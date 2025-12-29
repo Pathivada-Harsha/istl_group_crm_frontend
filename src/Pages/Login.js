@@ -21,8 +21,8 @@ export default function Login() {
   useEffect(() => {
     if (!loading && isAuthenticated) {
       // Get the page user was trying to access, or default to dashboard
-      const from = location.state?.from?.pathname || '/dashboard';
-      navigate(from, { replace: true });
+      // const from = location.state?.from?.pathname || '/dashboard';
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, loading, navigate, location]);
 
@@ -44,22 +44,21 @@ export default function Login() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: username,   
-          password: password,
+          username: username.trim(),   
+          password: password.trim(),
         }),
       });
 
       const data = await response.json();
-
       if (response.ok) {
         // Store user data with context
         login(data);
 
         // Get the page user was trying to access, or default to dashboard
-        const from = location.state?.from?.pathname || '/dashboard';
+        // const from = location.state?.from?.pathname || '/dashboard';
         
         // Navigate to the intended page
-        navigate(from, { replace: true });
+        navigate('/dashboard', { replace: true });
       } else {
         setError(data.message || "Login failed. Please try again.");
       }

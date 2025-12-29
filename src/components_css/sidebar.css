@@ -50,7 +50,7 @@
 
 /* Sidebar content wrapper */
 .sidebar-content {
-  padding: 16px;
+  /* padding: 16px; */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -289,8 +289,8 @@
 
 /* Collapse button */
 .sidebar-collapse-btn {
-  width: 36px;
-  height: 36px;
+  width: 100%;
+  height: 50px;
   border-radius: 8px;
   border: 1px solid #e6edf3;
   background: white;
