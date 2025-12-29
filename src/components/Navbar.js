@@ -43,7 +43,15 @@ function Navbar({ onMenuClick }) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Close all dropdowns
+  function closeAllDropdowns() {
+    setShowProfileMenu(false);
+    setShowNotifications(false);
+    setShowMessages(false);
+  }
+
   function handleLogout() {
+    closeAllDropdowns();
     logout();
     navigate('/login', { replace: true });
   }
@@ -119,7 +127,9 @@ function Navbar({ onMenuClick }) {
                 </div>
 
                 <div style={{ padding: 8, textAlign: "center", borderTop: "1px solid #eef2f6" }}>
-                  <Link to="/notifications" className="dropdown-item">View All</Link>
+                  <Link to="/notifications" className="dropdown-item" onClick={closeAllDropdowns}>
+                    View All
+                  </Link>
                 </div>
               </div>
             )}
@@ -154,7 +164,9 @@ function Navbar({ onMenuClick }) {
                 </div>
 
                 <div style={{ padding: 8, textAlign: "center", borderTop: "1px solid #eef2f6" }}>
-                  <Link to="/messages" className="dropdown-item">View All</Link>
+                  <Link to="/messages" className="dropdown-item" onClick={closeAllDropdowns}>
+                    View All
+                  </Link>
                 </div>
               </div>
             )}
@@ -177,9 +189,15 @@ function Navbar({ onMenuClick }) {
 
             {showProfileMenu && (
               <div className="dropdown-menu">
-                <Link to="/profile" className="dropdown-item">Profile</Link>
-                <Link to="/users" className="dropdown-item">Users</Link>
-                <Link to="/settings" className="dropdown-item">Settings</Link>
+                <Link to="/profile" className="dropdown-item" onClick={closeAllDropdowns}>
+                  Profile
+                </Link>
+                <Link to="/users" className="dropdown-item" onClick={closeAllDropdowns}>
+                  Users
+                </Link>
+                <Link to="/settings" className="dropdown-item" onClick={closeAllDropdowns}>
+                  Settings
+                </Link>
                 <hr className="dropdown-divider" />
 
                 <button

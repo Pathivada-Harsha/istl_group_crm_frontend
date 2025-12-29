@@ -29,6 +29,7 @@ import SolarProfile from "./Pages/Solarproposaleditor.js";
 import Users from "./Pages/UsersPage.js";
 import Addropdownitems from "./Pages/AddNewDropdownItems.js";
 import './App.css';
+import SessionManager from './components/SessionManager.js';
 
 function AppWrapper() {
   const location = useLocation();
@@ -41,7 +42,7 @@ function AppWrapper() {
 
 function AppShell({ hideShell }) {
   const [sidebarOpen, setSidebarOpen] = useState(false); 
-  const [collapsed, setCollapsed] = useState(false); 
+  const [collapsed, setCollapsed] = useState(true); 
 
   // restore collapsed state from localStorage (optional)
   useEffect(() => {

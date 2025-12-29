@@ -4,11 +4,11 @@ import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 import "../pages-css/Profile.css";
 import { useAuth } from '../hooks/useAuth';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 export default function Profile() {
   const { user: authUser, login } = useAuth();
-  
+
   const initialUser = {
     id: authUser.id,
     name: authUser.name,
@@ -67,6 +67,15 @@ export default function Profile() {
     }, 4000);
   };
 
+  const formatDateTime = (dateStr) => {
+  const d = new Date(dateStr);
+
+  const pad = (n) => n.toString().padStart(2, '0');
+
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+
   // Close toast manually
   const closeToast = () => {
     setToast({ show: false, type: '', message: '' });
@@ -81,6 +90,7 @@ export default function Profile() {
     const { name, value } = e.target;
     setPwdForm((p) => ({ ...p, [name]: value }));
   }
+
 
   function handleAvatarSelect(e) {
     const f = e.target.files && e.target.files[0];
@@ -142,6 +152,7 @@ export default function Profile() {
           role: profileForm.role,
           team: profileForm.team,
           avatarUrl: avatarPreview || user.avatarUrl,
+          
         };
         
         setUser(updatedUser);
@@ -306,14 +317,14 @@ export default function Profile() {
             <div className="profile-user-page-stat">
               <div className="profile-user-page-stat-title">Joined</div>
               <div className="profile-user-page-stat-value">
-                {new Date(user.joined).toLocaleDateString()}
+                {formatDateTime(user.joined)}
               </div>
             </div>
 
             <div className="profile-user-page-stat">
               <div className="profile-user-page-stat-title">Last Login</div>
               <div className="profile-user-page-stat-value">
-                {new Date(user.lastLogin).toLocaleString()}
+                {formatDateTime(user.lastLogin)}
               </div>
             </div>
           </div>
