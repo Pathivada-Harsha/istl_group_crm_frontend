@@ -7,6 +7,7 @@ export const AuthContext = createContext({
   isAuthenticated: false,
   user: null,
   menuPermissions: [],
+  pagePermissions: {},
   loading: true,
   login: () => {},
   logout: () => {},
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [menuPermissions, setMenuPermissions] = useState([]);
+  const [pagePermissions, setPagePermissions] = useState({});
   const [loading, setLoading] = useState(true);
 
   // Initialize auth state from localStorage
@@ -31,6 +33,7 @@ export const AuthProvider = ({ children }) => {
           if (userData && userData.user && userData.menuPermissions) {
             setUser(userData.user);
             setMenuPermissions(userData.menuPermissions);
+            setPagePermissions(userData.pagePermissions || {});
             setIsAuthenticated(true);
           } else {
             // Invalid data structure, clear storage
@@ -61,6 +64,7 @@ export const AuthProvider = ({ children }) => {
       
       setUser(userData.user);
       setMenuPermissions(userData.menuPermissions);
+      setPagePermissions(userData.pagePermissions || {});
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Error during login:', error);
@@ -73,6 +77,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem(USER_KEY);
     setUser(null);
     setMenuPermissions([]);
+    setPagePermissions({});
     setIsAuthenticated(false);
   }, []);
 
@@ -91,6 +96,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     user,
     menuPermissions,
+    pagePermissions,
     loading,
     login,
     logout,
