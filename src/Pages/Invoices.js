@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import '../pages-css/Invoices.css';
-        import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 // Sample data
 const sampleInvoices = [
@@ -429,6 +429,7 @@ const InvoicesManagementPage = () => {
 
         <GroupProjectFilter
           groupValue={groupName}
+          subGroupValue={subGroupName}
           projectValue={projectId}
           onChange={updateFilters}
         />
