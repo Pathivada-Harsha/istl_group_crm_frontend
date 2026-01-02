@@ -14,6 +14,50 @@
   }
 }
 
+/* External collapse button - positioned outside sidebar */
+.sidebar-external-collapse-btn {
+  position: fixed;
+  left: 246px; /* Width of expanded sidebar */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 48px;
+  border-radius: 0 6px 6px 0;
+  border: 1px solid #d1d5db;
+  border-left: none;
+  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
+  display: none; /* Hidden by default */
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: left 0.22s ease, background 0.15s;
+  z-index: 35;
+  font-size: 14px;
+  color: white;
+  font-weight: 600;
+}
+
+.sidebar-external-collapse-btn:hover {
+  background: linear-gradient(135deg, #0952b8 0%, #073d8f 100%);
+  box-shadow: 2px 0 8px rgba(11, 99, 214, 0.3);
+}
+
+/* Show on desktop only */
+@media (min-width: 1024px) {
+  .sidebar-external-collapse-btn {
+    display: inline-flex;
+  }
+}
+
+/* Adjust position when sidebar is collapsed */
+@media (min-width: 1024px) {
+  .sidebar.collapsed ~ .sidebar-external-collapse-btn,
+  body:has(.sidebar.collapsed) .sidebar-external-collapse-btn {
+    left: 68px; /* Width of collapsed sidebar */
+  }
+}
+
 /* Base sidebar */
 .sidebar {
   position: fixed;
@@ -50,7 +94,6 @@
 
 /* Sidebar content wrapper */
 .sidebar-content {
-  /* padding: 16px; */
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -149,6 +192,14 @@
   text-overflow: ellipsis;
 }
 
+/* Group abbreviation - hidden by default, shown when collapsed */
+.sidebar-group-abbreviation {
+  display: none;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
 /* Chevron icon */
 .sidebar-group-chevron {
   flex-shrink: 0;
@@ -193,6 +244,119 @@
   font-weight: 500;
   transition: all 0.15s;
   white-space: nowrap;
+  position: relative;
+}
+
+/* Tooltip for collapsed sidebar */
+.sidebar.collapsed .sidebar-item::after {
+  content: attr(title);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 8px 20px rgba(30, 58, 138, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Arrow for tooltip */
+.sidebar.collapsed .sidebar-item::before {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  border: 7px solid transparent;
+  border-right-color: #1e3a8a;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
+}
+
+/* Show tooltip on hover */
+.sidebar.collapsed .sidebar-item:hover::after {
+  opacity: 1;
+  margin-left: 18px;
+}
+
+.sidebar.collapsed .sidebar-item:hover::before {
+  opacity: 1;
+  margin-left: 11px;
+}
+
+/* Group header tooltip when collapsed */
+.sidebar.collapsed .sidebar-group-header.collapsible {
+  position: relative;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible::after {
+  content: attr(data-full-name);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 8px 20px rgba(11, 99, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-transform: none;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible::before {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  border: 7px solid transparent;
+  border-right-color: #0b63d6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover::after {
+  opacity: 1;
+  margin-left: 18px;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover::before {
+  opacity: 1;
+  margin-left: 11px;
+}
+
+/* Remove left padding for items without child connector (Main group items) */
+.sidebar-item:not(.child-item) {
+  padding-left: 12px;
 }
 
 /* Child item connector icon */
@@ -233,13 +397,15 @@
   display: none;
 }
 
-/* Show chevron when collapsed - make it centered and visible */
-.sidebar.collapsed .sidebar-group-chevron {
+/* Show abbreviation and hide chevron when collapsed */
+.sidebar.collapsed .sidebar-group-abbreviation {
   display: block;
   color: #1f2937;
-  margin: 0 auto;
-  width: 20px;
-  height: 20px;
+  font-size: 18px;
+}
+
+.sidebar.collapsed .sidebar-group-chevron {
+  display: none;
 }
 
 /* Make the group header centered and more visible when collapsed */
@@ -277,44 +443,20 @@
   flex-shrink: 0;
 }
 
-/* Bottom area: collapse control */
+/* Remove the old bottom collapse button */
 .sidebar-bottom {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-top: 12px;
-  padding-bottom: 12px;
-  border-top: 1px dashed #eef2f6;
+  display: none;
 }
 
-/* Collapse button */
 .sidebar-collapse-btn {
-  width: 100%;
-  height: 50px;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: white;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.15s;
+  display: none;
 }
 
-.sidebar-collapse-btn:hover {
-  background-color: #f3f4f6;
-}
-
-/* Optional text button (shown only when expanded) */
 .sidebar-collapse-text {
-  border: none;
-  background: transparent;
-  color: #6b7280;
-  font-size: 13px;
-  cursor: pointer;
+  display: none;
 }
 
-/* Responsive: on small screens, collapsed state should not hide labels */
+/* Responsive: on small screens, keep full width and show labels */
 @media (max-width: 1023px) {
   .sidebar.collapsed {
     width: 256px;
@@ -323,6 +465,10 @@
   .sidebar.collapsed .sidebar-label,
   .sidebar.collapsed .sidebar-group-title {
     display: inline;
+  }
+  
+  .sidebar.collapsed .sidebar-group-abbreviation {
+    display: none;
   }
   
   .sidebar.collapsed .sidebar-group-chevron {
@@ -336,7 +482,14 @@
   .sidebar.collapsed .sidebar-item {
     justify-content: flex-start;
     padding: 10px 12px;
+  }
+  
+  .sidebar.collapsed .sidebar-item.child-item {
     padding-left: 24px;
+  }
+  
+  .sidebar.collapsed .sidebar-item:not(.child-item) {
+    padding-left: 12px;
   }
   
   .sidebar.collapsed .sidebar-group-header {
@@ -368,4 +521,136 @@
 /* Active icon inherits active color */
 .sidebar-item.active .icon {
   color: inherit;
+}
+/* Add to your existing sidebar.css */
+
+/* Container for abbreviation and arrow */
+.sidebar-group-abbreviation-container {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Show abbreviation container when collapsed */
+.sidebar.collapsed .sidebar-group-abbreviation-container {
+  display: flex;
+}
+
+/* Abbreviation styling */
+.sidebar-group-abbreviation {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+/* Arrow next to abbreviation when collapsed */
+.sidebar-group-collapsed-arrow {
+  color: #6b7280;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, color 0.2s ease;
+  margin-top: 2px;
+}
+
+/* Rotate arrow when group is expanded */
+.sidebar-group-collapsed-arrow.expanded {
+  transform: rotate(180deg);
+  color: #0b63d6;
+}
+
+/* Hover effect for collapsed group header */
+.sidebar.collapsed .sidebar-group-header.collapsible:hover .sidebar-group-collapsed-arrow {
+  color: #0b63d6;
+}
+
+/* Hide regular chevron in collapsed mode - already handled but ensure it's clear */
+.sidebar.collapsed .sidebar-group-chevron {
+  display: none;
+}
+
+/* Update tooltip styling for better visibility */
+.sidebar.collapsed .sidebar-group-header.collapsible::after {
+  content: attr(data-full-name);
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 12px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  box-shadow: 0 8px 20px rgba(11, 99, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  text-transform: none;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible::before {
+  content: '';
+  position: absolute;
+  left: 100%;
+  top: 50%;
+  transform: translateY(-50%);
+  margin-left: 6px;
+  border: 7px solid transparent;
+  border-right-color: #0b63d6;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease, margin-left 0.2s ease;
+  z-index: 1000;
+  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover::after {
+  opacity: 1;
+  margin-left: 18px;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover::before {
+  opacity: 1;
+  margin-left: 11px;
+}
+
+/* Make the collapsed group header more clickable-looking */
+.sidebar.collapsed .sidebar-group-header.collapsible {
+  cursor: pointer;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  justify-content: center;
+  padding: 12px 6px;
+  transition: all 0.2s ease;
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover {
+  background-color: #e5e7eb;
+  border-color: #d1d5db;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Add animation for dropdown arrow */
+@keyframes arrowBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px);
+  }
+}
+
+.sidebar.collapsed .sidebar-group-header.collapsible:hover .sidebar-group-collapsed-arrow {
+  animation: arrowBounce 0.6s ease-in-out infinite;
+}
+
+/* Stop animation when expanded */
+.sidebar.collapsed .sidebar-group-header.collapsible:hover .sidebar-group-collapsed-arrow.expanded {
+  animation: none;
+  transform: rotate(180deg);
 }

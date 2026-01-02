@@ -1,7 +1,7 @@
-// src/pages/DropdownAdminPage.js
 import React, { useState, useEffect } from 'react';
 import adminApi from '../services/adminApi';
-import filterApi from '../services/filterApi';
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import '../pages-css/AddNewDropdownItems.css';
 
 const DropdownAdminPage = () => {
@@ -10,7 +10,9 @@ const DropdownAdminPage = () => {
   const [subGroups, setSubGroups] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ type: '', text: '' });
+
+  // Use Toast Hook
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   // Form states
   const [groupForm, setGroupForm] = useState({
@@ -40,17 +42,30 @@ const DropdownAdminPage = () => {
     status: 'PLANNING',
     budget: '',
     isActive: true,
+    selectedGroupId: '',
     subGroupId: ''
   });
 
   const [editMode, setEditMode] = useState(false);
-  const [availableGroups, setAvailableGroups] = useState([]);
-  const [availableSubGroups, setAvailableSubGroups] = useState([]);
+  const [availableGroupsForDropdown, setAvailableGroupsForDropdown] = useState([]);
+  const [availableSubGroupsForDropdown, setAvailableSubGroupsForDropdown] = useState([]);
+  const [filteredSubGroupsForProject, setFilteredSubGroupsForProject] = useState([]);
 
   useEffect(() => {
     loadData();
-    loadAvailableGroups();
+    loadDropdownData();
   }, [activeTab]);
+
+  useEffect(() => {
+    if (projectForm.selectedGroupId) {
+      const filtered = availableSubGroupsForDropdown.filter(
+        sg => sg.group?.id === Number(projectForm.selectedGroupId)
+      );
+      setFilteredSubGroupsForProject(filtered);
+    } else {
+      setFilteredSubGroupsForProject([]);
+    }
+  }, [projectForm.selectedGroupId, availableSubGroupsForDropdown]);
 
   const loadData = async () => {
     setLoading(true);
@@ -66,33 +81,22 @@ const DropdownAdminPage = () => {
         setProjects(data);
       }
     } catch (error) {
-      showMessage('error', 'Failed to load data');
+      showError('Failed to load data');
     } finally {
       setLoading(false);
     }
   };
 
-  const loadAvailableGroups = async () => {
+  const loadDropdownData = async () => {
     try {
-      const data = await filterApi.getAllGroups();
-      setAvailableGroups(data);
-    } catch (error) {
-      console.error('Failed to load groups:', error);
-    }
-  };
+      const groupsData = await adminApi.getAllGroups();
+      setAvailableGroupsForDropdown(groupsData);
 
-  const loadAvailableSubGroups = async (groupName) => {
-    try {
-      const data = await filterApi.getSubGroups(groupName);
-      setAvailableSubGroups(data);
+      const subGroupsData = await adminApi.getAllSubGroups();
+      setAvailableSubGroupsForDropdown(subGroupsData);
     } catch (error) {
-      console.error('Failed to load subgroups:', error);
+      console.error('Failed to load dropdown data:', error);
     }
-  };
-
-  const showMessage = (type, text) => {
-    setMessage({ type, text });
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const resetForms = () => {
@@ -108,9 +112,11 @@ const DropdownAdminPage = () => {
       status: 'PLANNING',
       budget: '',
       isActive: true,
+      selectedGroupId: '',
       subGroupId: ''
     });
     setEditMode(false);
+    setFilteredSubGroupsForProject([]);
   };
 
   // ============ GROUP HANDLERS ============
@@ -121,16 +127,16 @@ const DropdownAdminPage = () => {
     try {
       if (editMode) {
         await adminApi.updateGroup(groupForm.id, groupForm);
-        showMessage('success', 'Group updated successfully');
+        showSuccess('Group updated successfully');
       } else {
         await adminApi.createGroup(groupForm);
-        showMessage('success', 'Group created successfully');
+        showSuccess('Group created successfully');
       }
       resetForms();
       loadData();
-      loadAvailableGroups();
+      loadDropdownData();
     } catch (error) {
-      showMessage('error', 'Operation failed');
+      showError('Failed to save group');
     } finally {
       setLoading(false);
     }
@@ -143,15 +149,15 @@ const DropdownAdminPage = () => {
 
   const handleDeleteGroup = async (id) => {
     if (!window.confirm('Are you sure you want to delete this group?')) return;
-    
+
     setLoading(true);
     try {
       await adminApi.deleteGroup(id);
-      showMessage('success', 'Group deleted successfully');
+      showSuccess('Group deleted successfully');
       loadData();
-      loadAvailableGroups();
+      loadDropdownData();
     } catch (error) {
-      showMessage('error', 'Failed to delete group');
+      showError('Failed to delete group');
     } finally {
       setLoading(false);
     }
@@ -165,15 +171,16 @@ const DropdownAdminPage = () => {
     try {
       if (editMode) {
         await adminApi.updateSubGroup(subGroupForm.id, subGroupForm);
-        showMessage('success', 'SubGroup updated successfully');
+        showSuccess('SubGroup updated successfully');
       } else {
-        await adminApi.createSubGroup(subGroupForm, subGroupForm.groupId);
-        showMessage('success', 'SubGroup created successfully');
+        await adminApi.createSubGroup(subGroupForm, Number(subGroupForm.groupId));
+        showSuccess('SubGroup created successfully');
       }
       resetForms();
       loadData();
+      loadDropdownData();
     } catch (error) {
-      showMessage('error', 'Operation failed');
+      showError('Failed to save subgroup');
     } finally {
       setLoading(false);
     }
@@ -189,14 +196,15 @@ const DropdownAdminPage = () => {
 
   const handleDeleteSubGroup = async (id) => {
     if (!window.confirm('Are you sure you want to delete this subgroup?')) return;
-    
+
     setLoading(true);
     try {
       await adminApi.deleteSubGroup(id);
-      showMessage('success', 'SubGroup deleted successfully');
+      showSuccess('SubGroup deleted successfully');
       loadData();
+      loadDropdownData();
     } catch (error) {
-      showMessage('error', 'Failed to delete subgroup');
+      showError('Failed to delete subgroup');
     } finally {
       setLoading(false);
     }
@@ -210,15 +218,15 @@ const DropdownAdminPage = () => {
     try {
       if (editMode) {
         await adminApi.updateProject(projectForm.projectUniqueId, projectForm);
-        showMessage('success', 'Project updated successfully');
+        showSuccess('Project updated successfully');
       } else {
-        await adminApi.createProject(projectForm, projectForm.subGroupId);
-        showMessage('success', 'Project created successfully');
+        await adminApi.createProject(projectForm, Number(projectForm.subGroupId));
+        showSuccess('Project created successfully');
       }
       resetForms();
       loadData();
     } catch (error) {
-      showMessage('error', 'Operation failed');
+      showError('Failed to save project');
     } finally {
       setLoading(false);
     }
@@ -227,6 +235,7 @@ const DropdownAdminPage = () => {
   const handleEditProject = (project) => {
     setProjectForm({
       ...project,
+      selectedGroupId: project.subGroup?.group?.id || '',
       subGroupId: project.subGroup?.id || '',
       startDate: project.startDate || '',
       endDate: project.endDate || '',
@@ -237,14 +246,14 @@ const DropdownAdminPage = () => {
 
   const handleDeleteProject = async (projectUniqueId) => {
     if (!window.confirm('Are you sure you want to delete this project?')) return;
-    
+
     setLoading(true);
     try {
       await adminApi.deleteProject(projectUniqueId);
-      showMessage('success', 'Project deleted successfully');
+      showSuccess('Project deleted successfully');
       loadData();
     } catch (error) {
-      showMessage('error', 'Failed to delete project');
+      showError('Failed to delete project');
     } finally {
       setLoading(false);
     }
@@ -252,13 +261,10 @@ const DropdownAdminPage = () => {
 
   return (
     <div className="admin-page">
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       <div className="admin-header">
         <h1>Dropdown Management</h1>
-        {message.text && (
-          <div className={`message ${message.type}`}>
-            {message.text}
-          </div>
-        )}
       </div>
 
       <div className="admin-tabs">
@@ -398,9 +404,9 @@ const DropdownAdminPage = () => {
                     required
                   >
                     <option value="">Select Group</option>
-                    {availableGroups.map(group => (
-                      <option key={group.value} value={group.value}>
-                        {group.label}
+                    {availableGroupsForDropdown.map(group => (
+                      <option key={group.id} value={group.id}>
+                        {group.groupLabel}
                       </option>
                     ))}
                   </select>
@@ -508,18 +514,51 @@ const DropdownAdminPage = () => {
             <div className="form-section">
               <h2>{editMode ? 'Edit Project' : 'Add New Project'}</h2>
               <form onSubmit={handleProjectSubmit} className="admin-form">
-                <div className="form-group">
-                  <label>Parent SubGroup *</label>
-                  <select
-                    value={projectForm.subGroupId}
-                    onChange={(e) => setProjectForm({ ...projectForm, subGroupId: e.target.value })}
-                    required
-                    disabled={editMode}
-                  >
-                    <option value="">Select SubGroup</option>
-                    {/* You'll need to load all subgroups here */}
-                  </select>
+                {/* Cascading Dropdowns */}
+                <div className="form-row">
+                  <div className="form-group">
+                    <label>Select Group *</label>
+                    <select
+                      value={projectForm.selectedGroupId}
+                      onChange={(e) => {
+                        setProjectForm({
+                          ...projectForm,
+                          selectedGroupId: e.target.value,
+                          subGroupId: '' // Reset subgroup when group changes
+                        });
+                      }}
+                      required
+                      disabled={editMode}
+                    >
+                      <option value="">Select Group</option>
+                      {availableGroupsForDropdown.map(group => (
+                        <option key={group.id} value={group.id}>
+                          {group.groupLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Select SubGroup *</label>
+                    <select
+                      value={projectForm.subGroupId}
+                      onChange={(e) => setProjectForm({ ...projectForm, subGroupId: e.target.value })}
+                      required
+                      disabled={!projectForm.selectedGroupId || editMode}
+                    >
+                      <option value="">
+                        {!projectForm.selectedGroupId ? 'Select Group First' : 'Select SubGroup'}
+                      </option>
+                      {filteredSubGroupsForProject.map(subGroup => (
+                        <option key={subGroup.id} value={subGroup.id}>
+                          {subGroup.subGroupLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
                 <div className="form-row">
                   <div className="form-group">
                     <label>Project Name *</label>
@@ -624,6 +663,7 @@ const DropdownAdminPage = () => {
                     <tr>
                       <th>Project ID</th>
                       <th>Name</th>
+                      <th>Group</th>
                       <th>SubGroup</th>
                       <th>Location</th>
                       <th>Status</th>
@@ -637,6 +677,7 @@ const DropdownAdminPage = () => {
                       <tr key={project.id}>
                         <td>{project.projectUniqueId}</td>
                         <td>{project.projectName}</td>
+                        <td>{project.subGroup?.group?.groupName || '-'}</td>
                         <td>{project.subGroup?.subGroupName || '-'}</td>
                         <td>{project.location || '-'}</td>
                         <td>
