@@ -3,10 +3,14 @@ import React, { useState, useEffect } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
-
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
 
 function LeadsEnquiries() {
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -24,11 +28,16 @@ function LeadsEnquiries() {
   const [groups, setGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const handleSave = () => {
+    showSuccess('Data saved successfully!');
+  };
+  const { user } = useAuth();
 
   const currentUser = {
-    id: localStorage.getItem('userId') || 1,
-    role: localStorage.getItem('userRole') || 'USER',
-    name: localStorage.getItem('userName') || 'Current User'
+    id: user.id || 1,
+    role: user.role || 'USER',
+    name: user.name || 'Current User'
   };
 
   const [leads, setLeads] = useState([]);
@@ -94,7 +103,7 @@ function LeadsEnquiries() {
       const params = new URLSearchParams();
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
-      
+
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/getAll?${params}`);
       if (data.success) {
         setLeads(data.data);
@@ -114,12 +123,12 @@ function LeadsEnquiries() {
           'User-Role': currentUser.role
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch users');
-      
+
       const data = await response.json();
       console.log('Leads Users Response:', data);
-      
+
       // Backend returns array of LeadsUserWrapper: [{id, name}, ...]
       if (Array.isArray(data)) {
         setUsers(data);
@@ -138,12 +147,12 @@ function LeadsEnquiries() {
           'User-Role': currentUser.role
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch groups');
-      
+
       const data = await response.json();
       console.log('Leads Groups Response:', data);
-      
+
       // Backend returns array of LeadsGroupWrapper: [{value, label}, ...]
       if (Array.isArray(data)) {
         setGroups(data);
@@ -159,7 +168,7 @@ function LeadsEnquiries() {
       setSubGroups([]);
       return;
     }
-    
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
         headers: {
@@ -167,12 +176,12 @@ function LeadsEnquiries() {
           'User-Role': currentUser.role
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch subgroups');
-      
+
       const data = await response.json();
       console.log('Leads SubGroups Response:', data);
-      
+
       // Backend returns array of LeadsSubGroupWrapper: [{value, label}, ...]
       if (Array.isArray(data)) {
         setSubGroups(data);
@@ -203,7 +212,7 @@ function LeadsEnquiries() {
         method: 'POST',
         body: JSON.stringify(filterRequest)
       });
-      
+
       if (data.success) {
         setLeads(data.data);
         setCurrentPage(1);
@@ -247,7 +256,7 @@ function LeadsEnquiries() {
         setShowViewModal(true);
       }
     } catch (err) {
-      alert(err.message || 'Error fetching lead details');
+      showError(err.message || 'Error fetching lead details');
     }
   };
 
@@ -276,13 +285,13 @@ function LeadsEnquiries() {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/delete/${leadId}`, {
           method: 'DELETE'
         });
-        
+
         if (data.success) {
-          alert('Lead deleted successfully');
+          showSuccess('Lead deleted successfully');
           fetchLeads();
         }
       } catch (err) {
-        alert(err.message || 'Error deleting lead');
+        showError(err.message || 'Error deleting lead');
       }
     }
   };
@@ -290,16 +299,16 @@ function LeadsEnquiries() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    
+
     try {
       if (formData.id) {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${formData.id}`, {
           method: 'PUT',
           body: JSON.stringify(formData)
         });
-        
+
         if (data.success) {
-          alert('Lead updated successfully');
+          showSuccess('Lead updated successfully');
           setShowAddModal(false);
           resetForm();
           fetchLeads();
@@ -309,16 +318,16 @@ function LeadsEnquiries() {
           method: 'POST',
           body: JSON.stringify(formData)
         });
-        
+
         if (data.success) {
-          alert('Lead created successfully');
+          showSuccess('Lead created successfully');
           setShowAddModal(false);
           resetForm();
           fetchLeads();
         }
       }
     } catch (err) {
-      alert(err.message || 'Error saving lead');
+      showError(err.message || 'Error saving lead');
     } finally {
       setLoading(false);
     }
@@ -394,22 +403,23 @@ function LeadsEnquiries() {
   };
 
   return (
+    
     <div className="leads-enquiries-container">
+      {loading && <CrmPreloader text="Loading Leads..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       <div className="leads-enquiries-breadcrumb">
         <span>Dashboard</span>
         <span className="leads-enquiries-breadcrumb-separator">&gt;</span>
         <span className="leads-enquiries-breadcrumb-active">Leads / Enquiries</span>
       </div>
 
-      <div className="leads-enquiries-header">
-        <div className="page-header-with-filter">
-          <h1 className="leads-enquiries-title">Leads / Enquiries</h1>
-          <GroupCategoryFilter
-            groupValue={groupName}
-            subGroupValue={subGroupName}
-            onChange={updateFilters}
-          />
-        </div>
+      <div className="leads-enquiries-header page-header-with-filter">
+        <GroupCategoryFilter
+          groupValue={groupName}
+          subGroupValue={subGroupName}
+          onChange={updateFilters}
+        />
       </div>
 
       {error && (

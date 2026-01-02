@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BsArrowReturnRight } from "react-icons/bs";
+import { IoChevronDown } from "react-icons/io5"; // Add this import
 import '../components_css/sidebar.css';
 import {useAuth} from '../hooks/useAuth';
 
@@ -9,32 +10,14 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const location = useLocation();
 
   // Track which groups are expanded
-  const [expandedGroups, setExpandedGroups] = useState(() => {
-    // Default: expanded on desktop, collapsed on mobile
-    const isDesktop = window.innerWidth >= 1024;
-    return {
-      Main: true,
-      Sales: isDesktop,
-      Procurement: isDesktop
-    };
+  const [expandedGroups, setExpandedGroups] = useState({
+    Main: true,
+    Sales: false,
+    Procurement: false,
+    'Office Use': false
   });
 
   const {menuPermissions}=useAuth();
-
-  
-  useEffect(() => {
-    const handleResize = () => {
-      const isDesktop = window.innerWidth >= 1024;
-      setExpandedGroups(prev => ({
-        ...prev,
-        Sales: prev.Sales !== undefined ? prev.Sales : isDesktop,
-        Procurement: prev.Procurement !== undefined ? prev.Procurement : isDesktop
-      }));
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   const toggleGroup = (groupTitle) => {
     setExpandedGroups(prev => ({
@@ -47,6 +30,16 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const hasPermission = (permission) => {
     if (!menuPermissions || !Array.isArray(menuPermissions)) return false;
     return menuPermissions.includes(permission);
+  };
+
+  // Helper function to get group abbreviation
+  const getGroupAbbreviation = (groupTitle) => {
+    const abbreviations = {
+      'Sales': 'S',
+      'Procurement': 'P',
+      'Office Use': 'O'
+    };
+    return abbreviations[groupTitle] || groupTitle.charAt(0);
   };
 
   const menuGroups = [
@@ -94,35 +87,25 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
     {
       title: 'Sales',
       collapsible: true,
-      items: [
-        {
-          name: 'Clients Data',
-          path: '/sales/clients',
-          permission: 'SALES_CLIENTS',
-          icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
-        },
-        {
+      items: [{
           name: 'Leads / Enquiries',
           path: '/sales/leads',
           permission: 'SALES_LEADS',
           icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
         },
         {
+          name: 'Clients Data',
+          path: '/sales/clients',
+          permission: 'SALES_CLIENTS',
+          icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
+        },
+        
+        {
           name: 'Estimation/Proposals',
           path: '/sales/proposals',
           permission: 'SALES_ESTIMATION',
           icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
         },
-        //  { 
-        //   name: 'Quatations', 
-        //   path: '/procurement/quotations',
-        //   icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
-        // },
-        // { 
-        //   name: 'Sales Orders', 
-        //   path: '/sales/SalesOrder',
-        //   icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2'
-        // },
         {
           name: 'Invoices',
           path: '/sales/invoices',
@@ -169,6 +152,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         {
           name: 'Add New Group / Project',
           path: '/officeuse/addgroupproject',
+          permission: 'OFFICE_USE',
           icon: 'M12 4v16m8-8H4'
         }
       ]
@@ -178,12 +162,6 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
 
   // Filter menu groups and items based on permissions
   const filteredMenuGroups = menuGroups.map(group => {
-    // Office Use is always visible (no filtering)
-    if (group.title === 'Office Use') {
-      return group;
-    }
-
-    // Filter items based on permissions
     const filteredItems = group.items.filter(item => 
       hasPermission(item.permission)
     );
@@ -193,47 +171,76 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       items: filteredItems
     };
   }).filter(group => {
-    // Always show Office Use
-    if (group.title === 'Office Use') return true;
-    // Only show groups that have at least one visible item
+    if (group.title === 'Main') {
+      return group.items.length > 0;
+    }
     return group.items.length > 0;
   });
 
   return (
     <>
       {isOpen && <div className="sidebar-overlay" onClick={onClose}></div>}
+      
+      {/* Collapse button - outside sidebar, desktop only */}
+      <button 
+        className="sidebar-external-collapse-btn" 
+        onClick={onToggleCollapse}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? ">" : "<"}
+      </button>
+
       <aside className={`sidebar ${isOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}>
         <div className="sidebar-content">
           <nav className="sidebar-nav">
             {filteredMenuGroups.map(group => {
               const isExpanded = expandedGroups[group.title];
+              const showHeader = group.title !== 'Main';
 
               return (
                 <div key={group.title} className="sidebar-group">
                   {/* Group Header */}
-                  <div
-                    className={`sidebar-group-header ${group.collapsible ? 'collapsible' : ''}`}
-                    onClick={() => group.collapsible && toggleGroup(group.title)}
-                  >
-                    <span className="sidebar-group-title">{group.title}</span>
-                    {group.collapsible && (
-                      <svg
-                        className={`sidebar-group-chevron ${isExpanded ? 'expanded' : ''}`}
-                        width="16"
-                        height="16"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
-                        />
-                      </svg>
-                    )}
-                  </div>
+                  {showHeader && (
+                    <div
+                      className={`sidebar-group-header ${group.collapsible ? 'collapsible' : ''} ${isExpanded ? 'expanded' : ''}`}
+                      onClick={() => group.collapsible && toggleGroup(group.title)}
+                      data-full-name={group.title}
+                    >
+                      <span className="sidebar-group-title">{group.title}</span>
+                      
+                      {/* Abbreviation with dropdown arrow when collapsed */}
+                      <div className="sidebar-group-abbreviation-container">
+                        <span className="sidebar-group-abbreviation">
+                          {getGroupAbbreviation(group.title)}
+                        </span>
+                        {group.collapsible && (
+                          <IoChevronDown 
+                            className={`sidebar-group-collapsed-arrow ${isExpanded ? 'expanded' : ''}`}
+                            size={14}
+                          />
+                        )}
+                      </div>
+
+                      {/* Regular chevron for expanded view */}
+                      {group.collapsible && (
+                        <svg
+                          className={`sidebar-group-chevron ${isExpanded ? 'expanded' : ''}`}
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  )}
 
                   {/* Group Items */}
                   <div className={`sidebar-group-items ${isExpanded ? 'expanded' : 'collapsed'}`}>
@@ -244,10 +251,10 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
                           key={item.name}
                           to={item.path}
                           onClick={onClose}
-                          className={`sidebar-item ${active ? "active" : ""} ${group.collapsible ? 'child-item' : ''}`}
+                          className={`sidebar-item ${active ? "active" : ""} ${group.collapsible && showHeader ? 'child-item' : ''}`}
                           title={item.name}
                         >
-                          {group.collapsible && <BsArrowReturnRight className="child-connector" />}
+                          {group.collapsible && showHeader && <BsArrowReturnRight className="child-connector" />}
                           <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path
                               strokeLinecap="round"
@@ -265,13 +272,6 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
               );
             })}
           </nav>
-
-          {/* Collapse button */}
-          <div className="sidebar-bottom">
-            <button className="sidebar-collapse-btn" onClick={onToggleCollapse}>
-              {collapsed ? ">" : "<"}
-            </button>
-          </div>
         </div>
       </aside>
     </>

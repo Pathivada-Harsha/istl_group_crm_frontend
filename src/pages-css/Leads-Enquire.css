@@ -29,20 +29,7 @@
 
 /* Page Header */
 .leads-enquiries-header {
-  margin-bottom: 24px;
-}
-
-.leads-enquiries-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #111827;
-  margin: 0;
-}
-
-.leads-enquiries-subtitle {
-  font-size: 14px;
-  color: #6b7280;
-  margin: 8px 0 0 0;
+  margin-bottom: 16px;
 }
 
 /* Action Bar */
@@ -53,11 +40,16 @@
   margin-bottom: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   border: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .leads-enquiries-search-wrapper {
   position: relative;
-  margin-bottom: 16px;
+  flex: 1;
+  min-width: 250px;
 }
 
 .leads-enquiries-search-icon {
@@ -90,7 +82,6 @@
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
 }
 
 .leads-enquiries-filter-select {
@@ -102,6 +93,7 @@
   background-color: white;
   cursor: pointer;
   transition: all 0.2s;
+  min-width: 140px;
 }
 
 .leads-enquiries-filter-select:focus {
@@ -114,6 +106,7 @@
   display: flex;
   gap: 12px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .leads-enquiries-btn {
@@ -672,10 +665,17 @@
 
   .leads-enquiries-action-bar {
     padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .leads-enquiries-search-wrapper {
+    min-width: 100%;
   }
 
   .leads-enquiries-filters {
     flex-direction: column;
+    width: 100%;
   }
 
   .leads-enquiries-filter-select {
@@ -684,6 +684,8 @@
 
   .leads-enquiries-action-buttons {
     flex-direction: column;
+    width: 100%;
+    margin-left: 0;
   }
 
   .leads-enquiries-btn {

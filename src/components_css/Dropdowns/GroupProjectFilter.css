@@ -3,13 +3,13 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  /* background-color: white; */
-  border-bottom: 1px solid #e5e7eb;
+  /* padding: 20px 24px; */
+  /* border-bottom: 1px solid #e5e7eb; */
   gap: 16px;
   flex-wrap: wrap;
 }
 
+/* Main Filter Container */
 .group-project-filter {
   display: flex;
   align-items: center;
@@ -17,13 +17,15 @@
   margin-left: auto;
 }
 
+/* Individual Filter Group */
 .filter-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  min-width: 180px;
+  min-width: 220px;   /* ✅ fixed space */
 }
 
+/* Label */
 .filter-label {
   font-size: 12px;
   font-weight: 500;
@@ -32,37 +34,59 @@
   letter-spacing: 0.5px;
 }
 
+/* ✅ DROPDOWN – FIXED SIZE (NO JUMPING) */
 .filter-select {
+  width: 220px;        /* ✅ FIXED WIDTH */
+  min-width: 220px;
+  max-width: 220px;
+
   padding: 8px 12px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
-  background-color: white;
+  background-color: #ffffff;
   font-size: 14px;
   color: #1f2937;
   cursor: pointer;
-  transition: all 0.2s;
+
+  /* ✅ TEXT HANDLING */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  transition: border-color 0.2s, box-shadow 0.2s;
   outline: none;
 }
 
+/* Hover */
 .filter-select:hover:not(:disabled) {
   border-color: #9ca3af;
 }
 
+/* Focus */
 .filter-select:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+/* Disabled */
 .filter-select:disabled {
   background-color: #f3f4f6;
   cursor: not-allowed;
   opacity: 0.6;
 }
 
+/* Prevent option text from resizing dropdown */
 .filter-select option {
-  padding: 8px;
+  white-space: nowrap;
 }
 
+/* Error text */
+.filter-error {
+  font-size: 11px;
+  color: #dc2626;
+}
+
+/* Loading Spinner (if used) */
 .loading-indicator {
   display: inline-block;
   width: 14px;
@@ -74,10 +98,12 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Responsive Design */
+/* ✅ RESPONSIVE */
 @media (max-width: 768px) {
   .page-header-with-filter {
     flex-direction: column;
@@ -93,6 +119,12 @@
 
   .filter-group {
     width: 100%;
-    min-width: auto;
+    min-width: unset;
+  }
+
+  .filter-select {
+    width: 100%;
+    min-width: unset;
+    max-width: 100%;
   }
 }
