@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FiEdit, FiTrash2 } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/UsersPage.css';
 
@@ -113,6 +113,7 @@ const UsersPage = () => {
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
   const [showMenuPermissionsModal, setShowMenuPermissionsModal] = useState(false);
   const [showEditMenuPermissionsModal, setShowEditMenuPermissionsModal] = useState(false);
@@ -127,6 +128,37 @@ const UsersPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const { user, pagePermissions, menuPermissions } = useAuth();
+
+  // New User Form State
+  const [newUser, setNewUser] = useState({
+    user_id: '',
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+    phone: '',
+    role: '',
+    is_active: true
+  });
+  const [userIdValidation, setUserIdValidation] = useState({
+    checking: false,
+    isValid: null,
+    message: ''
+  });
+  const [passwordMatch, setPasswordMatch] = useState({
+    isValid: null,
+    message: ''
+  });
+  const [phoneValidation, setPhoneValidation] = useState({
+    isValid: null,
+    message: ''
+  });
+  const [passwordStrength, setPasswordStrength] = useState({
+    isValid: null,
+    message: ''
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Toast notifications
   const [toasts, setToasts] = useState([]);
@@ -323,6 +355,269 @@ const UsersPage = () => {
     }
   };
 
+  // Check if User ID exists
+  const checkUserIdExists = async (userId) => {
+    if (!userId || userId.trim() === '') {
+      setUserIdValidation({
+        checking: false,
+        isValid: null,
+        message: ''
+      });
+      return;
+    }
+
+    setUserIdValidation({
+      checking: true,
+      isValid: null,
+      message: 'Checking availability...'
+    });
+
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/isUserIdExist/${userId}`);
+      const exists = await response.json(); // Boolean response
+
+      if (exists) {
+        setUserIdValidation({
+          checking: false,
+          isValid: false,
+          message: 'User Name Already Exist Choose Another Name'
+        });
+      } else {
+        setUserIdValidation({
+          checking: false,
+          isValid: true,
+          message: 'Username is available'
+        });
+      }
+    } catch (error) {
+      console.error('Error checking user ID:', error);
+      setUserIdValidation({
+        checking: false,
+        isValid: null,
+        message: 'Error checking username'
+      });
+    }
+  };
+
+  // Debounce user ID check
+  useEffect(() => {
+    if (showAddUserModal && newUser.user_id) {
+      const timer = setTimeout(() => {
+        checkUserIdExists(newUser.user_id);
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }
+  }, [newUser.user_id, showAddUserModal]);
+
+  // Password match validation
+  useEffect(() => {
+    if (showAddUserModal && newUser.password && newUser.confirmPassword) {
+      if (newUser.password === newUser.confirmPassword) {
+        setPasswordMatch({
+          isValid: true,
+          message: 'Passwords match'
+        });
+      } else {
+        setPasswordMatch({
+          isValid: false,
+          message: 'Passwords do not match'
+        });
+      }
+    } else if (showAddUserModal && newUser.confirmPassword) {
+      setPasswordMatch({
+        isValid: false,
+        message: 'Passwords do not match'
+      });
+    } else {
+      setPasswordMatch({
+        isValid: null,
+        message: ''
+      });
+    }
+  }, [newUser.password, newUser.confirmPassword, showAddUserModal]);
+
+  // Phone number validation
+  useEffect(() => {
+    if (showAddUserModal && newUser.phone) {
+      const phoneRegex = /^\d{10}$/;
+      if (phoneRegex.test(newUser.phone)) {
+        setPhoneValidation({
+          isValid: true,
+          message: 'Valid phone number'
+        });
+      } else if (newUser.phone.length < 10) {
+        setPhoneValidation({
+          isValid: false,
+          message: `${newUser.phone.length}/10 digits`
+        });
+      } else {
+        setPhoneValidation({
+          isValid: false,
+          message: 'Phone number must be exactly 10 digits'
+        });
+      }
+    } else {
+      setPhoneValidation({
+        isValid: null,
+        message: ''
+      });
+    }
+  }, [newUser.phone, showAddUserModal]);
+
+  // Password strength validation
+  useEffect(() => {
+    if (showAddUserModal && newUser.password) {
+      const hasUpperCase = /[A-Z]/.test(newUser.password);
+      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newUser.password);
+      const isLengthValid = newUser.password.length >= 6;
+
+      if (isLengthValid && hasUpperCase && hasSpecialChar) {
+        setPasswordStrength({
+          isValid: true,
+          message: 'Strong password'
+        });
+      } else {
+        const errors = [];
+        if (!isLengthValid) errors.push('at least 6 characters');
+        if (!hasUpperCase) errors.push('1 uppercase letter');
+        if (!hasSpecialChar) errors.push('1 special symbol');
+        
+        setPasswordStrength({
+          isValid: false,
+          message: `Password must contain ${errors.join(', ')}`
+        });
+      }
+    } else {
+      setPasswordStrength({
+        isValid: null,
+        message: ''
+      });
+    }
+  }, [newUser.password, showAddUserModal]);
+
+  // Handle Add User Modal Open
+  const handleOpenAddUserModal = () => {
+    setNewUser({
+      user_id: '',
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+      phone: '',
+      role: '',
+      is_active: true
+    });
+    setUserIdValidation({
+      checking: false,
+      isValid: null,
+      message: ''
+    });
+    setPasswordMatch({
+      isValid: null,
+      message: ''
+    });
+    setPhoneValidation({
+      isValid: null,
+      message: ''
+    });
+    setPasswordStrength({
+      isValid: null,
+      message: ''
+    });
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setShowAddUserModal(true);
+  };
+
+  // Handle Add User Form Submit
+  const handleAddUserSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validate User ID
+    if (!userIdValidation.isValid) {
+      showToast('Please choose a valid username', 'error');
+      return;
+    }
+
+    // Validate Password Strength
+    if (!passwordStrength.isValid) {
+      showToast('Password does not meet requirements', 'error');
+      return;
+    }
+
+    // Validate Password Match
+    if (!passwordMatch.isValid) {
+      showToast('Passwords do not match', 'error');
+      return;
+    }
+
+    // Validate Phone (optional but if provided should be valid)
+    if (newUser.phone && !phoneValidation.isValid) {
+      showToast('Please enter a valid 10-digit phone number', 'error');
+      return;
+    }
+
+    // Prepare data for backend
+    const userData = {
+      user_id: newUser.user_id,
+      name: newUser.name,
+      email: newUser.email.toLowerCase(),
+      password: newUser.password,
+      phone: newUser.phone || '', 
+      role: newUser.role,
+      is_active: newUser.is_active ? 1 : 0,
+      created_by: user.id
+    };
+
+    // Log the data to console
+    console.log('New User Data:', userData);
+    console.log('Created By User ID:', user.id);
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/addNewUser`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(userData)
+      });
+      
+      if (response.ok) {
+        const result = await response.text(); // Backend returns plain string: "New User Added Successfully"
+        console.log('User created successfully:', result);
+        
+        // Refresh users list
+        await fetchUsers();
+        
+        // Close modal and reset form
+        setShowAddUserModal(false);
+        
+        // Show success message
+        showToast(result || 'User created successfully!', 'success');
+      } else {
+        // Handle error response
+        const errorText = await response.text();
+        console.error('Error creating user:', errorText);
+        
+        // Try to parse as JSON if it's a CustomException
+        try {
+          const errorJson = JSON.parse(errorText);
+          showToast(errorJson.message || 'Error creating user', 'error');
+        } catch {
+          // If not JSON, use the text directly
+          showToast(errorText || 'Error creating user', 'error');
+        }
+      }
+      setLoading(false);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      setLoading(false);
+      showToast('Network error: Unable to create user', 'error');
+    }
+  };
+
   // Fetch menu permissions for a user
   const fetchUserMenuPermissions = async (userId) => {
     try {
@@ -383,45 +678,78 @@ const UsersPage = () => {
   };
 
   // Fetch page permissions for a user
-  const fetchUserPagePermissions = async (userId) => {
-    try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`);
-      const data = await response.json();
-      
-      console.log('Page permissions response:', data);
-      
-      if (typeof data === 'string') {
-        return [];
-      }
-      
-      const permissionIds = [];
-      
-      Object.entries(data).forEach(([module, actions]) => {
-        actions.forEach(action => {
-          // Convert module like "QUOTATIONS.SALES" to "quotations.sales"
-          const moduleLower = module.toLowerCase();
-          const actionLower = action.toLowerCase();
-          const permName = `${moduleLower}.${actionLower}`;
-          
-          const perm = pagePermissionsStructure.find(p => p.name === permName);
-          
-          if (perm) {
-            permissionIds.push(perm.id);
-          } else {
-            console.warn(`Permission not found in structure: ${permName}`);
-          }
-        });
-      });
-      
-      console.log('Processed page permissions:', permissionIds);
-      console.log('Expected: 69, Got:', permissionIds.length);
-      
-      return permissionIds;
-    } catch (error) {
-      console.error('Error fetching user page permissions:', error);
+// Fetch page permissions for a user
+const fetchUserPagePermissions = async (userId) => {
+  try {
+    const response = await fetch(
+      `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`
+    );
+
+    const text = await response.text();
+
+    // Case 1: Backend sends plain string message
+    if (!response.ok || text === "No Permissions") {
+      console.warn("No permissions found for user");
       return [];
     }
-  };
+
+    // Case 2: Backend sends JSON
+    const data = JSON.parse(text);
+    console.log("Page permissions response:", data);
+
+    const permissionIds = [];
+
+    // Mapping object to handle all backend module name variations
+    const moduleNameMapping = {
+      'USERS': 'users',
+      'ROLES': 'roles',
+      'CUSTOMERS': 'customers',
+      'VENDORS': 'vendors',
+      'LEADS': 'leads',
+      'PROPOSALS': 'proposals',
+      'QUOTATIONS.SALES': 'quotations.sales',
+      'SALES.ORDERS': 'sales_orders',
+      'INVOICES': 'invoices',
+      'QUOTATIONS.PROCUREMENT': 'quotations.procurement',
+      'PURCHASE.ORDERS': 'purchase_orders',
+      'BILLS': 'bills',
+      'PAYMENTS': 'payments',
+      'REPORTS': 'reports',
+      'FOLLOWUPS': 'followups',
+      'SETTINGS': 'settings',
+      'ACTIVITY.LOGS': 'activity_logs',
+      'ATTACHMENTS': 'attachments'
+    };
+
+    Object.entries(data).forEach(([module, actions]) => {
+      // Convert backend module name to frontend format
+      const frontendModule = moduleNameMapping[module] || module.toLowerCase();
+      
+      actions.forEach((action) => {
+        const actionLower = action.toLowerCase();
+        const permName = `${frontendModule}.${actionLower}`;
+
+        const perm = pagePermissionsStructure.find(
+          (p) => p.name === permName
+        );
+
+        if (perm) {
+          permissionIds.push(perm.id);
+        } else {
+          console.warn(`Permission not found in structure: ${permName} (from backend: ${module}.${action})`);
+        }
+      });
+    });
+
+    console.log("Processed page permissions:", permissionIds);
+    console.log("Total permissions found:", permissionIds.length);
+    return permissionIds;
+
+  } catch (error) {
+    console.error("Error fetching user page permissions:", error);
+    return [];
+  }
+};
 
   // Handlers
   const handleEditUser = async (user) => {
@@ -697,6 +1025,13 @@ const UsersPage = () => {
           <h1 className="users-page-title">User Management</h1>
           <p className="users-page-subtitle">Manage users, roles, and permissions</p>
         </div>
+        <button 
+          className="users-page-btn users-page-btn-primary"
+          onClick={handleOpenAddUserModal}
+        >
+          <span className="users-page-icon">+</span>
+          Add New User
+        </button>
       </div>
 
       {/* Filters */}
@@ -825,6 +1160,259 @@ const UsersPage = () => {
           </div>
         )}
       </div>
+
+      {/* Add User Modal */}
+      {showAddUserModal && (
+        <div className="users-page-modal-overlay" onClick={() => setShowAddUserModal(false)}>
+          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="users-page-modal-header">
+              <h2>Add New User</h2>
+              <button
+                className="users-page-modal-close"
+                onClick={() => setShowAddUserModal(false)}
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleAddUserSubmit} autoComplete="off">
+              <div className="users-page-modal-body">
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Username (User ID) <span style={{ color: 'red' }}>*</span></label>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="off"
+                      data-form-type="other"
+                      value={newUser.user_id}
+                      onChange={(e) => setNewUser({ ...newUser, user_id: e.target.value })}
+                      placeholder="Enter unique username"
+                    />
+                    {userIdValidation.message && (
+                      <div 
+                        style={{
+                          marginTop: '4px',
+                          fontSize: '13px',
+                          color: userIdValidation.isValid ? '#22c55e' : userIdValidation.isValid === false ? '#ef4444' : '#6b7280'
+                        }}
+                      >
+                        {userIdValidation.checking ? '⏳ ' : userIdValidation.isValid ? '✓ ' : userIdValidation.isValid === false ? '✕ ' : ''}
+                        {userIdValidation.message}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="users-page-form-group">
+                    <label>Full Name <span style={{ color: 'red' }}>*</span></label>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="off"
+                      data-form-type="other"
+                      value={newUser.name}
+                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
+                      placeholder="Enter full name"
+                    />
+                  </div>
+                </div>
+
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Email <span style={{ color: 'red' }}>*</span></label>
+                    <input
+                      type="email"
+                      required
+                      autoComplete="new-email"
+                      data-form-type="other"
+                      value={newUser.email}
+                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
+                      placeholder="Enter email address"
+                    />
+                  </div>
+
+                  <div className="users-page-form-group">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      autoComplete="off"
+                      data-form-type="other"
+                      value={newUser.phone}
+                      onChange={(e) => {
+                        const value = e.target.value.replace(/\D/g, '');
+                        if (value.length <= 10) {
+                          setNewUser({ ...newUser, phone: value });
+                        }
+                      }}
+                      placeholder="Enter 10-digit phone number"
+                      maxLength="10"
+                    />
+                    {phoneValidation.message && (
+                      <div 
+                        style={{
+                          marginTop: '4px',
+                          fontSize: '13px',
+                          color: phoneValidation.isValid ? '#22c55e' : '#ef4444'
+                        }}
+                      >
+                        {phoneValidation.isValid ? '✓ ' : ''}
+                        {phoneValidation.message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Password <span style={{ color: 'red' }}>*</span></label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required
+                        autoComplete="new-password"
+                        data-form-type="other"
+                        name="new-user-password"
+                        value={newUser.password}
+                        onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
+                        placeholder="Enter password"
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#718096',
+                          fontSize: '18px',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        {showPassword ? <FiEyeOff /> : <FiEye />}
+                      </button>
+                    </div>
+                    {passwordStrength.message && (
+                      <div 
+                        style={{
+                          marginTop: '4px',
+                          fontSize: '13px',
+                          color: passwordStrength.isValid ? '#22c55e' : '#ef4444'
+                        }}
+                      >
+                        {passwordStrength.isValid ? '✓ ' : '✕ '}
+                        {passwordStrength.message}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="users-page-form-group">
+                    <label>Confirm Password <span style={{ color: 'red' }}>*</span></label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showConfirmPassword ? "text" : "password"}
+                        required
+                        autoComplete="new-password"
+                        data-form-type="other"
+                        name="confirm-user-password"
+                        value={newUser.confirmPassword}
+                        onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
+                        placeholder="Re-enter password"
+                        style={{ paddingRight: '40px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        style={{
+                          position: 'absolute',
+                          right: '12px',
+                          top: '50%',
+                          transform: 'translateY(-50%)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: '#718096',
+                          fontSize: '18px',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}
+                      >
+                        {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                      </button>
+                    </div>
+                    {passwordMatch.message && (
+                      <div 
+                        style={{
+                          marginTop: '4px',
+                          fontSize: '13px',
+                          color: passwordMatch.isValid ? '#22c55e' : '#ef4444'
+                        }}
+                      >
+                        {passwordMatch.isValid ? '✓ ' : '✕ '}
+                        {passwordMatch.message}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Role <span style={{ color: 'red' }}>*</span></label>
+                    <select
+                      required
+                      autoComplete="off"
+                      value={newUser.role}
+                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                    >
+                      <option value="">Select Role</option>
+                      {roles.map(role => (
+                        <option key={role.id} value={role.name}>
+                          {role.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                   <div className="users-page-form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: '40px' }}>
+                    <label className="users-page-checkbox-label" style={{ marginBottom: '0' }}>
+                      <span><input
+                        type="checkbox"
+                        checked={newUser.is_active}
+                        onChange={(e) => setNewUser({ ...newUser, is_active: e.target.checked })}
+                      /></span>
+                      <span style={{paddingLeft:"5px",marginTop:"0px"}}>Active User</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="users-page-modal-footer">
+                <button
+                  type="button"
+                  className="users-page-btn users-page-btn-secondary"
+                  onClick={() => setShowAddUserModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="users-page-btn users-page-btn-primary"
+                  disabled={loading || !userIdValidation.isValid || !passwordStrength.isValid || !passwordMatch.isValid}
+                >
+                  {loading ? 'Creating...' : 'Create User'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit User Modal */}
       {showEditUserModal && selectedUser && (
