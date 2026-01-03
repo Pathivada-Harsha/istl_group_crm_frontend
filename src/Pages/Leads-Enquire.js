@@ -296,11 +296,18 @@ function LeadsEnquiries() {
     }
   };
 
+  // Add this updated handleSubmit to replace the existing one in your Leads-Enquiries.js
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      // Check if status is changing to "Closed Won"
+      const isClosingWon = formData.status === 'Closed Won' &&
+        formData.id &&
+        leads.find(l => l.id === formData.id)?.status !== 'Closed Won';
+
       if (formData.id) {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${formData.id}`, {
           method: 'PUT',
@@ -308,7 +315,11 @@ function LeadsEnquiries() {
         });
 
         if (data.success) {
-          showSuccess('Lead updated successfully');
+          if (isClosingWon) {
+            showSuccess('Lead updated successfully!\n\n✅ Lead has been converted to Customer automatically.\nYou can find the customer in the Customers Database.');
+          } else {
+            showSuccess('Lead updated successfully');
+          }
           setShowAddModal(false);
           resetForm();
           fetchLeads();
@@ -403,7 +414,7 @@ function LeadsEnquiries() {
   };
 
   return (
-    
+
     <div className="leads-enquiries-container">
       {loading && <CrmPreloader text="Loading Leads..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -508,6 +519,7 @@ function LeadsEnquiries() {
                 <th>Category</th>
                 <th>Priority</th>
                 <th>Status</th>
+                <th>Follow-Ups</th>
                 <th>Assigned To</th>
                 <th onClick={() => handleSort('createdAt')}>Created At</th>
                 <th>Actions</th>
@@ -537,6 +549,13 @@ function LeadsEnquiries() {
                       <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>
                         {lead.status}
                       </span>
+                    </td>
+                    <td>
+                      {lead.hasPendingFollowups && (
+                        <span className="badge badge-orange">
+                          {lead.pendingFollowupsCount} Pending
+                        </span>
+                      )}
                     </td>
                     <td>{lead.assignedToName || '-'}</td>
                     <td>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}</td>

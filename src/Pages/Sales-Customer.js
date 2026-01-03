@@ -1,316 +1,363 @@
-import React, { useState } from 'react';
-import '../pages-css/Sales-Customer.css';
-import GroupCategoryFilter  from "./../components/Dropdowns/groupCategoryFilter.js";
+// Customers.js - Complete with KPIs, Follow-ups, and Leads-style UI
+import React, { useState, useEffect } from 'react';
+import '../pages-css/Leads-Enquire.css';
+import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+
 const CustomerDatabase = () => {
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('all');
-  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedGroup, setSelectedGroup] = useState('All');
+  const [selectedStatus, setSelectedStatus] = useState('All');
   const [selectedRows, setSelectedRows] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [followups, setFollowups] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCustomers, setTotalCustomers] = useState(0);
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { user } = useAuth();
 
-  // Sample customer data
-  const customers = [
-    {
-      id: 'CUST-001',
-      name: 'Rajesh Kumar',
-      company: 'Sunrise Solar Pvt Ltd',
-      group: 'Solar',
-      contactPerson: 'Rajesh Kumar',
-      phone: '+91 98765 43210',
-      email: 'rajesh@sunrisesolar.com',
-      city: 'Mumbai',
-      state: 'Maharashtra',
-      status: 'Active',
-      createdOn: '2024-01-15',
-      gst: '27AAAAA0000A1Z5',
-      address: '123 Solar Street, Andheri',
-      pincode: '400053',
-      website: 'www.sunrisesolar.com',
-      industry: 'Solar Energy',
-      designation: 'Managing Director',
-      annualBudget: '₹50L - ₹1Cr',
-      procurementCycle: 'Quarterly',
-      leadSource: 'Website',
-      probability: 'Hot',
-      notes: 'Looking for 500kW solar installation'
-    },
-    {
-      id: 'CUST-002',
-      name: 'Priya Sharma',
-      company: 'TechVision EPC',
-      group: 'EPC',
-      contactPerson: 'Priya Sharma',
-      phone: '+91 98234 56789',
-      email: 'priya@techvisionepc.com',
-      city: 'Bangalore',
-      state: 'Karnataka',
-      status: 'Active',
-      createdOn: '2024-02-10',
-      gst: '29BBBBB0000B1Z5',
-      address: '456 Tech Park, Whitefield',
-      pincode: '560066',
-      website: 'www.techvisionepc.com',
-      industry: 'Engineering',
-      designation: 'Project Manager',
-      annualBudget: '₹1Cr - ₹5Cr',
-      procurementCycle: 'Monthly',
-      leadSource: 'Referral',
-      probability: 'Warm',
-      notes: 'Interested in turnkey EPC projects'
-    },
-    {
-      id: 'CUST-003',
-      name: 'Amit Patel',
-      company: 'SmartCity CCMS',
-      group: 'CCMS',
-      contactPerson: 'Amit Patel',
-      phone: '+91 98111 22333',
-      email: 'amit@smartcityccms.com',
-      city: 'Ahmedabad',
-      state: 'Gujarat',
-      status: 'Prospect',
-      createdOn: '2024-03-05',
-      gst: '24CCCCC0000C1Z5',
-      address: '789 Smart Avenue, Satellite',
-      pincode: '380015',
-      website: 'www.smartcityccms.com',
-      industry: 'Smart Infrastructure',
-      designation: 'Technical Head',
-      annualBudget: '₹25L - ₹50L',
-      procurementCycle: 'Yearly',
-      leadSource: 'Marketing',
-      probability: 'Warm',
-      notes: 'Evaluating CCMS solutions for municipal project'
-    },
-    {
-      id: 'CUST-004',
-      name: 'Sneha Reddy',
-      company: 'IoT Solutions India',
-      group: 'IoT',
-      contactPerson: 'Sneha Reddy',
-      phone: '+91 98444 55666',
-      email: 'sneha@iotsolutions.in',
-      city: 'Hyderabad',
-      state: 'Telangana',
-      status: 'Active',
-      createdOn: '2024-01-20',
-      gst: '36DDDDD0000D1Z5',
-      address: '321 IoT Hub, HITEC City',
-      pincode: '500081',
-      website: 'www.iotsolutions.in',
-      industry: 'IoT & Automation',
-      designation: 'CEO',
-      annualBudget: '₹10L - ₹25L',
-      procurementCycle: 'Monthly',
-      leadSource: 'Walk-In',
-      probability: 'Hot',
-      notes: 'Regular IoT sensor procurement'
-    },
-    {
-      id: 'CUST-005',
-      name: 'Vikram Singh',
-      company: 'Green Energy Corp',
-      group: 'Solar',
-      contactPerson: 'Vikram Singh',
-      phone: '+91 98777 88999',
-      email: 'vikram@greenenergy.com',
-      city: 'Delhi',
-      state: 'Delhi',
-      status: 'Active',
-      createdOn: '2024-02-15',
-      gst: '07EEEEE0000E1Z5',
-      address: '555 Green Plaza, Connaught Place',
-      pincode: '110001',
-      website: 'www.greenenergy.com',
-      industry: 'Renewable Energy',
-      designation: 'Director',
-      annualBudget: '₹2Cr - ₹5Cr',
-      procurementCycle: 'Quarterly',
-      leadSource: 'Referral',
-      probability: 'Hot',
-      notes: 'Multiple solar projects in pipeline'
-    },
-    {
-      id: 'CUST-006',
-      name: 'Anjali Verma',
-      company: 'PowerGrid EPC',
-      group: 'EPC',
-      contactPerson: 'Anjali Verma',
-      phone: '+91 98555 44333',
-      email: 'anjali@powergridepc.com',
-      city: 'Pune',
-      state: 'Maharashtra',
-      status: 'Inactive',
-      createdOn: '2023-11-10',
-      gst: '27FFFFF0000F1Z5',
-      address: '888 Power Complex, Hinjewadi',
-      pincode: '411057',
-      website: 'www.powergridepc.com',
-      industry: 'Power Distribution',
-      designation: 'VP Operations',
-      annualBudget: '₹50L - ₹1Cr',
-      procurementCycle: 'Yearly',
-      leadSource: 'Marketing',
-      probability: 'Cold',
-      notes: 'On hold due to budget constraints'
-    },
-    {
-      id: 'CUST-007',
-      name: 'Karthik Menon',
-      company: 'Urban CCMS Ltd',
-      group: 'CCMS',
-      contactPerson: 'Karthik Menon',
-      phone: '+91 98666 77888',
-      email: 'karthik@urbanccms.com',
-      city: 'Chennai',
-      state: 'Tamil Nadu',
-      status: 'Active',
-      createdOn: '2024-03-20',
-      gst: '33GGGGG0000G1Z5',
-      address: '999 Urban Tower, Anna Nagar',
-      pincode: '600040',
-      website: 'www.urbanccms.com',
-      industry: 'Urban Development',
-      designation: 'Senior Manager',
-      annualBudget: '₹1Cr - ₹2Cr',
-      procurementCycle: 'Quarterly',
-      leadSource: 'Website',
-      probability: 'Warm',
-      notes: 'Exploring street light automation'
-    },
-    {
-      id: 'CUST-008',
-      name: 'Neha Agarwal',
-      company: 'SmartTech IoT',
-      group: 'IoT',
-      contactPerson: 'Neha Agarwal',
-      phone: '+91 98333 22111',
-      email: 'neha@smarttechiot.com',
-      city: 'Jaipur',
-      state: 'Rajasthan',
-      status: 'Prospect',
-      createdOn: '2024-03-25',
-      gst: '08HHHHH0000H1Z5',
-      address: '222 Smart City, Malviya Nagar',
-      pincode: '302017',
-      website: 'www.smarttechiot.com',
-      industry: 'Technology',
-      designation: 'Founder',
-      annualBudget: '₹5L - ₹10L',
-      procurementCycle: 'Monthly',
-      leadSource: 'Referral',
-      probability: 'Warm',
-      notes: 'Startup looking for IoT components'
-    },
-    {
-      id: 'CUST-009',
-      name: 'Rahul Desai',
-      company: 'SolarMax Industries',
-      group: 'Solar',
-      contactPerson: 'Rahul Desai',
-      phone: '+91 98222 11000',
-      email: 'rahul@solarmax.in',
-      city: 'Surat',
-      state: 'Gujarat',
-      status: 'Active',
-      createdOn: '2024-02-28',
-      gst: '24IIIII0000I1Z5',
-      address: '777 Industrial Area, Udhna',
-      pincode: '394210',
-      website: 'www.solarmax.in',
-      industry: 'Manufacturing',
-      designation: 'Plant Manager',
-      annualBudget: '₹1Cr - ₹5Cr',
-      procurementCycle: 'Quarterly',
-      leadSource: 'Marketing',
-      probability: 'Hot',
-      notes: 'Factory rooftop solar project'
-    },
-    {
-      id: 'CUST-010',
-      name: 'Pooja Khanna',
-      company: 'Metro EPC Solutions',
-      group: 'EPC',
-      contactPerson: 'Pooja Khanna',
-      phone: '+91 98999 88777',
-      email: 'pooja@metroepc.com',
-      city: 'Kolkata',
-      state: 'West Bengal',
-      status: 'Active',
-      createdOn: '2024-01-30',
-      gst: '19JJJJJ0000J1Z5',
-      address: '444 Metro Plaza, Salt Lake',
-      pincode: '700091',
-      website: 'www.metroepc.com',
-      industry: 'Infrastructure',
-      designation: 'Business Head',
-      annualBudget: '₹5Cr+',
-      procurementCycle: 'Monthly',
-      leadSource: 'Walk-In',
-      probability: 'Hot',
-      notes: 'Major infrastructure projects'
+  const currentUser = {
+    id: user.id || 1,
+    role: user.role || 'USER',
+    name: user.name || 'Current User'
+  };
+
+  const [formData, setFormData] = useState({
+    name: '',
+    companyName: '',
+    groupName: '',
+    contactPerson: '',
+    designation: '',
+    email: '',
+    phone: '',
+    altPhone: '',
+    website: '',
+    gstNumber: '',
+    pan: '',
+    address: '',
+    city: '',
+    state: '',
+    pincode: '',
+    status: 'Active',
+    assignedTo: null
+  });
+
+  const [followupFormData, setFollowupFormData] = useState({
+    followupType: 'Call',
+    scheduledAt: '',
+    assignedTo: '',
+    priority: 'Medium',
+    notes: ''
+  });
+
+  const fetchWithHeaders = async (url, options = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Id': currentUser.id,
+      'User-Role': currentUser.role,
+      ...options.headers
+    };
+
+    const response = await fetch(url, {
+      ...options,
+      headers
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
-  ];
 
-  const kpiData = {
-    totalCustomers: customers.length,
-    newThisMonth: 3,
-    activeProjects: 15,
-    followUpsPending: 8,
-    groupDistribution: {
-      Solar: 30,
-      EPC: 30,
-      CCMS: 20,
-      IoT: 20
+    return response.json();
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    fetchCustomers();
+  }, [groupName, subGroupName, currentPage, rowsPerPage]);
+
+  const fetchCustomers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams();
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      params.append('page', currentPage - 1); // Backend uses 0-based page index
+      params.append('size', rowsPerPage);
+      
+      const data = await fetchWithHeaders(`${API_BASE_URL}/customers/getAll?${params}`);
+      if (data.success) {
+        setCustomers(data.data.content || data.data); // Support paginated or non-paginated response
+        setTotalCustomers(data.data.totalElements || data.data.length || 0);
+      }
+    } catch (err) {
+      setError(err.message || 'Error fetching customers');
+    } finally {
+      setLoading(false);
     }
   };
 
-  const activityTimeline = [
-    { type: 'added', text: 'Customer profile created', date: '2024-03-25 10:30 AM' },
-    { type: 'note', text: 'Initial discussion completed', date: '2024-03-26 02:15 PM' },
-    { type: 'proposal', text: 'Proposal sent - Solar Project', date: '2024-03-28 11:00 AM' },
-    { type: 'followup', text: 'Follow-up call scheduled', date: '2024-04-02 09:00 AM' },
-    { type: 'document', text: 'KYC documents uploaded', date: '2024-04-05 03:30 PM' }
-  ];
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to fetch users');
+      
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setUsers([]);
+    }
+  };
 
-  const projectHistory = [
-    { id: 'PROP-2401', type: 'Proposal', value: '₹45,00,000', date: '2024-03-15', status: 'Sent' },
-    { id: 'QUO-2402', type: 'Quotation', value: '₹42,50,000', date: '2024-03-20', status: 'Approved' },
-    { id: 'SO-2403', type: 'Sales Order', value: '₹42,50,000', date: '2024-03-25', status: 'In Progress' }
-  ];
+  const fetchFollowups = async (customerId) => {
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/followups/entity/Customer/${customerId}`);
+      if (data.success) {
+        setFollowups(data.data);
+      }
+    } catch (err) {
+      console.error('Error fetching followups:', err);
+      setFollowups([]);
+    }
+  };
 
-  const followUpHistory = [
-    { date: '2024-04-02', summary: 'Discussed project timeline', assignee: 'Ravi Kumar', status: 'Completed' },
-    { date: '2024-04-10', summary: 'Site visit scheduled', assignee: 'Priya Singh', status: 'Pending' },
-    { date: '2024-04-15', summary: 'Budget approval follow-up', assignee: 'Amit Shah', status: 'Upcoming' }
-  ];
+  const applyFilters = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const filterRequest = {
+        searchTerm: searchTerm || null,
+        groupName: selectedGroup !== 'All' ? selectedGroup : null,
+        status: selectedStatus !== 'All' ? selectedStatus : null,
+        city: null,
+        state: null,
+        assignedTo: null,
+        fromDate: null,
+        toDate: null,
+        page: currentPage - 1, // 0-based page index
+        size: rowsPerPage
+      };
 
-  const documents = [
-    { name: 'GST Certificate.pdf', type: 'KYC', date: '2024-03-20', size: '245 KB' },
-    { name: 'Company Profile.pdf', type: 'Document', date: '2024-03-22', size: '1.2 MB' },
-    { name: 'Site Photos.zip', type: 'Attachment', date: '2024-03-25', size: '5.8 MB' }
-  ];
+      const data = await fetchWithHeaders(`${API_BASE_URL}/customers/filter`, {
+        method: 'POST',
+        body: JSON.stringify(filterRequest)
+      });
+      
+      if (data.success) {
+        setCustomers(data.data.content || data.data);
+        setTotalCustomers(data.data.totalElements || data.data.length || 0);
+      }
+    } catch (err) {
+      setError(err.message || 'Error applying filters');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredCustomers = customers.filter(customer => {
-    const matchesSearch =
-      customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      customer.phone.includes(searchTerm);
+  useEffect(() => {
+    const debounceTimer = setTimeout(() => {
+      applyFilters();
+      setCurrentPage(1); // Reset to first page when filters change
+    }, 500);
+    return () => clearTimeout(debounceTimer);
+  }, [searchTerm, selectedGroup, selectedStatus]);
 
-    const matchesGroup = selectedGroup === 'all' || customer.group === selectedGroup;
-    const matchesStatus = selectedStatus === 'all' || customer.status === selectedStatus;
+  const handleViewCustomer = async (customer) => {
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/customers/${customer.id}`);
+      if (data.success) {
+        setSelectedCustomer(data.data);
+        setIsDrawerOpen(true);
+        fetchFollowups(customer.id);
+      }
+    } catch (err) {
+      showError(err.message || 'Error fetching customer details');
+    }
+  };
 
-    return matchesSearch && matchesGroup && matchesStatus;
-  });
+  const handleEdit = (customer) => {
+    setIsDrawerOpen(false);
+    setFormData({
+      id: customer.id,
+      name: customer.name,
+      companyName: customer.companyName || '',
+      groupName: customer.groupName || '',
+      contactPerson: customer.contactPerson || '',
+      designation: customer.designation || '',
+      email: customer.email,
+      phone: customer.phone,
+      altPhone: customer.altPhone || '',
+      website: customer.website || '',
+      gstNumber: customer.gstNumber || '',
+      pan: customer.pan || '',
+      address: customer.address || '',
+      city: customer.city || '',
+      state: customer.state || '',
+      pincode: customer.pincode || '',
+      status: customer.status || 'Active',
+      assignedTo: customer.assignedTo
+    });
+    setIsAddFormOpen(true);
+  };
 
-  const handleViewCustomer = (customer) => {
-    setSelectedCustomer(customer);
-    setIsDrawerOpen(true);
+  const handleDelete = async (customerId) => {
+    if (window.confirm('Are you sure you want to delete this customer?')) {
+      try {
+        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/delete/${customerId}`, {
+          method: 'DELETE'
+        });
+        
+        if (data.success) {
+          showSuccess('Customer deleted successfully');
+          fetchCustomers();
+        }
+      } catch (err) {
+        showError(err.message || 'Error deleting customer');
+      }
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      if (formData.id) {
+        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/update/${formData.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(formData)
+        });
+        
+        if (data.success) {
+          showSuccess('Customer updated successfully');
+          setIsAddFormOpen(false);
+          resetForm();
+          fetchCustomers();
+        }
+      } else {
+        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/create`, {
+          method: 'POST',
+          body: JSON.stringify(formData)
+        });
+        
+        if (data.success) {
+          showSuccess('Customer created successfully');
+          setIsAddFormOpen(false);
+          resetForm();
+          fetchCustomers();
+        }
+      }
+    } catch (err) {
+      showError(err.message || 'Error saving customer');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFollowupSubmit = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const data = {
+        relatedType: 'Customer',
+        relatedId: selectedCustomer.id,
+        ...followupFormData,
+        status: 'Pending'
+      };
+      
+      const response = await fetchWithHeaders(`${API_BASE_URL}/followups/create`, {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      
+      if (response.success) {
+        showSuccess('Follow-up created successfully');
+        setShowFollowupModal(false);
+        resetFollowupForm();
+        fetchFollowups(selectedCustomer.id);
+        fetchCustomers(); // Refresh to update followup count
+      }
+    } catch (err) {
+      showError(err.message || 'Error creating follow-up');
+    }
+  };
+
+  const handleCompleteFollowup = async (followupId) => {
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/followups/update/${followupId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'Completed' })
+      });
+      
+      if (data.success) {
+        showSuccess('Follow-up marked as completed');
+        fetchFollowups(selectedCustomer.id);
+        fetchCustomers();
+      }
+    } catch (err) {
+      showError(err.message || 'Error updating follow-up');
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      companyName: '',
+      groupName: '',
+      contactPerson: '',
+      designation: '',
+      email: '',
+      phone: '',
+      altPhone: '',
+      website: '',
+      gstNumber: '',
+      pan: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      status: 'Active',
+      assignedTo: null
+    });
+  };
+
+  const resetFollowupForm = () => {
+    setFollowupFormData({
+      followupType: 'Call',
+      scheduledAt: '',
+      assignedTo: '',
+      priority: 'Medium',
+      notes: ''
+    });
   };
 
   const handleSelectRow = (customerId) => {
@@ -322,10 +369,10 @@ const CustomerDatabase = () => {
   };
 
   const handleSelectAll = () => {
-    if (selectedRows.length === filteredCustomers.length) {
+    if (selectedRows.length === customers.length) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(filteredCustomers.map(c => c.id));
+      setSelectedRows(customers.map(c => c.id));
     }
   };
 
@@ -335,6 +382,7 @@ const CustomerDatabase = () => {
       Solar: 'yellow',
       EPC: 'green',
       IoT: 'purple',
+      Hybrid: 'orange',
       Others: 'grey'
     };
     return colors[group] || 'grey';
@@ -350,574 +398,706 @@ const CustomerDatabase = () => {
     return colors[status] || 'grey';
   };
 
+  const exportToCSV = () => {
+    const headers = ['Customer Code', 'Name', 'Company', 'Email', 'Phone', 'Group', 'Status', 'City', 'State', 'Created At'];
+    const csvContent = [
+      headers.join(','),
+      ...customers.map(customer => [
+        customer.customerCode,
+        customer.name,
+        customer.companyName || '',
+        customer.email,
+        customer.phone,
+        customer.groupName || '',
+        customer.status,
+        customer.city || '',
+        customer.state || '',
+        customer.createdAt
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `customers_export_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  };
+
+  // Calculate KPIs (note: some KPIs use current page data, adjust as needed)
+  const kpiData = {
+    totalCustomers: totalCustomers, // Use total from API
+    newThisMonth: customers.filter(c => {
+      const createdDate = new Date(c.createdAt);
+      const now = new Date();
+      return createdDate.getMonth() === now.getMonth() && 
+             createdDate.getFullYear() === now.getFullYear();
+    }).length,
+    activeCustomers: customers.filter(c => c.status === 'Active').length,
+    pendingFollowups: customers.reduce((sum, c) => sum + (c.pendingFollowupsCount || 0), 0)
+  };
+
+  // Pagination calculations
+  const totalPages = Math.ceil(totalCustomers / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = Math.min(startIndex + rowsPerPage, totalCustomers);
+
   return (
-    <div className="sales-customer-page-container">
-      {/* Breadcrumb */}
-      <div className="sales-customer-page-breadcrumb">
+    <div className="leads-enquiries-container">
+      {loading && <CrmPreloader text="Loading Customers..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      <div className="leads-enquiries-breadcrumb">
         <span>Dashboard</span>
-        <span className="sales-customer-page-breadcrumb-separator">›</span>
-        <span className="sales-customer-page-breadcrumb-active">Customers</span>
+        <span className="leads-enquiries-breadcrumb-separator">&gt;</span>
+        <span className="leads-enquiries-breadcrumb-active">Customers</span>
       </div>
 
-      {/* Header */}
-      <div className="page-header-with-filter">
-
+      <div className="leads-enquiries-header page-header-with-filter">
         <GroupCategoryFilter
-        groupValue={groupName}
-        subGroupValue={subGroupName}
-        onChange={updateFilters}
-      />
-      </div>
-      <div className="sales-customer-page-header">
-        <h1 className="sales-customer-page-title">Customer / Client Database</h1>
-
-        <div className="sales-customer-page-header-actions">
-          <button className="sales-customer-page-btn-secondary">
-            <span className="sales-customer-page-icon">📥</span>
-            Import Data
-          </button>
-          <button className="sales-customer-page-btn-secondary">
-            <span className="sales-customer-page-icon">📤</span>
-            Export CSV
-          </button>
-          <button
-            className="sales-customer-page-btn-primary"
-            onClick={() => setIsAddFormOpen(true)}
-          >
-            <span className="sales-customer-page-icon">➕</span>
-            Add New Customer
-          </button>
-        </div>
+          groupValue={groupName}
+          subGroupValue={subGroupName}
+          onChange={updateFilters}
+        />
       </div>
 
-      {/* KPI Cards */}
-      <div className="sales-customer-page-kpi-grid">
-        <div className="sales-customer-page-kpi-card">
-          <div className="sales-customer-page-kpi-icon blue">👥</div>
-          <div className="sales-customer-page-kpi-content">
-            <div className="sales-customer-page-kpi-value">{kpiData.totalCustomers}</div>
-            <div className="sales-customer-page-kpi-label">Total Customers</div>
+      {error && (
+        <div className="alert alert-danger" role="alert">
+          {error}
+        </div>
+      )}
+
+      {/* KPI Cards - Compact Size */}
+      <div style={{
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(4, 1fr)', 
+        gap: '1rem', 
+        marginBottom: '1.5rem'
+      }}>
+        <div style={{
+          background: '#fff', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: '#eff6ff',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem'
+          }}>👥</div>
+          <div>
+            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.totalCustomers}</div>
+            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Total Customers</div>
           </div>
         </div>
-        <div className="sales-customer-page-kpi-card">
-          <div className="sales-customer-page-kpi-icon green">✨</div>
-          <div className="sales-customer-page-kpi-content">
-            <div className="sales-customer-page-kpi-value">{kpiData.newThisMonth}</div>
-            <div className="sales-customer-page-kpi-label">New This Month</div>
+
+        <div style={{
+          background: '#fff', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: '#fef3c7',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem'
+          }}>✨</div>
+          <div>
+            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.newThisMonth}</div>
+            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>New This Month</div>
           </div>
         </div>
-        <div className="sales-customer-page-kpi-card">
-          <div className="sales-customer-page-kpi-icon purple">📊</div>
-          <div className="sales-customer-page-kpi-content">
-            <div className="sales-customer-page-kpi-value">{kpiData.activeProjects}</div>
-            <div className="sales-customer-page-kpi-label">Active Projects</div>
+
+        <div style={{
+          background: '#fff', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: '#dbeafe',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem'
+          }}>📊</div>
+          <div>
+            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.activeCustomers}</div>
+            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Active Customers</div>
           </div>
         </div>
-        <div className="sales-customer-page-kpi-card">
-          <div className="sales-customer-page-kpi-icon orange">📞</div>
-          <div className="sales-customer-page-kpi-content">
-            <div className="sales-customer-page-kpi-value">{kpiData.followUpsPending}</div>
-            <div className="sales-customer-page-kpi-label">Follow-Ups Pending</div>
-          </div>
-        </div>
-        <div className="sales-customer-page-kpi-card wide">
-          <div className="sales-customer-page-kpi-label">Customer Groups Distribution</div>
-          <div className="sales-customer-page-distribution">
-            {Object.entries(kpiData.groupDistribution).map(([group, percent]) => (
-              <div key={group} className="sales-customer-page-distribution-item">
-                <span className={`sales-customer-page-badge badge-${getGroupColor(group)}`}>
-                  {group}
-                </span>
-                <span className="sales-customer-page-distribution-percent">{percent}%</span>
-              </div>
-            ))}
+
+        <div style={{
+          background: '#fff', 
+          padding: '1rem', 
+          borderRadius: '8px', 
+          boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem'
+        }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            background: '#fce7f3',
+            borderRadius: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '1.25rem'
+          }}>📞</div>
+          <div>
+            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.pendingFollowups}</div>
+            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Follow-Ups Pending</div>
           </div>
         </div>
       </div>
 
-      {/* Filters & Search */}
-      <div className="sales-customer-page-filters-section">
-        <div className="sales-customer-page-search-box">
-          <span className="sales-customer-page-search-icon">🔍</span>
+      <div className="leads-enquiries-action-bar">
+        <div className="leads-enquiries-search-wrapper">
+          <svg className="leads-enquiries-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
             type="text"
             placeholder="Search by name, company, phone, email, GST..."
+            className="leads-enquiries-search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="sales-customer-page-search-input"
           />
         </div>
-        <div className="sales-customer-page-filters">
-          <select
-            className="sales-customer-page-filter-select"
-            value={selectedGroup}
-            onChange={(e) => setSelectedGroup(e.target.value)}
-          >
-            <option value="all">All Groups</option>
+
+        <div className="leads-enquiries-filters">
+          <select className="leads-enquiries-filter-select" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+            <option value="All">All Groups</option>
             <option value="CCMS">CCMS</option>
             <option value="Solar">Solar</option>
             <option value="EPC">EPC</option>
             <option value="IoT">IoT</option>
+            <option value="Hybrid">Hybrid</option>
             <option value="Others">Others</option>
           </select>
-          <select
-            className="sales-customer-page-filter-select"
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-          >
-            <option value="all">All Status</option>
+
+          <select className="leads-enquiries-filter-select" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+            <option value="All">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
             <option value="Prospect">Prospect</option>
             <option value="Lead">Lead</option>
           </select>
-          <select className="sales-customer-page-filter-select">
-            <option>All Locations</option>
-            <option>Maharashtra</option>
-            <option>Karnataka</option>
-            <option>Gujarat</option>
-          </select>
-          {selectedRows.length > 0 && (
-            <button className="sales-customer-page-btn-bulk">
-              Bulk Actions ({selectedRows.length})
-            </button>
-          )}
+        </div>
+
+        <div className="leads-enquiries-action-buttons">
+          <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
+            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </button>
+          <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => { resetForm(); setIsAddFormOpen(true); }}>
+            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add New Customer
+          </button>
         </div>
       </div>
 
-      {/* Customer Table */}
-      <div className="sales-customer-page-table-card">
-        <div className="sales-customer-page-table-header">
-          <h3>All Customers ({filteredCustomers.length})</h3>
-          <div className="sales-customer-page-table-actions">
-            <select className="sales-customer-page-page-size">
-              <option>10 per page</option>
-              <option>25 per page</option>
-              <option>50 per page</option>
-            </select>
-          </div>
-        </div>
-        <div className="sales-customer-page-table-container">
-          <table className="sales-customer-page-table">
+      <div className="leads-enquiries-table-card">
+        <div className="leads-enquiries-table-wrapper">
+          <table className="leads-enquiries-table">
             <thead>
               <tr>
                 <th>
                   <input
                     type="checkbox"
-                    checked={selectedRows.length === filteredCustomers.length}
+                    checked={selectedRows.length === customers.length && customers.length > 0}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Customer ID</th>
-                <th>Customer Name</th>
-                <th>Company Name</th>
+                <th>Customer Code</th>
+                <th>Name</th>
+                <th>Company</th>
                 <th>Group</th>
-                <th>Contact Person</th>
                 <th>Phone</th>
                 <th>Email</th>
                 <th>Location</th>
                 <th>Status</th>
+                <th>Follow-Ups</th>
                 <th>Created On</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map((customer) => (
-                <tr key={customer.id} className="sales-customer-page-table-row">
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedRows.includes(customer.id)}
-                      onChange={() => handleSelectRow(customer.id)}
-                    />
-                  </td>
-                  <td><strong>{customer.id}</strong></td>
-                  <td>{customer.name}</td>
-                  <td>{customer.company}</td>
-                  <td>
-                    <span className={`sales-customer-page-badge badge-${getGroupColor(customer.group)}`}>
-                      {customer.group}
-                    </span>
-                  </td>
-                  <td>{customer.contactPerson}</td>
-                  <td>{customer.phone}</td>
-                  <td className="sales-customer-page-email">{customer.email}</td>
-                  <td>{customer.city}, {customer.state}</td>
-                  <td>
-                    <span className={`sales-customer-page-status status-${getStatusColor(customer.status)}`}>
-                      {customer.status}
-                    </span>
-                  </td>
-                  <td>{customer.createdOn}</td>
-                  <td>
-                    <div className="sales-customer-page-action-buttons">
-                      <button
-                        className="sales-customer-page-action-btn"
-                        onClick={() => handleViewCustomer(customer)}
-                        title="View Details"
-                      >
-                        👁️
-                      </button>
-                      <button className="sales-customer-page-action-btn" title="Edit">✏️</button>
-                      <button className="sales-customer-page-action-btn" title="Follow-up">📞</button>
-                      <button className="sales-customer-page-action-btn" title="Documents">📎</button>
-                    </div>
+              {customers.length === 0 ? (
+                <tr>
+                  <td colSpan="12" className="text-center py-4">
+                    {loading ? 'Loading...' : 'No customers found'}
                   </td>
                 </tr>
-              ))}
+              ) : (
+                customers.map((customer) => (
+                  <tr key={customer.id}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.includes(customer.id)}
+                        onChange={() => handleSelectRow(customer.id)}
+                      />
+                    </td>
+                    <td className="leads-enquiries-font-medium">{customer.customerCode}</td>
+                    <td className="leads-enquiries-font-medium">{customer.name}</td>
+                    <td>{customer.companyName || '-'}</td>
+                    <td>
+                      <span className={`leads-enquiries-badge badge-${getGroupColor(customer.groupName)}`}>
+                        {customer.groupName || 'Others'}
+                      </span>
+                    </td>
+                    <td>{customer.phone}</td>
+                    <td>{customer.email}</td>
+                    <td>{customer.city ? `${customer.city}, ${customer.state}` : '-'}</td>
+                    <td>
+                      <span className={`leads-enquiries-badge status-${getStatusColor(customer.status)}`}>
+                        {customer.status}
+                      </span>
+                    </td>
+                    <td>
+                      {customer.hasPendingFollowups && (
+                        <span className="leads-enquiries-badge leads-enquiries-badge-proposal">
+                          {customer.pendingFollowupsCount} Pending
+                        </span>
+                      )}
+                    </td>
+                    <td>{customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : '-'}</td>
+                    <td>
+                      <div className="leads-enquiries-action-buttons-cell">
+                        <button className="leads-enquiries-action-btn leads-enquiries-action-view" onClick={() => handleViewCustomer(customer)} title="View">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
+                        <button className="leads-enquiries-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(customer)} title="Edit">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button className="leads-enquiries-action-btn leads-enquiries-action-delete" onClick={() => handleDelete(customer.id)} title="Delete">
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-        <div className="sales-customer-page-table-footer">
-          <div className="sales-customer-page-pagination-info">
-            Showing {filteredCustomers.length} of {customers.length} customers
+
+        {/* Pagination */}
+        <div className="leads-enquiries-pagination">
+          <div className="leads-enquiries-pagination-info">
+            Showing {startIndex + 1} to {endIndex} of {totalCustomers} entries
           </div>
-          <div className="sales-customer-page-pagination">
-            <button className="sales-customer-page-pagination-btn">Previous</button>
-            <button className="sales-customer-page-pagination-btn active">1</button>
-            <button className="sales-customer-page-pagination-btn">2</button>
-            <button className="sales-customer-page-pagination-btn">Next</button>
+          <div className="leads-enquiries-pagination-controls">
+            <select 
+              className="leads-enquiries-rows-select" 
+              value={rowsPerPage} 
+              onChange={(e) => { 
+                setRowsPerPage(Number(e.target.value)); 
+                setCurrentPage(1); 
+              }}
+            >
+              <option value={10}>10 rows</option>
+              <option value={25}>25 rows</option>
+              <option value={50}>50 rows</option>
+              <option value={100}>100 rows</option>
+            </select>
+            <div className="leads-enquiries-pagination-buttons">
+              <button 
+                className="leads-enquiries-pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="leads-enquiries-pagination-current">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button 
+                className="leads-enquiries-pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                disabled={currentPage === totalPages}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Customer Details Drawer */}
-      {isDrawerOpen && selectedCustomer && (
-        <div className="sales-customer-page-drawer-overlay" onClick={() => setIsDrawerOpen(false)}>
-          <div className="sales-customer-page-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="sales-customer-page-drawer-header">
-              <div className="sales-customer-page-drawer-title-section">
-                <h2>{selectedCustomer.name}</h2>
-                <p className="sales-customer-page-drawer-company">{selectedCustomer.company}</p>
-                <div className="sales-customer-page-drawer-badges">
-                  <span className={`sales-customer-page-badge badge-${getGroupColor(selectedCustomer.group)}`}>
-                    {selectedCustomer.group}
-                  </span>
-                  <span className={`sales-customer-page-status status-${getStatusColor(selectedCustomer.status)}`}>
-                    {selectedCustomer.status}
-                  </span>
+      {/* Add/Edit Customer Modal */}
+      {isAddFormOpen && (
+        <div className="leads-enquiries-modal-overlay" onClick={() => setIsAddFormOpen(false)}>
+          <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="leads-enquiries-modal-header">
+              <h2>{formData.id ? 'Edit Customer' : 'Add New Customer'}</h2>
+              <button className="leads-enquiries-modal-close" onClick={() => setIsAddFormOpen(false)}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <form onSubmit={handleSubmit} className="leads-enquiries-form">
+              <div className="leads-enquiries-form-section">
+                <h3 className="leads-enquiries-form-section-title">Customer Information</h3>
+                <div className="leads-enquiries-form-grid">
+                  <div className="leads-enquiries-form-group">
+                    <label>Customer Name *</label>
+                    <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Company Name</label>
+                    <input type="text" value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Email *</label>
+                    <input type="email" required value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Phone *</label>
+                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Group</label>
+                    <select value={formData.groupName} onChange={(e) => setFormData({...formData, groupName: e.target.value})}>
+                      <option value="">Select group</option>
+                      <option value="CCMS">CCMS</option>
+                      <option value="Solar">Solar</option>
+                      <option value="EPC">EPC</option>
+                      <option value="IoT">IoT</option>
+                      <option value="Hybrid">Hybrid</option>
+                      <option value="Others">Others</option>
+                    </select>
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Status</label>
+                    <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                      <option value="Prospect">Prospect</option>
+                      <option value="Lead">Lead</option>
+                    </select>
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Contact Person</label>
+                    <input type="text" value={formData.contactPerson} onChange={(e) => setFormData({...formData, contactPerson: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Designation</label>
+                    <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Alternate Phone</label>
+                    <input type="tel" value={formData.altPhone} onChange={(e) => setFormData({...formData, altPhone: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Website</label>
+                    <input type="url" value={formData.website} onChange={(e) => setFormData({...formData, website: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>GST Number</label>
+                    <input type="text" value={formData.gstNumber} onChange={(e) => setFormData({...formData, gstNumber: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>PAN Number</label>
+                    <input type="text" value={formData.pan} onChange={(e) => setFormData({...formData, pan: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>City</label>
+                    <input type="text" value={formData.city} onChange={(e) => setFormData({...formData, city: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>State</label>
+                    <input type="text" value={formData.state} onChange={(e) => setFormData({...formData, state: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Pincode</label>
+                    <input type="text" value={formData.pincode} onChange={(e) => setFormData({...formData, pincode: e.target.value})} />
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Assign To</label>
+                    <select value={formData.assignedTo || ''} onChange={(e) => setFormData({...formData, assignedTo: e.target.value ? Number(e.target.value) : null})}>
+                      <option value="">Select Member</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="leads-enquiries-form-group">
+                  <label>Address</label>
+                  <textarea rows={3} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="Enter full address..." />
                 </div>
               </div>
-              <div className="sales-customer-page-drawer-actions">
-                <button className="sales-customer-page-drawer-btn">Edit Customer</button>
-                <button className="sales-customer-page-drawer-btn">Add Follow-Up</button>
-                <button className="sales-customer-page-drawer-btn">Export Profile</button>
-                <button
-                  className="sales-customer-page-drawer-close"
-                  onClick={() => setIsDrawerOpen(false)}
-                >
-                  ✕
+
+              <div className="leads-enquiries-form-actions">
+                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setIsAddFormOpen(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading}>
+                  {loading ? 'Saving...' : (formData.id ? 'Update Customer' : 'Save Customer')}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Customer Modal with Follow-ups */}
+      {isDrawerOpen && selectedCustomer && (
+        <div className="leads-enquiries-modal-overlay" onClick={() => setIsDrawerOpen(false)}>
+          <div className="leads-enquiries-modal leads-enquiries-modal-large" onClick={(e) => e.stopPropagation()}>
+            <div className="leads-enquiries-modal-header">
+              <h2>Customer Details - {selectedCustomer.customerCode}</h2>
+              <button className="leads-enquiries-modal-close" onClick={() => setIsDrawerOpen(false)}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-
-            <div className="sales-customer-page-drawer-content">
-              {/* Basic Information */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Basic Information</h3>
-                <div className="sales-customer-page-info-grid">
-                  <div className="sales-customer-page-info-item">
-                    <label>Customer ID</label>
-                    <span>{selectedCustomer.id}</span>
+            <div className="leads-enquiries-modal-body">
+              <div className="leads-enquiries-detail-section">
+                <h3>Basic Information</h3>
+                <div className="leads-enquiries-detail-grid">
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Customer Code:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.customerCode}</span>
                   </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Contact Person</label>
-                    <span>{selectedCustomer.contactPerson}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Name:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.name}</span>
                   </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Designation</label>
-                    <span>{selectedCustomer.designation}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Company:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.companyName || '-'}</span>
                   </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Email</label>
-                    <span>{selectedCustomer.email}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Email:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.email}</span>
                   </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Phone</label>
-                    <span>{selectedCustomer.phone}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Phone:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.phone}</span>
                   </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>GST Number</label>
-                    <span>{selectedCustomer.gst}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Group:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.groupName || '-'}</span>
                   </div>
-                  <div className="sales-customer-page-info-item full-width">
-                    <label>Address</label>
-                    <span>{selectedCustomer.address}, {selectedCustomer.city}, {selectedCustomer.state} - {selectedCustomer.pincode}</span>
-                  </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Website</label>
-                    <span className="sales-customer-page-link">{selectedCustomer.website}</span>
-                  </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Industry</label>
-                    <span>{selectedCustomer.industry}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Business Profile */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Business Profile</h3>
-                <div className="sales-customer-page-info-grid">
-                  <div className="sales-customer-page-info-item">
-                    <label>Annual Budget</label>
-                    <span>{selectedCustomer.annualBudget}</span>
-                  </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Procurement Cycle</label>
-                    <span>{selectedCustomer.procurementCycle}</span>
-                  </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Lead Source</label>
-                    <span>{selectedCustomer.leadSource}</span>
-                  </div>
-                  <div className="sales-customer-page-info-item">
-                    <label>Probability</label>
-                    <span className={`sales-customer-page-probability ${selectedCustomer.probability.toLowerCase()}`}>
-                      {selectedCustomer.probability}
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Status:</span>
+                    <span className={`leads-enquiries-badge status-${getStatusColor(selectedCustomer.status)}`}>
+                      {selectedCustomer.status}
                     </span>
                   </div>
-                  <div className="sales-customer-page-info-item full-width">
-                    <label>Notes</label>
-                    <span>{selectedCustomer.notes}</span>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Assigned To:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.assignedToName || '-'}</span>
+                  </div>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Address:</span>
+                    <span className="leads-enquiries-detail-value">
+                      {selectedCustomer.address ? `${selectedCustomer.address}, ${selectedCustomer.city}, ${selectedCustomer.state} - ${selectedCustomer.pincode}` : '-'}
+                    </span>
                   </div>
                 </div>
               </div>
 
-              {/* Project History */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Project History</h3>
-                <div className="sales-customer-page-project-list">
-                  {projectHistory.map((project) => (
-                    <div key={project.id} className="sales-customer-page-project-item">
-                      <div className="sales-customer-page-project-info">
-                        <strong>{project.id}</strong>
-                        <span className="sales-customer-page-project-type">{project.type}</span>
-                        <span>{project.date}</span>
-                      </div>
-                      <div className="sales-customer-page-project-details">
-                        <span className="sales-customer-page-project-value">{project.value}</span>
-                        <span className={`sales-customer-page-badge badge-${project.status === 'Approved' ? 'green' : 'blue'}`}>
-                          {project.status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+              {/* Follow-ups Section */}
+              <div className="leads-enquiries-detail-section">
+                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+                  <h3>Follow-Ups ({followups.length})</h3>
+                  <button 
+                    className="leads-enquiries-btn leads-enquiries-btn-primary"
+                    onClick={() => setShowFollowupModal(true)}
+                  >
+                    + Add Follow-Up
+                  </button>
                 </div>
+                
+                {followups.length === 0 ? (
+                  <p>No follow-ups scheduled</p>
+                ) : (
+                  <div>
+                    {followups.map(followup => (
+                      <div key={followup.id} style={{
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '6px',
+                        padding: '1rem',
+                        marginBottom: '0.75rem',
+                        background: followup.status === 'Completed' ? '#f0f9ff' : '#fff'
+                      }}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                          <div>
+                            <strong>{followup.followupType}</strong>
+                            <span className={`leads-enquiries-badge leads-enquiries-badge-${followup.priority === 'High' ? 'high' : followup.priority === 'Low' ? 'low' : 'medium'}`} style={{marginLeft: '0.5rem'}}>
+                              {followup.priority}
+                            </span>
+                          </div>
+                          <span className={`leads-enquiries-badge ${followup.status === 'Completed' ? 'leads-enquiries-badge-won' : 'leads-enquiries-badge-new'}`}>
+                            {followup.status}
+                          </span>
+                        </div>
+                        <div style={{fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem'}}>
+                          📅 Scheduled: {new Date(followup.scheduledAt).toLocaleString()}
+                        </div>
+                        {followup.notes && (
+                          <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>
+                            {followup.notes}
+                          </div>
+                        )}
+                        <div style={{fontSize: '0.85rem', color: '#999'}}>
+                          Assigned to: {followup.assignedToName || 'Unassigned'}
+                        </div>
+                        {followup.status === 'Pending' && (
+                          <button 
+                            className="leads-enquiries-btn leads-enquiries-btn-secondary"
+                            style={{marginTop: '0.5rem', padding: '0.25rem 0.75rem', fontSize: '0.85rem'}}
+                            onClick={() => handleCompleteFollowup(followup.id)}
+                          >
+                            Mark as Completed
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
-              {/* Follow-Up History */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Follow-Up History</h3>
-                <button className="sales-customer-page-add-btn">+ Add New Follow-Up</button>
-                <div className="sales-customer-page-followup-list">
-                  {followUpHistory.map((followup, idx) => (
-                    <div key={idx} className="sales-customer-page-followup-item">
-                      <div className="sales-customer-page-followup-date">{followup.date}</div>
-                      <div className="sales-customer-page-followup-details">
-                        <p>{followup.summary}</p>
-                        <span className="sales-customer-page-followup-assignee">
-                          Assigned to: {followup.assignee}
-                        </span>
-                      </div>
-                      <span className={`sales-customer-page-status status-${followup.status === 'Completed' ? 'green' : followup.status === 'Pending' ? 'orange' : 'blue'}`}>
-                        {followup.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Documents */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Uploaded Documents</h3>
-                <button className="sales-customer-page-add-btn">📎 Upload Document</button>
-                <div className="sales-customer-page-document-list">
-                  {documents.map((doc, idx) => (
-                    <div key={idx} className="sales-customer-page-document-item">
-                      <div className="sales-customer-page-document-icon">📄</div>
-                      <div className="sales-customer-page-document-info">
-                        <strong>{doc.name}</strong>
-                        <span className="sales-customer-page-document-meta">
-                          {doc.type} • {doc.size} • {doc.date}
-                        </span>
-                      </div>
-                      <button className="sales-customer-page-document-download">⬇️</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Activity Timeline */}
-              <div className="sales-customer-page-drawer-section">
-                <h3 className="sales-customer-page-drawer-section-title">Activity Timeline</h3>
-                <div className="sales-customer-page-timeline">
-                  {activityTimeline.map((activity, idx) => (
-                    <div key={idx} className="sales-customer-page-timeline-item">
-                      <div className={`sales-customer-page-timeline-icon icon-${activity.type}`}>
-                        {activity.type === 'added' && '✨'}
-                        {activity.type === 'note' && '📝'}
-                        {activity.type === 'proposal' && '📄'}
-                        {activity.type === 'followup' && '📞'}
-                        {activity.type === 'document' && '📎'}
-                      </div>
-                      <div className="sales-customer-page-timeline-content">
-                        <p>{activity.text}</p>
-                        <span className="sales-customer-page-timeline-date">{activity.date}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <div className="leads-enquiries-modal-actions">
+                <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => handleEdit(selectedCustomer)}>
+                  Edit Customer
+                </button>
+                <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setIsDrawerOpen(false)}>
+                  Close
+                </button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Customer Form Modal */}
-      {isAddFormOpen && (
-        <div className="sales-customer-page-modal-overlay" onClick={() => setIsAddFormOpen(false)}>
-          <div className="sales-customer-page-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="sales-customer-page-modal-header">
-              <h2>Add New Customer</h2>
-              <button
-                className="sales-customer-page-modal-close"
-                onClick={() => setIsAddFormOpen(false)}
-              >
-                ✕
+      {/* Add Follow-up Modal */}
+      {showFollowupModal && (
+        <div className="leads-enquiries-modal-overlay" onClick={() => setShowFollowupModal(false)}>
+          <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="leads-enquiries-modal-header">
+              <h2>Add Follow-Up</h2>
+              <button className="leads-enquiries-modal-close" onClick={() => setShowFollowupModal(false)}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
-            <div className="sales-customer-page-modal-content">
-              <form className="sales-customer-page-form">
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>Customer Name *</label>
-                    <input type="text" placeholder="Enter customer name" required />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Company Name *</label>
-                    <input type="text" placeholder="Enter company name" required />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>Customer Group *</label>
-                    <select required>
-                      <option value="">Select group</option>
-                      <option value="CCMS">CCMS</option>
-                      <option value="Solar">Solar</option>
-                      <option value="EPC">EPC</option>
-                      <option value="IoT">IoT</option>
-                      <option value="Others">Others</option>
+            <form onSubmit={handleFollowupSubmit} className="leads-enquiries-form">
+              <div className="leads-enquiries-form-section">
+                <div className="leads-enquiries-form-grid">
+                  <div className="leads-enquiries-form-group">
+                    <label>Follow-up Type *</label>
+                    <select 
+                      required 
+                      value={followupFormData.followupType}
+                      onChange={(e) => setFollowupFormData({...followupFormData, followupType: e.target.value})}
+                    >
+                      <option value="Call">Call</option>
+                      <option value="Email">Email</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Site Visit">Site Visit</option>
+                      <option value="Reminder">Reminder</option>
+                      <option value="Note">Note</option>
                     </select>
                   </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Customer Type *</label>
-                    <select required>
-                      <option value="">Select type</option>
-                      <option value="Lead">Lead</option>
-                      <option value="Prospect">Prospect</option>
-                      <option value="Client">Client</option>
+                  
+                  <div className="leads-enquiries-form-group">
+                    <label>Scheduled Date & Time *</label>
+                    <input 
+                      type="datetime-local" 
+                      required
+                      value={followupFormData.scheduledAt}
+                      onChange={(e) => setFollowupFormData({...followupFormData, scheduledAt: e.target.value})}
+                    />
+                  </div>
+                  
+                  <div className="leads-enquiries-form-group">
+                    <label>Priority *</label>
+                    <select 
+                      value={followupFormData.priority}
+                      onChange={(e) => setFollowupFormData({...followupFormData, priority: e.target.value})}
+                    >
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+                  
+                  <div className="leads-enquiries-form-group">
+                    <label>Assign To</label>
+                    <select 
+                      value={followupFormData.assignedTo}
+                      onChange={(e) => setFollowupFormData({...followupFormData, assignedTo: e.target.value ? Number(e.target.value) : ''})}
+                    >
+                      <option value="">Select User</option>
+                      {users.map(user => (
+                        <option key={user.id} value={user.id}>{user.name}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>Contact Person *</label>
-                    <input type="text" placeholder="Contact person name" required />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Designation</label>
-                    <input type="text" placeholder="e.g., Manager, Director" />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>Email *</label>
-                    <input type="email" placeholder="email@company.com" required />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Phone *</label>
-                    <input type="tel" placeholder="+91 98765 43210" required />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-group">
-                  <label>Address</label>
-                  <input type="text" placeholder="Street address" />
-                </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>City *</label>
-                    <input type="text" placeholder="City" required />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>State *</label>
-                    <input type="text" placeholder="State" required />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Pincode</label>
-                    <input type="text" placeholder="000000" />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>GST Number</label>
-                    <input type="text" placeholder="GST Number" />
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Website</label>
-                    <input type="url" placeholder="www.company.com" />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-row">
-                  <div className="sales-customer-page-form-group">
-                    <label>Lead Source</label>
-                    <select>
-                      <option value="">Select source</option>
-                      <option value="Website">Website</option>
-                      <option value="Referral">Referral</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Walk-In">Walk-In</option>
-                    </select>
-                  </div>
-                  <div className="sales-customer-page-form-group">
-                    <label>Industry</label>
-                    <input type="text" placeholder="e.g., Solar Energy" />
-                  </div>
-                </div>
-
-                <div className="sales-customer-page-form-group">
+                
+                <div className="leads-enquiries-form-group">
                   <label>Notes</label>
-                  <textarea
-                    rows="3"
-                    placeholder="Add any additional notes about the customer..."
-                  ></textarea>
+                  <textarea 
+                    rows={3}
+                    value={followupFormData.notes}
+                    onChange={(e) => setFollowupFormData({...followupFormData, notes: e.target.value})}
+                    placeholder="Add notes about this follow-up..."
+                  />
                 </div>
-
-                <div className="sales-customer-page-form-actions">
-                  <button
-                    type="button"
-                    className="sales-customer-page-btn-secondary"
-                    onClick={() => setIsAddFormOpen(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="sales-customer-page-btn-secondary">
-                    Save & Add Another
-                  </button>
-                  <button type="submit" className="sales-customer-page-btn-primary">
-                    Save Customer
-                  </button>
-                </div>
-              </form>
-            </div>
+              </div>
+              
+              <div className="leads-enquiries-form-actions">
+                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowFollowupModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary">
+                  Save Follow-Up
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
