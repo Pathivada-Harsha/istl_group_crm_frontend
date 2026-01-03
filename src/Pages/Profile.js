@@ -380,7 +380,7 @@ export default function Profile() {
               />
             </div>
 
-            <div className="profile-user-page-row">
+            {/* <div className="profile-user-page-row">
               <label>Designation / Role</label>
               <input 
                 name="role" 
@@ -388,7 +388,7 @@ export default function Profile() {
                 onChange={handleProfileChange} 
                 disabled={!editing || loading} 
               />
-            </div>
+            </div> */}
 
             {editing && (
               <div className="profile-user-page-actions-row">
