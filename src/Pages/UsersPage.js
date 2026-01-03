@@ -26,24 +26,11 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
     }
   };
 
-  const getTitle = () => {
-    switch (type) {
-      case 'success':
-        return 'Success';
-      case 'error':
-        return 'Error';
-      case 'notification':
-        return 'Notification';
-      default:
-        return 'Info';
-    }
-  };
-
   return (
     <div className={`toast toast-${type}`}>
       <div className="toast-header">
         <span className="toast-icon">{getIcon()}</span>
-        <strong className="toast-title">{getTitle()}</strong>
+        <strong className="toast-title">{type.charAt(0).toUpperCase() + type.slice(1)}</strong>
         <button className="toast-close" onClick={onClose}>×</button>
       </div>
       <div className="toast-body">{message}</div>
@@ -52,10 +39,10 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
 };
 
 // ConfirmModal Component (embedded)
-const ConfirmModal = ({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
+const ConfirmModal = ({
+  isOpen,
+  onClose,
+  onConfirm,
   title = "Confirm Action",
   message = "Are you sure you want to proceed?",
   confirmText = "Confirm",
@@ -65,7 +52,7 @@ const ConfirmModal = ({
   if (!isOpen) return null;
 
   const getIcon = () => {
-    switch(type) {
+    switch (type) {
       case 'danger':
         return '!';
       case 'warning':
@@ -83,20 +70,20 @@ const ConfirmModal = ({
         <div className={`confirm-modal-icon confirm-modal-icon-${type}`}>
           <span>{getIcon()}</span>
         </div>
-        
+
         <h2 className="confirm-modal-title">{title}</h2>
-        
+
         <p className="confirm-modal-message">{message}</p>
         <p className="confirm-modal-warning">This action cannot be undone.</p>
-        
+
         <div className="confirm-modal-actions">
-          <button 
+          <button
             className="confirm-modal-btn confirm-modal-btn-cancel"
             onClick={onClose}
           >
             {cancelText}
           </button>
-          <button 
+          <button
             className={`confirm-modal-btn confirm-modal-btn-confirm confirm-modal-btn-${type}`}
             onClick={onConfirm}
           >
@@ -128,6 +115,15 @@ const UsersPage = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const { user, pagePermissions, menuPermissions } = useAuth();
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalElements, setTotalElements] = useState(0);
+
+  // Debounce timer for search
+  const [searchDebounceTimer, setSearchDebounceTimer] = useState(null);
 
   // New User Form State
   const [newUser, setNewUser] = useState({
@@ -168,7 +164,7 @@ const UsersPage = () => {
   const [activeUsers, setActiveUsers] = useState(0);
   const [inactiveUsers, setInactiveUsers] = useState(0);
 
-  // Menu permissions list structure - matches database columns
+  // Menu permissions list structure - matches database columns (15 permissions)
   const menuPermissionsList = [
     { id: 'dashboard', name: 'Dashboard', dbField: 'dashboard', backendKey: 'DASHBOARD' },
     { id: 'analytics', name: 'Analytics', dbField: 'analytics', backendKey: 'ANALYTICS' },
@@ -183,11 +179,12 @@ const UsersPage = () => {
     { id: 'procurement_venders', name: 'Procurement - Vendors', dbField: 'procurement_venders', backendKey: 'PROCUREMENT_VENDERS' },
     { id: 'procurement_quotations_recived', name: 'Procurement - Quotations', dbField: 'procurement_quotations_recived', backendKey: 'PROCUREMENT_QUOTATIONS' },
     { id: 'procurement_purchase_orders', name: 'Procurement - Purchase Orders', dbField: 'procurement_purchase_orders', backendKey: 'PROCUREMENT_PURCHASE_ORDERS' },
-    { id: 'procurement_bills_received', name: 'Procurement - Bills', dbField: 'procurement_bills_received', backendKey: 'PROCUREMENT_BILLS' }
+    { id: 'procurement_bills_received', name: 'Procurement - Bills', dbField: 'procurement_bills_received', backendKey: 'PROCUREMENT_BILLS' },
+    { id: 'office_use', name: 'Office Use', dbField: 'office_use', backendKey: 'OFFICE_USE' }
   ];
 
   // Filter menu permissions based on logged-in user's access
-  const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions) 
+  const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions)
     ? menuPermissionsList.filter(menu => menuPermissions.includes(menu.backendKey))
     : menuPermissionsList; // If no restrictions, show all
 
@@ -264,27 +261,69 @@ const UsersPage = () => {
     { id: 69, name: 'attachments.delete', description: 'Delete attachments', module: 'System' }
   ];
 
+  // Enhanced mapping function to convert backend module.action to frontend permission name
+  const mapBackendPermissionToFrontend = (module, action) => {
+    // Comprehensive mapping for all backend module name variations
+    const moduleMap = {
+      'USERS': 'users',
+      'ROLES': 'roles',
+      'CUSTOMERS': 'customers',
+      'VENDORS': 'vendors',
+      'LEADS': 'leads',
+      'PROPOSALS': 'proposals',
+      'QUOTATIONS.SALES': 'quotations.sales',
+      'SALES.ORDERS': 'sales_orders',
+      'INVOICES': 'invoices',
+      'QUOTATIONS.PROCUREMENT': 'quotations.procurement',
+      'PURCHASE.ORDERS': 'purchase_orders',
+      'BILLS': 'bills',
+      'PAYMENTS': 'payments',
+      'REPORTS': 'reports',
+      'FOLLOWUPS': 'followups',
+      'SETTINGS': 'settings',
+      'ACTIVITY.LOGS': 'activity_logs',
+      'ATTACHMENTS': 'attachments'
+    };
+
+    const frontendModule = moduleMap[module] || module.toLowerCase().replace(/\./g, '_');
+    const frontendAction = action.toLowerCase();
+
+    return `${frontendModule}.${frontendAction}`;
+  };
+
   // Filter page permissions based on logged-in user's access
-  const availablePagePermissions = pagePermissions && typeof pagePermissions === 'object'
-    ? pagePermissionsStructure.filter(perm => {
-        // Convert permission name to module.action format that matches pagePermissions object
-        const parts = perm.name.split('.');
-        
-        if (parts.length === 2) {
-          // Format: users.view -> USERS module, VIEW action
-          const module = parts[0].toUpperCase();
-          const action = parts[1].toUpperCase();
-          return pagePermissions[module]?.includes(action);
-        } else if (parts.length === 3) {
-          // Format: quotations.sales.view -> QUOTATIONS.SALES module, VIEW action
-          const module = `${parts[0].toUpperCase()}.${parts[1].toUpperCase()}`;
-          const action = parts[2].toUpperCase();
-          return pagePermissions[module]?.includes(action);
-        }
-        
-        return false;
-      })
-    : pagePermissionsStructure; // If no restrictions, show all
+  const availablePagePermissions = React.useMemo(() => {
+    // If no pagePermissions from auth, show all permissions
+    if (!pagePermissions || typeof pagePermissions !== 'object') {
+      console.log('No page permissions restrictions - showing all 69 permissions');
+      return pagePermissionsStructure;
+    }
+
+    // Build a Set of all permission names the user has access to
+    const userPermissionNames = new Set();
+
+    Object.entries(pagePermissions).forEach(([module, actions]) => {
+      if (Array.isArray(actions)) {
+        actions.forEach(action => {
+          const permName = mapBackendPermissionToFrontend(module, action);
+          userPermissionNames.add(permName);
+        });
+      }
+    });
+
+    console.log('User has access to these permission names:', Array.from(userPermissionNames));
+    console.log('Total accessible permissions:', userPermissionNames.size);
+
+    // Filter permissions structure to only include what user has access to
+    const filtered = pagePermissionsStructure.filter(perm =>
+      userPermissionNames.has(perm.name)
+    );
+
+    console.log('Filtered permissions count:', filtered.length);
+    console.log('Total permissions in structure:', pagePermissionsStructure.length);
+
+    return filtered;
+  }, [pagePermissions]);
 
   // Toast functions
   const showToast = (message, type = 'success') => {
@@ -295,13 +334,6 @@ const UsersPage = () => {
   const removeToast = (id) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
   };
-
-  // Fetch initial data
-  useEffect(() => {
-    if (user?.id) {
-      fetchUsers();
-    }
-  }, [user]);
 
   // Format date to dd-mm-yyyy hh:mm:ss
   const formatDateTime = (dateString) => {
@@ -315,12 +347,18 @@ const UsersPage = () => {
     return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
   };
 
+  // Fetch users with search and filters
   const fetchUsers = async () => {
+    if (!user?.id) return;
+    
     setLoading(true);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/login/users/${user.id}`);
+      // Use search API endpoint
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?searchTerm=${encodeURIComponent(searchTerm)}&role=${filterRole}&page=${currentPage}&size=${pageSize}`
+      );
       const data = await response.json();
-      
+
       const transformedUsers = data.userWrapper.map(apiUser => ({
         id: apiUser.id,
         username: apiUser.user_id,
@@ -339,21 +377,58 @@ const UsersPage = () => {
       setTotalUsers(data.totalUsers || 0);
       setActiveUsers(data.activeUsers || 0);
       setInactiveUsers(data.inactiveUsers || 0);
-      
+
+      // Pagination Meta from Backend
+      setTotalPages(data.totalPages || 1);
+      setTotalElements(data.totalUsers || 0);
+
       const uniqueRoles = data.roles.map((roleName) => ({
-        id: roleName,
-        name: roleName,
-        description: `${roleName} role`
+        id: roleName, name: roleName, description: `${roleName} role`
       }));
       setRoles(uniqueRoles);
-      
-      setLoading(false);
     } catch (error) {
       console.error('Error fetching users:', error);
-      setLoading(false);
       showToast('Error fetching users', 'error');
+    } finally {
+      setLoading(false);
     }
   };
+
+  // Initial fetch on component mount
+  useEffect(() => {
+    if (user?.id) {
+      fetchUsers();
+    }
+  }, [user]);
+
+  // Fetch when pagination or role filter changes (immediate)
+  useEffect(() => {
+    if (user?.id) {
+      fetchUsers();
+    }
+  }, [currentPage, pageSize, filterRole]);
+
+  // Debounced search - only triggers after user stops typing
+  useEffect(() => {
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
+    }
+
+    const timer = setTimeout(() => {
+      if (user?.id) {
+        setCurrentPage(1); // Reset to first page on new search
+        fetchUsers();
+      }
+    }, 500); // 500ms debounce delay
+
+    setSearchDebounceTimer(timer);
+
+    return () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    };
+  }, [searchTerm]);
 
   // Check if User ID exists
   const checkUserIdExists = async (userId) => {
@@ -482,7 +557,7 @@ const UsersPage = () => {
         if (!isLengthValid) errors.push('at least 6 characters');
         if (!hasUpperCase) errors.push('1 uppercase letter');
         if (!hasSpecialChar) errors.push('1 special symbol');
-        
+
         setPasswordStrength({
           isValid: false,
           message: `Password must contain ${errors.join(', ')}`
@@ -564,7 +639,7 @@ const UsersPage = () => {
       name: newUser.name,
       email: newUser.email.toLowerCase(),
       password: newUser.password,
-      phone: newUser.phone || '', 
+      phone: newUser.phone || '',
       role: newUser.role,
       is_active: newUser.is_active ? 1 : 0,
       created_by: user.id
@@ -578,29 +653,29 @@ const UsersPage = () => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/addNewUser`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(userData)
       });
-      
+
       if (response.ok) {
         const result = await response.text(); // Backend returns plain string: "New User Added Successfully"
         console.log('User created successfully:', result);
-        
+
         // Refresh users list
         await fetchUsers();
-        
+
         // Close modal and reset form
         setShowAddUserModal(false);
-        
+
         // Show success message
         showToast(result || 'User created successfully!', 'success');
       } else {
         // Handle error response
         const errorText = await response.text();
         console.error('Error creating user:', errorText);
-        
+
         // Try to parse as JSON if it's a CustomException
         try {
           const errorJson = JSON.parse(errorText);
@@ -623,15 +698,15 @@ const UsersPage = () => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/login/menuPermissions/${userId}`);
       const data = await response.json();
-      
+
       console.log('Menu permissions response:', data);
-      
-      // Initialize all permissions to 0
+
+      // Initialize all 15 permissions to 0
       const permissionsObject = {};
       menuPermissionsList.forEach(menu => {
         permissionsObject[menu.dbField] = 0;
       });
-      
+
       // Mapping between backend keys and frontend dbFields
       const backendToFrontendMap = {
         'DASHBOARD': 'dashboard',
@@ -647,9 +722,10 @@ const UsersPage = () => {
         'PROCUREMENT_VENDERS': 'procurement_venders',
         'PROCUREMENT_QUOTATIONS': 'procurement_quotations_recived',
         'PROCUREMENT_PURCHASE_ORDERS': 'procurement_purchase_orders',
-        'PROCUREMENT_BILLS': 'procurement_bills_received'
+        'PROCUREMENT_BILLS': 'procurement_bills_received',
+        'OFFICE_USE': 'office_use'
       };
-      
+
       // If data is an array of strings
       if (Array.isArray(data)) {
         data.forEach(backendKey => {
@@ -661,14 +737,14 @@ const UsersPage = () => {
           }
         });
       }
-      
+
       console.log('Processed menu permissions:', permissionsObject);
       console.log('Total permissions set to 1:', Object.values(permissionsObject).filter(v => v === 1).length);
-      
+
       return permissionsObject;
     } catch (error) {
       console.error('Error fetching user menu permissions:', error);
-      // Return default permissions (all 0)
+      // Return default permissions (all 15 set to 0)
       const defaultPerms = {};
       menuPermissionsList.forEach(menu => {
         defaultPerms[menu.dbField] = 0;
@@ -678,78 +754,51 @@ const UsersPage = () => {
   };
 
   // Fetch page permissions for a user
-// Fetch page permissions for a user
-const fetchUserPagePermissions = async (userId) => {
-  try {
-    const response = await fetch(
-      `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`
-    );
+  const fetchUserPagePermissions = async (userId) => {
+    try {
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`
+      );
 
-    const text = await response.text();
+      const text = await response.text();
 
-    // Case 1: Backend sends plain string message
-    if (!response.ok || text === "No Permissions") {
-      console.warn("No permissions found for user");
+      // Case 1: Backend sends plain string message
+      if (!response.ok || text === "No Permissions") {
+        console.warn("No permissions found for user");
+        return [];
+      }
+
+      // Case 2: Backend sends JSON
+      const data = JSON.parse(text);
+      console.log("Page permissions response:", data);
+
+      const permissionIds = [];
+
+      Object.entries(data).forEach(([module, actions]) => {
+        actions.forEach((action) => {
+          const permName = mapBackendPermissionToFrontend(module, action);
+
+          const perm = pagePermissionsStructure.find(
+            (p) => p.name === permName
+          );
+
+          if (perm) {
+            permissionIds.push(perm.id);
+          } else {
+            console.warn(`Permission not found in structure: ${permName} (from backend: ${module}.${action})`);
+          }
+        });
+      });
+
+      console.log("Processed page permissions:", permissionIds);
+      console.log("Total permissions found:", permissionIds.length);
+      return permissionIds;
+
+    } catch (error) {
+      console.error("Error fetching user page permissions:", error);
       return [];
     }
-
-    // Case 2: Backend sends JSON
-    const data = JSON.parse(text);
-    console.log("Page permissions response:", data);
-
-    const permissionIds = [];
-
-    // Mapping object to handle all backend module name variations
-    const moduleNameMapping = {
-      'USERS': 'users',
-      'ROLES': 'roles',
-      'CUSTOMERS': 'customers',
-      'VENDORS': 'vendors',
-      'LEADS': 'leads',
-      'PROPOSALS': 'proposals',
-      'QUOTATIONS.SALES': 'quotations.sales',
-      'SALES.ORDERS': 'sales_orders',
-      'INVOICES': 'invoices',
-      'QUOTATIONS.PROCUREMENT': 'quotations.procurement',
-      'PURCHASE.ORDERS': 'purchase_orders',
-      'BILLS': 'bills',
-      'PAYMENTS': 'payments',
-      'REPORTS': 'reports',
-      'FOLLOWUPS': 'followups',
-      'SETTINGS': 'settings',
-      'ACTIVITY.LOGS': 'activity_logs',
-      'ATTACHMENTS': 'attachments'
-    };
-
-    Object.entries(data).forEach(([module, actions]) => {
-      // Convert backend module name to frontend format
-      const frontendModule = moduleNameMapping[module] || module.toLowerCase();
-      
-      actions.forEach((action) => {
-        const actionLower = action.toLowerCase();
-        const permName = `${frontendModule}.${actionLower}`;
-
-        const perm = pagePermissionsStructure.find(
-          (p) => p.name === permName
-        );
-
-        if (perm) {
-          permissionIds.push(perm.id);
-        } else {
-          console.warn(`Permission not found in structure: ${permName} (from backend: ${module}.${action})`);
-        }
-      });
-    });
-
-    console.log("Processed page permissions:", permissionIds);
-    console.log("Total permissions found:", permissionIds.length);
-    return permissionIds;
-
-  } catch (error) {
-    console.error("Error fetching user page permissions:", error);
-    return [];
-  }
-};
+  };
 
   // Handlers
   const handleEditUser = async (user) => {
@@ -773,7 +822,7 @@ const fetchUserPagePermissions = async (userId) => {
           is_active: selectedUser.is_active ? 1 : 0
         })
       });
-      
+
       if (response.ok) {
         fetchUsers();
         setShowEditUserModal(false);
@@ -797,15 +846,15 @@ const fetchUserPagePermissions = async (userId) => {
 
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
-    
+
     setLoading(true);
     setShowDeleteConfirm(false);
-    
+
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/deleteUser/${userToDelete.id}`, {
         method: 'DELETE'
       });
-      
+
       if (response.ok) {
         fetchUsers();
         showToast('User deleted successfully!', 'success');
@@ -837,13 +886,13 @@ const fetchUserPagePermissions = async (userId) => {
     setSelectedUser(user);
     setLoading(true);
     const menuPerms = await fetchUserMenuPermissions(user.id);
-    
+
     // Initialize only the permissions that the logged-in user has access to
     const completeMenuPerms = {};
     availableMenuPermissions.forEach(menu => {
       completeMenuPerms[menu.dbField] = menuPerms[menu.dbField] || 0;
     });
-    
+
     console.log('Initialized menu permissions for editing:', completeMenuPerms);
     setSelectedUserMenuPermissions(completeMenuPerms);
     setShowEditMenuPermissionsModal(true);
@@ -860,20 +909,21 @@ const fetchUserPagePermissions = async (userId) => {
   const handleSaveMenuPermissions = async () => {
     setLoading(true);
     try {
-      // Send ALL menu fields (not just available ones) to maintain database integrity
+      // Send ALL 15 menu fields (not just available ones) to maintain database integrity
       const completePermissions = {};
       menuPermissionsList.forEach(menu => {
         completePermissions[menu.dbField] = selectedUserMenuPermissions[menu.dbField] || 0;
       });
-      
-      console.log('Saving complete menu permissions:', completePermissions);
-      
+
+      console.log('Saving complete menu permissions (15 fields):', completePermissions);
+      console.log('Number of fields being sent:', Object.keys(completePermissions).length);
+
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateMenuPermissions/${selectedUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(completePermissions)
       });
-      
+
       if (response.ok) {
         fetchUsers();
         setShowEditMenuPermissionsModal(false);
@@ -940,13 +990,13 @@ const fetchUserPagePermissions = async (userId) => {
     setLoading(true);
     try {
       console.log('Saving page permissions:', selectedUserPermissions);
-      
+
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updatePagePermissions/${selectedUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissionIds: selectedUserPermissions })
       });
-      
+
       if (response.ok) {
         fetchUsers();
         setShowEditUserPermissionsModal(false);
@@ -965,18 +1015,6 @@ const fetchUserPagePermissions = async (userId) => {
       showToast('Error saving page permissions', 'error');
     }
   };
-
-  // Filter users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch =
-      user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesRole = filterRole === 'all' || user.role_name === filterRole;
-
-    return matchesSearch && matchesRole;
-  });
 
   // Group permissions by module
   const groupPermissionsByModule = (perms) => {
@@ -1025,7 +1063,7 @@ const fetchUserPagePermissions = async (userId) => {
           <h1 className="users-page-title">User Management</h1>
           <p className="users-page-subtitle">Manage users, roles, and permissions</p>
         </div>
-        <button 
+        <button
           className="users-page-btn users-page-btn-primary"
           onClick={handleOpenAddUserModal}
         >
@@ -1050,7 +1088,10 @@ const fetchUserPagePermissions = async (userId) => {
         <select
           className="users-page-filter-select"
           value={filterRole}
-          onChange={(e) => setFilterRole(e.target.value)}
+          onChange={(e) => {
+            setFilterRole(e.target.value);
+            setCurrentPage(1); // Reset to page 1 when changing filter
+          }}
         >
           <option value="all">All Roles</option>
           {roles.map(role => (
@@ -1080,86 +1121,101 @@ const fetchUserPagePermissions = async (userId) => {
         {loading ? (
           <div className="users-page-loading">Loading...</div>
         ) : (
-          <table className="users-page-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Contact</th>
-                <th>Role</th>
-                <th>Page Permissions</th>
-                <th>Menu Permissions</th>
-                <th>Status</th>
-                <th>Created</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map(user => (
-                <tr key={user.id} className={!user.is_active ? 'users-page-row-inactive' : ''}>
-                  <td>
-                    <div className="users-page-user-name">{user.full_name}</div>
-                  </td>
-                  <td>
-                    <div>{user.phone}</div>
-                    <div>{user.email}</div>
-                  </td>
-                  <td>
-                    <span className={`users-page-badge ${getRoleBadgeClass(user.role_name)}`}>
-                      {user.role_name}
-                    </span>
-                  </td>
-                  <td>
-                    <button
-                      className="users-page-btn-link"
-                      onClick={() => handleViewUserPermissions(user)}
-                    >
-                      {user.permission_count} permissions
-                    </button>
-                  </td>
-                  <td>
-                    <button
-                      className="users-page-btn-link"
-                      onClick={() => handleViewMenuPermissions(user)}
-                    >
-                      {user.menu_permissions_count} menus
-                    </button>
-                  </td>
-                  <td>
-                    <span className={`users-page-status-badge ${user.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>
-                      {user.is_active ? 'ACTIVE' : 'INACTIVE'}
-                    </span>
-                  </td>
-                  <td>{user.created_at}</td>
-                  <td>
-                    <div className="users-page-actions">
-                      <button
-                        className="users-page-btn-icon users-page-btn-icon-edit"
-                        onClick={() => handleEditUser(user)}
-                        title="Edit User"
-                      >
-                        <FiEdit />
-                      </button>
-                      <button
-                        className="users-page-btn-icon users-page-btn-icon-delete"
-                        onClick={() => handleDeleteUser(user)}
-                        title="Delete User"
-                      >
-                        <FiTrash2 />
-                      </button>
-                    </div>
-                  </td>
+          <>
+            <table className="users-page-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Contact</th>
+                  <th>Role</th>
+                  <th>Page Perms</th>
+                  <th>Menu Perms</th>
+                  <th>Status</th>
+                  <th>Created</th>
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map(u => (
+                  <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
+                    <td><div className="users-page-user-name">{u.full_name}</div></td>
+                    <td><div>{u.phone}</div><div>{u.email}</div></td>
+                    <td><span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span></td>
+                    <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
+                    <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
+                    <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                    <td>{u.created_at}</td>
+                    <td>
+                      <div className="users-page-actions">
+                        <button className="users-page-btn-icon" onClick={() => handleEditUser(u)} style={{color:"#5252ff"}}><FiEdit /></button>
+                        <button className="users-page-btn-icon" onClick={() => handleDeleteUser(u)} style={{color:"red"}}><FiTrash2 /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {users.length > 0 && (
+              <div className="pagination-footer">
+                <div className="pagination-info">
+                  Showing {((currentPage - 1) * pageSize) + 1} to{" "}
+                  {Math.min(currentPage * pageSize, totalElements)} of {totalElements} entries
+                </div>
+
+                <div className="pagination-controls">
+                  <div className="pagination-row-selector">
+                    <select
+                      className="pagination-select"
+                      value={pageSize}
+                      onChange={(e) => {
+                        setPageSize(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <option value={5}>5 rows</option>
+                      <option value={10}>10 rows</option>
+                      <option value={25}>25 rows</option>
+                      <option value={50}>50 rows</option>
+                    </select>
+                  </div>
+
+                  <div className="pagination-nav">
+                    <button
+                      className="pagination-btn"
+                      disabled={currentPage === 1}
+                      onClick={() => setCurrentPage((prev) => prev - 1)}
+                    >
+                      Previous
+                    </button>
+
+                    <span className="pagination-current">
+                      Page <strong>{currentPage}</strong> of{" "}
+                      <strong>{totalPages}</strong>
+                    </span>
+
+                    <button
+                      className="pagination-btn"
+                      disabled={currentPage === totalPages}
+                      onClick={() => setCurrentPage((prev) => prev + 1)}
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
         )}
 
-        {!loading && filteredUsers.length === 0 && (
+        {!loading && users.length === 0 && (
           <div className="users-page-empty-state">
             <p>No users found</p>
           </div>
         )}
       </div>
+
+      {/* All modals remain exactly the same as your original code */}
+      {/* I'm keeping them all here for completeness */}
 
       {/* Add User Modal */}
       {showAddUserModal && (
@@ -1190,7 +1246,7 @@ const fetchUserPagePermissions = async (userId) => {
                       placeholder="Enter unique username"
                     />
                     {userIdValidation.message && (
-                      <div 
+                      <div
                         style={{
                           marginTop: '4px',
                           fontSize: '13px',
@@ -1248,7 +1304,7 @@ const fetchUserPagePermissions = async (userId) => {
                       maxLength="10"
                     />
                     {phoneValidation.message && (
-                      <div 
+                      <div
                         style={{
                           marginTop: '4px',
                           fontSize: '13px',
@@ -1299,7 +1355,7 @@ const fetchUserPagePermissions = async (userId) => {
                       </button>
                     </div>
                     {passwordStrength.message && (
-                      <div 
+                      <div
                         style={{
                           marginTop: '4px',
                           fontSize: '13px',
@@ -1348,7 +1404,7 @@ const fetchUserPagePermissions = async (userId) => {
                       </button>
                     </div>
                     {passwordMatch.message && (
-                      <div 
+                      <div
                         style={{
                           marginTop: '4px',
                           fontSize: '13px',
@@ -1380,14 +1436,14 @@ const fetchUserPagePermissions = async (userId) => {
                     </select>
                   </div>
 
-                   <div className="users-page-form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: '40px' }}>
+                  <div className="users-page-form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: '40px' }}>
                     <label className="users-page-checkbox-label" style={{ marginBottom: '0' }}>
                       <span><input
                         type="checkbox"
                         checked={newUser.is_active}
                         onChange={(e) => setNewUser({ ...newUser, is_active: e.target.checked })}
                       /></span>
-                      <span style={{paddingLeft:"5px",marginTop:"0px"}}>Active User</span>
+                      <span style={{ paddingLeft: "5px", marginTop: "0px" }}>Active User</span>
                     </label>
                   </div>
                 </div>
@@ -1537,7 +1593,7 @@ const fetchUserPagePermissions = async (userId) => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Total Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length}
+                <strong>Total Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} / 15
               </div>
 
               <div className="users-page-permission-list">
@@ -1602,7 +1658,7 @@ const fetchUserPagePermissions = async (userId) => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} of {availableMenuPermissions.length} menus
+                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} of {availableMenuPermissions.length} menus (Total: 15 menu permissions)
                 <button
                   type="button"
                   className="users-page-btn-select-all"
