@@ -5,7 +5,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import GroupCategoryFilter from "./../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // Default template content
 const DEFAULT_TEMPLATE = {
@@ -246,17 +246,26 @@ const ProposalsWithTemplate = () => {
   // };
 
   // Fetch users for prepared by filter
-  const fetchUsers = async () => {
-    try {
-      const url = `${API_BASE_URL}/users/dropdown`;
-      const data = await fetchWithHeaders(url);
-      if (data.success) {
-        setUsers(data.data || []);
+ const fetchUsers = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+      headers: {
+        'User-Id': currentUser.id,
+        'User-Role': currentUser.role
       }
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    });
+
+    if (!response.ok) throw new Error('Failed to fetch users');
+
+    const data = await response.json();
+    if (Array.isArray(data)) {
+      setUsers(data);
     }
-  };
+  } catch (err) {
+    console.error('Error fetching users:', err);
+    setUsers([]);
+  }
+};
 
   // Filter proposals
   const handleFilter = async () => {
