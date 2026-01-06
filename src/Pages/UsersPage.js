@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FiEdit, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/UsersPage.css';
+import CrmPreloader from '../components/preLoader'
 
 // Toast Component (embedded)
 const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
@@ -110,6 +111,7 @@ const UsersPage = () => {
   const [selectedUserMenuPermissions, setSelectedUserMenuPermissions] = useState({});
   const [selectedUserPermissions, setSelectedUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState('Loading...');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -122,8 +124,14 @@ const UsersPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
 
-  // Debounce timer for search
-  const [searchDebounceTimer, setSearchDebounceTimer] = useState(null);
+  const [view, setView] = useState(pagePermissions.USERS[0] === "VIEW" ? true : false);
+  const [create, setCreate] = useState(pagePermissions.USERS[1] === "CREATE" ? true : false);
+  const [edit, setEdit] = useState(pagePermissions.USERS[2] === "EDIT" ? true : false);
+  const [deletee, setDeletee] = useState(pagePermissions.USERS[3] === "DELETE" ? true : false);
+
+  // Debounce reference for search
+  const searchDebounceTimer = useRef(null);
+  const [isSearching, setIsSearching] = useState(false);
 
   // New User Form State
   const [newUser, setNewUser] = useState({
@@ -159,7 +167,7 @@ const UsersPage = () => {
   // Toast notifications
   const [toasts, setToasts] = useState([]);
 
-  // Statistics from API
+  // Statistics from current users data
   const [totalUsers, setTotalUsers] = useState(0);
   const [activeUsers, setActiveUsers] = useState(0);
   const [inactiveUsers, setInactiveUsers] = useState(0);
@@ -186,7 +194,7 @@ const UsersPage = () => {
   // Filter menu permissions based on logged-in user's access
   const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions)
     ? menuPermissionsList.filter(menu => menuPermissions.includes(menu.backendKey))
-    : menuPermissionsList; // If no restrictions, show all
+    : menuPermissionsList;
 
   // Page permissions structure - matches your database exactly
   const pagePermissionsStructure = [
@@ -263,7 +271,6 @@ const UsersPage = () => {
 
   // Enhanced mapping function to convert backend module.action to frontend permission name
   const mapBackendPermissionToFrontend = (module, action) => {
-    // Comprehensive mapping for all backend module name variations
     const moduleMap = {
       'USERS': 'users',
       'ROLES': 'roles',
@@ -293,13 +300,10 @@ const UsersPage = () => {
 
   // Filter page permissions based on logged-in user's access
   const availablePagePermissions = React.useMemo(() => {
-    // If no pagePermissions from auth, show all permissions
     if (!pagePermissions || typeof pagePermissions !== 'object') {
-      console.log('No page permissions restrictions - showing all 69 permissions');
       return pagePermissionsStructure;
     }
 
-    // Build a Set of all permission names the user has access to
     const userPermissionNames = new Set();
 
     Object.entries(pagePermissions).forEach(([module, actions]) => {
@@ -311,19 +315,26 @@ const UsersPage = () => {
       }
     });
 
-    console.log('User has access to these permission names:', Array.from(userPermissionNames));
-    console.log('Total accessible permissions:', userPermissionNames.size);
-
-    // Filter permissions structure to only include what user has access to
     const filtered = pagePermissionsStructure.filter(perm =>
       userPermissionNames.has(perm.name)
     );
 
-    console.log('Filtered permissions count:', filtered.length);
-    console.log('Total permissions in structure:', pagePermissionsStructure.length);
-
     return filtered;
   }, [pagePermissions]);
+
+  // Filter roles - Hide SuperAdmin unless current user is SuperAdmin
+  const filteredRoles = React.useMemo(() => {
+    if (!user?.role) return roles;
+
+    if (user.role === 'SUPERADMIN' || user.role === 'SuperAdmin') {
+      return roles;
+    }
+
+    return roles.filter(role =>
+      role.name !== 'SUPERADMIN' &&
+      role.name !== 'SuperAdmin'
+    );
+  }, [roles, user?.role]);
 
   // Toast functions
   const showToast = (message, type = 'success') => {
@@ -347,16 +358,23 @@ const UsersPage = () => {
     return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
   };
 
-  // Fetch users with search and filters
-  const fetchUsers = async () => {
+  // ============================================
+  // FETCH USERS FUNCTION
+  // ============================================
+  const fetchUsers = useCallback(async () => {
     if (!user?.id) return;
-    
+
     setLoading(true);
+    setLoadingText('Fetching users...');
     try {
-      // Use search API endpoint
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?searchTerm=${encodeURIComponent(searchTerm)}&role=${filterRole}&page=${currentPage}&size=${pageSize}`
+        `${process.env.REACT_APP_API_URL}/login/users/${user.id}?page=${currentPage}&size=${pageSize}`
       );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
       const data = await response.json();
 
       const transformedUsers = data.userWrapper.map(apiUser => ({
@@ -377,8 +395,6 @@ const UsersPage = () => {
       setTotalUsers(data.totalUsers || 0);
       setActiveUsers(data.activeUsers || 0);
       setInactiveUsers(data.inactiveUsers || 0);
-
-      // Pagination Meta from Backend
       setTotalPages(data.totalPages || 1);
       setTotalElements(data.totalUsers || 0);
 
@@ -392,43 +408,118 @@ const UsersPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, currentPage, pageSize]);
 
-  // Initial fetch on component mount
-  useEffect(() => {
-    if (user?.id) {
-      fetchUsers();
-    }
-  }, [user]);
+  // ============================================
+  // SEARCH USERS FUNCTION
+  // ============================================
+  const searchUsers = useCallback(async () => {
+    if (!user?.id) return;
 
-  // Fetch when pagination or role filter changes (immediate)
-  useEffect(() => {
-    if (user?.id) {
-      fetchUsers();
-    }
-  }, [currentPage, pageSize, filterRole]);
+    setLoading(true);
+    setLoadingText('Searching users...');
+    setIsSearching(true);
+    try {
+      const params = new URLSearchParams({
+        searchTerm: searchTerm.trim(),
+        role: filterRole,
+        page: currentPage.toString(),
+        size: pageSize.toString()
+      });
 
-  // Debounced search - only triggers after user stops typing
-  useEffect(() => {
-    if (searchDebounceTimer) {
-      clearTimeout(searchDebounceTimer);
-    }
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?${params.toString()}`
+      );
 
-    const timer = setTimeout(() => {
-      if (user?.id) {
-        setCurrentPage(1); // Reset to first page on new search
-        fetchUsers();
+      if (!response.ok) {
+        throw new Error('Failed to search users');
       }
-    }, 500); // 500ms debounce delay
 
-    setSearchDebounceTimer(timer);
+      const data = await response.json();
 
+      const transformedUsers = data.userWrapper.map(apiUser => ({
+        id: apiUser.id,
+        username: apiUser.user_id,
+        email: apiUser.email,
+        full_name: apiUser.name,
+        phone: apiUser.phone,
+        is_active: apiUser.is_active === 1,
+        role_id: apiUser.role,
+        role_name: apiUser.role,
+        permission_count: apiUser.pagePermissionsCount || 0,
+        menu_permissions_count: apiUser.menuPermissionsCount || 0,
+        created_at: formatDateTime(apiUser.created_at)
+      }));
+
+      setUsers(transformedUsers);
+      setTotalPages(data.totalPages || 1);
+      setTotalElements(data.totalUsers || 0);
+
+      const uniqueRoles = data.roles.map((roleName) => ({
+        id: roleName, name: roleName, description: `${roleName} role`
+      }));
+      setRoles(uniqueRoles);
+    } catch (error) {
+      console.error('Error searching users:', error);
+      showToast('Error searching users', 'error');
+    } finally {
+      setLoading(false);
+      setIsSearching(false);
+    }
+  }, [user?.id, searchTerm, filterRole, currentPage, pageSize]);
+
+  // ============================================
+  // DEBOUNCED SEARCH EFFECT - 3 SECONDS DELAY
+  // ============================================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // Clear any existing timer
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    // Determine if we should search or fetch
+    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+
+    if (shouldSearch) {
+      // Set debounce timer for 3 seconds
+      searchDebounceTimer.current = setTimeout(() => {
+        searchUsers();
+      }, 500);
+    } else {
+      // If no search term and no filter, fetch immediately
+      fetchUsers();
+    }
+
+    // Cleanup function to clear timer on unmount or when dependencies change
     return () => {
-      if (timer) {
-        clearTimeout(timer);
+      if (searchDebounceTimer.current) {
+        clearTimeout(searchDebounceTimer.current);
       }
     };
-  }, [searchTerm]);
+  }, [searchTerm, filterRole, user?.id]);
+
+  // ============================================
+  // PAGINATION AND PAGE SIZE CHANGES - IMMEDIATE FETCH
+  // ============================================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    // For pagination changes, we want immediate response
+    // Clear any pending search timer
+    if (searchDebounceTimer.current) {
+      clearTimeout(searchDebounceTimer.current);
+    }
+
+    const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+
+    if (shouldSearch) {
+      searchUsers();
+    } else {
+      fetchUsers();
+    }
+  }, [currentPage, pageSize]);
 
   // Check if User ID exists
   const checkUserIdExists = async (userId) => {
@@ -449,7 +540,7 @@ const UsersPage = () => {
 
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/isUserIdExist/${userId}`);
-      const exists = await response.json(); // Boolean response
+      const exists = await response.json();
 
       if (exists) {
         setUserIdValidation({
@@ -609,31 +700,26 @@ const UsersPage = () => {
   const handleAddUserSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate User ID
     if (!userIdValidation.isValid) {
       showToast('Please choose a valid username', 'error');
       return;
     }
 
-    // Validate Password Strength
     if (!passwordStrength.isValid) {
       showToast('Password does not meet requirements', 'error');
       return;
     }
 
-    // Validate Password Match
     if (!passwordMatch.isValid) {
       showToast('Passwords do not match', 'error');
       return;
     }
 
-    // Validate Phone (optional but if provided should be valid)
     if (newUser.phone && !phoneValidation.isValid) {
       showToast('Please enter a valid 10-digit phone number', 'error');
       return;
     }
 
-    // Prepare data for backend
     const userData = {
       user_id: newUser.user_id,
       name: newUser.name,
@@ -645,11 +731,8 @@ const UsersPage = () => {
       created_by: user.id
     };
 
-    // Log the data to console
-    console.log('New User Data:', userData);
-    console.log('Created By User ID:', user.id);
-
     setLoading(true);
+    setLoadingText('Creating user...');
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/addNewUser`, {
         method: 'POST',
@@ -660,28 +743,25 @@ const UsersPage = () => {
       });
 
       if (response.ok) {
-        const result = await response.text(); // Backend returns plain string: "New User Added Successfully"
-        console.log('User created successfully:', result);
+        const result = await response.text();
 
-        // Refresh users list
-        await fetchUsers();
+        // Refresh data based on current filter state
+        if (searchTerm.trim() || filterRole !== 'all') {
+          await searchUsers();
+        } else {
+          await fetchUsers();
+        }
 
-        // Close modal and reset form
         setShowAddUserModal(false);
-
-        // Show success message
         showToast(result || 'User created successfully!', 'success');
       } else {
-        // Handle error response
         const errorText = await response.text();
         console.error('Error creating user:', errorText);
 
-        // Try to parse as JSON if it's a CustomException
         try {
           const errorJson = JSON.parse(errorText);
           showToast(errorJson.message || 'Error creating user', 'error');
         } catch {
-          // If not JSON, use the text directly
           showToast(errorText || 'Error creating user', 'error');
         }
       }
@@ -699,15 +779,11 @@ const UsersPage = () => {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/login/menuPermissions/${userId}`);
       const data = await response.json();
 
-      console.log('Menu permissions response:', data);
-
-      // Initialize all 15 permissions to 0
       const permissionsObject = {};
       menuPermissionsList.forEach(menu => {
         permissionsObject[menu.dbField] = 0;
       });
 
-      // Mapping between backend keys and frontend dbFields
       const backendToFrontendMap = {
         'DASHBOARD': 'dashboard',
         'ANALYTICS': 'analytics',
@@ -726,25 +802,18 @@ const UsersPage = () => {
         'OFFICE_USE': 'office_use'
       };
 
-      // If data is an array of strings
       if (Array.isArray(data)) {
         data.forEach(backendKey => {
           const frontendKey = backendToFrontendMap[backendKey];
           if (frontendKey && permissionsObject.hasOwnProperty(frontendKey)) {
             permissionsObject[frontendKey] = 1;
-          } else {
-            console.warn(`No mapping found for backend key: ${backendKey}`);
           }
         });
       }
 
-      console.log('Processed menu permissions:', permissionsObject);
-      console.log('Total permissions set to 1:', Object.values(permissionsObject).filter(v => v === 1).length);
-
       return permissionsObject;
     } catch (error) {
       console.error('Error fetching user menu permissions:', error);
-      // Return default permissions (all 15 set to 0)
       const defaultPerms = {};
       menuPermissionsList.forEach(menu => {
         defaultPerms[menu.dbField] = 0;
@@ -762,36 +831,26 @@ const UsersPage = () => {
 
       const text = await response.text();
 
-      // Case 1: Backend sends plain string message
       if (!response.ok || text === "No Permissions") {
-        console.warn("No permissions found for user");
         return [];
       }
 
-      // Case 2: Backend sends JSON
       const data = JSON.parse(text);
-      console.log("Page permissions response:", data);
-
       const permissionIds = [];
 
       Object.entries(data).forEach(([module, actions]) => {
         actions.forEach((action) => {
           const permName = mapBackendPermissionToFrontend(module, action);
-
           const perm = pagePermissionsStructure.find(
             (p) => p.name === permName
           );
 
           if (perm) {
             permissionIds.push(perm.id);
-          } else {
-            console.warn(`Permission not found in structure: ${permName} (from backend: ${module}.${action})`);
           }
         });
       });
 
-      console.log("Processed page permissions:", permissionIds);
-      console.log("Total permissions found:", permissionIds.length);
       return permissionIds;
 
     } catch (error) {
@@ -809,6 +868,7 @@ const UsersPage = () => {
   const handleUpdateUser = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setLoadingText('Updating user...');
 
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateUser/${selectedUser.id}`, {
@@ -824,7 +884,11 @@ const UsersPage = () => {
       });
 
       if (response.ok) {
-        fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all') {
+          await searchUsers();
+        } else {
+          await fetchUsers();
+        }
         setShowEditUserModal(false);
         setSelectedUser(null);
         showToast('User updated successfully!', 'success');
@@ -848,6 +912,7 @@ const UsersPage = () => {
     if (!userToDelete) return;
 
     setLoading(true);
+    setLoadingText('Deleting user...');
     setShowDeleteConfirm(false);
 
     try {
@@ -856,7 +921,11 @@ const UsersPage = () => {
       });
 
       if (response.ok) {
-        fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all') {
+          await searchUsers();
+        } else {
+          await fetchUsers();
+        }
         showToast('User deleted successfully!', 'success');
       } else {
         showToast('Error deleting user', 'error');
@@ -875,6 +944,7 @@ const UsersPage = () => {
   const handleViewMenuPermissions = async (user) => {
     setSelectedUser(user);
     setLoading(true);
+    setLoadingText('Loading menu permissions...');
     const menuPerms = await fetchUserMenuPermissions(user.id);
     setSelectedUserMenuPermissions(menuPerms);
     setShowMenuPermissionsModal(true);
@@ -885,15 +955,14 @@ const UsersPage = () => {
   const handleEditMenuPermissions = async (user) => {
     setSelectedUser(user);
     setLoading(true);
+    setLoadingText('Loading menu permissions...');
     const menuPerms = await fetchUserMenuPermissions(user.id);
 
-    // Initialize only the permissions that the logged-in user has access to
     const completeMenuPerms = {};
     availableMenuPermissions.forEach(menu => {
       completeMenuPerms[menu.dbField] = menuPerms[menu.dbField] || 0;
     });
 
-    console.log('Initialized menu permissions for editing:', completeMenuPerms);
     setSelectedUserMenuPermissions(completeMenuPerms);
     setShowEditMenuPermissionsModal(true);
     setLoading(false);
@@ -908,15 +977,12 @@ const UsersPage = () => {
 
   const handleSaveMenuPermissions = async () => {
     setLoading(true);
+    setLoadingText('Saving menu permissions...');
     try {
-      // Send ALL 15 menu fields (not just available ones) to maintain database integrity
       const completePermissions = {};
       menuPermissionsList.forEach(menu => {
         completePermissions[menu.dbField] = selectedUserMenuPermissions[menu.dbField] || 0;
       });
-
-      console.log('Saving complete menu permissions (15 fields):', completePermissions);
-      console.log('Number of fields being sent:', Object.keys(completePermissions).length);
 
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateMenuPermissions/${selectedUser.id}`, {
         method: 'PUT',
@@ -925,7 +991,11 @@ const UsersPage = () => {
       });
 
       if (response.ok) {
-        fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all') {
+          await searchUsers();
+        } else {
+          await fetchUsers();
+        }
         setShowEditMenuPermissionsModal(false);
         setSelectedUser(null);
         setSelectedUserMenuPermissions({});
@@ -947,6 +1017,7 @@ const UsersPage = () => {
   const handleViewUserPermissions = async (user) => {
     setSelectedUser(user);
     setLoading(true);
+    setLoadingText('Loading page permissions...');
     const pagePerms = await fetchUserPagePermissions(user.id);
     setPermissions(pagePermissionsStructure);
     setSelectedUserPermissions(pagePerms);
@@ -958,6 +1029,7 @@ const UsersPage = () => {
   const handleEditUserPermissions = async (user) => {
     setSelectedUser(user);
     setLoading(true);
+    setLoadingText('Loading page permissions...');
     const pagePerms = await fetchUserPagePermissions(user.id);
     setPermissions(pagePermissionsStructure);
     setSelectedUserPermissions(pagePerms);
@@ -988,9 +1060,8 @@ const UsersPage = () => {
 
   const handleSaveUserPermissions = async () => {
     setLoading(true);
+    setLoadingText('Saving page permissions...');
     try {
-      console.log('Saving page permissions:', selectedUserPermissions);
-
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updatePagePermissions/${selectedUser.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -998,7 +1069,11 @@ const UsersPage = () => {
       });
 
       if (response.ok) {
-        fetchUsers();
+        if (searchTerm.trim() || filterRole !== 'all') {
+          await searchUsers();
+        } else {
+          await fetchUsers();
+        }
         setShowEditUserPermissionsModal(false);
         setSelectedUser(null);
         setSelectedUserPermissions([]);
@@ -1045,6 +1120,9 @@ const UsersPage = () => {
 
   return (
     <div className="users-page-container">
+      {/* CRM Preloader */}
+      {loading && <CrmPreloader text={loadingText} />}
+
       {/* Toast Container */}
       <div className="toast-container">
         {toasts.map(toast => (
@@ -1063,13 +1141,22 @@ const UsersPage = () => {
           <h1 className="users-page-title">User Management</h1>
           <p className="users-page-subtitle">Manage users, roles, and permissions</p>
         </div>
-        <button
-          className="users-page-btn users-page-btn-primary"
-          onClick={handleOpenAddUserModal}
-        >
-          <span className="users-page-icon">+</span>
-          Add New User
-        </button>
+        <div className="tooltip-wrapper">
+          <button
+            className="users-page-btn users-page-btn-primary"
+            onClick={handleOpenAddUserModal}
+            disabled={!create}
+          >
+            <span className="users-page-icon">+</span>
+            Add New User
+          </button>
+
+          {!create && (
+            <span className="tooltip">
+              No Permission
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -1078,11 +1165,16 @@ const UsersPage = () => {
           <input
             type="text"
             className="users-page-search-input"
-            placeholder="Search by name, email, or username..."
+            placeholder="Search by name, email, or phone... "
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setCurrentPage(1); // Reset to first page on new search
+            }}
           />
-          <span className="users-page-search-icon">🔍</span>
+          <span className="users-page-search-icon">
+            {isSearching ? '⏳' : '🔍'}
+          </span>
         </div>
 
         <select
@@ -1090,11 +1182,11 @@ const UsersPage = () => {
           value={filterRole}
           onChange={(e) => {
             setFilterRole(e.target.value);
-            setCurrentPage(1); // Reset to page 1 when changing filter
+            setCurrentPage(1);
           }}
         >
           <option value="all">All Roles</option>
-          {roles.map(role => (
+          {filteredRoles.map(role => (
             <option key={role.id} value={role.name}>{role.name}</option>
           ))}
         </select>
@@ -1118,9 +1210,7 @@ const UsersPage = () => {
 
       {/* Users Table */}
       <div className="users-page-table-container">
-        {loading ? (
-          <div className="users-page-loading">Loading...</div>
-        ) : (
+        {!loading && (
           <>
             <table className="users-page-table">
               <thead>
@@ -1147,8 +1237,38 @@ const UsersPage = () => {
                     <td>{u.created_at}</td>
                     <td>
                       <div className="users-page-actions">
-                        <button className="users-page-btn-icon" onClick={() => handleEditUser(u)} style={{color:"#5252ff"}}><FiEdit /></button>
-                        <button className="users-page-btn-icon" onClick={() => handleDeleteUser(u)} style={{color:"red"}}><FiTrash2 /></button>
+                        <div className="tooltip-wrapper">
+                          <button
+                            className="users-page-btn-icon"
+                            onClick={() => handleEditUser(u)}
+                            disabled={!edit}
+                            style={{ color: edit ? "#5252ff" : "#9ca3af" }}
+                          >
+                            <FiEdit />
+                          </button>
+
+                          {!edit && (
+                            <span className="tooltip">
+                              No Permission
+                            </span>
+                          )}
+                        </div>
+                        <div className="tooltip-wrapper">
+                          <button
+                            className="users-page-btn-icon"
+                            onClick={() => handleDeleteUser(u)}
+                            disabled={!deletee}
+                            style={{ color: deletee ? "red" : "#9ca3af" }}
+                          >
+                            <FiTrash2 />
+                          </button>
+
+                          {!deletee && (
+                            <span className="tooltip error">
+                              No Permission
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -1213,9 +1333,6 @@ const UsersPage = () => {
           </div>
         )}
       </div>
-
-      {/* All modals remain exactly the same as your original code */}
-      {/* I'm keeping them all here for completeness */}
 
       {/* Add User Modal */}
       {showAddUserModal && (
@@ -1428,7 +1545,7 @@ const UsersPage = () => {
                       onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
                     >
                       <option value="">Select Role</option>
-                      {roles.map(role => (
+                      {filteredRoles.map(role => (
                         <option key={role.id} value={role.name}>
                           {role.name}
                         </option>
@@ -1526,7 +1643,7 @@ const UsersPage = () => {
                       onChange={(e) => setSelectedUser({ ...selectedUser, role_id: e.target.value, role_name: e.target.value })}
                     >
                       <option value="">Select Role</option>
-                      {roles.map(role => (
+                      {filteredRoles.map(role => (
                         <option key={role.id} value={role.name}>
                           {role.name}
                         </option>
