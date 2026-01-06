@@ -713,3 +713,52 @@
     border-radius: 0;
   }
 }
+/* Add these new styles to your existing Leads-Enquire.css file */
+
+/* Disabled button styles - Add to existing button styles */
+.leads-enquiries-btn-disabled,
+.leads-enquiries-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  background-color: #e5e7eb !important;
+  color: #9ca3af !important;
+  filter: blur(0.5px);
+}
+
+.leads-enquiries-btn-disabled:hover,
+.leads-enquiries-btn:disabled:hover {
+  background-color: #e5e7eb !important;
+}
+
+/* Disabled action buttons in table */
+.leads-enquiries-action-disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  filter: blur(0.5px);
+  pointer-events: none;
+}
+
+.leads-enquiries-action-disabled:hover {
+  background-color: transparent !important;
+}
+
+/* Alert styles for no permission message */
+.alert {
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.alert-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.alert-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}

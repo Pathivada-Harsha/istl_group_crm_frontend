@@ -1,331 +1,542 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { FaEye, FaEdit, FaTrash, FaFilePdf } from 'react-icons/fa';
 import '../pages-css/Proposals.css';
-
+import { useAuth } from "../hooks/useAuth.js";
 import GroupCategoryFilter from "./../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
-// Mock data for proposals
-const mockProposals = [
-  {
-    id: 'PROP-2024-001',
-    clientName: 'Rajesh Kumar',
-    companyName: 'Tech Innovations Pvt Ltd',
-    title: 'Digital Transformation Strategy',
-    value: 2500000,
-    version: 'v3',
-    status: 'Sent',
-    preparedBy: 'Anita Sharma',
-    lastUpdated: '2024-12-08',
-    createdDate: '2024-11-15',
-    email: 'rajesh@techinnovations.com',
-    phone: '+91 98765 43210',
-    address: 'Mumbai, Maharashtra',
-    introduction: 'We are pleased to present our comprehensive digital transformation strategy...',
-    scopeOfWork: 'Complete digital infrastructure overhaul, cloud migration, and process automation',
-    deliverables: 'Cloud Architecture, Migration Plan, Training Materials, Support Documentation',
-    pricingBreakdown: 'Infrastructure: ₹15,00,000\nConsulting: ₹8,00,000\nTraining: ₹2,00,000',
-    terms: 'Payment in 3 installments. 30-day notice for cancellation.',
-    notes: 'Client prefers phased implementation'
-  },
-  {
-    id: 'PROP-2024-002',
-    clientName: 'Priya Menon',
-    companyName: 'Global Exports Inc',
-    title: 'Supply Chain Optimization',
-    value: 1800000,
-    version: 'v2',
-    status: 'Approved',
-    preparedBy: 'Vikram Singh',
-    lastUpdated: '2024-12-07',
-    createdDate: '2024-11-20',
-    email: 'priya@globalexports.com',
-    phone: '+91 98234 56789',
-    address: 'Chennai, Tamil Nadu',
-    introduction: 'Our supply chain optimization solution will streamline your operations...',
-    scopeOfWork: 'Process analysis, system integration, and performance monitoring',
-    deliverables: 'Process Maps, Integration Documentation, Monitoring Dashboard',
-    pricingBreakdown: 'Analysis: ₹5,00,000\nImplementation: ₹10,00,000\nSupport: ₹3,00,000',
-    terms: '50% advance, balance on completion',
-    notes: 'Urgent requirement - fast-track approval needed'
-  },
-  {
-    id: 'PROP-2024-003',
-    clientName: 'Amit Patel',
-    companyName: 'Healthcare Solutions',
-    title: 'Hospital Management System',
-    value: 3200000,
-    version: 'v1',
-    status: 'Draft',
-    preparedBy: 'Neha Gupta',
-    lastUpdated: '2024-12-09',
-    createdDate: '2024-12-05',
-    email: 'amit@healthcaresol.com',
-    phone: '+91 99887 65432',
-    address: 'Bangalore, Karnataka',
-    introduction: 'Comprehensive hospital management system to digitize all operations...',
-    scopeOfWork: 'Custom software development, database design, and staff training',
-    deliverables: 'HMS Software, Database Schema, User Manual, Training Program',
-    pricingBreakdown: 'Development: ₹22,00,000\nTesting: ₹5,00,000\nTraining: ₹5,00,000',
-    terms: 'Payment in 4 milestones',
-    notes: 'Requires HIPAA compliance review'
-  },
-  {
-    id: 'PROP-2024-004',
-    clientName: 'Sunita Reddy',
-    companyName: 'EduTech Solutions',
-    title: 'E-Learning Platform Development',
-    value: 1500000,
-    version: 'v2',
-    status: 'Sent',
-    preparedBy: 'Vikram Singh',
-    lastUpdated: '2024-12-06',
-    createdDate: '2024-11-10',
-    email: 'sunita@edutech.com',
-    phone: '+91 97654 32109',
-    address: 'Hyderabad, Telangana',
-    introduction: 'Modern e-learning platform with interactive features and analytics...',
-    scopeOfWork: 'Platform development, content management system, student portal',
-    deliverables: 'Web Platform, Mobile Apps, Admin Dashboard, Analytics Module',
-    pricingBreakdown: 'Development: ₹10,00,000\nDesign: ₹3,00,000\nDeployment: ₹2,00,000',
-    terms: 'Payment in 3 phases based on milestones',
-    notes: 'Client wants beta launch by January'
-  },
-  {
-    id: 'PROP-2024-005',
-    clientName: 'Karthik Iyer',
-    companyName: 'Retail Mart Pvt Ltd',
-    title: 'Point of Sale System Upgrade',
-    value: 950000,
-    version: 'v1',
-    status: 'Rejected',
-    preparedBy: 'Neha Gupta',
-    lastUpdated: '2024-12-05',
-    createdDate: '2024-11-28',
-    email: 'karthik@retailmart.com',
-    phone: '+91 96543 21098',
-    address: 'Pune, Maharashtra',
-    introduction: 'Upgrade existing POS systems with modern cloud-based solution...',
-    scopeOfWork: 'POS software upgrade, hardware integration, staff training',
-    deliverables: 'POS Software, Integration Guides, Training Sessions',
-    pricingBreakdown: 'Software: ₹6,00,000\nHardware: ₹2,50,000\nTraining: ₹1,00,000',
-    terms: '40% advance, 60% on completion',
-    notes: 'Rejected due to budget constraints'
-  },
-  {
-    id: 'PROP-2024-006',
-    clientName: 'Deepa Krishnan',
-    companyName: 'Finance Advisory Group',
-    title: 'Financial Management Platform',
-    value: 2800000,
-    version: 'v1',
-    status: 'On Hold',
-    preparedBy: 'Anita Sharma',
-    lastUpdated: '2024-12-04',
-    createdDate: '2024-11-22',
-    email: 'deepa@financeadvisory.com',
-    phone: '+91 95432 10987',
-    address: 'Delhi, NCR',
-    introduction: 'Comprehensive financial management and advisory platform...',
-    scopeOfWork: 'Custom platform development, API integrations, compliance features',
-    deliverables: 'Web Platform, Mobile App, Compliance Module, Reporting Dashboard',
-    pricingBreakdown: 'Development: ₹18,00,000\nCompliance: ₹6,00,000\nSupport: ₹4,00,000',
-    terms: 'Payment in 5 installments',
-    notes: 'On hold pending regulatory approval'
-  }
-];
 
-const ProposalsManagementPage = () => {
-  const [proposals, setProposals] = useState(mockProposals);
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080';
+
+// Default template content
+const DEFAULT_TEMPLATE = {
+  companyName: "SESOLA POWER PROJECTS PROPOSAL PVT LTD",
+  aboutUs: `We are a leading provider of renewable energy solutions with expertise in solar power systems. Our team of experienced professionals is committed to delivering high-quality, sustainable energy solutions that meet the unique needs of our clients.
+
+With years of experience in the industry, we have successfully completed numerous projects across various sectors, establishing ourselves as a trusted partner in the transition to clean energy.`,
+  aboutSystem: `The proposed solar power system is designed to provide reliable, efficient, and sustainable energy generation. The system includes high-efficiency solar panels, advanced inverters, robust mounting structures, and comprehensive monitoring systems.
+
+Key features:
+- High-efficiency solar panels with excellent performance
+- Grid-tied inverter system for optimal power conversion
+- Durable mounting structures with wind load certification
+- Remote monitoring and management capabilities
+- Comprehensive safety features and protection systems`,
+  paymentTerms: `1. 30% advance payment upon signing of agreement
+2. 40% payment on delivery of materials at site
+3. 30% payment on successful commissioning and handover
+
+Payment can be made via bank transfer, cheque, or demand draft in favor of SESOLA POWER PROJECTS PROPOSAL PVT LTD.`,
+  defectLiabilityPeriod: `Standard 12 months warranty period from date of commissioning and handover.
+
+During this period, any defects in workmanship, materials, or performance will be rectified free of cost. This includes:
+- Repair or replacement of defective components
+- System performance issues
+- Installation-related defects
+
+Extended warranty options are available upon request.`,
+  systemPricing: [],
+  bomItems: []
+};
+
+const ProposalsWithTemplate = () => {
+  const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [filterPriority, setFilterPriority] = useState('All');
-  const [filterPreparedBy, setFilterPreparedBy] = useState('All');
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-  const [selectedProposal, setSelectedProposal] = useState(null);
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [showVersionModal, setShowVersionModal] = useState(false);
+  // Permissions
+  const permissions = {
+    VIEW: pagePermissions?.PROPOSALS?.includes('VIEW'),
+    CREATE: pagePermissions?.PROPOSALS?.includes('CREATE'),
+    EDIT: pagePermissions?.PROPOSALS?.includes('EDIT'),
+    DELETE: pagePermissions?.PROPOSALS?.includes('DELETE'),
+    APPROVE: pagePermissions?.PROPOSALS?.includes('APPROVE')
+  };
 
-  // Form state
-  const [formData, setFormData] = useState({
-    title: '',
-    clientName: '',
-    companyName: '',
-    email: '',
-    phone: '',
-    address: '',
-    introduction: '',
-    scopeOfWork: '',
-    deliverables: '',
-    pricingBreakdown: '',
-    terms: '',
-    value: '',
-    preparedBy: '',
-    notes: ''
-  });
+  const currentUser = {
+    id: user.id,
+    role: user.role,
+    name: user.name
+  };
 
-  // Filter and search logic
-  const filteredProposals = proposals.filter(proposal => {
-    const matchesSearch =
-      proposal.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      proposal.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      proposal.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      proposal.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      proposal.phone.includes(searchTerm) ||
-      proposal.value.toString().includes(searchTerm);
-
-    const matchesStatus = filterStatus === 'All' || proposal.status === filterStatus;
-    const matchesPreparedBy = filterPreparedBy === 'All' || proposal.preparedBy === filterPreparedBy;
-
-    return matchesSearch && matchesStatus && matchesPreparedBy;
-  });
-
-  // Sorting logic
-  const sortedProposals = [...filteredProposals].sort((a, b) => {
-    if (!sortConfig.key) return 0;
-
-    let aValue = a[sortConfig.key];
-    let bValue = b[sortConfig.key];
-
-    if (sortConfig.key === 'value') {
-      aValue = parseFloat(aValue);
-      bValue = parseFloat(bValue);
-    }
-
-    if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-    if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-    return 0;
-  });
+  // State
+  const [proposals, setProposals] = useState([]);
+  const [leads, setLeads] = useState([]);
+  // const [customers, setCustomers] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   // Pagination
-  const totalPages = Math.ceil(sortedProposals.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const paginatedProposals = sortedProposals.slice(startIndex, startIndex + rowsPerPage);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalProposals, setTotalProposals] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
 
-  const handleSort = (key) => {
-    setSortConfig({
-      key,
-      direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
-    });
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('All');
+  const [filterPreparedBy, setFilterPreparedBy] = useState('All');
+
+  // Modals
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [selectedProposal, setSelectedProposal] = useState(null);
+  const [activeTab, setActiveTab] = useState('company');
+
+  // Form state - Basic Info
+  const [formData, setFormData] = useState({
+    leadId: '',
+
+    title: '',
+    description: '',
+    totalValue: '',
+    groupName: '',
+    subGroupName: '',
+    status: 'Draft'
+  });
+
+  // Template state
+  const [templateData, setTemplateData] = useState({
+    companyName: DEFAULT_TEMPLATE.companyName,
+    aboutUs: DEFAULT_TEMPLATE.aboutUs,
+    aboutSystem: DEFAULT_TEMPLATE.aboutSystem,
+    paymentTerms: DEFAULT_TEMPLATE.paymentTerms,
+    defectLiabilityPeriod: DEFAULT_TEMPLATE.defectLiabilityPeriod,
+    systemPricing: [],
+    bomItems: []
+  });
+  //groups states
+
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+  const [filteredSubGroups, setFilteredSubGroups] = useState([]);
+
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch groups');
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      setGroups([]);
+    }
   };
 
-  const handleView = (proposal) => {
-    setSelectedProposal(proposal);
-    setShowViewModal(true);
+
+  const fetchSubGroupsForForm = async (group) => {
+    if (!group) {
+      setSubGroups([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch subgroups');
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setSubGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching subgroups:', err);
+      setSubGroups([]);
+    }
   };
 
+
+  useEffect(() => {
+    if (formData.groupName) {
+      fetchSubGroupsForForm(formData.groupName);
+    } else {
+      setSubGroups([]);
+    }
+  }, [formData.groupName]);
+  // Fetch with auth headers
+  const fetchWithHeaders = async (url, options = {}) => {
+    const headers = {
+      'Content-Type': 'application/json',
+      'User-Id': currentUser.id.toString(),
+      'User-Role': currentUser.role,
+      ...options.headers
+    };
+
+    const response = await fetch(url, { ...options, headers });
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return response.json();
+  };
+
+  // Parse JSON fields
+  const parseJSON = (jsonString) => {
+    if (!jsonString) return null;
+    try {
+      return typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  // Fetch proposals
+  const fetchProposals = async () => {
+    setLoading(true);
+    try {
+      const url = `${API_BASE_URL}/proposals/getAll?page=${currentPage - 1}&size=${rowsPerPage}&groupName=${groupName || ''}`;
+      const data = await fetchWithHeaders(url);
+
+      if (data.success) {
+        setProposals(data.data.content || []);
+        setTotalProposals(data.data.totalElements || 0);
+        setTotalPages(data.data.totalPages || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching proposals:', error);
+      alert('Failed to fetch proposals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch leads dropdown
+  const fetchLeads = async () => {
+    try {
+      let url;
+      if (currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN') {
+        url = `${API_BASE_URL}/leads/getAll`;
+      } else {
+        url = `${API_BASE_URL}/leads/my-leads`;
+      }
+
+      const data = await fetchWithHeaders(url);
+      if (data.success) {
+        setLeads(Array.isArray(data.data) ? data.data : data.data.content || []);
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error);
+    }
+  };
+
+  // Fetch customers dropdown
+  // const fetchCustomers = async () => {
+  //   try {
+  //     const url = `${API_BASE_URL}/customers/getAll`;
+  //     const data = await fetchWithHeaders(url);
+  //     if (data.success) {
+  //       setCustomers(Array.isArray(data.data) ? data.data : data.data.content || []);
+  //     }
+  //   } catch (error) {
+  //     console.error('Error fetching customers:', error);
+  //   }
+  // };
+
+  // Fetch users for prepared by filter
+  const fetchUsers = async () => {
+    try {
+      const url = `${API_BASE_URL}/users/dropdown`;
+      const data = await fetchWithHeaders(url);
+      if (data.success) {
+        setUsers(data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // Filter proposals
+  const handleFilter = async () => {
+    setLoading(true);
+    try {
+      const filterRequest = {
+        searchTerm: searchTerm || null,
+        filterStatus: filterStatus !== 'All' ? filterStatus : null,
+        filterGroup: groupName || null,
+        filterSubGroup: subGroupName || null,
+        filterPreparedBy: filterPreparedBy !== 'All' ? parseInt(filterPreparedBy) : null,
+        page: currentPage - 1,
+        size: rowsPerPage
+      };
+
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/filter`, {
+        method: 'POST',
+        body: JSON.stringify(filterRequest)
+      });
+
+      if (data.success) {
+        setProposals(data.data.content || []);
+        setTotalProposals(data.data.totalElements || 0);
+        setTotalPages(data.data.totalPages || 0);
+      }
+    } catch (error) {
+      console.error('Error filtering proposals:', error);
+      alert('Failed to filter proposals');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Create proposal
+  const handleCreate = async () => {
+    if (!formData.title || !formData.leadId) {
+      alert('Please fill in Title and Lead');
+      return;
+    }
+
+    try {
+      const requestData = {
+        ...formData,
+        ...templateData,
+        systemPricing: JSON.stringify(templateData.systemPricing),
+        bomItems: JSON.stringify(templateData.bomItems)
+      };
+
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/create`, {
+        method: 'POST',
+        body: JSON.stringify(requestData)
+      });
+
+      if (data.success) {
+        alert('Proposal created successfully!');
+        setShowCreateModal(false);
+        setShowTemplateModal(false);
+        resetForm();
+        fetchProposals();
+      }
+    } catch (error) {
+      console.error('Error creating proposal:', error);
+      alert('Failed to create proposal');
+    }
+  };
+
+  // Update proposal
+  const handleUpdate = async () => {
+    if (!formData.title) {
+      alert('Please fill in Title');
+      return;
+    }
+
+    try {
+      const requestData = {
+        ...formData,
+        ...templateData,
+        systemPricing: JSON.stringify(templateData.systemPricing),
+        bomItems: JSON.stringify(templateData.bomItems)
+      };
+
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(requestData)
+      });
+
+      if (data.success) {
+        alert('Proposal updated successfully!');
+        setShowCreateModal(false);
+        setShowTemplateModal(false);
+        resetForm();
+        fetchProposals();
+      }
+    } catch (error) {
+      console.error('Error updating proposal:', error);
+      alert('Failed to update proposal');
+    }
+  };
+
+  // Delete proposal
+  const handleDelete = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this proposal?')) {
+      return;
+    }
+
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/delete/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (data.success) {
+        alert('Proposal deleted successfully!');
+        fetchProposals();
+      }
+    } catch (error) {
+      console.error('Error deleting proposal:', error);
+      alert('Failed to delete proposal');
+    }
+  };
+
+  // Download PDF
+  const handleDownloadPDF = async (id) => {
+    try {
+      const headers = {
+        'User-Id': currentUser.id.toString(),
+        'User-Role': currentUser.role
+      };
+
+      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { headers });
+
+      if (!response.ok) {
+        throw new Error('Failed to download PDF');
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `proposal-${id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading PDF:', error);
+      alert('Failed to download PDF');
+    }
+  };
+
+  // View proposal
+  const handleView = async (id) => {
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/${id}`);
+      if (data.success) {
+        setSelectedProposal(data.data);
+        setShowViewModal(true);
+      }
+    } catch (error) {
+      console.error('Error fetching proposal:', error);
+      alert('Failed to fetch proposal details');
+    }
+  };
+
+  // Edit proposal
   const handleEdit = (proposal) => {
     setSelectedProposal(proposal);
-    setFormData(proposal);
+    setFormData({
+      leadId: proposal.leadId || '',
+      title: proposal.title || '',
+      description: proposal.description || '',
+      totalValue: proposal.totalValue || '',
+      groupName: proposal.groupName || '',
+      subGroupName: proposal.subGroupName || '',
+      status: proposal.status || 'Draft'
+    });
+
+    setTemplateData({
+      companyName: proposal.companyName || DEFAULT_TEMPLATE.companyName,
+      aboutUs: proposal.aboutUs || DEFAULT_TEMPLATE.aboutUs,
+      aboutSystem: proposal.aboutSystem || DEFAULT_TEMPLATE.aboutSystem,
+      paymentTerms: proposal.paymentTerms || DEFAULT_TEMPLATE.paymentTerms,
+      defectLiabilityPeriod: proposal.defectLiabilityPeriod || DEFAULT_TEMPLATE.defectLiabilityPeriod,
+      systemPricing: parseJSON(proposal.systemPricing) || [],
+      bomItems: parseJSON(proposal.bomItems) || []
+    });
+
     setIsEditMode(true);
     setShowCreateModal(true);
     setShowViewModal(false);
   };
 
-  const handleDuplicate = (proposal) => {
-    const newProposal = {
-      ...proposal,
-      id: `PROP-2024-${String(proposals.length + 1).padStart(3, '0')}`,
-      title: `${proposal.title} (Copy)`,
-      version: 'v1',
-      status: 'Draft',
-      lastUpdated: new Date().toISOString().split('T')[0],
-      createdDate: new Date().toISOString().split('T')[0]
-    };
-    setProposals([...proposals, newProposal]);
-    alert('Proposal duplicated successfully!');
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this proposal?')) {
-      setProposals(proposals.filter(p => p.id !== id));
-      alert('Proposal deleted successfully!');
-    }
-  };
-
-  const handleCreateNew = () => {
-    setIsEditMode(false);
+  // Reset form
+  const resetForm = () => {
     setFormData({
+      leadId: '',
+
       title: '',
-      clientName: '',
-      companyName: '',
-      email: '',
-      phone: '',
-      address: '',
-      introduction: '',
-      scopeOfWork: '',
-      deliverables: '',
-      pricingBreakdown: '',
-      terms: '',
-      value: '',
-      preparedBy: '',
-      notes: ''
+      description: '',
+      totalValue: '',
+      groupName: groupName || '',
+      subGroupName: subGroupName || '',
+      status: 'Draft'
     });
+    setTemplateData({
+      companyName: DEFAULT_TEMPLATE.companyName,
+      aboutUs: DEFAULT_TEMPLATE.aboutUs,
+      aboutSystem: DEFAULT_TEMPLATE.aboutSystem,
+      paymentTerms: DEFAULT_TEMPLATE.paymentTerms,
+      defectLiabilityPeriod: DEFAULT_TEMPLATE.defectLiabilityPeriod,
+      systemPricing: [],
+      bomItems: []
+    });
+    setIsEditMode(false);
+    setSelectedProposal(null);
+    setActiveTab('company');
+  };
+
+  // Open create modal
+  const handleCreateNew = () => {
+    resetForm();
     setShowCreateModal(true);
   };
 
-  const handleSubmitProposal = (status = 'Draft') => {
-    // Validation
-    if (!formData.title || !formData.clientName || !formData.companyName || !formData.email || !formData.value) {
-      alert('Please fill in all required fields (Title, Client Name, Company Name, Email, Value)');
-      return;
+  // System Pricing handlers
+  const addSystemPricingRow = () => {
+    setTemplateData({
+      ...templateData,
+      systemPricing: [...templateData.systemPricing, { item: '', description: '', amount: '' }]
+    });
+  };
+
+  const updateSystemPricingRow = (index, field, value) => {
+    const updated = [...templateData.systemPricing];
+    updated[index][field] = value;
+    setTemplateData({ ...templateData, systemPricing: updated });
+  };
+
+  const removeSystemPricingRow = (index) => {
+    const updated = templateData.systemPricing.filter((_, i) => i !== index);
+    setTemplateData({ ...templateData, systemPricing: updated });
+  };
+
+  // BOM handlers
+  const addBOMRow = () => {
+    setTemplateData({
+      ...templateData,
+      bomItems: [...templateData.bomItems, { item: '', specification: '', quantity: '', unit: '', rate: '', amount: '' }]
+    });
+  };
+
+  const updateBOMRow = (index, field, value) => {
+    const updated = [...templateData.bomItems];
+    updated[index][field] = value;
+
+    // Auto-calculate amount if quantity and rate are present
+    if (field === 'quantity' || field === 'rate') {
+      const quantity = parseFloat(updated[index].quantity) || 0;
+      const rate = parseFloat(updated[index].rate) || 0;
+      updated[index].amount = (quantity * rate).toFixed(2);
     }
 
-    const newProposal = {
-      ...formData,
-      id: isEditMode ? selectedProposal.id : `PROP-2024-${String(proposals.length + 1).padStart(3, '0')}`,
-      version: isEditMode ? selectedProposal.version : 'v1',
-      status: status,
-      lastUpdated: new Date().toISOString().split('T')[0],
-      createdDate: isEditMode ? selectedProposal.createdDate : new Date().toISOString().split('T')[0],
-      value: parseFloat(formData.value) || 0
-    };
-
-    if (isEditMode) {
-      setProposals(proposals.map(p => p.id === selectedProposal.id ? newProposal : p));
-      alert('Proposal updated successfully!');
-    } else {
-      setProposals([...proposals, newProposal]);
-      alert('Proposal created successfully!');
-    }
-
-    setShowCreateModal(false);
-    setCurrentPage(1); // Reset to first page to see new proposal
+    setTemplateData({ ...templateData, bomItems: updated });
   };
 
-  const handleStatusChange = (newStatus) => {
-    const updated = proposals.map(p =>
-      p.id === selectedProposal.id ? { ...p, status: newStatus, lastUpdated: new Date().toISOString().split('T')[0] } : p
-    );
-    setProposals(updated);
-    setSelectedProposal({ ...selectedProposal, status: newStatus });
-    alert(`Proposal status changed to ${newStatus}`);
+  const removeBOMRow = (index) => {
+    const updated = templateData.bomItems.filter((_, i) => i !== index);
+    setTemplateData({ ...templateData, bomItems: updated });
   };
 
-  const handleExportPDF = () => {
-    alert('Export PDF functionality - This would generate a PDF report of all proposals');
+  // Calculate total BOM amount
+  const calculateBOMTotal = () => {
+    return templateData.bomItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
   };
 
-  const handleExportExcel = () => {
-    alert('Export Excel functionality - This would generate an Excel spreadsheet of all proposals');
+  // Calculate total System Pricing
+  const calculateSystemPricingTotal = () => {
+    return templateData.systemPricing.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
   };
 
-  const handleDownloadProposalPDF = (proposal) => {
-    alert(`Downloading PDF for ${proposal.id} - ${proposal.title}`);
-  };
-
-  const handlePreviewPDF = () => {
-    alert('Preview PDF functionality - This would show a preview of the proposal document');
-  };
-
-  const handleShareEmail = () => {
-    alert('Share via Email functionality - This would open email client with proposal attached');
-  };
-
+  // Status badge class
   const getStatusClass = (status) => {
     const statusMap = {
       'Draft': 'status-draft',
@@ -337,33 +548,69 @@ const ProposalsManagementPage = () => {
     return statusMap[status] || 'status-draft';
   };
 
+  // Effects
+  useEffect(() => {
+    if (permissions.VIEW) {
+      fetchProposals();
+    }
+  }, [currentPage, rowsPerPage, groupName, subGroupName]);
+
+  useEffect(() => {
+    fetchLeads();
+    // fetchCustomers();
+    fetchUsers();
+    fetchGroups();
+    // fetchSubGroups();
+
+  }, []);
+
+  useEffect(() => {
+    if (searchTerm || filterStatus !== 'All' || filterPreparedBy !== 'All') {
+      const debounce = setTimeout(() => {
+        handleFilter();
+      }, 500);
+      return () => clearTimeout(debounce);
+    } else {
+      fetchProposals();
+    }
+  }, [searchTerm, filterStatus, filterPreparedBy]);
+
+  // If no VIEW permission, show message
+  if (!permissions.VIEW) {
+    return (
+      <div className="proposal-page-container">
+        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+          You don't have permission to view proposals.
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="proposal-page-container">
       {/* Header */}
       <div className="proposal-page-header">
-        <div>
-          <div className="proposal-page-breadcrumb">
-            Dashboard &gt; Proposals
-          </div>
+        <div className="proposal-page-breadcrumb">
+          Dashboard &gt; Proposals
         </div>
-
       </div>
+
       <div className="page-header-with-filter">
         <h1 className="proposal-page-title">Proposals</h1>
-
         <GroupCategoryFilter
           groupValue={groupName}
           subGroupValue={subGroupName}
           onChange={updateFilters}
         />
       </div>
-      {/* Action Bar */}
+
+      {/* Action Bar - Search & Filters in ONE ROW */}
       <div className="proposal-page-action-bar">
         <div className="proposal-page-search-filters">
           <input
             type="text"
             className="proposal-page-search"
-            placeholder="Search by ID, Client, Company, Email, Phone, Value..."
+            placeholder="Search by Proposal No, Title, Description..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -383,52 +630,25 @@ const ProposalsManagementPage = () => {
 
           <select
             className="proposal-page-filter"
-            value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-          >
-            <option value="All">All Priority</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
-
-          <select
-            className="proposal-page-filter"
             value={filterPreparedBy}
             onChange={(e) => setFilterPreparedBy(e.target.value)}
           >
             <option value="All">All Members</option>
-            <option value="Anita Sharma">Anita Sharma</option>
-            <option value="Vikram Singh">Vikram Singh</option>
-            <option value="Neha Gupta">Neha Gupta</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>{user.name}</option>
+            ))}
           </select>
         </div>
 
         <div className="proposal-page-action-buttons">
-          <button
-            className="proposal-page-btn proposal-page-btn-secondary"
-            onClick={handleExportPDF}
-          >
-            Export PDF
-          </button>
-          <button
-            className="proposal-page-btn proposal-page-btn-secondary"
-            onClick={handleExportExcel}
-          >
-            Export Excel
-          </button>
-          <button
-            className="proposal-page-btn proposal-page-btn-secondary"
-            onClick={() => setShowVersionModal(true)}
-          >
-            Version History
-          </button>
-          <button
-            className="proposal-page-btn proposal-page-btn-primary"
-            onClick={handleCreateNew}
-          >
-            + Create New Proposal
-          </button>
+          {permissions.CREATE && (
+            <button
+              className="proposal-page-btn proposal-page-btn-primary"
+              onClick={handleCreateNew}
+            >
+              + Create New Proposal
+            </button>
+          )}
         </div>
       </div>
 
@@ -437,86 +657,87 @@ const ProposalsManagementPage = () => {
         <table className="proposal-page-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort('id')}>
-                Proposal ID {sortConfig.key === 'id' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
-              <th>Client Name</th>
-              <th>Company Name</th>
-              <th>Proposal Title</th>
-              <th onClick={() => handleSort('value')}>
-                Value (₹) {sortConfig.key === 'value' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
+              <th>Proposal No</th>
+              <th>Lead Code</th>
+              <th>Lead Name</th>
+              <th>Group</th>
+              <th>Sub-Group</th>
+              <th>Title</th>
+              <th>Value (₹)</th>
               <th>Version</th>
               <th>Status</th>
               <th>Prepared By</th>
-              <th onClick={() => handleSort('lastUpdated')}>
-                Last Updated {sortConfig.key === 'lastUpdated' && (sortConfig.direction === 'asc' ? '↑' : '↓')}
-              </th>
+              <th>Updated</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {paginatedProposals.length > 0 ? (
-              paginatedProposals.map((proposal) => (
+            {loading ? (
+              <tr>
+                <td colSpan="12" style={{ textAlign: 'center', padding: '40px' }}>
+                  Loading...
+                </td>
+              </tr>
+            ) : proposals.length > 0 ? (
+              proposals.map((proposal) => (
                 <tr key={proposal.id}>
-                  <td className="proposal-page-id">{proposal.id}</td>
-                  <td>{proposal.clientName}</td>
-                  <td>{proposal.companyName}</td>
+                  <td className="proposal-page-id">{proposal.proposalNo}</td>
+                  <td>{proposal.leadCode || '-'}</td>
+                  <td>{proposal.leadName || '-'}</td>
+                  <td>{proposal.groupName || '-'}</td>
+                  <td>{proposal.subGroupName || '-'}</td>
                   <td>{proposal.title}</td>
-                  <td>₹{proposal.value.toLocaleString('en-IN')}</td>
-                  <td><span className="proposal-page-version">{proposal.version}</span></td>
+                  <td>₹{proposal.totalValue ? parseFloat(proposal.totalValue).toLocaleString('en-IN') : '0'}</td>
+                  <td><span className="proposal-page-version">v{proposal.version}</span></td>
                   <td>
                     <span className={`proposal-page-status ${getStatusClass(proposal.status)}`}>
                       {proposal.status}
                     </span>
                   </td>
-                  <td>{proposal.preparedBy}</td>
-                  <td>{proposal.lastUpdated}</td>
+                  <td>{proposal.preparedByName}</td>
+                  <td>{new Date(proposal.updatedAt).toLocaleDateString('en-IN')}</td>
                   <td>
                     <div className="proposal-page-actions">
                       <button
                         className="proposal-page-action-btn"
-                        onClick={() => handleView(proposal)}
+                        onClick={() => handleView(proposal.id)}
                         title="View"
                       >
-                        👁️
+                        <FaEye />
                       </button>
+                      {permissions.EDIT && (
+                        <button
+                          className="proposal-page-action-btn"
+                          onClick={() => handleEdit(proposal)}
+                          title="Edit"
+                        >
+                          <FaEdit />
+                        </button>
+                      )}
                       <button
                         className="proposal-page-action-btn"
-                        onClick={() => handleEdit(proposal)}
-                        title="Edit"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        className="proposal-page-action-btn"
-                        onClick={() => handleDuplicate(proposal)}
-                        title="Duplicate"
-                      >
-                        📋
-                      </button>
-                      <button
-                        className="proposal-page-action-btn"
-                        onClick={() => handleDownloadProposalPDF(proposal)}
+                        onClick={() => handleDownloadPDF(proposal.id)}
                         title="Download PDF"
                       >
-                        📄
+                        <FaFilePdf />
                       </button>
-                      <button
-                        className="proposal-page-action-btn proposal-page-action-delete"
-                        onClick={() => handleDelete(proposal.id)}
-                        title="Delete"
-                      >
-                        🗑️
-                      </button>
+                      {permissions.DELETE && (
+                        <button
+                          className="proposal-page-action-btn proposal-page-action-delete"
+                          onClick={() => handleDelete(proposal.id)}
+                          title="Delete"
+                        >
+                          <FaTrash />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="10" style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
-                  No proposals found. Try adjusting your filters or create a new proposal.
+                <td colSpan="12" style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
+                  No proposals found. {permissions.CREATE && 'Create a new proposal to get started.'}
                 </td>
               </tr>
             )}
@@ -527,8 +748,10 @@ const ProposalsManagementPage = () => {
       {/* Pagination */}
       <div className="proposal-page-pagination">
         <div className="proposal-page-pagination-info">
-          {sortedProposals.length > 0 ? (
-            <>Showing {startIndex + 1} to {Math.min(startIndex + rowsPerPage, sortedProposals.length)} of {sortedProposals.length} entries</>
+          {totalProposals > 0 ? (
+            <>
+              Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, totalProposals)} of {totalProposals} entries
+            </>
           ) : (
             <>No entries to display</>
           )}
@@ -545,6 +768,7 @@ const ProposalsManagementPage = () => {
             <option value={10}>10 rows</option>
             <option value={25}>25 rows</option>
             <option value={50}>50 rows</option>
+            <option value={100}>100 rows</option>
           </select>
           <button
             onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
@@ -569,168 +793,227 @@ const ProposalsManagementPage = () => {
       {/* View Modal */}
       {showViewModal && selectedProposal && (
         <div className="proposal-page-modal-overlay" onClick={() => setShowViewModal(false)}>
-          <div className="proposal-page-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="proposal-page-modal-header">
               <h2>Proposal Details</h2>
-              <button
-                className="proposal-page-modal-close"
-                onClick={() => setShowViewModal(false)}
-              >
+              <button className="proposal-page-modal-close" onClick={() => setShowViewModal(false)}>
                 ×
               </button>
             </div>
 
             <div className="proposal-page-modal-content">
-              {/* Proposal Header */}
               <div className="proposal-page-card">
                 <div className="proposal-page-card-header">
                   <div>
-                    <h3>{selectedProposal.title} - {selectedProposal.version}</h3>
-                    <p className="proposal-page-id">{selectedProposal.id}</p>
+                    <h3>{selectedProposal.companyName || 'SESOLA POWER PROJECTS PROPOSAL PVT LTD'}</h3>
+                    <h3>{selectedProposal.title} - v{selectedProposal.version}</h3>
+                    <p className="proposal-page-id">{selectedProposal.proposalNo}</p>
                   </div>
                   <span className={`proposal-page-status ${getStatusClass(selectedProposal.status)}`}>
                     {selectedProposal.status}
                   </span>
                 </div>
                 <div className="proposal-page-info-grid">
-                  <div>
-                    <strong>Created:</strong> {selectedProposal.createdDate}
-                  </div>
-                  <div>
-                    <strong>Updated:</strong> {selectedProposal.lastUpdated}
-                  </div>
-                  <div>
-                    <strong>Prepared By:</strong> {selectedProposal.preparedBy}
-                  </div>
-                  <div>
-                    <strong>Value:</strong> ₹{selectedProposal.value.toLocaleString('en-IN')}
-                  </div>
+                  <div><strong>Created:</strong> {new Date(selectedProposal.createdAt).toLocaleDateString('en-IN')}</div>
+                  <div><strong>Updated:</strong> {new Date(selectedProposal.updatedAt).toLocaleDateString('en-IN')}</div>
+                  <div><strong>Prepared By:</strong> {selectedProposal.preparedByName}</div>
+                  <div><strong>Value:</strong> ₹{selectedProposal.totalValue ? parseFloat(selectedProposal.totalValue).toLocaleString('en-IN') : '0'}</div>
+                  <div><strong>Group:</strong> {selectedProposal.groupName || '-'}</div>
+                  <div><strong>Sub-Group:</strong> {selectedProposal.subGroupName || '-'}</div>
                 </div>
               </div>
 
-              {/* Client Information */}
-              <div className="proposal-page-card">
-                <h3>Client Information</h3>
-                <div className="proposal-page-info-grid">
-                  <div>
-                    <strong>Client Name:</strong> {selectedProposal.clientName}
-                  </div>
-                  <div>
-                    <strong>Company:</strong> {selectedProposal.companyName}
-                  </div>
-                  <div>
-                    <strong>Email:</strong> {selectedProposal.email}
-                  </div>
-                  <div>
-                    <strong>Phone:</strong> {selectedProposal.phone}
-                  </div>
-                  <div className="proposal-page-full-width">
-                    <strong>Address:</strong> {selectedProposal.address}
-                  </div>
-                </div>
-              </div>
-
-              {/* Proposal Content */}
-              <div className="proposal-page-card">
-                <h3>Proposal Content</h3>
-                <div className="proposal-page-content-section">
-                  <h4>Introduction</h4>
-                  <p>{selectedProposal.introduction}</p>
-                </div>
-                <div className="proposal-page-content-section">
-                  <h4>Scope of Work</h4>
-                  <p>{selectedProposal.scopeOfWork}</p>
-                </div>
-                <div className="proposal-page-content-section">
-                  <h4>Deliverables</h4>
-                  <p>{selectedProposal.deliverables}</p>
-                </div>
-                <div className="proposal-page-content-section">
-                  <h4>Pricing Breakdown</h4>
-                  <pre>{selectedProposal.pricingBreakdown}</pre>
-                </div>
-                <div className="proposal-page-content-section">
-                  <h4>Terms & Conditions</h4>
-                  <p>{selectedProposal.terms}</p>
-                </div>
-              </div>
-
-              {/* Attachments Section */}
-              <div className="proposal-page-card">
-                <h3>Attachments</h3>
-                <div className="proposal-page-content-section">
-                  <p style={{ color: '#718096', fontStyle: 'italic' }}>
-                    No attachments uploaded yet. You can add attachments when editing this proposal.
-                  </p>
-                </div>
-              </div>
-
-              {/* Internal Notes */}
-              {selectedProposal.notes && (
+              {/* Lead/Customer Info */}
+              {(selectedProposal.leadId || selectedProposal.customerId) && (
                 <div className="proposal-page-card">
-                  <h3>Internal Notes</h3>
-                  <div className="proposal-page-content-section">
-                    <p>{selectedProposal.notes}</p>
+                  <h3>Client Information</h3>
+                  <div className="proposal-page-info-grid">
+                    {selectedProposal.leadId && (
+                      <>
+                        <div><strong>Lead Code:</strong> {selectedProposal.leadCode}</div>
+                        <div><strong>Lead Name:</strong> {selectedProposal.leadName}</div>
+                      </>
+                    )}
+                    {selectedProposal.customerId && (
+                      <>
+                        <div><strong>Customer Code:</strong> {selectedProposal.customerCode}</div>
+                        <div><strong>Customer Name:</strong> {selectedProposal.customerName}</div>
+                      </>
+                    )}
                   </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {selectedProposal.description && (
+                <div className="proposal-page-card">
+                  <h3>Description</h3>
+                  <div className="proposal-page-content-section">
+                    <p>{selectedProposal.description}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* About Us */}
+              {selectedProposal.aboutUs && (
+                <div className="proposal-page-card">
+                  <h3>About Us</h3>
+                  <div className="proposal-page-content-section">
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.aboutUs}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* About System */}
+              {selectedProposal.aboutSystem && (
+                <div className="proposal-page-card">
+                  <h3>About System</h3>
+                  <div className="proposal-page-content-section">
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.aboutSystem}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* System Pricing */}
+              {selectedProposal.systemPricing && parseJSON(selectedProposal.systemPricing)?.length > 0 && (
+                <div className="proposal-page-card">
+                  <h3>System Pricing</h3>
+                  <table className="proposal-page-table" style={{ marginTop: '10px' }}>
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Description</th>
+                        <th>Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parseJSON(selectedProposal.systemPricing).map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.item}</td>
+                          <td>{item.description}</td>
+                          <td>₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
+                        <td colSpan="2" style={{ textAlign: 'right' }}>Total:</td>
+                        <td>₹{parseJSON(selectedProposal.systemPricing).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Payment Terms */}
+              {selectedProposal.paymentTerms && (
+                <div className="proposal-page-card">
+                  <h3>Payment Terms</h3>
+                  <div className="proposal-page-content-section">
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.paymentTerms}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Defect Liability Period */}
+              {selectedProposal.defectLiabilityPeriod && (
+                <div className="proposal-page-card">
+                  <h3>Defect Liability Period</h3>
+                  <div className="proposal-page-content-section">
+                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.defectLiabilityPeriod}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* BOM */}
+              {selectedProposal.bomItems && parseJSON(selectedProposal.bomItems)?.length > 0 && (
+                <div className="proposal-page-card">
+                  <h3>Bill of Materials (BOM)</h3>
+                  <table className="proposal-page-table" style={{ marginTop: '10px' }}>
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Specification</th>
+                        <th>Quantity</th>
+                        <th>Unit</th>
+                        <th>Rate (₹)</th>
+                        <th>Amount (₹)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {parseJSON(selectedProposal.bomItems).map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.item}</td>
+                          <td>{item.specification}</td>
+                          <td>{item.quantity}</td>
+                          <td>{item.unit}</td>
+                          <td>₹{parseFloat(item.rate || 0).toLocaleString('en-IN')}</td>
+                          <td>₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
+                        <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
+                        <td>₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               )}
 
               {/* Actions */}
               <div className="proposal-page-modal-actions">
+                {permissions.EDIT && (
+                  <button
+                    className="proposal-page-btn proposal-page-btn-secondary"
+                    onClick={() => handleEdit(selectedProposal)}
+                  >
+                    Edit Proposal
+                  </button>
+                )}
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => handleEdit(selectedProposal)}
-                >
-                  Edit Proposal
-                </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => handleDownloadProposalPDF(selectedProposal)}
+                  onClick={() => handleDownloadPDF(selectedProposal.id)}
                 >
                   Download PDF
                 </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => {
-                    handleDuplicate(selectedProposal);
-                    setShowViewModal(false);
-                  }}
-                >
-                  Duplicate
-                </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={handleShareEmail}
-                >
-                  Share via Email
-                </button>
-                <select
-                  className="proposal-page-status-dropdown"
-                  value={selectedProposal.status}
-                  onChange={(e) => handleStatusChange(e.target.value)}
-                >
-                  <option value="Draft">Draft</option>
-                  <option value="Sent">Sent</option>
-                  <option value="Approved">Approved</option>
-                  <option value="Rejected">Rejected</option>
-                  <option value="On Hold">On Hold</option>
-                </select>
+                {permissions.APPROVE && (
+                  <select
+                    className="proposal-page-status-dropdown"
+                    value={selectedProposal.status}
+                    onChange={async (e) => {
+                      try {
+                        const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`, {
+                          method: 'PUT',
+                          body: JSON.stringify({ status: e.target.value })
+                        });
+                        if (data.success) {
+                          alert('Status updated successfully!');
+                          setSelectedProposal({ ...selectedProposal, status: e.target.value });
+                          fetchProposals();
+                        }
+                      } catch (error) {
+                        alert('Failed to update status');
+                      }
+                    }}
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Sent">Sent</option>
+                    <option value="Approved">Approved</option>
+                    <option value="Rejected">Rejected</option>
+                    <option value="On Hold">On Hold</option>
+                  </select>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal - Basic Info */}
       {showCreateModal && (
-        <div className="proposal-page-modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="proposal-page-modal-overlay" onClick={() => { setShowCreateModal(false); resetForm(); }}>
           <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="proposal-page-modal-header">
               <h2>{isEditMode ? 'Edit Proposal' : 'Create New Proposal'}</h2>
-              <button
-                className="proposal-page-modal-close"
-                onClick={() => setShowCreateModal(false)}
-              >
+              <button className="proposal-page-modal-close" onClick={() => { setShowCreateModal(false); resetForm(); }}>
                 ×
               </button>
             </div>
@@ -739,7 +1022,38 @@ const ProposalsManagementPage = () => {
               <div className="proposal-page-form">
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
-                    <label>Proposal Title *</label>
+                    <label>Lead *</label>
+                    <select
+                      value={formData.leadId}
+                      onChange={(e) => setFormData({ ...formData, leadId: e.target.value })}
+                    >
+                      <option value="">Select Lead</option>
+                      {leads.map(lead => (
+                        <option key={lead.id} value={lead.id}>
+                          {lead.leadCode} - {lead.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* <div className="proposal-page-form-group">
+                    <label>Customer (Optional)</label>
+                    <select
+                      value={formData.customerId}
+                      onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
+                    >
+                      <option value="">Select Customer</option>
+                      {customers.map(customer => (
+                        <option key={customer.id} value={customer.id}>
+                          {customer.customerCode} - {customer.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div> */}
+                </div>
+
+                <div className="proposal-page-form-row">
+                  <div className="proposal-page-form-group">
+                    <label>Title *</label>
                     <input
                       type="text"
                       value={formData.title}
@@ -748,153 +1062,70 @@ const ProposalsManagementPage = () => {
                     />
                   </div>
                   <div className="proposal-page-form-group">
-                    <label>Proposal Value (₹) *</label>
+                    <label>Total Value (₹)</label>
                     <input
                       type="number"
-                      value={formData.value}
-                      onChange={(e) => setFormData({ ...formData, value: e.target.value })}
-                      placeholder="Enter value"
+                      value={formData.totalValue}
+                      onChange={(e) => setFormData({ ...formData, totalValue: e.target.value })}
+                      placeholder="Enter total value"
                     />
                   </div>
                 </div>
 
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
-                    <label>Client Name *</label>
-                    <input
-                      type="text"
-                      value={formData.clientName}
-                      onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                      placeholder="Enter client name"
-                    />
-                  </div>
-                  <div className="proposal-page-form-group">
-                    <label>Company Name *</label>
-                    <input
-                      type="text"
-                      value={formData.companyName}
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                      placeholder="Enter company name"
-                    />
-                  </div>
-                </div>
-
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Email *</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="Enter email"
-                    />
-                  </div>
-                  <div className="proposal-page-form-group">
-                    <label>Phone *</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="Enter phone number"
-                    />
-                  </div>
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Address</label>
-                  <input
-                    type="text"
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Enter address"
-                  />
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Introduction</label>
-                  <textarea
-                    value={formData.introduction}
-                    onChange={(e) => setFormData({ ...formData, introduction: e.target.value })}
-                    placeholder="Enter proposal introduction"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Scope of Work</label>
-                  <textarea
-                    value={formData.scopeOfWork}
-                    onChange={(e) => setFormData({ ...formData, scopeOfWork: e.target.value })}
-                    placeholder="Enter scope of work"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Deliverables</label>
-                  <textarea
-                    value={formData.deliverables}
-                    onChange={(e) => setFormData({ ...formData, deliverables: e.target.value })}
-                    placeholder="Enter deliverables"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Pricing Breakdown</label>
-                  <textarea
-                    value={formData.pricingBreakdown}
-                    onChange={(e) => setFormData({ ...formData, pricingBreakdown: e.target.value })}
-                    placeholder="Enter pricing breakdown (e.g., Development: ₹10,00,000)"
-                    rows={4}
-                  />
-                </div>
-
-                <div className="proposal-page-form-group">
-                  <label>Terms & Conditions</label>
-                  <textarea
-                    value={formData.terms}
-                    onChange={(e) => setFormData({ ...formData, terms: e.target.value })}
-                    placeholder="Enter terms and conditions"
-                    rows={3}
-                  />
-                </div>
-
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Prepared By</label>
+                    <label>Group</label>
                     <select
-                      value={formData.preparedBy}
-                      onChange={(e) => setFormData({ ...formData, preparedBy: e.target.value })}
+                      value={formData.groupName}
+                      onChange={(e) => setFormData({ ...formData, groupName: e.target.value, subGroupName: '' })}
                     >
-                      <option value="">Select member</option>
-                      <option value="Anita Sharma">Anita Sharma</option>
-                      <option value="Vikram Singh">Vikram Singh</option>
-                      <option value="Neha Gupta">Neha Gupta</option>
+                      <option value="">Select Group</option>
+                      {groups.map((group, index) => (
+                        <option key={group.value || group.label || index} value={group.value || group.label}>
+                          {group.label || group.value}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="proposal-page-form-group">
-                    <label>Upload Files</label>
-                    <input
-                      type="file"
-                      multiple
-                      accept=".pdf,.docx,.png,.jpg,.jpeg"
-                      onChange={(e) => {
-                        // File upload logic would go here
-                        console.log('Files selected:', e.target.files);
-                      }}
-                      style={{ padding: '8px' }}
-                    />
+                    <label>Category</label>
+                    <select
+                      value={formData.subGroupName}
+                      onChange={(e) => setFormData({ ...formData, subGroupName: e.target.value })}
+                      disabled={!formData.groupName}
+                    >
+                      <option value="">Select Category</option>
+                      {subGroups.map((sub, index) => (
+                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
+                          {sub.label || sub.value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="proposal-page-form-row">
+                  <div className="proposal-page-form-group">
+                    <label>Status</label>
+                    <select
+                      value={formData.status}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    >
+                      <option value="Draft">Draft</option>
+                      <option value="Sent">Sent</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Rejected">Rejected</option>
+                      <option value="On Hold">On Hold</option>
+                    </select>
                   </div>
                 </div>
 
                 <div className="proposal-page-form-group">
-                  <label>Internal Notes</label>
+                  <label>Description</label>
                   <textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Add internal notes (not visible to client)"
-                    rows={2}
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Enter proposal description"
+                    rows={3}
                   />
                 </div>
               </div>
@@ -902,21 +1133,21 @@ const ProposalsManagementPage = () => {
               <div className="proposal-page-modal-actions">
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => handleSubmitProposal('Draft')}
+                  onClick={() => { setShowCreateModal(false); resetForm(); }}
                 >
-                  Save as Draft
+                  Cancel
                 </button>
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={handlePreviewPDF}
+                  onClick={() => setShowTemplateModal(true)}
                 >
-                  Preview PDF
+                  📝 Edit Template Content
                 </button>
                 <button
                   className="proposal-page-btn proposal-page-btn-primary"
-                  onClick={() => handleSubmitProposal('Sent')}
+                  onClick={isEditMode ? handleUpdate : handleCreate}
                 >
-                  {isEditMode ? 'Update & Send' : 'Create & Send'}
+                  {isEditMode ? 'Update Proposal' : 'Create Proposal'}
                 </button>
               </div>
             </div>
@@ -924,84 +1155,356 @@ const ProposalsManagementPage = () => {
         </div>
       )}
 
-      {/* Version History Modal */}
-      {showVersionModal && (
-        <div className="proposal-page-modal-overlay" onClick={() => setShowVersionModal(false)}>
-          <div className="proposal-page-modal" onClick={(e) => e.stopPropagation()}>
+      {/* Template Editor Modal */}
+      {showTemplateModal && (
+        <div className="proposal-page-modal-overlay" onClick={() => setShowTemplateModal(false)}>
+          <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px' }}>
             <div className="proposal-page-modal-header">
-              <h2>Version History</h2>
-              <button
-                className="proposal-page-modal-close"
-                onClick={() => setShowVersionModal(false)}
-              >
+              <h2>📝 Edit Proposal Template</h2>
+              <button className="proposal-page-modal-close" onClick={() => setShowTemplateModal(false)}>
                 ×
               </button>
             </div>
 
             <div className="proposal-page-modal-content">
-              <p style={{ marginBottom: '20px', color: '#4a5568' }}>
-                Track all versions and changes made to proposals over time.
-              </p>
-              <div className="proposal-page-version-list">
-                <div className="proposal-page-version-item">
-                  <div>
-                    <strong>v3</strong> - Current Version
-                    <p>Modified by Anita Sharma on 2024-12-08 at 03:45 PM</p>
-                    <p style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>
-                      Updated pricing breakdown and terms
-                    </p>
-                  </div>
-                  <button className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm">
-                    View
+              {/* Tabs */}
+              <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', flexWrap: 'wrap' }}>
+                {[
+                  { key: 'company', label: 'Company Info' },
+                  { key: 'aboutUs', label: 'About Us' },
+                  { key: 'aboutSystem', label: 'About System' },
+                  { key: 'pricing', label: 'System Pricing' },
+                  { key: 'payment', label: 'Payment Terms' },
+                  { key: 'dlp', label: 'DLP' },
+                  { key: 'bom', label: 'BOM' }
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    style={{
+                      padding: '10px 20px',
+                      border: 'none',
+                      background: activeTab === tab.key ? '#3182ce' : 'transparent',
+                      color: activeTab === tab.key ? 'white' : '#4a5568',
+                      fontWeight: activeTab === tab.key ? '600' : '400',
+                      cursor: 'pointer',
+                      borderRadius: '6px 6px 0 0',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    {tab.label}
                   </button>
-                </div>
-                <div className="proposal-page-version-item">
-                  <div>
-                    <strong>v2</strong>
-                    <p>Modified by Anita Sharma on 2024-11-25 at 11:20 AM</p>
-                    <p style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>
-                      Added deliverables section and revised scope
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm">
-                      View
-                    </button>
-                    <button
-                      className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                      onClick={() => alert('Restore v2 functionality - This would restore this version')}
-                    >
-                      Restore
-                    </button>
-                  </div>
-                </div>
-                <div className="proposal-page-version-item">
-                  <div>
-                    <strong>v1</strong> - Initial Version
-                    <p>Created by Anita Sharma on 2024-11-15 at 09:30 AM</p>
-                    <p style={{ fontSize: '12px', color: '#718096', marginTop: '4px' }}>
-                      Initial proposal draft created
-                    </p>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm">
-                      View
-                    </button>
-                    <button
-                      className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                      onClick={() => alert('Restore v1 functionality - This would restore this version')}
-                    >
-                      Restore
-                    </button>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              <div style={{ marginTop: '24px', padding: '16px', background: '#edf2f7', borderRadius: '6px' }}>
-                <p style={{ fontSize: '13px', color: '#4a5568', margin: 0 }}>
-                  <strong>Note:</strong> Version history is automatically tracked when proposals are edited.
-                  You can view or restore any previous version at any time.
-                </p>
+              {/* Tab Content */}
+              <div style={{ minHeight: '400px' }}>
+                {/* Company Info Tab */}
+                {activeTab === 'company' && (
+                  <div className="proposal-page-form">
+                    <div className="proposal-page-form-group">
+                      <label>Company Name</label>
+                      <input
+                        type="text"
+                        value={templateData.companyName}
+                        onChange={(e) => setTemplateData({ ...templateData, companyName: e.target.value })}
+                        placeholder="Enter company name"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* About Us Tab */}
+                {activeTab === 'aboutUs' && (
+                  <div className="proposal-page-form">
+                    <div className="proposal-page-form-group">
+                      <label>About Us</label>
+                      <textarea
+                        value={templateData.aboutUs}
+                        onChange={(e) => setTemplateData({ ...templateData, aboutUs: e.target.value })}
+                        placeholder="Enter company information..."
+                        rows={15}
+                        style={{ fontSize: '14px', lineHeight: '1.6' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* About System Tab */}
+                {activeTab === 'aboutSystem' && (
+                  <div className="proposal-page-form">
+                    <div className="proposal-page-form-group">
+                      <label>About System</label>
+                      <textarea
+                        value={templateData.aboutSystem}
+                        onChange={(e) => setTemplateData({ ...templateData, aboutSystem: e.target.value })}
+                        placeholder="Enter system description..."
+                        rows={15}
+                        style={{ fontSize: '14px', lineHeight: '1.6' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* System Pricing Tab */}
+                {activeTab === 'pricing' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h3 style={{ margin: 0 }}>System Pricing</h3>
+                      <button
+                        className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
+                        onClick={addSystemPricingRow}
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+                    <div className="proposal-page-table-container">
+                      <table className="proposal-page-table">
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Description</th>
+                            <th>Amount (₹)</th>
+                            <th style={{ width: '80px' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {templateData.systemPricing.length === 0 ? (
+                            <tr>
+                              <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
+                                No pricing items added. Click "Add Row" to start.
+                              </td>
+                            </tr>
+                          ) : (
+                            <>
+                              {templateData.systemPricing.map((row, index) => (
+                                <tr key={index}>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={row.item}
+                                      onChange={(e) => updateSystemPricingRow(index, 'item', e.target.value)}
+                                      placeholder="Item name"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={row.description}
+                                      onChange={(e) => updateSystemPricingRow(index, 'description', e.target.value)}
+                                      placeholder="Description"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="number"
+                                      value={row.amount}
+                                      onChange={(e) => updateSystemPricingRow(index, 'amount', e.target.value)}
+                                      placeholder="0.00"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <button
+                                      onClick={() => removeSystemPricingRow(index)}
+                                      style={{
+                                        background: '#fed7d7',
+                                        color: '#742a2a',
+                                        border: 'none',
+                                        padding: '6px 12px',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
+                                <td colSpan="2" style={{ textAlign: 'right' }}>Total:</td>
+                                <td>₹{calculateSystemPricingTotal()}</td>
+                                <td></td>
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* Payment Terms Tab */}
+                {activeTab === 'payment' && (
+                  <div className="proposal-page-form">
+                    <div className="proposal-page-form-group">
+                      <label>Payment Terms</label>
+                      <textarea
+                        value={templateData.paymentTerms}
+                        onChange={(e) => setTemplateData({ ...templateData, paymentTerms: e.target.value })}
+                        placeholder="Enter payment terms..."
+                        rows={12}
+                        style={{ fontSize: '14px', lineHeight: '1.6' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* DLP Tab */}
+                {activeTab === 'dlp' && (
+                  <div className="proposal-page-form">
+                    <div className="proposal-page-form-group">
+                      <label>Defect Liability Period</label>
+                      <textarea
+                        value={templateData.defectLiabilityPeriod}
+                        onChange={(e) => setTemplateData({ ...templateData, defectLiabilityPeriod: e.target.value })}
+                        placeholder="Enter defect liability period details..."
+                        rows={12}
+                        style={{ fontSize: '14px', lineHeight: '1.6' }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* BOM Tab */}
+                {activeTab === 'bom' && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                      <h3 style={{ margin: 0 }}>Bill of Materials (BOM)</h3>
+                      <button
+                        className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
+                        onClick={addBOMRow}
+                      >
+                        + Add Row
+                      </button>
+                    </div>
+                    <div className="proposal-page-table-container">
+                      <table className="proposal-page-table">
+                        <thead>
+                          <tr>
+                            <th>Item</th>
+                            <th>Specification</th>
+                            <th>Quantity</th>
+                            <th>Unit</th>
+                            <th>Rate (₹)</th>
+                            <th>Amount (₹)</th>
+                            <th style={{ width: '80px' }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {templateData.bomItems.length === 0 ? (
+                            <tr>
+                              <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
+                                No BOM items added. Click "Add Row" to start.
+                              </td>
+                            </tr>
+                          ) : (
+                            <>
+                              {templateData.bomItems.map((row, index) => (
+                                <tr key={index}>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={row.item}
+                                      onChange={(e) => updateBOMRow(index, 'item', e.target.value)}
+                                      placeholder="Item name"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={row.specification}
+                                      onChange={(e) => updateBOMRow(index, 'specification', e.target.value)}
+                                      placeholder="Specification"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="number"
+                                      value={row.quantity}
+                                      onChange={(e) => updateBOMRow(index, 'quantity', e.target.value)}
+                                      placeholder="0"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={row.unit}
+                                      onChange={(e) => updateBOMRow(index, 'unit', e.target.value)}
+                                      placeholder="Nos/Kg"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="number"
+                                      value={row.rate}
+                                      onChange={(e) => updateBOMRow(index, 'rate', e.target.value)}
+                                      placeholder="0.00"
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="number"
+                                      value={row.amount}
+                                      readOnly
+                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f7fafc' }}
+                                    />
+                                  </td>
+                                  <td>
+                                    <button
+                                      onClick={() => removeBOMRow(index)}
+                                      style={{
+                                        background: '#fed7d7',
+                                        color: '#742a2a',
+                                        border: 'none',
+                                        padding: '6px 12px',
+                                        borderRadius: '4px',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      🗑️
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                              <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
+                                <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
+                                <td>₹{calculateBOMTotal()}</td>
+                                <td></td>
+                              </tr>
+                            </>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Template Modal Actions */}
+              <div className="proposal-page-modal-actions" style={{ marginTop: '30px' }}>
+                <button
+                  className="proposal-page-btn proposal-page-btn-secondary"
+                  onClick={() => setShowTemplateModal(false)}
+                >
+                  Close
+                </button>
+                <button
+                  className="proposal-page-btn proposal-page-btn-primary"
+                  onClick={() => {
+                    setShowTemplateModal(false);
+                    alert('Template content saved! Now you can create/update the proposal.');
+                  }}
+                >
+                  ✓ Save Template
+                </button>
               </div>
             </div>
           </div>
@@ -1011,4 +1514,4 @@ const ProposalsManagementPage = () => {
   );
 };
 
-export default ProposalsManagementPage
+export default ProposalsWithTemplate;
