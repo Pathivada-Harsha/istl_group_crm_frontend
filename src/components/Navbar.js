@@ -192,12 +192,27 @@ function Navbar({ onMenuClick }) {
                 <Link to="/profile" className="dropdown-item" onClick={closeAllDropdowns}>
                   Profile
                 </Link>
-                <Link to="/users" className="dropdown-item" onClick={closeAllDropdowns}>
-                  Users
-                </Link>
-                <Link to="/settings" className="dropdown-item" onClick={closeAllDropdowns}>
+                {(user?.role?.toLowerCase() === "superadmin" ||
+                  user?.role?.toLowerCase() === "admin") && (
+                    <Link
+                      to="/users"
+                      className="dropdown-item"
+                      onClick={closeAllDropdowns}
+                    >
+                      Users
+                    </Link>
+                  )}
+                   {/* <Link
+                      to="/users"
+                      className="dropdown-item"
+                      onClick={closeAllDropdowns}
+                    >
+                      Users
+                    </Link> */}
+
+                {/* <Link to="/settings" className="dropdown-item" onClick={closeAllDropdowns}>
                   Settings
-                </Link>
+                </Link> */}
                 <hr className="dropdown-divider" />
 
                 <button
