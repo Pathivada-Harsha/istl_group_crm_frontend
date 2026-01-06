@@ -1,4 +1,4 @@
-// Leads-Enquiries.js - Updated with fetch API
+// Leads-Enquiries.js - Updated with Permissions
 import React, { useState, useEffect } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
@@ -29,10 +29,15 @@ function LeadsEnquiries() {
   const [subGroups, setSubGroups] = useState([]);
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
-  const handleSave = () => {
-    showSuccess('Data saved successfully!');
-  };
-  const { user } = useAuth();
+  const { user, pagePermissions } = useAuth();
+
+  // Extract permissions
+  const leadsPermissions = pagePermissions?.LEADS || [];
+  const canView = leadsPermissions.includes('VIEW');
+  const canCreate = leadsPermissions.includes('CREATE');
+  const canEdit = leadsPermissions.includes('EDIT');
+  const canDelete = leadsPermissions.includes('DELETE');
+  const canAssign = leadsPermissions.includes('ASSIGN');
 
   const currentUser = {
     id: user.id || 1,
@@ -56,7 +61,6 @@ function LeadsEnquiries() {
     subGroupName: ''
   });
 
-  // Helper function for fetch requests
   const fetchWithHeaders = async (url, options = {}) => {
     const headers = {
       'Content-Type': 'application/json',
@@ -79,14 +83,18 @@ function LeadsEnquiries() {
   };
 
   useEffect(() => {
-    fetchLeads();
-    fetchUsers();
-    fetchGroups();
-  }, []);
+    if (canView) {
+      fetchLeads();
+      fetchUsers();
+      fetchGroups();
+    }
+  }, [canView]);
 
   useEffect(() => {
-    fetchLeads();
-  }, [groupName, subGroupName]);
+    if (canView) {
+      fetchLeads();
+    }
+  }, [groupName, subGroupName, canView]);
 
   useEffect(() => {
     if (formData.groupName) {
@@ -127,9 +135,6 @@ function LeadsEnquiries() {
       if (!response.ok) throw new Error('Failed to fetch users');
 
       const data = await response.json();
-      console.log('Leads Users Response:', data);
-
-      // Backend returns array of LeadsUserWrapper: [{id, name}, ...]
       if (Array.isArray(data)) {
         setUsers(data);
       }
@@ -151,9 +156,6 @@ function LeadsEnquiries() {
       if (!response.ok) throw new Error('Failed to fetch groups');
 
       const data = await response.json();
-      console.log('Leads Groups Response:', data);
-
-      // Backend returns array of LeadsGroupWrapper: [{value, label}, ...]
       if (Array.isArray(data)) {
         setGroups(data);
       }
@@ -180,9 +182,6 @@ function LeadsEnquiries() {
       if (!response.ok) throw new Error('Failed to fetch subgroups');
 
       const data = await response.json();
-      console.log('Leads SubGroups Response:', data);
-
-      // Backend returns array of LeadsSubGroupWrapper: [{value, label}, ...]
       if (Array.isArray(data)) {
         setSubGroups(data);
       }
@@ -193,6 +192,8 @@ function LeadsEnquiries() {
   };
 
   const applyFilters = async () => {
+    if (!canView) return;
+    
     setLoading(true);
     setError(null);
     try {
@@ -249,6 +250,11 @@ function LeadsEnquiries() {
   };
 
   const handleView = async (lead) => {
+    if (!canView) {
+      showError('You do not have permission to view leads');
+      return;
+    }
+
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/${lead.id}`);
       if (data.success) {
@@ -261,6 +267,11 @@ function LeadsEnquiries() {
   };
 
   const handleEdit = (lead) => {
+    if (!canEdit) {
+      showError('You do not have permission to edit leads');
+      return;
+    }
+
     setShowViewModal(false);
     setFormData({
       id: lead.id,
@@ -280,6 +291,11 @@ function LeadsEnquiries() {
   };
 
   const handleDelete = async (leadId) => {
+    if (!canDelete) {
+      showError('You do not have permission to delete leads');
+      return;
+    }
+
     if (window.confirm('Are you sure you want to delete this lead?')) {
       try {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/delete/${leadId}`, {
@@ -296,14 +312,22 @@ function LeadsEnquiries() {
     }
   };
 
-  // Add this updated handleSubmit to replace the existing one in your Leads-Enquiries.js
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (formData.id && !canEdit) {
+      showError('You do not have permission to edit leads');
+      return;
+    }
+    
+    if (!formData.id && !canCreate) {
+      showError('You do not have permission to create leads');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Check if status is changing to "Closed Won"
       const isClosingWon = formData.status === 'Closed Won' &&
         formData.id &&
         leads.find(l => l.id === formData.id)?.status !== 'Closed Won';
@@ -387,6 +411,11 @@ function LeadsEnquiries() {
   const currentLeads = leads.slice(startIndex, endIndex);
 
   const exportToCSV = () => {
+    if (!canView) {
+      showError('You do not have permission to export leads');
+      return;
+    }
+
     const headers = ['Lead ID', 'Client Name', 'Email', 'Phone', 'Source', 'Priority', 'Status', 'Group', 'Category', 'Assigned To', 'Created At'];
     const csvContent = [
       headers.join(','),
@@ -413,8 +442,18 @@ function LeadsEnquiries() {
     a.click();
   };
 
-  return (
+  // Check if user has no permissions at all
+  if (!canView) {
+    return (
+      <div className="leads-enquiries-container">
+        <div className="alert alert-warning" role="alert">
+          You do not have permission to view leads. Please contact your administrator.
+        </div>
+      </div>
+    );
+  }
 
+  return (
     <div className="leads-enquiries-container">
       {loading && <CrmPreloader text="Loading Leads..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -482,7 +521,19 @@ function LeadsEnquiries() {
         </div>
 
         <div className="leads-enquiries-action-buttons">
-          <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => { resetForm(); setShowAddModal(true); }}>
+          <button 
+            className={`leads-enquiries-btn leads-enquiries-btn-primary ${!canCreate ? 'leads-enquiries-btn-disabled' : ''}`}
+            onClick={() => { 
+              if (canCreate) {
+                resetForm(); 
+                setShowAddModal(true);
+              } else {
+                showError('You do not have permission to create leads');
+              }
+            }}
+            disabled={!canCreate}
+            title={!canCreate ? 'No permission to create leads' : 'Add New Lead'}
+          >
             <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
@@ -496,14 +547,6 @@ function LeadsEnquiries() {
           </button>
         </div>
       </div>
-
-      {loading && (
-        <div className="text-center py-4">
-          <div className="spinner-border text-primary" role="status">
-            <span className="sr-only">Loading...</span>
-          </div>
-        </div>
-      )}
 
       <div className="leads-enquiries-table-card">
         <div className="leads-enquiries-table-wrapper">
@@ -528,7 +571,7 @@ function LeadsEnquiries() {
             <tbody>
               {currentLeads.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="text-center py-4">No leads found</td>
+                  <td colSpan="13" className="text-center py-4">No leads found</td>
                 </tr>
               ) : (
                 currentLeads.map((lead) => (
@@ -561,18 +604,34 @@ function LeadsEnquiries() {
                     <td>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}</td>
                     <td>
                       <div className="leads-enquiries-action-buttons-cell">
-                        <button className="leads-enquiries-action-btn leads-enquiries-action-view" onClick={() => handleView(lead)} title="View">
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <button className="leads-enquiries-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit">
+                        {canView && (
+                          <button 
+                            className="leads-enquiries-action-btn leads-enquiries-action-view" 
+                            onClick={() => handleView(lead)} 
+                            title="View"
+                          >
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        )}
+                        <button 
+                          className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleEdit(lead)} 
+                          title={!canEdit ? 'No permission to edit' : 'Edit'}
+                          disabled={!canEdit}
+                        >
                           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button className="leads-enquiries-action-btn leads-enquiries-action-delete" onClick={() => handleDelete(lead.id)} title="Delete">
+                        <button 
+                          className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleDelete(lead.id)} 
+                          title={!canDelete ? 'No permission to delete' : 'Delete'}
+                          disabled={!canDelete}
+                        >
                           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
@@ -697,7 +756,11 @@ function LeadsEnquiries() {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select value={formData.assignedTo || ''} onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}>
+                    <select 
+                      value={formData.assignedTo || ''} 
+                      onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}
+                      disabled={!canAssign}
+                    >
                       <option value="">Select Member</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>
@@ -705,6 +768,7 @@ function LeadsEnquiries() {
                         </option>
                       ))}
                     </select>
+                    {!canAssign && <small style={{color: '#6b7280', fontSize: '12px'}}>You don't have permission to assign leads</small>}
                   </div>
                 </div>
                 <div className="leads-enquiries-form-group">
@@ -798,9 +862,11 @@ function LeadsEnquiries() {
               </div>
 
               <div className="leads-enquiries-modal-actions">
-                <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => handleEdit(selectedLead)}>
-                  Edit Lead
-                </button>
+                {canEdit && (
+                  <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => handleEdit(selectedLead)}>
+                    Edit Lead
+                  </button>
+                )}
                 <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowViewModal(false)}>
                   Close
                 </button>
