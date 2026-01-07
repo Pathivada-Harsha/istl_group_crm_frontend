@@ -703,3 +703,9 @@ padding: 24px;
   background: #fed7d7;
   color: #742a2a;
 }
+.proposals-btn-disabled {
+  opacity: 0.45;
+  pointer-events: none;
+  filter: grayscale(100%);
+  cursor: not-allowed;
+}

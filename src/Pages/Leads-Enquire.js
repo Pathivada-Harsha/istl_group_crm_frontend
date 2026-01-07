@@ -1,5 +1,5 @@
 // Leads-Enquiries.js - Updated with Permissions
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -10,7 +10,7 @@ import CrmPreloader from "../components/preLoader.js";
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function LeadsEnquiries() {
-
+const isFirstRender = useRef(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -30,6 +30,7 @@ function LeadsEnquiries() {
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions } = useAuth();
+
 
   // Extract permissions
   const leadsPermissions = pagePermissions?.LEADS || [];
@@ -225,12 +226,32 @@ function LeadsEnquiries() {
     }
   };
 
-  useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      applyFilters();
-    }, 500);
-    return () => clearTimeout(debounceTimer);
-  }, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
+ useEffect(() => {
+  // ⛔ Skip first render
+  if (isFirstRender.current) {
+    isFirstRender.current = false;
+    return;
+  }
+
+  // ⛔ Skip if filters are still default
+  const isDefaultFilter =
+    !searchTerm &&
+    statusFilter === 'All' &&
+    priorityFilter === 'All' &&
+    sourceFilter === 'All';
+
+  if (isDefaultFilter) {
+    return;
+  }
+
+  const debounceTimer = setTimeout(() => {
+    applyFilters();
+  }, 500);
+
+  return () => clearTimeout(debounceTimer);
+
+}, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
+
 
   const handleSort = (column) => {
     const direction = sortColumn === column && sortDirection === 'asc' ? 'desc' : 'asc';

@@ -1,5 +1,5 @@
 // Customers.js - Complete with Permissions
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/Sales-Customer.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -11,6 +11,7 @@ import CrmPreloader from "../components/preLoader.js";
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const CustomerDatabase = () => {
+  const isFirstRender = useRef(true);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
@@ -116,7 +117,7 @@ const CustomerDatabase = () => {
       if (subGroupName) params.append('subGroupName', subGroupName);
       params.append('page', currentPage - 1);
       params.append('size', rowsPerPage);
-      
+
       const data = await fetchWithHeaders(`${API_BASE_URL}/customers/getAll?${params}`);
       if (data.success) {
         setCustomers(data.data.content || data.data);
@@ -137,9 +138,9 @@ const CustomerDatabase = () => {
           'User-Role': currentUser.role
         }
       });
-      
+
       if (!response.ok) throw new Error('Failed to fetch users');
-      
+
       const data = await response.json();
       if (Array.isArray(data)) {
         setUsers(data);
@@ -185,7 +186,7 @@ const CustomerDatabase = () => {
         method: 'POST',
         body: JSON.stringify(filterRequest)
       });
-      
+
       if (data.success) {
         setCustomers(data.data.content || data.data);
         setTotalCustomers(data.data.totalElements || data.data.length || 0);
@@ -198,11 +199,29 @@ const CustomerDatabase = () => {
   };
 
   useEffect(() => {
+    // ⛔ Skip first render (StrictMode safe)
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    // ⛔ Skip when filters are default
+    const isDefaultFilter =
+      !searchTerm &&
+      selectedGroup === 'All' &&
+      selectedStatus === 'All';
+
+    if (isDefaultFilter) {
+      return;
+    }
+
     const debounceTimer = setTimeout(() => {
-      applyFilters();
       setCurrentPage(1);
+      applyFilters();
     }, 500);
+
     return () => clearTimeout(debounceTimer);
+
   }, [searchTerm, selectedGroup, selectedStatus]);
 
   const handleViewCustomer = async (customer) => {
@@ -264,7 +283,7 @@ const CustomerDatabase = () => {
         const data = await fetchWithHeaders(`${API_BASE_URL}/customers/delete/${customerId}`, {
           method: 'DELETE'
         });
-        
+
         if (data.success) {
           showSuccess('Customer deleted successfully');
           fetchCustomers();
@@ -277,26 +296,26 @@ const CustomerDatabase = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.id && !canEdit) {
       showError('You do not have permission to edit customers');
       return;
     }
-    
+
     if (!formData.id && !canCreate) {
       showError('You do not have permission to create customers');
       return;
     }
 
     setLoading(true);
-    
+
     try {
       if (formData.id) {
         const data = await fetchWithHeaders(`${API_BASE_URL}/customers/update/${formData.id}`, {
           method: 'PUT',
           body: JSON.stringify(formData)
         });
-        
+
         if (data.success) {
           showSuccess('Customer updated successfully');
           setIsAddFormOpen(false);
@@ -308,7 +327,7 @@ const CustomerDatabase = () => {
           method: 'POST',
           body: JSON.stringify(formData)
         });
-        
+
         if (data.success) {
           showSuccess('Customer created successfully');
           setIsAddFormOpen(false);
@@ -325,7 +344,7 @@ const CustomerDatabase = () => {
 
   const handleFollowupSubmit = async (e) => {
     e.preventDefault();
-    
+
     try {
       const data = {
         relatedType: 'Customer',
@@ -333,12 +352,12 @@ const CustomerDatabase = () => {
         ...followupFormData,
         status: 'Pending'
       };
-      
+
       const response = await fetchWithHeaders(`${API_BASE_URL}/followups/create`, {
         method: 'POST',
         body: JSON.stringify(data)
       });
-      
+
       if (response.success) {
         showSuccess('Follow-up created successfully');
         setShowFollowupModal(false);
@@ -357,7 +376,7 @@ const CustomerDatabase = () => {
         method: 'PUT',
         body: JSON.stringify({ status: 'Completed' })
       });
-      
+
       if (data.success) {
         showSuccess('Follow-up marked as completed');
         fetchFollowups(selectedCustomer.id);
@@ -474,8 +493,8 @@ const CustomerDatabase = () => {
     newThisMonth: customers.filter(c => {
       const createdDate = new Date(c.createdAt);
       const now = new Date();
-      return createdDate.getMonth() === now.getMonth() && 
-             createdDate.getFullYear() === now.getFullYear();
+      return createdDate.getMonth() === now.getMonth() &&
+        createdDate.getFullYear() === now.getFullYear();
     }).length,
     activeCustomers: customers.filter(c => c.status === 'Active').length,
     pendingFollowups: customers.reduce((sum, c) => sum + (c.pendingFollowupsCount || 0), 0)
@@ -523,15 +542,15 @@ const CustomerDatabase = () => {
 
       {/* KPI Cards */}
       <div style={{
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(4, 1fr)', 
-        gap: '1rem', 
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, 1fr)',
+        gap: '1rem',
         marginBottom: '1.5rem'
       }}>
         <div style={{
-          background: '#fff', 
-          padding: '1rem', 
-          borderRadius: '8px', 
+          background: '#fff',
+          padding: '1rem',
+          borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           display: 'flex',
           alignItems: 'center',
@@ -548,15 +567,15 @@ const CustomerDatabase = () => {
             fontSize: '1.25rem'
           }}>👥</div>
           <div>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.totalCustomers}</div>
-            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Total Customers</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2' }}>{kpiData.totalCustomers}</div>
+            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.125rem' }}>Total Customers</div>
           </div>
         </div>
 
         <div style={{
-          background: '#fff', 
-          padding: '1rem', 
-          borderRadius: '8px', 
+          background: '#fff',
+          padding: '1rem',
+          borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           display: 'flex',
           alignItems: 'center',
@@ -573,15 +592,15 @@ const CustomerDatabase = () => {
             fontSize: '1.25rem'
           }}>✨</div>
           <div>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.newThisMonth}</div>
-            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>New This Month</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2' }}>{kpiData.newThisMonth}</div>
+            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.125rem' }}>New This Month</div>
           </div>
         </div>
 
         <div style={{
-          background: '#fff', 
-          padding: '1rem', 
-          borderRadius: '8px', 
+          background: '#fff',
+          padding: '1rem',
+          borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           display: 'flex',
           alignItems: 'center',
@@ -598,15 +617,15 @@ const CustomerDatabase = () => {
             fontSize: '1.25rem'
           }}>📊</div>
           <div>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.activeCustomers}</div>
-            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Active Customers</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2' }}>{kpiData.activeCustomers}</div>
+            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.125rem' }}>Active Customers</div>
           </div>
         </div>
 
         <div style={{
-          background: '#fff', 
-          padding: '1rem', 
-          borderRadius: '8px', 
+          background: '#fff',
+          padding: '1rem',
+          borderRadius: '8px',
           boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
           display: 'flex',
           alignItems: 'center',
@@ -623,8 +642,8 @@ const CustomerDatabase = () => {
             fontSize: '1.25rem'
           }}>📞</div>
           <div>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2'}}>{kpiData.pendingFollowups}</div>
-            <div style={{color: '#666', fontSize: '0.75rem', marginTop: '0.125rem'}}>Follow-Ups Pending</div>
+            <div style={{ fontSize: '1.5rem', fontWeight: 'bold', lineHeight: '1.2' }}>{kpiData.pendingFollowups}</div>
+            <div style={{ color: '#666', fontSize: '0.75rem', marginTop: '0.125rem' }}>Follow-Ups Pending</div>
           </div>
         </div>
       </div>
@@ -670,11 +689,11 @@ const CustomerDatabase = () => {
             </svg>
             Export
           </button>
-          <button 
+          <button
             className={`leads-enquiries-btn leads-enquiries-btn-primary ${!canCreate ? 'leads-enquiries-btn-disabled' : ''}`}
-            onClick={() => { 
+            onClick={() => {
               if (canCreate) {
-                resetForm(); 
+                resetForm();
                 setIsAddFormOpen(true);
               } else {
                 showError('You do not have permission to create customers');
@@ -760,9 +779,9 @@ const CustomerDatabase = () => {
                     <td>
                       <div className="leads-enquiries-action-buttons-cell">
                         {canView && (
-                          <button 
-                            className="leads-enquiries-action-btn leads-enquiries-action-view" 
-                            onClick={() => handleViewCustomer(customer)} 
+                          <button
+                            className="leads-enquiries-action-btn leads-enquiries-action-view"
+                            onClick={() => handleViewCustomer(customer)}
                             title="View"
                           >
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -771,9 +790,9 @@ const CustomerDatabase = () => {
                             </svg>
                           </button>
                         )}
-                        <button 
+                        <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleEdit(customer)} 
+                          onClick={() => handleEdit(customer)}
                           title={!canEdit ? 'No permission to edit' : 'Edit'}
                           disabled={!canEdit}
                         >
@@ -781,9 +800,9 @@ const CustomerDatabase = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button 
+                        <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleDelete(customer.id)} 
+                          onClick={() => handleDelete(customer.id)}
                           title={!canDelete ? 'No permission to delete' : 'Delete'}
                           disabled={!canDelete}
                         >
@@ -805,12 +824,12 @@ const CustomerDatabase = () => {
             Showing {startIndex + 1} to {endIndex} of {totalCustomers} entries
           </div>
           <div className="leads-enquiries-pagination-controls">
-            <select 
-              className="leads-enquiries-rows-select" 
-              value={rowsPerPage} 
-              onChange={(e) => { 
-                setRowsPerPage(Number(e.target.value)); 
-                setCurrentPage(1); 
+            <select
+              className="leads-enquiries-rows-select"
+              value={rowsPerPage}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
               }}
             >
               <option value={10}>10 rows</option>
@@ -819,9 +838,9 @@ const CustomerDatabase = () => {
               <option value={100}>100 rows</option>
             </select>
             <div className="leads-enquiries-pagination-buttons">
-              <button 
-                className="leads-enquiries-pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+              <button
+                className="leads-enquiries-pagination-btn"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -829,9 +848,9 @@ const CustomerDatabase = () => {
               <span className="leads-enquiries-pagination-current">
                 Page {currentPage} of {totalPages}
               </span>
-              <button 
-                className="leads-enquiries-pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+              <button
+                className="leads-enquiries-pagination-btn"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages}
               >
                 Next
@@ -859,23 +878,23 @@ const CustomerDatabase = () => {
                 <div className="leads-enquiries-form-grid">
                   <div className="leads-enquiries-form-group">
                     <label>Customer Name *</label>
-                    <input type="text" required value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+                    <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Company Name</label>
-                    <input type="text" value={formData.companyName} onChange={(e) => setFormData({...formData, companyName: e.target.value})} />
+                    <input type="text" value={formData.companyName} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Email *</label>
-                    <input type="email" required value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                    <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Phone *</label>
-                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} />
+                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Group</label>
-                    <select value={formData.groupName} onChange={(e) => setFormData({...formData, groupName: e.target.value})}>
+                    <select value={formData.groupName} onChange={(e) => setFormData({ ...formData, groupName: e.target.value })}>
                       <option value="">Select group</option>
                       <option value="CCMS">CCMS</option>
                       <option value="Solar">Solar</option>
@@ -887,7 +906,7 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Status</label>
-                    <select value={formData.status} onChange={(e) => setFormData({...formData, status: e.target.value})}>
+                    <select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
                       <option value="Prospect">Prospect</option>
@@ -896,43 +915,43 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Contact Person</label>
-                    <input type="text" value={formData.contactPerson} onChange={(e) => setFormData({...formData, contactPerson: e.target.value})} />
+                    <input type="text" value={formData.contactPerson} onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Designation</label>
-                    <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} />
+                    <input type="text" value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Alternate Phone</label>
-                    <input type="tel" value={formData.altPhone} onChange={(e) => setFormData({...formData, altPhone: e.target.value})} />
+                    <input type="tel" value={formData.altPhone} onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Website</label>
-                    <input type="url" value={formData.website} onChange={(e) => setFormData({...formData, website: e.target.value})} />
+                    <input type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>GST Number</label>
-                    <input type="text" value={formData.gstNumber} onChange={(e) => setFormData({...formData, gstNumber: e.target.value})} />
+                    <input type="text" value={formData.gstNumber} onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>PAN Number</label>
-                    <input type="text" value={formData.pan} onChange={(e) => setFormData({...formData, pan: e.target.value})} />
+                    <input type="text" value={formData.pan} onChange={(e) => setFormData({ ...formData, pan: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>City</label>
-                    <input type="text" value={formData.city} onChange={(e) => setFormData({...formData, city: e.target.value})} />
+                    <input type="text" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>State</label>
-                    <input type="text" value={formData.state} onChange={(e) => setFormData({...formData, state: e.target.value})} />
+                    <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Pincode</label>
-                    <input type="text" value={formData.pincode} onChange={(e) => setFormData({...formData, pincode: e.target.value})} />
+                    <input type="text" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select value={formData.assignedTo || ''} onChange={(e) => setFormData({...formData, assignedTo: e.target.value ? Number(e.target.value) : null})}>
+                    <select value={formData.assignedTo || ''} onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}>
                       <option value="">Select Member</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>{user.name}</option>
@@ -942,7 +961,7 @@ const CustomerDatabase = () => {
                 </div>
                 <div className="leads-enquiries-form-group">
                   <label>Address</label>
-                  <textarea rows={3} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} placeholder="Enter full address..." />
+                  <textarea rows={3} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="Enter full address..." />
                 </div>
               </div>
 
@@ -1020,16 +1039,16 @@ const CustomerDatabase = () => {
 
               {/* Follow-ups Section */}
               <div className="leads-enquiries-detail-section">
-                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3>Follow-Ups ({followups.length})</h3>
-                  <button 
+                  <button
                     className="leads-enquiries-btn leads-enquiries-btn-primary"
                     onClick={() => setShowFollowupModal(true)}
                   >
                     + Add Follow-Up
                   </button>
                 </div>
-                
+
                 {followups.length === 0 ? (
                   <p>No follow-ups scheduled</p>
                 ) : (
@@ -1042,10 +1061,10 @@ const CustomerDatabase = () => {
                         marginBottom: '0.75rem',
                         background: followup.status === 'Completed' ? '#f0f9ff' : '#fff'
                       }}>
-                        <div style={{display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem'}}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                           <div>
                             <strong>{followup.followupType}</strong>
-                            <span className={`leads-enquiries-badge leads-enquiries-badge-${followup.priority === 'High' ? 'high' : followup.priority === 'Low' ? 'low' : 'medium'}`} style={{marginLeft: '0.5rem'}}>
+                            <span className={`leads-enquiries-badge leads-enquiries-badge-${followup.priority === 'High' ? 'high' : followup.priority === 'Low' ? 'low' : 'medium'}`} style={{ marginLeft: '0.5rem' }}>
                               {followup.priority}
                             </span>
                           </div>
@@ -1053,21 +1072,21 @@ const CustomerDatabase = () => {
                             {followup.status}
                           </span>
                         </div>
-                        <div style={{fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem'}}>
+                        <div style={{ fontSize: '0.9rem', color: '#666', marginBottom: '0.5rem' }}>
                           📅 Scheduled: {new Date(followup.scheduledAt).toLocaleString()}
                         </div>
                         {followup.notes && (
-                          <div style={{fontSize: '0.9rem', marginBottom: '0.5rem'}}>
+                          <div style={{ fontSize: '0.9rem', marginBottom: '0.5rem' }}>
                             {followup.notes}
                           </div>
                         )}
-                        <div style={{fontSize: '0.85rem', color: '#999'}}>
+                        <div style={{ fontSize: '0.85rem', color: '#999' }}>
                           Assigned to: {followup.assignedToName || 'Unassigned'}
                         </div>
                         {followup.status === 'Pending' && (
-                          <button 
+                          <button
                             className="leads-enquiries-btn leads-enquiries-btn-secondary"
-                            style={{marginTop: '0.5rem', padding: '0.25rem 0.75rem', fontSize: '0.85rem'}}
+                            style={{ marginTop: '0.5rem', padding: '0.25rem 0.75rem', fontSize: '0.85rem' }}
                             onClick={() => handleCompleteFollowup(followup.id)}
                           >
                             Mark as Completed
@@ -1111,10 +1130,10 @@ const CustomerDatabase = () => {
                 <div className="leads-enquiries-form-grid">
                   <div className="leads-enquiries-form-group">
                     <label>Follow-up Type *</label>
-                    <select 
-                      required 
+                    <select
+                      required
                       value={followupFormData.followupType}
-                      onChange={(e) => setFollowupFormData({...followupFormData, followupType: e.target.value})}
+                      onChange={(e) => setFollowupFormData({ ...followupFormData, followupType: e.target.value })}
                     >
                       <option value="Call">Call</option>
                       <option value="Email">Email</option>
@@ -1124,34 +1143,34 @@ const CustomerDatabase = () => {
                       <option value="Note">Note</option>
                     </select>
                   </div>
-                  
+
                   <div className="leads-enquiries-form-group">
                     <label>Scheduled Date & Time *</label>
-                    <input 
-                      type="datetime-local" 
+                    <input
+                      type="datetime-local"
                       required
                       value={followupFormData.scheduledAt}
-                      onChange={(e) => setFollowupFormData({...followupFormData, scheduledAt: e.target.value})}
+                      onChange={(e) => setFollowupFormData({ ...followupFormData, scheduledAt: e.target.value })}
                     />
                   </div>
-                  
+
                   <div className="leads-enquiries-form-group">
                     <label>Priority *</label>
-                    <select 
+                    <select
                       value={followupFormData.priority}
-                      onChange={(e) => setFollowupFormData({...followupFormData, priority: e.target.value})}
+                      onChange={(e) => setFollowupFormData({ ...followupFormData, priority: e.target.value })}
                     >
                       <option value="High">High</option>
                       <option value="Medium">Medium</option>
                       <option value="Low">Low</option>
                     </select>
                   </div>
-                  
+
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select 
+                    <select
                       value={followupFormData.assignedTo}
-                      onChange={(e) => setFollowupFormData({...followupFormData, assignedTo: e.target.value ? Number(e.target.value) : ''})}
+                      onChange={(e) => setFollowupFormData({ ...followupFormData, assignedTo: e.target.value ? Number(e.target.value) : '' })}
                     >
                       <option value="">Select User</option>
                       {users.map(user => (
@@ -1160,18 +1179,18 @@ const CustomerDatabase = () => {
                     </select>
                   </div>
                 </div>
-                
+
                 <div className="leads-enquiries-form-group">
                   <label>Notes</label>
-                  <textarea 
+                  <textarea
                     rows={3}
                     value={followupFormData.notes}
-                    onChange={(e) => setFollowupFormData({...followupFormData, notes: e.target.value})}
+                    onChange={(e) => setFollowupFormData({ ...followupFormData, notes: e.target.value })}
                     placeholder="Add notes about this follow-up..."
                   />
                 </div>
               </div>
-              
+
               <div className="leads-enquiries-form-actions">
                 <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowFollowupModal(false)}>
                   Cancel

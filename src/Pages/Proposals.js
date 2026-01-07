@@ -4,6 +4,8 @@ import '../pages-css/Proposals.css';
 import { useAuth } from "../hooks/useAuth.js";
 import GroupCategoryFilter from "./../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -48,7 +50,8 @@ const ProposalsWithTemplate = () => {
     CREATE: pagePermissions?.PROPOSALS?.includes('CREATE'),
     EDIT: pagePermissions?.PROPOSALS?.includes('EDIT'),
     DELETE: pagePermissions?.PROPOSALS?.includes('DELETE'),
-    APPROVE: pagePermissions?.PROPOSALS?.includes('APPROVE')
+    APPROVE: pagePermissions?.PROPOSALS?.includes('APPROVE'),
+    DOWNLOAD: pagePermissions?.PROPOSALS?.includes('DOWNLOAD')
   };
 
   const currentUser = {
@@ -105,6 +108,9 @@ const ProposalsWithTemplate = () => {
     systemPricing: [],
     bomItems: []
   });
+  //Toast
+  const { toasts, removeToast, showSuccess, showError,showWarning } = useToast();
+
   //groups states
 
   const [groups, setGroups] = useState([]);
@@ -207,7 +213,7 @@ const ProposalsWithTemplate = () => {
       }
     } catch (error) {
       console.error('Error fetching proposals:', error);
-      alert('Failed to fetch proposals');
+      showError('Failed to fetch proposals');
     } finally {
       setLoading(false);
     }
@@ -217,11 +223,13 @@ const ProposalsWithTemplate = () => {
   const fetchLeads = async () => {
     try {
       let url;
-      if (currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN') {
-        url = `${API_BASE_URL}/leads/getAll`;
-      } else {
-        url = `${API_BASE_URL}/leads/my-leads`;
-      }
+      url = `${API_BASE_URL}/leads/getAll`;
+
+      // if (currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN') {
+      //   url = `${API_BASE_URL}/leads/getAll`;
+      // } else {
+      //   url = `${API_BASE_URL}/leads/my-leads`;
+      // }
 
       const data = await fetchWithHeaders(url);
       if (data.success) {
@@ -246,26 +254,26 @@ const ProposalsWithTemplate = () => {
   // };
 
   // Fetch users for prepared by filter
- const fetchUsers = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
-      headers: {
-        'User-Id': currentUser.id,
-        'User-Role': currentUser.role
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch users');
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
       }
-    });
-
-    if (!response.ok) throw new Error('Failed to fetch users');
-
-    const data = await response.json();
-    if (Array.isArray(data)) {
-      setUsers(data);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setUsers([]);
     }
-  } catch (err) {
-    console.error('Error fetching users:', err);
-    setUsers([]);
-  }
-};
+  };
 
   // Filter proposals
   const handleFilter = async () => {
@@ -293,7 +301,7 @@ const ProposalsWithTemplate = () => {
       }
     } catch (error) {
       console.error('Error filtering proposals:', error);
-      alert('Failed to filter proposals');
+      showError('Failed to filter proposals');
     } finally {
       setLoading(false);
     }
@@ -302,7 +310,7 @@ const ProposalsWithTemplate = () => {
   // Create proposal
   const handleCreate = async () => {
     if (!formData.title || !formData.leadId) {
-      alert('Please fill in Title and Lead');
+      showWarning('Please fill in Title and Lead');
       return;
     }
 
@@ -320,7 +328,7 @@ const ProposalsWithTemplate = () => {
       });
 
       if (data.success) {
-        alert('Proposal created successfully!');
+        showSuccess('Proposal created successfully!');
         setShowCreateModal(false);
         setShowTemplateModal(false);
         resetForm();
@@ -328,14 +336,14 @@ const ProposalsWithTemplate = () => {
       }
     } catch (error) {
       console.error('Error creating proposal:', error);
-      alert('Failed to create proposal');
+      showError('Failed to create proposal');
     }
   };
 
   // Update proposal
   const handleUpdate = async () => {
     if (!formData.title) {
-      alert('Please fill in Title');
+      showError('Please fill in Title');
       return;
     }
 
@@ -347,23 +355,31 @@ const ProposalsWithTemplate = () => {
         bomItems: JSON.stringify(templateData.bomItems)
       };
 
-      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`, {
-        method: 'PUT',
-        body: JSON.stringify(requestData)
-      });
+      const data = await fetchWithHeaders(
+        `${API_BASE_URL}/proposals/update/${selectedProposal.id}`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(requestData)
+        }
+      );
 
       if (data.success) {
-        alert('Proposal updated successfully!');
+        showSuccess(data.message || 'Data saved successfully!');
         setShowCreateModal(false);
         setShowTemplateModal(false);
         resetForm();
         fetchProposals();
+      } else {
+        showError(data.message || 'Failed to load data');
       }
+
     } catch (error) {
       console.error('Error updating proposal:', error);
-      alert('Failed to update proposal');
+      showError('Failed to load data');
     }
   };
+
+
 
   // Delete proposal
   const handleDelete = async (id) => {
@@ -377,12 +393,12 @@ const ProposalsWithTemplate = () => {
       });
 
       if (data.success) {
-        alert('Proposal deleted successfully!');
+        showSuccess('Proposal deleted successfully!');
         fetchProposals();
       }
     } catch (error) {
       console.error('Error deleting proposal:', error);
-      alert('Failed to delete proposal');
+      showError('Failed to delete proposal');
     }
   };
 
@@ -411,7 +427,7 @@ const ProposalsWithTemplate = () => {
       document.body.removeChild(a);
     } catch (error) {
       console.error('Error downloading PDF:', error);
-      alert('Failed to download PDF');
+      showError('Failed to download PDF');
     }
   };
 
@@ -425,7 +441,7 @@ const ProposalsWithTemplate = () => {
       }
     } catch (error) {
       console.error('Error fetching proposal:', error);
-      alert('Failed to fetch proposal details');
+      showError('Failed to fetch proposal details');
     }
   };
 
@@ -598,6 +614,7 @@ const ProposalsWithTemplate = () => {
   return (
     <div className="proposal-page-container">
       {/* Header */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
       <div className="proposal-page-header">
         <div className="proposal-page-breadcrumb">
           Dashboard &gt; Proposals
@@ -994,12 +1011,12 @@ const ProposalsWithTemplate = () => {
                           body: JSON.stringify({ status: e.target.value })
                         });
                         if (data.success) {
-                          alert('Status updated successfully!');
+                          showSuccess('Status updated successfully!');
                           setSelectedProposal({ ...selectedProposal, status: e.target.value });
                           fetchProposals();
                         }
                       } catch (error) {
-                        alert('Failed to update status');
+                        showError('Failed to update status');
                       }
                     }}
                   >
@@ -1509,7 +1526,7 @@ const ProposalsWithTemplate = () => {
                   className="proposal-page-btn proposal-page-btn-primary"
                   onClick={() => {
                     setShowTemplateModal(false);
-                    alert('Template content saved! Now you can create/update the proposal.');
+                    showWarning('Template content saved! Now you can create/update the proposal.');
                   }}
                 >
                   ✓ Save Template
