@@ -30,7 +30,7 @@ import Users from "./Pages/UsersPage.js";
 import Addropdownitems from "./Pages/AddNewDropdownItems.js";
 import './App.css';
 import SessionManager from './components/SessionManager.js';
-
+import NewRolePermissions from './Pages/NewRolePermissions.js'
 function AppWrapper() {
   const location = useLocation();
 
@@ -199,6 +199,12 @@ function AppShell({ hideShell }) {
               <Addropdownitems />
             </ProtectedRoute>
           } />
+          <Route path="/officeuse/roles-permissions" element={
+            <ProtectedRoute>
+              <NewRolePermissions />
+            </ProtectedRoute>
+          } />
+         
         </Routes>
       </main>
     </div>
