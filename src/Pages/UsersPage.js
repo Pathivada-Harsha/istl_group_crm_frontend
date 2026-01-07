@@ -726,7 +726,7 @@ const UsersPage = () => {
       email: newUser.email.toLowerCase(),
       password: newUser.password,
       phone: newUser.phone || '',
-      role: newUser.role,
+      role: newUser.role.toUpperCase(),
       is_active: newUser.is_active ? 1 : 0,
       created_by: user.id
     };
