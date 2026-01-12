@@ -72,6 +72,7 @@ const isFirstRender = useRef(true);
 
     const response = await fetch(url, {
       ...options,
+      credentials: "include",
       headers
     });
 
@@ -127,6 +128,7 @@ const isFirstRender = useRef(true);
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role
@@ -148,6 +150,7 @@ const isFirstRender = useRef(true);
   const fetchGroups = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role
@@ -174,6 +177,7 @@ const isFirstRender = useRef(true);
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role

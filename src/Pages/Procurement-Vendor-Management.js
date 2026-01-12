@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag, Briefcase, Truck } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -11,6 +11,7 @@ import vendorApi from '../services/vendorApi';
 import filterApi from '../services/filterApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -38,7 +39,6 @@ const VendorManagement = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState(null);
   const [stats, setStats] = useState(null);
-  // ADD THESE NEW STATE VARIABLES:
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Modal dropdown state for Add/Edit vendor form
@@ -54,21 +54,18 @@ const VendorManagement = () => {
     projects: false
   });
 
-  // Available users for assignment
   const [availableUsers, setAvailableUsers] = useState([]);
+
   // Fetch vendors on mount and filter change
   useEffect(() => {
     fetchVendors();
   }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, filters.category]);
 
-  // Fetch stats on mount
+  // Fetch stats on mount AND when filters change
   useEffect(() => {
     fetchStats();
-  }, []);
-  // Fetch available users for assignment
-  useEffect(() => {
-    fetchAvailableUsers();
-  }, []);
+  }, [groupName, subGroupName, projectId]);
+
   /**
    * Get auth headers
    */
@@ -78,11 +75,9 @@ const VendorManagement = () => {
     'X-User-Role': user?.role || localStorage.getItem('userRole')
   });
 
-
-
   /**
- * Fetch available users for assignment dropdown
- */
+   * Fetch available users for assignment dropdown
+   */
   const fetchAvailableUsers = async () => {
     try {
       const users = await filterApi.getLeadsUsers();
@@ -208,7 +203,7 @@ const VendorManagement = () => {
   };
 
   /**
-   * NEW: Handle add new vendor button
+   * Handle add new vendor button
    */
   const handleAddNewVendor = () => {
     setEditFormData({
@@ -239,15 +234,14 @@ const VendorManagement = () => {
     setModalSubGroups([]);
     setModalProjects([]);
 
-    fetchModalGroups(); // Fetch groups when opening
+    fetchModalGroups();
     setShowCreateModal(true);
   };
 
   /**
-   * NEW: Handle create vendor (separate from update)
+   * Handle create vendor
    */
   const handleCreateVendor = async () => {
-    // Validation
     if (!editFormData.name || !editFormData.name.trim()) {
       showError('Vendor name is required');
       return;
@@ -258,7 +252,6 @@ const VendorManagement = () => {
       return;
     }
 
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(editFormData.email)) {
       showError('Please enter a valid email address');
@@ -289,8 +282,9 @@ const VendorManagement = () => {
       setLoading(false);
     }
   };
+
   /**
-   * Fetch vendors from backend (only vendors with POs)
+   * Fetch vendors from backend
    */
   const fetchVendors = async () => {
     setLoading(true);
@@ -310,7 +304,8 @@ const VendorManagement = () => {
       if (filters.search) params.append('searchTerm', filters.search);
 
       const response = await fetch(`${API_BASE_URL}/api/vendors?${params}`, {
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
 
       if (!response.ok) throw new Error('Failed to fetch vendors');
@@ -330,11 +325,17 @@ const VendorManagement = () => {
   };
 
   /**
-   * Fetch statistics
+   * Fetch statistics with filters
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch('${API_BASE_URL}/api/vendors/stats', {
+      const params = new URLSearchParams();
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId) params.append('projectId', projectId);
+
+      const response = await fetch(`${API_BASE_URL}/api/vendors/stats?${params}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -353,8 +354,8 @@ const VendorManagement = () => {
   const handleViewVendor = async (vendor) => {
     setLoading(true);
     try {
-      // Fetch vendor details
       const vendorResponse = await fetch(`${API_BASE_URL}/api/vendors/${vendor.id}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -362,8 +363,8 @@ const VendorManagement = () => {
       const vendorData = await vendorResponse.json();
       setSelectedVendor(vendorData);
 
-      // Fetch vendor's purchase orders
       const posResponse = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendor.id}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -411,12 +412,10 @@ const VendorManagement = () => {
       projectId: vendor.projectId || ''
     });
 
-    // Set modal dropdown state
     setModalGroupName(vendor.groupName || '');
     setModalSubGroupName(vendor.subGroupName || '');
     setModalProjectId(vendor.projectId || '');
 
-    // Fetch modal dropdowns
     fetchModalGroups();
     if (vendor.groupName) {
       fetchModalSubGroups(vendor.groupName);
@@ -440,6 +439,7 @@ const VendorManagement = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/vendors/${editFormData.id}`, {
+        credentials: "include",
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -453,8 +453,8 @@ const VendorManagement = () => {
       showSuccess('Vendor updated successfully!');
       setShowEditModal(false);
       fetchVendors();
+      fetchStats();
 
-      // If detail drawer is open, refresh it
       if (showDetailDrawer && selectedVendor?.id === editFormData.id) {
         handleViewVendor({ id: editFormData.id });
       }
@@ -477,7 +477,8 @@ const VendorManagement = () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/vendors/${vendorId}`, {
         method: 'DELETE',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include",
       });
 
       if (!response.ok) throw new Error('Failed to deactivate vendor');
@@ -508,6 +509,25 @@ const VendorManagement = () => {
     return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
+  // Format time ago
+  const formatTimeAgo = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
+    if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    
+    return formatDate(dateStr);
+  };
+
   // Render star rating
   const renderStarRating = (rating) => {
     if (!rating) return <span className="no-rating">Not rated</span>;
@@ -531,12 +551,94 @@ const VendorManagement = () => {
     return status === 'Active' ? 'vendor-badge-active' : 'vendor-badge-inactive';
   };
 
+  // PO Timeline Component
+  const POTimeline = ({ po }) => {
+    const getStatusColor = (status) => {
+      const colors = {
+        'Draft': '#94a3b8',
+        'Approved': '#3b82f6',
+        'Ordered': '#8b5cf6',
+        'In-Transit': '#f59e0b',
+        'Delivered': '#22c55e',
+        'Cancelled': '#ef4444'
+      };
+      return colors[status] || '#94a3b8';
+    };
+
+    const statusSteps = ['Draft', 'Approved', 'Ordered', 'In-Transit', 'Delivered'];
+    const currentIndex = statusSteps.indexOf(po.status);
+
+    return (
+      <div className="po-timeline">
+        {statusSteps.map((step, index) => (
+          <div 
+            key={step} 
+            className={`timeline-step ${index <= currentIndex ? 'completed' : ''}`}
+          >
+            <div 
+              className="timeline-dot" 
+              style={{ 
+                backgroundColor: index <= currentIndex ? getStatusColor(step) : '#e2e8f0' 
+              }}
+            />
+            <div className="timeline-label">
+              <span className="timeline-status">{step}</span>
+              {index === currentIndex && (
+                <span className="timeline-date">{formatDate(po.orderDate)}</span>
+              )}
+            </div>
+            {index < statusSteps.length - 1 && (
+              <div 
+                className="timeline-line" 
+                style={{ 
+                  backgroundColor: index < currentIndex ? getStatusColor(step) : '#e2e8f0' 
+                }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   // KPI data from stats
   const kpiData = stats ? [
-    { title: 'Total Vendors', value: stats.totalVendors.toString(), icon: <Package size={32} />, color: '#2563eb' },
-    { title: 'Active Vendors', value: stats.activeVendors.toString(), icon: <TrendingUp size={32} />, color: '#22c55e' },
-    { title: 'Avg Rating', value: stats.averageRating.toFixed(1), icon: <Star size={32} />, color: '#f59e0b' },
-    { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue), icon: <DollarSign size={32} />, color: '#8b5cf6' }
+    { 
+      title: 'Total Vendors', 
+      value: stats.totalVendors.toString(), 
+      icon: <Package size={32} />, 
+      color: '#2563eb' 
+    },
+    { 
+      title: 'Approved Vendors', 
+      value: stats.activeVendors.toString(), 
+      icon: <CheckCircle size={32} />, 
+      color: '#22c55e' 
+    },
+    { 
+      title: 'Average Rating', 
+      value: stats.averageRating.toFixed(1) + '/5', 
+      icon: <Star size={32} />, 
+      color: '#f59e0b' 
+    },
+    { 
+      title: 'Total Purchase Value', 
+      value: formatCurrency(stats.totalPurchaseValue), 
+      icon: <DollarSign size={32} />, 
+      color: '#8b5cf6' 
+    },
+    { 
+      title: 'Pending Quotations', 
+      value: stats.pendingQuotations.toString(), 
+      icon: <FileText size={32} />, 
+      color: '#06b6d4' 
+    },
+    { 
+      title: 'Last Updated', 
+      value: formatTimeAgo(stats.lastUpdated), 
+      icon: <Clock size={32} />, 
+      color: '#64748b' 
+    }
   ] : [];
 
   return (
@@ -568,7 +670,7 @@ const VendorManagement = () => {
         <div className="vendor-management-search-filters">
           <input
             type="text"
-            placeholder="Search by name, email, phone..."
+            placeholder="Search by name, email, phone, code..."
             className="vendor-management-search"
             value={filters.search}
             onChange={(e) => {
@@ -607,14 +709,12 @@ const VendorManagement = () => {
         </div>
 
         <div className="vendor-management-actions">
-         
-            <button
-              className="vendor-management-btn-primary"
-              onClick={handleAddNewVendor}
-            >
-              <Plus size={18} /> Add Vendor
-            </button>
-          
+          <button
+            className="vendor-management-btn-primary"
+            onClick={handleAddNewVendor}
+          >
+            <Plus size={18} /> Add Vendor
+          </button>
           <button className="vendor-management-btn-secondary">
             <Download size={18} /> Export
           </button>
@@ -626,7 +726,9 @@ const VendorManagement = () => {
         <div className="vendor-management-kpi-grid">
           {kpiData.map((kpi, index) => (
             <div key={index} className="vendor-management-kpi-card" style={{ borderTopColor: kpi.color }}>
-              <div className="vendor-management-kpi-icon">{kpi.icon}</div>
+              <div className="vendor-management-kpi-icon" style={{ color: kpi.color }}>
+                {kpi.icon}
+              </div>
               <div className="vendor-management-kpi-content">
                 <div className="vendor-management-kpi-value">{kpi.value}</div>
                 <div className="vendor-management-kpi-label">{kpi.title}</div>
@@ -782,10 +884,24 @@ const VendorManagement = () => {
             </div>
 
             <div className="vendor-management-drawer-content">
-              {/* Vendor Info */}
+              {/* Vendor Information */}
               <div className="vendor-management-drawer-section">
                 <h3>Vendor Information</h3>
                 <div className="vendor-info-grid">
+                  <div className="vendor-info-item">
+                    <Building2 size={18} />
+                    <div>
+                      <span className="info-label">Vendor Code</span>
+                      <span className="info-value">{selectedVendor.vendorCode || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
+                    <User size={18} />
+                    <div>
+                      <span className="info-label">Contact Person</span>
+                      <span className="info-value">{selectedVendor.contactPerson || 'N/A'}</span>
+                    </div>
+                  </div>
                   <div className="vendor-info-item">
                     <Mail size={18} />
                     <div>
@@ -801,6 +917,13 @@ const VendorManagement = () => {
                     </div>
                   </div>
                   <div className="vendor-info-item">
+                    <FileText size={18} />
+                    <div>
+                      <span className="info-label">GST Number</span>
+                      <span className="info-value">{selectedVendor.gstNumber || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
                     <MapPin size={18} />
                     <div>
                       <span className="info-label">Address</span>
@@ -809,6 +932,20 @@ const VendorManagement = () => {
                           `${selectedVendor.address}, ${selectedVendor.city}, ${selectedVendor.state} ${selectedVendor.pincode}`
                           : 'N/A'}
                       </span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
+                    <Tag size={18} />
+                    <div>
+                      <span className="info-label">Category</span>
+                      <span className="info-value">{selectedVendor.category || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
+                    <Briefcase size={18} />
+                    <div>
+                      <span className="info-label">Vendor Type</span>
+                      <span className="info-value">{selectedVendor.vendorType || 'N/A'}</span>
                     </div>
                   </div>
                   <div className="vendor-info-item">
@@ -856,7 +993,7 @@ const VendorManagement = () => {
                 </div>
               </div>
 
-              {/* Purchase History */}
+              {/* Purchase History with Timeline */}
               <div className="vendor-management-drawer-section">
                 <h3>Purchase History ({vendorPurchaseOrders.length} Orders)</h3>
                 {vendorPurchaseOrders.length === 0 ? (
@@ -874,10 +1011,22 @@ const VendorManagement = () => {
                           </div>
                           <span className="po-value">{formatCurrency(po.totalValue)}</span>
                         </div>
+                        
+                        {/* PO Timeline */}
+                        <POTimeline po={po} />
+                        
                         <div className="po-item-details">
-                          <span><Calendar size={14} /> {formatDate(po.orderDate)}</span>
-                          <span><Package size={14} /> {po.totalItemsOrdered} items</span>
+                          <span><Calendar size={14} /> Order: {formatDate(po.orderDate)}</span>
+                          <span><Truck size={14} /> Expected: {formatDate(po.expectedDelivery)}</span>
+                          <span><Package size={14} /> {po.totalItemsOrdered} items ({po.totalItemsDelivered} delivered)</span>
                         </div>
+                        
+                        {po.notes && (
+                          <div className="po-notes">
+                            <FileText size={14} />
+                            <span>{po.notes}</span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1082,8 +1231,8 @@ const VendorManagement = () => {
             </div>
           </div>
         </div>
-
       )}
+
       {/* Create Vendor Modal */}
       {showCreateModal && editFormData && (
         <div className="vendor-management-modal-overlay" onClick={() => setShowCreateModal(false)}>
@@ -1332,7 +1481,7 @@ const VendorManagement = () => {
                   </div>
                 </div>
 
-                
+                {availableUsers.length > 0 && (
                   <div className="vendor-form-group">
                     <label>Assign To</label>
                     <select
@@ -1347,7 +1496,7 @@ const VendorManagement = () => {
                       ))}
                     </select>
                   </div>
-                
+                )}
 
                 <div className="vendor-form-group">
                   <label>Notes</label>
@@ -1373,7 +1522,6 @@ const VendorManagement = () => {
         </div>
       )}
     </div>
-
   );
 };
 

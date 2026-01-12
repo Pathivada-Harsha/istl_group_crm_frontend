@@ -3,6 +3,7 @@ import adminApi from '../services/adminApi';
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import '../pages-css/AddNewDropdownItems.css';
+import { useAuth } from '../hooks/useAuth.js';
 
 const DropdownAdminPage = () => {
   const [activeTab, setActiveTab] = useState('groups');
@@ -10,7 +11,7 @@ const DropdownAdminPage = () => {
   const [subGroups, setSubGroups] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const { user } = useAuth();
   // Use Toast Hook
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
@@ -36,6 +37,8 @@ const DropdownAdminPage = () => {
     projectUniqueId: '',
     projectName: '',
     description: '',
+    group_id: '',
+    sub_group_name: '',
     location: '',
     startDate: '',
     endDate: '',
@@ -46,6 +49,11 @@ const DropdownAdminPage = () => {
     subGroupId: ''
   });
 
+  const currentUser = {
+    id: user.id || 1,
+    role: user.role || 'USER',
+    name: user.name || 'Current User'
+  };
   const [editMode, setEditMode] = useState(false);
   const [availableGroupsForDropdown, setAvailableGroupsForDropdown] = useState([]);
   const [availableSubGroupsForDropdown, setAvailableSubGroupsForDropdown] = useState([]);
@@ -106,6 +114,8 @@ const DropdownAdminPage = () => {
       projectUniqueId: '',
       projectName: '',
       description: '',
+      group_id: '',
+      sub_group_name: '',
       location: '',
       startDate: '',
       endDate: '',
@@ -220,7 +230,8 @@ const DropdownAdminPage = () => {
         await adminApi.updateProject(projectForm.projectUniqueId, projectForm);
         showSuccess('Project updated successfully');
       } else {
-        await adminApi.createProject(projectForm, Number(projectForm.subGroupId));
+        // Pass userId from currentUser
+        await adminApi.createProject(projectForm, Number(projectForm.subGroupId), currentUser.id);
         showSuccess('Project created successfully');
       }
       resetForms();

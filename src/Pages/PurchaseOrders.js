@@ -86,6 +86,7 @@ const PurchaseOrders = () => {
   const fetchApprovedQuotations = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/quotations/approved`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -122,6 +123,7 @@ const PurchaseOrders = () => {
       if (filters.search) params.append('searchTerm', filters.search);
 
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders?${params}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -147,6 +149,7 @@ const PurchaseOrders = () => {
   const fetchStats = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/stats`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -166,6 +169,7 @@ const PurchaseOrders = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/${po.id}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -191,6 +195,7 @@ const PurchaseOrders = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/${poId}/status`, {
+        credentials: "include",
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -219,6 +224,7 @@ const PurchaseOrders = () => {
   const fetchVendors = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/vendors?page=0&size=1000`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -356,6 +362,7 @@ const PurchaseOrders = () => {
       };
 
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
+        credentials: "include",
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -449,6 +456,7 @@ const PurchaseOrders = () => {
     try {
       // Fetch full quotation details with items
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -538,6 +546,7 @@ const PurchaseOrders = () => {
       const response = await fetch(
         `${API_BASE_URL}/api/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`,
         {
+          credentials: "include",
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -575,6 +584,7 @@ const PurchaseOrders = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendorId}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 

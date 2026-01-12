@@ -899,3 +899,287 @@
     justify-content: center;
   }
 }
+/* ============================================
+   ADD THESE NEW STYLES TO YOUR EXISTING 
+   Procurement-Vendor-Management.css FILE
+   ============================================ */
+
+/* PO Timeline Styles */
+.po-timeline {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  margin: 12px 0;
+  overflow-x: auto;
+}
+
+.timeline-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 1;
+  min-width: 80px;
+}
+
+.timeline-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 2;
+  transition: all 0.3s;
+}
+
+.timeline-step.completed .timeline-dot {
+  transform: scale(1.2);
+}
+
+.timeline-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.timeline-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.timeline-date {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.timeline-line {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  right: -50%;
+  height: 3px;
+  z-index: 1;
+  transition: all 0.3s;
+}
+
+.timeline-step:last-child .timeline-line {
+  display: none;
+}
+
+/* PO Notes in Vendor View */
+.po-notes {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: #f8fafc;
+  border-radius: 6px;
+  margin-top: 8px;
+  font-size: 13px;
+  color: #64748b;
+  align-items: flex-start;
+}
+
+.po-notes span {
+  flex: 1;
+  line-height: 1.5;
+}
+
+/* Enhanced Vendor Info Grid */
+.vendor-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.vendor-info-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.vendor-info-item svg {
+  color: #64748b;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.vendor-info-item > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.info-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.info-value {
+  font-size: 14px;
+  color: #1e293b;
+  font-weight: 500;
+  word-wrap: break-word;
+  line-height: 1.5;
+}
+
+/* No Rating Style */
+.no-rating {
+  font-size: 13px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* Enhanced Purchase History Item */
+.purchase-history-item {
+  padding: 16px;
+  background-color: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 12px;
+  transition: all 0.2s;
+}
+
+.purchase-history-item:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px);
+}
+
+.purchase-history-item:last-child {
+  margin-bottom: 0;
+}
+
+/* Vendor Code Display */
+.vendor-code {
+  font-size: 11px;
+  color: #64748b;
+  background-color: #f1f5f9;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+
+/* Contact Item Styling */
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.contact-item:first-child {
+  margin-bottom: 4px;
+}
+
+.contact-item svg {
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* Responsive Timeline */
+@media (max-width: 768px) {
+  .po-timeline {
+    padding: 12px 0;
+  }
+  
+  .timeline-step {
+    min-width: 60px;
+  }
+  
+  .timeline-dot {
+    width: 12px;
+    height: 12px;
+    border-width: 2px;
+  }
+  
+  .timeline-status {
+    font-size: 10px;
+  }
+  
+  .timeline-date {
+    font-size: 9px;
+  }
+  
+  .timeline-line {
+    height: 2px;
+  }
+
+  .vendor-info-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Vendor Danger Button */
+.vendor-management-btn-danger {
+  padding: 10px 20px;
+  background-color: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vendor-management-btn-danger:hover {
+  background-color: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* KPI Icon Color Enhancement */
+.vendor-management-kpi-icon {
+  font-size: 32px;
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f1f5f9;
+  border-radius: 12px;
+  /* Color is now set inline in JS for dynamic coloring */
+}
+
+/* Purchase History List Enhancement */
+.purchase-history-list {
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.purchase-history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.purchase-history-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 3px;
+}
+
+.purchase-history-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+.purchase-history-list::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

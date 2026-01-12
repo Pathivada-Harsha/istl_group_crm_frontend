@@ -120,6 +120,7 @@ const ProposalsWithTemplate = () => {
   const fetchGroups = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role
@@ -147,6 +148,7 @@ const ProposalsWithTemplate = () => {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role
@@ -182,7 +184,7 @@ const ProposalsWithTemplate = () => {
       ...options.headers
     };
 
-    const response = await fetch(url, { ...options, headers });
+    const response = await fetch(url, { ...options, headers,credentials: "include" });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -257,6 +259,7 @@ const ProposalsWithTemplate = () => {
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role
@@ -410,7 +413,7 @@ const ProposalsWithTemplate = () => {
         'User-Role': currentUser.role
       };
 
-      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { headers });
+      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials: "include",headers });
 
       if (!response.ok) {
         throw new Error('Failed to download PDF');

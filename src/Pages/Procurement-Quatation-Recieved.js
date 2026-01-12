@@ -109,6 +109,7 @@ const QuotationsReceived = () => {
       if (filters.search) params.append('searchTerm', filters.search);
 
       const response = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -134,6 +135,7 @@ const QuotationsReceived = () => {
   const fetchStats = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/quotations/stats`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -327,6 +329,7 @@ const QuotationsReceived = () => {
     try {
       // Fetch full quotation details with items
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -472,6 +475,7 @@ const QuotationsReceived = () => {
       };
 
       const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
+        credentials: "include",
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -515,6 +519,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+        credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -543,6 +548,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, {
+        credentials: "include",
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -582,6 +588,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/create-po`, {
+        credentials: "include",
         method: 'POST',
         headers: getAuthHeaders()
       });
@@ -741,6 +748,7 @@ const QuotationsReceived = () => {
       }
 
       const response = await fetch(`${API_BASE_URL}/api/quotations/procurement`, {
+        credentials: "include",
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`,

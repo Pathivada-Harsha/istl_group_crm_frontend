@@ -20,7 +20,7 @@ class VendorApi {
       const queryString = new URLSearchParams(params).toString();
       const url = `${VENDOR_ENDPOINT}${queryString ? '?' + queryString : ''}`;
       
-      const response = await fetch(url, {
+      const response = await fetch(url, {credentials: "include",
         method: 'GET',
         headers: this.getHeaders()
       });
@@ -42,7 +42,7 @@ class VendorApi {
    */
   async getVendorById(id) {
     try {
-      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {
+      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {credentials: "include",
         method: 'GET',
         headers: this.getHeaders()
       });
@@ -64,7 +64,7 @@ class VendorApi {
    */
   async createVendor(vendorData) {
     try {
-      const response = await fetch(VENDOR_ENDPOINT, {
+      const response = await fetch(VENDOR_ENDPOINT, {credentials: "include",
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(vendorData)
@@ -88,7 +88,7 @@ class VendorApi {
    */
   async updateVendor(id, vendorData) {
     try {
-      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {
+      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {credentials: "include",
         method: 'PUT',
         headers: this.getHeaders(),
         body: JSON.stringify(vendorData)
@@ -111,7 +111,7 @@ class VendorApi {
    */
   async deleteVendor(id) {
     try {
-      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {
+      const response = await fetch(`${VENDOR_ENDPOINT}/${id}`, {credentials: "include",
         method: 'DELETE',
         headers: this.getHeaders()
       });
@@ -132,7 +132,7 @@ class VendorApi {
    */
   async getStats() {
     try {
-      const response = await fetch(`${VENDOR_ENDPOINT}/stats`, {
+      const response = await fetch(`${VENDOR_ENDPOINT}/stats`, {credentials: "include",
         method: 'GET',
         headers: this.getHeaders()
       });

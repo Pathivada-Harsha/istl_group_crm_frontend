@@ -9,7 +9,7 @@ const filterApi = {
   // Get all groups
    getLeadsUsers : async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/users/leads-users`, {credentials: "include",
         headers: getAuthHeaders()
       });
 
@@ -26,7 +26,7 @@ const filterApi = {
   },
   getAllGroups: async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/filters/groups`, {
+      const response = await fetch(`${API_BASE_URL}/filters/groups`, {credentials: "include",
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -48,7 +48,7 @@ const filterApi = {
   getSubGroups: async (groupName) => {
     try {
       const params = new URLSearchParams({ groupName });
-      const response = await fetch(`${API_BASE_URL}/filters/subgroups?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/filters/subgroups?${params}`, {credentials: "include",
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -70,7 +70,7 @@ const filterApi = {
   getProjects: async (groupName, subGroupName) => {
     try {
       const params = new URLSearchParams({ groupName, subGroupName });
-      const response = await fetch(`${API_BASE_URL}/filters/projects?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/filters/projects?${params}`, {credentials: "include",
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -91,7 +91,7 @@ const filterApi = {
   // Get project details by unique ID
   getProjectDetails: async (projectUniqueId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -113,7 +113,7 @@ const filterApi = {
   createProject: async (project, subGroupId) => {
     try {
       const params = new URLSearchParams({ subGroupId });
-      const response = await fetch(`${API_BASE_URL}/projects?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/projects?${params}`, {credentials: "include",
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ const filterApi = {
   // Update project
   updateProject: async (projectUniqueId, project) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -157,7 +157,7 @@ const filterApi = {
   // Delete project (soft delete)
   deleteProject: async (projectUniqueId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

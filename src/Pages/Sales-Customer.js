@@ -83,6 +83,7 @@ const CustomerDatabase = () => {
     };
 
     const response = await fetch(url, {
+      credentials: "include",
       ...options,
       headers
     });
@@ -133,6 +134,7 @@ const CustomerDatabase = () => {
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        credentials: "include",
         headers: {
           'User-Id': currentUser.id,
           'User-Role': currentUser.role

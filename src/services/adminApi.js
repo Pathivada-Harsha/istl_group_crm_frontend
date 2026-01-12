@@ -4,10 +4,11 @@ const API_BASE_URL = 'http://localhost:8080/api/admin/dropdowns';
 
 const adminApi = {
   // ============ GROUP OPERATIONS ============
-  
+
   getAllGroups: async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/groups`, {
+        credentials: "include",
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -22,6 +23,7 @@ const adminApi = {
   createGroup: async (group) => {
     try {
       const response = await fetch(`${API_BASE_URL}/groups`, {
+        credentials: "include",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(group),
@@ -52,6 +54,7 @@ const adminApi = {
   deleteGroup: async (id) => {
     try {
       const response = await fetch(`${API_BASE_URL}/groups/${id}`, {
+        credentials: "include",
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -68,6 +71,7 @@ const adminApi = {
   getAllSubGroups: async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/subgroups`, {
+        credentials: "include",
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -83,6 +87,7 @@ const adminApi = {
     try {
       const params = new URLSearchParams({ groupId });
       const response = await fetch(`${API_BASE_URL}/subgroups?${params}`, {
+        credentials: "include",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subGroup),
@@ -98,6 +103,7 @@ const adminApi = {
   updateSubGroup: async (id, subGroup) => {
     try {
       const response = await fetch(`${API_BASE_URL}/subgroups/${id}`, {
+        credentials: "include",
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(subGroup),
@@ -113,6 +119,7 @@ const adminApi = {
   deleteSubGroup: async (id) => {
     try {
       const response = await fetch(`${API_BASE_URL}/subgroups/${id}`, {
+        credentials: "include",
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -129,6 +136,7 @@ const adminApi = {
   getAllProjects: async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/projects`, {
+        credentials: "include",
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -140,10 +148,11 @@ const adminApi = {
     }
   },
 
-  createProject: async (project, subGroupId) => {
+  createProject: async (project, subGroupId, userId) => {
     try {
-      const params = new URLSearchParams({ subGroupId });
+      const params = new URLSearchParams({ subGroupId, userId });
       const response = await fetch(`${API_BASE_URL}/projects?${params}`, {
+        credentials: "include",
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(project),
@@ -159,6 +168,7 @@ const adminApi = {
   updateProject: async (projectUniqueId, project) => {
     try {
       const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {
+        credentials: "include",
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(project),
@@ -174,6 +184,7 @@ const adminApi = {
   deleteProject: async (projectUniqueId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {
+        credentials: "include",
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });
