@@ -1,650 +1,1378 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
-
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
-const ProcurementManagement = () => {
-  const [activeView, setActiveView] = useState('list');
-  const [selectedVendor, setSelectedVendor] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
-  const [vendorTypeFilter, setVendorTypeFilter] = useState('all');
-  const [ratingFilter, setRatingFilter] = useState('all');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
+import vendorApi from '../services/vendorApi';
+import filterApi from '../services/filterApi';
+const VendorManagement = () => {
+  const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
+  const { user } = useAuth();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  const vendors = [
-    {
-      id: 1,
-      name: 'SunPower Industries',
-      category: 'Solar Modules',
-      contactPerson: 'Rajesh Kumar',
-      email: 'rajesh@sunpower.com',
-      phone: '+91 98765 43210',
-      rating: 4.5,
-      lastPurchase: '₹12,50,000',
-      status: 'Active',
-      address: 'Plot 45, Industrial Area, Hyderabad',
-      gst: '29ABCDE1234F1Z5',
-      vendorType: 'Manufacturer',
-      quotations: [
-        { fileName: 'Solar_Panel_Q1_2024.pdf', price: '₹285/Wp', validity: '2024-12-31', uploadedOn: '2024-11-15', uploadedBy: 'Admin' },
-        { fileName: 'Inverter_Quote.xlsx', price: '₹45,000', validity: '2024-12-15', uploadedOn: '2024-11-10', uploadedBy: 'Procurement Team' }
-      ],
-      purchases: [
-        { id: 'PO-2024-001', item: 'Solar Panel 540W', qty: 100, rate: 285, total: 28500, date: '2024-11-20', status: 'Delivered' },
-        { id: 'PO-2024-002', item: 'Junction Box', qty: 500, rate: 45, total: 22500, date: '2024-11-18', status: 'Ordered' }
-      ]
-    },
-    {
-      id: 2,
-      name: 'BatteryTech Solutions',
-      category: 'Batteries',
-      contactPerson: 'Priya Sharma',
-      email: 'priya@batterytech.com',
-      phone: '+91 98765 43211',
-      rating: 4.8,
-      lastPurchase: '₹8,75,000',
-      status: 'Active',
-      address: '12/A, Electronics City, Bangalore',
-      gst: '29FGHIJ5678K2L6',
-      vendorType: 'Distributor',
-      quotations: [
-        { fileName: 'Lithium_Battery_Quote.pdf', price: '₹18,500/unit', validity: '2024-12-20', uploadedOn: '2024-11-12', uploadedBy: 'Admin' }
-      ],
-      purchases: [
-        { id: 'PO-2024-003', item: 'Lithium Battery 150Ah', qty: 50, rate: 18500, total: 925000, date: '2024-11-15', status: 'Delivered' }
-      ]
-    },
-    {
-      id: 3,
-      name: 'ElectroSupply Co',
-      category: 'Electrical',
-      contactPerson: 'Amit Patel',
-      email: 'amit@electrosupply.com',
-      phone: '+91 98765 43212',
-      rating: 4.2,
-      lastPurchase: '₹3,25,000',
-      status: 'Active',
-      address: 'Shop 78, Wholesale Market, Delhi',
-      gst: '29KLMNO9012P3Q7',
-      vendorType: 'Distributor',
-      quotations: [],
-      purchases: [
-        { id: 'PO-2024-004', item: 'MC4 Connectors', qty: 1000, rate: 25, total: 25000, date: '2024-11-10', status: 'Delivered' }
-      ]
-    },
-    {
-      id: 4,
-      name: 'Invertek Systems',
-      category: 'Inverters',
-      contactPerson: 'Sneha Reddy',
-      email: 'sneha@invertek.com',
-      phone: '+91 98765 43213',
-      rating: 4.6,
-      lastPurchase: '₹15,00,000',
-      status: 'Active',
-      address: '23, Tech Park, Pune',
-      gst: '29RSTUV3456W4X8',
-      vendorType: 'Manufacturer',
-      quotations: [
-        { fileName: 'Hybrid_Inverter_2024.pdf', price: '₹75,000', validity: '2025-01-15', uploadedOn: '2024-11-20', uploadedBy: 'Admin' }
-      ],
-      purchases: []
-    },
-    {
-      id: 5,
-      name: 'StructurePro Engineering',
-      category: 'Structural',
-      contactPerson: 'Vikram Singh',
-      email: 'vikram@structurepro.com',
-      phone: '+91 98765 43214',
-      rating: 3.9,
-      lastPurchase: '₹6,50,000',
-      status: 'Inactive',
-      address: 'Building 12, Industrial Estate, Mumbai',
-      gst: '29YZABC7890D5E9',
-      vendorType: 'Service Provider',
-      quotations: [],
-      purchases: [
-        { id: 'PO-2024-005', item: 'Steel Structure', qty: 200, rate: 350, total: 70000, date: '2024-10-25', status: 'Delivered' }
-      ]
-    }
-  ];
-
-  const kpiData = [
-    { title: 'Total Vendors', value: '247', icon: '🏢', color: '#2563eb' },
-    { title: 'Approved Vendors', value: '198', icon: '✅', color: '#22c55e' },
-    { title: 'Average Rating', value: '4.3/5', icon: '⭐', color: '#f59e0b' },
-    { title: 'Total Purchase Value', value: '₹2.4Cr', icon: '💰', color: '#8b5cf6' },
-    { title: 'Pending Quotations', value: '23', icon: '📋', color: '#ef4444' },
-    { title: 'Last Updated', value: '2 hrs ago', icon: '🕒', color: '#06b6d4' }
-  ];
-
-  const filteredVendors = vendors.filter(vendor => {
-    const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      vendor.contactPerson.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === 'all' || vendor.category === categoryFilter;
-    const matchesType = vendorTypeFilter === 'all' || vendor.vendorType === vendorTypeFilter;
-    const matchesRating = ratingFilter === 'all' || Math.floor(vendor.rating) === parseInt(ratingFilter);
-
-    return matchesSearch && matchesCategory && matchesType && matchesRating;
+  const [filters, setFilters] = useState({
+    search: '',
+    category: 'all',   
+    vendorType: 'all',
+    rating: 'all',
+    status: 'all'
   });
 
-  const handleViewVendor = (vendor) => {
-    setSelectedVendor(vendor);
-    setActiveView('vendorProfile');
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 10;
+
+  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
+  const [selectedVendor, setSelectedVendor] = useState(null);
+  const [vendorPurchaseOrders, setVendorPurchaseOrders] = useState([]);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editFormData, setEditFormData] = useState(null);
+  const [stats, setStats] = useState(null);
+  // ADD THESE NEW STATE VARIABLES:
+  const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // Modal dropdown state for Add/Edit vendor form
+  const [modalGroups, setModalGroups] = useState([]);
+  const [modalSubGroups, setModalSubGroups] = useState([]);
+  const [modalProjects, setModalProjects] = useState([]);
+  const [modalGroupName, setModalGroupName] = useState('');
+  const [modalSubGroupName, setModalSubGroupName] = useState('');
+  const [modalProjectId, setModalProjectId] = useState('');
+  const [modalDropdownLoading, setModalDropdownLoading] = useState({
+    groups: false,
+    subGroups: false,
+    projects: false
+  });
+
+  // Available users for assignment
+  const [availableUsers, setAvailableUsers] = useState([]);
+  // Fetch vendors on mount and filter change
+  useEffect(() => {
+    fetchVendors();
+  }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, filters.category]);
+
+  // Fetch stats on mount
+  useEffect(() => {
+    fetchStats();
+  }, []);
+  // Fetch available users for assignment
+  useEffect(() => {
+    fetchAvailableUsers();
+  }, []);
+  /**
+   * Get auth headers
+   */
+  const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Role': user?.role || localStorage.getItem('userRole')
+  });
+
+
+
+  /**
+ * Fetch available users for assignment dropdown
+ */
+  const fetchAvailableUsers = async () => {
+    try {
+      const users = await filterApi.getLeadsUsers();
+      setAvailableUsers(users);
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    }
   };
 
-  const getRatingStars = (rating) => {
-    const fullStars = Math.floor(rating);
-    const hasHalfStar = rating % 1 !== 0;
-    return '⭐'.repeat(fullStars) + (hasHalfStar ? '½' : '');
+  /**
+   * Fetch modal groups when opening add/edit form
+   */
+  const fetchModalGroups = async () => {
+    setModalDropdownLoading(prev => ({ ...prev, groups: true }));
+    try {
+      const groups = await filterApi.getAllGroups();
+      setModalGroups(groups);
+    } catch (error) {
+      console.error('Failed to fetch modal groups:', error);
+      showError('Failed to load groups');
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, groups: false }));
+    }
   };
 
-  const handleSaveVendor = () => {
-    alert('Vendor saved successfully!');
-    setActiveView('list');
+  /**
+   * Fetch modal subgroups when group is selected
+   */
+  const fetchModalSubGroups = async (groupName) => {
+    if (!groupName) {
+      setModalSubGroups([]);
+      setModalProjects([]);
+      return;
+    }
+
+    setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
+    try {
+      const subGroups = await filterApi.getSubGroups(groupName);
+      setModalSubGroups(subGroups);
+    } catch (error) {
+      console.error('Failed to fetch modal subgroups:', error);
+      showError('Failed to load categories');
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, subGroups: false }));
+    }
   };
 
-  const handleSavePurchase = () => {
-    alert('Purchase entry saved successfully!');
-    setActiveView('list');
+  /**
+   * Fetch modal projects when subgroup is selected
+   */
+  const fetchModalProjects = async (groupName, subGroupName) => {
+    if (!groupName || !subGroupName) {
+      setModalProjects([]);
+      return;
+    }
+
+    setModalDropdownLoading(prev => ({ ...prev, projects: true }));
+    try {
+      const projects = await filterApi.getProjects(groupName, subGroupName);
+      setModalProjects(projects);
+    } catch (error) {
+      console.error('Failed to fetch modal projects:', error);
+      showError('Failed to load projects');
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, projects: false }));
+    }
   };
+
+  /**
+   * Handle modal group change
+   */
+  const handleModalGroupChange = (e) => {
+    const newGroupName = e.target.value;
+    setModalGroupName(newGroupName);
+    setModalSubGroupName('');
+    setModalProjectId('');
+    setModalSubGroups([]);
+    setModalProjects([]);
+
+    setEditFormData(prev => ({
+      ...prev,
+      groupName: newGroupName,
+      subGroupName: '',
+      projectId: ''
+    }));
+
+    if (newGroupName) {
+      fetchModalSubGroups(newGroupName);
+    }
+  };
+
+  /**
+   * Handle modal subgroup change
+   */
+  const handleModalSubGroupChange = (e) => {
+    const newSubGroupName = e.target.value;
+    setModalSubGroupName(newSubGroupName);
+    setModalProjectId('');
+    setModalProjects([]);
+
+    setEditFormData(prev => ({
+      ...prev,
+      subGroupName: newSubGroupName,
+      projectId: ''
+    }));
+
+    if (modalGroupName && newSubGroupName) {
+      fetchModalProjects(modalGroupName, newSubGroupName);
+    }
+  };
+
+  /**
+   * Handle modal project change
+   */
+  const handleModalProjectChange = (e) => {
+    const newProjectId = e.target.value;
+    setModalProjectId(newProjectId);
+
+    setEditFormData(prev => ({
+      ...prev,
+      projectId: newProjectId
+    }));
+  };
+
+  /**
+   * NEW: Handle add new vendor button
+   */
+  const handleAddNewVendor = () => {
+    setEditFormData({
+      name: '',
+      contactPerson: '',
+      email: '',
+      phone: '',
+      website: '',
+      gstNumber: '',
+      address: '',
+      city: '',
+      state: '',
+      pincode: '',
+      rating: 0,
+      status: 'Active',
+      groupName: '',
+      subGroupName: '',
+      projectId: '',
+      vendorType: '',
+      category: '',
+      notes: '',
+      assignedTo: ''
+    });
+    setModalGroupName('');
+    setModalSubGroupName('');
+    setModalProjectId('');
+    setModalGroups([]);
+    setModalSubGroups([]);
+    setModalProjects([]);
+
+    fetchModalGroups(); // Fetch groups when opening
+    setShowCreateModal(true);
+  };
+
+  /**
+   * NEW: Handle create vendor (separate from update)
+   */
+  const handleCreateVendor = async () => {
+    // Validation
+    if (!editFormData.name || !editFormData.name.trim()) {
+      showError('Vendor name is required');
+      return;
+    }
+
+    if (!editFormData.email || !editFormData.email.trim()) {
+      showError('Email is required');
+      return;
+    }
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(editFormData.email)) {
+      showError('Please enter a valid email address');
+      return;
+    }
+
+    if (!editFormData.category || editFormData.category === '') {
+      showError('Category is required');
+      return;
+    }
+
+    if (!editFormData.vendorType || editFormData.vendorType === '') {
+      showError('Vendor type is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await vendorApi.createVendor(editFormData);
+      showSuccess('Vendor created successfully!');
+      setShowCreateModal(false);
+      fetchVendors();
+      fetchStats();
+    } catch (error) {
+      console.error('Failed to create vendor:', error);
+      showError(error.message || 'Failed to create vendor');
+    } finally {
+      setLoading(false);
+    }
+  };
+  /**
+   * Fetch vendors from backend (only vendors with POs)
+   */
+  const fetchVendors = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage,
+        size: pageSize,
+        sortBy: 'lastPurchaseDate',
+        sortDirection: 'DESC'
+      });
+
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId) params.append('projectId', projectId);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.category !== 'all') params.append('category', filters.category);
+      if (filters.search) params.append('searchTerm', filters.search);
+
+      const response = await fetch(`http://localhost:8080/api/vendors?${params}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch vendors');
+
+      const data = await response.json();
+      setVendors(data.vendors || []);
+      setTotalPages(data.totalPages || 0);
+      setTotalElements(data.totalElements || 0);
+
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+      showError('Failed to load vendors');
+      setVendors([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Fetch statistics
+   */
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/vendors/stats', {
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  /**
+   * View vendor details with purchase history
+   */
+  const handleViewVendor = async (vendor) => {
+    setLoading(true);
+    try {
+      // Fetch vendor details
+      const vendorResponse = await fetch(`http://localhost:8080/api/vendors/${vendor.id}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!vendorResponse.ok) throw new Error('Failed to fetch vendor details');
+      const vendorData = await vendorResponse.json();
+      setSelectedVendor(vendorData);
+
+      // Fetch vendor's purchase orders
+      const posResponse = await fetch(`http://localhost:8080/api/purchase-orders/vendor/${vendor.id}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (posResponse.ok) {
+        const posData = await posResponse.json();
+        setVendorPurchaseOrders(posData);
+      } else {
+        setVendorPurchaseOrders([]);
+      }
+
+      setShowDetailDrawer(true);
+
+    } catch (error) {
+      console.error('Failed to fetch vendor details:', error);
+      showError('Failed to load vendor details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Open edit modal
+   */
+  const handleEditVendor = (vendor) => {
+    setEditFormData({
+      id: vendor.id,
+      name: vendor.name || '',
+      contactPerson: vendor.contactPerson || '',
+      email: vendor.email || '',
+      phone: vendor.phone || '',
+      website: vendor.website || '',
+      gstNumber: vendor.gstNumber || '',
+      address: vendor.address || '',
+      city: vendor.city || '',
+      state: vendor.state || '',
+      pincode: vendor.pincode || '',
+      rating: vendor.rating || 0,
+      status: vendor.status || 'Active',
+      vendorType: vendor.vendorType || '',
+      category: vendor.category || '',
+      notes: vendor.notes || '',
+      assignedTo: vendor.assignedTo || '',
+      groupName: vendor.groupName || '',
+      subGroupName: vendor.subGroupName || '',
+      projectId: vendor.projectId || ''
+    });
+
+    // Set modal dropdown state
+    setModalGroupName(vendor.groupName || '');
+    setModalSubGroupName(vendor.subGroupName || '');
+    setModalProjectId(vendor.projectId || '');
+
+    // Fetch modal dropdowns
+    fetchModalGroups();
+    if (vendor.groupName) {
+      fetchModalSubGroups(vendor.groupName);
+      if (vendor.subGroupName) {
+        fetchModalProjects(vendor.groupName, vendor.subGroupName);
+      }
+    }
+
+    setShowEditModal(true);
+  };
+
+  /**
+   * Update vendor
+   */
+  const handleUpdateVendor = async () => {
+    if (!editFormData.name || !editFormData.email) {
+      showError('Please fill in required fields (Name, Email)');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/vendors/${editFormData.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(editFormData)
+      });
+
+      if (!response.ok) throw new Error('Failed to update vendor');
+
+      showSuccess('Vendor updated successfully!');
+      setShowEditModal(false);
+      fetchVendors();
+
+      // If detail drawer is open, refresh it
+      if (showDetailDrawer && selectedVendor?.id === editFormData.id) {
+        handleViewVendor({ id: editFormData.id });
+      }
+
+    } catch (error) {
+      console.error('Failed to update vendor:', error);
+      showError('Failed to update vendor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Delete vendor (soft delete)
+   */
+  const handleDeleteVendor = async (vendorId) => {
+    if (!window.confirm('Are you sure you want to deactivate this vendor?')) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/vendors/${vendorId}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to deactivate vendor');
+
+      showSuccess('Vendor deactivated successfully');
+      setShowDetailDrawer(false);
+      fetchVendors();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to delete vendor:', error);
+      showError('Failed to deactivate vendor');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format currency
+  const formatCurrency = (amount) => {
+    if (!amount) return '₹0';
+    return `₹${amount.toLocaleString('en-IN')}`;
+  };
+
+  // Format date
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+  };
+
+  // Render star rating
+  const renderStarRating = (rating) => {
+    if (!rating) return <span className="no-rating">Not rated</span>;
+
+    return (
+      <div className="star-rating">
+        {[1, 2, 3, 4, 5].map((star) => (
+          <Star
+            key={star}
+            size={16}
+            fill={star <= rating ? '#f59e0b' : 'none'}
+            stroke={star <= rating ? '#f59e0b' : '#d1d5db'}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // Get status badge class
+  const getStatusBadgeClass = (status) => {
+    return status === 'Active' ? 'vendor-badge-active' : 'vendor-badge-inactive';
+  };
+
+  // KPI data from stats
+  const kpiData = stats ? [
+    { title: 'Total Vendors', value: stats.totalVendors.toString(), icon: <Package size={32} />, color: '#2563eb' },
+    { title: 'Active Vendors', value: stats.activeVendors.toString(), icon: <TrendingUp size={32} />, color: '#22c55e' },
+    { title: 'Avg Rating', value: stats.averageRating.toFixed(1), icon: <Star size={32} />, color: '#f59e0b' },
+    { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue), icon: <DollarSign size={32} />, color: '#8b5cf6' }
+  ] : [];
 
   return (
-    <div className="procurement-page">
+    <div className="vendor-management-container">
+      {loading && <CrmPreloader text="Loading..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
+      {/* Header */}
+      <div className="vendor-management-header">
+        <div className="vendor-management-breadcrumb">
+          Dashboard &gt; Procurement &gt; Vendor Management
+        </div>
 
-      <div className="main-container">
+        <div className="page-header-with-filter">
+          <h1 className="vendor-management-title">
+            Vendor Management <span className="vendor-management-count">({totalElements})</span>
+          </h1>
+          <GroupProjectFilter
+            groupValue={groupName}
+            subGroupValue={subGroupName}
+            projectValue={projectId}
+            onChange={updateFilters}
+          />
+        </div>
+      </div>
 
+      {/* Action Bar */}
+      <div className="vendor-management-action-bar">
+        <div className="vendor-management-search-filters">
+          <input
+            type="text"
+            placeholder="Search by name, email, phone..."
+            className="vendor-management-search"
+            value={filters.search}
+            onChange={(e) => {
+              setFilters({ ...filters, search: e.target.value });
+              setCurrentPage(0);
+            }}
+          />
 
-        <main className="content-area">
-          <div className="breadcrumb">Dashboard &gt; Procurement</div>
-          <div className="page-header-with-filter">
-            <h1 className="page-title">Procurement & Vendor Management</h1>
+          <select
+            className="vendor-management-filter"
+            value={filters.status}
+            onChange={(e) => {
+              setFilters({ ...filters, status: e.target.value });
+              setCurrentPage(0);
+            }}
+          >
+            <option value="all">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
 
-            <GroupProjectFilter
-              groupValue={groupName}
-              subGroupValue={subGroupName}
-              projectValue={projectId}
-              onChange={updateFilters}
-            />
-          </div>
-          {activeView === 'list' && (
-            <>
-              <div className="action-bar">
-                <div className="search-filters">
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Search vendors, materials, quotations..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+          <select
+            className="vendor-management-filter"
+            value={filters.category}
+            onChange={(e) => {
+              setFilters({ ...filters, category: e.target.value });
+              setCurrentPage(0);
+            }}
+          >
+            <option value="all">All Categories</option>
+            <option value="IT Equipment">IT Equipment</option>
+            <option value="Office Furniture">Office Furniture</option>
+            <option value="Manufacturing">Manufacturing</option>
+            <option value="Office Supplies">Office Supplies</option>
+          </select>
+        </div>
 
-                  <select className="filter-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-                    <option value="all">All Categories</option>
-                    <option value="Solar Modules">Solar Modules</option>
-                    <option value="Batteries">Batteries</option>
-                    <option value="Inverters">Inverters</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="Structural">Structural</option>
-                  </select>
+        <div className="vendor-management-actions">
+         
+            <button
+              className="vendor-management-btn-primary"
+              onClick={handleAddNewVendor}
+            >
+              <Plus size={18} /> Add Vendor
+            </button>
+          
+          <button className="vendor-management-btn-secondary">
+            <Download size={18} /> Export
+          </button>
+        </div>
+      </div>
 
-                  <select className="filter-select" value={vendorTypeFilter} onChange={(e) => setVendorTypeFilter(e.target.value)}>
-                    <option value="all">All Types</option>
-                    <option value="Manufacturer">Manufacturer</option>
-                    <option value="Distributor">Distributor</option>
-                    <option value="Service Provider">Service Provider</option>
-                  </select>
-
-                  <select className="filter-select" value={ratingFilter} onChange={(e) => setRatingFilter(e.target.value)}>
-                    <option value="all">All Ratings</option>
-                    <option value="5">5 Stars</option>
-                    <option value="4">4+ Stars</option>
-                    <option value="3">3+ Stars</option>
-                  </select>
-                </div>
-
-                <div className="quick-actions">
-                  <button className="btn btn-primary" onClick={() => setActiveView('addVendor')}>
-                    ➕ Add Vendor
-                  </button>
-                  <button className="btn btn-secondary">
-                    📤 Upload Quotation
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => setActiveView('addPurchase')}>
-                    🛍️ Add Purchase
-                  </button>
-                </div>
+      {/* KPI Cards */}
+      {stats && (
+        <div className="vendor-management-kpi-grid">
+          {kpiData.map((kpi, index) => (
+            <div key={index} className="vendor-management-kpi-card" style={{ borderTopColor: kpi.color }}>
+              <div className="vendor-management-kpi-icon">{kpi.icon}</div>
+              <div className="vendor-management-kpi-content">
+                <div className="vendor-management-kpi-value">{kpi.value}</div>
+                <div className="vendor-management-kpi-label">{kpi.title}</div>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-              <div className="kpi-grid">
-                {kpiData.map((kpi, index) => (
-                  <div key={index} className="kpi-card" style={{ borderTopColor: kpi.color }}>
-                    <div className="kpi-icon">{kpi.icon}</div>
-                    <div className="kpi-content">
-                      <h3 className="kpi-title">{kpi.title}</h3>
-                      <div className="kpi-value">{kpi.value}</div>
+      {/* Vendors Table */}
+      <div className="vendor-management-table-container">
+        <table className="vendor-management-table">
+          <thead>
+            <tr>
+              <th>Vendor Name</th>
+              <th>Contact</th>
+              <th>Category</th>
+              <th>Rating</th>
+              <th>Total Orders</th>
+              <th>Total Purchase Value</th>
+              <th>Last Purchase</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vendors.length === 0 ? (
+              <tr>
+                <td colSpan="9" className="empty-state">
+                  No vendors found. Vendors appear here after placing purchase orders.
+                </td>
+              </tr>
+            ) : (
+              vendors.map((vendor) => (
+                <tr key={vendor.id} className="vendor-management-table-row">
+                  <td className="vendor-name-cell">
+                    <div className="vendor-name-info">
+                      <span className="vendor-name">{vendor.name}</span>
+                      {vendor.vendorCode && (
+                        <span className="vendor-code">{vendor.vendorCode}</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="vendor-contact-cell">
+                    <div className="vendor-contact">
+                      {vendor.email && (
+                        <div className="contact-item">
+                          <Mail size={14} />
+                          <span>{vendor.email}</span>
+                        </div>
+                      )}
+                      {vendor.phone && (
+                        <div className="contact-item">
+                          <Phone size={14} />
+                          <span>{vendor.phone}</span>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                  <td>{vendor.category || 'N/A'}</td>
+                  <td>{renderStarRating(vendor.rating)}</td>
+                  <td className="vendor-orders-cell">
+                    <div className="orders-badge">
+                      <ShoppingCart size={14} />
+                      <span>{vendor.totalOrders || 0}</span>
+                    </div>
+                  </td>
+                  <td className="vendor-value-cell">{formatCurrency(vendor.totalPurchaseValue)}</td>
+                  <td>{formatDate(vendor.lastPurchaseDate)}</td>
+                  <td>
+                    <span className={`vendor-management-badge ${getStatusBadgeClass(vendor.status)}`}>
+                      {vendor.status}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="vendor-management-actions-cell">
+                      <button
+                        className="vendor-management-action-btn"
+                        onClick={() => handleViewVendor(vendor)}
+                        title="View Details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
+                        className="vendor-management-action-btn"
+                        onClick={() => handleEditVendor(vendor)}
+                        title="Edit Vendor"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+
+        {/* Pagination */}
+        <div className="table-footer">
+          <span>
+            Showing {currentPage * pageSize + 1}-
+            {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} vendors
+          </span>
+          <div className="pagination">
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage(p => p - 1)}
+              disabled={currentPage === 0}
+            >
+              Previous
+            </button>
+
+            {[...Array(Math.min(5, totalPages))].map((_, index) => {
+              const pageNum = currentPage < 3 ? index : currentPage + index - 2;
+              if (pageNum >= 0 && pageNum < totalPages) {
+                return (
+                  <button
+                    key={pageNum}
+                    className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum + 1}
+                  </button>
+                );
+              }
+              return null;
+            })}
+
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={currentPage >= totalPages - 1}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Drawer */}
+      {showDetailDrawer && selectedVendor && (
+        <div className="vendor-management-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+          <div className="vendor-management-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="vendor-management-drawer-header">
+              <div>
+                <h2>{selectedVendor.name}</h2>
+                <p className="vendor-management-drawer-subtitle">{selectedVendor.vendorCode}</p>
+              </div>
+              <button className="vendor-management-drawer-close" onClick={() => setShowDetailDrawer(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="vendor-management-drawer-content">
+              {/* Vendor Info */}
+              <div className="vendor-management-drawer-section">
+                <h3>Vendor Information</h3>
+                <div className="vendor-info-grid">
+                  <div className="vendor-info-item">
+                    <Mail size={18} />
+                    <div>
+                      <span className="info-label">Email</span>
+                      <span className="info-value">{selectedVendor.email || 'N/A'}</span>
                     </div>
                   </div>
-                ))}
-              </div>
-
-              <div className="table-card">
-                <div className="table-header">
-                  <h2>Vendor List</h2>
-                  <span className="table-count">{filteredVendors.length} vendors found</span>
-                </div>
-
-                <div className="table-wrapper">
-                  <table className="data-table">
-                    <thead>
-                      <tr>
-                        <th>Vendor Name</th>
-                        <th>Category</th>
-                        <th>Contact Person</th>
-                        <th>Email / Phone</th>
-                        <th>Rating</th>
-                        <th>Last Purchase</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredVendors.map((vendor) => (
-                        <tr key={vendor.id}>
-                          <td className="vendor-name">{vendor.name}</td>
-                          <td>
-                            <span className="category-badge">{vendor.category}</span>
-                          </td>
-                          <td>{vendor.contactPerson}</td>
-                          <td className="contact-cell">
-                            <div>{vendor.email}</div>
-                            <div className="phone-text">{vendor.phone}</div>
-                          </td>
-                          <td>
-                            <div className="rating-cell">
-                              <span className="rating-stars">{getRatingStars(vendor.rating)}</span>
-                              <span className="rating-value">{vendor.rating}</span>
-                            </div>
-                          </td>
-                          <td className="purchase-value">{vendor.lastPurchase}</td>
-                          <td>
-                            <span className={`status-badge ${vendor.status.toLowerCase()}`}>
-                              {vendor.status}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="action-buttons">
-                              <button className="btn-icon" onClick={() => handleViewVendor(vendor)} title="View">
-                                👁️
-                              </button>
-                              <button className="btn-icon" title="Edit">✏️</button>
-                              <button className="btn-icon" title="Upload">📤</button>
-                              <button className="btn-icon delete" title="Delete">🗑️</button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                <div className="table-footer">
-                  <span>Showing 1-5 of {filteredVendors.length} vendors</span>
-                  <div className="pagination">
-                    <button className="page-btn">Previous</button>
-                    <button className="page-btn active">1</button>
-                    <button className="page-btn">2</button>
-                    <button className="page-btn">3</button>
-                    <button className="page-btn">Next</button>
+                  <div className="vendor-info-item">
+                    <Phone size={18} />
+                    <div>
+                      <span className="info-label">Phone</span>
+                      <span className="info-value">{selectedVendor.phone || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
+                    <MapPin size={18} />
+                    <div>
+                      <span className="info-label">Address</span>
+                      <span className="info-value">
+                        {selectedVendor.address ?
+                          `${selectedVendor.address}, ${selectedVendor.city}, ${selectedVendor.state} ${selectedVendor.pincode}`
+                          : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="vendor-info-item">
+                    <Star size={18} />
+                    <div>
+                      <span className="info-label">Rating</span>
+                      {renderStarRating(selectedVendor.rating)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </>
-          )}
 
-          {activeView === 'vendorProfile' && selectedVendor && (
-            <div className="vendor-profile">
-              <button className="btn-back" onClick={() => setActiveView('list')}>
-                ← Back to List
-              </button>
-
-              <div className="profile-header">
-                <div className="profile-info">
-                  <h2>{selectedVendor.name}</h2>
-                  <span className="vendor-type">{selectedVendor.vendorType}</span>
-                  <div className="rating-display">
-                    {getRatingStars(selectedVendor.rating)} {selectedVendor.rating}
+              {/* Purchase Statistics */}
+              <div className="vendor-management-drawer-section">
+                <h3>Purchase Statistics</h3>
+                <div className="vendor-stats-grid">
+                  <div className="vendor-stat-card">
+                    <ShoppingCart size={24} />
+                    <div>
+                      <div className="stat-value">{selectedVendor.totalOrders || 0}</div>
+                      <div className="stat-label">Total Orders</div>
+                    </div>
                   </div>
-                </div>
-                <div className="profile-actions">
-                  <button className="btn btn-secondary">✏️ Edit</button>
-                  <button className="btn btn-primary">📤 Upload Quotation</button>
-                </div>
-              </div>
-
-              <div className="profile-grid">
-                <div className="profile-card">
-                  <h3>Vendor Information</h3>
-                  <div className="info-row">
-                    <span className="info-label">Category:</span>
-                    <span className="info-value">{selectedVendor.category}</span>
+                  <div className="vendor-stat-card">
+                    <DollarSign size={24} />
+                    <div>
+                      <div className="stat-value">{formatCurrency(selectedVendor.totalPurchaseValue)}</div>
+                      <div className="stat-label">Total Purchase Value</div>
+                    </div>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Contact Person:</span>
-                    <span className="info-value">{selectedVendor.contactPerson}</span>
+                  <div className="vendor-stat-card">
+                    <Calendar size={24} />
+                    <div>
+                      <div className="stat-value">{formatDate(selectedVendor.lastPurchaseDate)}</div>
+                      <div className="stat-label">Last Purchase</div>
+                    </div>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Email:</span>
-                    <span className="info-value">{selectedVendor.email}</span>
+                  <div className="vendor-stat-card">
+                    <DollarSign size={24} />
+                    <div>
+                      <div className="stat-value">{formatCurrency(selectedVendor.lastPurchaseAmount)}</div>
+                      <div className="stat-label">Last Purchase Amount</div>
+                    </div>
                   </div>
-                  <div className="info-row">
-                    <span className="info-label">Phone:</span>
-                    <span className="info-value">{selectedVendor.phone}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Address:</span>
-                    <span className="info-value">{selectedVendor.address}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">GST No:</span>
-                    <span className="info-value">{selectedVendor.gst}</span>
-                  </div>
-                  <div className="info-row">
-                    <span className="info-label">Status:</span>
-                    <span className={`status-badge ${selectedVendor.status.toLowerCase()}`}>
-                      {selectedVendor.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="profile-card">
-                  <h3>Vendor Quotations</h3>
-                  {selectedVendor.quotations.length > 0 ? (
-                    <table className="mini-table">
-                      <thead>
-                        <tr>
-                          <th>File Name</th>
-                          <th>Price</th>
-                          <th>Validity</th>
-                          <th>Uploaded On</th>
-                          <th>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedVendor.quotations.map((quote, index) => (
-                          <tr key={index}>
-                            <td>{quote.fileName}</td>
-                            <td className="price-cell">{quote.price}</td>
-                            <td>{quote.validity}</td>
-                            <td>{quote.uploadedOn}</td>
-                            <td>
-                              <button className="btn-download">⬇️</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <p className="empty-state">No quotations uploaded yet</p>
-                  )}
                 </div>
               </div>
 
-              <div className="profile-card full-width">
-                <h3>Purchase History</h3>
-                {selectedVendor.purchases.length > 0 ? (
-                  <table className="mini-table">
-                    <thead>
-                      <tr>
-                        <th>Purchase ID</th>
-                        <th>Material / Item</th>
-                        <th>Qty</th>
-                        <th>Rate</th>
-                        <th>Total</th>
-                        <th>Date</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedVendor.purchases.map((purchase, index) => (
-                        <tr key={index}>
-                          <td className="purchase-id">{purchase.id}</td>
-                          <td>{purchase.item}</td>
-                          <td>{purchase.qty}</td>
-                          <td>₹{purchase.rate}</td>
-                          <td className="price-cell">₹{purchase.total.toLocaleString()}</td>
-                          <td>{purchase.date}</td>
-                          <td>
-                            <span className={`status-badge ${purchase.status.toLowerCase()}`}>
-                              {purchase.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              {/* Purchase History */}
+              <div className="vendor-management-drawer-section">
+                <h3>Purchase History ({vendorPurchaseOrders.length} Orders)</h3>
+                {vendorPurchaseOrders.length === 0 ? (
+                  <p className="empty-state">No purchase orders found</p>
                 ) : (
-                  <p className="empty-state">No purchase history available</p>
+                  <div className="purchase-history-list">
+                    {vendorPurchaseOrders.map((po) => (
+                      <div key={po.id} className="purchase-history-item">
+                        <div className="po-item-header">
+                          <div>
+                            <span className="po-number">{po.poNo}</span>
+                            <span className={`vendor-management-badge ${getStatusBadgeClass(po.status)}`}>
+                              {po.status}
+                            </span>
+                          </div>
+                          <span className="po-value">{formatCurrency(po.totalValue)}</span>
+                        </div>
+                        <div className="po-item-details">
+                          <span><Calendar size={14} /> {formatDate(po.orderDate)}</span>
+                          <span><Package size={14} /> {po.totalItemsOrdered} items</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
 
-              <div className="profile-card full-width">
-                <h3>Analytics</h3>
-                <div className="analytics-grid">
-                  <div className="analytics-item">
-                    <span className="analytics-label">Average Delivery Time</span>
-                    <span className="analytics-value">5.2 days</span>
+              {/* Actions */}
+              <div className="vendor-management-drawer-actions">
+                <button
+                  className="vendor-management-btn-primary"
+                  onClick={() => handleEditVendor(selectedVendor)}
+                >
+                  Edit Vendor
+                </button>
+                {selectedVendor.status === 'Active' && (
+                  <button
+                    className="vendor-management-btn-danger"
+                    onClick={() => handleDeleteVendor(selectedVendor.id)}
+                  >
+                    Deactivate
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {showEditModal && editFormData && (
+        <div className="vendor-management-modal-overlay" onClick={() => setShowEditModal(false)}>
+          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="vendor-management-modal-header">
+              <h2>Edit Vendor</h2>
+              <button className="vendor-management-modal-close" onClick={() => setShowEditModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="vendor-management-edit-form">
+              <div className="vendor-form-section">
+                <h3>Basic Information</h3>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Vendor Name *</label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      placeholder="Enter vendor name"
+                    />
                   </div>
-                  <div className="analytics-item">
-                    <span className="analytics-label">Total Orders</span>
-                    <span className="analytics-value">{selectedVendor.purchases.length}</span>
+                  <div className="vendor-form-group">
+                    <label>Contact Person</label>
+                    <input
+                      type="text"
+                      value={editFormData.contactPerson}
+                      onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })}
+                      placeholder="Enter contact person"
+                    />
                   </div>
-                  <div className="analytics-item">
-                    <span className="analytics-label">On-Time Delivery</span>
-                    <span className="analytics-value">92%</span>
+                </div>
+
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Email *</label>
+                    <input
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      placeholder="Enter email"
+                    />
                   </div>
-                  <div className="analytics-item">
-                    <span className="analytics-label">Price Competitiveness</span>
-                    <span className="analytics-value">Excellent</span>
+                  <div className="vendor-form-group">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                      placeholder="Enter phone"
+                    />
+                  </div>
+                </div>
+
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Category</label>
+                    <select
+                      value={editFormData.category}
+                      onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                    >
+                      <option value="">Select category</option>
+                      <option value="IT Equipment">IT Equipment</option>
+                      <option value="Office Furniture">Office Furniture</option>
+                      <option value="Manufacturing">Manufacturing</option>
+                      <option value="Office Supplies">Office Supplies</option>
+                    </select>
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>Rating</label>
+                    <select
+                      value={editFormData.rating}
+                      onChange={(e) => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}
+                    >
+                      <option value="0">Not Rated</option>
+                      <option value="1">⭐ 1 Star</option>
+                      <option value="2">⭐⭐ 2 Stars</option>
+                      <option value="3">⭐⭐⭐ 3 Stars</option>
+                      <option value="4">⭐⭐⭐⭐ 4 Stars</option>
+                      <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Status</label>
+                    <select
+                      value={editFormData.status}
+                      onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>GST Number</label>
+                    <input
+                      type="text"
+                      value={editFormData.gstNumber}
+                      onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })}
+                      placeholder="Enter GST number"
+                    />
                   </div>
                 </div>
               </div>
-            </div>
-          )}
 
-          {activeView === 'addVendor' && (
-            <div className="form-container">
-              <button className="btn-back" onClick={() => setActiveView('list')}>
-                ← Back to List
-              </button>
+              <div className="vendor-form-section">
+                <h3>Address</h3>
+                <div className="vendor-form-group">
+                  <label>Address</label>
+                  <textarea
+                    rows={2}
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                    placeholder="Enter address"
+                  />
+                </div>
 
-              <div className="form-card">
-                <h2>Add New Vendor</h2>
-                <div className="vendor-form">
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Vendor Name *</label>
-                      <input type="text" placeholder="Enter vendor name" />
-                    </div>
-                    <div className="form-group">
-                      <label>Category *</label>
-                      <select>
-                        <option>Select category</option>
-                        <option>Solar Modules</option>
-                        <option>Batteries</option>
-                        <option>Inverters</option>
-                        <option>Electrical</option>
-                        <option>Structural</option>
-                      </select>
-                    </div>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      value={editFormData.city}
+                      onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                      placeholder="Enter city"
+                    />
                   </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Contact Person *</label>
-                      <input type="text" placeholder="Enter contact person name" />
-                    </div>
-                    <div className="form-group">
-                      <label>Vendor Type *</label>
-                      <select>
-                        <option>Select type</option>
-                        <option>Manufacturer</option>
-                        <option>Distributor</option>
-                        <option>Service Provider</option>
-                      </select>
-                    </div>
+                  <div className="vendor-form-group">
+                    <label>State</label>
+                    <input
+                      type="text"
+                      value={editFormData.state}
+                      onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}
+                      placeholder="Enter state"
+                    />
                   </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Phone *</label>
-                      <input type="tel" placeholder="+91 XXXXX XXXXX" />
-                    </div>
-                    <div className="form-group">
-                      <label>Email *</label>
-                      <input type="email" placeholder="vendor@example.com" />
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Address *</label>
-                    <textarea rows="3" placeholder="Enter complete address"></textarea>
-                  </div>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>GST No.</label>
-                      <input type="text" placeholder="29ABCDE1234F1Z5" />
-                    </div>
-                    <div className="form-group">
-                      <label>Rating</label>
-                      <select>
-                        <option>Select rating</option>
-                        <option>5 - Excellent</option>
-                        <option>4 - Good</option>
-                        <option>3 - Average</option>
-                        <option>2 - Below Average</option>
-                        <option>1 - Poor</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Notes</label>
-                    <textarea rows="3" placeholder="Additional notes about the vendor"></textarea>
-                  </div>
-
-                  <div className="form-group">
-                    <label>Upload Documents</label>
-                    <div className="file-upload">
-                      <input type="file" id="vendor-docs" multiple />
-                      <label htmlFor="vendor-docs" className="file-upload-label">
-                        📎 Click to upload or drag & drop
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="form-actions">
-                    <button type="button" className="btn btn-secondary" onClick={() => setActiveView('list')}>
-                      Cancel
-                    </button>
-                    <button type="button" className="btn btn-primary" onClick={handleSaveVendor}>
-                      Save Vendor
-                    </button>
+                  <div className="vendor-form-group">
+                    <label>Pincode</label>
+                    <input
+                      type="text"
+                      value={editFormData.pincode}
+                      onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })}
+                      placeholder="Enter pincode"
+                    />
                   </div>
                 </div>
               </div>
+
+              <div className="vendor-form-section">
+                <h3>Additional Information</h3>
+                <div className="vendor-form-group">
+                  <label>Notes</label>
+                  <textarea
+                    rows={3}
+                    value={editFormData.notes}
+                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                    placeholder="Enter any additional notes"
+                  />
+                </div>
+              </div>
             </div>
-          )}
 
-          {activeView === 'addPurchase' && (
-            <div className="form-container">
-              <button className="btn-back" onClick={() => setActiveView('list')}>
-                ← Back to List
+            <div className="vendor-management-modal-actions">
+              <button className="vendor-management-btn-primary" onClick={handleUpdateVendor}>
+                Save Changes
               </button>
+              <button className="vendor-management-btn-secondary" onClick={() => setShowEditModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
 
-              <div className="form-card">
-                <h2>Add Purchase Entry</h2>
-                <div className="vendor-form">
-                  <div className="form-group">
-                    <label>Select Vendor *</label>
-                    <select>
-                      <option>Select vendor</option>
-                      {vendors.map(v => (
-                        <option key={v.id} value={v.id}>{v.name}</option>
+      )}
+      {/* Create Vendor Modal */}
+      {showCreateModal && editFormData && (
+        <div className="vendor-management-modal-overlay" onClick={() => setShowCreateModal(false)}>
+          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="vendor-management-modal-header">
+              <h2>Add New Vendor</h2>
+              <button className="vendor-management-modal-close" onClick={() => setShowCreateModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="vendor-management-edit-form">
+              {/* Project Assignment Section */}
+              <div className="vendor-form-section">
+                <h3>Project Assignment</h3>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Group</label>
+                    <select
+                      value={modalGroupName}
+                      onChange={handleModalGroupChange}
+                      disabled={modalDropdownLoading.groups}
+                    >
+                      <option value="">
+                        {modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
+                      </option>
+                      {modalGroups.map(group => (
+                        <option key={group.value} value={group.value}>
+                          {group.label}
+                        </option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Material / Item Name *</label>
-                      <input type="text" placeholder="Enter material or item name" />
-                    </div>
-                    <div className="form-group">
-                      <label>Quantity *</label>
-                      <input type="number" placeholder="Enter quantity" />
-                    </div>
+                  <div className="vendor-form-group">
+                    <label>Category / Sub-Group</label>
+                    <select
+                      value={modalSubGroupName}
+                      onChange={handleModalSubGroupChange}
+                      disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                    >
+                      <option value="">
+                        {!modalGroupName
+                          ? 'Select Group First'
+                          : modalDropdownLoading.subGroups
+                            ? 'Loading...'
+                            : 'Select Category'}
+                      </option>
+                      {modalSubGroups.map(subGroup => (
+                        <option key={subGroup.value} value={subGroup.value}>
+                          {subGroup.label}
+                        </option>
+                      ))}
+                    </select>
                   </div>
+                </div>
 
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label>Unit Price (₹) *</label>
-                      <input type="number" placeholder="Enter unit price" />
-                    </div>
-                    <div className="form-group">
-                      <label>GST % *</label>
-                      <select>
-                        <option>Select GST</option>
-                        <option>18%</option>
-                        <option>12%</option>
-                        <option>5%</option>
-                        <option>0%</option>
-                      </select>
-                    </div>
+                <div className="vendor-form-group">
+                  <label>Project (Optional)</label>
+                  <select
+                    value={modalProjectId}
+                    onChange={handleModalProjectChange}
+                    disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                  >
+                    <option value="">
+                      {!modalSubGroupName
+                        ? 'Select Category First'
+                        : modalDropdownLoading.projects
+                          ? 'Loading...'
+                          : 'Select Project (Optional)'}
+                    </option>
+                    {modalProjects.map(project => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} - {project.location}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Basic Information Section */}
+              <div className="vendor-form-section">
+                <h3>Basic Information</h3>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Vendor Name *</label>
+                    <input
+                      type="text"
+                      value={editFormData.name}
+                      onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })}
+                      placeholder="Enter vendor name"
+                    />
                   </div>
-
-                  <div className="form-group">
-                    <label>Total Amount (Auto Calculated)</label>
-                    <input type="text" value="₹0.00" readOnly className="readonly-input" />
+                  <div className="vendor-form-group">
+                    <label>Contact Person</label>
+                    <input
+                      type="text"
+                      value={editFormData.contactPerson}
+                      onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })}
+                      placeholder="Enter contact person"
+                    />
                   </div>
+                </div>
 
-                  <div className="form-group">
-                    <label>Upload Purchase Order (Optional)</label>
-                    <div className="file-upload">
-                      <input type="file" id="purchase-order" />
-                      <label htmlFor="purchase-order" className="file-upload-label">
-                        📎 Click to upload PDF or image
-                      </label>
-                    </div>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Email *</label>
+                    <input
+                      type="email"
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
+                      placeholder="Enter email"
+                    />
                   </div>
-
-                  <div className="form-group">
-                    <label>Notes</label>
-                    <textarea rows="3" placeholder="Additional notes about this purchase"></textarea>
+                  <div className="vendor-form-group">
+                    <label>Phone</label>
+                    <input
+                      type="tel"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                      placeholder="Enter phone"
+                    />
                   </div>
+                </div>
 
-                  <div className="form-actions">
-                    <button type="button" className="btn btn-secondary" onClick={() => setActiveView('list')}>
-                      Cancel
-                    </button>
-                    <button type="button" className="btn btn-primary" onClick={handleSavePurchase}>
-                      Save Purchase Entry
-                    </button>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Category *</label>
+                    <select
+                      value={editFormData.category}
+                      onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}
+                    >
+                      <option value="">Select category</option>
+                      <option value="IT Equipment">IT Equipment</option>
+                      <option value="Office Furniture">Office Furniture</option>
+                      <option value="Manufacturing">Manufacturing</option>
+                      <option value="Office Supplies">Office Supplies</option>
+                    </select>
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>Vendor Type *</label>
+                    <select
+                      value={editFormData.vendorType}
+                      onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}
+                    >
+                      <option value="">Select type</option>
+                      <option value="Manufacturer">Manufacturer</option>
+                      <option value="Distributor">Distributor</option>
+                      <option value="Service Provider">Service Provider</option>
+                    </select>
                   </div>
                 </div>
               </div>
+
+              {/* Contact Information Section */}
+              <div className="vendor-form-section">
+                <h3>Contact Information</h3>
+                <div className="vendor-form-group">
+                  <label>Website</label>
+                  <input
+                    type="url"
+                    value={editFormData.website}
+                    onChange={(e) => setEditFormData({ ...editFormData, website: e.target.value })}
+                    placeholder="https://www.example.com"
+                  />
+                </div>
+
+                <div className="vendor-form-group">
+                  <label>Address</label>
+                  <textarea
+                    rows={2}
+                    value={editFormData.address}
+                    onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                    placeholder="Enter address"
+                  />
+                </div>
+
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>City</label>
+                    <input
+                      type="text"
+                      value={editFormData.city}
+                      onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })}
+                      placeholder="Enter city"
+                    />
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>State</label>
+                    <input
+                      type="text"
+                      value={editFormData.state}
+                      onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}
+                      placeholder="Enter state"
+                    />
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>Pincode</label>
+                    <input
+                      type="text"
+                      value={editFormData.pincode}
+                      onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })}
+                      placeholder="Enter pincode"
+                    />
+                  </div>
+                </div>
+
+                <div className="vendor-form-group">
+                  <label>GST Number</label>
+                  <input
+                    type="text"
+                    value={editFormData.gstNumber}
+                    onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })}
+                    placeholder="Enter GST number"
+                  />
+                </div>
+              </div>
+
+              {/* Additional Details Section */}
+              <div className="vendor-form-section">
+                <h3>Additional Details</h3>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group">
+                    <label>Rating</label>
+                    <select
+                      value={editFormData.rating}
+                      onChange={(e) => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}
+                    >
+                      <option value="0">Not Rated</option>
+                      <option value="1">⭐ 1 Star</option>
+                      <option value="2">⭐⭐ 2 Stars</option>
+                      <option value="3">⭐⭐⭐ 3 Stars</option>
+                      <option value="4">⭐⭐⭐⭐ 4 Stars</option>
+                      <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
+                    </select>
+                  </div>
+                  <div className="vendor-form-group">
+                    <label>Status</label>
+                    <select
+                      value={editFormData.status}
+                      onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                </div>
+
+                
+                  <div className="vendor-form-group">
+                    <label>Assign To</label>
+                    <select
+                      value={editFormData.assignedTo}
+                      onChange={(e) => setEditFormData({ ...editFormData, assignedTo: e.target.value })}
+                    >
+                      <option value="">Select user</option>
+                      {availableUsers.map(user => (
+                        <option key={user.id} value={user.id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                
+
+                <div className="vendor-form-group">
+                  <label>Notes</label>
+                  <textarea
+                    rows={3}
+                    value={editFormData.notes}
+                    onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                    placeholder="Enter any additional notes"
+                  />
+                </div>
+              </div>
             </div>
-          )}
-        </main>
-      </div>
+
+            <div className="vendor-management-modal-actions">
+              <button className="vendor-management-btn-primary" onClick={handleCreateVendor}>
+                Create Vendor
+              </button>
+              <button className="vendor-management-btn-secondary" onClick={() => setShowCreateModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+
   );
 };
 
-export default ProcurementManagement;
+export default VendorManagement;

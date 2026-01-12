@@ -1,9 +1,29 @@
 // src/services/filterApi.js
 
 const API_BASE_URL = 'http://localhost:8080/api';
-
+const getAuthHeaders = () => ({
+  'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+  'Content-Type': 'application/json'
+});
 const filterApi = {
   // Get all groups
+   getLeadsUsers : async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/leads-users`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch users');
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error('Error fetching leads users:', error);
+      throw error;
+    }
+  },
   getAllGroups: async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/filters/groups`, {
@@ -159,6 +179,7 @@ const filterApi = {
       throw error;
     }
   },
+
 };
 
 export default filterApi;
