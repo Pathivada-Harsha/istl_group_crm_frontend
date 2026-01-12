@@ -8,6 +8,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
@@ -107,7 +108,7 @@ const QuotationsReceived = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`http://localhost:8080/api/quotations/procurement?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, {
         headers: getAuthHeaders()
       });
 
@@ -132,7 +133,7 @@ const QuotationsReceived = () => {
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/quotations/stats', {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/stats`, {
         headers: getAuthHeaders()
       });
 
@@ -325,7 +326,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       // Fetch full quotation details with items
-      const response = await fetch(`http://localhost:8080/api/quotations/${quotation.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
         headers: getAuthHeaders()
       });
 
@@ -470,7 +471,7 @@ const QuotationsReceived = () => {
         paymentStatus: 'Pending'
       };
 
-      const response = await fetch('http://localhost:8080/api/purchase-orders/from-quotation', {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -513,7 +514,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/quotations/${quotation.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
         headers: getAuthHeaders()
       });
 
@@ -541,7 +542,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/quotations/${quotationId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -580,7 +581,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/quotations/${quotationId}/create-po`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/create-po`, {
         method: 'POST',
         headers: getAuthHeaders()
       });
@@ -739,7 +740,7 @@ const QuotationsReceived = () => {
         formData.append('file', selectedFile);
       }
 
-      const response = await fetch('http://localhost:8080/api/quotations/procurement', {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/procurement`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`,

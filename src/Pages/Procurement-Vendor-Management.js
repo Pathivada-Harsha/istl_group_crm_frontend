@@ -9,6 +9,8 @@ import ToastContainer from './../components/Notification_Toast/ToastContainer.js
 import CrmPreloader from "../components/preLoader.js";
 import vendorApi from '../services/vendorApi';
 import filterApi from '../services/filterApi';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -307,7 +309,7 @@ const VendorManagement = () => {
       if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`http://localhost:8080/api/vendors?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vendors?${params}`, {
         headers: getAuthHeaders()
       });
 
@@ -332,7 +334,7 @@ const VendorManagement = () => {
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/vendors/stats', {
+      const response = await fetch('${API_BASE_URL}/api/vendors/stats', {
         headers: getAuthHeaders()
       });
 
@@ -352,7 +354,7 @@ const VendorManagement = () => {
     setLoading(true);
     try {
       // Fetch vendor details
-      const vendorResponse = await fetch(`http://localhost:8080/api/vendors/${vendor.id}`, {
+      const vendorResponse = await fetch(`${API_BASE_URL}/api/vendors/${vendor.id}`, {
         headers: getAuthHeaders()
       });
 
@@ -361,7 +363,7 @@ const VendorManagement = () => {
       setSelectedVendor(vendorData);
 
       // Fetch vendor's purchase orders
-      const posResponse = await fetch(`http://localhost:8080/api/purchase-orders/vendor/${vendor.id}`, {
+      const posResponse = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendor.id}`, {
         headers: getAuthHeaders()
       });
 
@@ -437,7 +439,7 @@ const VendorManagement = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/vendors/${editFormData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vendors/${editFormData.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -473,7 +475,7 @@ const VendorManagement = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/vendors/${vendorId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/vendors/${vendorId}`, {
         method: 'DELETE',
         headers: getAuthHeaders()
       });

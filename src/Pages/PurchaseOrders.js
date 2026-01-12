@@ -8,6 +8,8 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
 const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -83,7 +85,7 @@ const PurchaseOrders = () => {
    */
   const fetchApprovedQuotations = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/quotations/approved', {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/approved`, {
         headers: getAuthHeaders()
       });
 
@@ -119,7 +121,7 @@ const PurchaseOrders = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`http://localhost:8080/api/purchase-orders?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders?${params}`, {
         headers: getAuthHeaders()
       });
 
@@ -144,7 +146,7 @@ const PurchaseOrders = () => {
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/purchase-orders/stats', {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/stats`, {
         headers: getAuthHeaders()
       });
 
@@ -163,7 +165,7 @@ const PurchaseOrders = () => {
   const handleViewPO = async (po) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/purchase-orders/${po.id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/${po.id}`, {
         headers: getAuthHeaders()
       });
 
@@ -188,7 +190,7 @@ const PurchaseOrders = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/purchase-orders/${poId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/${poId}/status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -216,7 +218,7 @@ const PurchaseOrders = () => {
    */
   const fetchVendors = async () => {
     try {
-      const response = await fetch('http://localhost:8080/api/vendors?page=0&size=1000', {
+      const response = await fetch(`${API_BASE_URL}/api/vendors?page=0&size=1000`, {
         headers: getAuthHeaders()
       });
 
@@ -353,7 +355,7 @@ const PurchaseOrders = () => {
         paymentStatus: 'Pending'
       };
 
-      const response = await fetch('http://localhost:8080/api/purchase-orders/from-quotation', {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -446,7 +448,7 @@ const PurchaseOrders = () => {
     setLoading(true);
     try {
       // Fetch full quotation details with items
-      const response = await fetch(`http://localhost:8080/api/quotations/${quotationId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, {
         headers: getAuthHeaders()
       });
 
@@ -534,7 +536,7 @@ const PurchaseOrders = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `http://localhost:8080/api/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`,
+        `${API_BASE_URL}/api/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`,
         {
           method: 'PUT',
           headers: {
@@ -572,7 +574,7 @@ const PurchaseOrders = () => {
   const handleViewVendorPOs = async (vendorId) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:8080/api/purchase-orders/vendor/${vendorId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendorId}`, {
         headers: getAuthHeaders()
       });
 
