@@ -1,507 +1,660 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, Truck, AlertCircle, ShoppingCart } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck, CheckCircle, Clock, FileText, TrendingUp, DollarSign, AlertCircle } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
-
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
 
 const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [selectedPOs, setSelectedPOs] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
+  const { user } = useAuth();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const [loading, setLoading] = useState(false);
+
   const [filters, setFilters] = useState({
     search: '',
     status: 'all',
-    vendor: 'all',
-    category: 'all',
-    dateRange: 'all'
+    paymentStatus: 'all'
   });
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const pageSize = 10;
+
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
-  const [showCreateEditModal, setShowCreateEditModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
-  const [formData, setFormData] = useState(null);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [deliveryFormData, setDeliveryFormData] = useState(null);
+  const [stats, setStats] = useState(null);
 
-  // Mock data with delivery tracking
-  const mockPurchaseOrders = [
-    {
-      id: 'PO-2024-001',
-      linkedQuotationId: 'QUO-2024-003',
-      vendor: 'Digital Systems Corp',
-      vendorRating: 4.8,
-      vendorContact: '+91 98765 43212',
-      vendorGST: 'GST29ABCDE1234F1Z5',
-      poDate: '2024-12-07',
-      deliveryDate: '2024-12-20',
-      category: 'IT Equipment',
-      items: [
-        { name: 'Laptop Dell XPS 15', description: 'Intel i7, 16GB RAM, 512GB SSD', qty: 10, unitPrice: 82000, tax: 18, lineTotal: 967600, delivered: 10 },
-        { name: 'Monitor 27" 4K', description: 'Dell UltraSharp', qty: 10, unitPrice: 30000, tax: 18, lineTotal: 354000, delivered: 10 }
-      ],
-      subtotal: 1120000,
-      taxAmount: 201600,
-      shippingCost: 0,
-      totalValue: 1321600,
-      orderStatus: 'Delivered',
-      deliveryStatus: {
-        totalItems: 20,
-        deliveredItems: 20,
-        pendingItems: 0
-      },
-      paymentStatus: 'Pending',
-      paymentTerms: '30 days net',
-      deliveryAddress: 'Building A, Tech Park, Bangalore - 560001',
-      deliveryTerms: '12 days from order date',
-      trackingNumber: 'TRK1234567890',
-      assignedOfficer: 'Amit Patel',
-      createdBy: 'Amit Patel',
-      documents: ['po-001.pdf', 'quotation-003.pdf'],
-      notes: ['Urgent delivery required', 'Contact vendor for confirmation'],
-      timeline: [
-        { status: 'Created', date: '2024-12-07', time: '10:30 AM', user: 'Amit Patel' },
-        { status: 'Approved', date: '2024-12-07', time: '02:15 PM', user: 'Rajesh Kumar' },
-        { status: 'Ordered', date: '2024-12-08', time: '09:00 AM', user: 'Amit Patel' },
-        { status: 'Delivered', date: '2024-12-12', time: '03:00 PM', user: 'System' }
-      ]
-    },
-    {
-      id: 'PO-2024-002',
-      linkedQuotationId: 'QUO-2024-002',
-      vendor: 'Office Plus Solutions',
-      vendorRating: 4.2,
-      vendorContact: '+91 98765 43211',
-      vendorGST: 'GST27FGHIJ5678K2M6',
-      poDate: '2024-12-06',
-      deliveryDate: '2024-12-16',
-      category: 'Office Furniture',
-      items: [
-        { name: 'Executive Desk', description: 'Wooden, L-shaped', qty: 5, unitPrice: 25000, tax: 12, lineTotal: 140000, delivered: 3 },
-        { name: 'Ergonomic Chair', description: 'Herman Miller Aeron', qty: 5, unitPrice: 45000, tax: 12, lineTotal: 252000, delivered: 3 }
-      ],
-      subtotal: 350000,
-      taxAmount: 42000,
-      shippingCost: 5000,
-      totalValue: 397000,
-      orderStatus: 'In-Transit',
-      deliveryStatus: {
-        totalItems: 10,
-        deliveredItems: 6,
-        pendingItems: 4
-      },
-      paymentStatus: 'Partial',
-      paymentTerms: '45 days net',
-      deliveryAddress: 'Office Complex B, Mumbai - 400001',
-      deliveryTerms: '10 days from order date',
-      trackingNumber: 'TRK9876543210',
-      assignedOfficer: 'Priya Sharma',
-      createdBy: 'Priya Sharma',
-      documents: ['po-002.pdf'],
-      notes: ['Install on delivery'],
-      timeline: [
-        { status: 'Created', date: '2024-12-06', time: '11:00 AM', user: 'Priya Sharma' },
-        { status: 'Approved', date: '2024-12-06', time: '03:30 PM', user: 'Rajesh Kumar' },
-        { status: 'Ordered', date: '2024-12-07', time: '10:00 AM', user: 'Priya Sharma' },
-        { status: 'In-Transit', date: '2024-12-09', time: '02:00 PM', user: 'System' }
-      ]
-    },
-    {
-      id: 'PO-2024-003',
-      linkedQuotationId: 'QUO-2024-006',
-      vendor: 'Premium Electronics',
-      vendorRating: 4.6,
-      vendorContact: '+91 98765 43215',
-      vendorGST: 'GST19KLMNO9012P3Q7',
-      poDate: '2024-12-08',
-      deliveryDate: '2024-12-22',
-      category: 'IT Equipment',
-      items: [
-        { name: 'Network Switch 48-port', description: 'Cisco Catalyst', qty: 3, unitPrice: 125000, tax: 18, lineTotal: 442500, delivered: 0 },
-        { name: 'UPS 10KVA', description: 'APC Smart-UPS', qty: 2, unitPrice: 85000, tax: 18, lineTotal: 200600, delivered: 0 }
-      ],
-      subtotal: 545000,
-      taxAmount: 98100,
-      shippingCost: 8000,
-      totalValue: 651100,
-      orderStatus: 'Approved',
-      deliveryStatus: {
-        totalItems: 5,
-        deliveredItems: 0,
-        pendingItems: 5
-      },
-      paymentStatus: 'Pending',
-      paymentTerms: '45 days net',
-      deliveryAddress: 'Data Center, Hyderabad - 500032',
-      deliveryTerms: '14 days from order date',
-      trackingNumber: '',
-      assignedOfficer: 'Vikram Joshi',
-      createdBy: 'Vikram Joshi',
-      documents: ['po-003.pdf', 'quotation-006.pdf', 'technical-specs.pdf'],
-      notes: ['Requires technical team on-site for installation'],
-      timeline: [
-        { status: 'Created', date: '2024-12-08', time: '09:15 AM', user: 'Vikram Joshi' },
-        { status: 'Approved', date: '2024-12-08', time: '04:00 PM', user: 'Rajesh Kumar' }
-      ]
-    },
-    {
-      id: 'PO-2024-004',
-      linkedQuotationId: null,
-      vendor: 'Global Supplies Inc',
-      vendorRating: 4.0,
-      vendorContact: '+91 98765 43220',
-      vendorGST: 'GST24RSTUV3456W4X8',
-      poDate: '2024-12-05',
-      deliveryDate: '2024-12-19',
-      category: 'Office Supplies',
-      items: [
-        { name: 'Whiteboard Markers', description: 'Assorted colors', qty: 100, unitPrice: 80, tax: 18, lineTotal: 9440, delivered: 100 },
-        { name: 'Staplers', description: 'Heavy duty', qty: 25, unitPrice: 350, tax: 18, lineTotal: 10325, delivered: 25 }
-      ],
-      subtotal: 16750,
-      taxAmount: 3015,
-      shippingCost: 500,
-      totalValue: 20265,
-      orderStatus: 'Delivered',
-      deliveryStatus: {
-        totalItems: 125,
-        deliveredItems: 125,
-        pendingItems: 0
-      },
-      paymentStatus: 'Paid',
-      paymentTerms: '30 days net',
-      deliveryAddress: 'Corporate Office, Delhi - 110001',
-      deliveryTerms: '7 days from order date',
-      trackingNumber: 'TRK5555666777',
-      assignedOfficer: 'Meera Singh',
-      createdBy: 'Meera Singh',
-      documents: ['po-004.pdf'],
-      notes: [],
-      timeline: [
-        { status: 'Created', date: '2024-12-05', time: '10:00 AM', user: 'Meera Singh' },
-        { status: 'Approved', date: '2024-12-05', time: '11:30 AM', user: 'Rajesh Kumar' },
-        { status: 'Ordered', date: '2024-12-05', time: '02:00 PM', user: 'Meera Singh' },
-        { status: 'In-Transit', date: '2024-12-06', time: '10:00 AM', user: 'System' },
-        { status: 'Delivered', date: '2024-12-10', time: '03:30 PM', user: 'System' }
-      ]
-    },
-    {
-      id: 'PO-2024-005',
-      linkedQuotationId: null,
-      vendor: 'Industrial Parts Co',
-      vendorRating: 3.8,
-      vendorContact: '+91 98765 43225',
-      vendorGST: 'GST33YZABC7890D5E9',
-      poDate: '2024-12-10',
-      deliveryDate: '2024-12-30',
-      category: 'Manufacturing',
-      items: [
-        { name: 'Motor Assembly', description: '5HP Industrial Motor', qty: 3, unitPrice: 45000, tax: 18, lineTotal: 159300, delivered: 0 }
-      ],
-      subtotal: 135000,
-      taxAmount: 24300,
-      shippingCost: 3000,
-      totalValue: 162300,
-      orderStatus: 'Draft',
-      deliveryStatus: {
-        totalItems: 3,
-        deliveredItems: 0,
-        pendingItems: 3
-      },
-      paymentStatus: 'Not Initiated',
-      paymentTerms: '60 days net',
-      deliveryAddress: 'Manufacturing Unit, Pune - 411001',
-      deliveryTerms: '20 days from order date',
-      trackingNumber: '',
-      assignedOfficer: 'Suresh Reddy',
-      createdBy: 'Suresh Reddy',
-      documents: [],
-      notes: ['Awaiting final approval from management'],
-      timeline: [
-        { status: 'Created', date: '2024-12-10', time: '11:00 AM', user: 'Suresh Reddy' }
-      ]
-    },
-    {
-      id: 'PO-2024-006',
-      linkedQuotationId: 'QUO-2024-001',
-      vendor: 'TechSupply Industries',
-      vendorRating: 4.5,
-      vendorContact: '+91 98765 43210',
-      vendorGST: 'GST29FGHIJ1234K6L0',
-      poDate: '2024-12-09',
-      deliveryDate: '2024-12-24',
-      category: 'IT Equipment',
-      items: [
-        { name: 'Laptop Dell XPS 15', description: 'Intel i7, 16GB RAM, 512GB SSD', qty: 10, unitPrice: 85000, tax: 18, lineTotal: 1003000, delivered: 0 },
-        { name: 'Monitor 27" 4K', description: 'LG UltraFine Display', qty: 10, unitPrice: 32000, tax: 18, lineTotal: 377600, delivered: 0 }
-      ],
-      subtotal: 1170000,
-      taxAmount: 210600,
-      shippingCost: 0,
-      totalValue: 1380600,
-      orderStatus: 'Cancelled',
-      deliveryStatus: {
-        totalItems: 20,
-        deliveredItems: 0,
-        pendingItems: 0
-      },
-      paymentStatus: 'Not Initiated',
-      paymentTerms: '30 days net',
-      deliveryAddress: 'Building C, Tech Park, Bangalore - 560001',
-      deliveryTerms: '15 days from order date',
-      trackingNumber: '',
-      assignedOfficer: 'Rajesh Kumar',
-      createdBy: 'Rajesh Kumar',
-      documents: ['po-006.pdf'],
-      notes: ['Cancelled due to budget constraints'],
-      timeline: [
-        { status: 'Created', date: '2024-12-09', time: '09:00 AM', user: 'Rajesh Kumar' },
-        { status: 'Cancelled', date: '2024-12-09', time: '04:00 PM', user: 'Rajesh Kumar' }
-      ]
-    }
-  ];
 
-  useEffect(() => {
-    setPurchaseOrders(mockPurchaseOrders);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // ADD THESE NEW STATE VARIABLES:
+  const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+  const [vendors, setVendors] = useState([]); // List of vendors
+  const [quotations, setQuotations] = useState([]); // List of approved quotations
 
-  // Calculate KPIs
-  const kpis = {
-    total: purchaseOrders.length,
-    approved: purchaseOrders.filter(po => po.orderStatus === 'Approved').length,
-    inTransit: purchaseOrders.filter(po => po.orderStatus === 'In-Transit').length,
-    delivered: purchaseOrders.filter(po => po.orderStatus === 'Delivered').length,
-    totalValue: purchaseOrders.reduce((sum, po) => sum + po.totalValue, 0),
-    pendingBills: purchaseOrders.filter(po => po.orderStatus === 'Delivered' && po.paymentStatus !== 'Paid').length
-  };
-
-  // Filter purchase orders
-  const filteredPOs = purchaseOrders.filter(po => {
-    if (filters.search && !po.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !po.vendor.toLowerCase().includes(filters.search.toLowerCase()) &&
-      (!po.linkedQuotationId || !po.linkedQuotationId.toLowerCase().includes(filters.search.toLowerCase()))) {
-      return false;
-    }
-    if (filters.status !== 'all' && po.orderStatus !== filters.status) return false;
-    if (filters.category !== 'all' && po.category !== filters.category) return false;
-    return true;
+  const [createPOFormData, setCreatePOFormData] = useState({
+    quotationId: '',
+    quotation: null, // Store selected quotation object
+    orderDate: new Date().toISOString().split('T')[0],
+    expectedDelivery: '',
+    paymentTerms: '',
+    shippingAddress: '',
+    notes: '',
+    items: []
   });
+  const [newItem, setNewItem] = useState({
+    itemName: '',
+    itemDescription: '',
+    quantity: 0,
+    unitPrice: 0,
+    gst: 18,
+    discount: 0
+  });
+  // Fetch POs on mount and filter change
+  useEffect(() => {
+    fetchPurchaseOrders();
+  }, [groupName, subGroupName, projectId, currentPage, filters.status, filters.search]);
 
-  // Handle checkbox selection
-  const handleSelectPO = (poId) => {
-    setSelectedPOs(prev =>
-      prev.includes(poId)
-        ? prev.filter(id => id !== poId)
-        : [...prev, poId]
-    );
-  };
+  // Fetch stats on mount
+  useEffect(() => {
+    fetchStats();
+  }, []);
+  // Fetch vendors on mount
+  useEffect(() => {
+    fetchVendors();
+  }, []);
+  /**
+   * Get auth headers
+   */
+  const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Role': user?.role || localStorage.getItem('userRole')
+  });
+  /**
+   * Fetch approved quotations for PO creation
+   */
+  const fetchApprovedQuotations = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/quotations/approved', {
+        headers: getAuthHeaders()
+      });
 
-  const handleSelectAll = (e) => {
-    if (e.target.checked) {
-      setSelectedPOs(filteredPOs.map(po => po.id));
-    } else {
-      setSelectedPOs([]);
+      if (response.ok) {
+        const data = await response.json();
+        setQuotations(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch quotations:', error);
     }
   };
 
-  // View PO details
-  const handleViewPO = (po) => {
-    setSelectedPO(po);
-    setShowDetailDrawer(true);
+  // 4. Replace the useEffect that calls fetchVendors (around line 48):
+  useEffect(() => {
+    fetchApprovedQuotations();
+  }, []);
+  /**
+   * Fetch purchase orders from backend
+   */
+  const fetchPurchaseOrders = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage,
+        size: pageSize,
+        sortBy: 'orderDate',
+        sortDirection: 'DESC'
+      });
+
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId) params.append('projectId', projectId);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.search) params.append('searchTerm', filters.search);
+
+      const response = await fetch(`http://localhost:8080/api/purchase-orders?${params}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch purchase orders');
+
+      const data = await response.json();
+      setPurchaseOrders(data.purchaseOrders || []);
+      setTotalPages(data.totalPages || 0);
+      setTotalElements(data.totalElements || 0);
+
+    } catch (error) {
+      console.error('Failed to fetch purchase orders:', error);
+      showError('Failed to load purchase orders');
+      setPurchaseOrders([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Create new PO
-  const handleCreatePO = () => {
-    setEditMode(false);
-    setFormData({
-      vendor: '',
-      linkedQuotationId: '',
-      deliveryDate: '',
-      paymentTerms: '',
-      deliveryAddress: '',
-      deliveryTerms: '',
-      items: [{ name: '', description: '', qty: 1, unitPrice: 0, tax: 18 }],
-      notes: ''
+  /**
+   * Fetch statistics
+   */
+  const fetchStats = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/purchase-orders/stats', {
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  /**
+   * View PO details with items
+   */
+  const handleViewPO = async (po) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/purchase-orders/${po.id}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch PO details');
+
+      const data = await response.json();
+      setSelectedPO(data);
+      setShowDetailDrawer(true);
+    } catch (error) {
+      console.error('Failed to fetch PO details:', error);
+      showError('Failed to load PO details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Update PO status
+   */
+  const handleUpdateStatus = async (poId, newStatus) => {
+    if (!window.confirm(`Change status to ${newStatus}?`)) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/purchase-orders/${poId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+
+      if (!response.ok) throw new Error('Failed to update status');
+
+      showSuccess(`PO status updated to ${newStatus}`);
+      fetchPurchaseOrders();
+      fetchStats();
+      setShowDetailDrawer(false);
+
+    } catch (error) {
+      console.error('Failed to update status:', error);
+      showError('Failed to update PO status');
+    } finally {
+      setLoading(false);
+    }
+  };
+  /**
+   * Fetch vendors for dropdown
+   */
+  const fetchVendors = async () => {
+    try {
+      const response = await fetch('http://localhost:8080/api/vendors?page=0&size=1000', {
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVendors(data.vendors || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+    }
+  };
+
+  /**
+   * Handle add item to PO
+   */
+  const handleAddItemToPO = () => {
+    // Validation
+    if (!newItem.itemName || !newItem.itemName.trim()) {
+      showError('Item name is required');
+      return;
+    }
+
+    if (newItem.quantity <= 0) {
+      showError('Quantity must be greater than 0');
+      return;
+    }
+
+    if (newItem.unitPrice <= 0) {
+      showError('Unit price must be greater than 0');
+      return;
+    }
+
+    // Calculate line total
+    const baseAmount = newItem.quantity * newItem.unitPrice;
+    const discountAmount = baseAmount * (newItem.discount / 100);
+    const taxableAmount = baseAmount - discountAmount;
+    const gstAmount = taxableAmount * (newItem.gst / 100);
+    const lineTotal = taxableAmount + gstAmount;
+
+    const item = {
+      ...newItem,
+      lineTotal,
+      id: Date.now() // Temporary ID
+    };
+
+    setCreatePOFormData(prev => ({
+      ...prev,
+      items: [...prev.items, item]
+    }));
+
+    // Reset new item form
+    setNewItem({
+      itemName: '',
+      itemDescription: '',
+      quantity: 0,
+      unitPrice: 0,
+      gst: 18,
+      discount: 0
     });
-    setShowCreateEditModal(true);
   };
 
-  // Edit PO
-  const handleEditPO = (po) => {
-    setEditMode(true);
-    setFormData({ ...po });
-    setShowDetailDrawer(false);
-    setShowCreateEditModal(true);
+  /**
+   * Handle remove item from PO
+   */
+  const handleRemoveItemFromPO = (itemId) => {
+    setCreatePOFormData(prev => ({
+      ...prev,
+      items: prev.items.filter(item => item.id !== itemId)
+    }));
   };
 
-  // Status update handlers
-  const handleApprovePO = (poId) => {
-    setPurchaseOrders(prev => prev.map(po =>
-      po.id === poId ? { ...po, orderStatus: 'Approved' } : po
-    ));
-    alert(`Purchase Order ${poId} has been approved`);
+  /**
+   * Calculate total value of PO
+   */
+  const calculatePOTotal = () => {
+    return createPOFormData.items.reduce((sum, item) => sum + item.lineTotal, 0);
   };
 
-  const handleMarkDelivered = (poId) => {
-    setPurchaseOrders(prev => prev.map(po =>
-      po.id === poId ? { ...po, orderStatus: 'Delivered' } : po
-    ));
-    alert(`Purchase Order ${poId} marked as delivered`);
-  };
+  /**
+   * Handle create PO
+   */
+  const handleCreatePO = async () => {
+    // Validation
+    if (!createPOFormData.quotationId) {
+      showError('Please select a quotation');
+      return;
+    }
 
-  const handleCancelPO = (poId) => {
-    if (window.confirm('Are you sure you want to cancel this purchase order?')) {
-      setPurchaseOrders(prev => prev.map(po =>
-        po.id === poId ? { ...po, orderStatus: 'Cancelled' } : po
-      ));
-      alert(`Purchase Order ${poId} has been cancelled`);
+    if (createPOFormData.items.length === 0) {
+      showError('No items available from quotation');
+      return;
+    }
+
+    // Check if at least one item has quantity > 0
+    const hasItems = createPOFormData.items.some(item => item.quantity > 0);
+    if (!hasItems) {
+      showError('Please set quantity for at least one item');
+      return;
+    }
+
+    if (!createPOFormData.expectedDelivery) {
+      showError('Expected delivery date is required');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Filter items with quantity > 0
+      const poItems = createPOFormData.items
+        .filter(item => item.quantity > 0)
+        .map(({ quotationItemId, itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
+          itemName,
+          itemDescription,
+          quantity,
+          unitPrice,
+          gst,
+          discount
+        }));
+
+      const poData = {
+        quotationId: createPOFormData.quotationId,
+        vendorId: createPOFormData.quotation.vendorId,
+        rfqId: createPOFormData.quotation.rfqId,
+        groupName: createPOFormData.quotation.groupName,
+        subGroupName: createPOFormData.quotation.subGroupName,
+        projectId: createPOFormData.quotation.projectId,
+        orderDate: createPOFormData.orderDate,
+        expectedDelivery: createPOFormData.expectedDelivery,
+        paymentTerms: createPOFormData.paymentTerms,
+        shippingAddress: createPOFormData.shippingAddress,
+        notes: createPOFormData.notes,
+        items: poItems,
+        status: 'Draft',
+        paymentStatus: 'Pending'
+      };
+
+      const response = await fetch('http://localhost:8080/api/purchase-orders/from-quotation', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(poData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create PO');
+      }
+
+      const createdPO = await response.json();
+      showSuccess(`Purchase Order ${createdPO.poNo} created successfully!`);
+
+      // Reset form
+      setShowCreatePOModal(false);
+      setCreatePOFormData({
+        quotationId: '',
+        quotation: null,
+        orderDate: new Date().toISOString().split('T')[0],
+        expectedDelivery: '',
+        paymentTerms: '',
+        shippingAddress: '',
+        notes: '',
+        items: []
+      });
+
+      // Refresh list
+      fetchPurchaseOrders();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to create PO:', error);
+      showError(error.message || 'Failed to create purchase order');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Get status badge class
-  const getStatusBadgeClass = (status) => {
-    const statusClasses = {
-      'Draft': 'procurement-purchase-orders-badge-draft',
-      'Approved': 'procurement-purchase-orders-badge-approved',
-      'Ordered': 'procurement-purchase-orders-badge-ordered',
-      'In-Transit': 'procurement-purchase-orders-badge-transit',
-      'Delivered': 'procurement-purchase-orders-badge-delivered',
-      'Cancelled': 'procurement-purchase-orders-badge-cancelled'
-    };
-    return statusClasses[status] || '';
+  /**
+   * Handle open create PO modal
+   */
+  /**
+ * Handle open create PO modal
+ */
+  const handleOpenCreatePO = () => {
+    setCreatePOFormData({
+      quotationId: '',
+      quotation: null,
+      orderDate: new Date().toISOString().split('T')[0],
+      expectedDelivery: '',
+      paymentTerms: '',
+      shippingAddress: '',
+      notes: '',
+      items: []
+    });
+    setShowCreatePOModal(true);
+  };
+  /**
+   * Open delivery modal
+   */
+  const handleOpenDeliveryModal = (po, item) => {
+    setDeliveryFormData({
+      poId: po.id,
+      itemId: item.id,
+      itemName: item.itemName,
+      orderedQty: item.quantity,
+      deliveredQty: item.deliveredQty,
+      pendingQty: item.pendingQty,
+      newDeliveryQty: 0
+    });
+    setShowDeliveryModal(true);
+  };
+  /**
+   * Handle quotation selection
+   */
+  const handleQuotationSelect = async (quotationId) => {
+    if (!quotationId) {
+      setCreatePOFormData({
+        ...createPOFormData,
+        quotationId: '',
+        quotation: null,
+        items: []
+      });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch full quotation details with items
+      const response = await fetch(`http://localhost:8080/api/quotations/${quotationId}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch quotation details');
+
+      const quotationData = await response.json();
+
+      // Map quotation items to PO items
+      const poItems = quotationData.items.map(item => ({
+        quotationItemId: item.id,
+        itemName: item.itemName,
+        itemDescription: item.description || '',
+        quotedQuantity: item.quantity,
+        quantity: item.quantity, // Default to full quantity
+        unitPrice: item.unitPrice,
+        gst: item.taxPercent,
+        discount: 0,
+        lineTotal: 0
+      }));
+
+      // Calculate line totals
+      poItems.forEach(item => {
+        const baseAmount = item.quantity * item.unitPrice;
+        const discountAmount = baseAmount * (item.discount / 100);
+        const taxableAmount = baseAmount - discountAmount;
+        const gstAmount = taxableAmount * (item.gst / 100);
+        item.lineTotal = taxableAmount + gstAmount;
+      });
+
+      setCreatePOFormData({
+        ...createPOFormData,
+        quotationId: quotationData.id,
+        quotation: quotationData,
+        paymentTerms: quotationData.paymentTerms || '',
+        notes: quotationData.notes || '',
+        items: poItems
+      });
+
+    } catch (error) {
+      console.error('Failed to fetch quotation:', error);
+      showError('Failed to load quotation details');
+    } finally {
+      setLoading(false);
+    }
+  };
+  /**
+   * Update PO item quantity
+   */
+  const handleUpdatePOItemQuantity = (index, quantity) => {
+    const newItems = [...createPOFormData.items];
+    const item = newItems[index];
+    const qty = parseFloat(quantity) || 0;
+
+    // Validate quantity doesn't exceed quoted quantity
+    if (qty > item.quotedQuantity) {
+      showError(`Quantity cannot exceed quoted quantity of ${item.quotedQuantity}`);
+      return;
+    }
+
+    item.quantity = qty;
+
+    // Recalculate line total
+    const baseAmount = qty * item.unitPrice;
+    const discountAmount = baseAmount * (item.discount / 100);
+    const taxableAmount = baseAmount - discountAmount;
+    const gstAmount = taxableAmount * (item.gst / 100);
+    item.lineTotal = taxableAmount + gstAmount;
+
+    setCreatePOFormData({ ...createPOFormData, items: newItems });
+  };
+  /**
+   * Mark item as delivered
+   */
+  const handleMarkDelivered = async () => {
+    if (!deliveryFormData || deliveryFormData.newDeliveryQty <= 0) {
+      showError('Please enter a valid delivery quantity');
+      return;
+    }
+
+    if (deliveryFormData.newDeliveryQty > deliveryFormData.pendingQty) {
+      showError('Delivery quantity cannot exceed pending quantity');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `http://localhost:8080/api/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify({ deliveredQty: deliveryFormData.newDeliveryQty })
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to mark delivery');
+
+      showSuccess('Delivery recorded successfully! Vendor stats updated.');
+      setShowDeliveryModal(false);
+
+      // Refresh PO details
+      if (selectedPO) {
+        handleViewPO(selectedPO);
+      }
+
+      fetchPurchaseOrders();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to mark delivery:', error);
+      showError('Failed to record delivery');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getPaymentBadgeClass = (status) => {
-    const statusClasses = {
-      'Not Initiated': 'procurement-purchase-orders-payment-not-initiated',
-      'Pending': 'procurement-purchase-orders-payment-pending',
-      'Partial': 'procurement-purchase-orders-payment-partial',
-      'Paid': 'procurement-purchase-orders-payment-paid'
-    };
-    return statusClasses[status] || '';
+  /**
+   * View vendor's purchase orders
+   */
+  const handleViewVendorPOs = async (vendorId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`http://localhost:8080/api/purchase-orders/vendor/${vendorId}`, {
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch vendor POs');
+
+      const data = await response.json();
+      // You can display this in a modal or navigate to vendor page
+      console.log('Vendor POs:', data);
+      showSuccess(`Found ${data.length} purchase orders for this vendor`);
+
+    } catch (error) {
+      console.error('Failed to fetch vendor POs:', error);
+      showError('Failed to load vendor purchase orders');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Format currency
   const formatCurrency = (amount) => {
+    if (!amount) return '₹0';
     return `₹${amount.toLocaleString('en-IN')}`;
   };
 
   // Format date
   const formatDate = (dateStr) => {
+    if (!dateStr) return '';
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
-  // Add item row
-  const handleAddItem = () => {
-    if (formData) {
-      setFormData({
-        ...formData,
-        items: [...formData.items, { name: '', description: '', qty: 1, unitPrice: 0, tax: 18 }]
-      });
-    }
+  // Get status badge class
+  const getStatusBadgeClass = (status) => {
+    const statusClasses = {
+      'Draft': 'po-badge-draft',
+      'Approved': 'po-badge-approved',
+      'Ordered': 'po-badge-ordered',
+      'In-Transit': 'po-badge-transit',
+      'Delivered': 'po-badge-delivered',
+      'Cancelled': 'po-badge-cancelled'
+    };
+    return statusClasses[status] || '';
   };
 
-  // Remove item row
-  const handleRemoveItem = (index) => {
-    if (formData && formData.items.length > 1) {
-      const newItems = formData.items.filter((_, i) => i !== index);
-      setFormData({ ...formData, items: newItems });
-    }
+  // Get payment status badge class
+  const getPaymentBadgeClass = (status) => {
+    const paymentClasses = {
+      'Pending': 'po-payment-pending',
+      'Partially Paid': 'po-payment-partial',
+      'Paid': 'po-payment-paid'
+    };
+    return paymentClasses[status] || '';
   };
 
-  // Update item
-  const handleUpdateItem = (index, field, value) => {
-    if (formData) {
-      const newItems = [...formData.items];
-      newItems[index] = { ...newItems[index], [field]: value };
-      setFormData({ ...formData, items: newItems });
-    }
+  // Calculate delivery progress
+  const calculateDeliveryProgress = (po) => {
+    if (!po.totalItemsOrdered || po.totalItemsOrdered === 0) return 0;
+    return Math.round((po.totalItemsDelivered / po.totalItemsOrdered) * 100);
   };
 
-  // Save PO
-  const handleSavePO = () => {
-    if (!formData.vendor || formData.items.length === 0) {
-      alert('Please fill in all required fields');
-      return;
-    }
-
-    const subtotal = formData.items.reduce((sum, item) => sum + (item.qty * item.unitPrice), 0);
-    const taxAmount = formData.items.reduce((sum, item) => {
-      const lineSubtotal = item.qty * item.unitPrice;
-      return sum + (lineSubtotal * item.tax / 100);
-    }, 0);
-    const totalValue = subtotal + taxAmount + (formData.shippingCost || 0);
-
-    // Calculate delivery status
-    const totalItems = formData.items.reduce((sum, item) => sum + item.qty, 0);
-    const deliveredItems = formData.items.reduce((sum, item) => sum + (item.delivered || 0), 0);
-    const pendingItems = totalItems - deliveredItems;
-
-    if (editMode) {
-      setPurchaseOrders(prev => prev.map(po =>
-        po.id === formData.id ? {
-          ...formData,
-          subtotal,
-          taxAmount,
-          totalValue,
-          items: formData.items.map(item => ({
-            ...item,
-            delivered: item.delivered || 0,
-            lineTotal: item.qty * item.unitPrice * (1 + item.tax / 100)
-          })),
-          deliveryStatus: {
-            totalItems,
-            deliveredItems,
-            pendingItems
-          }
-        } : po
-      ));
-      alert('Purchase Order updated successfully');
-    } else {
-      const newPO = {
-        ...formData,
-        id: `PO-2024-${String(purchaseOrders.length + 1).padStart(3, '0')}`,
-        poDate: new Date().toISOString().split('T')[0],
-        subtotal,
-        taxAmount,
-        shippingCost: 0,
-        totalValue: subtotal + taxAmount,
-        orderStatus: 'Draft',
-        paymentStatus: 'Not Initiated',
-        createdBy: 'Current User',
-        assignedOfficer: formData.assignedOfficer || 'Current User',
-        category: formData.category || 'General',
-        documents: [],
-        items: formData.items.map(item => ({
-          ...item,
-          delivered: 0,
-          lineTotal: item.qty * item.unitPrice * (1 + item.tax / 100)
-        })),
-        deliveryStatus: {
-          totalItems,
-          deliveredItems: 0,
-          pendingItems: totalItems
-        },
-        timeline: [
-          { status: 'Created', date: new Date().toISOString().split('T')[0], time: new Date().toLocaleTimeString('en-IN'), user: 'Current User' }
-        ]
-      };
-      setPurchaseOrders(prev => [...prev, newPO]);
-      alert('Purchase Order created successfully');
-    }
-    setShowCreateEditModal(false);
-  };
+  // KPI data from stats
+  const kpiData = stats ? [
+    { title: 'Total POs', value: stats.totalPOs.toString(), icon: <FileText size={32} />, color: '#2563eb' },
+    { title: 'In Transit', value: stats.inTransit.toString(), icon: <Truck size={32} />, color: '#f59e0b' },
+    { title: 'Delivered', value: stats.delivered.toString(), icon: <CheckCircle size={32} />, color: '#22c55e' },
+    { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <DollarSign size={32} />, color: '#8b5cf6' }
+  ] : [];
 
   return (
-    <div className="procurement-purchase-orders-container">
+    <div className="purchase-orders-container">
+      {loading && <CrmPreloader text="Loading..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* Header */}
-      <div className="procurement-purchase-orders-header">
-        <div className="procurement-purchase-orders-breadcrumb">
+      <div className="purchase-orders-header">
+        <div className="purchase-orders-breadcrumb">
           Dashboard &gt; Procurement &gt; Purchase Orders
         </div>
+
         <div className="page-header-with-filter">
-          <h1 className="procurement-purchase-orders-title">
-            Purchase Orders <span className="procurement-purchase-orders-count">({purchaseOrders.length})</span>
+          <h1 className="purchase-orders-title">
+            Purchase Orders <span className="purchase-orders-count">({totalElements})</span>
           </h1>
           <GroupProjectFilter
             groupValue={groupName}
@@ -509,837 +662,576 @@ const PurchaseOrders = () => {
             projectValue={projectId}
             onChange={updateFilters}
           />
-
-
         </div>
       </div>
 
       {/* Action Bar */}
-      <div className="procurement-purchase-orders-action-bar">
-        <div className="procurement-purchase-orders-search-filters">
+      <div className="purchase-orders-action-bar">
+        <div className="purchase-orders-search-filters">
           <input
             type="text"
-            placeholder="Search by PO ID, Vendor, Item, RFQ ID, Quotation ID..."
-            className="procurement-purchase-orders-search"
+            placeholder="Search by PO Number, Vendor ID, RFQ ID..."
+            className="purchase-orders-search"
             value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            onChange={(e) => {
+              setFilters({ ...filters, search: e.target.value });
+              setCurrentPage(0);
+            }}
           />
 
           <select
-            className="procurement-purchase-orders-filter"
+            className="purchase-orders-filter"
             value={filters.status}
-            onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            onChange={(e) => {
+              setFilters({ ...filters, status: e.target.value });
+              setCurrentPage(0);
+            }}
           >
             <option value="all">All Status</option>
             <option value="Draft">Draft</option>
             <option value="Approved">Approved</option>
             <option value="Ordered">Ordered</option>
-            <option value="In-Transit">In-Transit</option>
+            <option value="In-Transit">In Transit</option>
             <option value="Delivered">Delivered</option>
             <option value="Cancelled">Cancelled</option>
           </select>
 
           <select
-            className="procurement-purchase-orders-filter"
-            value={filters.category}
-            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+            className="purchase-orders-filter"
+            value={filters.paymentStatus}
+            onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
           >
-            <option value="all">All Categories</option>
-            <option value="IT Equipment">IT Equipment</option>
-            <option value="Office Furniture">Office Furniture</option>
-            <option value="Manufacturing">Manufacturing</option>
-            <option value="Office Supplies">Office Supplies</option>
+            <option value="all">All Payment Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Partially Paid">Partially Paid</option>
+            <option value="Paid">Paid</option>
           </select>
         </div>
 
-        <div className="procurement-purchase-orders-actions">
-          <button className="procurement-purchase-orders-btn-secondary">Import Excel/PDF</button>
-          <button className="procurement-purchase-orders-btn-secondary">Export CSV</button>
-          <button className="procurement-purchase-orders-btn-primary" onClick={handleCreatePO}>
-            + Create Purchase Order
+        <div className="purchase-orders-actions">
+          <button
+            className="purchase-orders-btn-primary"
+            onClick={handleOpenCreatePO}
+          >
+            <Plus size={18} /> Create PO
+          </button>
+          <button className="purchase-orders-btn-secondary">
+            <Download size={18} /> Export
           </button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="procurement-purchase-orders-kpi-grid">
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">📋</div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{kpis.total}</div>
-            <div className="procurement-purchase-orders-kpi-label">Total POs</div>
-          </div>
+      {stats && (
+        <div className="purchase-orders-kpi-grid">
+          {kpiData.map((kpi, index) => (
+            <div key={index} className="purchase-orders-kpi-card" style={{ borderTopColor: kpi.color }}>
+              <div className="purchase-orders-kpi-icon">{kpi.icon}</div>
+              <div className="purchase-orders-kpi-content">
+                <div className="purchase-orders-kpi-value">{kpi.value}</div>
+                <div className="purchase-orders-kpi-label">{kpi.title}</div>
+              </div>
+            </div>
+          ))}
         </div>
-
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">
-            <CheckCircle size={32} />
-          </div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{kpis.approved}</div>
-            <div className="procurement-purchase-orders-kpi-label">Approved POs</div>
-          </div>
-        </div>
-
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">
-            <Truck size={32} />
-          </div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{kpis.inTransit}</div>
-            <div className="procurement-purchase-orders-kpi-label">In-Transit</div>
-          </div>
-        </div>
-
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">
-            <Package size={32} />
-          </div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{kpis.delivered}</div>
-            <div className="procurement-purchase-orders-kpi-label">Delivered</div>
-          </div>
-        </div>
-
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">
-            <DollarSign size={32} />
-          </div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{formatCurrency(kpis.totalValue)}</div>
-            <div className="procurement-purchase-orders-kpi-label">Total PO Value</div>
-          </div>
-        </div>
-
-        <div className="procurement-purchase-orders-kpi-card">
-          <div className="procurement-purchase-orders-kpi-icon">
-            <AlertCircle size={32} />
-          </div>
-          <div className="procurement-purchase-orders-kpi-content">
-            <div className="procurement-purchase-orders-kpi-value">{kpis.pendingBills}</div>
-            <div className="procurement-purchase-orders-kpi-label">Pending Bills</div>
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Purchase Orders Table */}
-      <div className="procurement-purchase-orders-table-container">
-        <table className="procurement-purchase-orders-table">
+      <div className="purchase-orders-table-container">
+        <table className="purchase-orders-table">
           <thead>
             <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  onChange={handleSelectAll}
-                  checked={selectedPOs.length === filteredPOs.length && filteredPOs.length > 0}
-                />
-              </th>
-              <th>PO ID</th>
-              <th>Vendor Name</th>
-              <th>Linked Quotation</th>
-              <th>PO Date</th>
-              <th>Delivery Date</th>
-              <th>Category</th>
+              <th>PO Number</th>
+              <th>Vendor ID</th>
+              <th>Order Date</th>
               <th>Total Value</th>
-              <th>Delivered</th>
-              <th>Pending</th>
-              <th>Order Status</th>
+              <th>Delivery Progress</th>
               <th>Payment Status</th>
-              <th>Assigned Officer</th>
+              <th>Status</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {filteredPOs.map(po => (
-              <tr key={po.id} className="procurement-purchase-orders-table-row">
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedPOs.includes(po.id)}
-                    onChange={() => handleSelectPO(po.id)}
-                  />
-                </td>
-                <td className="procurement-purchase-orders-table-id">{po.id}</td>
-                <td className="procurement-purchase-orders-table-vendor">{po.vendor}</td>
-                <td>
-                  {po.linkedQuotationId ? (
-                    <span className="procurement-purchase-orders-link">{po.linkedQuotationId}</span>
-                  ) : (
-                    <span className="procurement-purchase-orders-no-link">—</span>
-                  )}
-                </td>
-                <td>{formatDate(po.poDate)}</td>
-                <td>{formatDate(po.deliveryDate)}</td>
-                <td>{po.category}</td>
-                <td className="procurement-purchase-orders-table-value">{formatCurrency(po.totalValue)}</td>
-                <td className="procurement-purchase-orders-delivered">
-                  <CheckCircle size={16} className="procurement-purchase-orders-delivered-icon" />
-                  {po.deliveryStatus?.deliveredItems || 0}
-                </td>
-                <td className="procurement-purchase-orders-pending">
-                  <Clock size={16} className="procurement-purchase-orders-pending-icon" />
-                  {po.deliveryStatus?.pendingItems || 0}
-                </td>
-                <td>
-                  <span className={`procurement-purchase-orders-badge ${getStatusBadgeClass(po.orderStatus)}`}>
-                    {po.orderStatus}
-                  </span>
-                </td>
-                <td>
-                  <span className={`procurement-purchase-orders-badge ${getPaymentBadgeClass(po.paymentStatus)}`}>
-                    {po.paymentStatus}
-                  </span>
-                </td>
-                <td>{po.assignedOfficer}</td>
-                <td>
-                  <div className="procurement-purchase-orders-actions-cell">
-                    <button
-                      className="procurement-purchase-orders-action-btn"
-                      onClick={() => handleViewPO(po)}
-                      title="View Details"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    {po.orderStatus !== 'Cancelled' && (
-                      <button
-                        className="procurement-purchase-orders-action-btn"
-                        onClick={() => handleEditPO(po)}
-                        title="Edit"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                    )}
-                    {po.orderStatus === 'Draft' && (
-                      <button
-                        className="procurement-purchase-orders-action-btn"
-                        onClick={() => handleApprovePO(po.id)}
-                        title="Approve"
-                      >
-                        <Check size={16} />
-                      </button>
-                    )}
-                    {(po.orderStatus === 'Ordered' || po.orderStatus === 'In-Transit') && (
-                      <button
-                        className="procurement-purchase-orders-action-btn"
-                        onClick={() => handleMarkDelivered(po.id)}
-                        title="Mark Delivered"
-                      >
-                        <Package size={16} />
-                      </button>
-                    )}
-                    {po.orderStatus !== 'Delivered' && po.orderStatus !== 'Cancelled' && (
-                      <button
-                        className="procurement-purchase-orders-action-btn"
-                        onClick={() => handleCancelPO(po.id)}
-                        title="Cancel"
-                      >
-                        <XCircle size={16} />
-                      </button>
-                    )}
-                    <button className="procurement-purchase-orders-action-btn" title="Download PDF">
-                      <Download size={16} />
-                    </button>
-                  </div>
+            {purchaseOrders.length === 0 ? (
+              <tr>
+                <td colSpan="8" className="empty-state">
+                  No purchase orders found
                 </td>
               </tr>
-            ))}
+            ) : (
+              purchaseOrders.map((po) => {
+                const progress = calculateDeliveryProgress(po);
+                return (
+                  <tr key={po.id} className="purchase-orders-table-row">
+                    <td className="purchase-orders-table-id">{po.poNo}</td>
+                    <td>
+                      <button
+                        className="vendor-link"
+                        onClick={() => handleViewVendorPOs(po.vendorId)}
+                      >
+                        Vendor #{po.vendorId}
+                      </button>
+                    </td>
+                    <td>{formatDate(po.orderDate)}</td>
+                    <td className="purchase-orders-table-value">{formatCurrency(po.totalValue)}</td>
+                    <td>
+                      <div className="delivery-progress">
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                        <span className="progress-text">
+                          {po.totalItemsDelivered}/{po.totalItemsOrdered} items ({progress}%)
+                        </span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`purchase-orders-badge ${getPaymentBadgeClass(po.paymentStatus)}`}>
+                        {po.paymentStatus}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`purchase-orders-badge ${getStatusBadgeClass(po.status)}`}>
+                        {po.status}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="purchase-orders-actions-cell">
+                        <button
+                          className="purchase-orders-action-btn"
+                          onClick={() => handleViewPO(po)}
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
+                          <button
+                            className="purchase-orders-action-btn"
+                            onClick={() => handleUpdateStatus(po.id, 'Delivered')}
+                            title="Mark Delivered"
+                          >
+                            <CheckCircle size={16} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
           </tbody>
         </table>
+
+        {/* Pagination */}
+        <div className="table-footer">
+          <span>
+            Showing {currentPage * pageSize + 1}-
+            {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} purchase orders
+          </span>
+          <div className="pagination">
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage(p => p - 1)}
+              disabled={currentPage === 0}
+            >
+              Previous
+            </button>
+
+            {[...Array(Math.min(5, totalPages))].map((_, index) => {
+              const pageNum = currentPage < 3 ? index : currentPage + index - 2;
+              if (pageNum >= 0 && pageNum < totalPages) {
+                return (
+                  <button
+                    key={pageNum}
+                    className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
+                    onClick={() => setCurrentPage(pageNum)}
+                  >
+                    {pageNum + 1}
+                  </button>
+                );
+              }
+              return null;
+            })}
+
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage(p => p + 1)}
+              disabled={currentPage >= totalPages - 1}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Detail Drawer */}
       {showDetailDrawer && selectedPO && (
-        <div className="procurement-purchase-orders-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
-          <div className="procurement-purchase-orders-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="procurement-purchase-orders-drawer-header">
+        <div className="purchase-orders-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+          <div className="purchase-orders-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="purchase-orders-drawer-header">
               <div>
-                <h2>{selectedPO.id}</h2>
-                <p className="procurement-purchase-orders-drawer-vendor">{selectedPO.vendor}</p>
+                <h2>{selectedPO.poNo}</h2>
+                <p className="purchase-orders-drawer-subtitle">Vendor ID: {selectedPO.vendorId}</p>
               </div>
-              <button className="procurement-purchase-orders-drawer-close" onClick={() => setShowDetailDrawer(false)}>
+              <button className="purchase-orders-drawer-close" onClick={() => setShowDetailDrawer(false)}>
                 ✕
               </button>
             </div>
 
-            <div className="procurement-purchase-orders-drawer-content">
-              {/* Status Badges */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <div className="procurement-purchase-orders-drawer-badges">
-                  <span className={`procurement-purchase-orders-badge ${getStatusBadgeClass(selectedPO.orderStatus)}`}>
-                    {selectedPO.orderStatus}
-                  </span>
-                  <span className={`procurement-purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>
-                    {selectedPO.paymentStatus}
-                  </span>
-                </div>
-              </div>
-
-              {/* Vendor Information */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <h3>Vendor Information</h3>
-                <div className="procurement-purchase-orders-info-grid">
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Vendor Name:</label>
-                    <span>{selectedPO.vendor}</span>
+            <div className="purchase-orders-drawer-content">
+              {/* PO Details */}
+              <div className="purchase-orders-drawer-section">
+                <h3>Purchase Order Details</h3>
+                <div className="po-details-grid">
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Status:</span>
+                    <span className={`purchase-orders-badge ${getStatusBadgeClass(selectedPO.status)}`}>
+                      {selectedPO.status}
+                    </span>
                   </div>
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Rating:</label>
-                    <span>⭐ {selectedPO.vendorRating}/5</span>
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Payment:</span>
+                    <span className={`purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>
+                      {selectedPO.paymentStatus}
+                    </span>
                   </div>
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Contact:</label>
-                    <span>{selectedPO.vendorContact}</span>
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Order Date:</span>
+                    <span>{formatDate(selectedPO.orderDate)}</span>
                   </div>
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>GST:</label>
-                    <span>{selectedPO.vendorGST}</span>
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Expected Delivery:</span>
+                    <span>{formatDate(selectedPO.expectedDelivery)}</span>
+                  </div>
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Total Value:</span>
+                    <span className="po-value">{formatCurrency(selectedPO.totalValue)}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Linked Quotation */}
-              {selectedPO.linkedQuotationId && (
-                <div className="procurement-purchase-orders-drawer-section">
-                  <h3>Linked Quotation</h3>
-                  <div className="procurement-purchase-orders-linked-item">
-                    <span className="procurement-purchase-orders-link">{selectedPO.linkedQuotationId}</span>
-                    <button className="procurement-purchase-orders-btn-link">View Quotation</button>
-                  </div>
-                </div>
-              )}
-
-              {/* Line Items */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <h3>Itemized Line Items</h3>
-                <table className="procurement-purchase-orders-items-table">
+              {/* Items Table */}
+              <div className="purchase-orders-drawer-section">
+                <h3>Order Items</h3>
+                <table className="po-items-table">
                   <thead>
                     <tr>
-                      <th>Item</th>
-                      <th>Description</th>
-                      <th>Qty Ordered</th>
-                      <th>Qty Delivered</th>
+                      <th>Item Name</th>
+                      <th>Ordered</th>
+                      <th>Delivered</th>
+                      <th>Pending</th>
                       <th>Unit Price</th>
-                      <th>Tax %</th>
                       <th>Line Total</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedPO.items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td>{item.name}</td>
-                        <td>{item.description}</td>
-                        <td>{item.qty}</td>
-                        <td>
-                          <span className={`procurement-purchase-orders-item-delivery ${item.delivered === item.qty ? 'fully-delivered' : item.delivered > 0 ? 'partial-delivered' : 'not-delivered'}`}>
-                            {item.delivered}/{item.qty}
-                            {item.delivered === item.qty && <CheckCircle size={14} style={{ marginLeft: '4px', verticalAlign: 'middle' }} />}
-                            {item.delivered > 0 && item.delivered < item.qty && <Clock size={14} style={{ marginLeft: '4px', verticalAlign: 'middle' }} />}
-                          </span>
-                        </td>
+                    {selectedPO.items && selectedPO.items.map((item) => (
+                      <tr key={item.id}>
+                        <td>{item.itemName}</td>
+                        <td>{item.quantity}</td>
+                        <td className="delivered-qty">{item.deliveredQty}</td>
+                        <td className="pending-qty">{item.pendingQty}</td>
                         <td>{formatCurrency(item.unitPrice)}</td>
-                        <td>{item.tax}%</td>
                         <td>{formatCurrency(item.lineTotal)}</td>
+                        <td>
+                          {item.pendingQty > 0 && selectedPO.status !== 'Cancelled' && (
+                            <button
+                              className="purchase-orders-btn-small"
+                              onClick={() => handleOpenDeliveryModal(selectedPO, item)}
+                            >
+                              Mark Delivered
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
 
-              {/* PO Totals */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <h3>PO Totals</h3>
-                <div className="procurement-purchase-orders-totals">
-                  <div className="procurement-purchase-orders-total-row">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(selectedPO.subtotal)}</span>
-                  </div>
-                  <div className="procurement-purchase-orders-total-row">
-                    <span>Tax Amount:</span>
-                    <span>{formatCurrency(selectedPO.taxAmount)}</span>
-                  </div>
-                  <div className="procurement-purchase-orders-total-row">
-                    <span>Shipping/Packaging:</span>
-                    <span>{formatCurrency(selectedPO.shippingCost)}</span>
-                  </div>
-                  <div className="procurement-purchase-orders-total-row procurement-purchase-orders-grand-total">
-                    <span><strong>Grand Total:</strong></span>
-                    <span><strong>{formatCurrency(selectedPO.totalValue)}</strong></span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Delivery Information */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <h3>Delivery Information</h3>
-
-                {/* Delivery Status Summary */}
-                {selectedPO.deliveryStatus && (
-                  <div className="procurement-purchase-orders-delivery-summary">
-                    <div className="procurement-purchase-orders-delivery-stat">
-                      <div className="procurement-purchase-orders-delivery-stat-icon procurement-purchase-orders-stat-total">
-                        <Package size={24} />
-                      </div>
-                      <div className="procurement-purchase-orders-delivery-stat-content">
-                        <div className="procurement-purchase-orders-delivery-stat-value">
-                          {selectedPO.deliveryStatus.totalItems}
-                        </div>
-                        <div className="procurement-purchase-orders-delivery-stat-label">Total Items</div>
-                      </div>
-                    </div>
-
-                    <div className="procurement-purchase-orders-delivery-stat">
-                      <div className="procurement-purchase-orders-delivery-stat-icon procurement-purchase-orders-stat-delivered">
-                        <CheckCircle size={24} />
-                      </div>
-                      <div className="procurement-purchase-orders-delivery-stat-content">
-                        <div className="procurement-purchase-orders-delivery-stat-value">
-                          {selectedPO.deliveryStatus.deliveredItems}
-                        </div>
-                        <div className="procurement-purchase-orders-delivery-stat-label">Delivered</div>
-                      </div>
-                    </div>
-
-                    <div className="procurement-purchase-orders-delivery-stat">
-                      <div className="procurement-purchase-orders-delivery-stat-icon procurement-purchase-orders-stat-pending">
-                        <Clock size={24} />
-                      </div>
-                      <div className="procurement-purchase-orders-delivery-stat-content">
-                        <div className="procurement-purchase-orders-delivery-stat-value">
-                          {selectedPO.deliveryStatus.pendingItems}
-                        </div>
-                        <div className="procurement-purchase-orders-delivery-stat-label">Pending</div>
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="procurement-purchase-orders-delivery-progress">
-                      <div className="procurement-purchase-orders-progress-bar">
-                        <div
-                          className="procurement-purchase-orders-progress-fill"
-                          style={{
-                            width: `${(selectedPO.deliveryStatus.deliveredItems / selectedPO.deliveryStatus.totalItems * 100)}%`
-                          }}
-                        ></div>
-                      </div>
-                      <div className="procurement-purchase-orders-progress-text">
-                        {Math.round((selectedPO.deliveryStatus.deliveredItems / selectedPO.deliveryStatus.totalItems * 100))}% Complete
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <div className="procurement-purchase-orders-info-grid">
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Delivery Address:</label>
-                    <span>{selectedPO.deliveryAddress}</span>
-                  </div>
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Delivery Terms:</label>
-                    <span>{selectedPO.deliveryTerms}</span>
-                  </div>
-                  <div className="procurement-purchase-orders-info-item">
-                    <label>Expected Delivery:</label>
-                    <span>{formatDate(selectedPO.deliveryDate)}</span>
-                  </div>
-                  {selectedPO.trackingNumber && (
-                    <div className="procurement-purchase-orders-info-item">
-                      <label>Tracking Number:</label>
-                      <span className="procurement-purchase-orders-link">{selectedPO.trackingNumber}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Timeline */}
-              <div className="procurement-purchase-orders-drawer-section">
-                <h3>PO Activity Timeline</h3>
-                <div className="procurement-purchase-orders-timeline">
-                  {selectedPO.timeline.map((event, idx) => (
-                    <div key={idx} className="procurement-purchase-orders-timeline-item">
-                      <div className="procurement-purchase-orders-timeline-marker"></div>
-                      <div className="procurement-purchase-orders-timeline-content">
-                        <div className="procurement-purchase-orders-timeline-status">{event.status}</div>
-                        <div className="procurement-purchase-orders-timeline-meta">
-                          {formatDate(event.date)} • {event.time} • {event.user}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Documents */}
-              {selectedPO.documents.length > 0 && (
-                <div className="procurement-purchase-orders-drawer-section">
-                  <h3>Documents</h3>
-                  <div className="procurement-purchase-orders-attachments">
-                    {selectedPO.documents.map((file, idx) => (
-                      <div key={idx} className="procurement-purchase-orders-attachment-item">
-                        📎 {file}
-                        <button className="procurement-purchase-orders-attachment-download">
-                          <Download size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              {selectedPO.notes.length > 0 && (
-                <div className="procurement-purchase-orders-drawer-section">
-                  <h3>Notes</h3>
-                  <div className="procurement-purchase-orders-notes">
-                    {selectedPO.notes.map((note, idx) => (
-                      <div key={idx} className="procurement-purchase-orders-note-item">
-                        • {note}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="procurement-purchase-orders-drawer-actions">
-                {selectedPO.orderStatus === 'Draft' && (
+              {/* Actions */}
+              <div className="purchase-orders-drawer-actions">
+                {selectedPO.status !== 'Delivered' && selectedPO.status !== 'Cancelled' && (
                   <>
                     <button
-                      className="procurement-purchase-orders-btn-secondary"
-                      onClick={() => handleEditPO(selectedPO)}
+                      className="purchase-orders-btn-primary"
+                      onClick={() => handleUpdateStatus(selectedPO.id, 'In-Transit')}
                     >
-                      Edit PO
+                      Mark In Transit
                     </button>
                     <button
-                      className="procurement-purchase-orders-btn-primary"
-                      onClick={() => {
-                        handleApprovePO(selectedPO.id);
-                        setShowDetailDrawer(false);
-                      }}
+                      className="purchase-orders-btn-primary"
+                      onClick={() => handleUpdateStatus(selectedPO.id, 'Delivered')}
                     >
-                      Approve PO
+                      Mark All Delivered
                     </button>
                   </>
                 )}
-                {(selectedPO.orderStatus === 'Ordered' || selectedPO.orderStatus === 'In-Transit') && (
-                  <button
-                    className="procurement-purchase-orders-btn-primary"
-                    onClick={() => {
-                      handleMarkDelivered(selectedPO.id);
-                      setShowDetailDrawer(false);
-                    }}
-                  >
-                    Mark as Delivered
-                  </button>
-                )}
-                {selectedPO.orderStatus !== 'Delivered' && selectedPO.orderStatus !== 'Cancelled' && (
-                  <button
-                    className="procurement-purchase-orders-btn-danger"
-                    onClick={() => {
-                      handleCancelPO(selectedPO.id);
-                      setShowDetailDrawer(false);
-                    }}
-                  >
-                    Cancel PO
-                  </button>
-                )}
-                <button className="procurement-purchase-orders-btn-secondary">Generate PDF</button>
-                <button className="procurement-purchase-orders-btn-secondary">Add Note</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create/Edit PO Modal */}
-      {showCreateEditModal && formData && (
-        <div className="procurement-purchase-orders-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
-          <div className="procurement-purchase-orders-create-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="procurement-purchase-orders-modal-header">
-              <h2>{editMode ? 'Edit Purchase Order' : 'Create Purchase Order'}</h2>
-              <button className="procurement-purchase-orders-modal-close" onClick={() => setShowCreateEditModal(false)}>
+      {/* Delivery Modal */}
+      {showDeliveryModal && deliveryFormData && (
+        <div className="purchase-orders-modal-overlay" onClick={() => setShowDeliveryModal(false)}>
+          <div className="purchase-orders-delivery-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="purchase-orders-modal-header">
+              <h2>Mark Item Delivered</h2>
+              <button className="purchase-orders-modal-close" onClick={() => setShowDeliveryModal(false)}>
                 ✕
               </button>
             </div>
 
-            <div className="procurement-purchase-orders-form">
-              {editMode && (
-                <div className="procurement-purchase-orders-form-row">
-                  <div className="procurement-purchase-orders-form-group">
-                    <label>PO ID</label>
-                    <input
-                      type="text"
-                      value={formData.id}
-                      disabled
-                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-                    />
+            <div className="purchase-orders-modal-content">
+              <div className="delivery-item-info">
+                <h3>{deliveryFormData.itemName}</h3>
+                <div className="delivery-stats">
+                  <div className="delivery-stat">
+                    <span className="delivery-stat-label">Ordered:</span>
+                    <span className="delivery-stat-value">{deliveryFormData.orderedQty}</span>
                   </div>
-                  <div className="procurement-purchase-orders-form-group">
-                    <label>PO Date</label>
-                    <input
-                      type="date"
-                      value={formData.poDate}
-                      disabled
-                      style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-                    />
+                  <div className="delivery-stat">
+                    <span className="delivery-stat-label">Already Delivered:</span>
+                    <span className="delivery-stat-value">{deliveryFormData.deliveredQty}</span>
                   </div>
-                </div>
-              )}
-
-              <div className="procurement-purchase-orders-form-row">
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Vendor *</label>
-                  <input
-                    type="text"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                    placeholder="Select or enter vendor name"
-                  />
-                </div>
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Linked Quotation ID</label>
-                  <input
-                    type="text"
-                    value={formData.linkedQuotationId || ''}
-                    onChange={(e) => setFormData({ ...formData, linkedQuotationId: e.target.value })}
-                    placeholder="Optional"
-                  />
+                  <div className="delivery-stat">
+                    <span className="delivery-stat-label">Pending:</span>
+                    <span className="delivery-stat-value pending">{deliveryFormData.pendingQty}</span>
+                  </div>
                 </div>
               </div>
 
-              <div className="procurement-purchase-orders-form-row">
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Category *</label>
-                  <select
-                    value={formData.category || ''}
-                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  >
-                    <option value="">Select Category</option>
-                    <option value="IT Equipment">IT Equipment</option>
-                    <option value="Office Supplies">Office Supplies</option>
-                    <option value="Furniture">Furniture</option>
-                    <option value="Raw Materials">Raw Materials</option>
-                    <option value="Services">Services</option>
-                  </select>
-                </div>
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Assigned Officer</label>
-                  <input
-                    type="text"
-                    value={formData.assignedOfficer || ''}
-                    onChange={(e) => setFormData({ ...formData, assignedOfficer: e.target.value })}
-                    placeholder="Assign to..."
-                  />
-                </div>
-              </div>
-
-              <div className="procurement-purchase-orders-form-row">
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Delivery Date *</label>
-                  <input
-                    type="date"
-                    value={formData.deliveryDate}
-                    onChange={(e) => setFormData({ ...formData, deliveryDate: e.target.value })}
-                  />
-                </div>
-                <div className="procurement-purchase-orders-form-group">
-                  <label>Payment Terms</label>
-                  <input
-                    type="text"
-                    value={formData.paymentTerms}
-                    onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
-                    placeholder="e.g., 30 days net"
-                  />
-                </div>
-              </div>
-
-              {editMode && (
-                <div className="procurement-purchase-orders-form-row">
-                  <div className="procurement-purchase-orders-form-group">
-                    <label>Order Status</label>
-                    <select
-                      value={formData.orderStatus}
-                      onChange={(e) => setFormData({ ...formData, orderStatus: e.target.value })}
-                    >
-                      <option value="Draft">Draft</option>
-                      <option value="Approved">Approved</option>
-                      <option value="Ordered">Ordered</option>
-                      <option value="In-Transit">In-Transit</option>
-                      <option value="Delivered">Delivered</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
-                  </div>
-                  <div className="procurement-purchase-orders-form-group">
-                    <label>Payment Status</label>
-                    <select
-                      value={formData.paymentStatus}
-                      onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
-                    >
-                      <option value="Not Initiated">Not Initiated</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Partial">Partial</option>
-                      <option value="Paid">Paid</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
-              {editMode && (
-                <div className="procurement-purchase-orders-edit-delivery-summary">
-                  <h4>Delivery Tracking Summary</h4>
-                  <div className="procurement-purchase-orders-edit-delivery-stats">
-                    <div className="procurement-purchase-orders-edit-stat">
-                      <Package size={20} />
-                      <div>
-                        <div className="procurement-purchase-orders-edit-stat-value">
-                          {formData.items.reduce((sum, item) => sum + item.qty, 0)}
-                        </div>
-                        <div className="procurement-purchase-orders-edit-stat-label">Total Items</div>
-                      </div>
-                    </div>
-                    <div className="procurement-purchase-orders-edit-stat delivered">
-                      <CheckCircle size={20} />
-                      <div>
-                        <div className="procurement-purchase-orders-edit-stat-value">
-                          {formData.items.reduce((sum, item) => sum + (item.delivered || 0), 0)}
-                        </div>
-                        <div className="procurement-purchase-orders-edit-stat-label">Delivered</div>
-                      </div>
-                    </div>
-                    <div className="procurement-purchase-orders-edit-stat pending">
-                      <Clock size={20} />
-                      <div>
-                        <div className="procurement-purchase-orders-edit-stat-value">
-                          {formData.items.reduce((sum, item) => sum + item.qty, 0) -
-                            formData.items.reduce((sum, item) => sum + (item.delivered || 0), 0)}
-                        </div>
-                        <div className="procurement-purchase-orders-edit-stat-label">Pending</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="procurement-purchase-orders-form-group">
-                <label>Delivery Address *</label>
+              <div className="delivery-form-group">
+                <label>Quantity Delivered Now *</label>
                 <input
-                  type="text"
-                  value={formData.deliveryAddress}
-                  onChange={(e) => setFormData({ ...formData, deliveryAddress: e.target.value })}
-                  placeholder="Enter delivery address"
+                  type="number"
+                  min="0"
+                  max={deliveryFormData.pendingQty}
+                  value={deliveryFormData.newDeliveryQty}
+                  onChange={(e) => setDeliveryFormData({
+                    ...deliveryFormData,
+                    newDeliveryQty: parseFloat(e.target.value) || 0
+                  })}
+                  placeholder="Enter quantity delivered"
                 />
-              </div>
-
-              <div className="procurement-purchase-orders-form-group">
-                <label>Delivery Terms</label>
-                <input
-                  type="text"
-                  value={formData.deliveryTerms}
-                  onChange={(e) => setFormData({ ...formData, deliveryTerms: e.target.value })}
-                  placeholder="e.g., 15 days from order date"
-                />
-              </div>
-
-              {/* Items Section */}
-              <div className="procurement-purchase-orders-form-section">
-                <div className="procurement-purchase-orders-section-header">
-                  <h3>Line Items</h3>
-                  <button className="procurement-purchase-orders-btn-add-item" onClick={handleAddItem}>
-                    + Add Item
-                  </button>
-                </div>
-                <div className="procurement-purchase-orders-items-form">
-                  <div className="procurement-purchase-orders-items-header">
-                    <span style={{ flex: '2', minWidth: '150px' }}>Item Name</span>
-                    <span style={{ flex: '2', minWidth: '150px' }}>Description</span>
-                    <span style={{ width: '80px' }}>Qty Ordered</span>
-                    {editMode && <span style={{ width: '80px' }}>Qty Delivered</span>}
-                    <span style={{ width: '120px' }}>Unit Price</span>
-                    <span style={{ width: '80px' }}>Tax %</span>
-                    <span style={{ width: '40px' }}></span>
-                  </div>
-                  {formData.items.map((item, index) => (
-                    <div key={index} className="procurement-purchase-orders-item-row">
-                      <input
-                        type="text"
-                        placeholder="Item name"
-                        value={item.name}
-                        onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-                        style={{ flex: '2', minWidth: '150px' }}
-                      />
-                      <input
-                        type="text"
-                        placeholder="Description"
-                        value={item.description}
-                        onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
-                        style={{ flex: '2', minWidth: '150px' }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Qty"
-                        value={item.qty}
-                        onChange={(e) => handleUpdateItem(index, 'qty', parseInt(e.target.value) || 1)}
-                        style={{ width: '80px' }}
-                      />
-                      {editMode && (
-                        <input
-                          type="number"
-                          placeholder="Delivered"
-                          value={item.delivered || 0}
-                          onChange={(e) => {
-                            const deliveredValue = parseInt(e.target.value) || 0;
-                            const maxDelivered = item.qty;
-                            handleUpdateItem(index, 'delivered', Math.min(deliveredValue, maxDelivered));
-                          }}
-                          style={{ width: '80px' }}
-                          min="0"
-                          max={item.qty}
-                        />
-                      )}
-                      <input
-                        type="number"
-                        placeholder="Unit Price"
-                        value={item.unitPrice}
-                        onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        style={{ width: '120px' }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Tax %"
-                        value={item.tax}
-                        onChange={(e) => handleUpdateItem(index, 'tax', parseFloat(e.target.value) || 0)}
-                        style={{ width: '80px' }}
-                      />
-                      {formData.items.length > 1 && (
-                        <button
-                          className="procurement-purchase-orders-btn-remove-item"
-                          onClick={() => handleRemoveItem(index)}
-                          style={{ width: '40px' }}
-                        >
-                          ✕
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="procurement-purchase-orders-form-group">
-                <label>Notes</label>
-                <textarea
-                  rows="3"
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Add any special instructions or notes..."
-                ></textarea>
+                <small>Maximum: {deliveryFormData.pendingQty} units</small>
               </div>
             </div>
 
-            <div className="procurement-purchase-orders-modal-actions">
-              <button className="procurement-purchase-orders-btn-primary" onClick={handleSavePO}>
-                {editMode ? 'Update PO' : 'Create PO'}
+            <div className="purchase-orders-modal-actions">
+              <button
+                className="purchase-orders-btn-primary"
+                onClick={handleMarkDelivered}
+                disabled={deliveryFormData.newDeliveryQty <= 0}
+              >
+                Confirm Delivery
               </button>
-              <button className="procurement-purchase-orders-btn-secondary">Save as Draft</button>
-              <button className="procurement-purchase-orders-btn-secondary" onClick={() => setShowCreateEditModal(false)}>
+              <button
+                className="purchase-orders-btn-secondary"
+                onClick={() => setShowDeliveryModal(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Create PO Modal */}
+      {showCreatePOModal && (
+        <div className="purchase-orders-modal-overlay" onClick={() => setShowCreatePOModal(false)}>
+          <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="purchase-orders-modal-header">
+              <h2>Create Purchase Order</h2>
+              <button className="purchase-orders-modal-close" onClick={() => setShowCreatePOModal(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="purchase-orders-modal-content">
+              {/* Select Quotation Section */}
+              <div className="po-form-section">
+                <h3>Select Approved Quotation</h3>
+
+                <div className="po-form-group">
+                  <label>Quotation *</label>
+                  <select
+                    value={createPOFormData.quotationId}
+                    onChange={(e) => handleQuotationSelect(e.target.value)}
+                  >
+                    <option value="">Select Quotation</option>
+                    {quotations.map(quot => (
+                      <option key={quot.id} value={quot.id}>
+                        {quot.quoteNo} - {quot.category} - {formatCurrency(quot.totalValue)} - Valid: {formatDate(quot.validTill)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {createPOFormData.quotation && (
+                  <div style={{
+                    marginTop: '12px',
+                    padding: '12px',
+                    backgroundColor: '#f8fafc',
+                    borderRadius: '8px',
+                    border: '1px solid #e2e8f0'
+                  }}>
+                    <h4 style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '600' }}>Quotation Details</h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
+                      <div>
+                        <strong>Vendor Contact:</strong> {createPOFormData.quotation.vendorContact || 'N/A'}
+                      </div>
+                      <div>
+                        <strong>RFQ ID:</strong> {createPOFormData.quotation.rfqId || 'N/A'}
+                      </div>
+                      <div>
+                        <strong>Category:</strong> {createPOFormData.quotation.category}
+                      </div>
+                      <div>
+                        <strong>Valid Until:</strong> {formatDate(createPOFormData.quotation.validTill)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* PO Details Section */}
+              {createPOFormData.quotationId && (
+                <>
+                  <div className="po-form-section">
+                    <h3>Purchase Order Details</h3>
+
+                    <div className="po-form-row">
+                      <div className="po-form-group">
+                        <label>Order Date *</label>
+                        <input
+                          type="date"
+                          value={createPOFormData.orderDate}
+                          onChange={(e) => setCreatePOFormData({ ...createPOFormData, orderDate: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="po-form-group">
+                        <label>Expected Delivery *</label>
+                        <input
+                          type="date"
+                          value={createPOFormData.expectedDelivery}
+                          onChange={(e) => setCreatePOFormData({ ...createPOFormData, expectedDelivery: e.target.value })}
+                          min={createPOFormData.orderDate}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="po-form-group">
+                      <label>Payment Terms</label>
+                      <input
+                        type="text"
+                        value={createPOFormData.paymentTerms}
+                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, paymentTerms: e.target.value })}
+                        placeholder="e.g., Net 30, Advance Payment"
+                      />
+                    </div>
+
+                    <div className="po-form-group">
+                      <label>Shipping Address</label>
+                      <textarea
+                        rows={2}
+                        value={createPOFormData.shippingAddress}
+                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, shippingAddress: e.target.value })}
+                        placeholder="Enter shipping address"
+                      />
+                    </div>
+
+                    <div className="po-form-group">
+                      <label>Notes</label>
+                      <textarea
+                        rows={2}
+                        value={createPOFormData.notes}
+                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, notes: e.target.value })}
+                        placeholder="Additional notes"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Items from Quotation */}
+                  <div className="po-form-section">
+                    <h3>Quotation Items - Adjust Quantities</h3>
+                    <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
+                      Modify quantities as needed (cannot exceed quoted quantities)
+                    </p>
+
+                    <table className="po-items-table">
+                      <thead>
+                        <tr>
+                          <th>Item Name</th>
+                          <th>Description</th>
+                          <th>Quoted Qty</th>
+                          <th>PO Qty</th>
+                          <th>Unit Price</th>
+                          <th>GST</th>
+                          <th>Discount</th>
+                          <th>Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {createPOFormData.items.map((item, index) => (
+                          <tr key={index}>
+                            <td>{item.itemName}</td>
+                            <td>{item.itemDescription || '—'}</td>
+                            <td style={{ fontWeight: '600', textAlign: 'center' }}>{item.quotedQuantity}</td>
+                            <td>
+                              <input
+                                type="number"
+                                min="0"
+                                max={item.quotedQuantity}
+                                value={item.quantity}
+                                onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)}
+                                style={{
+                                  width: '80px',
+                                  padding: '6px',
+                                  textAlign: 'center',
+                                  border: '1px solid #e2e8f0',
+                                  borderRadius: '4px'
+                                }}
+                              />
+                            </td>
+                            <td>{formatCurrency(item.unitPrice)}</td>
+                            <td>{item.gst}%</td>
+                            <td>{item.discount}%</td>
+                            <td className="po-value">{formatCurrency(item.lineTotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          <td colSpan="7" style={{ textAlign: 'right', fontWeight: 'bold' }}>Total:</td>
+                          <td className="po-value" style={{ fontWeight: 'bold' }}>
+                            {formatCurrency(calculatePOTotal())}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="purchase-orders-modal-actions">
+              <button
+                className="purchase-orders-btn-primary"
+                onClick={handleCreatePO}
+                disabled={!createPOFormData.quotationId || createPOFormData.items.length === 0}
+              >
+                Create Purchase Order
+              </button>
+              <button
+                className="purchase-orders-btn-secondary"
+                onClick={() => setShowCreatePOModal(false)}
+              >
                 Cancel
               </button>
             </div>
