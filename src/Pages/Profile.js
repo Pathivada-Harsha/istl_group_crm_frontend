@@ -133,6 +133,7 @@ export default function Profile() {
         `${API_BASE_URL}/login/updateUser/${user.id}`,
         {
           method: 'PUT',
+          credentials: "include",
           headers: {
             'Content-Type': 'application/json',
           },
@@ -213,6 +214,7 @@ export default function Profile() {
         `${API_BASE_URL}/login/updatePassword/${user.id}`,
         {
           method: 'PUT',
+          credentials: "include",
           headers: {
             'Content-Type': 'application/json',
           },

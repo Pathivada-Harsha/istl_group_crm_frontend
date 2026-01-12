@@ -368,8 +368,12 @@ const UsersPage = () => {
     setLoadingText('Fetching users...');
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/login/users/${user.id}?page=${currentPage}&size=${pageSize}`
+        `${process.env.REACT_APP_API_URL}/login/users/${user.id}?page=${currentPage}&size=${pageSize}`,
+        {
+          credentials: "include",
+        }
       );
+
 
       if (!response.ok) {
         throw new Error('Failed to fetch users');
@@ -428,7 +432,10 @@ const UsersPage = () => {
       });
 
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?${params.toString()}`
+        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?${params.toString()}`,
+        {
+          credentials: "include",
+        }
       );
 
       if (!response.ok) {
@@ -539,7 +546,10 @@ const UsersPage = () => {
     });
 
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/isUserIdExist/${userId}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/isUserIdExist/${userId}`,
+        {
+          credentials: "include",
+        });
       const exists = await response.json();
 
       if (exists) {
@@ -735,7 +745,8 @@ const UsersPage = () => {
     setLoadingText('Creating user...');
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/addNewUser`, {
-        method: 'POST',
+        method: 'POST',        
+        credentials: "include",
         headers: {
           'Content-Type': 'application/json'
         },
@@ -776,7 +787,10 @@ const UsersPage = () => {
   // Fetch menu permissions for a user
   const fetchUserMenuPermissions = async (userId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/login/menuPermissions/${userId}`);
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/login/menuPermissions/${userId}`,
+        {
+          credentials: "include",
+        });
       const data = await response.json();
 
       const permissionsObject = {};
@@ -826,7 +840,10 @@ const UsersPage = () => {
   const fetchUserPagePermissions = async (userId) => {
     try {
       const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`
+        `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`,
+        {
+          credentials: "include",
+        }
       );
 
       const text = await response.text();
@@ -873,6 +890,7 @@ const UsersPage = () => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateUser/${selectedUser.id}`, {
         method: 'POST',
+        credentials: "include",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: selectedUser.full_name,
@@ -917,6 +935,7 @@ const UsersPage = () => {
 
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/deleteUser/${userToDelete.id}`, {
+        credentials: "include",
         method: 'DELETE'
       });
 
@@ -986,6 +1005,7 @@ const UsersPage = () => {
 
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateMenuPermissions/${selectedUser.id}`, {
         method: 'PUT',
+        credentials: "include",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(completePermissions)
       });
@@ -1064,6 +1084,7 @@ const UsersPage = () => {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updatePagePermissions/${selectedUser.id}`, {
         method: 'PUT',
+        credentials: "include",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissionIds: selectedUserPermissions })
       });
