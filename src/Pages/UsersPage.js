@@ -486,7 +486,7 @@ const UsersPage = () => {
       // Set debounce timer for 3 seconds
       searchDebounceTimer.current = setTimeout(() => {
         searchUsers();
-      }, 500);
+      }, 1000);
     } else {
       // If no search term and no filter, fetch immediately
       fetchUsers();
@@ -1208,73 +1208,75 @@ const UsersPage = () => {
         </div>
       </div>
 
-      {/* Users Table */}
+      {/* Users Table - WITH SCROLL */}
       <div className="users-page-table-container">
         {!loading && (
           <>
-            <table className="users-page-table">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Role</th>
-                  <th>Page Perms</th>
-                  <th>Menu Perms</th>
-                  <th>Status</th>
-                  <th>Created</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map(u => (
-                  <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
-                    <td><div className="users-page-user-name">{u.full_name}</div></td>
-                    <td><div>{u.phone}</div><div>{u.email}</div></td>
-                    <td><span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span></td>
-                    <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
-                    <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
-                    <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
-                    <td>{u.created_at}</td>
-                    <td>
-                      <div className="users-page-actions">
-                        <div className="tooltip-wrapper">
-                          <button
-                            className="users-page-btn-icon"
-                            onClick={() => handleEditUser(u)}
-                            disabled={!edit}
-                            style={{ color: edit ? "#5252ff" : "#9ca3af" }}
-                          >
-                            <FiEdit />
-                          </button>
-
-                          {!edit && (
-                            <span className="tooltip">
-                              No Permission
-                            </span>
-                          )}
-                        </div>
-                        <div className="tooltip-wrapper">
-                          <button
-                            className="users-page-btn-icon"
-                            onClick={() => handleDeleteUser(u)}
-                            disabled={!deletee}
-                            style={{ color: deletee ? "red" : "#9ca3af" }}
-                          >
-                            <FiTrash2 />
-                          </button>
-
-                          {!deletee && (
-                            <span className="tooltip error">
-                              No Permission
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
+            <div className="users-page-table-wrapper">
+              <table className="users-page-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Contact</th>
+                    <th>Role</th>
+                    <th>Page Perms</th>
+                    <th>Menu Perms</th>
+                    <th>Status</th>
+                    <th>Created</th>
+                    <th>Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map(u => (
+                    <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
+                      <td><div className="users-page-user-name">{u.full_name}</div></td>
+                      <td><div>{u.phone}</div><div>{u.email}</div></td>
+                      <td><span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span></td>
+                      <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
+                      <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
+                      <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                      <td>{u.created_at}</td>
+                      <td>
+                        <div className="users-page-actions">
+                          <div className="tooltip-wrapper">
+                            <button
+                              className="users-page-btn-icon"
+                              onClick={() => handleEditUser(u)}
+                              disabled={!edit}
+                              style={{ color: edit ? "#5252ff" : "#9ca3af" }}
+                            >
+                              <FiEdit />
+                            </button>
+
+                            {!edit && (
+                              <span className="tooltip">
+                                No Permission
+                              </span>
+                            )}
+                          </div>
+                          <div className="tooltip-wrapper">
+                            <button
+                              className="users-page-btn-icon"
+                              onClick={() => handleDeleteUser(u)}
+                              disabled={!deletee}
+                              style={{ color: deletee ? "red" : "#9ca3af" }}
+                            >
+                              <FiTrash2 />
+                            </button>
+
+                            {!deletee && (
+                              <span className="tooltip error">
+                                No Permission
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
             {users.length > 0 && (
               <div className="pagination-footer">
                 <div className="pagination-info">
