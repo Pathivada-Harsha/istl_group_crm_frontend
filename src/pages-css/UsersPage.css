@@ -862,10 +862,11 @@
   position: fixed;
   top: 20px;
   right: 20px;
-  z-index: 9999;
+  z-index: 99999; /* INCREASED - Higher than everything */
   display: flex;
   flex-direction: column;
   gap: 12px;
+  pointer-events: none; /* ADD THIS - Allows clicks to pass through container */
 }
 
 .toast {
@@ -876,6 +877,9 @@
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: slideIn 0.3s ease-out;
   overflow: hidden;
+  pointer-events: all; /* ADD THIS - Toast itself should capture clicks */
+  position: relative; /* ADD THIS - For proper z-index stacking */
+  z-index: 99999; /* ADD THIS - Individual toast z-index */
 }
 
 @keyframes slideIn {
@@ -949,18 +953,28 @@
   font-size: 24px;
   color: #9ca3af;
   cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
+  padding: 4px; /* CHANGED from 0 to 4px for better click area */
+  width: 28px; /* INCREASED from 24px */
+  height: 28px; /* INCREASED from 24px */
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
-  transition: color 0.2s;
+  transition: all 0.2s; /* CHANGED from just color */
+  border-radius: 4px; /* ADD THIS */
+  flex-shrink: 0; /* ADD THIS */
+  position: relative; /* ADD THIS */
+  z-index: 1; /* ADD THIS - Ensures button is on top */
+  pointer-events: all; /* ADD THIS - Explicitly enable clicks */
 }
 
 .toast-close:hover {
   color: #4b5563;
+  background: #f3f4f6; /* ADD THIS - Visual hover feedback */
+}
+
+.toast-close:active {
+  transform: scale(0.95); /* ADD THIS - Visual click feedback */
 }
 
 .toast-body {
@@ -969,7 +983,6 @@
   color: #4b5563;
   line-height: 1.5;
 }
-
 /* ============================================================
    CONFIRM MODAL STYLES
    ============================================================ */

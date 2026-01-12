@@ -1,0 +1,122 @@
+body.session-modal-open {
+  overflow: hidden;
+}
+
+/* Backdrop */
+.session-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 1050;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal */
+.session-dialog {
+  background: #ffffff;
+  width: 440px;
+  max-width: 92%;
+  border-radius: 14px;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.45);
+  animation: fadeIn 0.25s ease-out;
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.session-header {
+  padding: 22px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.session-icon {
+  font-size: 30px;
+  color: #f59e0b;
+  margin-bottom: 8px;
+}
+
+.session-header h3 {
+  margin: 0;
+  font-size: 20px;
+  color: #111827;
+}
+
+/* Body */
+.session-body {
+  padding: 22px;
+  text-align: center;
+}
+
+.session-text {
+  font-size: 14px;
+  color: #374151;
+}
+
+.session-timer {
+  font-size: 48px;
+  font-weight: bold;
+  color: #dc2626;
+  margin: 14px 0;
+}
+
+.session-subtext {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* Footer */
+.session-footer {
+  padding: 16px 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* Buttons */
+.session-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  border: none;
+}
+
+/* Stay */
+.session-btn-outline {
+  background: #ffffff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+}
+
+.session-btn-outline:hover {
+  background: #eff6ff;
+}
+
+/* Logout */
+.session-btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.session-btn-danger:hover {
+  background: #b91c1c;
+}
+
+/* Animation */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-18px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
