@@ -1,205 +1,141 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, CreditCard, Link as LinkIcon, Trash2, AlertCircle } from 'lucide-react';
+import { 
+  Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, 
+  Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, 
+  CreditCard, Link as LinkIcon, Trash2, AlertCircle 
+} from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const BillsReceived = () => {
   const [bills, setBills] = useState([]);
   const [selectedBills, setSelectedBills] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [kpis, setKpis] = useState({
+    totalBills: 0,
+    outstandingAmount: 0,
+    billsThisMonth: 0,
+    paidBills: 0,
+    linkedToPOPercentage: 0
+  });
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const [filters, setFilters] = useState({
     search: '',
     paymentStatus: 'all',
     vendor: 'all',
-    poId: 'all',
-    dateRange: 'all'
+    poId: 'all'
   });
+  
+  const [pagination, setPagination] = useState({
+    currentPage: 0,
+    totalPages: 0,
+    totalItems: 0,
+    pageSize: 20
+  });
+  
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
   const [showCreateEditModal, setShowCreateEditModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showFileViewModal, setShowFileViewModal] = useState(false);
+  const [fileViewUrl, setFileViewUrl] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { user } = useAuth();
 
-  // Mock data
-  const mockBills = [
-    {
-      id: 'BILL-2024-001',
-      vendor: 'Digital Systems Corp',
-      linkedPOId: 'PO-2024-001',
-      linkedQuotationId: 'QUO-2024-003',
-      billDate: '2024-12-11',
-      dueDate: '2024-12-25',
-      amount: 1321600,
-      paidAmount: 0,
-      balanceAmount: 1321600,
-      paymentStatus: 'Pending',
-      uploadedBy: 'Amit Patel',
-      uploadedOn: '2024-12-11',
-      items: [
-        { name: 'Laptop Dell XPS 15', qty: 10, price: 82000, tax: 18, lineTotal: 967600 },
-        { name: 'Monitor 27" 4K', qty: 10, price: 30000, tax: 18, lineTotal: 354000 }
-      ],
-      subtotal: 1120000,
-      taxAmount: 201600,
-      documents: ['bill-001.pdf', 'delivery-note.pdf'],
-      paymentHistory: [],
-      notes: ['Bill received for delivered items']
-    },
-    {
-      id: 'BILL-2024-002',
-      vendor: 'Office Plus Solutions',
-      linkedPOId: 'PO-2024-002',
-      linkedQuotationId: 'QUO-2024-002',
-      billDate: '2024-12-10',
-      dueDate: '2024-12-24',
-      amount: 397000,
-      paidAmount: 200000,
-      balanceAmount: 197000,
-      paymentStatus: 'Partially Paid',
-      uploadedBy: 'Priya Sharma',
-      uploadedOn: '2024-12-10',
-      items: [
-        { name: 'Executive Desk', qty: 5, price: 25000, tax: 12, lineTotal: 140000 },
-        { name: 'Ergonomic Chair', qty: 5, price: 45000, tax: 12, lineTotal: 252000 }
-      ],
-      subtotal: 350000,
-      taxAmount: 42000,
-      documents: ['bill-002.pdf'],
-      paymentHistory: [
-        { date: '2024-12-10', mode: 'Bank Transfer', refNumber: 'TXN123456', amount: 200000, paidBy: 'Priya Sharma' }
-      ],
-      notes: []
-    },
-    {
-      id: 'BILL-2024-003',
-      vendor: 'Global Supplies Inc',
-      linkedPOId: 'PO-2024-004',
-      linkedQuotationId: null,
-      billDate: '2024-12-10',
-      dueDate: '2024-12-20',
-      amount: 20265,
-      paidAmount: 20265,
-      balanceAmount: 0,
-      paymentStatus: 'Paid',
-      uploadedBy: 'Meera Singh',
-      uploadedOn: '2024-12-10',
-      items: [
-        { name: 'Whiteboard Markers', qty: 100, price: 80, tax: 18, lineTotal: 9440 },
-        { name: 'Staplers', qty: 25, price: 350, tax: 18, lineTotal: 10325 }
-      ],
-      subtotal: 16750,
-      taxAmount: 3015,
-      documents: ['bill-003.pdf', 'payment-receipt.pdf'],
-      paymentHistory: [
-        { date: '2024-12-11', mode: 'UPI', refNumber: 'UPI987654321', amount: 20265, paidBy: 'Meera Singh' }
-      ],
-      notes: ['Full payment completed']
-    },
-    {
-      id: 'BILL-2024-004',
-      vendor: 'Premium Electronics',
-      linkedPOId: 'PO-2024-003',
-      linkedQuotationId: 'QUO-2024-006',
-      billDate: '2024-12-09',
-      dueDate: '2024-12-23',
-      amount: 651100,
-      paidAmount: 0,
-      balanceAmount: 651100,
-      paymentStatus: 'Pending',
-      uploadedBy: 'Vikram Joshi',
-      uploadedOn: '2024-12-09',
-      items: [
-        { name: 'Network Switch 48-port', qty: 3, price: 125000, tax: 18, lineTotal: 442500 },
-        { name: 'UPS 10KVA', qty: 2, price: 85000, tax: 18, lineTotal: 200600 }
-      ],
-      subtotal: 545000,
-      taxAmount: 98100,
-      documents: ['bill-004.pdf', 'warranty-certificate.pdf'],
-      paymentHistory: [],
-      notes: ['Awaiting payment approval']
-    },
-    {
-      id: 'BILL-2024-005',
-      vendor: 'TechSupply Industries',
-      linkedPOId: 'PO-2024-007',
-      linkedQuotationId: 'QUO-2024-001',
-      billDate: '2024-12-08',
-      dueDate: '2024-12-22',
-      amount: 756000,
-      paidAmount: 350000,
-      balanceAmount: 406000,
-      paymentStatus: 'Partially Paid',
-      uploadedBy: 'Rajesh Kumar',
-      uploadedOn: '2024-12-08',
-      items: [
-        { name: 'Server Hardware', qty: 2, price: 320000, tax: 18, lineTotal: 755200 }
-      ],
-      subtotal: 640000,
-      taxAmount: 115200,
-      documents: ['bill-005.pdf'],
-      paymentHistory: [
-        { date: '2024-12-09', mode: 'Cheque', refNumber: 'CHQ456789', amount: 350000, paidBy: 'Rajesh Kumar' }
-      ],
-      notes: ['Balance payment pending']
-    },
-    {
-      id: 'BILL-2024-006',
-      vendor: 'Industrial Parts Co',
-      linkedPOId: 'PO-2024-008',
-      linkedQuotationId: null,
-      billDate: '2024-12-07',
-      dueDate: '2024-12-30',
-      amount: 162300,
-      paidAmount: 162300,
-      balanceAmount: 0,
-      paymentStatus: 'Paid',
-      uploadedBy: 'Suresh Reddy',
-      uploadedOn: '2024-12-07',
-      items: [
-        { name: 'Motor Assembly', qty: 3, price: 45000, tax: 18, lineTotal: 159300 }
-      ],
-      subtotal: 135000,
-      taxAmount: 24300,
-      documents: ['bill-006.pdf', 'test-certificate.pdf'],
-      paymentHistory: [
-        { date: '2024-12-07', mode: 'NEFT', refNumber: 'NEFT123987', amount: 162300, paidBy: 'Suresh Reddy' }
-      ],
-      notes: ['Fully paid on delivery']
-    }
-  ];
+  const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Role': user?.role || localStorage.getItem('userRole'),
+    'Content-Type': 'application/json'
+  });
 
+  // Fetch bills from backend
   useEffect(() => {
-    setBills(mockBills);
+    fetchBills();
+    fetchKPIs();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, pagination.currentPage]);
 
-  // Calculate KPIs
-  const kpis = {
-    total: bills.length,
-    outstanding: bills.reduce((sum, bill) => sum + bill.balanceAmount, 0),
-    thisMonth: bills.filter(bill => {
-      const billDate = new Date(bill.billDate);
-      const now = new Date();
-      return billDate.getMonth() === now.getMonth() && billDate.getFullYear() === now.getFullYear();
-    }).length,
-    paid: bills.filter(bill => bill.paymentStatus === 'Paid').length,
-    linkedToPO: Math.round((bills.filter(bill => bill.linkedPOId).length / bills.length) * 100)
+  const fetchBills = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: pagination.currentPage.toString(),
+        size: pagination.pageSize.toString(),
+        sortBy: 'billDate',
+        sortDirection: 'DESC'
+      });
+
+      if (projectId) params.append('projectId', projectId);
+      if (groupName) params.append('groupId', groupName);
+      if (subGroupName) params.append('subGroupId', subGroupName);
+      if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
+      if (filters.search) params.append('search', filters.search);
+
+      const response = await fetch(`${API_BASE_URL}/api/bills?${params}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setBills(data.bills || []);
+        setPagination(prev => ({
+          ...prev,
+          currentPage: data.currentPage,
+          totalPages: data.totalPages,
+          totalItems: data.totalItems
+        }));
+      } else {
+        showError('Failed to fetch bills');
+      }
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+      showError('Error fetching bills');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Filter bills
-  const filteredBills = bills.filter(bill => {
-    if (filters.search && !bill.id.toLowerCase().includes(filters.search.toLowerCase()) &&
-      !bill.vendor.toLowerCase().includes(filters.search.toLowerCase()) &&
-      (!bill.linkedPOId || !bill.linkedPOId.toLowerCase().includes(filters.search.toLowerCase()))) {
-      return false;
+  const fetchKPIs = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (projectId) params.append('projectId', projectId);
+      if (groupName) params.append('groupId', groupName);
+      if (subGroupName) params.append('subGroupId', subGroupName);
+
+      const response = await fetch(`${API_BASE_URL}/api/bills/stats?${params}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const stats = await response.json();
+        setKpis({
+          totalBills: stats.totalBills,
+          outstandingAmount: stats.outstandingAmount,
+          billsThisMonth: stats.billsThisMonth,
+          paidBills: stats.paidBills,
+          linkedToPOPercentage: stats.linkedToPOPercentage
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching KPIs:', error);
     }
-    if (filters.paymentStatus !== 'all' && bill.paymentStatus !== filters.paymentStatus) return false;
-    return true;
-  });
+  };
 
   // Handle checkbox selection
   const handleSelectBill = (billId) => {
@@ -212,127 +148,276 @@ const BillsReceived = () => {
 
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedBills(filteredBills.map(bill => bill.id));
+      setSelectedBills(bills.map(bill => bill.id));
     } else {
       setSelectedBills([]);
     }
   };
 
   // View bill details
-  const handleViewBill = (bill) => {
-    setSelectedBill(bill);
-    setShowDetailDrawer(true);
+  const handleViewBill = async (billId) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const bill = await response.json();
+        setSelectedBill(bill);
+        setShowDetailDrawer(true);
+      } else {
+        showError('Failed to fetch bill details');
+      }
+    } catch (error) {
+      console.error('Error fetching bill:', error);
+      showError('Error fetching bill');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Create new bill
   const handleCreateBill = () => {
     setEditMode(false);
     setFormData({
-      vendor: '',
-      linkedPOId: '',
-      billNumber: '',
+      vendorId: null,
+      poId: null,
+      billNo: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      items: [{ name: '', qty: 1, price: 0, tax: 18 }],
+      projectId: projectId || '',
+      groupId: groupName || '',
+      subGroupId: subGroupName || '',
+      items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }],
       notes: ''
     });
+    setSelectedFile(null);
     setShowCreateEditModal(true);
   };
 
   // Edit bill
   const handleEditBill = (bill) => {
     setEditMode(true);
-    setFormData({ ...bill });
+    setFormData({
+      ...bill,
+      billDate: bill.billDate.split('T')[0],
+      dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : ''
+    });
     setShowDetailDrawer(false);
     setShowCreateEditModal(true);
   };
 
   // Delete bill
-  const handleDeleteBill = (billId) => {
-    if (window.confirm('Are you sure you want to delete this bill?')) {
-      setBills(prev => prev.filter(bill => bill.id !== billId));
-      alert(`Bill ${billId} has been deleted`);
+  const handleDeleteBill = async (billId) => {
+    if (!window.confirm('Are you sure you want to delete this bill?')) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
+        credentials: "include",
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        showSuccess('Bill deleted successfully');
+        fetchBills();
+        fetchKPIs();
+      } else {
+        showError('Failed to delete bill');
+      }
+    } catch (error) {
+      console.error('Error deleting bill:', error);
+      showError('Error deleting bill');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Save bill (create or update)
+  const handleSaveBill = async () => {
+    if (!formData.vendorId || !formData.billDate || formData.items.length === 0) {
+      showError('Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const method = editMode ? 'PUT' : 'POST';
+      const url = editMode 
+        ? `${API_BASE_URL}/api/bills/${formData.id}` 
+        : `${API_BASE_URL}/api/bills`;
+
+      const response = await fetch(url, {
+        credentials: "include",
+        method,
+        headers: getAuthHeaders(),
+        body: JSON.stringify(formData)
+      });
+
+      if (response.ok) {
+        const savedBill = await response.json();
+        
+        // Upload file if selected
+        if (selectedFile && savedBill.id) {
+          await uploadBillFile(savedBill.id, selectedFile);
+        }
+
+        showSuccess(editMode ? 'Bill updated successfully' : 'Bill created successfully');
+        setShowCreateEditModal(false);
+        fetchBills();
+        fetchKPIs();
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to save bill');
+      }
+    } catch (error) {
+      console.error('Error saving bill:', error);
+      showError('Error saving bill');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Upload bill file
+  const uploadBillFile = async (billId, file) => {
+    const formDataFile = new FormData();
+    formDataFile.append('file', file);
+
+    const headers = {
+      'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      'X-User-Id': user?.id || localStorage.getItem('userId'),
+      'X-User-Role': user?.role || localStorage.getItem('userRole')
+    };
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}/upload`, {
+        credentials: "include",
+        method: 'POST',
+        headers,
+        body: formDataFile
+      });
+
+      if (response.ok) {
+        showSuccess('File uploaded successfully');
+      } else {
+        showError('File upload failed');
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      showError('Error uploading file');
+    }
+  };
+
+  // View bill file in modal
+  const handleViewFile = (billId) => {
+    const url = `${API_BASE_URL}/api/bills/${billId}/view`;
+    setFileViewUrl(url);
+    setShowFileViewModal(true);
+  };
+
+  // Download bill file
+  const handleDownloadFile = (billId, fileName) => {
+    const url = `${API_BASE_URL}/api/bills/${billId}/download`;
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Add payment
   const handleAddPayment = (bill) => {
     setSelectedBill(bill);
     setPaymentData({
-      billId: bill.id,
       amount: '',
-      mode: 'Bank Transfer',
-      refNumber: '',
-      date: new Date().toISOString().split('T')[0]
+      paymentMode: 'Bank Transfer',
+      referenceNumber: '',
+      paymentDate: new Date().toISOString().split('T')[0],
+      notes: ''
     });
     setShowPaymentModal(true);
   };
 
   // Save payment
-  const handleSavePayment = () => {
-    if (!paymentData.amount || !paymentData.refNumber) {
-      alert('Please fill in all payment details');
+  const handleSavePayment = async () => {
+    if (!paymentData.amount || !paymentData.referenceNumber) {
+      showError('Please fill in all payment details');
       return;
     }
 
     const paymentAmount = parseFloat(paymentData.amount);
     if (paymentAmount <= 0 || paymentAmount > selectedBill.balanceAmount) {
-      alert('Invalid payment amount');
+      showError('Invalid payment amount');
       return;
     }
 
-    setBills(prev => prev.map(bill => {
-      if (bill.id === paymentData.billId) {
-        const newPaidAmount = bill.paidAmount + paymentAmount;
-        const newBalanceAmount = bill.amount - newPaidAmount;
-        const newPaymentStatus = newBalanceAmount === 0 ? 'Paid' : 'Partially Paid';
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/bills/${selectedBill.id}/payments`,
+        {
+          credentials: "include",
+          method: 'POST',
+          headers: getAuthHeaders(),
+          body: JSON.stringify({
+            ...paymentData,
+            paymentDate: new Date(paymentData.paymentDate).toISOString()
+          })
+        }
+      );
 
-        return {
-          ...bill,
-          paidAmount: newPaidAmount,
-          balanceAmount: newBalanceAmount,
-          paymentStatus: newPaymentStatus,
-          paymentHistory: [
-            ...bill.paymentHistory,
-            {
-              date: paymentData.date,
-              mode: paymentData.mode,
-              refNumber: paymentData.refNumber,
-              amount: paymentAmount,
-              paidBy: 'Current User'
-            }
-          ]
-        };
+      if (response.ok) {
+        showSuccess('Payment added successfully');
+        setShowPaymentModal(false);
+        setShowDetailDrawer(false);
+        fetchBills();
+        fetchKPIs();
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to add payment');
       }
-      return bill;
-    }));
-
-    alert('Payment added successfully');
-    setShowPaymentModal(false);
-    setShowDetailDrawer(false);
+    } catch (error) {
+      console.error('Error adding payment:', error);
+      showError('Error adding payment');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Mark as paid
-  const handleMarkPaid = (billId) => {
-    setBills(prev => prev.map(bill =>
-      bill.id === billId ? {
-        ...bill,
-        paidAmount: bill.amount,
-        balanceAmount: 0,
-        paymentStatus: 'Paid',
-        paymentHistory: [
-          ...bill.paymentHistory,
-          {
-            date: new Date().toISOString().split('T')[0],
-            mode: 'Manual Entry',
-            refNumber: 'MANUAL-' + Date.now(),
-            amount: bill.balanceAmount,
-            paidBy: 'Current User'
-          }
-        ]
-      } : bill
-    ));
-    alert(`Bill ${billId} marked as paid`);
+  const handleMarkPaid = async (billId) => {
+    if (!window.confirm('Mark this bill as fully paid?')) return;
+
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/bills/${billId}/mark-paid`,
+        {
+          credentials: "include",
+          method: 'POST',
+          headers: getAuthHeaders()
+        }
+      );
+
+      if (response.ok) {
+        showSuccess('Bill marked as paid');
+        fetchBills();
+        fetchKPIs();
+        setShowDetailDrawer(false);
+      } else {
+        const errorData = await response.json();
+        showError(errorData.error || 'Failed to mark bill as paid');
+      }
+    } catch (error) {
+      console.error('Error marking bill as paid:', error);
+      showError('Error marking bill as paid');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Get payment status badge class
@@ -347,11 +432,12 @@ const BillsReceived = () => {
 
   // Format currency
   const formatCurrency = (amount) => {
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return `₹${(amount || 0).toLocaleString('en-IN')}`;
   };
 
   // Format date
   const formatDate = (dateStr) => {
+    if (!dateStr) return 'N/A';
     const date = new Date(dateStr);
     return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
   };
@@ -361,7 +447,7 @@ const BillsReceived = () => {
     if (formData) {
       setFormData({
         ...formData,
-        items: [...formData.items, { name: '', qty: 1, price: 0, tax: 18 }]
+        items: [...formData.items, { description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
       });
     }
   };
@@ -383,64 +469,41 @@ const BillsReceived = () => {
     }
   };
 
-  // Save bill
-  const handleSaveBill = () => {
-    if (!formData.vendor || !formData.billDate || formData.items.length === 0) {
-      alert('Please fill in all required fields');
-      return;
+  // File input change
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      // Validate file size (5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showError('File size exceeds 5MB limit');
+        e.target.value = null;
+        return;
+      }
+      
+      // Validate file type
+      const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+      if (!validTypes.includes(file.type)) {
+        showError('Invalid file type. Only PDF, PNG, JPG allowed');
+        e.target.value = null;
+        return;
+      }
+      
+      setSelectedFile(file);
     }
-
-    const subtotal = formData.items.reduce((sum, item) => sum + (item.qty * item.price), 0);
-    const taxAmount = formData.items.reduce((sum, item) => {
-      const lineSubtotal = item.qty * item.price;
-      return sum + (lineSubtotal * item.tax / 100);
-    }, 0);
-    const totalAmount = subtotal + taxAmount;
-
-    if (editMode) {
-      setBills(prev => prev.map(bill =>
-        bill.id === formData.id ? {
-          ...formData,
-          subtotal,
-          taxAmount,
-          amount: totalAmount,
-          balanceAmount: totalAmount - bill.paidAmount
-        } : bill
-      ));
-      alert('Bill updated successfully');
-    } else {
-      const newBill = {
-        ...formData,
-        id: `BILL-2024-${String(bills.length + 1).padStart(3, '0')}`,
-        subtotal,
-        taxAmount,
-        amount: totalAmount,
-        paidAmount: 0,
-        balanceAmount: totalAmount,
-        paymentStatus: 'Pending',
-        uploadedBy: 'Current User',
-        uploadedOn: new Date().toISOString().split('T')[0],
-        documents: [],
-        paymentHistory: []
-      };
-      setBills(prev => [...prev, newBill]);
-      alert('Bill created successfully');
-    }
-    setShowCreateEditModal(false);
   };
 
   return (
     <div className="procurement-bills-received-container">
+      {loading && <CrmPreloader text="Loading bills..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* Header */}
-      <div className="procurement-bills-received-header ">
+      <div className="procurement-bills-received-header">
         <div className="procurement-bills-received-breadcrumb">
           Dashboard &gt; Procurement &gt; Bills Received
         </div>
         <div className="page-header-with-filter">
-          <h1 className="procurement-bills-received-title">
-            Bills Received
-            {/* <span className="procurement-bills-received-count">({bills.length})</span> */}
-          </h1>
+          <h1 className="procurement-bills-received-title">Bills Received</h1>
           <GroupProjectFilter
             groupValue={groupName}
             subGroupValue={subGroupName}
@@ -448,8 +511,6 @@ const BillsReceived = () => {
             onChange={updateFilters}
           />
         </div>
-
-
       </div>
 
       {/* Action Bar */}
@@ -457,10 +518,11 @@ const BillsReceived = () => {
         <div className="procurement-bills-received-search-filters">
           <input
             type="text"
-            placeholder="Search by Bill ID, Vendor, PO ID, Amount..."
+            placeholder="Search by Bill ID, Vendor, PO ID..."
             className="procurement-bills-received-search"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            onKeyPress={(e) => e.key === 'Enter' && fetchBills()}
           />
 
           <select
@@ -476,10 +538,9 @@ const BillsReceived = () => {
         </div>
 
         <div className="procurement-bills-received-actions">
-          <button className="procurement-bills-received-btn-secondary">Export CSV</button>
-          <button className="procurement-bills-received-btn-secondary">Export PDF</button>
           <button className="procurement-bills-received-btn-primary" onClick={handleCreateBill}>
-            + Add New Bill
+            <Plus size={18} style={{ marginRight: '8px' }} />
+            Add New Bill
           </button>
         </div>
       </div>
@@ -491,7 +552,7 @@ const BillsReceived = () => {
             <FileText size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.total}</div>
+            <div className="procurement-bills-received-kpi-value">{kpis.totalBills}</div>
             <div className="procurement-bills-received-kpi-label">Total Bills</div>
           </div>
         </div>
@@ -501,7 +562,7 @@ const BillsReceived = () => {
             <DollarSign size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{formatCurrency(kpis.outstanding)}</div>
+            <div className="procurement-bills-received-kpi-value">{formatCurrency(kpis.outstandingAmount)}</div>
             <div className="procurement-bills-received-kpi-label">Outstanding Amount</div>
           </div>
         </div>
@@ -511,7 +572,7 @@ const BillsReceived = () => {
             <Calendar size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.thisMonth}</div>
+            <div className="procurement-bills-received-kpi-value">{kpis.billsThisMonth}</div>
             <div className="procurement-bills-received-kpi-label">Bills This Month</div>
           </div>
         </div>
@@ -521,7 +582,7 @@ const BillsReceived = () => {
             <CheckCircle size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.paid}</div>
+            <div className="procurement-bills-received-kpi-value">{kpis.paidBills}</div>
             <div className="procurement-bills-received-kpi-label">Fully Paid Bills</div>
           </div>
         </div>
@@ -531,7 +592,7 @@ const BillsReceived = () => {
             <LinkIcon size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.linkedToPO}%</div>
+            <div className="procurement-bills-received-kpi-value">{kpis.linkedToPOPercentage}%</div>
             <div className="procurement-bills-received-kpi-label">Bills Linked to POs</div>
           </div>
         </div>
@@ -546,7 +607,7 @@ const BillsReceived = () => {
                 <input
                   type="checkbox"
                   onChange={handleSelectAll}
-                  checked={selectedBills.length === filteredBills.length && filteredBills.length > 0}
+                  checked={selectedBills.length === bills.length && bills.length > 0}
                 />
               </th>
               <th>Bill ID</th>
@@ -563,88 +624,138 @@ const BillsReceived = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredBills.map(bill => (
-              <tr key={bill.id} className="procurement-bills-received-table-row">
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedBills.includes(bill.id)}
-                    onChange={() => handleSelectBill(bill.id)}
-                  />
-                </td>
-                <td className="procurement-bills-received-table-id">{bill.id}</td>
-                <td className="procurement-bills-received-table-vendor">{bill.vendor}</td>
-                <td>
-                  {bill.linkedPOId ? (
-                    <span className="procurement-bills-received-link">{bill.linkedPOId}</span>
-                  ) : (
-                    <span className="procurement-bills-received-no-link">—</span>
-                  )}
-                </td>
-                <td>{formatDate(bill.billDate)}</td>
-                <td>{formatDate(bill.dueDate)}</td>
-                <td className="procurement-bills-received-table-amount">{formatCurrency(bill.amount)}</td>
-                <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
-                <td className="procurement-bills-received-table-balance">
-                  {formatCurrency(bill.balanceAmount)}
-                </td>
-                <td>
-                  <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.paymentStatus)}`}>
-                    {bill.paymentStatus}
-                  </span>
-                </td>
-                <td>{bill.uploadedBy}</td>
-                <td>
-                  <div className="procurement-bills-received-actions-cell">
-                    <button
-                      className="procurement-bills-received-action-btn"
-                      onClick={() => handleViewBill(bill)}
-                      title="View Details"
-                    >
-                      <Eye size={16} />
-                    </button>
-                    {bill.paymentStatus !== 'Paid' && (
-                      <>
-                        <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleEditBill(bill)}
-                          title="Edit"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleAddPayment(bill)}
-                          title="Add Payment"
-                        >
-                          <CreditCard size={16} />
-                        </button>
-                        <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleMarkPaid(bill.id)}
-                          title="Mark Paid"
-                        >
-                          <Check size={16} />
-                        </button>
-                      </>
-                    )}
-                    <button className="procurement-bills-received-action-btn" title="Download">
-                      <Download size={16} />
-                    </button>
-                    <button
-                      className="procurement-bills-received-action-btn"
-                      onClick={() => handleDeleteBill(bill.id)}
-                      title="Delete"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+            {bills.length === 0 ? (
+              <tr>
+                <td colSpan="12" style={{ textAlign: 'center', padding: '40px' }}>
+                  <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px' }} />
+                  <p style={{ color: '#64748b', fontSize: '16px' }}>No bills found. Click "Add New Bill" to create one.</p>
                 </td>
               </tr>
-            ))}
+            ) : (
+              bills.map(bill => (
+                <tr key={bill.id} className="procurement-bills-received-table-row">
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selectedBills.includes(bill.id)}
+                      onChange={() => handleSelectBill(bill.id)}
+                    />
+                  </td>
+                  <td className="procurement-bills-received-table-id">{bill.billNo}</td>
+                  <td className="procurement-bills-received-table-vendor">{bill.vendorName}</td>
+                  <td>
+                    {bill.poNumber ? (
+                      <span className="procurement-bills-received-link">{bill.poNumber}</span>
+                    ) : (
+                      <span className="procurement-bills-received-no-link">—</span>
+                    )}
+                  </td>
+                  <td>{formatDate(bill.billDate)}</td>
+                  <td>{formatDate(bill.dueDate)}</td>
+                  <td className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>
+                  <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
+                  <td className="procurement-bills-received-table-balance">
+                    {formatCurrency(bill.balanceAmount)}
+                  </td>
+                  <td>
+                    <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
+                      {bill.status}
+                    </span>
+                  </td>
+                  <td>{bill.uploadedByName}</td>
+                  <td>
+                    <div className="procurement-bills-received-actions-cell">
+                      <button
+                        className="procurement-bills-received-action-btn"
+                        onClick={() => handleViewBill(bill.id)}
+                        title="View Details"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      {bill.status !== 'Paid' && (
+                        <>
+                          <button
+                            className="procurement-bills-received-action-btn"
+                            onClick={() => handleEditBill(bill)}
+                            title="Edit"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            className="procurement-bills-received-action-btn"
+                            onClick={() => handleAddPayment(bill)}
+                            title="Add Payment"
+                          >
+                            <CreditCard size={16} />
+                          </button>
+                          <button
+                            className="procurement-bills-received-action-btn"
+                            onClick={() => handleMarkPaid(bill.id)}
+                            title="Mark Paid"
+                          >
+                            <Check size={16} />
+                          </button>
+                        </>
+                      )}
+                      {bill.billFilePath && (
+                        <>
+                          <button
+                            className="procurement-bills-received-action-btn"
+                            onClick={() => handleViewFile(bill.id)}
+                            title="View File"
+                          >
+                            <Eye size={16} />
+                          </button>
+                          <button
+                            className="procurement-bills-received-action-btn"
+                            onClick={() => handleDownloadFile(bill.id, bill.billFileName)}
+                            title="Download"
+                          >
+                            <Download size={16} />
+                          </button>
+                        </>
+                      )}
+                      <button
+                        className="procurement-bills-received-action-btn"
+                        onClick={() => handleDeleteBill(bill.id)}
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>
+
+      {/* Pagination */}
+      {pagination.totalPages > 1 && (
+        <div className="procurement-bills-received-pagination">
+          <button
+            onClick={() => setPagination(prev => ({ ...prev, currentPage: prev.currentPage - 1 }))}
+            disabled={pagination.currentPage === 0}
+            className="procurement-bills-received-btn-secondary"
+          >
+            Previous
+          </button>
+          <span style={{ padding: '0 16px', color: '#64748b' }}>
+            Page {pagination.currentPage + 1} of {pagination.totalPages}
+          </span>
+          <button
+            onClick={() => setPagination(prev => ({ ...prev, currentPage: prev.currentPage + 1 }))}
+            disabled={pagination.currentPage >= pagination.totalPages - 1}
+            className="procurement-bills-received-btn-secondary"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Continue in next part with modals... */}
+    
 
       {/* Detail Drawer */}
       {showDetailDrawer && selectedBill && (
@@ -652,11 +763,11 @@ const BillsReceived = () => {
           <div className="procurement-bills-received-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-drawer-header">
               <div>
-                <h2>{selectedBill.id}</h2>
-                <p className="procurement-bills-received-drawer-vendor">{selectedBill.vendor}</p>
+                <h2>{selectedBill.billNo}</h2>
+                <p className="procurement-bills-received-drawer-vendor">{selectedBill.vendorName}</p>
               </div>
               <button className="procurement-bills-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>
-                ✕
+                <X size={24} />
               </button>
             </div>
 
@@ -664,8 +775,8 @@ const BillsReceived = () => {
               {/* Status and Dates */}
               <div className="procurement-bills-received-drawer-section">
                 <div className="procurement-bills-received-drawer-badges">
-                  <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(selectedBill.paymentStatus)}`}>
-                    {selectedBill.paymentStatus}
+                  <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(selectedBill.status)}`}>
+                    {selectedBill.status}
                   </span>
                   <span className="procurement-bills-received-drawer-date">
                     Due: {formatDate(selectedBill.dueDate)}
@@ -688,7 +799,7 @@ const BillsReceived = () => {
                   <div className="procurement-bills-received-info-item">
                     <label>Total Amount:</label>
                     <span className="procurement-bills-received-amount-highlight">
-                      {formatCurrency(selectedBill.amount)}
+                      {formatCurrency(selectedBill.totalAmount)}
                     </span>
                   </div>
                   <div className="procurement-bills-received-info-item">
@@ -700,72 +811,55 @@ const BillsReceived = () => {
                 </div>
               </div>
 
-              {/* Linked PO and Quotation */}
-              <div className="procurement-bills-received-drawer-section">
-                <h3>Traceability</h3>
-                <div className="procurement-bills-received-traceability">
-                  {selectedBill.linkedQuotationId && (
-                    <div className="procurement-bills-received-trace-item">
-                      <span className="procurement-bills-received-trace-label">Quotation:</span>
-                      <span className="procurement-bills-received-link">{selectedBill.linkedQuotationId}</span>
-                      <button className="procurement-bills-received-btn-link">View</button>
-                    </div>
-                  )}
-                  {selectedBill.linkedPOId && (
-                    <div className="procurement-bills-received-trace-item">
-                      <span className="procurement-bills-received-trace-label">Purchase Order:</span>
-                      <span className="procurement-bills-received-link">{selectedBill.linkedPOId}</span>
-                      <button className="procurement-bills-received-btn-link">View</button>
-                    </div>
-                  )}
+              {/* Traceability */}
+              {(selectedBill.quotationId || selectedBill.poNumber) && (
+                <div className="procurement-bills-received-drawer-section">
+                  <h3>Traceability</h3>
+                  <div className="procurement-bills-received-traceability">
+                    {selectedBill.quotationId && (
+                      <div className="procurement-bills-received-trace-item">
+                        <span className="procurement-bills-received-trace-label">Quotation:</span>
+                        <span className="procurement-bills-received-link">{selectedBill.quotationId}</span>
+                      </div>
+                    )}
+                    {selectedBill.poNumber && (
+                      <div className="procurement-bills-received-trace-item">
+                        <span className="procurement-bills-received-trace-label">Purchase Order:</span>
+                        <span className="procurement-bills-received-link">{selectedBill.poNumber}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Line Items */}
-              <div className="procurement-bills-received-drawer-section">
-                <h3>Bill Line Items</h3>
-                <table className="procurement-bills-received-items-table">
-                  <thead>
-                    <tr>
-                      <th>Item</th>
-                      <th>Qty</th>
-                      <th>Price</th>
-                      <th>Tax %</th>
-                      <th>Line Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedBill.items.map((item, idx) => (
-                      <tr key={idx}>
-                        <td>{item.name}</td>
-                        <td>{item.qty}</td>
-                        <td>{formatCurrency(item.price)}</td>
-                        <td>{item.tax}%</td>
-                        <td>{formatCurrency(item.lineTotal)}</td>
+              {selectedBill.items && selectedBill.items.length > 0 && (
+                <div className="procurement-bills-received-drawer-section">
+                  <h3>Bill Line Items</h3>
+                  <table className="procurement-bills-received-items-table">
+                    <thead>
+                      <tr>
+                        <th>Item</th>
+                        <th>Qty</th>
+                        <th>Price</th>
+                        <th>Tax %</th>
+                        <th>Line Total</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Bill Totals */}
-              <div className="procurement-bills-received-drawer-section">
-                <h3>Bill Totals</h3>
-                <div className="procurement-bills-received-totals">
-                  <div className="procurement-bills-received-total-row">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(selectedBill.subtotal)}</span>
-                  </div>
-                  <div className="procurement-bills-received-total-row">
-                    <span>Tax Amount:</span>
-                    <span>{formatCurrency(selectedBill.taxAmount)}</span>
-                  </div>
-                  <div className="procurement-bills-received-total-row procurement-bills-received-grand-total">
-                    <span><strong>Total Payable:</strong></span>
-                    <span><strong>{formatCurrency(selectedBill.amount)}</strong></span>
-                  </div>
+                    </thead>
+                    <tbody>
+                      {selectedBill.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.description}</td>
+                          <td>{item.quantity}</td>
+                          <td>{formatCurrency(item.unitPrice)}</td>
+                          <td>{item.taxPercent}%</td>
+                          <td>{formatCurrency(item.lineTotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+              )}
 
               {/* Payment Section */}
               <div className="procurement-bills-received-drawer-section">
@@ -785,7 +879,7 @@ const BillsReceived = () => {
                   </div>
                 </div>
 
-                {selectedBill.paymentHistory.length > 0 && (
+                {selectedBill.paymentHistory && selectedBill.paymentHistory.length > 0 && (
                   <>
                     <h4>Payment History</h4>
                     <table className="procurement-bills-received-payment-table">
@@ -801,11 +895,11 @@ const BillsReceived = () => {
                       <tbody>
                         {selectedBill.paymentHistory.map((payment, idx) => (
                           <tr key={idx}>
-                            <td>{formatDate(payment.date)}</td>
-                            <td>{payment.mode}</td>
-                            <td>{payment.refNumber}</td>
+                            <td>{formatDate(payment.paymentDate)}</td>
+                            <td>{payment.paymentMode}</td>
+                            <td>{payment.referenceNumber}</td>
                             <td>{formatCurrency(payment.amount)}</td>
-                            <td>{payment.paidBy}</td>
+                            <td>{payment.paidByName}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -814,40 +908,47 @@ const BillsReceived = () => {
                 )}
               </div>
 
-              {/* Documents */}
-              {selectedBill.documents.length > 0 && (
+              {/* Bill File */}
+              {selectedBill.billFilePath && (
                 <div className="procurement-bills-received-drawer-section">
-                  <h3>Documents</h3>
+                  <h3>Bill Document</h3>
                   <div className="procurement-bills-received-attachments">
-                    {selectedBill.documents.map((file, idx) => (
-                      <div key={idx} className="procurement-bills-received-attachment-item">
-                        <FileText size={16} /> {file}
-                        <button className="procurement-bills-received-attachment-download">
-                          <Download size={16} />
+                    <div className="procurement-bills-received-attachment-item">
+                      <FileText size={16} /> {selectedBill.billFileName}
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button 
+                          className="procurement-bills-received-btn-link"
+                          onClick={() => handleViewFile(selectedBill.id)}
+                        >
+                          <Eye size={14} /> View
+                        </button>
+                        <button 
+                          className="procurement-bills-received-btn-link"
+                          onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
+                        >
+                          <Download size={14} /> Download
                         </button>
                       </div>
-                    ))}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Notes */}
-              {selectedBill.notes.length > 0 && (
+              {selectedBill.notes && (
                 <div className="procurement-bills-received-drawer-section">
                   <h3>Notes</h3>
                   <div className="procurement-bills-received-notes">
-                    {selectedBill.notes.map((note, idx) => (
-                      <div key={idx} className="procurement-bills-received-note-item">
-                        • {note}
-                      </div>
-                    ))}
+                    <div className="procurement-bills-received-note-item">
+                      {selectedBill.notes}
+                    </div>
                   </div>
                 </div>
               )}
 
               {/* Action Buttons */}
               <div className="procurement-bills-received-drawer-actions">
-                {selectedBill.paymentStatus !== 'Paid' && (
+                {selectedBill.status !== 'Paid' && (
                   <>
                     <button
                       className="procurement-bills-received-btn-primary"
@@ -856,27 +957,36 @@ const BillsReceived = () => {
                         setShowDetailDrawer(false);
                       }}
                     >
+                      <CreditCard size={18} style={{ marginRight: '8px' }} />
                       Add Payment
                     </button>
                     <button
                       className="procurement-bills-received-btn-secondary"
                       onClick={() => handleEditBill(selectedBill)}
                     >
+                      <Edit2 size={18} style={{ marginRight: '8px' }} />
                       Edit Bill
                     </button>
                     <button
                       className="procurement-bills-received-btn-secondary"
                       onClick={() => {
                         handleMarkPaid(selectedBill.id);
-                        setShowDetailDrawer(false);
                       }}
                     >
+                      <Check size={18} style={{ marginRight: '8px' }} />
                       Mark Fully Paid
                     </button>
                   </>
                 )}
-                <button className="procurement-bills-received-btn-secondary">Download PDF</button>
-                <button className="procurement-bills-received-btn-secondary">Add Note</button>
+                {selectedBill.billFilePath && (
+                  <button 
+                    className="procurement-bills-received-btn-secondary"
+                    onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
+                  >
+                    <Download size={18} style={{ marginRight: '8px' }} />
+                    Download PDF
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -890,27 +1000,27 @@ const BillsReceived = () => {
             <div className="procurement-bills-received-modal-header">
               <h2>{editMode ? 'Edit Bill' : 'Add New Bill'}</h2>
               <button className="procurement-bills-received-modal-close" onClick={() => setShowCreateEditModal(false)}>
-                ✕
+                <X size={24} />
               </button>
             </div>
 
             <div className="procurement-bills-received-form">
               <div className="procurement-bills-received-form-row">
                 <div className="procurement-bills-received-form-group">
-                  <label>Vendor *</label>
+                  <label>Vendor ID *</label>
                   <input
-                    type="text"
-                    value={formData.vendor}
-                    onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                    placeholder="Select or enter vendor name"
+                    type="number"
+                    value={formData.vendorId || ''}
+                    onChange={(e) => setFormData({ ...formData, vendorId: parseInt(e.target.value) })}
+                    placeholder="Enter vendor ID"
                   />
                 </div>
                 <div className="procurement-bills-received-form-group">
                   <label>Linked PO ID</label>
                   <input
-                    type="text"
-                    value={formData.linkedPOId || ''}
-                    onChange={(e) => setFormData({ ...formData, linkedPOId: e.target.value })}
+                    type="number"
+                    value={formData.poId || ''}
+                    onChange={(e) => setFormData({ ...formData, poId: parseInt(e.target.value) || null })}
                     placeholder="Optional"
                   />
                 </div>
@@ -935,11 +1045,43 @@ const BillsReceived = () => {
                 </div>
               </div>
 
+              {/* Project Hierarchy */}
+              <div className="procurement-bills-received-form-row">
+                <div className="procurement-bills-received-form-group">
+                  <label>Group Name</label>
+                  <input
+                    type="text"
+                    value={formData.groupId || ''}
+                    onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
+                    placeholder="Group name"
+                  />
+                </div>
+                <div className="procurement-bills-received-form-group">
+                  <label>Sub Group Name</label>
+                  <input
+                    type="text"
+                    value={formData.subGroupId || ''}
+                    onChange={(e) => setFormData({ ...formData, subGroupId: e.target.value })}
+                    placeholder="Sub group name"
+                  />
+                </div>
+              </div>
+
+              <div className="procurement-bills-received-form-group">
+                <label>Project ID</label>
+                <input
+                  type="text"
+                  value={formData.projectId || ''}
+                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                  placeholder="Project ID"
+                />
+              </div>
+
               {/* Items Section */}
               <div className="procurement-bills-received-form-section">
                 <div className="procurement-bills-received-section-header">
                   <h3>Line Items</h3>
-                  <button className="procurement-bills-received-btn-add-item" onClick={handleAddItem}>
+                  <button className="procurement-bills-received-btn-add-item" onClick={handleAddItem} type="button">
                     + Add Item
                   </button>
                 </div>
@@ -948,37 +1090,38 @@ const BillsReceived = () => {
                     <div key={index} className="procurement-bills-received-item-row">
                       <input
                         type="text"
-                        placeholder="Item name"
-                        value={item.name}
-                        onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
+                        placeholder="Item description"
+                        value={item.description}
+                        onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
                       />
                       <input
                         type="number"
                         placeholder="Qty"
-                        value={item.qty}
-                        onChange={(e) => handleUpdateItem(index, 'qty', parseInt(e.target.value) || 1)}
+                        value={item.quantity}
+                        onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value) || 1)}
                         style={{ width: '80px' }}
                       />
                       <input
                         type="number"
                         placeholder="Price"
-                        value={item.price}
-                        onChange={(e) => handleUpdateItem(index, 'price', parseFloat(e.target.value) || 0)}
+                        value={item.unitPrice}
+                        onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                         style={{ width: '120px' }}
                       />
                       <input
                         type="number"
                         placeholder="Tax %"
-                        value={item.tax}
-                        onChange={(e) => handleUpdateItem(index, 'tax', parseFloat(e.target.value) || 0)}
+                        value={item.taxPercent}
+                        onChange={(e) => handleUpdateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
                         style={{ width: '80px' }}
                       />
                       {formData.items.length > 1 && (
                         <button
                           className="procurement-bills-received-btn-remove-item"
                           onClick={() => handleRemoveItem(index)}
+                          type="button"
                         >
-                          ✕
+                          <X size={16} />
                         </button>
                       )}
                     </div>
@@ -986,11 +1129,26 @@ const BillsReceived = () => {
                 </div>
               </div>
 
+              {/* File Upload */}
+              <div className="procurement-bills-received-form-group">
+                <label>Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
+                <input
+                  type="file"
+                  accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={handleFileChange}
+                />
+                {selectedFile && (
+                  <p style={{ fontSize: '13px', color: '#22c55e', marginTop: '4px' }}>
+                    ✓ {selectedFile.name} selected
+                  </p>
+                )}
+              </div>
+
               <div className="procurement-bills-received-form-group">
                 <label>Notes</label>
                 <textarea
                   rows="3"
-                  value={formData.notes}
+                  value={formData.notes || ''}
                   onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="Add any notes..."
                 ></textarea>
@@ -1010,13 +1168,13 @@ const BillsReceived = () => {
       )}
 
       {/* Payment Modal */}
-      {showPaymentModal && paymentData && (
+      {showPaymentModal && paymentData && selectedBill && (
         <div className="procurement-bills-received-modal-overlay" onClick={() => setShowPaymentModal(false)}>
           <div className="procurement-bills-received-payment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-modal-header">
               <h2>Add Payment</h2>
               <button className="procurement-bills-received-modal-close" onClick={() => setShowPaymentModal(false)}>
-                ✕
+                <X size={24} />
               </button>
             </div>
 
@@ -1024,7 +1182,7 @@ const BillsReceived = () => {
               <div className="procurement-bills-received-payment-info">
                 <div className="procurement-bills-received-info-item">
                   <label>Bill ID:</label>
-                  <span>{selectedBill.id}</span>
+                  <span>{selectedBill.billNo}</span>
                 </div>
                 <div className="procurement-bills-received-info-item">
                   <label>Total Balance Due:</label>
@@ -1049,8 +1207,8 @@ const BillsReceived = () => {
                 <div className="procurement-bills-received-form-group">
                   <label>Payment Mode *</label>
                   <select
-                    value={paymentData.mode}
-                    onChange={(e) => setPaymentData({ ...paymentData, mode: e.target.value })}
+                    value={paymentData.paymentMode}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentMode: e.target.value })}
                   >
                     <option value="Bank Transfer">Bank Transfer</option>
                     <option value="UPI">UPI</option>
@@ -1064,8 +1222,8 @@ const BillsReceived = () => {
                   <label>Payment Date *</label>
                   <input
                     type="date"
-                    value={paymentData.date}
-                    onChange={(e) => setPaymentData({ ...paymentData, date: e.target.value })}
+                    value={paymentData.paymentDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
                   />
                 </div>
               </div>
@@ -1074,10 +1232,20 @@ const BillsReceived = () => {
                 <label>Reference Number *</label>
                 <input
                   type="text"
-                  value={paymentData.refNumber}
-                  onChange={(e) => setPaymentData({ ...paymentData, refNumber: e.target.value })}
+                  value={paymentData.referenceNumber}
+                  onChange={(e) => setPaymentData({ ...paymentData, referenceNumber: e.target.value })}
                   placeholder="Transaction/Cheque/Reference Number"
                 />
+              </div>
+
+              <div className="procurement-bills-received-form-group">
+                <label>Notes</label>
+                <textarea
+                  rows="2"
+                  value={paymentData.notes || ''}
+                  onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
+                  placeholder="Add any notes..."
+                ></textarea>
               </div>
             </div>
 
@@ -1088,6 +1256,27 @@ const BillsReceived = () => {
               <button className="procurement-bills-received-btn-secondary" onClick={() => setShowPaymentModal(false)}>
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* File View Modal */}
+      {showFileViewModal && fileViewUrl && (
+        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowFileViewModal(false)}>
+          <div className="procurement-bills-received-file-view-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="procurement-bills-received-modal-header">
+              <h2>Bill Document</h2>
+              <button className="procurement-bills-received-modal-close" onClick={() => setShowFileViewModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+            <div style={{ width: '100%', height: 'calc(100vh - 120px)', overflow: 'auto' }}>
+              <iframe
+                src={fileViewUrl}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                title="Bill Document"
+              />
             </div>
           </div>
         </div>

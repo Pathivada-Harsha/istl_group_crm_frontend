@@ -36,7 +36,7 @@ import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import NewRolePermissions from './Pages/NewRolePermissions';
-
+import Projectdashboard from "./Pages/ProjectDashboard.js"
 import './App.css';
 
 /* ---------------- APP WRAPPER ---------------- */
@@ -177,7 +177,9 @@ function AppShell({ hideShell }) {
           <Route path="/officeuse/roles-permissions" element={
             <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
           } />
-
+          <Route path="/Projectdashboard" element={
+            <ProtectedRoute><Projectdashboard /></ProtectedRoute>
+          } />
         </Routes>
       </main>
     </div>
