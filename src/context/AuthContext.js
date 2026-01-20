@@ -1,5 +1,9 @@
-// src/context/AuthContext.js
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, {
+  createContext,
+  useState,
+  useEffect,
+  useCallback
+} from 'react';
 
 const USER_KEY = 'bd_portal_user';
 
@@ -8,6 +12,8 @@ export const AuthContext = createContext({
   user: null,
   menuPermissions: [],
   pagePermissions: {},
+  sessionTimeout: null, // seconds
+  warningTime: null,    // seconds
   loading: true,
   login: () => {},
   logout: () => {},
@@ -19,6 +25,8 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [menuPermissions, setMenuPermissions] = useState([]);
   const [pagePermissions, setPagePermissions] = useState({});
+  const [sessionTimeout, setSessionTimeout] = useState(null); // seconds
+  const [warningTime, setWarningTime] = useState(null);       // seconds
   const [loading, setLoading] = useState(true);
 
   // Initialize auth state from localStorage
@@ -28,15 +36,17 @@ export const AuthProvider = ({ children }) => {
         const userStr = localStorage.getItem(USER_KEY);
         if (userStr) {
           const userData = JSON.parse(userStr);
-          
-          // Validate the stored data structure
+
           if (userData && userData.user && userData.menuPermissions) {
             setUser(userData.user);
             setMenuPermissions(userData.menuPermissions);
             setPagePermissions(userData.pagePermissions || {});
+
+            setSessionTimeout(userData.sessionTimeout || null);
+            setWarningTime(userData.warningTime || null);
+
             setIsAuthenticated(true);
           } else {
-            // Invalid data structure, clear storage
             localStorage.removeItem(USER_KEY);
           }
         }
@@ -51,20 +61,22 @@ export const AuthProvider = ({ children }) => {
     initAuth();
   }, []);
 
-  // Login function
+  // Login
   const login = useCallback((userData) => {
     try {
-      // Validate userData structure
       if (!userData || !userData.user || !userData.menuPermissions) {
         throw new Error('Invalid user data structure');
       }
 
-      // Store the complete data
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
-      
+
       setUser(userData.user);
       setMenuPermissions(userData.menuPermissions);
       setPagePermissions(userData.pagePermissions || {});
+
+      setSessionTimeout(userData.sessionTimeout || null);
+      setWarningTime(userData.warningTime || null);
+
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Error during login:', error);
@@ -72,16 +84,18 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Logout function
+  // Logout
   const logout = useCallback(() => {
     localStorage.removeItem(USER_KEY);
     setUser(null);
     setMenuPermissions([]);
     setPagePermissions({});
+    setSessionTimeout(null);
+    setWarningTime(null);
     setIsAuthenticated(false);
   }, []);
 
-  // Get current user data
+  // Get stored user (raw)
   const getUser = useCallback(() => {
     try {
       const userStr = localStorage.getItem(USER_KEY);
@@ -97,6 +111,8 @@ export const AuthProvider = ({ children }) => {
     user,
     menuPermissions,
     pagePermissions,
+    sessionTimeout,
+    warningTime,
     loading,
     login,
     logout,
