@@ -1128,3 +1128,347 @@
     width: 100%;
   }
 }
+
+
+/* ADD THESE STYLES TO Bills-Recieved.css */
+
+/* ========================================
+   PAGINATION STYLES
+   ======================================== */
+
+.procurement-bills-received-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px;
+  background: white;
+  border-radius: 12px;
+  margin-top: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pagination-info span {
+  font-size: 14px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.page-size-selector {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-size-selector:hover {
+  border-color: #cbd5e1;
+}
+
+.page-size-selector:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-controls button {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 80px;
+}
+
+.pagination-controls button:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.pagination-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 4px;
+  margin: 0 8px;
+}
+
+.page-number {
+  padding: 8px 12px;
+  min-width: 40px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-number:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.page-number.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+/* ========================================
+   FIXED TABLE ALIGNMENT FOR ITEMS
+   ======================================== */
+
+.bills-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bills-items-table thead {
+  background-color: #f8fafc;
+}
+
+.bills-items-table th {
+  padding: 12px 10px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.bills-items-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.bills-items-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.bills-items-table td {
+  padding: 8px;
+  vertical-align: middle;
+}
+
+.bills-item-row .item-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: all 0.2s;
+}
+
+.bills-item-row .item-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.line-total-display {
+  display: inline-block;
+  font-weight: 600;
+  color: #059669;
+  font-size: 14px;
+  padding: 8px;
+}
+
+.procurement-bills-received-btn-remove-item {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.procurement-bills-received-btn-remove-item:hover {
+  background: #dc2626;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+/* Ensure columns have fixed widths */
+.bills-items-table th:nth-child(1),
+.bills-items-table td:nth-child(1) {
+  width: 15%;
+}
+
+.bills-items-table th:nth-child(2),
+.bills-items-table td:nth-child(2) {
+  width: 25%;
+}
+
+.bills-items-table th:nth-child(3),
+.bills-items-table td:nth-child(3) {
+  width: 10%;
+}
+
+.bills-items-table th:nth-child(4),
+.bills-items-table td:nth-child(4) {
+  width: 15%;
+}
+
+.bills-items-table th:nth-child(5),
+.bills-items-table td:nth-child(5) {
+  width: 10%;
+}
+
+.bills-items-table th:nth-child(6),
+.bills-items-table td:nth-child(6) {
+  width: 15%;
+}
+
+.bills-items-table th:nth-child(7),
+.bills-items-table td:nth-child(7) {
+  width: 10%;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN FOR PAGINATION
+   ======================================== */
+
+@media (max-width: 768px) {
+  .procurement-bills-received-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pagination-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-size-selector {
+    width: 100%;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pagination-controls button {
+    min-width: 60px;
+    padding: 8px;
+    font-size: 13px;
+  }
+
+  .page-numbers {
+    margin: 0;
+  }
+
+  .page-number {
+    min-width: 36px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  /* Responsive table for items */
+  .bills-items-table {
+    font-size: 12px;
+  }
+
+  .bills-item-row .item-input {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  .line-total-display {
+    font-size: 12px;
+  }
+}
+
+/* ========================================
+   BILL TOTAL DISPLAY
+   ======================================== */
+
+.procurement-bills-received-bill-total {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background-color: #f1f5f9;
+  border-radius: 8px;
+  margin-top: 16px;
+  font-size: 16px;
+}
+
+.procurement-bills-received-bill-total strong {
+  color: #475569;
+  font-weight: 600;
+}
+
+.procurement-bills-received-bill-total .total-amount {
+  color: #059669;
+  font-weight: 700;
+  font-size: 20px;
+}
+
+/* ========================================
+   FIX FOR MODAL SCROLLING
+   ======================================== */
+
+.procurement-bills-received-create-modal {
+  max-height: 90vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.procurement-bills-received-create-modal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.procurement-bills-received-create-modal::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.procurement-bills-received-create-modal::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.procurement-bills-received-create-modal::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

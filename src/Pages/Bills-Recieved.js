@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, 
-  Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, 
-  CreditCard, Link as LinkIcon, Trash2, AlertCircle 
+import {
+  Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
+  Calendar, DollarSign, CheckCircle, CreditCard, 
+  Link as LinkIcon, Trash2, Download
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -11,6 +11,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import filterApi from '../services/filterApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -26,21 +27,26 @@ const BillsReceived = () => {
     linkedToPOPercentage: 0
   });
 
+  // Dropdown data
+  const [vendors, setVendors] = useState([]);
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+  const [projects, setProjects] = useState([]);
+
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const [filters, setFilters] = useState({
     search: '',
-    paymentStatus: 'all',
-    vendor: 'all',
-    poId: 'all'
+    paymentStatus: 'all'
   });
-  
+
   const [pagination, setPagination] = useState({
     currentPage: 0,
     totalPages: 0,
     totalItems: 0,
     pageSize: 20
   });
-  
+
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
   const [showCreateEditModal, setShowCreateEditModal] = useState(false);
@@ -51,7 +57,12 @@ const BillsReceived = () => {
   const [formData, setFormData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
-  
+
+  // Modal dropdown states
+  const [modalGroupName, setModalGroupName] = useState('');
+  const [modalSubGroupName, setModalSubGroupName] = useState('');
+  const [modalProjectId, setModalProjectId] = useState('');
+
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user } = useAuth();
 
@@ -62,12 +73,28 @@ const BillsReceived = () => {
     'Content-Type': 'application/json'
   });
 
-  // Fetch bills from backend
+  // Fetch bills and KPIs - API call each time pagination changes
   useEffect(() => {
     fetchBills();
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize]);
+
+  useEffect(() => {
     fetchKPIs();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, groupName, subGroupName, filters.paymentStatus, pagination.currentPage]);
+  }, [projectId, groupName, subGroupName]);
+
+  // Fetch dropdown data when modal opens
+  useEffect(() => {
+    if (showCreateEditModal) {
+      fetchAllDropdownData();
+    }
+  }, [showCreateEditModal]);
+
+  // Refresh POs when group/subgroup/project changes in modal
+  useEffect(() => {
+    if (showCreateEditModal && (modalGroupName || modalSubGroupName || modalProjectId)) {
+      fetchPurchaseOrders();
+    }
+  }, [modalGroupName, modalSubGroupName, modalProjectId]);
 
   const fetchBills = async () => {
     setLoading(true);
@@ -86,8 +113,8 @@ const BillsReceived = () => {
       if (filters.search) params.append('search', filters.search);
 
       const response = await fetch(`${API_BASE_URL}/api/bills?${params}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -95,9 +122,9 @@ const BillsReceived = () => {
         setBills(data.bills || []);
         setPagination(prev => ({
           ...prev,
-          currentPage: data.currentPage,
-          totalPages: data.totalPages,
-          totalItems: data.totalItems
+          currentPage: data.currentPage || 0,
+          totalPages: data.totalPages || 0,
+          totalItems: data.totalItems || 0
         }));
       } else {
         showError('Failed to fetch bills');
@@ -118,18 +145,18 @@ const BillsReceived = () => {
       if (subGroupName) params.append('subGroupId', subGroupName);
 
       const response = await fetch(`${API_BASE_URL}/api/bills/stats?${params}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
 
       if (response.ok) {
         const stats = await response.json();
         setKpis({
-          totalBills: stats.totalBills,
-          outstandingAmount: stats.outstandingAmount,
-          billsThisMonth: stats.billsThisMonth,
-          paidBills: stats.paidBills,
-          linkedToPOPercentage: stats.linkedToPOPercentage
+          totalBills: stats.totalBills || 0,
+          outstandingAmount: stats.outstandingAmount || 0,
+          billsThisMonth: stats.billsThisMonth || 0,
+          paidBills: stats.paidBills || 0,
+          linkedToPOPercentage: stats.linkedToPOPercentage || 0
         });
       }
     } catch (error) {
@@ -137,7 +164,163 @@ const BillsReceived = () => {
     }
   };
 
-  // Handle checkbox selection
+  // Fetch all dropdown data
+  const fetchAllDropdownData = async () => {
+    try {
+      await Promise.all([
+        fetchVendors(),
+        fetchPurchaseOrders(),
+        fetchGroups()
+      ]);
+    } catch (error) {
+      console.error('Error fetching dropdown data:', error);
+    }
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vendors/dropdown`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVendors(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+      setVendors([]);
+    }
+  };
+
+  const fetchPurchaseOrders = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (modalGroupName) params.append('groupName', modalGroupName);
+      if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
+      if (modalProjectId) params.append('projectId', modalProjectId);
+
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/dropdown?${params}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setPurchaseOrders(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch purchase orders:', error);
+      setPurchaseOrders([]);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const groups = await filterApi.getAllGroups();
+      setGroups(groups || []);
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+      setGroups([]);
+    }
+  };
+
+  const fetchSubGroups = async (groupName) => {
+    if (!groupName) {
+      setSubGroups([]);
+      return;
+    }
+
+    try {
+      const subGroups = await filterApi.getSubGroups(groupName);
+      setSubGroups(subGroups || []);
+    } catch (error) {
+      console.error('Failed to fetch subgroups:', error);
+      setSubGroups([]);
+    }
+  };
+
+  const fetchProjects = async (groupName, subGroupName) => {
+    if (!groupName || !subGroupName) {
+      setProjects([]);
+      return;
+    }
+
+    try {
+      const projects = await filterApi.getProjects(groupName, subGroupName);
+      setProjects(projects || []);
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      setProjects([]);
+    }
+  };
+
+  // Handle modal dropdown changes
+  const handleModalGroupChange = (e) => {
+    const newGroupName = e.target.value;
+    setModalGroupName(newGroupName);
+    setModalSubGroupName('');
+    setModalProjectId('');
+    setSubGroups([]);
+    setProjects([]);
+
+    setFormData(prev => ({
+      ...prev,
+      groupId: newGroupName,
+      subGroupId: '',
+      projectId: ''
+    }));
+
+    if (newGroupName) {
+      fetchSubGroups(newGroupName);
+    }
+  };
+
+  const handleModalSubGroupChange = (e) => {
+    const newSubGroupName = e.target.value;
+    setModalSubGroupName(newSubGroupName);
+    setModalProjectId('');
+    setProjects([]);
+
+    setFormData(prev => ({
+      ...prev,
+      subGroupId: newSubGroupName,
+      projectId: ''
+    }));
+
+    if (modalGroupName && newSubGroupName) {
+      fetchProjects(modalGroupName, newSubGroupName);
+    }
+  };
+
+  const handleModalProjectChange = (e) => {
+    const newProjectId = e.target.value;
+    setModalProjectId(newProjectId);
+
+    setFormData(prev => ({
+      ...prev,
+      projectId: newProjectId
+    }));
+  };
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({
+      ...prev,
+      currentPage: newPage
+    }));
+  };
+
+  const handlePageSizeChange = (e) => {
+    setPagination(prev => ({
+      ...prev,
+      pageSize: parseInt(e.target.value),
+      currentPage: 0 // Reset to first page
+    }));
+  };
+
+  // Checkbox selection
   const handleSelectBill = (billId) => {
     setSelectedBills(prev =>
       prev.includes(billId)
@@ -159,8 +342,8 @@ const BillsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
 
       if (response.ok) {
@@ -182,17 +365,28 @@ const BillsReceived = () => {
   const handleCreateBill = () => {
     setEditMode(false);
     setFormData({
-      vendorId: null,
-      poId: null,
+      vendorId: '',
+      poId: '',
       billNo: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       projectId: projectId || '',
       groupId: groupName || '',
       subGroupId: subGroupName || '',
-      items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }],
+      items: [{
+        itemName: '',
+        description: '',
+        quantity: 1,
+        unitPrice: 0,
+        taxPercent: 18
+      }],
       notes: ''
     });
+
+    setModalGroupName(groupName || '');
+    setModalSubGroupName(subGroupName || '');
+    setModalProjectId(projectId || '');
+
     setSelectedFile(null);
     setShowCreateEditModal(true);
   };
@@ -202,9 +396,22 @@ const BillsReceived = () => {
     setEditMode(true);
     setFormData({
       ...bill,
-      billDate: bill.billDate.split('T')[0],
+      billDate: bill.billDate ? bill.billDate.split('T')[0] : '',
       dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : ''
     });
+
+    setModalGroupName(bill.groupId || '');
+    setModalSubGroupName(bill.subGroupId || '');
+    setModalProjectId(bill.projectId || '');
+
+    // Fetch dropdowns for edit mode
+    if (bill.groupId) {
+      fetchSubGroups(bill.groupId);
+      if (bill.subGroupId) {
+        fetchProjects(bill.groupId, bill.subGroupId);
+      }
+    }
+
     setShowDetailDrawer(false);
     setShowCreateEditModal(true);
   };
@@ -216,15 +423,16 @@ const BillsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
-        credentials: "include",
         method: 'DELETE',
-        headers: getAuthHeaders()
+        headers: getAuthHeaders(),
+        credentials: "include"
       });
 
       if (response.ok) {
         showSuccess('Bill deleted successfully');
         fetchBills();
         fetchKPIs();
+        setShowDetailDrawer(false);
       } else {
         showError('Failed to delete bill');
       }
@@ -238,28 +446,60 @@ const BillsReceived = () => {
 
   // Save bill (create or update)
   const handleSaveBill = async () => {
-    if (!formData.vendorId || !formData.billDate || formData.items.length === 0) {
-      showError('Please fill in all required fields');
+    // Validation
+    if (!formData.vendorId || formData.vendorId === '') {
+      showError('Please select a vendor');
       return;
+    }
+
+    if (!formData.billDate) {
+      showError('Please select bill date');
+      return;
+    }
+
+    if (!formData.dueDate) {
+      showError('Please select due date');
+      return;
+    }
+
+    if (formData.items.length === 0) {
+      showError('Please add at least one item');
+      return;
+    }
+
+    // Validate items
+    for (let item of formData.items) {
+      if (!item.description || item.description.trim() === '') {
+        showError('Please enter description for all items');
+        return;
+      }
+      if (!item.quantity || item.quantity <= 0) {
+        showError('Please enter valid quantity for all items');
+        return;
+      }
+      if (item.unitPrice === undefined || item.unitPrice === null || item.unitPrice < 0) {
+        showError('Please enter valid price for all items');
+        return;
+      }
     }
 
     setLoading(true);
     try {
       const method = editMode ? 'PUT' : 'POST';
-      const url = editMode 
-        ? `${API_BASE_URL}/api/bills/${formData.id}` 
+      const url = editMode
+        ? `${API_BASE_URL}/api/bills/${formData.id}`
         : `${API_BASE_URL}/api/bills`;
 
       const response = await fetch(url, {
-        credentials: "include",
         method,
         headers: getAuthHeaders(),
+        credentials: "include",
         body: JSON.stringify(formData)
       });
 
       if (response.ok) {
         const savedBill = await response.json();
-        
+
         // Upload file if selected
         if (selectedFile && savedBill.id) {
           await uploadBillFile(savedBill.id, selectedFile);
@@ -271,11 +511,11 @@ const BillsReceived = () => {
         fetchKPIs();
       } else {
         const errorData = await response.json();
-        showError(errorData.error || 'Failed to save bill');
+        showError(errorData.error || errorData.message || 'Failed to save bill');
       }
     } catch (error) {
       console.error('Error saving bill:', error);
-      showError('Error saving bill');
+      showError('Error saving bill: ' + error.message);
     } finally {
       setLoading(false);
     }
@@ -294,9 +534,9 @@ const BillsReceived = () => {
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/bills/${billId}/upload`, {
-        credentials: "include",
         method: 'POST',
         headers,
+        credentials: "include",
         body: formDataFile
       });
 
@@ -360,9 +600,9 @@ const BillsReceived = () => {
       const response = await fetch(
         `${API_BASE_URL}/api/bills/${selectedBill.id}/payments`,
         {
-          credentials: "include",
           method: 'POST',
           headers: getAuthHeaders(),
+          credentials: "include",
           body: JSON.stringify({
             ...paymentData,
             paymentDate: new Date(paymentData.paymentDate).toISOString()
@@ -397,9 +637,9 @@ const BillsReceived = () => {
       const response = await fetch(
         `${API_BASE_URL}/api/bills/${billId}/mark-paid`,
         {
-          credentials: "include",
           method: 'POST',
-          headers: getAuthHeaders()
+          headers: getAuthHeaders(),
+          credentials: "include"
         }
       );
 
@@ -447,7 +687,13 @@ const BillsReceived = () => {
     if (formData) {
       setFormData({
         ...formData,
-        items: [...formData.items, { description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
+        items: [...formData.items, {
+          itemName: '',
+          description: '',
+          quantity: 1,
+          unitPrice: 0,
+          taxPercent: 18
+        }]
       });
     }
   };
@@ -473,28 +719,39 @@ const BillsReceived = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
         showError('File size exceeds 5MB limit');
         e.target.value = null;
         return;
       }
-      
-      // Validate file type
+
       const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
       if (!validTypes.includes(file.type)) {
         showError('Invalid file type. Only PDF, PNG, JPG allowed');
         e.target.value = null;
         return;
       }
-      
+
       setSelectedFile(file);
     }
   };
 
+  // Calculate line total for an item
+  const calculateLineTotal = (item) => {
+    const subtotal = (item.quantity || 0) * (item.unitPrice || 0);
+    const tax = subtotal * ((item.taxPercent || 0) / 100);
+    return subtotal + tax;
+  };
+
+  // Calculate bill total
+  const calculateBillTotal = () => {
+    if (!formData || !formData.items) return 0;
+    return formData.items.reduce((total, item) => total + calculateLineTotal(item), 0);
+  };
+
   return (
     <div className="procurement-bills-received-container">
-      {loading && <CrmPreloader text="Loading bills..." />}
+      {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Header */}
@@ -518,7 +775,7 @@ const BillsReceived = () => {
         <div className="procurement-bills-received-search-filters">
           <input
             type="text"
-            placeholder="Search by Bill ID, Vendor, PO ID..."
+            placeholder="Search by Bill ID, Vendor..."
             className="procurement-bills-received-search"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
@@ -729,33 +986,370 @@ const BillsReceived = () => {
             )}
           </tbody>
         </table>
+
+        {/* PAGINATION - NEW UI */}
+        {pagination.totalPages > 0 && (
+          <div className="procurement-bills-received-pagination">
+            <div className="pagination-info">
+              <span>
+                Showing {pagination.currentPage * pagination.pageSize + 1} to{' '}
+                {Math.min((pagination.currentPage + 1) * pagination.pageSize, pagination.totalItems)} of{' '}
+                {pagination.totalItems} bills
+              </span>
+              <select
+                className="page-size-selector"
+                value={pagination.pageSize}
+                onChange={handlePageSizeChange}
+              >
+                <option value="10">10 per page</option>
+                <option value="20">20 per page</option>
+                <option value="50">50 per page</option>
+                <option value="100">100 per page</option>
+              </select>
+            </div>
+            
+            <div className="pagination-controls">
+              <button
+                onClick={() => handlePageChange(0)}
+                disabled={pagination.currentPage === 0}
+                className="procurement-bills-received-btn-secondary"
+                title="First Page"
+              >
+                «
+              </button>
+              <button
+                onClick={() => handlePageChange(pagination.currentPage - 1)}
+                disabled={pagination.currentPage === 0}
+                className="procurement-bills-received-btn-secondary"
+              >
+                ‹ Previous
+              </button>
+              
+              <span className="page-numbers">
+                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (pagination.totalPages <= 5) {
+                    pageNum = i;
+                  } else if (pagination.currentPage < 3) {
+                    pageNum = i;
+                  } else if (pagination.currentPage > pagination.totalPages - 3) {
+                    pageNum = pagination.totalPages - 5 + i;
+                  } else {
+                    pageNum = pagination.currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`page-number ${pagination.currentPage === pageNum ? 'active' : ''}`}
+                    >
+                      {pageNum + 1}
+                    </button>
+                  );
+                })}
+              </span>
+              
+              <button
+                onClick={() => handlePageChange(pagination.currentPage + 1)}
+                disabled={pagination.currentPage >= pagination.totalPages - 1}
+                className="procurement-bills-received-btn-secondary"
+              >
+                Next ›
+              </button>
+              <button
+                onClick={() => handlePageChange(pagination.totalPages - 1)}
+                disabled={pagination.currentPage >= pagination.totalPages - 1}
+                className="procurement-bills-received-btn-secondary"
+                title="Last Page"
+              >
+                »
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Pagination */}
-      {pagination.totalPages > 1 && (
-        <div className="procurement-bills-received-pagination">
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, currentPage: prev.currentPage - 1 }))}
-            disabled={pagination.currentPage === 0}
-            className="procurement-bills-received-btn-secondary"
-          >
-            Previous
-          </button>
-          <span style={{ padding: '0 16px', color: '#64748b' }}>
-            Page {pagination.currentPage + 1} of {pagination.totalPages}
-          </span>
-          <button
-            onClick={() => setPagination(prev => ({ ...prev, currentPage: prev.currentPage + 1 }))}
-            disabled={pagination.currentPage >= pagination.totalPages - 1}
-            className="procurement-bills-received-btn-secondary"
-          >
-            Next
-          </button>
+
+      {/* Create/Edit Bill Modal */}
+      {showCreateEditModal && formData && (
+        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
+          <div className="procurement-bills-received-create-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="procurement-bills-received-modal-header">
+              <h2>{editMode ? 'Edit Bill' : 'Add New Bill'}</h2>
+              <button className="procurement-bills-received-modal-close" onClick={() => setShowCreateEditModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="procurement-bills-received-form">
+              {/* Project Assignment Section */}
+              <div className="procurement-bills-received-form-section">
+                <h3>Project Assignment</h3>
+                <div className="procurement-bills-received-form-row">
+                  <div className="procurement-bills-received-form-group">
+                    <label>Group</label>
+                    <select value={modalGroupName} onChange={handleModalGroupChange}>
+                      <option value="">Select Group</option>
+                      {groups.map(group => (
+                        <option key={group.value} value={group.value}>
+                          {group.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="procurement-bills-received-form-group">
+                    <label>Sub Group</label>
+                    <select
+                      value={modalSubGroupName}
+                      onChange={handleModalSubGroupChange}
+                      disabled={!modalGroupName}
+                    >
+                      <option value="">{!modalGroupName ? 'Select Group First' : 'Select Sub Group'}</option>
+                      {subGroups.map(subGroup => (
+                        <option key={subGroup.value} value={subGroup.value}>
+                          {subGroup.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="procurement-bills-received-form-group">
+                  <label>Project (Optional)</label>
+                  <select
+                    value={modalProjectId}
+                    onChange={handleModalProjectChange}
+                    disabled={!modalSubGroupName}
+                  >
+                    <option value="">{!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}</option>
+                    {projects.map(project => (
+                      <option key={project.id} value={project.id}>
+                        {project.name} - {project.location}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Vendor and PO Selection */}
+              <div className="procurement-bills-received-form-section">
+                <h3>Vendor & Purchase Order</h3>
+                <div className="procurement-bills-received-form-row">
+                  <div className="procurement-bills-received-form-group">
+                    <label>Vendor *</label>
+                    <select
+                      value={formData.vendorId || ''}
+                      onChange={(e) => setFormData({ ...formData, vendorId: parseInt(e.target.value) })}
+                      required
+                    >
+                      <option value="">Select Vendor</option>
+                      {vendors.map(vendor => (
+                        <option key={vendor.id} value={vendor.id}>
+                          {vendor.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="procurement-bills-received-form-group">
+                    <label>Linked PO (Optional)</label>
+                    <select
+                      value={formData.poId || ''}
+                      onChange={(e) => setFormData({ ...formData, poId: parseInt(e.target.value) || null })}
+                    >
+                      <option value="">No PO Link</option>
+                      {purchaseOrders.map(po => (
+                        <option key={po.id} value={po.id}>
+                          {po.poNo} - {po.vendorName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dates */}
+              <div className="procurement-bills-received-form-section">
+                <h3>Bill Dates</h3>
+                <div className="procurement-bills-received-form-row">
+                  <div className="procurement-bills-received-form-group">
+                    <label>Bill Date *</label>
+                    <input
+                      type="date"
+                      value={formData.billDate}
+                      onChange={(e) => setFormData({ ...formData, billDate: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="procurement-bills-received-form-group">
+                    <label>Due Date *</label>
+                    <input
+                      type="date"
+                      value={formData.dueDate}
+                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Items Section - FIXED TABLE ALIGNMENT */}
+              <div className="procurement-bills-received-form-section">
+                <div className="procurement-bills-received-section-header">
+                  <h3>Bill Line Items</h3>
+                  <button
+                    className="procurement-bills-received-btn-add-item"
+                    onClick={handleAddItem}
+                    type="button"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+
+                <div className="procurement-bills-received-items-form">
+                  {/* FIXED: Table with proper alignment */}
+                  <table className="bills-items-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '15%' }}>Item Name</th>
+                        <th style={{ width: '25%' }}>Description *</th>
+                        <th style={{ width: '10%' }}>Qty *</th>
+                        <th style={{ width: '15%' }}>Price *</th>
+                        <th style={{ width: '10%' }}>Tax %</th>
+                        <th style={{ width: '15%' }}>Line Total</th>
+                        <th style={{ width: '10%' }}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.items.map((item, index) => (
+                        <tr key={index} className="bills-item-row">
+                          <td>
+                            <input
+                              type="text"
+                              placeholder="Item name"
+                              value={item.itemName || ''}
+                              onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
+                              className="item-input"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="text"
+                              placeholder="Description"
+                              value={item.description || ''}
+                              onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
+                              className="item-input"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              placeholder="Qty"
+                              value={item.quantity || ''}
+                              onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                              className="item-input"
+                              min="0"
+                              step="0.01"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              placeholder="Price"
+                              value={item.unitPrice || ''}
+                              onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              className="item-input"
+                              min="0"
+                              step="0.01"
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              placeholder="Tax %"
+                              value={item.taxPercent || ''}
+                              onChange={(e) => handleUpdateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
+                              className="item-input"
+                              min="0"
+                              max="100"
+                              step="0.01"
+                            />
+                          </td>
+                          <td>
+                            <span className="line-total-display">
+                              {formatCurrency(calculateLineTotal(item))}
+                            </span>
+                          </td>
+                          <td>
+                            {formData.items.length > 1 && (
+                              <button
+                                className="procurement-bills-received-btn-remove-item"
+                                onClick={() => handleRemoveItem(index)}
+                                type="button"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Bill Total */}
+                <div className="procurement-bills-received-bill-total">
+                  <strong>Total Bill Amount:</strong>
+                  <span className="total-amount">{formatCurrency(calculateBillTotal())}</span>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div className="procurement-bills-received-form-section">
+                <h3>Attach Bill Document</h3>
+                <div className="procurement-bills-received-form-group">
+                  <label>Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
+                  <input
+                    type="file"
+                    accept=".pdf,.png,.jpg,.jpeg"
+                    onChange={handleFileChange}
+                  />
+                  {selectedFile && (
+                    <p style={{ fontSize: '13px', color: '#22c55e', marginTop: '4px' }}>
+                      ✓ {selectedFile.name} selected
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="procurement-bills-received-form-section">
+                <h3>Additional Notes</h3>
+                <div className="procurement-bills-received-form-group">
+                  <label>Notes (Optional)</label>
+                  <textarea
+                    rows="3"
+                    value={formData.notes || ''}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add any additional notes..."
+                  ></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div className="procurement-bills-received-modal-actions">
+              <button className="procurement-bills-received-btn-primary" onClick={handleSaveBill}>
+                {editMode ? 'Update Bill' : 'Create Bill'}
+              </button>
+              <button className="procurement-bills-received-btn-secondary" onClick={() => setShowCreateEditModal(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
         </div>
       )}
-
-      {/* Continue in next part with modals... */}
-    
 
       {/* Detail Drawer */}
       {showDetailDrawer && selectedBill && (
@@ -916,13 +1510,13 @@ const BillsReceived = () => {
                     <div className="procurement-bills-received-attachment-item">
                       <FileText size={16} /> {selectedBill.billFileName}
                       <div style={{ display: 'flex', gap: '8px' }}>
-                        <button 
+                        <button
                           className="procurement-bills-received-btn-link"
                           onClick={() => handleViewFile(selectedBill.id)}
                         >
                           <Eye size={14} /> View
                         </button>
-                        <button 
+                        <button
                           className="procurement-bills-received-btn-link"
                           onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
                         >
@@ -979,7 +1573,7 @@ const BillsReceived = () => {
                   </>
                 )}
                 {selectedBill.billFilePath && (
-                  <button 
+                  <button
                     className="procurement-bills-received-btn-secondary"
                     onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
                   >
@@ -988,180 +1582,6 @@ const BillsReceived = () => {
                   </button>
                 )}
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Create/Edit Bill Modal */}
-      {showCreateEditModal && formData && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
-          <div className="procurement-bills-received-create-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="procurement-bills-received-modal-header">
-              <h2>{editMode ? 'Edit Bill' : 'Add New Bill'}</h2>
-              <button className="procurement-bills-received-modal-close" onClick={() => setShowCreateEditModal(false)}>
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="procurement-bills-received-form">
-              <div className="procurement-bills-received-form-row">
-                <div className="procurement-bills-received-form-group">
-                  <label>Vendor ID *</label>
-                  <input
-                    type="number"
-                    value={formData.vendorId || ''}
-                    onChange={(e) => setFormData({ ...formData, vendorId: parseInt(e.target.value) })}
-                    placeholder="Enter vendor ID"
-                  />
-                </div>
-                <div className="procurement-bills-received-form-group">
-                  <label>Linked PO ID</label>
-                  <input
-                    type="number"
-                    value={formData.poId || ''}
-                    onChange={(e) => setFormData({ ...formData, poId: parseInt(e.target.value) || null })}
-                    placeholder="Optional"
-                  />
-                </div>
-              </div>
-
-              <div className="procurement-bills-received-form-row">
-                <div className="procurement-bills-received-form-group">
-                  <label>Bill Date *</label>
-                  <input
-                    type="date"
-                    value={formData.billDate}
-                    onChange={(e) => setFormData({ ...formData, billDate: e.target.value })}
-                  />
-                </div>
-                <div className="procurement-bills-received-form-group">
-                  <label>Due Date *</label>
-                  <input
-                    type="date"
-                    value={formData.dueDate}
-                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              {/* Project Hierarchy */}
-              <div className="procurement-bills-received-form-row">
-                <div className="procurement-bills-received-form-group">
-                  <label>Group Name</label>
-                  <input
-                    type="text"
-                    value={formData.groupId || ''}
-                    onChange={(e) => setFormData({ ...formData, groupId: e.target.value })}
-                    placeholder="Group name"
-                  />
-                </div>
-                <div className="procurement-bills-received-form-group">
-                  <label>Sub Group Name</label>
-                  <input
-                    type="text"
-                    value={formData.subGroupId || ''}
-                    onChange={(e) => setFormData({ ...formData, subGroupId: e.target.value })}
-                    placeholder="Sub group name"
-                  />
-                </div>
-              </div>
-
-              <div className="procurement-bills-received-form-group">
-                <label>Project ID</label>
-                <input
-                  type="text"
-                  value={formData.projectId || ''}
-                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                  placeholder="Project ID"
-                />
-              </div>
-
-              {/* Items Section */}
-              <div className="procurement-bills-received-form-section">
-                <div className="procurement-bills-received-section-header">
-                  <h3>Line Items</h3>
-                  <button className="procurement-bills-received-btn-add-item" onClick={handleAddItem} type="button">
-                    + Add Item
-                  </button>
-                </div>
-                <div className="procurement-bills-received-items-form">
-                  {formData.items.map((item, index) => (
-                    <div key={index} className="procurement-bills-received-item-row">
-                      <input
-                        type="text"
-                        placeholder="Item description"
-                        value={item.description}
-                        onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Qty"
-                        value={item.quantity}
-                        onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value) || 1)}
-                        style={{ width: '80px' }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Price"
-                        value={item.unitPrice}
-                        onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                        style={{ width: '120px' }}
-                      />
-                      <input
-                        type="number"
-                        placeholder="Tax %"
-                        value={item.taxPercent}
-                        onChange={(e) => handleUpdateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
-                        style={{ width: '80px' }}
-                      />
-                      {formData.items.length > 1 && (
-                        <button
-                          className="procurement-bills-received-btn-remove-item"
-                          onClick={() => handleRemoveItem(index)}
-                          type="button"
-                        >
-                          <X size={16} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* File Upload */}
-              <div className="procurement-bills-received-form-group">
-                <label>Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
-                <input
-                  type="file"
-                  accept=".pdf,.png,.jpg,.jpeg"
-                  onChange={handleFileChange}
-                />
-                {selectedFile && (
-                  <p style={{ fontSize: '13px', color: '#22c55e', marginTop: '4px' }}>
-                    ✓ {selectedFile.name} selected
-                  </p>
-                )}
-              </div>
-
-              <div className="procurement-bills-received-form-group">
-                <label>Notes</label>
-                <textarea
-                  rows="3"
-                  value={formData.notes || ''}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Add any notes..."
-                ></textarea>
-              </div>
-            </div>
-
-            <div className="procurement-bills-received-modal-actions">
-              <button className="procurement-bills-received-btn-primary" onClick={handleSaveBill}>
-                {editMode ? 'Update Bill' : 'Save Bill'}
-              </button>
-              <button className="procurement-bills-received-btn-secondary" onClick={() => setShowCreateEditModal(false)}>
-                Cancel
-              </button>
             </div>
           </div>
         </div>
