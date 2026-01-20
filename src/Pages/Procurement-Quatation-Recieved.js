@@ -13,7 +13,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions } = useAuth();
+  const { user } = useAuth(); // Removed pagePermissions since it's not used
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
@@ -28,8 +28,9 @@ const QuotationsReceived = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(20);
 
+  // Detail drawer and modals
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [showUploadQuotationModal, setShowUploadQuotationModal] = useState(false);
@@ -53,33 +54,34 @@ const QuotationsReceived = () => {
     projects: false
   });
 
-  // Extract permissions
-  // const quotationPermissions = pagePermissions?.LEADS || [];
-  // const canView = quotationPermissions.includes('VIEW');
-  // const canCreate = quotationPermissions.includes('CREATE');
-  // const canEdit = quotationPermissions.includes('EDIT');
-  // const canApprove = quotationPermissions.includes('APPROVE');
-  // const canDelete = quotationPermissions.includes('DELETE');
+  // Vendor state
+  const [vendors, setVendors] = useState([]);
+  const [selectedVendorDetails, setSelectedVendorDetails] = useState(null);
 
+  // Extract permissions
   const canView = 'VIEW';
   const canCreate = 'CREATE';
   const canEdit = 'EDIT';
   const canApprove = 'APPROVE';
-  const canDelete = 'DELETE';
+  // Removed canDelete since it's not used
+
   // Fetch quotations on mount and filter change
   useEffect(() => {
     if (canView) {
       fetchQuotations();
     }
-  }, [groupName, subGroupName, projectId, currentPage, filters.status, filters.search]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
 
   // Fetch stats on mount
   useEffect(() => {
     if (canView) {
       fetchStats();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Rest of your code...
   /**
    * Get auth headers
    */
@@ -90,14 +92,14 @@ const QuotationsReceived = () => {
   });
 
   /**
-   * Fetch quotations from backend
+   * Fetch quotations from backend - ALREADY CORRECT (uses pageSize state)
    */
   const fetchQuotations = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: currentPage,
-        size: pageSize,
+        size: pageSize, // Uses the state value
         sortBy: 'uploadedAt',
         sortDirection: 'DESC'
       });
@@ -129,6 +131,8 @@ const QuotationsReceived = () => {
     }
   };
 
+  // ... rest of your functions ...
+
   /**
    * Fetch statistics
    */
@@ -145,6 +149,30 @@ const QuotationsReceived = () => {
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  /**
+   * Fetch vendors for dropdown
+   */
+  const fetchVendors = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/vendors/dropdown`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setVendors(data);
+        console.log('Fetched vendors:', data);
+      } else {
+        throw new Error('Failed to fetch vendors');
+      }
+    } catch (error) {
+      console.error('Failed to fetch vendors:', error);
+      showError('Failed to load vendors');
+      setVendors([]);
     }
   };
 
@@ -273,6 +301,42 @@ const QuotationsReceived = () => {
   };
 
   /**
+   * Handle vendor selection from dropdown
+   */
+  const handleVendorSelection = (e) => {
+    const vendorId = e.target.value ? parseInt(e.target.value) : null;
+
+    if (vendorId) {
+      // Find the selected vendor from the vendors list
+      const selectedVendor = vendors.find(v => v.id === vendorId);
+
+      if (selectedVendor) {
+        // Set vendor details from dropdown data (includes phone)
+        setSelectedVendorDetails({
+          id: selectedVendor.id,
+          name: selectedVendor.name,
+          phone: selectedVendor.phone
+        });
+
+        // Update form data with vendor ID and phone
+        setQuotationFormData({
+          ...quotationFormData,
+          vendorId: vendorId,
+          vendorContact: selectedVendor.phone || '' // Auto-populate from dropdown
+        });
+      }
+    } else {
+      // Clear selection
+      setSelectedVendorDetails(null);
+      setQuotationFormData({
+        ...quotationFormData,
+        vendorId: null,
+        vendorContact: ''
+      });
+    }
+  };
+
+  /**
    * Handle file selection
    */
   const handleFileSelect = (e) => {
@@ -316,6 +380,7 @@ const QuotationsReceived = () => {
       setFilePreview(null);
     }
   };
+
   /**
    * Open PO creation modal with quotation data
    */
@@ -507,8 +572,9 @@ const QuotationsReceived = () => {
       setLoading(false);
     }
   };
+
   /**
-   * View quotation details
+   * View quotation details - UPDATED TO SHOW FULL DETAILS
    */
   const handleViewQuotation = async (quotation) => {
     if (!canView) {
@@ -618,9 +684,6 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
-
     setQuotationFormData({
       rfqId: '',
       validTill: '',
@@ -628,6 +691,7 @@ const QuotationsReceived = () => {
       subGroupName: subGroupName || '',
       projectId: projectId || '',
       category: 'IT Equipment',
+      vendorId: null,
       vendorContact: '',
       vendorRating: 0,
       deliveryTime: '',
@@ -636,6 +700,10 @@ const QuotationsReceived = () => {
       notes: '',
       items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
     });
+
+    // Reset vendor selection
+    setSelectedVendorDetails(null);
+    setVendors([]);
 
     // Set modal dropdown values
     setModalGroupName(groupName || '');
@@ -646,8 +714,10 @@ const QuotationsReceived = () => {
     setSelectedFile(null);
     setFilePreview(null);
 
-    // Fetch groups
+    // Fetch data
     fetchModalGroups();
+    fetchVendors(); // Fetch vendors for dropdown
+
     if (groupName) {
       fetchModalSubGroups(groupName);
       if (subGroupName) {
@@ -665,6 +735,13 @@ const QuotationsReceived = () => {
     // Validation
     if (!quotationFormData.groupName) {
       showError('Group is required');
+      return;
+    }
+
+    // Check vendor contact requirement for new vendors
+    if (!quotationFormData.vendorId &&
+      (!quotationFormData.vendorContact || !quotationFormData.vendorContact.trim())) {
+      showError('Vendor contact is required when creating a new vendor');
       return;
     }
 
@@ -722,6 +799,7 @@ const QuotationsReceived = () => {
 
       // Add quotation data as JSON
       const quotationData = {
+        vendorId: quotationFormData.vendorId || null,
         rfqId: quotationFormData.rfqId ? quotationFormData.rfqId.trim() : null,
         validTill: quotationFormData.validTill,
         groupName: quotationFormData.groupName,
@@ -768,6 +846,8 @@ const QuotationsReceived = () => {
       setShowUploadQuotationModal(false);
       setSelectedFile(null);
       setFilePreview(null);
+      setSelectedVendorDetails(null);
+      setVendors([]);
       fetchQuotations();
       fetchStats();
 
@@ -967,6 +1047,7 @@ const QuotationsReceived = () => {
       )}
 
       {/* Quotations Table */}
+      {/* Quotations Table */}
       <div className="procurement-quotation-received-table-container">
         <table className="procurement-quotation-received-table">
           <thead>
@@ -1008,8 +1089,8 @@ const QuotationsReceived = () => {
                   </td>
                   <td>
                     {quotation.fileName ? (
-                      <a
-                        href={`http://localhost:8080/api/quotations/${quotation.id}/file`}
+
+                      <a href={`${API_BASE_URL}/api/quotations/${quotation.id}/file`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="file-link"
@@ -1077,12 +1158,35 @@ const QuotationsReceived = () => {
           </tbody>
         </table>
 
+
         {/* Pagination */}
+        {/* Pagination - UPDATED */}
         <div className="table-footer">
-          <span>
-            Showing {currentPage * pageSize + 1}-
-            {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} quotations
-          </span>
+          <div className="table-footer-left">
+            <span>
+              Showing {currentPage * pageSize + 1}-
+              {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} quotations
+            </span>
+            <div className="records-per-page">
+              <label htmlFor="pageSize">Records per page:</label>
+              <select
+                id="pageSize"
+                value={pageSize}
+                onChange={(e) => {
+                  const newSize = parseInt(e.target.value);
+                  setPageSize(newSize);
+                  setCurrentPage(0); // Reset to first page when changing page size
+                  // fetchQuotations will be called automatically by useEffect
+                }}
+                className="page-size-select"
+              >
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
+
           <div className="pagination">
             <button
               className="page-btn"
@@ -1117,16 +1221,19 @@ const QuotationsReceived = () => {
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Detail Drawer */}
+      </div>
+      {/* Detail Drawer - UPDATED WITH FULL DETAILS */}
       {showDetailDrawer && selectedQuotation && (
         <div className="procurement-quotation-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
           <div className="procurement-quotation-received-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-quotation-received-drawer-header">
               <div>
                 <h2>{selectedQuotation.quoteNo}</h2>
-                <p className="procurement-quotation-received-drawer-subtitle">Vendor ID: {selectedQuotation.vendorId || 'N/A'}</p>
+                <p className="procurement-quotation-received-drawer-subtitle">
+                  Vendor ID: {selectedQuotation.vendorId || 'N/A'} |
+                  Category: {selectedQuotation.category || 'N/A'}
+                </p>
               </div>
               <button className="procurement-quotation-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>
                 ✕
@@ -1134,6 +1241,7 @@ const QuotationsReceived = () => {
             </div>
 
             <div className="procurement-quotation-received-drawer-content">
+              {/* Basic Information */}
               <div className="procurement-quotation-received-drawer-section">
                 <h3>Quotation Details</h3>
                 <div className="quotation-details-grid">
@@ -1144,58 +1252,235 @@ const QuotationsReceived = () => {
                     </span>
                   </div>
                   <div className="quotation-detail-item">
+                    <span className="quotation-detail-label">RFQ ID:</span>
+                    <span>{selectedQuotation.rfqId || '—'}</span>
+                  </div>
+                  <div className="quotation-detail-item">
                     <span className="quotation-detail-label">Valid Until:</span>
                     <span>{formatDate(selectedQuotation.validTill)}</span>
+                  </div>
+                  <div className="quotation-detail-item">
+                    <span className="quotation-detail-label">Uploaded On:</span>
+                    <span>{formatDate(selectedQuotation.uploadedAt)}</span>
                   </div>
                   <div className="quotation-detail-item">
                     <span className="quotation-detail-label">Total Value:</span>
                     <span className="quotation-value">{formatCurrency(selectedQuotation.totalValue)}</span>
                   </div>
                   <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Category:</span>
-                    <span>{selectedQuotation.category}</span>
+                    <span className="quotation-detail-label">Vendor Contact:</span>
+                    <span>{selectedQuotation.vendorContact || '—'}</span>
                   </div>
-                  {selectedQuotation.fileName && (
-                    <div className="quotation-detail-item">
-                      <span className="quotation-detail-label">Attachment:</span>
-                      <a
-                        href={`http://localhost:8080/api/quotations/${selectedQuotation.id}/file`}
+                </div>
+              </div>
+
+              {/* Project Assignment */}
+              {(selectedQuotation.groupName || selectedQuotation.subGroupName || selectedQuotation.projectId) && (
+                <div className="procurement-quotation-received-drawer-section">
+                  <h3>Project Assignment</h3>
+                  <div className="quotation-details-grid">
+                    {selectedQuotation.groupName && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Group:</span>
+                        <span>{selectedQuotation.groupName}</span>
+                      </div>
+                    )}
+                    {selectedQuotation.subGroupName && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Sub Group:</span>
+                        <span>{selectedQuotation.subGroupName}</span>
+                      </div>
+                    )}
+                    {selectedQuotation.projectId && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Project ID:</span>
+                        <span>{selectedQuotation.projectId}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Terms & Conditions */}
+              {(selectedQuotation.deliveryTime || selectedQuotation.paymentTerms || selectedQuotation.warranty) && (
+                <div className="procurement-quotation-received-drawer-section">
+                  <h3>Terms & Conditions</h3>
+                  <div className="quotation-details-grid">
+                    {selectedQuotation.deliveryTime && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Delivery Time:</span>
+                        <span>{selectedQuotation.deliveryTime}</span>
+                      </div>
+                    )}
+                    {selectedQuotation.paymentTerms && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Payment Terms:</span>
+                        <span>{selectedQuotation.paymentTerms}</span>
+                      </div>
+                    )}
+                    {selectedQuotation.warranty && (
+                      <div className="quotation-detail-item">
+                        <span className="quotation-detail-label">Warranty:</span>
+                        <span>{selectedQuotation.warranty}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Items Section */}
+              {selectedQuotation.items && selectedQuotation.items.length > 0 && (
+                <div className="procurement-quotation-received-drawer-section">
+                  <h3>Quotation Items ({selectedQuotation.items.length})</h3>
+                  <div className="quotation-items-table-wrapper">
+                    <table className="quotation-items-table">
+                      <thead>
+                        <tr>
+                          <th>Line</th>
+                          <th>Item Name</th>
+                          <th>Description</th>
+                          <th>Quantity</th>
+                          <th>Unit Price</th>
+                          <th>Tax %</th>
+                          <th>Line Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedQuotation.items.map((item, index) => {
+                          const qty = parseFloat(item.quantity) || 0;
+                          const price = parseFloat(item.unitPrice) || 0;
+                          const tax = parseFloat(item.taxPercent) || 0;
+                          const subtotal = qty * price;
+                          const taxAmount = subtotal * (tax / 100);
+                          const total = subtotal + taxAmount;
+
+                          return (
+                            <tr key={item.id || index}>
+                              <td>{item.lineNo || index + 1}</td>
+                              <td>{item.itemName}</td>
+                              <td>{item.description || '—'}</td>
+                              <td className="text-right">{qty}</td>
+                              <td className="text-right">{formatCurrency(price)}</td>
+                              <td className="text-center">{tax}%</td>
+                              <td className="text-right" style={{ fontWeight: '600' }}>{formatCurrency(total)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedQuotation.notes && (
+                <div className="procurement-quotation-received-drawer-section">
+                  <h3>Notes</h3>
+                  <p style={{ color: '#475569', lineHeight: '1.6' }}>{selectedQuotation.notes}</p>
+                </div>
+              )}
+
+              {/* Attached Files */}
+              <div className="procurement-quotation-received-drawer-section">
+                <h3>Attached Files</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {selectedQuotation.fileName ? (
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: '#f8fafc',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <FileText size={24} color="#64748b" />
+                        <div>
+                          <div style={{ fontWeight: '500', color: '#1e293b' }}>
+                            {selectedQuotation.fileName}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#64748b' }}>
+                            {formatFileSize(selectedQuotation.fileSize)} • Uploaded Quotation
+                          </div>
+                        </div>
+                      </div>
+
+                      <a href={`${API_BASE_URL}/api/quotations/${selectedQuotation.id}/file`}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="file-link"
+                        className="procurement-quotation-received-btn-secondary"
+                        style={{ padding: '6px 12px', fontSize: '14px' }}
                       >
-                        📄 {selectedQuotation.fileName}
+                        <Download size={16} /> View
                       </a>
+                    </div>
+                  ) : (
+                    <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No quotation file attached</p>
+                  )}
+
+                  {selectedQuotation.poId && (
+                    <div style={{
+                      padding: '12px',
+                      backgroundColor: '#f0fdf4',
+                      border: '1px solid #bbf7d0',
+                      borderRadius: '6px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px'
+                    }}>
+                      <Package size={24} color="#22c55e" />
+                      <div>
+                        <div style={{ fontWeight: '500', color: '#166534' }}>
+                          Purchase Order Created
+                        </div>
+                        <div style={{ fontSize: '12px', color: '#16a34a' }}>
+                          PO ID: {selectedQuotation.poId}
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
+              {/* Action Buttons */}
               <div className="procurement-quotation-received-drawer-actions">
-                {selectedQuotation.status === 'Approved' && canCreate && (
+                {selectedQuotation.status === 'Approved' && !selectedQuotation.poId && canCreate && (
                   <button
                     className="procurement-quotation-received-btn-primary"
-                    onClick={() => handleCreatePO(selectedQuotation.id)}
+                    onClick={() => {
+                      setShowDetailDrawer(false);
+                      handleOpenCreatePOModal(selectedQuotation);
+                    }}
                   >
-                    Create Purchase Order
+                    <ShoppingCart size={18} /> Create Purchase Order
                   </button>
                 )}
                 {selectedQuotation.status !== 'Approved' && selectedQuotation.status !== 'Rejected' && selectedQuotation.status !== 'PO Created' && (
                   <>
-                    {canEdit && (
+                    {selectedQuotation.status === 'New' && canEdit && (
                       <button
                         className="procurement-quotation-received-btn-secondary"
                         onClick={() => handleUpdateStatus(selectedQuotation.id, 'Shortlisted')}
                       >
-                        Shortlist
+                        <Star size={18} /> Shortlist
                       </button>
                     )}
-                    {canApprove && (
+                    {(selectedQuotation.status === 'Shortlisted' || selectedQuotation.status === 'New') && canApprove && (
                       <button
                         className="procurement-quotation-received-btn-secondary"
                         onClick={() => handleUpdateStatus(selectedQuotation.id, 'Approved')}
                       >
-                        Approve
+                        <Check size={18} /> Approve
+                      </button>
+                    )}
+                    {canEdit && (
+                      <button
+                        className="procurement-quotation-received-btn-secondary"
+                        style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}
+                        onClick={() => handleUpdateStatus(selectedQuotation.id, 'Rejected')}
+                      >
+                        <XCircle size={18} /> Reject
                       </button>
                     )}
                   </>
@@ -1206,7 +1491,7 @@ const QuotationsReceived = () => {
         </div>
       )}
 
-      {/* Upload Modal */}
+      {/* Upload Modal - COMPLETE CODE WITH PROPER ALIGNMENT */}
       {showUploadQuotationModal && quotationFormData && (
         <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowUploadQuotationModal(false)}>
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
@@ -1218,6 +1503,87 @@ const QuotationsReceived = () => {
             </div>
 
             <div className="procurement-quotation-received-upload-form">
+
+              {/* Vendor Selection Section */}
+              <div className="procurement-quotation-received-form-section">
+                <h3>Vendor Information</h3>
+
+                <div className="procurement-quotation-received-form-row">
+                  {/* Vendor Dropdown */}
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Select Existing Vendor (Optional)</label>
+                    <select
+                      value={quotationFormData.vendorId || ''}
+                      onChange={handleVendorSelection}
+                    >
+                      <option value="">-- Create New Vendor or Select Existing --</option>
+                      {vendors.map((vendor) => (
+                        <option key={vendor.id} value={vendor.id}>
+                          {vendor.name}
+                          {vendor.phone ? ` - ${vendor.phone}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
+                      {quotationFormData.vendorId
+                        ? 'Existing vendor selected - contact info loaded automatically'
+                        : 'Leave blank to create a new vendor entry'}
+                    </small>
+                  </div>
+
+                  {/* Vendor Contact - Show only when NO existing vendor is selected */}
+                  {!quotationFormData.vendorId && (
+                    <div className="procurement-quotation-received-form-group">
+                      <label>Vendor Contact *</label>
+                      <input
+                        type="text"
+                        value={quotationFormData.vendorContact}
+                        onChange={(e) => setQuotationFormData({
+                          ...quotationFormData,
+                          vendorContact: e.target.value
+                        })}
+                        placeholder="Enter phone/email for new vendor"
+                      />
+                      <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
+                        Required for new vendor creation
+                      </small>
+                    </div>
+                  )}
+
+                  {/* Display Vendor Details - Show only when existing vendor is selected */}
+                  {quotationFormData.vendorId && selectedVendorDetails && (
+                    <div className="procurement-quotation-received-form-group">
+                      <label>Selected Vendor Details</label>
+                      <div style={{
+                        padding: '12px',
+                        backgroundColor: '#f0f9ff',
+                        border: '1px solid #bae6fd',
+                        borderRadius: '6px',
+                        fontSize: '14px',
+                        color: '#0c4a6e'
+                      }}>
+                        <div style={{ marginBottom: '6px' }}>
+                          <strong>📋 Name:</strong> {selectedVendorDetails.name}
+                        </div>
+                        {selectedVendorDetails.phone && (
+                          <div style={{ marginBottom: '6px' }}>
+                            <strong>📞 Contact:</strong> {selectedVendorDetails.phone}
+                          </div>
+                        )}
+                        <div style={{
+                          marginTop: '8px',
+                          paddingTop: '8px',
+                          borderTop: '1px solid #bae6fd',
+                          fontSize: '12px',
+                          color: '#0369a1'
+                        }}>
+                          ✓ Vendor information will be auto-populated in the quotation
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Project Assignment Section */}
               <div className="procurement-quotation-received-form-section">
@@ -1296,18 +1662,6 @@ const QuotationsReceived = () => {
                     />
                   </div>
                   <div className="procurement-quotation-received-form-group">
-                    <label>Vendor Contact</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.vendorContact}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorContact: e.target.value })}
-                      placeholder="Vendor phone/email"
-                    />
-                  </div>
-                </div>
-
-                <div className="procurement-quotation-received-form-row">
-                  <div className="procurement-quotation-received-form-group">
                     <label>Category *</label>
                     <select
                       value={quotationFormData.category}
@@ -1319,6 +1673,9 @@ const QuotationsReceived = () => {
                       <option value="Office Supplies">Office Supplies</option>
                     </select>
                   </div>
+                </div>
+
+                <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Valid Till *</label>
                     <input
@@ -1328,9 +1685,6 @@ const QuotationsReceived = () => {
                       min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
-                </div>
-
-                <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Payment Terms</label>
                     <input
@@ -1340,6 +1694,9 @@ const QuotationsReceived = () => {
                       placeholder="e.g., Net 30"
                     />
                   </div>
+                </div>
+
+                <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Delivery Time</label>
                     <input
@@ -1349,9 +1706,6 @@ const QuotationsReceived = () => {
                       placeholder="e.g., 2 weeks"
                     />
                   </div>
-                </div>
-
-                <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Warranty</label>
                     <input
@@ -1361,7 +1715,10 @@ const QuotationsReceived = () => {
                       placeholder="e.g., 1 year"
                     />
                   </div>
-                  <div className="procurement-quotation-received-form-group">
+                </div>
+
+                <div className="procurement-quotation-received-form-row">
+                  <div className="procurement-quotation-received-form-group" style={{ flex: '1 1 100%' }}>
                     <label>Notes</label>
                     <input
                       type="text"
@@ -1534,6 +1891,8 @@ const QuotationsReceived = () => {
           </div>
         </div>
       )}
+
+      {/* Create PO Modal */}
       {showCreatePOFromQuotationModal && poFormData && (
         <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowCreatePOFromQuotationModal(false)}>
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
