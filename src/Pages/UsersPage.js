@@ -1733,7 +1733,7 @@ const UsersPage = () => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Total Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} / 15
+                <strong>Total Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length}
               </div>
 
               <div className="users-page-permission-list">
@@ -1798,7 +1798,7 @@ const UsersPage = () => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} of {availableMenuPermissions.length} menus (Total: 15 menu permissions)
+                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} of {availableMenuPermissions.length}
                 <button
                   type="button"
                   className="users-page-btn-select-all"
@@ -2042,3 +2042,7 @@ const UsersPage = () => {
 };
 
 export default UsersPage;
+
+
+
+

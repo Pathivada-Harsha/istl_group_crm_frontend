@@ -17,7 +17,7 @@
 /* External collapse button - positioned outside sidebar */
 .sidebar-external-collapse-btn {
   position: fixed;
-  left: 246px; /* Width of expanded sidebar */
+  left: 250px; /* Width of expanded sidebar */
   top: 50%;
   transform: translateY(-50%);
   width: 24px;

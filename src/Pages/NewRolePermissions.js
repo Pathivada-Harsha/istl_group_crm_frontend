@@ -314,8 +314,8 @@ function NewRolePermissions() {
   const loadData = async () => {
     try {
       const [r, p] = await Promise.all([
-        fetch(`${API}/roles/getAllRoles`).then(res => res.json()),
-        fetch(`${API}/permissions/getAllPermissions`).then(res => res.json())
+        fetch(`${API}/roles/getAllRoles`,{credentials: "include"}).then(res => res.json()),
+        fetch(`${API}/permissions/getAllPermissions`,{credentials: "include"}).then(res => res.json())
       ]);
       setRoles(r);
       setPermissions(p);
@@ -335,6 +335,7 @@ function NewRolePermissions() {
     try {
       const response = await fetch(`${API}/roles/addNewRole`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: roleName,
@@ -370,6 +371,7 @@ function NewRolePermissions() {
     try {
       const response = await fetch(`${API}/permissions/addNewPermission`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: permissionName,
@@ -448,6 +450,7 @@ function NewRolePermissions() {
     try {
       const response = await fetch(`${API}/role-permission/assignPermissions`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           role_id: selectedRoleId,
