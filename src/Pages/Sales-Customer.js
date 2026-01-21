@@ -35,7 +35,7 @@ const CustomerDatabase = () => {
   // Extract permissions
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
   const canView = customersPermissions.includes('VIEW');
-  console.log(canView);
+
   const canCreate = customersPermissions.includes('CREATE');
   const canEdit = customersPermissions.includes('EDIT');
   const canDelete = customersPermissions.includes('DELETE');
