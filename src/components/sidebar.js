@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { BsArrowReturnRight } from "react-icons/bs";
 import { IoChevronDown } from "react-icons/io5"; // Add this import
 import '../components_css/sidebar.css';
-import {useAuth} from '../hooks/useAuth';
+import { useAuth } from '../hooks/useAuth';
 
 function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const location = useLocation();
@@ -17,7 +17,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
     'Office Use': false
   });
 
-  const {menuPermissions}=useAuth();
+  const { menuPermissions } = useAuth();
 
   const toggleGroup = (groupTitle) => {
     setExpandedGroups(prev => ({
@@ -48,9 +48,15 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       items: [
         {
           name: 'Dashboard',
-          path: '/Projectdashboard',
+          path: '/dashboard',
           permission: 'DASHBOARD',
           icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'
+        },
+        {
+          name: 'ProjectDashboard',
+          path: '/Projectdashboard',
+          permission: 'DASHBOARD',
+          icon: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm3 4v8m4-5v5m4-3v3'
         },
         {
           name: 'Project Dashboard',
@@ -94,31 +100,31 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       title: 'Sales',
       collapsible: true,
       items: [{
-          name: 'Leads / Enquiries',
-          path: '/sales/leads',
-          permission: 'SALES_LEADS',
-          icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
-        },
-        {
-          name: 'Estimation/Proposals',
-          path: '/sales/proposals',
-          permission: 'SALES_ESTIMATION',
-          icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
-        },
-        {
-          name: 'Clients Data',
-          path: '/sales/clients',
-          permission: 'SALES_CLIENTS',
-          icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
-        },
-        
-        
-        {
-          name: 'Invoices',
-          path: '/sales/invoices',
-          permission: 'INVOICES',
-          icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z'
-        },
+        name: 'Leads / Enquiries',
+        path: '/sales/leads',
+        permission: 'SALES_LEADS',
+        icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z'
+      },
+      {
+        name: 'Estimation/Proposals',
+        path: '/sales/proposals',
+        permission: 'SALES_ESTIMATION',
+        icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z'
+      },
+      {
+        name: 'Clients Data',
+        path: '/sales/clients',
+        permission: 'SALES_CLIENTS',
+        icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
+      },
+
+
+      {
+        name: 'Invoices',
+        path: '/sales/invoices',
+        permission: 'INVOICES',
+        icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z'
+      },
 
       ]
     },
@@ -176,7 +182,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
 
   // Filter menu groups and items based on permissions
   const filteredMenuGroups = menuGroups.map(group => {
-    const filteredItems = group.items.filter(item => 
+    const filteredItems = group.items.filter(item =>
       hasPermission(item.permission)
     );
 
@@ -194,10 +200,10 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   return (
     <>
       {isOpen && <div className="sidebar-overlay" onClick={onClose}></div>}
-      
+
       {/* Collapse button - outside sidebar, desktop only */}
-      <button 
-        className="sidebar-external-collapse-btn" 
+      <button
+        className="sidebar-external-collapse-btn"
         onClick={onToggleCollapse}
         title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
@@ -221,14 +227,14 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
                       data-full-name={group.title}
                     >
                       <span className="sidebar-group-title">{group.title}</span>
-                      
+
                       {/* Abbreviation with dropdown arrow when collapsed */}
                       <div className="sidebar-group-abbreviation-container">
                         <span className="sidebar-group-abbreviation">
                           {getGroupAbbreviation(group.title)}
                         </span>
                         {group.collapsible && (
-                          <IoChevronDown 
+                          <IoChevronDown
                             className={`sidebar-group-collapsed-arrow ${isExpanded ? 'expanded' : ''}`}
                             size={14}
                           />

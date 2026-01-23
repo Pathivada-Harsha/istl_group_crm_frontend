@@ -31,7 +31,8 @@ const CustomerDatabase = () => {
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions } = useAuth();
-
+  const [groups, setGroups] = useState([]);        // ADD THIS
+  const [subGroups, setSubGroups] = useState([]); // ADD THIS
   // Extract permissions
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
   const canView = customersPermissions.includes('VIEW');
@@ -50,6 +51,7 @@ const CustomerDatabase = () => {
     name: '',
     companyName: '',
     groupName: '',
+    subGroupName: '',    // ADD THIS LINE
     contactPerson: '',
     designation: '',
     email: '',
@@ -95,11 +97,58 @@ const CustomerDatabase = () => {
 
     return response.json();
   };
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
 
+      if (!response.ok) throw new Error('Failed to fetch groups');
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      setGroups([]);
+    }
+  };
+  const fetchSubGroupsForForm = async (group) => {
+    if (!group) {
+      setSubGroups([]);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch subgroups');
+
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setSubGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching subgroups:', err);
+      setSubGroups([]);
+    }
+  };
   useEffect(() => {
     if (canView) {
       fetchCustomers();
       fetchUsers();
+      fetchGroups();
     }
   }, [canView]);
 
@@ -108,7 +157,13 @@ const CustomerDatabase = () => {
       fetchCustomers();
     }
   }, [groupName, subGroupName, currentPage, rowsPerPage, canView]);
-
+  useEffect(() => {
+    if (formData.groupName) {
+      fetchSubGroupsForForm(formData.groupName);
+    } else {
+      setSubGroups([]);
+    }
+  }, [formData.groupName]);
   const fetchCustomers = async () => {
     setLoading(true);
     setError(null);
@@ -256,6 +311,7 @@ const CustomerDatabase = () => {
       name: customer.name,
       companyName: customer.companyName || '',
       groupName: customer.groupName || '',
+      subGroupName: customer.subGroupName || '',  // ADD THIS LINE
       contactPerson: customer.contactPerson || '',
       designation: customer.designation || '',
       email: customer.email,
@@ -394,6 +450,7 @@ const CustomerDatabase = () => {
       name: '',
       companyName: '',
       groupName: '',
+      subGroupName: '',  // ADD THIS LINE
       contactPerson: '',
       designation: '',
       email: '',
@@ -728,6 +785,7 @@ const CustomerDatabase = () => {
                 <th>Name</th>
                 <th>Company</th>
                 <th>Group</th>
+                <th>Category</th>
                 <th>Phone</th>
                 <th>Email</th>
                 <th>Location</th>
@@ -762,6 +820,7 @@ const CustomerDatabase = () => {
                         {customer.groupName || 'Others'}
                       </span>
                     </td>
+                    <td>{customer.subGroupName || '-'}</td>
                     <td>{customer.phone}</td>
                     <td>{customer.email}</td>
                     <td>{customer.city ? `${customer.city}, ${customer.state}` : '-'}</td>
@@ -896,14 +955,31 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Group</label>
-                    <select value={formData.groupName} onChange={(e) => setFormData({ ...formData, groupName: e.target.value })}>
-                      <option value="">Select group</option>
-                      <option value="CCMS">CCMS</option>
-                      <option value="Solar">Solar</option>
-                      <option value="EPC">EPC</option>
-                      <option value="IoT">IoT</option>
-                      <option value="Hybrid">Hybrid</option>
-                      <option value="Others">Others</option>
+                    <select
+                      value={formData.groupName}
+                      onChange={(e) => setFormData({ ...formData, groupName: e.target.value, subGroupName: '' })}
+                    >
+                      <option value="">Select Group</option>
+                      {groups.map((group, index) => (
+                        <option key={group.value || group.label || index} value={group.value || group.label}>
+                          {group.label || group.value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="leads-enquiries-form-group">
+                    <label>Category / Sub-Group</label>
+                    <select
+                      value={formData.subGroupName}
+                      onChange={(e) => setFormData({ ...formData, subGroupName: e.target.value })}
+                      disabled={!formData.groupName}
+                    >
+                      <option value="">Select Category</option>
+                      {subGroups.map((sub, index) => (
+                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
+                          {sub.label || sub.value}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="leads-enquiries-form-group">
@@ -1019,6 +1095,10 @@ const CustomerDatabase = () => {
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Group:</span>
                     <span className="leads-enquiries-detail-value">{selectedCustomer.groupName || '-'}</span>
+                  </div>
+                  <div className="leads-enquiries-detail-item">
+                    <span className="leads-enquiries-detail-label">Category:</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.subGroupName || '-'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Status:</span>

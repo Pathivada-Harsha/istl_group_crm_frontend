@@ -1,297 +1,469 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Eye, Edit2, Trash2, DollarSign, Download, Send } from 'lucide-react';
 import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
-// Sample data
-const sampleInvoices = [
-  {
-    id: 'INV-2024-001',
-    clientName: 'Acme Corporation',
-    invoiceTitle: 'Website Development Services',
-    amount: 85000,
-    gstAmount: 15300,
-    totalPayable: 100300,
-    paymentStatus: 'Paid',
-    invoiceStatus: 'Sent',
-    invoiceDate: '2024-11-15',
-    dueDate: '2024-12-15',
-    preparedBy: 'John Smith',
-    quotationRef: 'QUO-2024-089',
-    companyName: 'Acme Corporation',
-    email: 'contact@acme.com',
-    phone: '+91 98765 43210',
-    billingAddress: '123 Business Park, Mumbai, Maharashtra 400001',
-    gstNumber: '27AABCU9603R1ZM',
-    items: [
-      { name: 'Frontend Development', description: 'React-based UI', quantity: 1, unitPrice: 50000, tax: 18 },
-      { name: 'Backend Development', description: 'Node.js API', quantity: 1, unitPrice: 35000, tax: 18 }
-    ],
-    payments: [
-      { date: '2024-11-20', amount: 100300, method: 'Bank Transfer' }
-    ],
-    termsConditions: 'Payment due within 30 days. Late payments subject to 2% monthly interest.',
-    notes: 'Thank you for your business!'
-  },
-  {
-    id: 'INV-2024-002',
-    clientName: 'Tech Innovators',
-    invoiceTitle: 'Mobile App Development',
-    amount: 120000,
-    gstAmount: 21600,
-    totalPayable: 141600,
-    paymentStatus: 'Partially Paid',
-    invoiceStatus: 'Sent',
-    invoiceDate: '2024-11-20',
-    dueDate: '2024-12-20',
-    preparedBy: 'Sarah Johnson',
-    quotationRef: 'QUO-2024-092',
-    companyName: 'Tech Innovators Pvt Ltd',
-    email: 'info@techinnovators.com',
-    phone: '+91 99887 76655',
-    billingAddress: '456 Tech Tower, Bangalore, Karnataka 560001',
-    gstNumber: '29AACCT1234Q1Z5',
-    items: [
-      { name: 'iOS App Development', description: 'Native Swift app', quantity: 1, unitPrice: 60000, tax: 18 },
-      { name: 'Android App Development', description: 'Native Kotlin app', quantity: 1, unitPrice: 60000, tax: 18 }
-    ],
-    payments: [
-      { date: '2024-11-25', amount: 70800, method: 'UPI' }
-    ],
-    termsConditions: 'Payment due within 30 days.',
-    notes: 'Milestone-based payment schedule applies.'
-  },
-  {
-    id: 'INV-2024-003',
-    clientName: 'Global Enterprises',
-    invoiceTitle: 'Cloud Infrastructure Setup',
-    amount: 65000,
-    gstAmount: 11700,
-    totalPayable: 76700,
-    paymentStatus: 'Pending',
-    invoiceStatus: 'Overdue',
-    invoiceDate: '2024-10-25',
-    dueDate: '2024-11-25',
-    preparedBy: 'Michael Chen',
-    quotationRef: 'QUO-2024-078',
-    companyName: 'Global Enterprises Ltd',
-    email: 'billing@globalent.com',
-    phone: '+91 88776 65544',
-    billingAddress: '789 Business Center, Delhi, NCR 110001',
-    gstNumber: '07AADCG1234M1ZP',
-    items: [
-      { name: 'AWS Infrastructure', description: 'EC2, S3, RDS setup', quantity: 1, unitPrice: 45000, tax: 18 },
-      { name: 'DevOps Configuration', description: 'CI/CD pipeline', quantity: 1, unitPrice: 20000, tax: 18 }
-    ],
-    payments: [],
-    termsConditions: 'Payment due within 30 days.',
-    notes: 'Includes 3 months support.'
-  },
-  {
-    id: 'INV-2024-004',
-    clientName: 'StartUp Inc',
-    invoiceTitle: 'Digital Marketing Campaign',
-    amount: 45000,
-    gstAmount: 8100,
-    totalPayable: 53100,
-    paymentStatus: 'Pending',
-    invoiceStatus: 'Sent',
-    invoiceDate: '2024-12-01',
-    dueDate: '2024-12-31',
-    preparedBy: 'Emily Davis',
-    quotationRef: 'QUO-2024-095',
-    companyName: 'StartUp Inc',
-    email: 'hello@startupinc.com',
-    phone: '+91 77665 54433',
-    billingAddress: '321 Innovation Hub, Pune, Maharashtra 411001',
-    gstNumber: '27AACCS1234N1Z6',
-    items: [
-      { name: 'Social Media Marketing', description: '3 months campaign', quantity: 1, unitPrice: 30000, tax: 18 },
-      { name: 'SEO Services', description: 'Keyword optimization', quantity: 1, unitPrice: 15000, tax: 18 }
-    ],
-    payments: [],
-    termsConditions: 'Payment due within 30 days.',
-    notes: 'Monthly reporting included.'
-  },
-  {
-    id: 'INV-2024-005',
-    clientName: 'Future Systems',
-    invoiceTitle: 'ERP System Customization',
-    amount: 95000,
-    gstAmount: 17100,
-    totalPayable: 112100,
-    paymentStatus: 'Pending',
-    invoiceStatus: 'Draft',
-    invoiceDate: '2024-12-05',
-    dueDate: '2025-01-05',
-    preparedBy: 'Robert Lee',
-    quotationRef: 'QUO-2024-098',
-    companyName: 'Future Systems Pvt Ltd',
-    email: 'contact@futuresystems.com',
-    phone: '+91 99887 12345',
-    billingAddress: '555 Tech Valley, Hyderabad, Telangana 500001',
-    gstNumber: '36AACCP1234P1Z7',
-    items: [
-      { name: 'ERP Module Development', description: 'Custom modules', quantity: 1, unitPrice: 70000, tax: 18 },
-      { name: 'Training & Documentation', description: 'User training', quantity: 1, unitPrice: 25000, tax: 18 }
-    ],
-    payments: [],
-    termsConditions: 'Payment due within 30 days.',
-    notes: 'Draft - pending client approval.'
-  }
-];
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
+import filterApi from '../services/filterApi';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const InvoicesManagementPage = () => {
-  const [invoices, setInvoices] = useState(sampleInvoices);
-  const [filteredInvoices, setFilteredInvoices] = useState(sampleInvoices);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [filterPaymentStatus, setFilterPaymentStatus] = useState('All');
+  const [invoices, setInvoices] = useState([]);
+  const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
+  const { user } = useAuth();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [paymentHistory, setPaymentHistory] = useState([]);
+  const [filters, setFilters] = useState({
+    search: '',
+    status: 'all',
+    paymentStatus: 'all'
+  });
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Modal states
   const [selectedInvoice, setSelectedInvoice] = useState(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
-  const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
+  const [stats, setStats] = useState(null);
+
+  // Dropdown states
+  const [modalGroups, setModalGroups] = useState([]);
+  const [modalSubGroups, setModalSubGroups] = useState([]);
+  const [modalProjects, setModalProjects] = useState([]);
+  const [modalGroupName, setModalGroupName] = useState('');
+  const [modalSubGroupName, setModalSubGroupName] = useState('');
+  const [modalProjectId, setModalProjectId] = useState('');
+  const [modalDropdownLoading, setModalDropdownLoading] = useState({
+    groups: false,
+    subGroups: false,
+    projects: false
+  });
+
+  // Customer data
+  const [customerData, setCustomerData] = useState(null);
+
   // Form states
   const [formData, setFormData] = useState({
-    invoiceTitle: '',
-    clientName: '',
-    companyName: '',
-    email: '',
-    phone: '',
-    billingAddress: '',
-    gstNumber: '',
-    quotationRef: '',
+    customerId: null,
+    projectId: '',
+    groupId: '',
+    subGroupId: '',
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
-    items: [{ name: '', description: '', quantity: 1, unitPrice: 0, tax: 18 }],
-    termsConditions: '',
-    notes: ''
+    items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+    status: 'DRAFT'
   });
 
+  // Update payment form data
   const [paymentData, setPaymentData] = useState({
-    date: new Date().toISOString().split('T')[0],
     amount: 0,
     method: 'Bank Transfer',
+    transactionReference: '',
     notes: ''
   });
 
-  // Search and filter
-  const handleSearch = (value) => {
-    setSearchTerm(value);
-    applyFilters(value, filterStatus, filterPaymentStatus);
+  // Fetch invoices on mount and filter change
+  useEffect(() => {
+    fetchInvoices();
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
+
+  // Fetch stats on mount
+  useEffect(() => {
+    fetchStats();
+  }, []);
+  const handleDownloadPdf = async (invoice) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/download-pdf`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to download PDF');
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `Invoice-${invoice.invoiceNo}.pdf`;
+      if (contentDisposition) {
+        const matches = /filename="([^"]+)"/.exec(contentDisposition);
+        if (matches && matches[1]) filename = matches[1];
+      }
+
+      // Download the file
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showSuccess('Invoice PDF downloaded successfully!');
+
+    } catch (error) {
+      console.error('Failed to download PDF:', error);
+      showError('Failed to download PDF');
+    } finally {
+      setLoading(false);
+    }
+  };
+  /**
+   * Get auth headers
+   */
+  const getAuthHeaders = () => ({
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Role': user?.role || localStorage.getItem('userRole')
+  });
+
+  /**
+   * Fetch invoices from backend
+   */
+  const fetchInvoices = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page: currentPage,
+        size: pageSize,
+        sortBy: 'invoiceDate',
+        sortDirection: 'DESC'
+      });
+
+      if (groupName) params.append('groupId', groupName);
+      if (subGroupName) params.append('subGroupId', subGroupName);
+      if (projectId) params.append('projectId', projectId);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.search) params.append('searchTerm', filters.search);
+
+      const response = await fetch(`${API_BASE_URL}/api/invoices?${params}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch invoices');
+
+      const data = await response.json();
+      setInvoices(data.invoices || []);
+      setTotalPages(data.totalPages || 0);
+      setTotalElements(data.totalElements || 0);
+
+    } catch (error) {
+      console.error('Failed to fetch invoices:', error);
+      showError('Failed to load invoices');
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const applyFilters = (search, status, paymentStatus) => {
-    let filtered = invoices;
+  /**
+   * Fetch statistics
+   */
+  const fetchStats = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/stats`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
 
-    if (search) {
-      filtered = filtered.filter(inv =>
-        inv.id.toLowerCase().includes(search.toLowerCase()) ||
-        inv.clientName.toLowerCase().includes(search.toLowerCase()) ||
-        inv.companyName.toLowerCase().includes(search.toLowerCase()) ||
-        inv.quotationRef.toLowerCase().includes(search.toLowerCase())
-      );
+      if (response.ok) {
+        const data = await response.json();
+        setStats(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error);
+    }
+  };
+
+  /**
+   * Fetch modal groups
+   */
+  const fetchModalGroups = async () => {
+    setModalDropdownLoading(prev => ({ ...prev, groups: true }));
+    try {
+      const groups = await filterApi.getAllGroups();
+      setModalGroups(groups || []);
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+      showError('Failed to load groups');
+      setModalGroups([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, groups: false }));
+    }
+  };
+
+  /**
+   * Fetch modal subgroups
+   */
+  const fetchModalSubGroups = async (groupName) => {
+    if (!groupName) {
+      setModalSubGroups([]);
+      setModalProjects([]);
+      return;
     }
 
-    if (status !== 'All') {
-      filtered = filtered.filter(inv => inv.invoiceStatus === status);
+    setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
+    try {
+      const subGroups = await filterApi.getSubGroups(groupName);
+      setModalSubGroups(subGroups || []);
+    } catch (error) {
+      console.error('Failed to fetch subgroups:', error);
+      showError('Failed to load categories');
+      setModalSubGroups([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, subGroups: false }));
+    }
+  };
+
+  /**
+   * Fetch modal projects
+   */
+  const fetchModalProjects = async (groupName, subGroupName) => {
+    if (!groupName || !subGroupName) {
+      setModalProjects([]);
+      return;
     }
 
-    if (paymentStatus !== 'All') {
-      filtered = filtered.filter(inv => inv.paymentStatus === paymentStatus);
+    setModalDropdownLoading(prev => ({ ...prev, projects: true }));
+    try {
+      const projects = await filterApi.getProjects(groupName, subGroupName);
+      setModalProjects(projects || []);
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      showError('Failed to load projects');
+      setModalProjects([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, projects: false }));
+    }
+  };
+
+  /**
+   * Fetch customer by project ID
+   */
+  const fetchCustomerByProject = async (projectId) => {
+    if (!projectId) {
+      setCustomerData(null);
+      return;
     }
 
-    setFilteredInvoices(filtered);
-    setCurrentPage(1);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/customer-by-project/${projectId}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setCustomerData(data);
+        setFormData(prev => ({ ...prev, customerId: data.customerId }));
+      } else {
+        setCustomerData(null);
+        showError('Customer not found for this project');
+      }
+    } catch (error) {
+      console.error('Failed to fetch customer:', error);
+      setCustomerData(null);
+    }
   };
 
-  const handleStatusFilter = (value) => {
-    setFilterStatus(value);
-    applyFilters(searchTerm, value, filterPaymentStatus);
+  /**
+   * Handle modal group change
+   */
+  const handleModalGroupChange = (e) => {
+    const newGroupName = e.target.value;
+    setModalGroupName(newGroupName);
+    setModalSubGroupName('');
+    setModalProjectId('');
+    setModalSubGroups([]);
+    setModalProjects([]);
+    setCustomerData(null);
+
+    setFormData({
+      ...formData,
+      groupId: newGroupName,
+      subGroupId: '',
+      projectId: '',
+      customerId: null
+    });
+
+    if (newGroupName) {
+      fetchModalSubGroups(newGroupName);
+    }
   };
 
-  const handlePaymentStatusFilter = (value) => {
-    setFilterPaymentStatus(value);
-    applyFilters(searchTerm, filterStatus, value);
+  /**
+   * Handle modal subgroup change
+   */
+  const handleModalSubGroupChange = (e) => {
+    const newSubGroupName = e.target.value;
+    setModalSubGroupName(newSubGroupName);
+    setModalProjectId('');
+    setModalProjects([]);
+    setCustomerData(null);
+
+    setFormData({
+      ...formData,
+      subGroupId: newSubGroupName,
+      projectId: '',
+      customerId: null
+    });
+
+    if (modalGroupName && newSubGroupName) {
+      fetchModalProjects(modalGroupName, newSubGroupName);
+    }
   };
 
-  // View invoice
-  const handleViewInvoice = (invoice) => {
-    setSelectedInvoice(invoice);
-    setShowInvoiceModal(true);
-    setEditMode(false);
+  /**
+   * Handle modal project change
+   */
+  const handleModalProjectChange = (e) => {
+    const newProjectId = e.target.value;
+    setModalProjectId(newProjectId);
+
+    setFormData({
+      ...formData,
+      projectId: newProjectId
+    });
+
+    if (newProjectId) {
+      fetchCustomerByProject(newProjectId);
+    }
   };
 
-  // Create/Edit invoice
+  /**
+   * View invoice
+   */
+  const handleViewInvoice = async (invoice) => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch invoice details');
+
+      const data = await response.json();
+      setSelectedInvoice(data);
+
+      // Fetch payment history
+      const historyResponse = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/payment-history`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (historyResponse.ok) {
+        const historyData = await historyResponse.json();
+        setPaymentHistory(historyData);
+      }
+
+      setShowInvoiceModal(true);
+    } catch (error) {
+      console.error('Failed to fetch invoice details:', error);
+      showError('Failed to load invoice details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+
+
+  /**
+   * Create new invoice
+   */
   const handleCreateNew = () => {
     setFormData({
-      invoiceTitle: '',
-      clientName: '',
-      companyName: '',
-      email: '',
-      phone: '',
-      billingAddress: '',
-      gstNumber: '',
-      quotationRef: '',
+      customerId: null,
+      projectId: '',
+      groupId: '',
+      subGroupId: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      items: [{ name: '', description: '', quantity: 1, unitPrice: 0, tax: 18 }],
-      termsConditions: 'Payment due within 30 days.',
-      notes: ''
+      items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+      status: 'DRAFT'
     });
-    setShowCreateModal(true);
+    setCustomerData(null);
+    setModalGroupName('');
+    setModalSubGroupName('');
+    setModalProjectId('');
     setEditMode(false);
+
+    fetchModalGroups();
+    setShowCreateModal(true);
   };
 
+  /**
+   * Edit invoice
+   */
   const handleEditInvoice = (invoice) => {
     setFormData({
-      invoiceTitle: invoice.invoiceTitle,
-      clientName: invoice.clientName,
-      companyName: invoice.companyName,
-      email: invoice.email,
-      phone: invoice.phone,
-      billingAddress: invoice.billingAddress,
-      gstNumber: invoice.gstNumber,
-      quotationRef: invoice.quotationRef,
-      invoiceDate: invoice.invoiceDate,
-      dueDate: invoice.dueDate,
-      items: invoice.items,
-      termsConditions: invoice.termsConditions,
-      notes: invoice.notes
+      customerId: invoice.customerId,
+      projectId: invoice.projectId,
+      groupId: invoice.groupId,
+      subGroupId: invoice.subGroupId,
+      invoiceDate: invoice.invoiceDate.split('T')[0],
+      dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
+      items: invoice.items || [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+      status: invoice.status
     });
     setSelectedInvoice(invoice);
-    setShowCreateModal(true);
     setEditMode(true);
+    setShowCreateModal(true);
   };
 
+  /**
+   * Add item
+   */
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { name: '', description: '', quantity: 1, unitPrice: 0, tax: 18 }]
+      items: [...formData.items, { description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }]
     });
   };
 
+  /**
+   * Update item
+   */
   const updateItem = (index, field, value) => {
     const newItems = [...formData.items];
     newItems[index][field] = value;
     setFormData({ ...formData, items: newItems });
   };
 
+  /**
+   * Remove item
+   */
   const removeItem = (index) => {
-    const newItems = formData.items.filter((_, i) => i !== index);
-    setFormData({ ...formData, items: newItems });
+    if (formData.items.length > 1) {
+      const newItems = formData.items.filter((_, i) => i !== index);
+      setFormData({ ...formData, items: newItems });
+    }
   };
 
+  /**
+   * Calculate invoice totals
+   */
   const calculateInvoice = () => {
     let subtotal = 0;
     let taxTotal = 0;
 
     formData.items.forEach(item => {
       const lineTotal = item.quantity * item.unitPrice;
-      const lineTax = (lineTotal * item.tax) / 100;
+      const lineTax = (lineTotal * item.taxPercent) / 100;
       subtotal += lineTotal;
       taxTotal += lineTax;
     });
@@ -303,119 +475,194 @@ const InvoicesManagementPage = () => {
     };
   };
 
-  const handleSaveInvoice = (status) => {
-    const totals = calculateInvoice();
-    const newInvoice = {
-      id: editMode ? selectedInvoice.id : `INV-2024-${String(invoices.length + 1).padStart(3, '0')}`,
-      ...formData,
-      amount: totals.subtotal,
-      gstAmount: totals.taxTotal,
-      totalPayable: totals.grandTotal,
-      paymentStatus: 'Pending',
-      invoiceStatus: status,
-      preparedBy: 'Current User',
-      payments: editMode ? selectedInvoice.payments : []
-    };
-
-    if (editMode) {
-      const updated = invoices.map(inv => inv.id === selectedInvoice.id ? newInvoice : inv);
-      setInvoices(updated);
-      setFilteredInvoices(updated);
-    } else {
-      setInvoices([...invoices, newInvoice]);
-      setFilteredInvoices([...invoices, newInvoice]);
+  /**
+   * Save invoice
+   */
+  const handleSaveInvoice = async (status) => {
+    // Validation
+    if (!formData.customerId) {
+      showError('Please select a project to auto-fill customer details');
+      return;
     }
 
-    setShowCreateModal(false);
-    alert(`Invoice ${editMode ? 'updated' : 'created'} successfully!`);
+    if (!formData.dueDate) {
+      showError('Due date is required');
+      return;
+    }
+
+    if (formData.items.length === 0 || !formData.items[0].description) {
+      showError('Please add at least one item');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const invoiceData = {
+        ...formData,
+        status: status,
+        items: formData.items.map(item => ({
+          description: item.description,
+          quantity: parseFloat(item.quantity),
+          unitPrice: parseFloat(item.unitPrice),
+          taxPercent: parseFloat(item.taxPercent),
+          unitType: item.unitType
+        }))
+      };
+
+      const url = editMode
+        ? `${API_BASE_URL}/api/invoices/${selectedInvoice.id}`
+        : `${API_BASE_URL}/api/invoices`;
+
+      const response = await fetch(url, {
+        credentials: "include",
+        method: editMode ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify(invoiceData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save invoice');
+      }
+
+      showSuccess(`Invoice ${editMode ? 'updated' : 'created'} successfully!`);
+      setShowCreateModal(false);
+      fetchInvoices();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to save invoice:', error);
+      showError(error.message || 'Failed to save invoice');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Record payment
+  /**
+   * Record payment
+   */
   const handleRecordPayment = (invoice) => {
     setSelectedInvoice(invoice);
     setPaymentData({
-      date: new Date().toISOString().split('T')[0],
-      amount: invoice.totalPayable - (invoice.payments?.reduce((sum, p) => sum + p.amount, 0) || 0),
+      amount: parseFloat(invoice.balanceAmount || invoice.totalAmount),
       method: 'Bank Transfer',
       notes: ''
     });
     setShowPaymentModal(true);
   };
 
-  const handleSavePayment = () => {
-    const newPayment = {
-      date: paymentData.date,
-      amount: parseFloat(paymentData.amount),
-      method: paymentData.method,
-      notes: paymentData.notes
-    };
-
-    const updatedInvoice = { ...selectedInvoice };
-    updatedInvoice.payments = [...(updatedInvoice.payments || []), newPayment];
-
-    const totalPaid = updatedInvoice.payments.reduce((sum, p) => sum + p.amount, 0);
-    const balanceDue = updatedInvoice.totalPayable - totalPaid;
-
-    if (balanceDue <= 0) {
-      updatedInvoice.paymentStatus = 'Paid';
-    } else if (totalPaid > 0) {
-      updatedInvoice.paymentStatus = 'Partially Paid';
+  /**
+   * Save payment
+   */
+  const handleSavePayment = async () => {
+    if (paymentData.amount <= 0) {
+      showError('Payment amount must be greater than zero');
+      return;
     }
 
-    const updated = invoices.map(inv => inv.id === selectedInvoice.id ? updatedInvoice : inv);
-    setInvoices(updated);
-    setFilteredInvoices(updated);
-    setShowPaymentModal(false);
-    alert('Payment recorded successfully!');
-  };
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${selectedInvoice.id}/payment`, {
+        credentials: "include",
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ amount: paymentData.amount })
+      });
 
-  // Delete invoice
-  const handleDeleteInvoice = (id) => {
-    if (window.confirm('Are you sure you want to delete this invoice?')) {
-      const updated = invoices.filter(inv => inv.id !== id);
-      setInvoices(updated);
-      setFilteredInvoices(updated);
-      alert('Invoice deleted successfully!');
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to record payment');
+      }
+
+      showSuccess('Payment recorded successfully!');
+      setShowPaymentModal(false);
+      fetchInvoices();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to record payment:', error);
+      showError(error.message || 'Failed to record payment');
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentInvoices = filteredInvoices.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredInvoices.length / itemsPerPage);
+  /**
+   * Delete invoice
+   */
+  const handleDeleteInvoice = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this invoice?')) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/${id}`, {
+        credentials: "include",
+        method: 'DELETE',
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to delete invoice');
+
+      showSuccess('Invoice deleted successfully!');
+      fetchInvoices();
+      fetchStats();
+
+    } catch (error) {
+      console.error('Failed to delete invoice:', error);
+      showError('Failed to delete invoice');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Helper functions
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0
-    }).format(amount);
+    if (!amount && amount !== 0) return '₹0.00';
+    const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
+    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
   };
 
   const getStatusClass = (status) => {
     const statusMap = {
-      'Draft': 'Invoices-page-status-draft',
-      'Sent': 'Invoices-page-status-sent',
-      'Paid': 'Invoices-page-status-paid',
-      'Overdue': 'Invoices-page-status-overdue',
-      'Cancelled': 'Invoices-page-status-cancelled'
+      'DRAFT': 'Invoices-page-status-draft',
+      'SENT': 'Invoices-page-status-sent',
+      'PAID': 'Invoices-page-status-paid',
+      'PARTIALLY_PAID': 'Invoices-page-payment-partial',
+      'CANCELLED': 'Invoices-page-status-cancelled'
     };
     return statusMap[status] || '';
   };
 
-  const getPaymentStatusClass = (status) => {
+  const getStatusDisplayName = (status) => {
     const statusMap = {
-      'Pending': 'Invoices-page-payment-pending',
-      'Partially Paid': 'Invoices-page-payment-partial',
-      'Paid': 'Invoices-page-payment-paid'
+      'DRAFT': 'Draft',
+      'SENT': 'Sent',
+      'PAID': 'Paid',
+      'PARTIALLY_PAID': 'Partially Paid',
+      'CANCELLED': 'Cancelled'
     };
-    return statusMap[status] || '';
+    return statusMap[status] || status;
   };
 
   return (
     <div className="Invoices-page-container">
+      {loading && <CrmPreloader text="Loading..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       {/* Breadcrumb */}
       <div className="Invoices-page-breadcrumb">
         <span>Pages</span>
@@ -423,10 +670,8 @@ const InvoicesManagementPage = () => {
         <span className="Invoices-page-current">Invoices</span>
       </div>
 
-
       <div className="page-header-with-filter">
-        <h1 className="Invoices-page-title">Invoices</h1>
-
+        <h1 className="Invoices-page-title">Invoices ({totalElements})</h1>
         <GroupProjectFilter
           groupValue={groupName}
           subGroupValue={subGroupName}
@@ -434,44 +679,39 @@ const InvoicesManagementPage = () => {
           onChange={updateFilters}
         />
       </div>
+
       {/* Action Bar */}
       <div className="Invoices-page-action-bar">
         <div className="Invoices-page-search-filters">
           <input
             type="text"
             className="Invoices-page-search"
-            placeholder="Search invoices by ID, client, company..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
+            placeholder="Search invoices by ID..."
+            value={filters.search}
+            onChange={(e) => {
+              setFilters({ ...filters, search: e.target.value });
+              setCurrentPage(0);
+            }}
           />
 
           <select
             className="Invoices-page-filter"
-            value={filterStatus}
-            onChange={(e) => handleStatusFilter(e.target.value)}
+            value={filters.status}
+            onChange={(e) => {
+              setFilters({ ...filters, status: e.target.value });
+              setCurrentPage(0);
+            }}
           >
-            <option value="All">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Sent">Sent</option>
-            <option value="Paid">Paid</option>
-            <option value="Overdue">Overdue</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-
-          <select
-            className="Invoices-page-filter"
-            value={filterPaymentStatus}
-            onChange={(e) => handlePaymentStatusFilter(e.target.value)}
-          >
-            <option value="All">Payment Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Partially Paid">Partially Paid</option>
-            <option value="Paid">Paid</option>
+            <option value="all">All Status</option>
+            <option value="DRAFT">Draft</option>
+            <option value="SENT">Sent</option>
+            <option value="PAID">Paid</option>
+            <option value="PARTIALLY_PAID">Partially Paid</option>
+            <option value="CANCELLED">Cancelled</option>
           </select>
         </div>
 
         <div className="Invoices-page-actions">
-          <button className="Invoices-page-btn-secondary">Export Excel</button>
           <button className="Invoices-page-btn-primary" onClick={handleCreateNew}>
             + Create New Invoice
           </button>
@@ -479,30 +719,32 @@ const InvoicesManagementPage = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="Invoices-page-stats">
-        <div className="Invoices-page-stat-card">
-          <div className="Invoices-page-stat-label">Total Invoices</div>
-          <div className="Invoices-page-stat-value">{invoices.length}</div>
-        </div>
-        <div className="Invoices-page-stat-card">
-          <div className="Invoices-page-stat-label">Paid</div>
-          <div className="Invoices-page-stat-value Invoices-page-stat-success">
-            {invoices.filter(inv => inv.paymentStatus === 'Paid').length}
+      {stats && (
+        <div className="Invoices-page-stats">
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">Total Invoices</div>
+            <div className="Invoices-page-stat-value">{stats.totalInvoices}</div>
+          </div>
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">Paid</div>
+            <div className="Invoices-page-stat-value Invoices-page-stat-success">
+              {stats.paidInvoices}
+            </div>
+          </div>
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">Pending</div>
+            <div className="Invoices-page-stat-value Invoices-page-stat-warning">
+              {stats.sentInvoices + stats.partiallyPaidInvoices}
+            </div>
+          </div>
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">Total Amount</div>
+            <div className="Invoices-page-stat-value">
+              {formatCurrency(stats.totalPaidAmount)}
+            </div>
           </div>
         </div>
-        <div className="Invoices-page-stat-card">
-          <div className="Invoices-page-stat-label">Pending</div>
-          <div className="Invoices-page-stat-value Invoices-page-stat-warning">
-            {invoices.filter(inv => inv.paymentStatus === 'Pending').length}
-          </div>
-        </div>
-        <div className="Invoices-page-stat-card">
-          <div className="Invoices-page-stat-label">Overdue</div>
-          <div className="Invoices-page-stat-value Invoices-page-stat-danger">
-            {invoices.filter(inv => inv.invoiceStatus === 'Overdue').length}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Invoices Table */}
       <div className="Invoices-page-table-container">
@@ -510,100 +752,133 @@ const InvoicesManagementPage = () => {
           <thead>
             <tr>
               <th>Invoice ID</th>
-              <th>Client Name</th>
-              <th>Invoice Title</th>
-              <th>Amount</th>
-              <th>GST/Tax</th>
-              <th>Total Payable</th>
-              <th>Payment Status</th>
-              <th>Invoice Status</th>
+              <th>Customer</th>
+              <th>Project</th>
+              <th>Total Amount</th>
+              <th>Paid Amount</th>
+              <th>Balance</th>
+              <th>Status</th>
               <th>Invoice Date</th>
               <th>Due Date</th>
-              <th>Prepared By</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {currentInvoices.map(invoice => (
-              <tr key={invoice.id}>
-                <td className="Invoices-page-invoice-id">{invoice.id}</td>
-                <td>{invoice.clientName}</td>
-                <td>{invoice.invoiceTitle}</td>
-                <td>{formatCurrency(invoice.amount)}</td>
-                <td>{formatCurrency(invoice.gstAmount)}</td>
-                <td className="Invoices-page-total">{formatCurrency(invoice.totalPayable)}</td>
-                <td>
-                  <span className={`Invoices-page-badge ${getPaymentStatusClass(invoice.paymentStatus)}`}>
-                    {invoice.paymentStatus}
-                  </span>
-                </td>
-                <td>
-                  <span className={`Invoices-page-badge ${getStatusClass(invoice.invoiceStatus)}`}>
-                    {invoice.invoiceStatus}
-                  </span>
-                </td>
-                <td>{invoice.invoiceDate}</td>
-                <td>{invoice.dueDate}</td>
-                <td>{invoice.preparedBy}</td>
-                <td>
-                  <div className="Invoices-page-action-buttons">
-                    <button
-                      className="Invoices-page-action-btn Invoices-page-btn-view"
-                      onClick={() => handleViewInvoice(invoice)}
-                      title="View"
-                    >
-                      👁
-                    </button>
-                    <button
-                      className="Invoices-page-action-btn Invoices-page-btn-edit"
-                      onClick={() => handleEditInvoice(invoice)}
-                      title="Edit"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      className="Invoices-page-action-btn Invoices-page-btn-payment"
-                      onClick={() => handleRecordPayment(invoice)}
-                      title="Record Payment"
-                    >
-                      💰
-                    </button>
-                    <button
-                      className="Invoices-page-action-btn Invoices-page-btn-delete"
-                      onClick={() => handleDeleteInvoice(invoice.id)}
-                      title="Delete"
-                    >
-                      🗑️
-                    </button>
-                  </div>
+            {invoices.length === 0 ? (
+              <tr>
+                <td colSpan="10" className="empty-state">
+                  No invoices found
                 </td>
               </tr>
-            ))}
+            ) : (
+              invoices.map((invoice) => (
+                <tr key={invoice.id}>
+                  <td className="Invoices-page-invoice-id">{invoice.invoiceNo}</td>
+                  <td>{invoice.customerId}</td>
+                  <td>{invoice.projectId || '—'}</td>
+                  <td className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>
+                  <td>{formatCurrency(invoice.paidAmount)}</td>
+                  <td className="Invoices-page-total">{formatCurrency(invoice.balanceAmount)}</td>
+                  <td>
+                    <span className={`Invoices-page-badge ${getStatusClass(invoice.status)}`}>
+                      {getStatusDisplayName(invoice.status)}
+                    </span>
+                  </td>
+                  <td>{formatDate(invoice.invoiceDate)}</td>
+                  <td>{formatDate(invoice.dueDate)}</td>
+                  <td>
+                    <div className="Invoices-page-action-buttons">
+                      <button
+                        className="Invoices-page-action-btn Invoices-page-btn-view"
+                        onClick={() => handleViewInvoice(invoice)}
+                        title="View"
+                      >
+                        <Eye size={16} />
+                      </button>
+                      <button
+                        className="Invoices-page-action-btn Invoices-page-btn-edit"
+                        onClick={() => handleEditInvoice(invoice)}
+                        title="Edit"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        className="Invoices-page-action-btn Invoices-page-btn-download"
+                        onClick={() => handleDownloadPdf(invoice)}
+                        title="Download PDF"
+                      >
+                        <Download size={16} />
+                      </button>
+                      <button
+                        className="Invoices-page-action-btn Invoices-page-btn-payment"
+                        onClick={() => handleRecordPayment(invoice)}
+                        title="Record Payment"
+                      >
+                        <DollarSign size={16} />
+                      </button>
+                      <button
+                        className="Invoices-page-action-btn Invoices-page-btn-delete"
+                        onClick={() => handleDeleteInvoice(invoice.id)}
+                        title="Delete"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
-      </div>
 
-      {/* Pagination */}
-      <div className="Invoices-page-pagination">
-        <div className="Invoices-page-pagination-info">
-          Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredInvoices.length)} of {filteredInvoices.length} invoices
-        </div>
-        <div className="Invoices-page-pagination-controls">
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="Invoices-page-pagination-btn"
-          >
-            Previous
-          </button>
-          <span className="Invoices-page-pagination-current">Page {currentPage} of {totalPages}</span>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            className="Invoices-page-pagination-btn"
-          >
-            Next
-          </button>
+        {/* Pagination */}
+        <div className="Invoices-page-pagination">
+          <div className="Invoices-page-pagination-info">
+            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} invoices
+          </div>
+
+          <div className="Invoices-page-pagination-controls-wrapper">
+            {/* Rows per page selector */}
+            <div className="Invoices-page-pagination-size">
+              <label>Rows per page:</label>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(0); // Reset to first page when changing page size
+                }}
+                className="Invoices-page-pagination-size-select"
+              >
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+
+            {/* Page navigation */}
+            <div className="Invoices-page-pagination-controls">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
+                disabled={currentPage === 0}
+                className="Invoices-page-pagination-btn"
+              >
+                Previous
+              </button>
+              <span className="Invoices-page-pagination-current">
+                Page {currentPage + 1} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
+                disabled={currentPage >= totalPages - 1}
+                className="Invoices-page-pagination-btn"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -612,58 +887,35 @@ const InvoicesManagementPage = () => {
         <div className="Invoices-page-modal-overlay" onClick={() => setShowInvoiceModal(false)}>
           <div className="Invoices-page-modal Invoices-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
-              <h2>Invoice Details</h2>
+              <h2>Invoice Details - {selectedInvoice.invoiceNo}</h2>
               <button className="Invoices-page-modal-close" onClick={() => setShowInvoiceModal(false)}>×</button>
             </div>
 
             <div className="Invoices-page-modal-body">
               <div className="Invoices-page-invoice-view">
-                {/* Header Section */}
-                <div className="Invoices-page-invoice-header">
-                  <div className="Invoices-page-invoice-company">
-                    <h1>INVOICE</h1>
-                    <p className="Invoices-page-invoice-number">{selectedInvoice.id}</p>
-                  </div>
-                  <div className="Invoices-page-invoice-status-badge">
-                    <span className={`Invoices-page-badge ${getStatusClass(selectedInvoice.invoiceStatus)}`}>
-                      {selectedInvoice.invoiceStatus}
-                    </span>
-                  </div>
-                </div>
-
                 <div className="Invoices-page-invoice-meta">
                   <div className="Invoices-page-invoice-meta-item">
-                    <strong>Invoice Date:</strong> {selectedInvoice.invoiceDate}
+                    <strong>Invoice Date:</strong> {formatDate(selectedInvoice.invoiceDate)}
                   </div>
                   <div className="Invoices-page-invoice-meta-item">
-                    <strong>Due Date:</strong> {selectedInvoice.dueDate}
+                    <strong>Due Date:</strong> {formatDate(selectedInvoice.dueDate)}
                   </div>
                   <div className="Invoices-page-invoice-meta-item">
-                    <strong>Reference:</strong> {selectedInvoice.quotationRef}
-                  </div>
-                </div>
-
-                {/* Client Information */}
-                <div className="Invoices-page-invoice-section">
-                  <h3>Bill To</h3>
-                  <div className="Invoices-page-client-info">
-                    <p><strong>{selectedInvoice.companyName}</strong></p>
-                    <p>{selectedInvoice.clientName}</p>
-                    <p>{selectedInvoice.email}</p>
-                    <p>{selectedInvoice.phone}</p>
-                    <p>{selectedInvoice.billingAddress}</p>
-                    {selectedInvoice.gstNumber && <p><strong>GST:</strong> {selectedInvoice.gstNumber}</p>}
+                    <strong>Status:</strong>
+                    <span className={`Invoices-page-badge ${getStatusClass(selectedInvoice.status)}`}>
+                      {getStatusDisplayName(selectedInvoice.status)}
+                    </span>
                   </div>
                 </div>
 
                 {/* Invoice Items */}
                 <div className="Invoices-page-invoice-section">
-                  <h3>{selectedInvoice.invoiceTitle}</h3>
+                  <h3>Invoice Items</h3>
                   <table className="Invoices-page-invoice-items-table">
                     <thead>
                       <tr>
-                        <th>Item</th>
                         <th>Description</th>
+                        <th>Unit Type</th>
                         <th>Qty</th>
                         <th>Unit Price</th>
                         <th>Tax %</th>
@@ -671,16 +923,16 @@ const InvoicesManagementPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedInvoice.items.map((item, index) => {
+                      {selectedInvoice.items && selectedInvoice.items.map((item, index) => {
                         const lineTotal = item.quantity * item.unitPrice;
-                        const lineTax = (lineTotal * item.tax) / 100;
+                        const lineTax = (lineTotal * item.taxPercent) / 100;
                         return (
                           <tr key={index}>
-                            <td>{item.name}</td>
                             <td>{item.description}</td>
+                            <td>{item.unitType}</td>
                             <td>{item.quantity}</td>
                             <td>{formatCurrency(item.unitPrice)}</td>
-                            <td>{item.tax}%</td>
+                            <td>{item.taxPercent}%</td>
                             <td>{formatCurrency(lineTotal + lineTax)}</td>
                           </tr>
                         );
@@ -688,74 +940,63 @@ const InvoicesManagementPage = () => {
                     </tbody>
                   </table>
                 </div>
-
+                {/* Payment History */}
+                {paymentHistory && paymentHistory.length > 0 && (
+                  <div className="Invoices-page-invoice-section">
+                    <h3>Payment History</h3>
+                    <table className="Invoices-page-invoice-items-table">
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Amount</th>
+                          <th>Method</th>
+                          <th>Reference</th>
+                          <th>Notes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paymentHistory.map((payment, index) => (
+                          <tr key={index}>
+                            <td>{formatDate(payment.paymentDate)}</td>
+                            <td className="Invoices-page-text-success">{formatCurrency(payment.amount)}</td>
+                            <td>{payment.paymentMethod}</td>
+                            <td>{payment.transactionReference || '—'}</td>
+                            <td>{payment.notes || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
                 {/* Totals */}
                 <div className="Invoices-page-invoice-totals">
                   <div className="Invoices-page-total-row">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(selectedInvoice.amount)}</span>
+                    <span>Total Amount:</span>
+                    <span>{formatCurrency(selectedInvoice.totalAmount)}</span>
                   </div>
                   <div className="Invoices-page-total-row">
-                    <span>GST/Tax:</span>
-                    <span>{formatCurrency(selectedInvoice.gstAmount)}</span>
+                    <span>Paid Amount:</span>
+                    <span className="Invoices-page-text-success">{formatCurrency(selectedInvoice.paidAmount)}</span>
                   </div>
                   <div className="Invoices-page-total-row Invoices-page-grand-total">
-                    <span>Total Payable:</span>
-                    <span>{formatCurrency(selectedInvoice.totalPayable)}</span>
+                    <span>Balance Due:</span>
+                    <span className="Invoices-page-text-danger">{formatCurrency(selectedInvoice.balanceAmount)}</span>
                   </div>
                 </div>
-
-                {/* Payment Summary */}
-                <div className="Invoices-page-invoice-section">
-                  <h3>Payment Summary</h3>
-                  <div className="Invoices-page-payment-summary">
-                    <div className="Invoices-page-payment-info">
-                      <div className="Invoices-page-payment-row Invoices-page-balance-due">
-                        <span><strong>Balance Due:</strong></span>
-                        <span className="Invoices-page-text-danger">
-                          {formatCurrency(selectedInvoice.totalPayable - (selectedInvoice.payments?.reduce((sum, p) => sum + p.amount, 0) || 0))}
-                        </span>
-                      </div>
-                    </div>
-
-                    {selectedInvoice.payments && selectedInvoice.payments.length > 0 && (
-                      <div className="Invoices-page-payment-history">
-                        <h4>Payment History</h4>
-                        {selectedInvoice.payments.map((payment, index) => (
-                          <div key={index} className="Invoices-page-payment-item">
-                            <span>{payment.date}</span>
-                            <span>{payment.method}</span>
-                            <span className="Invoices-page-payment-amount">{formatCurrency(payment.amount)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Terms */}
-                {selectedInvoice.termsConditions && (
-                  <div className="Invoices-page-invoice-section">
-                    <h3>Terms & Conditions</h3>
-                    <p>{selectedInvoice.termsConditions}</p>
-                  </div>
-                )}
-
-                {selectedInvoice.notes && (
-                  <div className="Invoices-page-invoice-section">
-                    <h3>Notes</h3>
-                    <p>{selectedInvoice.notes}</p>
-                  </div>
-                )}
               </div>
             </div>
 
-            <div className="Invoices-page-modal-footer">
+            <div className="Invoices-page-modal-actions">
+              <button
+                className="Invoices-page-btn-secondary"
+                onClick={() => handleDownloadPdf(selectedInvoice)}
+              >
+                <Download size={16} style={{ marginRight: '8px' }} />
+                Download PDF
+              </button>
               <button className="Invoices-page-btn-secondary" onClick={() => handleEditInvoice(selectedInvoice)}>
                 Edit Invoice
               </button>
-              <button className="Invoices-page-btn-secondary">Download PDF</button>
-              <button className="Invoices-page-btn-secondary">Send to Client</button>
               <button className="Invoices-page-btn-primary" onClick={() => {
                 setShowInvoiceModal(false);
                 handleRecordPayment(selectedInvoice);
@@ -770,7 +1011,7 @@ const InvoicesManagementPage = () => {
       {/* Create/Edit Invoice Modal */}
       {showCreateModal && (
         <div className="Invoices-page-modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="Invoices-page-modal Invoices-page-modal-large" onClick={e => e.stopPropagation()}>
+          <div className="Invoices-page-modal Invoices-page-modal-xlarge" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>{editMode ? 'Edit Invoice' : 'Create New Invoice'}</h2>
               <button className="Invoices-page-modal-close" onClick={() => setShowCreateModal(false)}>×</button>
@@ -778,30 +1019,92 @@ const InvoicesManagementPage = () => {
 
             <div className="Invoices-page-modal-body">
               <div className="Invoices-page-form">
+                {/* Project Assignment */}
+                <div className="Invoices-page-form-section">
+                  <h3>Project Assignment</h3>
+                  <div className="Invoices-page-form-grid">
+                    <div className="Invoices-page-form-group">
+                      <label>Group *</label>
+                      <select
+                        value={modalGroupName}
+                        onChange={handleModalGroupChange}
+                        disabled={modalDropdownLoading.groups}
+                      >
+                        <option value="">
+                          {modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
+                        </option>
+                        {modalGroups.map((group, index) => (
+                          <option key={group.value || index} value={group.value}>
+                            {group.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="Invoices-page-form-group">
+                      <label>Sub Group</label>
+                      <select
+                        value={modalSubGroupName}
+                        onChange={handleModalSubGroupChange}
+                        disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                      >
+                        <option value="">
+                          {modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
+                        </option>
+                        {modalSubGroups.map((subGroup, index) => (
+                          <option key={subGroup.value || index} value={subGroup.value}>
+                            {subGroup.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="Invoices-page-form-group">
+                      <label>Project *</label>
+                      <select
+                        value={modalProjectId}
+                        onChange={handleModalProjectChange}
+                        disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                      >
+                        <option value="">
+                          {modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
+                        </option>
+                        {modalProjects.map((project, index) => (
+                          <option key={project.id || index} value={project.id}>
+                            {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Customer Information (Auto-populated) */}
+                {customerData && (
+                  <div className="Invoices-page-form-section">
+                    <h3>Customer Information</h3>
+                    <div style={{
+                      padding: '16px',
+                      backgroundColor: '#f0f9ff',
+                      border: '1px solid #bae6fd',
+                      borderRadius: '8px',
+                      fontSize: '14px'
+                    }}>
+                      <p><strong>Company:</strong> {customerData.companyName}</p>
+                      <p><strong>Contact Person:</strong> {customerData.contactPerson}</p>
+                      <p><strong>Email:</strong> {customerData.email}</p>
+                      <p><strong>Phone:</strong> {customerData.phone}</p>
+                      {customerData.gstNumber && <p><strong>GST:</strong> {customerData.gstNumber}</p>}
+                    </div>
+                  </div>
+                )}
+
                 {/* Invoice Details */}
                 <div className="Invoices-page-form-section">
                   <h3>Invoice Details</h3>
                   <div className="Invoices-page-form-grid">
                     <div className="Invoices-page-form-group">
-                      <label>Invoice Title*</label>
-                      <input
-                        type="text"
-                        value={formData.invoiceTitle}
-                        onChange={(e) => setFormData({ ...formData, invoiceTitle: e.target.value })}
-                        placeholder="e.g., Website Development Services"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Quotation Reference</label>
-                      <input
-                        type="text"
-                        value={formData.quotationRef}
-                        onChange={(e) => setFormData({ ...formData, quotationRef: e.target.value })}
-                        placeholder="QUO-2024-XXX"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Invoice Date*</label>
+                      <label>Invoice Date *</label>
                       <input
                         type="date"
                         value={formData.invoiceDate}
@@ -809,72 +1112,12 @@ const InvoicesManagementPage = () => {
                       />
                     </div>
                     <div className="Invoices-page-form-group">
-                      <label>Due Date*</label>
+                      <label>Due Date *</label>
                       <input
                         type="date"
                         value={formData.dueDate}
                         onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Client Information */}
-                <div className="Invoices-page-form-section">
-                  <h3>Client Information</h3>
-                  <div className="Invoices-page-form-grid">
-                    <div className="Invoices-page-form-group">
-                      <label>Client Name*</label>
-                      <input
-                        type="text"
-                        value={formData.clientName}
-                        onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
-                        placeholder="John Doe"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Company Name*</label>
-                      <input
-                        type="text"
-                        value={formData.companyName}
-                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                        placeholder="Company Pvt Ltd"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Email*</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        placeholder="email@company.com"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Phone*</label>
-                      <input
-                        type="tel"
-                        value={formData.phone}
-                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                        placeholder="+91 99999 99999"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group Invoices-page-form-group-full">
-                      <label>Billing Address*</label>
-                      <textarea
-                        value={formData.billingAddress}
-                        onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
-                        placeholder="Full billing address"
-                        rows="2"
-                      />
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>GST Number</label>
-                      <input
-                        type="text"
-                        value={formData.gstNumber}
-                        onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })}
-                        placeholder="27AABCU9603R1ZM"
+                        min={formData.invoiceDate}
                       />
                     </div>
                   </div>
@@ -883,127 +1126,110 @@ const InvoicesManagementPage = () => {
                 {/* Invoice Items */}
                 <div className="Invoices-page-form-section">
                   <div className="Invoices-page-section-header">
-                    <h3>Invoice Items</h3>
-                    <button className="Invoices-page-btn-secondary" onClick={addItem}>+ Add Item</button>
+                    <h3>Invoice Items *</h3>
+                    <button className="Invoices-page-btn-add" onClick={addItem}>+ Add Item</button>
                   </div>
 
                   {formData.items.map((item, index) => (
                     <div key={index} className="Invoices-page-item-row">
-                      <div className="Invoices-page-form-grid Invoices-page-item-grid">
-                        <div className="Invoices-page-form-group">
-                          <label>Item Name*</label>
-                          <input
-                            type="text"
-                            value={item.name}
-                            onChange={(e) => updateItem(index, 'name', e.target.value)}
-                            placeholder="Service/Product name"
-                          />
-                        </div>
-                        <div className="Invoices-page-form-group Invoices-page-form-group-wide">
-                          <label>Description</label>
+                      <div className="Invoices-page-item-fields">
+                        <div className="Invoices-page-form-group" style={{ flex: '2' }}>
+                          <label>Description *</label>
                           <input
                             type="text"
                             value={item.description}
                             onChange={(e) => updateItem(index, 'description', e.target.value)}
-                            placeholder="Brief description"
+                            placeholder="Item description"
                           />
                         </div>
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
-                          <label>Qty*</label>
+                          <label>Unit Type</label>
+                          <select
+                            value={item.unitType}
+                            onChange={(e) => updateItem(index, 'unitType', e.target.value)}
+                          >
+                            <option value="Nos">Nos</option>
+                            <option value="Kgs">Kgs</option>
+                            <option value="Boxes">Boxes</option>
+                            <option value="Pcs">Pcs</option>
+                            <option value="Meters">Meters</option>
+                            <option value="Liters">Liters</option>
+                          </select>
+                        </div>
+                        <div className="Invoices-page-form-group Invoices-page-form-group-small">
+                          <label>Qty *</label>
                           <input
                             type="number"
                             value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
+                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 1)}
                             min="1"
                           />
                         </div>
                         <div className="Invoices-page-form-group">
-                          <label>Unit Price*</label>
+                          <label>Unit Price *</label>
                           <input
                             type="number"
                             value={item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
+                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                             min="0"
-                            placeholder="0"
+                            step="0.01"
                           />
                         </div>
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Tax %</label>
-                          <input
-                            type="number"
-                            value={item.tax}
-                            onChange={(e) => updateItem(index, 'tax', parseFloat(e.target.value))}
-                            min="0"
-                            max="100"
-                          />
+                          <select
+                            value={item.taxPercent}
+                            onChange={(e) => updateItem(index, 'taxPercent', parseFloat(e.target.value))}
+                          >
+                            <option value="0">0%</option>
+                            <option value="5">5%</option>
+                            <option value="12">12%</option>
+                            <option value="18">18%</option>
+                            <option value="28">28%</option>
+                          </select>
                         </div>
                         <div className="Invoices-page-form-group">
                           <label>Line Total</label>
-                          <div className="Invoices-page-calculated-value">
-                            {formatCurrency(item.quantity * item.unitPrice * (1 + item.tax / 100))}
+                          <div className="Invoices-page-item-total">
+                            {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxPercent / 100))}
                           </div>
                         </div>
-                        <div className="Invoices-page-item-actions">
-                          {formData.items.length > 1 && (
-                            <button
-                              className="Invoices-page-btn-icon-danger"
-                              onClick={() => removeItem(index)}
-                              title="Remove item"
-                            >
-                              🗑️
-                            </button>
-                          )}
-                        </div>
                       </div>
+                      {formData.items.length > 1 && (
+                        <button
+                          className="Invoices-page-btn-remove"
+                          onClick={() => removeItem(index)}
+                          title="Remove item"
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   ))}
 
-                  <div className="Invoices-page-invoice-totals Invoices-page-form-totals">
-                    <div className="Invoices-page-total-row">
+                  <div className="Invoices-page-calculation-summary">
+                    <div className="Invoices-page-calc-row">
                       <span>Subtotal:</span>
                       <span>{formatCurrency(calculateInvoice().subtotal)}</span>
                     </div>
-                    <div className="Invoices-page-total-row">
+                    <div className="Invoices-page-calc-row">
                       <span>Tax Total:</span>
                       <span>{formatCurrency(calculateInvoice().taxTotal)}</span>
                     </div>
-                    <div className="Invoices-page-total-row Invoices-page-grand-total">
+                    <div className="Invoices-page-calc-row Invoices-page-calc-grand">
                       <span>Grand Total:</span>
                       <span>{formatCurrency(calculateInvoice().grandTotal)}</span>
                     </div>
                   </div>
                 </div>
-
-                {/* Terms & Notes */}
-                <div className="Invoices-page-form-section">
-                  <h3>Additional Information</h3>
-                  <div className="Invoices-page-form-group">
-                    <label>Terms & Conditions</label>
-                    <textarea
-                      value={formData.termsConditions}
-                      onChange={(e) => setFormData({ ...formData, termsConditions: e.target.value })}
-                      placeholder="Payment terms, conditions, etc."
-                      rows="3"
-                    />
-                  </div>
-                  <div className="Invoices-page-form-group">
-                    <label>Notes</label>
-                    <textarea
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      placeholder="Additional notes for the client"
-                      rows="2"
-                    />
-                  </div>
-                </div>
               </div>
             </div>
 
-            <div className="Invoices-page-modal-footer">
-              <button className="Invoices-page-btn-secondary" onClick={() => handleSaveInvoice('Draft')}>
+            <div className="Invoices-page-modal-actions">
+              <button className="Invoices-page-btn-secondary" onClick={() => handleSaveInvoice('DRAFT')}>
                 Save as Draft
               </button>
-              <button className="Invoices-page-btn-primary" onClick={() => handleSaveInvoice('Sent')}>
+              <button className="Invoices-page-btn-primary" onClick={() => handleSaveInvoice('SENT')}>
                 {editMode ? 'Update Invoice' : 'Create & Send Invoice'}
               </button>
             </div>
@@ -1021,50 +1247,48 @@ const InvoicesManagementPage = () => {
             </div>
 
             <div className="Invoices-page-modal-body">
-              <div className="Invoices-page-payment-summary-box">
-                <div className="Invoices-page-payment-detail">
+              <div style={{
+                padding: '16px',
+                backgroundColor: '#f8fafc',
+                borderRadius: '8px',
+                marginBottom: '20px'
+              }}>
+                <div className="Invoices-page-payment-row">
                   <span>Invoice ID:</span>
-                  <strong>{selectedInvoice.id}</strong>
+                  <strong>{selectedInvoice.invoiceNo}</strong>
                 </div>
-                <div className="Invoices-page-payment-detail">
+                <div className="Invoices-page-payment-row">
                   <span>Total Amount:</span>
-                  <strong>{formatCurrency(selectedInvoice.totalPayable)}</strong>
+                  <strong>{formatCurrency(selectedInvoice.totalAmount)}</strong>
                 </div>
-                <div className="Invoices-page-payment-detail">
+                <div className="Invoices-page-payment-row">
                   <span>Already Paid:</span>
                   <strong className="Invoices-page-text-success">
-                    {formatCurrency(selectedInvoice.payments?.reduce((sum, p) => sum + p.amount, 0) || 0)}
+                    {formatCurrency(selectedInvoice.paidAmount)}
                   </strong>
                 </div>
-                <div className="Invoices-page-payment-detail">
+                <div className="Invoices-page-payment-row">
                   <span>Balance Due:</span>
                   <strong className="Invoices-page-text-danger">
-                    {formatCurrency(selectedInvoice.totalPayable - (selectedInvoice.payments?.reduce((sum, p) => sum + p.amount, 0) || 0))}
+                    {formatCurrency(selectedInvoice.balanceAmount)}
                   </strong>
                 </div>
               </div>
 
               <div className="Invoices-page-form">
                 <div className="Invoices-page-form-group">
-                  <label>Payment Date*</label>
-                  <input
-                    type="date"
-                    value={paymentData.date}
-                    onChange={(e) => setPaymentData({ ...paymentData, date: e.target.value })}
-                  />
-                </div>
-                <div className="Invoices-page-form-group">
-                  <label>Amount Paid*</label>
+                  <label>Amount Paid *</label>
                   <input
                     type="number"
                     value={paymentData.amount}
-                    onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
                     min="0"
-                    placeholder="0"
+                    step="0.01"
+                    max={selectedInvoice.balanceAmount}
                   />
                 </div>
                 <div className="Invoices-page-form-group">
-                  <label>Payment Method*</label>
+                  <label>Payment Method *</label>
                   <select
                     value={paymentData.method}
                     onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}
@@ -1085,10 +1309,19 @@ const InvoicesManagementPage = () => {
                     rows="3"
                   />
                 </div>
+                <div className="Invoices-page-form-group">
+                  <label>Transaction Reference</label>
+                  <input
+                    type="text"
+                    value={paymentData.transactionReference}
+                    onChange={(e) => setPaymentData({ ...paymentData, transactionReference: e.target.value })}
+                    placeholder="Transaction ID, cheque number, etc."
+                  />
+                </div>
               </div>
             </div>
 
-            <div className="Invoices-page-modal-footer">
+            <div className="Invoices-page-modal-actions">
               <button className="Invoices-page-btn-secondary" onClick={() => setShowPaymentModal(false)}>
                 Cancel
               </button>

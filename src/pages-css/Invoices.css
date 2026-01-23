@@ -847,3 +847,251 @@
   margin-top: 12px;
   border-top: 2px solid #e2e8f1;
 }
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .Invoices-page-form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .Invoices-page-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .Invoices-page-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .Invoices-page-search-filters {
+    flex-direction: column;
+  }
+  
+  .Invoices-page-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .Invoices-page-table-container {
+    overflow-x: auto;
+  }
+  
+  .Invoices-page-modal {
+    max-width: 95%;
+    margin: 10px;
+  }
+  
+  .Invoices-page-item-row {
+    flex-direction: column;
+  }
+  
+  .Invoices-page-item-fields {
+    flex-direction: column;
+  }
+  
+  .Invoices-page-pagination {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .Invoices-page-container {
+    padding: 12px;
+  }
+  
+  .Invoices-page-title {
+    font-size: 24px;
+  }
+  
+  .Invoices-page-table th,
+  .Invoices-page-table td {
+    padding: 8px;
+    font-size: 12px;
+  }
+  
+  .Invoices-page-action-buttons {
+    flex-wrap: wrap;
+  }
+}
+
+.Invoices-page-pagination-controls-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.Invoices-page-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.Invoices-page-pagination-size label {
+  font-weight: 500;
+}
+
+.Invoices-page-pagination-size-select {
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.Invoices-page-pagination-size-select:hover {
+  border-color: #cbd5e1;
+}
+
+.Invoices-page-pagination-size-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+/* ADD THESE STYLES TO YOUR Invoices.css FILE */
+
+/* Pagination wrapper styles */
+.Invoices-page-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  background-color: white;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0 0 8px 8px;
+}
+
+.Invoices-page-pagination-info {
+  font-size: 14px;
+  color: #64748b;
+}
+
+.Invoices-page-pagination-controls-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+/* Rows per page selector */
+.Invoices-page-pagination-size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #64748b;
+}
+
+.Invoices-page-pagination-size label {
+  font-weight: 500;
+}
+
+.Invoices-page-pagination-size-select {
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 70px;
+}
+
+.Invoices-page-pagination-size-select:hover {
+  border-color: #cbd5e1;
+}
+
+.Invoices-page-pagination-size-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Page navigation controls */
+.Invoices-page-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.Invoices-page-pagination-btn {
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background-color: white;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.Invoices-page-pagination-btn:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+.Invoices-page-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.Invoices-page-pagination-current {
+  font-size: 14px;
+  color: #475569;
+  font-weight: 500;
+  min-width: 120px;
+  text-align: center;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 768px) {
+  .Invoices-page-pagination {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .Invoices-page-pagination-controls-wrapper {
+    flex-direction: column;
+    gap: 12px;
+  }
+}
+/* ADD THESE STYLES TO YOUR Invoices.css FILE */
+
+/* Download button styling */
+.Invoices-page-btn-download {
+  background-color: #10b981;
+  color: white;
+}
+
+.Invoices-page-btn-download:hover {
+  background-color: #059669;
+}
+
+/* Ensure action buttons are properly spaced */
+.Invoices-page-action-buttons {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.Invoices-page-action-btn {
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.Invoices-page-action-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}

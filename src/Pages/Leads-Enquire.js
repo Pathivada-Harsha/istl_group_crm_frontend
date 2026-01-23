@@ -7,10 +7,12 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import LeadTimelineModal from './../components/Leads/LeadTimelineModal.js'; // NEW
+import AddFollowupModal from './../components/Leads/AddFollowupModal.js'; // NEW
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function LeadsEnquiries() {
-const isFirstRender = useRef(true);
+  const isFirstRender = useRef(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
   const [selectedLead, setSelectedLead] = useState(null);
@@ -30,7 +32,11 @@ const isFirstRender = useRef(true);
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions } = useAuth();
-
+  // NEW: Follow-up and Timeline states
+  const [showFollowupModal, setShowFollowupModal] = useState(false);
+  const [showTimelineModal, setShowTimelineModal] = useState(false);
+  const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null);
+  const [selectedLeadForTimeline, setSelectedLeadForTimeline] = useState(null);
 
   // Extract permissions
   const leadsPermissions = pagePermissions?.LEADS || [];
@@ -124,7 +130,41 @@ const isFirstRender = useRef(true);
       setLoading(false);
     }
   };
+  // NEW: Handle Add Follow-up
+  const handleAddFollowup = (lead) => {
+    if (!canCreate) {
+      showError('You do not have permission to create follow-ups');
+      return;
+    }
+    setSelectedLeadForFollowup(lead);
+    setShowFollowupModal(true);
+  };
 
+  // NEW: Handle View Timeline
+  const handleViewTimeline = async (lead) => {
+    if (!canView) {
+      showError('You do not have permission to view timeline');
+      return;
+    }
+
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/leads/${lead.id}`);
+      if (data.success) {
+        setSelectedLeadForTimeline(data.data);
+        setShowTimelineModal(true);
+      }
+    } catch (err) {
+      showError(err.message || 'Error fetching lead details');
+    }
+  };
+
+  // NEW: Handle Follow-up Created
+  const handleFollowupCreated = () => {
+    setShowFollowupModal(false);
+    setSelectedLeadForFollowup(null);
+    showSuccess('Follow-up created successfully');
+    fetchLeads(); // Refresh to update pending follow-up counts
+  };
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
@@ -198,7 +238,7 @@ const isFirstRender = useRef(true);
 
   const applyFilters = async () => {
     if (!canView) return;
-    
+
     setLoading(true);
     setError(null);
     try {
@@ -230,31 +270,31 @@ const isFirstRender = useRef(true);
     }
   };
 
- useEffect(() => {
-  // ⛔ Skip first render
-  if (isFirstRender.current) {
-    isFirstRender.current = false;
-    return;
-  }
+  useEffect(() => {
+    // ⛔ Skip first render
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
 
-  // ⛔ Skip if filters are still default
-  const isDefaultFilter =
-    !searchTerm &&
-    statusFilter === 'All' &&
-    priorityFilter === 'All' &&
-    sourceFilter === 'All';
+    // ⛔ Skip if filters are still default
+    const isDefaultFilter =
+      !searchTerm &&
+      statusFilter === 'All' &&
+      priorityFilter === 'All' &&
+      sourceFilter === 'All';
 
-  if (isDefaultFilter) {
-    return;
-  }
+    if (isDefaultFilter) {
+      return;
+    }
 
-  const debounceTimer = setTimeout(() => {
-    applyFilters();
-  }, 500);
+    const debounceTimer = setTimeout(() => {
+      applyFilters();
+    }, 500);
 
-  return () => clearTimeout(debounceTimer);
+    return () => clearTimeout(debounceTimer);
 
-}, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
+  }, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
 
 
   const handleSort = (column) => {
@@ -339,12 +379,12 @@ const isFirstRender = useRef(true);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (formData.id && !canEdit) {
       showError('You do not have permission to edit leads');
       return;
     }
-    
+
     if (!formData.id && !canCreate) {
       showError('You do not have permission to create leads');
       return;
@@ -546,11 +586,11 @@ const isFirstRender = useRef(true);
         </div>
 
         <div className="leads-enquiries-action-buttons">
-          <button 
+          <button
             className={`leads-enquiries-btn leads-enquiries-btn-primary ${!canCreate ? 'leads-enquiries-btn-disabled' : ''}`}
-            onClick={() => { 
+            onClick={() => {
               if (canCreate) {
-                resetForm(); 
+                resetForm();
                 setShowAddModal(true);
               } else {
                 showError('You do not have permission to create leads');
@@ -630,9 +670,9 @@ const isFirstRender = useRef(true);
                     <td>
                       <div className="leads-enquiries-action-buttons-cell">
                         {canView && (
-                          <button 
-                            className="leads-enquiries-action-btn leads-enquiries-action-view" 
-                            onClick={() => handleView(lead)} 
+                          <button
+                            className="leads-enquiries-action-btn leads-enquiries-action-view"
+                            onClick={() => handleView(lead)}
                             title="View"
                           >
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -641,9 +681,33 @@ const isFirstRender = useRef(true);
                             </svg>
                           </button>
                         )}
-                        <button 
+
+                        {/* NEW: Timeline Button */}
+                        <button
+                          className="leads-enquiries-action-btn leads-enquiries-action-timeline"
+                          onClick={() => handleViewTimeline(lead)}
+                          title="View Timeline"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        {/* NEW: Add Follow-up Button */}
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleAddFollowup(lead)}
+                          title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
+                          disabled={!canCreate}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+
+                        <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleEdit(lead)} 
+                          onClick={() => handleEdit(lead)}
                           title={!canEdit ? 'No permission to edit' : 'Edit'}
                           disabled={!canEdit}
                         >
@@ -651,9 +715,10 @@ const isFirstRender = useRef(true);
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button 
+
+                        <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleDelete(lead.id)} 
+                          onClick={() => handleDelete(lead.id)}
                           title={!canDelete ? 'No permission to delete' : 'Delete'}
                           disabled={!canDelete}
                         >
@@ -781,8 +846,8 @@ const isFirstRender = useRef(true);
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select 
-                      value={formData.assignedTo || ''} 
+                    <select
+                      value={formData.assignedTo || ''}
                       onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}
                       disabled={!canAssign}
                     >
@@ -793,7 +858,7 @@ const isFirstRender = useRef(true);
                         </option>
                       ))}
                     </select>
-                    {!canAssign && <small style={{color: '#6b7280', fontSize: '12px'}}>You don't have permission to assign leads</small>}
+                    {!canAssign && <small style={{ color: '#6b7280', fontSize: '12px' }}>You don't have permission to assign leads</small>}
                   </div>
                 </div>
                 <div className="leads-enquiries-form-group">
@@ -887,6 +952,36 @@ const isFirstRender = useRef(true);
               </div>
 
               <div className="leads-enquiries-modal-actions">
+                {/* NEW: Add Follow-up from View Modal */}
+                {canCreate && (
+                  <button
+                    className="leads-enquiries-btn leads-enquiries-btn-success"
+                    onClick={() => {
+                      setShowViewModal(false);
+                      handleAddFollowup(selectedLead);
+                    }}
+                  >
+                    <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    </svg>
+                    Add Follow-up
+                  </button>
+                )}
+
+                {/* NEW: View Timeline from View Modal */}
+                <button
+                  className="leads-enquiries-btn leads-enquiries-btn-info"
+                  onClick={() => {
+                    setShowViewModal(false);
+                    handleViewTimeline(selectedLead);
+                  }}
+                >
+                  <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  View Timeline
+                </button>
+
                 {canEdit && (
                   <button className="leads-enquiries-btn leads-enquiries-btn-primary" onClick={() => handleEdit(selectedLead)}>
                     Edit Lead
@@ -899,6 +994,33 @@ const isFirstRender = useRef(true);
             </div>
           </div>
         </div>
+      )}
+
+      {/* NEW: Follow-up Modal */}
+      {showFollowupModal && selectedLeadForFollowup && (
+        <AddFollowupModal
+          lead={selectedLeadForFollowup}
+          onClose={() => {
+            setShowFollowupModal(false);
+            setSelectedLeadForFollowup(null);
+          }}
+          onFollowupCreated={handleFollowupCreated}
+        />
+      )}
+
+      {/* NEW: Timeline Modal */}
+      {showTimelineModal && selectedLeadForTimeline && (
+        <LeadTimelineModal
+          lead={selectedLeadForTimeline}
+          onClose={() => {
+            setShowTimelineModal(false);
+            setSelectedLeadForTimeline(null);
+          }}
+          onAddFollowup={() => {
+            setShowTimelineModal(false);
+            handleAddFollowup(selectedLeadForTimeline);
+          }}
+        />
       )}
     </div>
   );

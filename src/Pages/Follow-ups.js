@@ -1,174 +1,1230 @@
 // ClientDashboardFollowUps.js
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "../pages-css/Follow-ups.css";
+import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
+import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import { useAuth } from "../hooks/useAuth.js";
+import useToast from '../hooks/useToast';
+import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import CrmPreloader from "../components/preLoader.js";
 
-export default function ClientDashboardFollowUps({ initialFollowUps = [], onAdd }) {
-  // initialFollowUps: optional prop to seed follow-ups (array)
-  const [followUps, setFollowUps] = useState(initialFollowUps);
-  const [showForm, setShowForm] = useState(false);
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-  // Form state
-  const [form, setForm] = useState({
-    date: "",
-    time: "",
-    description: "",
-    member: "",
-    status: "Pending",
-    notes: "",
+export default function ClientDashboardFollowUps() {
+  const { user } = useAuth();
+  const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  
+  const [followUps, setFollowUps] = useState([]);
+  const [filteredFollowUps, setFilteredFollowUps] = useState([]);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingFollowup, setEditingFollowup] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [leads, setLeads] = useState([]);
+  const [allLeads, setAllLeads] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState('All');
+  const [priorityFilter, setPriorityFilter] = useState('All');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [assignedToFilter, setAssignedToFilter] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // KPI States
+  const [kpis, setKpis] = useState({
+    total: 0,
+    pending: 0,
+    completed: 0,
+    overdue: 0,
+    today: 0
   });
 
-  const resetForm = () => {
-    setForm({
-      date: "",
-      time: "",
-      description: "",
-      member: "",
-      status: "Pending",
-      notes: "",
-    });
+  // Add Form state
+  const [addForm, setAddForm] = useState({
+    modalGroupName: '',
+    modalSubGroupName: '',
+    leadId: '',
+    followupType: 'Call',
+    scheduledDate: '',
+    scheduledTime: '',
+    assignedTo: '',
+    status: 'Pending',
+    priority: 'Medium',
+    notes: ''
+  });
+
+  // Edit Form state
+  const [editForm, setEditForm] = useState({
+    followupType: 'Call',
+    scheduledDate: '',
+    scheduledTime: '',
+    assignedTo: '',
+    status: 'Pending',
+    priority: 'Medium',
+    notes: '',
+    outcome: ''
+  });
+
+  useEffect(() => {
+    fetchFollowUps();
+    fetchUsers();
+    fetchAllLeads();
+    fetchGroups();
+  }, []);
+
+  useEffect(() => {
+    fetchFollowUps();
+  }, [groupName, subGroupName]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm]);
+
+  useEffect(() => {
+    calculateKPIs();
+  }, [filteredFollowUps]);
+
+  // Fetch leads when modal group/subgroup changes
+  useEffect(() => {
+    if (addForm.modalGroupName) {
+      fetchSubGroupsForModal(addForm.modalGroupName);
+      fetchLeadsForModal();
+    } else {
+      setSubGroups([]);
+      setLeads([]);
+    }
+  }, [addForm.modalGroupName]);
+
+  useEffect(() => {
+    if (addForm.modalGroupName) {
+      fetchLeadsForModal();
+    }
+  }, [addForm.modalSubGroupName]);
+
+  const fetchFollowUps = async () => {
+    setLoading(true);
+    try {
+      let url = `${API_BASE_URL}/followups/my-followups`;
+      
+      if (user.role === 'SUPERADMIN' || user.role === 'ADMIN') {
+        url = `${API_BASE_URL}/followups/all`;
+      }
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch follow-ups');
+      
+      const data = await response.json();
+      if (data.success) {
+        setFollowUps(data.data || []);
+      }
+    } catch (err) {
+      showError(err.message || 'Error fetching follow-ups');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  function handleChange(e) {
-    const { name, value } = e.target;
-    setForm((s) => ({ ...s, [name]: value }));
-  }
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
 
-  function handleAdd(e) {
-    e.preventDefault();
-    // Basic validation
-    if (!form.date || !form.description || !form.member) {
-      alert("Please fill Date, Description and BD Member.");
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const data = await response.json();
+      setUsers(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Error fetching users:', err);
+    }
+  };
+
+  const fetchAllLeads = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/leads/getAll`, {
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch leads');
+      const data = await response.json();
+      if (data.success) {
+        setAllLeads(data.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching leads:', err);
+    }
+  };
+
+  const fetchGroups = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching groups:', err);
+      setGroups([]);
+    }
+  };
+
+  const fetchSubGroupsForModal = async (group) => {
+    if (!group) {
+      setSubGroups([]);
       return;
     }
 
-    const newFU = {
-      id: `F-${Date.now()}`,
-      date: form.date + (form.time ? ` ${form.time}` : ""),
-      desc: form.description,
-      member: form.member,
-      status: form.status,
-      notes: form.notes,
-      createdAt: new Date().toISOString(),
-    };
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`,
+        {
+          credentials: "include",
+          headers: {
+            'User-Id': user.id,
+            'User-Role': user.role
+          }
+        }
+      );
 
-    const updated = [newFU, ...followUps];
-    setFollowUps(updated);
-    setShowForm(false);
-    resetForm();
+      if (!response.ok) throw new Error('Failed to fetch subgroups');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setSubGroups(data);
+      }
+    } catch (err) {
+      console.error('Error fetching subgroups:', err);
+      setSubGroups([]);
+    }
+  };
 
-    if (typeof onAdd === "function") onAdd(newFU);
-  }
+  const fetchLeadsForModal = async () => {
+    try {
+      const params = new URLSearchParams();
+      if (addForm.modalGroupName) params.append('groupName', addForm.modalGroupName);
+      if (addForm.modalSubGroupName) params.append('subGroupName', addForm.modalSubGroupName);
 
-  function handleDelete(id) {
+      const response = await fetch(`${API_BASE_URL}/leads/getAll?${params}`, {
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch leads');
+      const data = await response.json();
+      if (data.success) {
+        setLeads(data.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching leads:', err);
+      setLeads([]);
+    }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...followUps];
+
+    // Apply group/subgroup filters from page-level filter
+    if (groupName) {
+      filtered = filtered.filter(f => f.groupName === groupName);
+    }
+    if (subGroupName) {
+      filtered = filtered.filter(f => f.subGroupName === subGroupName);
+    }
+
+    if (statusFilter !== 'All') {
+      filtered = filtered.filter(f => f.status === statusFilter);
+    }
+
+    if (priorityFilter !== 'All') {
+      filtered = filtered.filter(f => f.priority === priorityFilter);
+    }
+
+    if (typeFilter !== 'All') {
+      filtered = filtered.filter(f => f.followupType === typeFilter);
+    }
+
+    if (assignedToFilter !== 'All') {
+      filtered = filtered.filter(f => f.assignedTo === parseInt(assignedToFilter));
+    }
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(f => 
+        (f.notes && f.notes.toLowerCase().includes(term)) ||
+        (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
+        (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
+        (f.followupType && f.followupType.toLowerCase().includes(term))
+      );
+    }
+
+    setFilteredFollowUps(filtered);
+    setCurrentPage(1);
+  };
+
+  const calculateKPIs = () => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const total = filteredFollowUps.length;
+    const pending = filteredFollowUps.filter(f => f.status === 'Pending').length;
+    const completed = filteredFollowUps.filter(f => f.status === 'Completed').length;
+    
+    const overdue = filteredFollowUps.filter(f => {
+      if (f.status !== 'Pending') return false;
+      const scheduledDate = new Date(f.scheduledAt);
+      return scheduledDate < now;
+    }).length;
+
+    const todayCount = filteredFollowUps.filter(f => {
+      if (f.status !== 'Pending') return false;
+      const scheduledDate = new Date(f.scheduledAt);
+      const scheduleDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
+      return scheduleDay.getTime() === today.getTime();
+    }).length;
+
+    setKpis({ total, pending, completed, overdue, today: todayCount });
+  };
+
+  const resetAddForm = () => {
+    setAddForm({
+      modalGroupName: '',
+      modalSubGroupName: '',
+      leadId: '',
+      followupType: 'Call',
+      scheduledDate: '',
+      scheduledTime: '',
+      assignedTo: user.id,
+      status: 'Pending',
+      priority: 'Medium',
+      notes: ''
+    });
+    setLeads([]);
+    setSubGroups([]);
+  };
+
+  const resetEditForm = () => {
+    setEditForm({
+      followupType: 'Call',
+      scheduledDate: '',
+      scheduledTime: '',
+      assignedTo: '',
+      status: 'Pending',
+      priority: 'Medium',
+      notes: '',
+      outcome: ''
+    });
+  };
+
+  const handleAddFormChange = (e) => {
+    const { name, value } = e.target;
+    setAddForm(prev => ({ ...prev, [name]: value }));
+
+    // Reset subgroup and lead when group changes
+    if (name === 'modalGroupName') {
+      setAddForm(prev => ({ 
+        ...prev, 
+        [name]: value,
+        modalSubGroupName: '',
+        leadId: ''
+      }));
+    }
+
+    // Reset lead when subgroup changes
+    if (name === 'modalSubGroupName') {
+      setAddForm(prev => ({ 
+        ...prev, 
+        [name]: value,
+        leadId: ''
+      }));
+    }
+  };
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!addForm.scheduledDate) {
+      showError('Please select a date');
+      return;
+    }
+
+    if (!addForm.leadId) {
+      showError('Please select a lead');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const selectedLead = allLeads.find(l => l.id === parseInt(addForm.leadId));
+      
+      const scheduledAt = addForm.scheduledTime 
+        ? `${addForm.scheduledDate} ${addForm.scheduledTime}:00`
+        : `${addForm.scheduledDate} 09:00:00`;
+
+      const requestData = {
+        relatedType: 'LEAD',
+        relatedId: parseInt(addForm.leadId),
+        leadId: parseInt(addForm.leadId),
+        customerId: selectedLead?.customerId || null,
+        projectId: null,
+        groupName: selectedLead?.groupName || addForm.modalGroupName,
+        subGroupName: selectedLead?.subGroupName || addForm.modalSubGroupName,
+        followupType: addForm.followupType,
+        scheduledAt: scheduledAt,
+        assignedTo: parseInt(addForm.assignedTo),
+        status: addForm.status,
+        priority: addForm.priority,
+        notes: addForm.notes
+      };
+
+      const response = await fetch(`${API_BASE_URL}/followups/create`, {
+        method: 'POST',
+        credentials: "include",
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id': user.id,
+          'User-Role': user.role
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create follow-up');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        showSuccess('Follow-up created successfully');
+        setShowAddModal(false);
+        resetAddForm();
+        fetchFollowUps();
+      }
+    } catch (err) {
+      showError(err.message || 'Error creating follow-up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!editForm.scheduledDate) {
+      showError('Please select a date');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const scheduledAt = editForm.scheduledTime 
+        ? `${editForm.scheduledDate} ${editForm.scheduledTime}:00`
+        : `${editForm.scheduledDate} 09:00:00`;
+
+      const requestData = {
+        followupType: editForm.followupType,
+        scheduledAt: scheduledAt,
+        assignedTo: parseInt(editForm.assignedTo),
+        status: editForm.status,
+        priority: editForm.priority,
+        notes: editForm.notes,
+        outcome: editForm.outcome
+      };
+
+      const response = await fetch(`${API_BASE_URL}/followups/update/${editingFollowup.id}`, {
+        method: 'PUT',
+        credentials: "include",
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id': user.id,
+          'User-Role': user.role
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to update follow-up');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        showSuccess('Follow-up updated successfully');
+        setShowEditModal(false);
+        resetEditForm();
+        setEditingFollowup(null);
+        fetchFollowUps();
+      }
+    } catch (err) {
+      showError(err.message || 'Error updating follow-up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (followup) => {
+    const scheduledDate = followup.scheduledAt ? followup.scheduledAt.split(' ')[0] : '';
+    const scheduledTime = followup.scheduledAt ? followup.scheduledAt.split(' ')[1]?.substring(0, 5) : '';
+
+    setEditForm({
+      followupType: followup.followupType || 'Call',
+      scheduledDate: scheduledDate,
+      scheduledTime: scheduledTime,
+      assignedTo: followup.assignedTo || user.id,
+      status: followup.status || 'Pending',
+      priority: followup.priority || 'Medium',
+      notes: followup.notes || '',
+      outcome: followup.outcome || ''
+    });
+    setEditingFollowup(followup);
+    setShowEditModal(true);
+  };
+
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this follow-up?")) return;
-    setFollowUps((list) => list.filter((f) => f.id !== id));
-  }
 
-  function toggleStatus(id) {
-    setFollowUps((list) =>
-      list.map((f) => (f.id === id ? { ...f, status: f.status === "Pending" ? "Completed" : "Pending" } : f))
-    );
-  }
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/followups/delete/${id}`, {
+        method: 'DELETE',
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to delete follow-up');
+      
+      const data = await response.json();
+      if (data.success) {
+        showSuccess('Follow-up deleted successfully');
+        fetchFollowUps();
+      }
+    } catch (err) {
+      showError(err.message || 'Error deleting follow-up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickStatusUpdate = async (followup, newStatus) => {
+    setLoading(true);
+    try {
+      const requestData = {
+        status: newStatus,
+        outcome: newStatus === 'Completed' ? 'Completed via quick action' : undefined
+      };
+
+      const response = await fetch(`${API_BASE_URL}/followups/update/${followup.id}`, {
+        method: 'PUT',
+        credentials: "include",
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id': user.id,
+          'User-Role': user.role
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) throw new Error('Failed to update status');
+      
+      const data = await response.json();
+      if (data.success) {
+        showSuccess('Status updated successfully');
+        fetchFollowUps();
+      }
+    } catch (err) {
+      showError(err.message || 'Error updating status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusClass = (status) => {
+    const classes = {
+      'Pending': 'pending',
+      'Completed': 'completed',
+      'Cancelled': 'cancelled',
+      'Rescheduled': 'rescheduled'
+    };
+    return classes[status] || 'pending';
+  };
+
+  const getPriorityClass = (priority) => {
+    const classes = {
+      'High': 'high',
+      'Medium': 'medium',
+      'Low': 'low'
+    };
+    return classes[priority] || 'medium';
+  };
+
+  const isOverdue = (followup) => {
+    if (followup.status !== 'Pending') return false;
+    const scheduledDate = new Date(followup.scheduledAt);
+    return scheduledDate < new Date();
+  };
+
+  // Pagination
+  const totalPages = Math.ceil(filteredFollowUps.length / rowsPerPage);
+  const startIndex = (currentPage - 1) * rowsPerPage;
+  const endIndex = startIndex + rowsPerPage;
+  const currentFollowUps = filteredFollowUps.slice(startIndex, endIndex);
 
   return (
-    <div className="Client-Dashboard-page-followups-root">
-      <div className="Client-Dashboard-page-followups-header">
-        <h2>Follow-Ups</h2>
-        <div className="Client-Dashboard-page-followups-actions">
-          <button className="Client-Dashboard-page-btn" onClick={() => setShowForm((s) => !s)}>
-            {showForm ? "Close" : "Add Follow-Up"}
-          </button>
+    <div className="followups-page-root">
+      {loading && <CrmPreloader text="Loading Follow-ups..." />}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* Breadcrumb */}
+      <div className="followups-breadcrumb">
+        <span>Dashboard</span>
+        <span className="followups-breadcrumb-separator">&gt;</span>
+        <span className="followups-breadcrumb-active">Follow-ups Management</span>
+      </div>
+
+      {/* Header with Group Filter */}
+      <div className="followups-header page-header-with-filter">
+        <h1>Follow-ups Management</h1>
+        <GroupCategoryFilter
+          groupValue={groupName}
+          subGroupValue={subGroupName}
+          onChange={updateFilters}
+        />
+      </div>
+
+      {/* KPI Cards */}
+      <div className="followups-kpi-container">
+        <div className="followups-kpi-card kpi-total">
+          <div className="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Total Follow-ups</div>
+            <div className="kpi-value">{kpis.total}</div>
+          </div>
+        </div>
+
+        <div className="followups-kpi-card kpi-pending">
+          <div className="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Pending</div>
+            <div className="kpi-value">{kpis.pending}</div>
+          </div>
+        </div>
+
+        <div className="followups-kpi-card kpi-today">
+          <div className="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Due Today</div>
+            <div className="kpi-value">{kpis.today}</div>
+          </div>
+        </div>
+
+        <div className="followups-kpi-card kpi-overdue">
+          <div className="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Overdue</div>
+            <div className="kpi-value">{kpis.overdue}</div>
+          </div>
+        </div>
+
+        <div className="followups-kpi-card kpi-completed">
+          <div className="kpi-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <div className="kpi-content">
+            <div className="kpi-label">Completed</div>
+            <div className="kpi-value">{kpis.completed}</div>
+          </div>
         </div>
       </div>
 
-      {showForm && (
-        <form className="Client-Dashboard-page-followups-form" onSubmit={handleAdd}>
-          <div className="Client-Dashboard-page-form-row">
-            <label>
-              Date
-              <input type="date" name="date" value={form.date} onChange={handleChange} />
-            </label>
-            <label>
-              Time
-              <input type="time" name="time" value={form.time} onChange={handleChange} />
-            </label>
-            <label>
-              BD Member
-              <input type="text" name="member" value={form.member} onChange={handleChange} placeholder="Assigned person" />
-            </label>
-            <label>
-              Status
-              <select name="status" value={form.status} onChange={handleChange}>
-                <option>Pending</option>
-                <option>Completed</option>
-                <option>Cancelled</option>
-              </select>
-            </label>
-          </div>
+      {/* Action Bar */}
+      <div className="followups-action-bar">
+        <div className="followups-search-wrapper">
+          <svg className="followups-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search by notes, lead code, or assigned to..."
+            className="followups-search-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
 
-          <div className="Client-Dashboard-page-form-row">
-            <label style={{ flex: 2 }}>
-              Description
-              <textarea name="description" value={form.description} onChange={handleChange} placeholder="What to follow up about" />
-            </label>
+        <div className="followups-filters">
+          <select className="followups-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="All">All Status</option>
+            <option value="Pending">Pending</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
+            <option value="Rescheduled">Rescheduled</option>
+          </select>
 
-            <label style={{ flex: 1 }}>
-              Notes (internal)
-              <textarea name="notes" value={form.notes} onChange={handleChange} placeholder="Internal notes (optional)" />
-            </label>
-          </div>
+          <select className="followups-filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+            <option value="All">All Priority</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
 
-          <div className="Client-Dashboard-page-form-actions">
-            <button type="submit" className="Client-Dashboard-page-btn primary">Save Follow-Up</button>
-            <button type="button" className="Client-Dashboard-page-btn" onClick={() => { resetForm(); setShowForm(false); }}>Cancel</button>
+          <select className="followups-filter-select" value={assignedToFilter} onChange={(e) => setAssignedToFilter(e.target.value)}>
+            <option value="All">All Assigned</option>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <button 
+          className="followups-btn followups-btn-primary" 
+          onClick={() => { 
+            resetAddForm(); 
+            setShowAddModal(true); 
+          }}
+        >
+          <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Follow-up
+        </button>
+      </div>
+
+      {/* Table */}
+      <div className="followups-table-card">
+        <div className="followups-table-wrapper">
+          <table className="followups-table">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Type</th>
+                <th>Scheduled</th>
+                <th>Priority</th>
+                <th>Status</th>
+                <th>Assigned To</th>
+                <th>Notes</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentFollowUps.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="followups-empty-state">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                    </svg>
+                    <p>No follow-ups found</p>
+                  </td>
+                </tr>
+              ) : (
+                currentFollowUps.map((followup) => (
+                  <tr key={followup.id} className={isOverdue(followup) ? 'followup-overdue' : ''}>
+                    <td>
+                      <div className="followup-lead-info">
+                        <strong>{followup.leadCode || 'N/A'}</strong>
+                        {followup.groupName && (
+                          <span className="followup-group-badge">{followup.groupName}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span className="followup-type-badge">
+                        {followup.followupType === 'Call' && '📞'}
+                        {followup.followupType === 'Email' && '📧'}
+                        {followup.followupType === 'Meeting' && '👥'}
+                        {followup.followupType === 'Visit' && '🏢'}
+                        {followup.followupType === 'Demo' && '💻'}
+                        {followup.followupType === 'Proposal' && '📄'}
+                        {followup.followupType === 'Other' && '📌'}
+                        {' '}{followup.followupType}
+                      </span>
+                    </td>
+                    <td>
+                      <div className="followup-scheduled">
+                        {formatDateTime(followup.scheduledAt)}
+                        {isOverdue(followup) && (
+                          <span className="followup-overdue-badge">Overdue</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <span className={`followup-priority-badge priority-${getPriorityClass(followup.priority)}`}>
+                        {followup.priority}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className={`followup-status-btn status-${getStatusClass(followup.status)}`}
+                        onClick={() => {
+                          const newStatus = followup.status === 'Pending' ? 'Completed' : 'Pending';
+                          handleQuickStatusUpdate(followup, newStatus);
+                        }}
+                        title="Click to toggle status"
+                      >
+                        {followup.status}
+                      </button>
+                    </td>
+                    <td>{followup.assignedToName || 'Unassigned'}</td>
+                    <td>
+                      <div className="followup-notes-preview">
+                        {followup.notes ? followup.notes.substring(0, 50) + (followup.notes.length > 50 ? '...' : '') : '-'}
+                      </div>
+                    </td>
+                    <td>
+                      <div className="followup-actions">
+                        <button 
+                          className="followup-action-btn action-edit" 
+                          onClick={() => handleEdit(followup)}
+                          title="Edit"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button 
+                          className="followup-action-btn action-delete" 
+                          onClick={() => handleDelete(followup.id)}
+                          title="Delete"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination */}
+        <div className="followups-pagination">
+          <div className="followups-pagination-info">
+            Showing {startIndex + 1} to {Math.min(endIndex, filteredFollowUps.length)} of {filteredFollowUps.length} entries
           </div>
-        </form>
+          <div className="followups-pagination-controls">
+            <select className="followups-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
+              <option value={10}>10 rows</option>
+              <option value={25}>25 rows</option>
+              <option value={50}>50 rows</option>
+            </select>
+            <div className="followups-pagination-buttons">
+              <button 
+                className="followups-pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+                disabled={currentPage === 1}
+              >
+                Previous
+              </button>
+              <span className="followups-pagination-current">
+                Page {currentPage} of {totalPages || 1}
+              </span>
+              <button 
+                className="followups-pagination-btn" 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+                disabled={currentPage === totalPages || totalPages === 0}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Add Follow-up Modal */}
+      {showAddModal && (
+        <div className="followup-modal-overlay" onClick={() => { setShowAddModal(false); resetAddForm(); }}>
+          <div className="followup-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="followup-modal-header">
+              <h2>Add New Follow-up</h2>
+              <button className="followup-modal-close" onClick={() => { setShowAddModal(false); resetAddForm(); }}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSubmit} className="followup-modal-form">
+              <div className="followup-form-section">
+                <h3>Select Lead</h3>
+                <div className="followup-form-grid">
+                  <div className="followup-form-group">
+                    <label>Group *</label>
+                    <select 
+                      name="modalGroupName" 
+                      value={addForm.modalGroupName} 
+                      onChange={handleAddFormChange}
+                      required
+                    >
+                      <option value="">Select Group</option>
+                      {groups.map((group, index) => (
+                        <option key={group.value || group.label || index} value={group.value || group.label}>
+                          {group.label || group.value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Sub Group</label>
+                    <select 
+                      name="modalSubGroupName" 
+                      value={addForm.modalSubGroupName} 
+                      onChange={handleAddFormChange}
+                      disabled={!addForm.modalGroupName}
+                    >
+                      <option value="">Select Sub Group</option>
+                      {subGroups.map((sub, index) => (
+                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
+                          {sub.label || sub.value}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group followup-form-full">
+                    <label>Lead *</label>
+                    <select 
+                      name="leadId" 
+                      value={addForm.leadId} 
+                      onChange={handleAddFormChange}
+                      required
+                      disabled={!addForm.modalGroupName}
+                    >
+                      <option value="">Select a lead</option>
+                      {leads.map(lead => (
+                        <option key={lead.id} value={lead.id}>
+                          {lead.leadCode} - {lead.name} ({lead.email})
+                        </option>
+                      ))}
+                    </select>
+                    {!addForm.modalGroupName && (
+                      <small className="followup-help-text">Please select a group first</small>
+                    )}
+                    {addForm.modalGroupName && leads.length === 0 && (
+                      <small className="followup-help-text">No leads found for selected group/subgroup</small>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="followup-form-section">
+                <h3>Follow-up Details</h3>
+                <div className="followup-form-grid">
+                  <div className="followup-form-group">
+                    <label>Follow-up Type *</label>
+                    <select name="followupType" value={addForm.followupType} onChange={handleAddFormChange} required>
+                      <option value="Call">Call</option>
+                      <option value="Email">Email</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Visit">Site Visit</option>
+                      <option value="Demo">Demo</option>
+                      <option value="Proposal">Send Proposal</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Priority *</label>
+                    <select name="priority" value={addForm.priority} onChange={handleAddFormChange} required>
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Scheduled Date *</label>
+                    <input
+                      type="date"
+                      name="scheduledDate"
+                      value={addForm.scheduledDate}
+                      onChange={handleAddFormChange}
+                      required
+                      min={new Date().toISOString().split('T')[0]}
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Scheduled Time</label>
+                    <input
+                      type="time"
+                      name="scheduledTime"
+                      value={addForm.scheduledTime}
+                      onChange={handleAddFormChange}
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Assign To *</label>
+                    <select name="assignedTo" value={addForm.assignedTo} onChange={handleAddFormChange} required>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {u.id === user.id ? '(Me)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Status</label>
+                    <select name="status" value={addForm.status} onChange={handleAddFormChange}>
+                      <option value="Pending">Pending</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Rescheduled">Rescheduled</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="followup-form-group">
+                  <label>Notes / Description</label>
+                  <textarea
+                    name="notes"
+                    value={addForm.notes}
+                    onChange={handleAddFormChange}
+                    rows={4}
+                    placeholder="Add notes about this follow-up..."
+                  />
+                </div>
+              </div>
+
+              <div className="followup-modal-actions">
+                <button 
+                  type="button" 
+                  className="followups-btn followups-btn-secondary" 
+                  onClick={() => { setShowAddModal(false); resetAddForm(); }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="followups-btn followups-btn-primary" 
+                  disabled={loading}
+                >
+                  {loading ? 'Creating...' : 'Create Follow-up'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
-      <div className="Client-Dashboard-page-followups-list-card Client-Dashboard-page-card">
-        <table className="Client-Dashboard-page-table Client-Dashboard-page-followups-table">
-          <thead>
-            <tr>
-              <th>Date & Time</th>
-              <th>Description</th>
-              <th>BD Member</th>
-              <th>Status</th>
-              <th>Notes</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {followUps.length === 0 && (
-              <tr>
-                <td colSpan="6" style={{ textAlign: "center", padding: "20px 0", color: "#6b7280" }}>
-                  No follow-ups yet.
-                </td>
-              </tr>
-            )}
-            {followUps.map((f) => (
-              <tr key={f.id}>
-                <td>{f.date}</td>
-                <td style={{ maxWidth: 360 }}>{f.desc}</td>
-                <td>{f.member}</td>
-                <td>
-                  <button
-                    className={`Client-Dashboard-page-followup-status ${f.status === "Completed" ? "completed" : f.status === "Cancelled" ? "cancelled" : "pending"}`}
-                    onClick={() => toggleStatus(f.id)}
-                    title="Toggle status"
-                  >
-                    {f.status}
-                  </button>
-                </td>
-                <td style={{ maxWidth: 260 }}>{f.notes || "-"}</td>
-                <td>
-                  <button className="Client-Dashboard-page-link" onClick={() => alert(`Edit follow-up ${f.id} (implement edit)`)}>Edit</button>
-                  <button className="Client-Dashboard-page-link" onClick={() => handleDelete(f.id)}>Delete</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Edit Follow-up Modal */}
+      {showEditModal && editingFollowup && (
+        <div className="followup-modal-overlay" onClick={() => { setShowEditModal(false); resetEditForm(); setEditingFollowup(null); }}>
+          <div className="followup-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="followup-modal-header">
+              <h2>Edit Follow-up</h2>
+              <button className="followup-modal-close" onClick={() => { setShowEditModal(false); resetEditForm(); setEditingFollowup(null); }}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="followup-modal-lead-info">
+              <div className="followup-info-item">
+                <span className="followup-info-label">Lead:</span>
+                <span className="followup-info-value">{editingFollowup.leadCode}</span>
+              </div>
+              <div className="followup-info-item">
+                <span className="followup-info-label">Group:</span>
+                <span className="followup-info-value">{editingFollowup.groupName || 'N/A'}</span>
+              </div>
+              <div className="followup-info-item">
+                <span className="followup-info-label">Sub Group:</span>
+                <span className="followup-info-value">{editingFollowup.subGroupName || 'N/A'}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="followup-modal-form">
+              <div className="followup-form-section">
+                <h3>Follow-up Details</h3>
+                <div className="followup-form-grid">
+                  <div className="followup-form-group">
+                    <label>Follow-up Type *</label>
+                    <select name="followupType" value={editForm.followupType} onChange={handleEditFormChange} required>
+                      <option value="Call">Call</option>
+                      <option value="Email">Email</option>
+                      <option value="Meeting">Meeting</option>
+                      <option value="Visit">Site Visit</option>
+                      <option value="Demo">Demo</option>
+                      <option value="Proposal">Send Proposal</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Priority *</label>
+                    <select name="priority" value={editForm.priority} onChange={handleEditFormChange} required>
+                      <option value="High">High</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Scheduled Date *</label>
+                    <input
+                      type="date"
+                      name="scheduledDate"
+                      value={editForm.scheduledDate}
+                      onChange={handleEditFormChange}
+                      required
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Scheduled Time</label>
+                    <input
+                      type="time"
+                      name="scheduledTime"
+                      value={editForm.scheduledTime}
+                      onChange={handleEditFormChange}
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Assign To *</label>
+                    <select name="assignedTo" value={editForm.assignedTo} onChange={handleEditFormChange} required>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} {u.id === user.id ? '(Me)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="followup-form-group">
+                    <label>Status *</label>
+                    <select name="status" value={editForm.status} onChange={handleEditFormChange} required>
+                      <option value="Pending">Pending</option>
+                      <option value="Completed">Completed</option>
+                      <option value="Cancelled">Cancelled</option>
+                      <option value="Rescheduled">Rescheduled</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="followup-form-group">
+                  <label>Notes / Description</label>
+                  <textarea
+                    name="notes"
+                    value={editForm.notes}
+                    onChange={handleEditFormChange}
+                    rows={3}
+                    placeholder="Add notes about this follow-up..."
+                  />
+                </div>
+
+                <div className="followup-form-group">
+                  <label>Outcome</label>
+                  <textarea
+                    name="outcome"
+                    value={editForm.outcome}
+                    onChange={handleEditFormChange}
+                    rows={3}
+                    placeholder="What was the result of this follow-up?"
+                  />
+                </div>
+              </div>
+
+              <div className="followup-modal-actions">
+                <button 
+                  type="button" 
+                  className="followups-btn followups-btn-secondary" 
+                  onClick={() => { setShowEditModal(false); resetEditForm(); setEditingFollowup(null); }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  className="followups-btn followups-btn-primary" 
+                  disabled={loading}
+                >
+                  {loading ? 'Updating...' : 'Update Follow-up'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
