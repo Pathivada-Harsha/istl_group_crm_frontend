@@ -1,0 +1,259 @@
+import React, { useState, useEffect } from 'react';
+import './AddFollowupModal.css';
+import { useAuth } from "../../hooks/useAuth.js";
+import useToast from '../../hooks/useToast';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
+  const { user } = useAuth();
+  const { showSuccess, showError } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [users, setUsers] = useState([]);
+
+  const [formData, setFormData] = useState({
+    relatedType: 'LEAD',
+    relatedId: lead.id,
+    leadId: lead.id,
+    customerId: lead.customerId || null,
+    projectId: null,
+    groupName: lead.groupName || '',
+    subGroupName: lead.subGroupName || '',
+    followupType: 'Call',
+    scheduledDate: '',
+    scheduledTime: '',
+    assignedTo: user.id,
+    status: 'Pending',
+    priority: 'Medium',
+    notes: ''
+  });
+
+  useEffect(() => {
+    fetchUsers();
+  }, []);
+
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+        credentials: "include",
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch users');
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        setUsers(data);
+      }
+    } catch (err) {
+      console.error('Error fetching users:', err);
+      setUsers([]);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.scheduledDate) {
+      showError('Please select a date');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Combine date and time
+      const scheduledAt = formData.scheduledTime 
+        ? `${formData.scheduledDate} ${formData.scheduledTime}:00`
+        : `${formData.scheduledDate} 09:00:00`;
+
+      const requestData = {
+        relatedType: formData.relatedType,
+        relatedId: formData.relatedId,
+        leadId: formData.leadId,
+        customerId: formData.customerId,
+        projectId: formData.projectId,
+        groupName: formData.groupName,
+        subGroupName: formData.subGroupName,
+        followupType: formData.followupType,
+        scheduledAt: scheduledAt,
+        assignedTo: formData.assignedTo,
+        status: formData.status,
+        priority: formData.priority,
+        notes: formData.notes
+      };
+
+      const response = await fetch(`${API_BASE_URL}/followups/create`, {
+        method: 'POST',
+        credentials: "include",
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id': user.id,
+          'User-Role': user.role
+        },
+        body: JSON.stringify(requestData)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create follow-up');
+      }
+
+      const data = await response.json();
+      
+      if (data.success) {
+        onFollowupCreated();
+      } else {
+        throw new Error(data.message || 'Failed to create follow-up');
+      }
+    } catch (err) {
+      showError(err.message || 'Error creating follow-up');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="add-followup-modal-overlay" onClick={onClose}>
+      <div className="add-followup-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="add-followup-modal-header">
+          <h2>Add Follow-up for {lead.name}</h2>
+          <button className="add-followup-modal-close" onClick={onClose}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="add-followup-lead-info">
+          <div className="add-followup-info-item">
+            <span className="add-followup-info-label">Lead ID:</span>
+            <span className="add-followup-info-value">{lead.leadCode}</span>
+          </div>
+          <div className="add-followup-info-item">
+            <span className="add-followup-info-label">Email:</span>
+            <span className="add-followup-info-value">{lead.email}</span>
+          </div>
+          <div className="add-followup-info-item">
+            <span className="add-followup-info-label">Phone:</span>
+            <span className="add-followup-info-value">{lead.phone}</span>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="add-followup-form">
+          <div className="add-followup-form-grid">
+            <div className="add-followup-form-group">
+              <label>Follow-up Type *</label>
+              <select
+                required
+                value={formData.followupType}
+                onChange={(e) => setFormData({ ...formData, followupType: e.target.value })}
+              >
+                <option value="Call">Call</option>
+                <option value="Email">Email</option>
+                <option value="Meeting">Meeting</option>
+                <option value="Visit">Site Visit</option>
+                <option value="Demo">Demo</option>
+                <option value="Proposal">Send Proposal</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+
+            <div className="add-followup-form-group">
+              <label>Scheduled Date *</label>
+              <input
+                type="date"
+                required
+                value={formData.scheduledDate}
+                onChange={(e) => setFormData({ ...formData, scheduledDate: e.target.value })}
+                min={new Date().toISOString().split('T')[0]}
+              />
+            </div>
+
+            <div className="add-followup-form-group">
+              <label>Scheduled Time</label>
+              <input
+                type="time"
+                value={formData.scheduledTime}
+                onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+              />
+            </div>
+
+            <div className="add-followup-form-group">
+              <label>Priority *</label>
+              <select
+                required
+                value={formData.priority}
+                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+              >
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+
+            <div className="add-followup-form-group">
+              <label>Assign To *</label>
+              <select
+                required
+                value={formData.assignedTo}
+                onChange={(e) => setFormData({ ...formData, assignedTo: Number(e.target.value) })}
+              >
+                {users.map(u => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} {u.id === user.id ? '(Me)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="add-followup-form-group">
+              <label>Status</label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              >
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Rescheduled">Rescheduled</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="add-followup-form-group">
+            <label>Notes / Description</label>
+            <textarea
+              rows={4}
+              value={formData.notes}
+              onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+              placeholder="Add notes about this follow-up..."
+            />
+          </div>
+
+          <div className="add-followup-form-actions">
+            <button 
+              type="button" 
+              className="add-followup-btn add-followup-btn-secondary" 
+              onClick={onClose}
+              disabled={loading}
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              className="add-followup-btn add-followup-btn-primary" 
+              disabled={loading}
+            >
+              {loading ? 'Creating...' : 'Create Follow-up'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export default AddFollowupModal;
