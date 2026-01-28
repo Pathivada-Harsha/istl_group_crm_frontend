@@ -23,7 +23,11 @@ const InvoicesManagementPage = () => {
     status: 'all',
     paymentStatus: 'all'
   });
-
+  const [orderBookItems, setOrderBookItems] = useState([]);
+  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+  const [showItemDropdown, setShowItemDropdown] = useState(false);
+  const [activeItemIndex, setActiveItemIndex] = useState(null);
+  const [itemSearchTerm, setItemSearchTerm] = useState('');
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -50,9 +54,32 @@ const InvoicesManagementPage = () => {
     subGroups: false,
     projects: false
   });
-  const [orderBookItems, setOrderBookItems] = useState([]);
-  const [filteredItems, setFilteredItems] = useState({});
-  const [showDropdown, setShowDropdown] = useState({});
+  const fetchOrderBookItems = async (projectId) => {
+    if (!projectId) {
+      setOrderBookItems([]);
+      return;
+    }
+
+    setLoadingOrderItems(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/invoices/order-book-items/${projectId}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch order book items');
+
+      const data = await response.json();
+      setOrderBookItems(data.data || []);
+      console.log('Loaded order book items:', data.data);
+
+    } catch (error) {
+      console.error('Failed to fetch order book items:', error);
+      setOrderBookItems([]);
+    } finally {
+      setLoadingOrderItems(false);
+    }
+  };
   // Customer data
   const [customerData, setCustomerData] = useState(null);
 
@@ -68,30 +95,6 @@ const InvoicesManagementPage = () => {
     status: 'DRAFT'
   });
 
-  const fetchOrderBookItemsForCustomer = async (customerId) => {
-    if (!customerId) {
-      setOrderBookItems([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/order-book-items-by-customer/${customerId}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch order book items');
-
-      const data = await response.json();
-      setOrderBookItems(data.data || []);
-      console.log('Loaded order book items:', data.data.length);
-
-    } catch (error) {
-      console.error('Failed to fetch order book items:', error);
-      setOrderBookItems([]);
-    }
-  };
-
   // Update payment form data
   const [paymentData, setPaymentData] = useState({
     amount: 0,
@@ -99,22 +102,17 @@ const InvoicesManagementPage = () => {
     transactionReference: '',
     notes: ''
   });
-  const selectOrderBookItem = (index, item) => {
-    const newItems = [...formData.items];
-    newItems[index] = {
-      ...newItems[index],
-      description: item.itemName,
-      quantity: item.quantity || 1,
-      unitPrice: item.unitPrice || 0,
-      taxPercent: item.taxPercent || 18,
-      unitType: item.unit || 'Nos',
-      orderBookItemId: item.id
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showItemDropdown && !event.target.closest('.Invoices-page-form-group')) {
+        setShowItemDropdown(false);
+        setActiveItemIndex(null);
+      }
     };
 
-    setFormData({ ...formData, items: newItems });
-    setShowDropdown(prev => ({ ...prev, [index]: false }));
-    setFilteredItems(prev => ({ ...prev, [index]: [] }));
-  };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showItemDropdown]);
   // Fetch invoices on mount and filter change
   useEffect(() => {
     fetchInvoices();
@@ -210,19 +208,6 @@ const InvoicesManagementPage = () => {
       setLoading(false);
     }
   };
-  // 7. Add click outside handler to close dropdown
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.Invoices-page-form-group')) {
-        setShowDropdown({});
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // THAT'S IT! Simple and clean dropdown for each item row.
 
   /**
    * Fetch statistics
@@ -311,7 +296,6 @@ const InvoicesManagementPage = () => {
   const fetchCustomerByProject = async (projectId) => {
     if (!projectId) {
       setCustomerData(null);
-      setOrderBookItems([]); // Clear items when no project
       return;
     }
 
@@ -325,39 +309,16 @@ const InvoicesManagementPage = () => {
         const data = await response.json();
         setCustomerData(data);
         setFormData(prev => ({ ...prev, customerId: data.customerId }));
-
-        // Fetch order book items for this customer
-        fetchOrderBookItemsForCustomer(data.customerId);
       } else {
         setCustomerData(null);
-        setOrderBookItems([]);
         showError('Customer not found for this project');
       }
     } catch (error) {
       console.error('Failed to fetch customer:', error);
       setCustomerData(null);
-      setOrderBookItems([]);
     }
   };
-  const handleDescriptionChange = (index, value) => {
-    updateItem(index, 'description', value);
 
-    if (!value || value.length < 2) {
-      setFilteredItems(prev => ({ ...prev, [index]: [] }));
-      setShowDropdown(prev => ({ ...prev, [index]: false }));
-      return;
-    }
-
-    // Filter order book items
-    const searchLower = value.toLowerCase();
-    const filtered = orderBookItems.filter(item =>
-      item.itemName?.toLowerCase().includes(searchLower) ||
-      item.specification?.toLowerCase().includes(searchLower)
-    ).slice(0, 10); // Show max 10 items
-
-    setFilteredItems(prev => ({ ...prev, [index]: filtered }));
-    setShowDropdown(prev => ({ ...prev, [index]: filtered.length > 0 }));
-  };
   /**
    * Handle modal group change
    */
@@ -404,7 +365,34 @@ const InvoicesManagementPage = () => {
       fetchModalProjects(modalGroupName, newSubGroupName);
     }
   };
+  // 4. Add function to filter order book items based on search
+  const filterOrderBookItems = (searchTerm) => {
+    if (!searchTerm) return orderBookItems;
 
+    const lowerSearch = searchTerm.toLowerCase();
+    return orderBookItems.filter(item =>
+      item.itemName.toLowerCase().includes(lowerSearch) ||
+      (item.specification && item.specification.toLowerCase().includes(lowerSearch)) ||
+      (item.description && item.description.toLowerCase().includes(lowerSearch))
+    );
+  };
+  const selectOrderBookItem = (index, item) => {
+    const newItems = [...formData.items];
+    newItems[index] = {
+      ...newItems[index],
+      description: item.itemName,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      taxPercent: item.taxPercent || 18,
+      unitType: item.unit || 'Nos',
+      orderBookItemId: item.id // Store reference
+    };
+
+    setFormData({ ...formData, items: newItems });
+    setShowItemDropdown(false);
+    setActiveItemIndex(null);
+    setItemSearchTerm('');
+  };
   /**
    * Handle modal project change
    */
@@ -419,6 +407,10 @@ const InvoicesManagementPage = () => {
 
     if (newProjectId) {
       fetchCustomerByProject(newProjectId);
+      fetchOrderBookItems(newProjectId); // ADD THIS LINE
+    } else {
+      setCustomerData(null);
+      setOrderBookItems([]); // ADD THIS LINE
     }
   };
 
@@ -1154,19 +1146,18 @@ const InvoicesManagementPage = () => {
                         ))}
                       </select>
                     </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Company *</label>
-                      <select
-                        value={formData.company || 'ISTL'}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                      >
-                        <option value="ISTL">ISTL</option>
-                        <option value="SESOLA">SESOLA</option>
-                      </select>
-                    </div>
                   </div>
                 </div>
-
+                <div className="Invoices-page-form-group">
+                  <label>Company *</label>
+                  <select
+                    value={formData.company || 'ISTL'}
+                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
+                  >
+                    <option value="ISTL">ISTL</option>
+                    <option value="SESOLA">SESOLA</option>
+                  </select>
+                </div>
                 {/* Customer Information (Auto-populated) */}
                 {customerData && (
                   <div className="Invoices-page-form-section">
@@ -1222,65 +1213,45 @@ const InvoicesManagementPage = () => {
                     <div key={index} className="Invoices-page-item-row">
                       <div className="Invoices-page-item-fields">
                         <div className="Invoices-page-form-group" style={{ flex: '2', position: 'relative' }}>
-                          <label>Description *</label>
+                          <label>Description / Item Name *</label>
                           <input
                             type="text"
                             value={item.description}
-                            onChange={(e) => handleDescriptionChange(index, e.target.value)}
-                            onFocus={() => {
-                              if (item.description && item.description.length >= 2) {
-                                handleDescriptionChange(index, item.description);
-                              }
+                            onChange={(e) => {
+                              updateItem(index, 'description', e.target.value);
+                              setItemSearchTerm(e.target.value);
+                              setActiveItemIndex(index);
+                              setShowItemDropdown(true);
                             }}
-                            placeholder="Start typing item name..."
+                            onFocus={() => {
+                              setActiveItemIndex(index);
+                              setShowItemDropdown(true);
+                            }}
+                            placeholder="Type to search order book items or enter manually"
                           />
-
-                          {/* Dropdown for filtered items */}
-                          {showDropdown[index] && filteredItems[index]?.length > 0 && (
-                            <div
-                              className="invoice-item-dropdown"
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                left: 0,
-                                right: 0,
-                                background: 'white',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '4px',
-                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                                maxHeight: '250px',
-                                overflowY: 'auto',
-                                zIndex: 1000,
-                                marginTop: '2px'
-                              }}
-                            >
-                              {filteredItems[index].map((obItem) => (
+                          {showItemDropdown && activeItemIndex === index && orderBookItems.length > 0 && (
+                            <div className="Invoices-page-item-dropdown">
+                              {filterOrderBookItems(itemSearchTerm).slice(0, 10).map((obItem) => (
                                 <div
                                   key={obItem.id}
+                                  className="Invoices-page-item-dropdown-option"
                                   onClick={() => selectOrderBookItem(index, obItem)}
-                                  style={{
-                                    padding: '10px 12px',
-                                    cursor: 'pointer',
-                                    borderBottom: '1px solid #f1f5f9',
-                                    transition: 'background-color 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                                 >
-                                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
-                                    {obItem.itemName}
-                                  </div>
+                                  <div className="Invoices-page-item-option-name">{obItem.itemName}</div>
                                   {obItem.specification && (
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>
-                                      {obItem.specification}
-                                    </div>
+                                    <div className="Invoices-page-item-option-spec">{obItem.specification}</div>
                                   )}
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                                  <div className="Invoices-page-item-option-details">
                                     Order: {obItem.orderBookNo} | Qty: {obItem.quantity} {obItem.unit} |
-                                    Price: ₹{parseFloat(obItem.unitPrice).toFixed(2)}
+                                    Rate: ₹{parseFloat(obItem.unitPrice).toFixed(2)}
                                   </div>
                                 </div>
                               ))}
+                              {filterOrderBookItems(itemSearchTerm).length === 0 && (
+                                <div className="Invoices-page-item-dropdown-empty">
+                                  No matching order book items found
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
