@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
-  Calendar, DollarSign, CheckCircle, CreditCard, 
+  Calendar, DollarSign, CheckCircle, CreditCard,
   Link as LinkIcon, Trash2, Download
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
@@ -70,6 +70,8 @@ const BillsReceived = () => {
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
     'X-User-Id': user?.id || localStorage.getItem('userId'),
     'X-User-Role': user?.role || localStorage.getItem('userRole'),
+    'User-Id': user?.id || localStorage.getItem('userId'),
+    'User-Role': user?.role || localStorage.getItem('userRole'),
     'Content-Type': 'application/json'
   });
 
@@ -179,7 +181,12 @@ const BillsReceived = () => {
 
   const fetchVendors = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vendors/dropdown`, {
+      const params = new URLSearchParams();
+      if (modalGroupName) params.append('groupName', modalGroupName);
+      if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
+      if (modalProjectId) params.append('projectId', modalProjectId);
+
+      const response = await fetch(`${API_BASE_URL}/api/vendors/for-bills?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -187,6 +194,7 @@ const BillsReceived = () => {
       if (response.ok) {
         const data = await response.json();
         setVendors(data || []);
+        console.log('✅ Loaded vendors (including PO vendors):', data.length);
       }
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
@@ -194,14 +202,25 @@ const BillsReceived = () => {
     }
   };
 
-  const fetchPurchaseOrders = async () => {
+  const fetchPurchaseOrders = async (vendorIdOrName = null) => {
     try {
       const params = new URLSearchParams();
       if (modalGroupName) params.append('groupName', modalGroupName);
       if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
       if (modalProjectId) params.append('projectId', modalProjectId);
 
-      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/dropdown?${params}`, {
+      // Handle both vendorId (number) and vendorName (string from POs)
+      if (vendorIdOrName) {
+        if (typeof vendorIdOrName === 'number') {
+          params.append('vendorId', vendorIdOrName);
+        } else if (typeof vendorIdOrName === 'string' && vendorIdOrName.startsWith('PO_')) {
+          // This is a vendor from PO, extract vendor name
+          const vendorName = vendorIdOrName.replace('PO_', '');
+          params.append('vendorName', vendorName);
+        }
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/by-vendor?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -209,13 +228,66 @@ const BillsReceived = () => {
       if (response.ok) {
         const data = await response.json();
         setPurchaseOrders(data || []);
+        console.log('✅ Loaded POs for vendor:', data.length);
       }
     } catch (error) {
       console.error('Failed to fetch purchase orders:', error);
       setPurchaseOrders([]);
     }
   };
+  const fetchPOItems = async (poId) => {
+    if (!poId) return;
 
+    try {
+      setLoading(true);
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/purchase-orders/${poId}/items-for-bill`,
+        {
+          credentials: "include",
+          headers: getAuthHeaders()
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+
+        if (data.success && data.items && data.items.length > 0) {
+          const billItems = data.items.map(item => ({
+            poItemId: item.id,
+            itemName: item.itemName || '',
+            itemSku: item.itemSku || '',
+            description: item.description || '',
+            orderedQty: item.orderedQty,
+            deliveredQty: item.deliveredQty,
+            pendingQty: item.pendingQty,
+            maxBillableQty: item.pendingQty, // Max = pending delivery
+            quantity: item.pendingQty, // Default to full pending
+            unitPrice: item.unitPrice || 0,
+            taxPercent: item.taxPercent || 18,
+            deliveryStatus: item.deliveryStatus
+          }));
+
+          setFormData(prev => ({
+            ...prev,
+            items: billItems
+          }));
+
+          showSuccess(
+            `✅ Loaded ${billItems.length} items. Enter delivered quantities.`
+          );
+        } else {
+          showError('All items fully delivered');
+          setFormData(prev => ({ ...prev, items: [] }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch PO items:', error);
+      showError('Failed to load PO items');
+    } finally {
+      setLoading(false);
+    }
+  };
   const fetchGroups = async () => {
     try {
       const groups = await filterApi.getAllGroups();
@@ -264,46 +336,95 @@ const BillsReceived = () => {
     setModalProjectId('');
     setSubGroups([]);
     setProjects([]);
+    setPurchaseOrders([]); // Clear POs
 
     setFormData(prev => ({
       ...prev,
       groupId: newGroupName,
       subGroupId: '',
-      projectId: ''
+      projectId: '',
+      poId: '', // Clear PO selection
+      items: [] // Clear items
     }));
 
     if (newGroupName) {
       fetchSubGroups(newGroupName);
+      fetchVendors(); // Refresh vendors for new group
     }
   };
 
-  const handleModalSubGroupChange = (e) => {
+  const handleModalSubGroupChange = async (e) => {
     const newSubGroupName = e.target.value;
     setModalSubGroupName(newSubGroupName);
     setModalProjectId('');
     setProjects([]);
+    setPurchaseOrders([]);
 
     setFormData(prev => ({
       ...prev,
       subGroupId: newSubGroupName,
-      projectId: ''
+      projectId: '',
+      vendorId: '', // ✅ Clear vendor
+      poId: '',
+      items: []
     }));
 
     if (modalGroupName && newSubGroupName) {
-      fetchProjects(modalGroupName, newSubGroupName);
+      await fetchProjects(modalGroupName, newSubGroupName);
+      await fetchVendors(); // ✅ Re-fetch vendors!
     }
   };
 
-  const handleModalProjectChange = (e) => {
+  const handleModalProjectChange = async (e) => {
     const newProjectId = e.target.value;
     setModalProjectId(newProjectId);
+    setPurchaseOrders([]);
 
     setFormData(prev => ({
       ...prev,
-      projectId: newProjectId
+      projectId: newProjectId,
+      vendorId: '', // ✅ Clear vendor
+      poId: '',
+      items: []
     }));
-  };
 
+    if (newProjectId) {
+      await fetchVendors(); // ✅ Re-fetch vendors for project!
+    }
+  };
+  const handleVendorChange = (e) => {
+    const vendorIdOrName = e.target.value;
+
+    setFormData(prev => ({
+      ...prev,
+      vendorId: vendorIdOrName,
+      poId: '', // Clear PO selection
+      items: [] // Clear items
+    }));
+
+    setPurchaseOrders([]); // Clear POs
+
+    if (vendorIdOrName) {
+      // Fetch POs for this vendor
+      const vendorId = typeof vendorIdOrName === 'string' && !vendorIdOrName.startsWith('PO_')
+        ? parseInt(vendorIdOrName)
+        : vendorIdOrName;
+      fetchPurchaseOrders(vendorId);
+    }
+  };
+  const handlePOChange = (e) => {
+    const poId = e.target.value;
+
+    setFormData(prev => ({
+      ...prev,
+      poId: poId ? parseInt(poId) : null,
+      items: [] // Clear existing items
+    }));
+
+    if (poId) {
+      fetchPOItems(parseInt(poId));
+    }
+  };
   // Pagination handlers
   const handlePageChange = (newPage) => {
     setPagination(prev => ({
@@ -389,6 +510,7 @@ const BillsReceived = () => {
 
     setSelectedFile(null);
     setShowCreateEditModal(true);
+      fetchAllDropdownData();
   };
 
   // Edit bill
@@ -1007,7 +1129,7 @@ const BillsReceived = () => {
                 <option value="100">100 per page</option>
               </select>
             </div>
-            
+
             <div className="pagination-controls">
               <button
                 onClick={() => handlePageChange(0)}
@@ -1024,7 +1146,7 @@ const BillsReceived = () => {
               >
                 ‹ Previous
               </button>
-              
+
               <span className="page-numbers">
                 {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
                   let pageNum;
@@ -1037,7 +1159,7 @@ const BillsReceived = () => {
                   } else {
                     pageNum = pagination.currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <button
                       key={pageNum}
@@ -1049,7 +1171,7 @@ const BillsReceived = () => {
                   );
                 })}
               </span>
-              
+
               <button
                 onClick={() => handlePageChange(pagination.currentPage + 1)}
                 disabled={pagination.currentPage >= pagination.totalPages - 1}
@@ -1141,31 +1263,48 @@ const BillsReceived = () => {
                     <label>Vendor *</label>
                     <select
                       value={formData.vendorId || ''}
-                      onChange={(e) => setFormData({ ...formData, vendorId: parseInt(e.target.value) })}
+                      onChange={handleVendorChange} // UPDATED: Use new handler
                       required
                     >
                       <option value="">Select Vendor</option>
-                      {vendors.map(vendor => (
-                        <option key={vendor.id} value={vendor.id}>
+                      {vendors.map((vendor, index) => (
+                        <option key={vendor.id || index} value={vendor.id}>
                           {vendor.name}
+                          {vendor.contact && ` - ${vendor.contact}`}
+                          {vendor.source === 'po_vendor' && ' (From PO)'}
                         </option>
                       ))}
                     </select>
+                    {vendors.length === 0 && (
+                      <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
+                        No vendors available for selected project. Create a PO with new vendor first.
+                      </small>
+                    )}
                   </div>
 
                   <div className="procurement-bills-received-form-group">
                     <label>Linked PO (Optional)</label>
                     <select
                       value={formData.poId || ''}
-                      onChange={(e) => setFormData({ ...formData, poId: parseInt(e.target.value) || null })}
+                      onChange={handlePOChange} // UPDATED: Use new handler
                     >
                       <option value="">No PO Link</option>
                       {purchaseOrders.map(po => (
                         <option key={po.id} value={po.id}>
-                          {po.poNo} - {po.vendorName}
+                          {po.poNo} - {po.vendorName} - {formatCurrency(po.totalValue)}
                         </option>
                       ))}
                     </select>
+                    {formData.vendorId && purchaseOrders.length === 0 && (
+                      <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                        No POs found for selected vendor
+                      </small>
+                    )}
+                    {formData.poId && (
+                      <small style={{ color: '#22c55e', fontSize: '12px', marginTop: '4px' }}>
+                        ✓ PO items loaded below
+                      </small>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1214,7 +1353,7 @@ const BillsReceived = () => {
                     <thead>
                       <tr>
                         <th style={{ width: '15%' }}>Item Name</th>
-                        <th style={{ width: '25%' }}>Description *</th>
+                        <th style={{ width: '25%' }}>Description * {formData.poId && '(From PO)'}</th>
                         <th style={{ width: '10%' }}>Qty *</th>
                         <th style={{ width: '15%' }}>Price *</th>
                         <th style={{ width: '10%' }}>Tax %</th>
@@ -1237,11 +1376,21 @@ const BillsReceived = () => {
                           <td>
                             <input
                               type="text"
-                              placeholder="Description"
+                              placeholder={item.poItemId ? "From PO" : "Description"}
                               value={item.description || ''}
                               onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
                               className="item-input"
+                              readOnly={!!item.poItemId} // Make read-only if from PO
+                              style={{
+                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
+                                cursor: item.poItemId ? 'not-allowed' : 'text'
+                              }}
                             />
+                            {item.poItemId && (
+                              <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                                PO Item #{item.poItemId}
+                              </small>
+                            )}
                           </td>
                           <td>
                             <input
@@ -1433,21 +1582,62 @@ const BillsReceived = () => {
                   <table className="procurement-bills-received-items-table">
                     <thead>
                       <tr>
-                        <th>Item</th>
-                        <th>Qty</th>
+                        <th>Item Name</th>
+                        <th>Description</th>
+                        <th>Ordered</th>
+                        <th>Delivered</th>
+                        <th>Pending</th>
+                        <th>Deliver Qty *</th>
                         <th>Price</th>
                         <th>Tax %</th>
                         <th>Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedBill.items.map((item, idx) => (
-                        <tr key={idx}>
+                      {formData.items.map((item, index) => (
+                        <tr key={index}>
+                          <td>
+                            {item.itemName}
+                            {item.deliveryStatus && (
+                              <div style={{ fontSize: '11px', color: '#64748b' }}>
+                                {item.deliveryStatus}
+                              </div>
+                            )}
+                          </td>
                           <td>{item.description}</td>
-                          <td>{item.quantity}</td>
-                          <td>{formatCurrency(item.unitPrice)}</td>
-                          <td>{item.taxPercent}%</td>
-                          <td>{formatCurrency(item.lineTotal)}</td>
+                          <td>{item.orderedQty}</td>
+                          <td style={{ color: '#64748b' }}>{item.deliveredQty}</td>
+                          <td style={{ color: '#22c55e', fontWeight: '600' }}>
+                            {item.pendingQty}
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              value={item.quantity}
+                              onChange={(e) => handleUpdateItem(index, 'quantity', e.target.value)}
+                              max={item.maxBillableQty}
+                              min="0"
+                              step="0.01"
+                            />
+                            <small>Max: {item.pendingQty}</small>
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              value={item.unitPrice}
+                              readOnly
+                              style={{ backgroundColor: '#f8fafc' }}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              type="number"
+                              value={item.taxPercent}
+                              readOnly
+                              style={{ backgroundColor: '#f8fafc' }}
+                            />
+                          </td>
+                          <td>{formatCurrency(calculateLineTotal(item))}</td>
                         </tr>
                       ))}
                     </tbody>

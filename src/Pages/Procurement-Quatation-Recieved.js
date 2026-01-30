@@ -23,7 +23,9 @@ const QuotationsReceived = () => {
     status: 'all',
     category: 'all'
   });
-
+  const [orderBookItems, setOrderBookItems] = useState([]);
+  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+  const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -87,8 +89,8 @@ const QuotationsReceived = () => {
    */
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'X-User-Id': user?.id || localStorage.getItem('userId'),
-    'X-User-Role': user?.role || localStorage.getItem('userRole')
+    'User-Id': user?.id || localStorage.getItem('userId'),
+    'User-Role': user?.role || localStorage.getItem('userRole')
   });
 
   /**
@@ -152,20 +154,29 @@ const QuotationsReceived = () => {
     }
   };
 
+
   /**
-   * Fetch vendors for dropdown
+   * Fetch vendors filtered by group/subgroup
    */
-  const fetchVendors = async () => {
+  const fetchVendors = async (groupName = null, subGroupName = null) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vendors/dropdown`, {
+      let url = `${API_BASE_URL}/api/vendors/by-group-subgroup?`;
+      if (groupName) url += `groupName=${encodeURIComponent(groupName)}&`;
+      if (subGroupName) url += `subGroupName=${encodeURIComponent(subGroupName)}`;
+
+      console.log('📡 Fetching vendors:', url);
+
+      const response = await fetch(url, {
         credentials: "include",
         headers: getAuthHeaders()
       });
 
       if (response.ok) {
         const data = await response.json();
-        setVendors(data);
-        console.log('Fetched vendors:', data);
+        if (data.success) {
+          setVendors(data.data || []);
+          console.log('✅ Loaded vendors:', data.data.length);
+        }
       } else {
         throw new Error('Failed to fetch vendors');
       }
@@ -176,6 +187,57 @@ const QuotationsReceived = () => {
     }
   };
 
+
+  /**
+   * Fetch order book items by project
+   */
+  const fetchOrderBookItems = async (projectId) => {
+    if (!projectId) {
+      setOrderBookItems([]);
+      return;
+    }
+
+    setLoadingOrderItems(true);
+    try {
+      const url = `${API_BASE_URL}/api/quotations/orderbook-items/${projectId}`;
+      console.log('📡 Fetching order book items for project:', projectId);
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch order book items');
+
+      const data = await response.json();
+      if (data.success) {
+        setOrderBookItems(data.data || []);
+        console.log('✅ Loaded order book items:', data.data.length);
+
+        // Auto-populate items in quotation form if in create mode
+        if (quotationFormData && data.data && data.data.length > 0) {
+          const formattedItems = data.data.map(item => ({
+            itemName: item.itemName,
+            description: item.specification || item.description || '',
+            quantity: item.quantity || 1,
+            unitPrice: 0, // Vendor will provide price
+            taxPercent: item.taxPercent || 18,
+            orderBookItemId: item.id,
+            included: true // By default, all items are included
+          }));
+
+          setQuotationFormData(prev => ({ ...prev, items: formattedItems }));
+          console.log('✅ Pre-populated items from order book');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error fetching order book items:', error);
+      showError('Failed to load order book items');
+      setOrderBookItems([]);
+    } finally {
+      setLoadingOrderItems(false);
+    }
+  };
   /**
    * Fetch modal groups
    */
@@ -239,8 +301,8 @@ const QuotationsReceived = () => {
   };
 
   /**
-   * Handle modal group change
-   */
+  * Handle modal group change - UPDATED to fetch vendors
+  */
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
     setModalGroupName(newGroupName);
@@ -248,46 +310,56 @@ const QuotationsReceived = () => {
     setModalProjectId('');
     setModalSubGroups([]);
     setModalProjects([]);
+    setOrderBookItems([]); // Clear order items
 
     if (quotationFormData) {
       setQuotationFormData({
         ...quotationFormData,
         groupName: newGroupName,
         subGroupName: '',
-        projectId: ''
+        projectId: '',
+        items: [] // Clear items when group changes
       });
     }
 
     if (newGroupName) {
       fetchModalSubGroups(newGroupName);
+      // Fetch vendors filtered by group
+      fetchVendors(newGroupName, null);
+    } else {
+      setVendors([]);
     }
   };
 
   /**
-   * Handle modal subgroup change
-   */
+ * Handle modal subgroup change - UPDATED to fetch vendors
+ */
   const handleModalSubGroupChange = (e) => {
     const newSubGroupName = e.target.value;
     setModalSubGroupName(newSubGroupName);
     setModalProjectId('');
     setModalProjects([]);
+    setOrderBookItems([]); // Clear order items
 
     if (quotationFormData) {
       setQuotationFormData({
         ...quotationFormData,
         subGroupName: newSubGroupName,
-        projectId: ''
+        projectId: '',
+        items: [] // Clear items when subgroup changes
       });
     }
 
     if (modalGroupName && newSubGroupName) {
       fetchModalProjects(modalGroupName, newSubGroupName);
+      // Fetch vendors filtered by group and subgroup
+      fetchVendors(modalGroupName, newSubGroupName);
     }
   };
 
   /**
-   * Handle modal project change
-   */
+ * Handle modal project change - UPDATED to fetch order items
+ */
   const handleModalProjectChange = (e) => {
     const newProjectId = e.target.value;
     setModalProjectId(newProjectId);
@@ -298,8 +370,60 @@ const QuotationsReceived = () => {
         projectId: newProjectId
       });
     }
+
+    // Fetch order book items when project is selected
+    if (newProjectId) {
+      fetchOrderBookItems(newProjectId);
+    }
   };
 
+  /**
+   * Toggle vendor type (existing vs new)
+   */
+  const handleVendorTypeChange = (type) => {
+    setShowNewVendorForm(type === 'new');
+
+    if (type === 'new') {
+      // Clear vendor selection
+      setQuotationFormData({
+        ...quotationFormData,
+        vendorId: null,
+        vendorName: '',
+        vendorContact: ''
+      });
+      setSelectedVendorDetails(null);
+    } else {
+      // Clear new vendor fields
+      setQuotationFormData({
+        ...quotationFormData,
+        vendorName: '',
+        vendorContact: ''
+      });
+    }
+  };
+
+  /**
+   * Handle new vendor contact change (restrict to 10 digits)
+   */
+  const handleNewVendorContactChange = (value) => {
+    // Remove non-digits and limit to 10
+    const cleaned = value.replace(/\D/g, '').slice(0, 10);
+    setQuotationFormData({
+      ...quotationFormData,
+      vendorContact: cleaned
+    });
+  };
+
+  /**
+   * Toggle item inclusion in quotation
+   */
+  const toggleItemInclusion = (index) => {
+    if (quotationFormData) {
+      const newItems = [...quotationFormData.items];
+      newItems[index].included = !newItems[index].included;
+      setQuotationFormData({ ...quotationFormData, items: newItems });
+    }
+  };
   /**
    * Handle vendor selection from dropdown
    */
@@ -692,18 +816,21 @@ const QuotationsReceived = () => {
       projectId: projectId || '',
       category: 'IT Equipment',
       vendorId: null,
+      vendorName: '', // NEW
       vendorContact: '',
       vendorRating: 0,
       deliveryTime: '',
       paymentTerms: '',
       warranty: '',
       notes: '',
-      items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
+      items: []
     });
 
     // Reset vendor selection
     setSelectedVendorDetails(null);
+    setShowNewVendorForm(false);
     setVendors([]);
+    setOrderBookItems([]);
 
     // Set modal dropdown values
     setModalGroupName(groupName || '');
@@ -716,13 +843,19 @@ const QuotationsReceived = () => {
 
     // Fetch data
     fetchModalGroups();
-    fetchVendors(); // Fetch vendors for dropdown
 
     if (groupName) {
       fetchModalSubGroups(groupName);
+      fetchVendors(groupName, null); // Fetch vendors for group
+
       if (subGroupName) {
         fetchModalProjects(groupName, subGroupName);
+        fetchVendors(groupName, subGroupName); // Fetch vendors for group+subgroup
       }
+    }
+
+    if (projectId) {
+      fetchOrderBookItems(projectId); // Fetch order items for project
     }
 
     setShowUploadQuotationModal(true);
@@ -738,11 +871,17 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Check vendor contact requirement for new vendors
-    if (!quotationFormData.vendorId &&
-      (!quotationFormData.vendorContact || !quotationFormData.vendorContact.trim())) {
-      showError('Vendor contact is required when creating a new vendor');
-      return;
+    // NEW: Check vendor type and validate accordingly
+    if (!quotationFormData.vendorId) {
+      // Creating new vendor - require name and contact
+      if (!quotationFormData.vendorName || !quotationFormData.vendorName.trim()) {
+        showError('Vendor name is required when creating a new vendor');
+        return;
+      }
+      if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) {
+        showError('Please enter a valid 10-digit contact number for the new vendor');
+        return;
+      }
     }
 
     if (!quotationFormData.validTill) {
@@ -766,9 +905,16 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Validate all items have required fields
-    for (let i = 0; i < quotationFormData.items.length; i++) {
-      const item = quotationFormData.items[i];
+    // NEW: Check if at least one item is included
+    const includedItems = quotationFormData.items.filter(item => item.included !== false);
+    if (includedItems.length === 0) {
+      showError('Please include at least one item in the quotation');
+      return;
+    }
+
+    // Validate all included items have required fields
+    for (let i = 0; i < includedItems.length; i++) {
+      const item = includedItems[i];
       if (!item.itemName || !item.itemName.trim()) {
         showError(`Item ${i + 1}: Item name is required`);
         return;
@@ -788,8 +934,8 @@ const QuotationsReceived = () => {
       // Create FormData for file upload
       const formData = new FormData();
 
-      // Clean items - remove calculated fields that DB generates
-      const cleanedItems = quotationFormData.items.map(item => ({
+      // Clean items - remove calculated fields and only include selected items
+      const cleanedItems = includedItems.map(item => ({
         itemName: item.itemName.trim(),
         description: item.description ? item.description.trim() : '',
         quantity: item.quantity,
@@ -800,13 +946,14 @@ const QuotationsReceived = () => {
       // Add quotation data as JSON
       const quotationData = {
         vendorId: quotationFormData.vendorId || null,
+        vendorName: quotationFormData.vendorName ? quotationFormData.vendorName.trim() : null, // NEW
+        vendorContact: quotationFormData.vendorContact ? quotationFormData.vendorContact.trim() : null,
         rfqId: quotationFormData.rfqId ? quotationFormData.rfqId.trim() : null,
         validTill: quotationFormData.validTill,
         groupName: quotationFormData.groupName,
         subGroupName: quotationFormData.subGroupName || null,
         projectId: quotationFormData.projectId || null,
         category: quotationFormData.category,
-        vendorContact: quotationFormData.vendorContact ? quotationFormData.vendorContact.trim() : null,
         deliveryTime: quotationFormData.deliveryTime ? quotationFormData.deliveryTime.trim() : null,
         paymentTerms: quotationFormData.paymentTerms ? quotationFormData.paymentTerms.trim() : null,
         warranty: quotationFormData.warranty ? quotationFormData.warranty.trim() : null,
@@ -848,6 +995,8 @@ const QuotationsReceived = () => {
       setFilePreview(null);
       setSelectedVendorDetails(null);
       setVendors([]);
+      setOrderBookItems([]);
+      setShowNewVendorForm(false);
       fetchQuotations();
       fetchStats();
 
@@ -1494,7 +1643,7 @@ const QuotationsReceived = () => {
       {/* Upload Modal - COMPLETE CODE WITH PROPER ALIGNMENT */}
       {showUploadQuotationModal && quotationFormData && (
         <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowUploadQuotationModal(false)}>
-          <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px' }}>
             <div className="procurement-quotation-received-modal-header">
               <h2>Upload New Quotation</h2>
               <button className="procurement-quotation-received-modal-close" onClick={() => setShowUploadQuotationModal(false)}>
@@ -1504,90 +1653,9 @@ const QuotationsReceived = () => {
 
             <div className="procurement-quotation-received-upload-form">
 
-              {/* Vendor Selection Section */}
-              <div className="procurement-quotation-received-form-section">
-                <h3>Vendor Information</h3>
-
-                <div className="procurement-quotation-received-form-row">
-                  {/* Vendor Dropdown */}
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Select Existing Vendor (Optional)</label>
-                    <select
-                      value={quotationFormData.vendorId || ''}
-                      onChange={handleVendorSelection}
-                    >
-                      <option value="">-- Create New Vendor or Select Existing --</option>
-                      {vendors.map((vendor) => (
-                        <option key={vendor.id} value={vendor.id}>
-                          {vendor.name}
-                          {vendor.phone ? ` - ${vendor.phone}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
-                      {quotationFormData.vendorId
-                        ? 'Existing vendor selected - contact info loaded automatically'
-                        : 'Leave blank to create a new vendor entry'}
-                    </small>
-                  </div>
-
-                  {/* Vendor Contact - Show only when NO existing vendor is selected */}
-                  {!quotationFormData.vendorId && (
-                    <div className="procurement-quotation-received-form-group">
-                      <label>Vendor Contact *</label>
-                      <input
-                        type="text"
-                        value={quotationFormData.vendorContact}
-                        onChange={(e) => setQuotationFormData({
-                          ...quotationFormData,
-                          vendorContact: e.target.value
-                        })}
-                        placeholder="Enter phone/email for new vendor"
-                      />
-                      <small style={{ color: '#64748b', marginTop: '4px', display: 'block' }}>
-                        Required for new vendor creation
-                      </small>
-                    </div>
-                  )}
-
-                  {/* Display Vendor Details - Show only when existing vendor is selected */}
-                  {quotationFormData.vendorId && selectedVendorDetails && (
-                    <div className="procurement-quotation-received-form-group">
-                      <label>Selected Vendor Details</label>
-                      <div style={{
-                        padding: '12px',
-                        backgroundColor: '#f0f9ff',
-                        border: '1px solid #bae6fd',
-                        borderRadius: '6px',
-                        fontSize: '14px',
-                        color: '#0c4a6e'
-                      }}>
-                        <div style={{ marginBottom: '6px' }}>
-                          <strong>📋 Name:</strong> {selectedVendorDetails.name}
-                        </div>
-                        {selectedVendorDetails.phone && (
-                          <div style={{ marginBottom: '6px' }}>
-                            <strong>📞 Contact:</strong> {selectedVendorDetails.phone}
-                          </div>
-                        )}
-                        <div style={{
-                          marginTop: '8px',
-                          paddingTop: '8px',
-                          borderTop: '1px solid #bae6fd',
-                          fontSize: '12px',
-                          color: '#0369a1'
-                        }}>
-                          ✓ Vendor information will be auto-populated in the quotation
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Project Assignment Section */}
-              <div className="procurement-quotation-received-form-section">
-                <h3>Project Assignment</h3>
+              {/* PROJECT SELECTION AT TOP */}
+              <div className="procurement-quotation-received-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px' }}>
+                <h3>📂 Project Assignment</h3>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Group *</label>
@@ -1605,9 +1673,6 @@ const QuotationsReceived = () => {
                         </option>
                       ))}
                     </select>
-                    {modalGroups.length === 0 && !modalDropdownLoading.groups && (
-                      <small style={{ color: '#ef4444' }}>No groups available</small>
-                    )}
                   </div>
 
                   <div className="procurement-quotation-received-form-group">
@@ -1646,9 +1711,157 @@ const QuotationsReceived = () => {
                     </select>
                   </div>
                 </div>
+
+                {loadingOrderItems && (
+                  <div style={{ marginTop: '10px', color: '#3b82f6', fontSize: '13px' }}>
+                    🔄 Loading order book items...
+                  </div>
+                )}
+
+                {orderBookItems.length > 0 && (
+                  <div style={{ marginTop: '10px', color: '#059669', fontSize: '13px' }}>
+                    ✅ Loaded {orderBookItems.length} items from order book
+                  </div>
+                )}
               </div>
 
-              {/* Basic Information */}
+              {/* VENDOR SELECTION - NEW/EXISTING */}
+              <div className="procurement-quotation-received-form-section">
+                <h3>🏢 Vendor Information</h3>
+
+                {/* Vendor Type Radio Buttons */}
+                <div style={{ marginBottom: '15px', display: 'flex', gap: '20px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="vendorType"
+                      checked={!showNewVendorForm}
+                      onChange={() => handleVendorTypeChange('existing')}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span>Select Existing Vendor</span>
+                  </label>
+
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      name="vendorType"
+                      checked={showNewVendorForm}
+                      onChange={() => handleVendorTypeChange('new')}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <span>Add New Vendor</span>
+                  </label>
+                </div>
+
+                {/* EXISTING VENDOR SELECTION */}
+                {!showNewVendorForm && (
+                  <div className="procurement-quotation-received-form-row">
+                    <div className="procurement-quotation-received-form-group">
+                      <label>Select Vendor *</label>
+                      <select
+                        value={quotationFormData.vendorId || ''}
+                        onChange={handleVendorSelection}
+                        disabled={vendors.length === 0}
+                      >
+                        <option value="">
+                          {vendors.length === 0 ? 'No vendors available for selected group/subgroup' : 'Select Vendor'}
+                        </option>
+                        {vendors.map((vendor) => (
+                          <option key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                            {vendor.phone ? ` - ${vendor.phone}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {vendors.length === 0 && modalGroupName && (
+                        <small style={{ color: '#ef4444', marginTop: '4px', display: 'block' }}>
+                          ⚠️ No vendors found for selected Group/Sub-Group. Please add a new vendor or select a different group.
+                        </small>
+                      )}
+                    </div>
+
+                    {/* Display Selected Vendor Details */}
+                    {quotationFormData.vendorId && selectedVendorDetails && (
+                      <div className="procurement-quotation-received-form-group">
+                        <label>Selected Vendor Details</label>
+                        <div style={{
+                          padding: '12px',
+                          backgroundColor: '#f0f9ff',
+                          border: '1px solid #bae6fd',
+                          borderRadius: '6px',
+                          fontSize: '14px',
+                          color: '#0c4a6e'
+                        }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <strong>📋 Name:</strong> {selectedVendorDetails.name}
+                          </div>
+                          {selectedVendorDetails.phone && (
+                            <div>
+                              <strong>📞 Contact:</strong> {selectedVendorDetails.phone}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* NEW VENDOR FORM */}
+                {showNewVendorForm && (
+                  <div style={{
+                    padding: '20px',
+                    background: '#f0fdf4',
+                    border: '2px solid #86efac',
+                    borderRadius: '8px'
+                  }}>
+                    <div className="procurement-quotation-received-form-row">
+                      <div className="procurement-quotation-received-form-group">
+                        <label>Vendor Name *</label>
+                        <input
+                          type="text"
+                          value={quotationFormData.vendorName || ''}
+                          onChange={(e) => setQuotationFormData({
+                            ...quotationFormData,
+                            vendorName: e.target.value
+                          })}
+                          placeholder="Enter vendor name"
+                        />
+                      </div>
+
+                      <div className="procurement-quotation-received-form-group">
+                        <label>Contact Number * (10 digits)</label>
+                        <input
+                          type="tel"
+                          value={quotationFormData.vendorContact || ''}
+                          onChange={(e) => handleNewVendorContactChange(e.target.value)}
+                          placeholder="Enter 10-digit mobile"
+                          maxLength={10}
+                        />
+                        {quotationFormData.vendorContact && quotationFormData.vendorContact.length < 10 && (
+                          <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                            Contact must be exactly 10 digits
+                          </small>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px',
+                      background: '#dbeafe',
+                      border: '1px solid #93c5fd',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      color: '#1e40af'
+                    }}>
+                      💡 <strong>Note:</strong> This vendor will be automatically created in the system after quotation is saved.
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* BASIC INFORMATION */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Basic Information</h3>
                 <div className="procurement-quotation-received-form-row">
@@ -1730,7 +1943,7 @@ const QuotationsReceived = () => {
                 </div>
               </div>
 
-              {/* File Upload Section */}
+              {/* FILE UPLOAD */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Attach Quotation File (Optional)</h3>
                 <div className="procurement-quotation-received-form-group">
@@ -1752,10 +1965,17 @@ const QuotationsReceived = () => {
                 </div>
               </div>
 
-              {/* Items Section */}
+              {/* ITEMS SECTION - WITH TOGGLE */}
               <div className="procurement-quotation-received-form-section">
                 <div className="procurement-quotation-received-section-header">
-                  <h3>Quotation Items *</h3>
+                  <h3>
+                    Quotation Items *
+                    {quotationFormData.items.length > 0 && (
+                      <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 'normal', marginLeft: '8px' }}>
+                        ({quotationFormData.items.filter(i => i.included !== false).length} of {quotationFormData.items.length} included)
+                      </span>
+                    )}
+                  </h3>
                   <button
                     type="button"
                     className="procurement-quotation-received-btn-add-item"
@@ -1765,126 +1985,208 @@ const QuotationsReceived = () => {
                   </button>
                 </div>
 
-                {/* Items Table with Headers */}
-                <div className="procurement-quotation-received-items-table-wrapper">
-                  <table className="procurement-quotation-received-items-table">
-                    <thead>
-                      <tr>
-                        <th style={{ minWidth: '200px' }}>Item Name *</th>
-                        <th style={{ minWidth: '200px' }}>Description</th>
-                        <th style={{ width: '100px' }}>Quantity *</th>
-                        <th style={{ width: '130px' }}>Unit Price (₹) *</th>
-                        <th style={{ width: '100px' }}>GST %</th>
-                        <th style={{ width: '130px' }}>Line Total</th>
-                        <th style={{ width: '60px' }}>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {quotationFormData.items.map((item, index) => {
-                        const qty = parseFloat(item.quantity) || 0;
-                        const price = parseFloat(item.unitPrice) || 0;
-                        const tax = parseFloat(item.taxPercent) || 0;
-                        const lineTotal = qty * price;
-                        const taxAmount = lineTotal * (tax / 100);
-                        const totalWithTax = lineTotal + taxAmount;
+                {quotationFormData.items.length === 0 ? (
+                  <div style={{
+                    padding: '40px',
+                    textAlign: 'center',
+                    background: '#f8fafc',
+                    border: '2px dashed #cbd5e0',
+                    borderRadius: '8px'
+                  }}>
+                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>📦</div>
+                    <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '5px', color: '#64748b' }}>
+                      No Items Loaded
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>
+                      Select a project above to load items from order book, or click "Add Item" to add manually
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {orderBookItems.length > 0 && (
+                      <div style={{
+                        marginBottom: '15px',
+                        padding: '12px',
+                        background: '#eff6ff',
+                        border: '1px solid #bfdbfe',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        color: '#1e40af'
+                      }}>
+                        💡 <strong>Tip:</strong> Items loaded from order book. Uncheck items you don't want in this quotation,
+                        and enter vendor prices for included items.
+                      </div>
+                    )}
 
-                        return (
-                          <tr key={index}>
-                            <td>
-                              <input
-                                type="text"
-                                placeholder="Enter item name"
-                                value={item.itemName}
-                                onChange={(e) => handleUpdateQuotationItem(index, 'itemName', e.target.value)}
-                                className="table-input"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                placeholder="Enter description"
-                                value={item.description}
-                                onChange={(e) => handleUpdateQuotationItem(index, 'description', e.target.value)}
-                                className="table-input"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={(e) => handleUpdateQuotationItem(index, 'quantity', parseFloat(e.target.value) || 1)}
-                                className="table-input text-center"
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                value={item.unitPrice}
-                                onChange={(e) => handleUpdateQuotationItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                                className="table-input text-right"
-                              />
-                            </td>
-                            <td>
-                              <select
-                                value={item.taxPercent}
-                                onChange={(e) => handleUpdateQuotationItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
-                                className="table-input"
-                              >
-                                <option value="0">0%</option>
-                                <option value="5">5%</option>
-                                <option value="12">12%</option>
-                                <option value="18">18%</option>
-                                <option value="28">28%</option>
-                              </select>
-                            </td>
-                            <td className="text-right" style={{ fontWeight: '600', color: '#1e293b' }}>
-                              {formatCurrency(totalWithTax)}
-                            </td>
-                            <td className="text-center">
-                              {quotationFormData.items.length > 1 && (
-                                <button
-                                  type="button"
-                                  className="procurement-quotation-received-btn-remove-item"
-                                  onClick={() => handleRemoveQuotationItem(index)}
-                                  title="Remove item"
-                                >
-                                  ✕
-                                </button>
-                              )}
-                            </td>
+                    <div className="procurement-quotation-received-items-table-wrapper">
+                      <table className="procurement-quotation-received-items-table">
+                        <thead>
+                          <tr>
+                            <th style={{ width: '50px' }}>Include</th>
+                            <th style={{ minWidth: '200px' }}>Item Name *</th>
+                            <th style={{ minWidth: '200px' }}>Description</th>
+                            <th style={{ width: '100px' }}>Quantity *</th>
+                            <th style={{ width: '130px' }}>Unit Price (₹) *</th>
+                            <th style={{ width: '100px' }}>GST %</th>
+                            <th style={{ width: '130px' }}>Line Total</th>
+                            <th style={{ width: '60px' }}>Action</th>
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody>
+                          {quotationFormData.items.map((item, index) => {
+                            const included = item.included !== false;
+                            const qty = parseFloat(item.quantity) || 0;
+                            const price = parseFloat(item.unitPrice) || 0;
+                            const tax = parseFloat(item.taxPercent) || 0;
+                            const lineTotal = qty * price;
+                            const taxAmount = lineTotal * (tax / 100);
+                            const totalWithTax = lineTotal + taxAmount;
 
-                {/* Quotation Summary */}
-                <div className="procurement-quotation-received-quote-summary">
-                  <div className="procurement-quotation-received-summary-row">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(calculateQuotationTotal().subtotal)}</span>
-                  </div>
-                  <div className="procurement-quotation-received-summary-row">
-                    <span>Tax Amount:</span>
-                    <span>{formatCurrency(calculateQuotationTotal().taxAmount)}</span>
-                  </div>
-                  <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total">
-                    <span><strong>Total Value:</strong></span>
-                    <span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span>
-                  </div>
-                </div>
+                            return (
+                              <tr
+                                key={index}
+                                style={{
+                                  background: included ? 'white' : '#f8fafc',
+                                  opacity: included ? 1 : 0.5
+                                }}
+                              >
+                                <td style={{ textAlign: 'center' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={included}
+                                    onChange={() => toggleItemInclusion(index)}
+                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    placeholder="Enter item name"
+                                    value={item.itemName}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'itemName', e.target.value)}
+                                    className="table-input"
+                                    disabled={!included}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    placeholder="Enter description"
+                                    value={item.description}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'description', e.target.value)}
+                                    className="table-input"
+                                    disabled={!included}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    type="number"
+                                    min="1"
+                                    value={item.quantity}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'quantity', parseFloat(e.target.value) || 1)}
+                                    className="table-input text-center"
+                                    disabled={!included}
+                                  />
+                                </td>
+                                <td>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.unitPrice}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                    className="table-input text-right"
+                                    disabled={!included}
+                                  />
+                                </td>
+                                <td>
+                                  <select
+                                    value={item.taxPercent}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
+                                    className="table-input"
+                                    disabled={!included}
+                                  >
+                                    <option value="0">0%</option>
+                                    <option value="5">5%</option>
+                                    <option value="12">12%</option>
+                                    <option value="18">18%</option>
+                                    <option value="28">28%</option>
+                                  </select>
+                                </td>
+                                <td className="text-right" style={{
+                                  fontWeight: '600',
+                                  color: included ? '#1e293b' : '#94a3b8'
+                                }}>
+                                  {included ? formatCurrency(totalWithTax) : '-'}
+                                </td>
+                                <td className="text-center">
+                                  {quotationFormData.items.length > 1 && (
+                                    <button
+                                      type="button"
+                                      className="procurement-quotation-received-btn-remove-item"
+                                      onClick={() => handleRemoveQuotationItem(index)}
+                                      title="Remove item"
+                                    >
+                                      ✕
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Quotation Summary - Only count included items */}
+                    <div className="procurement-quotation-received-quote-summary">
+                      <div className="procurement-quotation-received-summary-row">
+                        <span>Subtotal:</span>
+                        <span>{formatCurrency(
+                          quotationFormData.items
+                            .filter(item => item.included !== false)
+                            .reduce((sum, item) => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const price = parseFloat(item.unitPrice) || 0;
+                              return sum + (qty * price);
+                            }, 0)
+                        )}</span>
+                      </div>
+                      <div className="procurement-quotation-received-summary-row">
+                        <span>Tax Amount:</span>
+                        <span>{formatCurrency(
+                          quotationFormData.items
+                            .filter(item => item.included !== false)
+                            .reduce((sum, item) => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const price = parseFloat(item.unitPrice) || 0;
+                              const tax = parseFloat(item.taxPercent) || 0;
+                              return sum + ((qty * price) * tax / 100);
+                            }, 0)
+                        )}</span>
+                      </div>
+                      <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total">
+                        <span><strong>Total Value:</strong></span>
+                        <span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
             <div className="procurement-quotation-received-modal-actions">
-              <button className="procurement-quotation-received-btn-primary" onClick={handleSaveQuotation}>
+              <button
+                className="procurement-quotation-received-btn-primary"
+                onClick={handleSaveQuotation}
+                disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}
+              >
                 Upload Quotation
               </button>
-              <button className="procurement-quotation-received-btn-secondary" onClick={() => setShowUploadQuotationModal(false)}>
+              <button
+                className="procurement-quotation-received-btn-secondary"
+                onClick={() => setShowUploadQuotationModal(false)}
+              >
                 Cancel
               </button>
             </div>

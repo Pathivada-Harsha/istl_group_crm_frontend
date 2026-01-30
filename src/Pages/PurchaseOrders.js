@@ -40,10 +40,33 @@ const PurchaseOrders = () => {
   const [showCreatePOModal, setShowCreatePOModal] = useState(false);
   const [vendors, setVendors] = useState([]); // List of vendors
   const [quotations, setQuotations] = useState([]); // List of approved quotations
+  const [modalGroupName, setModalGroupName] = useState('');
+  const [modalSubGroupName, setModalSubGroupName] = useState('');
+  const [modalProjectId, setModalProjectId] = useState('');
+  const [modalGroups, setModalGroups] = useState([]);
+  const [modalSubGroups, setModalSubGroups] = useState([]);
+  const [modalProjects, setModalProjects] = useState([]);
+  const [modalDropdownLoading, setModalDropdownLoading] = useState({
+    groups: false,
+    subGroups: false,
+    projects: false
+  });
 
+  // Order book items (fallback when no quotations)
+  const [orderBookItems, setOrderBookItems] = useState([]);
+  const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+
+  // New vendor support
+  const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   const [createPOFormData, setCreatePOFormData] = useState({
     quotationId: '',
-    quotation: null, // Store selected quotation object
+    quotation: null,
+    vendorId: null,
+    vendorName: '', // NEW
+    vendorContact: '', // NEW
+    groupName: '', // NEW
+    subGroupName: '', // NEW
+    projectId: '', // NEW
     orderDate: new Date().toISOString().split('T')[0],
     expectedDelivery: '',
     paymentTerms: '',
@@ -73,12 +96,278 @@ const PurchaseOrders = () => {
     fetchVendors();
   }, []);
   /**
+ * Fetch modal groups
+ */
+  const fetchModalGroups = async () => {
+    setModalDropdownLoading(prev => ({ ...prev, groups: true }));
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/filters/groups`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setModalGroups(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+      setModalGroups([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, groups: false }));
+    }
+  };
+
+  /**
+   * Fetch modal subgroups
+   */
+  const fetchModalSubGroups = async (groupName) => {
+    if (!groupName) {
+      setModalSubGroups([]);
+      setModalProjects([]);
+      return;
+    }
+
+    setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/filters/subgroups?groupName=${encodeURIComponent(groupName)}`,
+        {
+          credentials: "include",
+          headers: getAuthHeaders()
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setModalSubGroups(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch subgroups:', error);
+      setModalSubGroups([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, subGroups: false }));
+    }
+  };
+
+  /**
+   * Fetch modal projects
+   */
+  const fetchModalProjects = async (groupName, subGroupName) => {
+    if (!groupName || !subGroupName) {
+      setModalProjects([]);
+      return;
+    }
+
+    setModalDropdownLoading(prev => ({ ...prev, projects: true }));
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/filters/projects?groupName=${encodeURIComponent(groupName)}&subGroupName=${encodeURIComponent(subGroupName)}`,
+        {
+          credentials: "include",
+          headers: getAuthHeaders()
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        setModalProjects(data || []);
+      }
+    } catch (error) {
+      console.error('Failed to fetch projects:', error);
+      setModalProjects([]);
+    } finally {
+      setModalDropdownLoading(prev => ({ ...prev, projects: false }));
+    }
+  };
+  /**
+   * Fetch quotations filtered by group/subgroup/project
+   */
+  const fetchFilteredQuotations = async (groupName, subGroupName, projectId) => {
+    try {
+      let url = `${API_BASE_URL}/api/quotations/approved?`;
+
+      if (groupName) url += `groupName=${encodeURIComponent(groupName)}&`;
+      if (subGroupName) url += `subGroupName=${encodeURIComponent(subGroupName)}&`;
+      if (projectId) url += `projectId=${encodeURIComponent(projectId)}`;
+
+      console.log('📡 Fetching approved quotations:', url);
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setQuotations(data || []);
+        console.log('✅ Loaded quotations:', data.length);
+
+        // If no quotations found and we have a project, fetch order book items
+        if ((!data || data.length === 0) && projectId) {
+          fetchOrderBookItems(projectId);
+        } else {
+          setOrderBookItems([]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch quotations:', error);
+      setQuotations([]);
+    }
+  };
+
+  /**
+ * Fetch order book items by project (fallback when no quotations)
+ */
+  const fetchOrderBookItems = async (projectId) => {
+    if (!projectId) {
+      setOrderBookItems([]);
+      return;
+    }
+
+    setLoadingOrderItems(true);
+    try {
+      const url = `${API_BASE_URL}/api/quotations/orderbook-items/${projectId}`;
+      console.log('📡 Fetching order book items for project:', projectId);
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch order book items');
+
+      const data = await response.json();
+      if (data.success) {
+        setOrderBookItems(data.data || []);
+        console.log('✅ Loaded order book items:', data.data.length);
+      }
+    } catch (error) {
+      console.error('❌ Error fetching order book items:', error);
+      showError('Failed to load order book items');
+      setOrderBookItems([]);
+    } finally {
+      setLoadingOrderItems(false);
+    }
+  };
+  /**
+   * Handle modal group change
+   */
+  const handleModalGroupChange = (e) => {
+    const newGroupName = e.target.value;
+    setModalGroupName(newGroupName);
+    setModalSubGroupName('');
+    setModalProjectId('');
+    setModalSubGroups([]);
+    setModalProjects([]);
+    setQuotations([]);
+    setOrderBookItems([]);
+
+    if (newGroupName) {
+      fetchModalSubGroups(newGroupName);
+      fetchFilteredQuotations(newGroupName, null, null);
+    }
+  };
+
+  /**
+   * Handle modal subgroup change
+   */
+  const handleModalSubGroupChange = (e) => {
+    const newSubGroupName = e.target.value;
+    setModalSubGroupName(newSubGroupName);
+    setModalProjectId('');
+    setModalProjects([]);
+    setQuotations([]);
+    setOrderBookItems([]);
+
+    if (modalGroupName && newSubGroupName) {
+      fetchModalProjects(modalGroupName, newSubGroupName);
+      fetchFilteredQuotations(modalGroupName, newSubGroupName, null);
+    }
+  };
+
+  /**
+   * Handle modal project change
+   */
+  const handleModalProjectChange = (e) => {
+    const newProjectId = e.target.value;
+    setModalProjectId(newProjectId);
+    setQuotations([]);
+    setOrderBookItems([]);
+
+    if (newProjectId) {
+      fetchFilteredQuotations(modalGroupName, modalSubGroupName, newProjectId);
+    }
+  };
+  /**
+ * Handle vendor type toggle (existing vs new)
+ */
+  const handleVendorTypeChange = (type) => {
+    setShowNewVendorForm(type === 'new');
+
+    if (type === 'new') {
+      setCreatePOFormData({
+        ...createPOFormData,
+        vendorId: null,
+        vendorName: '',
+        vendorContact: ''
+      });
+    } else {
+      setCreatePOFormData({
+        ...createPOFormData,
+        vendorName: '',
+        vendorContact: ''
+      });
+    }
+  };
+
+  /**
+   * Handle new vendor contact change (restrict to 10 digits)
+   */
+  const handleNewVendorContactChange = (value) => {
+    const cleaned = value.replace(/\D/g, '').slice(0, 10);
+    setCreatePOFormData({
+      ...createPOFormData,
+      vendorContact: cleaned
+    });
+  };
+
+  /**
+ * Load order book items into PO form
+ */
+  const handleLoadOrderBookItems = () => {
+    if (orderBookItems.length === 0) {
+      showError('No order book items available');
+      return;
+    }
+
+    const poItems = orderBookItems.map(item => ({
+      itemName: item.itemName,
+      itemDescription: item.specification || item.description || '',
+      quotedQuantity: item.quantity || 1,
+      quantity: item.quantity || 1,
+      unitPrice: 0, // User must enter vendor price
+      gst: item.taxPercent || 18,
+      discount: 0,
+      lineTotal: 0
+    }));
+
+    setCreatePOFormData({
+      ...createPOFormData,
+      items: poItems
+    });
+
+    showSuccess(`Loaded ${poItems.length} items from order book`);
+  };
+  /**
    * Get auth headers
    */
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
     'X-User-Id': user?.id || localStorage.getItem('userId'),
-    'X-User-Role': user?.role || localStorage.getItem('userRole')
+    'X-User-Role': user?.role || localStorage.getItem('userRole'),
+     'User-Id': user?.id || localStorage.getItem('userId'),
+    'User-Role': user?.role || localStorage.getItem('userRole')
   });
   /**
    * Fetch approved quotations for PO creation
@@ -308,13 +597,30 @@ const PurchaseOrders = () => {
    */
   const handleCreatePO = async () => {
     // Validation
-    if (!createPOFormData.quotationId) {
-      showError('Please select a quotation');
+    if (!modalGroupName) {
+      showError('Please select a group');
       return;
     }
 
+    // Vendor validation
+    if (!createPOFormData.vendorId && !showNewVendorForm) {
+      showError('Please select a vendor or add a new vendor');
+      return;
+    }
+
+    if (showNewVendorForm) {
+      if (!createPOFormData.vendorName || !createPOFormData.vendorName.trim()) {
+        showError('Vendor name is required');
+        return;
+      }
+      if (!createPOFormData.vendorContact || createPOFormData.vendorContact.length !== 10) {
+        showError('Please enter a valid 10-digit contact number');
+        return;
+      }
+    }
+
     if (createPOFormData.items.length === 0) {
-      showError('No items available from quotation');
+      showError('No items available. Please select a quotation or load order book items.');
       return;
     }
 
@@ -322,6 +628,15 @@ const PurchaseOrders = () => {
     const hasItems = createPOFormData.items.some(item => item.quantity > 0);
     if (!hasItems) {
       showError('Please set quantity for at least one item');
+      return;
+    }
+
+    // Check if all items with quantity > 0 have unit price
+    const missingPrices = createPOFormData.items.some(
+      item => item.quantity > 0 && (!item.unitPrice || item.unitPrice === 0)
+    );
+    if (missingPrices) {
+      showError('Please enter unit price for all items');
       return;
     }
 
@@ -335,7 +650,7 @@ const PurchaseOrders = () => {
       // Filter items with quantity > 0
       const poItems = createPOFormData.items
         .filter(item => item.quantity > 0)
-        .map(({ quotationItemId, itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
+        .map(({ itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
           itemName,
           itemDescription,
           quantity,
@@ -345,12 +660,14 @@ const PurchaseOrders = () => {
         }));
 
       const poData = {
-        quotationId: createPOFormData.quotationId,
-        vendorId: createPOFormData.quotation.vendorId,
-        rfqId: createPOFormData.quotation.rfqId,
-        groupName: createPOFormData.quotation.groupName,
-        subGroupName: createPOFormData.quotation.subGroupName,
-        projectId: createPOFormData.quotation.projectId,
+        quotationId: createPOFormData.quotationId || null,
+        vendorId: createPOFormData.vendorId || null,
+        vendorName: showNewVendorForm ? createPOFormData.vendorName : null,
+        vendorContact: createPOFormData.vendorContact || null,
+        rfqId: createPOFormData.quotation?.rfqId || null,
+        groupName: modalGroupName,
+        subGroupName: modalSubGroupName || null,
+        projectId: modalProjectId || null,
         orderDate: createPOFormData.orderDate,
         expectedDelivery: createPOFormData.expectedDelivery,
         paymentTerms: createPOFormData.paymentTerms,
@@ -361,7 +678,11 @@ const PurchaseOrders = () => {
         paymentStatus: 'Pending'
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
+      const endpoint = createPOFormData.quotationId
+        ? `${API_BASE_URL}/api/purchase-orders/from-quotation`
+        : `${API_BASE_URL}/api/purchase-orders`;
+
+      const response = await fetch(endpoint, {
         credentials: "include",
         method: 'POST',
         headers: {
@@ -384,6 +705,12 @@ const PurchaseOrders = () => {
       setCreatePOFormData({
         quotationId: '',
         quotation: null,
+        vendorId: null,
+        vendorName: '',
+        vendorContact: '',
+        groupName: '',
+        subGroupName: '',
+        projectId: '',
         orderDate: new Date().toISOString().split('T')[0],
         expectedDelivery: '',
         paymentTerms: '',
@@ -391,6 +718,9 @@ const PurchaseOrders = () => {
         notes: '',
         items: []
       });
+      setShowNewVendorForm(false);
+      setQuotations([]);
+      setOrderBookItems([]);
 
       // Refresh list
       fetchPurchaseOrders();
@@ -405,15 +735,23 @@ const PurchaseOrders = () => {
   };
 
   /**
-   * Handle open create PO modal
-   */
-  /**
- * Handle open create PO modal
- */
+  * Handle open create PO modal - UPDATED
+  */
   const handleOpenCreatePO = () => {
+    // Initialize with current filter values
+    setModalGroupName(groupName || '');
+    setModalSubGroupName(subGroupName || '');
+    setModalProjectId(projectId || '');
+
     setCreatePOFormData({
       quotationId: '',
       quotation: null,
+      vendorId: null,
+      vendorName: '',
+      vendorContact: '',
+      groupName: groupName || '',
+      subGroupName: subGroupName || '',
+      projectId: projectId || '',
       orderDate: new Date().toISOString().split('T')[0],
       expectedDelivery: '',
       paymentTerms: '',
@@ -421,6 +759,24 @@ const PurchaseOrders = () => {
       notes: '',
       items: []
     });
+
+    setShowNewVendorForm(false);
+    setQuotations([]);
+    setOrderBookItems([]);
+
+    // Fetch dropdowns
+    fetchModalGroups();
+    fetchVendors();
+
+    if (groupName) {
+      fetchModalSubGroups(groupName);
+      fetchFilteredQuotations(groupName, subGroupName, projectId);
+    }
+
+    if (groupName && subGroupName) {
+      fetchModalProjects(groupName, subGroupName);
+    }
+
     setShowCreatePOModal(true);
   };
   /**
@@ -1053,10 +1409,11 @@ const PurchaseOrders = () => {
           </div>
         </div>
       )}
-      {/* Create PO Modal */}
+
+      {/* Create PO Modal - COMPLETE UPDATED VERSION */}
       {showCreatePOModal && (
         <div className="purchase-orders-modal-overlay" onClick={() => setShowCreatePOModal(false)}>
-          <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px', maxHeight: '90vh', overflow: 'auto' }}>
             <div className="purchase-orders-modal-header">
               <h2>Create Purchase Order</h2>
               <button className="purchase-orders-modal-close" onClick={() => setShowCreatePOModal(false)}>
@@ -1065,184 +1422,569 @@ const PurchaseOrders = () => {
             </div>
 
             <div className="purchase-orders-modal-content">
-              {/* Select Quotation Section */}
-              <div className="po-form-section">
-                <h3>Select Approved Quotation</h3>
 
-                <div className="po-form-group">
-                  <label>Quotation *</label>
-                  <select
-                    value={createPOFormData.quotationId}
-                    onChange={(e) => handleQuotationSelect(e.target.value)}
-                  >
-                    <option value="">Select Quotation</option>
-                    {quotations.map(quot => (
-                      <option key={quot.id} value={quot.id}>
-                        {quot.quoteNo} - {quot.category} - {formatCurrency(quot.totalValue)} - Valid: {formatDate(quot.validTill)}
+              {/* ========== STEP 1: PROJECT SELECTION ========== */}
+              <div className="po-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '2px solid #e2e8f0' }}>
+                <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span>📂</span> Step 1: Select Project
+                </h3>
+                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                  Choose a project to load approved quotations or order book items
+                </p>
+
+                <div className="po-form-row">
+                  <div className="po-form-group">
+                    <label>Group *</label>
+                    <select
+                      value={modalGroupName}
+                      onChange={handleModalGroupChange}
+                      disabled={modalDropdownLoading.groups}
+                      style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                    >
+                      <option value="">
+                        {modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
                       </option>
-                    ))}
-                  </select>
+                      {modalGroups.map((group, index) => (
+                        <option key={group.value || index} value={group.value}>
+                          {group.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="po-form-group">
+                    <label>Sub Group</label>
+                    <select
+                      value={modalSubGroupName}
+                      onChange={handleModalSubGroupChange}
+                      disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                      style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                    >
+                      <option value="">
+                        {modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
+                      </option>
+                      {modalSubGroups.map((sub, index) => (
+                        <option key={sub.value || index} value={sub.value}>
+                          {sub.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="po-form-group">
+                    <label>Project *</label>
+                    <select
+                      value={modalProjectId}
+                      onChange={handleModalProjectChange}
+                      disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                      style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                    >
+                      <option value="">
+                        {modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
+                      </option>
+                      {modalProjects.map((project, index) => (
+                        <option key={project.id || index} value={project.id}>
+                          {project.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
-                {createPOFormData.quotation && (
-                  <div style={{
-                    marginTop: '12px',
-                    padding: '12px',
-                    backgroundColor: '#f8fafc',
-                    borderRadius: '8px',
-                    border: '1px solid #e2e8f0'
-                  }}>
-                    <h4 style={{ marginBottom: '8px', fontSize: '14px', fontWeight: '600' }}>Quotation Details</h4>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '13px' }}>
-                      <div>
-                        <strong>Vendor Contact:</strong> {createPOFormData.quotation.vendorContact || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>RFQ ID:</strong> {createPOFormData.quotation.rfqId || 'N/A'}
-                      </div>
-                      <div>
-                        <strong>Category:</strong> {createPOFormData.quotation.category}
-                      </div>
-                      <div>
-                        <strong>Valid Until:</strong> {formatDate(createPOFormData.quotation.validTill)}
-                      </div>
-                    </div>
+                {/* Loading indicator */}
+                {loadingOrderItems && (
+                  <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>
+                    🔄 Loading quotations and order book items...
                   </div>
                 )}
               </div>
 
-              {/* PO Details Section */}
-              {createPOFormData.quotationId && (
-                <>
-                  <div className="po-form-section">
-                    <h3>Purchase Order Details</h3>
+              {/* ========== STEP 2: QUOTATION OR ORDER BOOK SELECTION ========== */}
+              {modalProjectId && (
+                <div className="po-form-section">
+                  {/* SCENARIO A: Quotations Available */}
+                  {quotations.length > 0 && (
+                    <>
+                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                        <span>✅</span> Approved Quotations Available ({quotations.length})
+                      </h3>
+                      <p style={{ fontSize: '13px', color: '#059669', marginBottom: '16px' }}>
+                        Select a quotation to create purchase order
+                      </p>
 
-                    <div className="po-form-row">
                       <div className="po-form-group">
-                        <label>Order Date *</label>
-                        <input
-                          type="date"
-                          value={createPOFormData.orderDate}
-                          onChange={(e) => setCreatePOFormData({ ...createPOFormData, orderDate: e.target.value })}
-                        />
+                        <label>Select Quotation *</label>
+                        <select
+                          value={createPOFormData.quotationId}
+                          onChange={(e) => handleQuotationSelect(e.target.value)}
+                          style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                        >
+                          <option value="">Select Quotation</option>
+                          {quotations.map(quot => (
+                            <option key={quot.id} value={quot.id}>
+                              {quot.quoteNo} - {quot.category} - {formatCurrency(quot.totalValue)} - Valid: {formatDate(quot.validTill)}
+                            </option>
+                          ))}
+                        </select>
                       </div>
 
-                      <div className="po-form-group">
-                        <label>Expected Delivery *</label>
-                        <input
-                          type="date"
-                          value={createPOFormData.expectedDelivery}
-                          onChange={(e) => setCreatePOFormData({ ...createPOFormData, expectedDelivery: e.target.value })}
-                          min={createPOFormData.orderDate}
-                        />
+                      {createPOFormData.quotation && (
+                        <div style={{
+                          marginTop: '16px',
+                          padding: '16px',
+                          backgroundColor: '#f0fdf4',
+                          borderRadius: '8px',
+                          border: '2px solid #86efac'
+                        }}>
+                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: '#166534' }}>
+                            Selected Quotation Details
+                          </h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', fontSize: '14px' }}>
+                            <div>
+                              <strong>Vendor Contact:</strong> {createPOFormData.quotation.vendorContact || createPOFormData.quotation.vendorName || 'Vendor #' + createPOFormData.quotation.vendorId}
+                            </div>
+                            <div>
+                              <strong>RFQ ID:</strong> {createPOFormData.quotation.rfqId || 'N/A'}
+                            </div>
+                            <div>
+                              <strong>Category:</strong> {createPOFormData.quotation.category}
+                            </div>
+                            <div>
+                              <strong>Valid Until:</strong> {formatDate(createPOFormData.quotation.validTill)}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* SCENARIO B: No Quotations - Show Order Book Option */}
+                  {!loadingOrderItems && quotations.length === 0 && (
+                    <>
+                      <div style={{
+                        padding: '20px',
+                        background: '#fef3c7',
+                        border: '2px solid #fbbf24',
+                        borderRadius: '8px',
+                        marginBottom: '20px'
+                      }}>
+                        <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span>⚠️</span> No Approved Quotations Found
+                        </h4>
+                        <p style={{ fontSize: '14px', color: '#92400e', marginBottom: '12px' }}>
+                          No approved quotations are available for the selected project.
+                        </p>
+
+                        {orderBookItems.length > 0 ? (
+                          <>
+                            <div style={{
+                              padding: '12px',
+                              background: '#dbeafe',
+                              border: '1px solid #93c5fd',
+                              borderRadius: '6px',
+                              marginBottom: '12px'
+                            }}>
+                              <p style={{ fontSize: '13px', color: '#1e40af', marginBottom: '8px' }}>
+                                ✅ <strong>Good News!</strong> We found {orderBookItems.length} items from order books for this project.
+                              </p>
+                              <p style={{ fontSize: '13px', color: '#1e40af' }}>
+                                You can create a PO using these items. You'll need to enter vendor information and prices manually.
+                              </p>
+                            </div>
+
+                            <button
+                              className="purchase-orders-btn-primary"
+                              onClick={handleLoadOrderBookItems}
+                              style={{ width: '100%', padding: '12px', fontSize: '15px' }}
+                            >
+                              📋 Load {orderBookItems.length} Items from Order Book
+                            </button>
+                          </>
+                        ) : (
+                          <div style={{
+                            padding: '12px',
+                            background: '#fee2e2',
+                            border: '1px solid #fecaca',
+                            borderRadius: '6px'
+                          }}>
+                            <p style={{ fontSize: '13px', color: '#991b1b', marginBottom: '4px' }}>
+                              ❌ <strong>No order book items found</strong> for this project.
+                            </p>
+                            <p style={{ fontSize: '12px', color: '#991b1b' }}>
+                              Please select a different project or create an order book/quotation first.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ========== STEP 3: VENDOR SELECTION ========== */}
+              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+                <div className="po-form-section">
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span>🏢</span> Vendor Information
+                  </h3>
+
+                  {/* Show vendor from quotation OR allow selection */}
+                  {createPOFormData.quotation ? (
+                    <div style={{
+                      padding: '16px',
+                      background: '#f0f9ff',
+                      border: '2px solid #bae6fd',
+                      borderRadius: '8px'
+                    }}>
+                      <div style={{ fontSize: '14px', color: '#0c4a6e' }}>
+                        <strong>Vendor from Quotation:</strong>
+                        <div style={{ marginTop: '8px', fontSize: '15px', fontWeight: '600' }}>
+                          {createPOFormData.quotation.vendorName || createPOFormData.quotation.vendorContact || `Vendor #${createPOFormData.quotation.vendorId}`}
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <>
+                      {/* Vendor Type Radio Buttons */}
+                      <div style={{ marginBottom: '16px', display: 'flex', gap: '24px', padding: '12px', background: '#f8fafc', borderRadius: '6px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+                          <input
+                            type="radio"
+                            name="vendorType"
+                            checked={!showNewVendorForm}
+                            onChange={() => handleVendorTypeChange('existing')}
+                            style={{ marginRight: '8px', width: '18px', height: '18px' }}
+                          />
+                          <span>Select Existing Vendor</span>
+                        </label>
 
+                        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
+                          <input
+                            type="radio"
+                            name="vendorType"
+                            checked={showNewVendorForm}
+                            onChange={() => handleVendorTypeChange('new')}
+                            style={{ marginRight: '8px', width: '18px', height: '18px' }}
+                          />
+                          <span>Add New Vendor</span>
+                        </label>
+                      </div>
+
+                      {/* Existing Vendor Dropdown */}
+                      {!showNewVendorForm && (
+                        <div className="po-form-group">
+                          <label>Select Vendor *</label>
+                          <select
+                            value={createPOFormData.vendorId || ''}
+                            onChange={(e) => setCreatePOFormData({
+                              ...createPOFormData,
+                              vendorId: e.target.value ? parseInt(e.target.value) : null
+                            })}
+                            style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                          >
+                            <option value="">Select Vendor</option>
+                            {vendors.map(vendor => (
+                              <option key={vendor.id} value={vendor.id}>
+                                {vendor.name} {vendor.contactNumber ? `- ${vendor.contactNumber}` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          {vendors.length === 0 && (
+                            <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                              No vendors available. Please add a new vendor.
+                            </small>
+                          )}
+                        </div>
+                      )}
+
+                      {/* New Vendor Form */}
+                      {showNewVendorForm && (
+                        <div style={{
+                          padding: '20px',
+                          background: '#f0fdf4',
+                          border: '2px solid #86efac',
+                          borderRadius: '8px'
+                        }}>
+                          <div className="po-form-row">
+                            <div className="po-form-group">
+                              <label>Vendor Name *</label>
+                              <input
+                                type="text"
+                                value={createPOFormData.vendorName || ''}
+                                onChange={(e) => setCreatePOFormData({
+                                  ...createPOFormData,
+                                  vendorName: e.target.value
+                                })}
+                                placeholder="Enter vendor company name"
+                                style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                              />
+                            </div>
+
+                            <div className="po-form-group">
+                              <label>Contact Number * (10 digits)</label>
+                              <input
+                                type="tel"
+                                value={createPOFormData.vendorContact || ''}
+                                onChange={(e) => handleNewVendorContactChange(e.target.value)}
+                                placeholder="Enter 10-digit mobile"
+                                maxLength={10}
+                                style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                              />
+                              {createPOFormData.vendorContact && createPOFormData.vendorContact.length < 10 && (
+                                <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                                  ⚠️ Contact must be exactly 10 digits ({createPOFormData.vendorContact.length}/10)
+                                </small>
+                              )}
+                            </div>
+                          </div>
+
+                          <div style={{
+                            marginTop: '12px',
+                            padding: '12px',
+                            background: '#dbeafe',
+                            border: '1px solid #93c5fd',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            color: '#1e40af'
+                          }}>
+                            💡 <strong>Note:</strong> This vendor will be created automatically when you submit the purchase order.
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ========== STEP 4: PO DETAILS ========== */}
+              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+                <div className="po-form-section">
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <span>📝</span> Purchase Order Details
+                  </h3>
+
+                  <div className="po-form-row">
+                    <div className="po-form-group">
+                      <label>Order Date *</label>
+                      <input
+                        type="date"
+                        value={createPOFormData.orderDate}
+                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, orderDate: e.target.value })}
+                        style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                      />
+                    </div>
+
+                    <div className="po-form-group">
+                      <label>Expected Delivery *</label>
+                      <input
+                        type="date"
+                        value={createPOFormData.expectedDelivery}
+                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, expectedDelivery: e.target.value })}
+                        min={createPOFormData.orderDate}
+                        style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="po-form-row">
                     <div className="po-form-group">
                       <label>Payment Terms</label>
                       <input
                         type="text"
                         value={createPOFormData.paymentTerms}
                         onChange={(e) => setCreatePOFormData({ ...createPOFormData, paymentTerms: e.target.value })}
-                        placeholder="e.g., Net 30, Advance Payment"
+                        placeholder="e.g., Net 30, Advance Payment, 50% advance"
+                        style={{ width: '100%', padding: '10px', fontSize: '14px' }}
                       />
                     </div>
 
                     <div className="po-form-group">
                       <label>Shipping Address</label>
-                      <textarea
-                        rows={2}
+                      <input
+                        type="text"
                         value={createPOFormData.shippingAddress}
                         onChange={(e) => setCreatePOFormData({ ...createPOFormData, shippingAddress: e.target.value })}
-                        placeholder="Enter shipping address"
-                      />
-                    </div>
-
-                    <div className="po-form-group">
-                      <label>Notes</label>
-                      <textarea
-                        rows={2}
-                        value={createPOFormData.notes}
-                        onChange={(e) => setCreatePOFormData({ ...createPOFormData, notes: e.target.value })}
-                        placeholder="Additional notes"
+                        placeholder="Enter delivery address"
+                        style={{ width: '100%', padding: '10px', fontSize: '14px' }}
                       />
                     </div>
                   </div>
 
-                  {/* Items from Quotation */}
-                  <div className="po-form-section">
-                    <h3>Quotation Items - Adjust Quantities</h3>
-                    <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '12px' }}>
-                      Modify quantities as needed (cannot exceed quoted quantities)
-                    </p>
-
-                    <table className="po-items-table">
-                      <thead>
-                        <tr>
-                          <th>Item Name</th>
-                          <th>Description</th>
-                          <th>Quoted Qty</th>
-                          <th>PO Qty</th>
-                          <th>Unit Price</th>
-                          <th>GST</th>
-                          <th>Discount</th>
-                          <th>Line Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {createPOFormData.items.map((item, index) => (
-                          <tr key={index}>
-                            <td>{item.itemName}</td>
-                            <td>{item.itemDescription || '—'}</td>
-                            <td style={{ fontWeight: '600', textAlign: 'center' }}>{item.quotedQuantity}</td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                max={item.quotedQuantity}
-                                value={item.quantity}
-                                onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)}
-                                style={{
-                                  width: '80px',
-                                  padding: '6px',
-                                  textAlign: 'center',
-                                  border: '1px solid #e2e8f0',
-                                  borderRadius: '4px'
-                                }}
-                              />
-                            </td>
-                            <td>{formatCurrency(item.unitPrice)}</td>
-                            <td>{item.gst}%</td>
-                            <td>{item.discount}%</td>
-                            <td className="po-value">{formatCurrency(item.lineTotal)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan="7" style={{ textAlign: 'right', fontWeight: 'bold' }}>Total:</td>
-                          <td className="po-value" style={{ fontWeight: 'bold' }}>
-                            {formatCurrency(calculatePOTotal())}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
+                  <div className="po-form-group">
+                    <label>Notes / Special Instructions</label>
+                    <textarea
+                      rows={3}
+                      value={createPOFormData.notes}
+                      onChange={(e) => setCreatePOFormData({ ...createPOFormData, notes: e.target.value })}
+                      placeholder="Additional notes, special requirements, etc."
+                      style={{ width: '100%', padding: '10px', fontSize: '14px', resize: 'vertical' }}
+                    />
                   </div>
-                </>
+                </div>
+              )}
+
+              {/* ========== STEP 5: ITEMS TABLE ========== */}
+              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+                <div className="po-form-section">
+                  <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                    <span>📋</span> Purchase Order Items
+                  </h3>
+                  <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                    {createPOFormData.quotationId
+                      ? 'Adjust quantities as needed (cannot exceed quoted quantities)'
+                      : 'Enter vendor prices for all items. Quantities are from order books.'}
+                  </p>
+
+                  {createPOFormData.items.length > 0 ? (
+                    <>
+                      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                        <table className="po-items-table" style={{ width: '100%', minWidth: '900px' }}>
+                          <thead style={{ background: '#f8fafc' }}>
+                            <tr>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Item Name</th>
+                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
+                              {createPOFormData.quotationId && (
+                                <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '100px' }}>Quoted Qty</th>
+                              )}
+                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '100px' }}>PO Qty *</th>
+                              <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600', width: '130px' }}>Unit Price (₹) *</th>
+                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>GST %</th>
+                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>Discount %</th>
+                              <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600', width: '130px' }}>Line Total</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {createPOFormData.items.map((item, index) => (
+                              <tr key={index} style={{ borderTop: '1px solid #e2e8f0' }}>
+                                <td style={{ padding: '12px', fontWeight: '500' }}>{item.itemName}</td>
+                                <td style={{ padding: '12px', fontSize: '13px', color: '#64748b' }}>{item.itemDescription || '—'}</td>
+                                {createPOFormData.quotationId && (
+                                  <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>
+                                    {item.quotedQuantity}
+                                  </td>
+                                )}
+                                <td style={{ padding: '12px', textAlign: 'center' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={createPOFormData.quotationId ? item.quotedQuantity : undefined}
+                                    value={item.quantity}
+                                    onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)}
+                                    style={{
+                                      width: '70px',
+                                      padding: '8px',
+                                      textAlign: 'center',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '4px',
+                                      fontSize: '14px'
+                                    }}
+                                  />
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'right' }}>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.unitPrice}
+                                    onChange={(e) => {
+                                      const newItems = [...createPOFormData.items];
+                                      newItems[index].unitPrice = parseFloat(e.target.value) || 0;
+
+                                      // Recalculate line total
+                                      const baseAmount = newItems[index].quantity * newItems[index].unitPrice;
+                                      const discountAmount = baseAmount * (newItems[index].discount / 100);
+                                      const taxableAmount = baseAmount - discountAmount;
+                                      const gstAmount = taxableAmount * (newItems[index].gst / 100);
+                                      newItems[index].lineTotal = taxableAmount + gstAmount;
+
+                                      setCreatePOFormData({ ...createPOFormData, items: newItems });
+                                    }}
+                                    disabled={createPOFormData.quotationId}
+                                    placeholder="0.00"
+                                    style={{
+                                      width: '110px',
+                                      padding: '8px',
+                                      textAlign: 'right',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '4px',
+                                      fontSize: '14px',
+                                      backgroundColor: createPOFormData.quotationId ? '#f1f5f9' : 'white'
+                                    }}
+                                  />
+                                </td>
+                                <td style={{ padding: '12px', textAlign: 'center', fontSize: '14px' }}>{item.gst}%</td>
+                                <td style={{ padding: '12px', textAlign: 'center', fontSize: '14px' }}>{item.discount}%</td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: '#059669', fontSize: '14px' }}>
+                                  {formatCurrency(item.lineTotal)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                          <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                            <tr>
+                              <td colSpan={createPOFormData.quotationId ? 7 : 6} style={{ padding: '16px', textAlign: 'right', fontWeight: '700', fontSize: '16px' }}>
+                                Grand Total:
+                              </td>
+                              <td style={{ padding: '16px', textAlign: 'right', fontWeight: '700', fontSize: '18px', color: '#059669' }}>
+                                {formatCurrency(calculatePOTotal())}
+                              </td>
+                            </tr>
+                          </tfoot>
+                        </table>
+                      </div>
+
+                      {/* Warning for missing prices */}
+                      {!createPOFormData.quotationId && createPOFormData.items.some(i => i.quantity > 0 && (!i.unitPrice || i.unitPrice === 0)) && (
+                        <div style={{
+                          marginTop: '12px',
+                          padding: '12px',
+                          background: '#fef3c7',
+                          border: '1px solid #fbbf24',
+                          borderRadius: '6px',
+                          fontSize: '13px',
+                          color: '#92400e'
+                        }}>
+                          ⚠️ Please enter unit prices for all items with quantity greater than 0
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div style={{
+                      padding: '60px',
+                      textAlign: 'center',
+                      background: '#f8fafc',
+                      border: '2px dashed #cbd5e0',
+                      borderRadius: '8px',
+                      color: '#94a3b8'
+                    }}>
+                      <div style={{ fontSize: '48px', marginBottom: '12px' }}>📦</div>
+                      <div style={{ fontSize: '16px', fontWeight: '500' }}>No items to display</div>
+                      <div style={{ fontSize: '14px', marginTop: '4px' }}>Select a quotation or load order book items</div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
-            <div className="purchase-orders-modal-actions">
+            {/* ========== MODAL FOOTER / ACTIONS ========== */}
+            <div className="purchase-orders-modal-actions" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px' }}>
               <button
                 className="purchase-orders-btn-primary"
                 onClick={handleCreatePO}
-                disabled={!createPOFormData.quotationId || createPOFormData.items.length === 0}
+                disabled={!modalGroupName || createPOFormData.items.length === 0}
+                style={{
+                  padding: '12px 32px',
+                  fontSize: '15px',
+                  opacity: (!modalGroupName || createPOFormData.items.length === 0) ? 0.5 : 1,
+                  cursor: (!modalGroupName || createPOFormData.items.length === 0) ? 'not-allowed' : 'pointer'
+                }}
               >
-                Create Purchase Order
+                ✅ Create Purchase Order
               </button>
               <button
                 className="purchase-orders-btn-secondary"
                 onClick={() => setShowCreatePOModal(false)}
+                style={{ padding: '12px 32px', fontSize: '15px' }}
               >
                 Cancel
               </button>
