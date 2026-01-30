@@ -124,7 +124,7 @@ const UsersPage = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
 
-  const [view, setView] = useState(pagePermissions.USERS[0] === "VIEW" ? true : false);
+  // const [view, setView] = useState(pagePermissions.USERS[0] === "VIEW" ? true : false);
   const [create, setCreate] = useState(pagePermissions.USERS[1] === "CREATE" ? true : false);
   const [edit, setEdit] = useState(pagePermissions.USERS[2] === "EDIT" ? true : false);
   const [deletee, setDeletee] = useState(pagePermissions.USERS[3] === "DELETE" ? true : false);
@@ -1733,7 +1733,7 @@ const UsersPage = () => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Total Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length}
+                <strong>Total Assigned Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length}
               </div>
 
               <div className="users-page-permission-list">
@@ -1881,7 +1881,7 @@ const UsersPage = () => {
 
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Total Permissions:</strong> {selectedUserPermissions.length}
+                <strong>Total Assignend Page Permissions:</strong> {selectedUserPermissions.length}
               </div>
 
               {Object.entries(groupPermissionsByModule(
