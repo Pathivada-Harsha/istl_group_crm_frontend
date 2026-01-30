@@ -59,7 +59,11 @@ const ProposalsWithTemplate = () => {
     role: user.role,
     name: user.name
   };
-
+  // ADD THESE STATE VARIABLES (around line 70, after existing state)
+  const [bomItemsMaster, setBomItemsMaster] = useState([]);
+  const [filteredBomItems, setFilteredBomItems] = useState({});
+  const [showBomDropdown, setShowBomDropdown] = useState({});
+  const [bomCategories, setBomCategories] = useState([]);
   // State
   const [proposals, setProposals] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -85,7 +89,9 @@ const ProposalsWithTemplate = () => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [activeTab, setActiveTab] = useState('company');
-
+  const [showUnitDropdown, setShowUnitDropdown] = useState({});
+  const [filteredUnits, setFilteredUnits] = useState({});
+  const [customUnits, setCustomUnits] = useState({}); // Store custom units per row
   // Form state - Basic Info
   const [formData, setFormData] = useState({
     leadId: '',
@@ -97,6 +103,155 @@ const ProposalsWithTemplate = () => {
     subGroupName: '',
     status: 'Draft'
   });
+  const COMMON_UNITS = [
+    // Quantity
+    'Nos',
+    'Pcs',
+    'Units',
+    'Pairs',
+    'Dozen',
+    'Gross',
+
+    // Length
+    'Meter',
+    'Meters',
+    'Feet',
+    'Inch',
+    'Km',
+    'mm',
+    'cm',
+
+    // Area
+    'Sqft',
+    'Sq.ft',
+    'Sqm',
+    'Sq.m',
+    'Acres',
+    'Hectares',
+
+    // Volume
+    'Liters',
+    'Litres',
+    'ml',
+    'Gallons',
+    'Cu.ft',
+    'Cu.m',
+
+    // Weight
+    'Kg',
+    'Kgs',
+    'Grams',
+    'Tons',
+    'MT',
+    'Quintal',
+    'Lbs',
+
+    // Electrical
+    'Watt',
+    'KW',
+    'KVA',
+    'Amp',
+    'Volt',
+
+    // Set/Bundle
+    'Set',
+    'Sets',
+    'Kit',
+    'Kits',
+    'Bundle',
+    'Lot',
+    'Box',
+    'Boxes',
+    'Carton',
+    'Bag',
+    'Bags',
+
+    // Time
+    'Hours',
+    'Days',
+    'Months',
+    'Years',
+
+    // Others
+    'Roll',
+    'Rolls',
+    'Sheet',
+    'Sheets',
+    'Panel',
+    'Panels',
+    'RM',
+    'RMT',
+    'Running Meter',
+    'Coil',
+    'Drum'
+  ].sort(); // Sort alphabetically
+
+  /**
+ * Filter units based on search term
+ */
+  const filterUnits = (index, searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      setFilteredUnits(prev => ({ ...prev, [index]: COMMON_UNITS }));
+      return;
+    }
+
+    const search = searchTerm.toLowerCase().trim();
+    const filtered = COMMON_UNITS.filter(unit =>
+      unit.toLowerCase().includes(search)
+    );
+
+    setFilteredUnits(prev => ({ ...prev, [index]: filtered }));
+  };
+
+  /**
+   * Handle unit input change
+   */
+  const handleUnitChange = (index, value) => {
+    updateBOMRow(index, 'unit', value);
+
+    if (value && value.length > 0) {
+      filterUnits(index, value);
+      setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
+    } else {
+      setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  /**
+   * Select unit from dropdown
+   */
+  const selectUnit = (index, unit) => {
+    updateBOMRow(index, 'unit', unit);
+    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+    setFilteredUnits(prev => ({ ...prev, [index]: [] }));
+  };
+
+  /**
+   * Handle unit blur - add to custom units if not in list
+   */
+  const handleUnitBlur = (index, value) => {
+    if (value && value.trim().length > 0) {
+      const trimmedValue = value.trim();
+
+      // Check if it's already in COMMON_UNITS (case-insensitive)
+      const existsInCommon = COMMON_UNITS.some(unit =>
+        unit.toLowerCase() === trimmedValue.toLowerCase()
+      );
+
+      // If not in common list and not already in custom, add it
+      if (!existsInCommon && !customUnits[trimmedValue.toLowerCase()]) {
+        setCustomUnits(prev => ({
+          ...prev,
+          [trimmedValue.toLowerCase()]: trimmedValue
+        }));
+        console.log('✅ Added custom unit:', trimmedValue);
+      }
+    }
+
+    // Close dropdown
+    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+  };
+
 
   // Template state
   const [templateData, setTemplateData] = useState({
@@ -109,8 +264,88 @@ const ProposalsWithTemplate = () => {
     bomItems: []
   });
   //Toast
-  const { toasts, removeToast, showSuccess, showError,showWarning } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
+  const fetchBomItemsMaster = async (category = null) => {
+    try {
+      let url = `${API_BASE_URL}/api/bom-items-master/all`;
+      if (category) {
+        url = `${API_BASE_URL}/api/bom-items-master/by-category?category=${category}`;
+      }
 
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch BOM items');
+
+      const data = await response.json();
+      if (data.success) {
+        setBomItemsMaster(data.data || []);
+        console.log('Loaded BOM items:', data.data.length);
+      }
+    } catch (error) {
+      console.error('Error fetching BOM items:', error);
+      setBomItemsMaster([]);
+    }
+  };
+
+  // ADD THIS FUNCTION to search/filter BOM items
+  const handleBomItemSearch = async (index, searchTerm) => {
+    console.log('🔍 Searching BOM items:', searchTerm);
+
+    if (!searchTerm || searchTerm.length < 2) {
+      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+      return;
+    }
+
+    try {
+      const url = `${API_BASE_URL}/api/bom-items-master/search?searchTerm=${encodeURIComponent(searchTerm)}`;
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to search BOM items');
+
+      const data = await response.json();
+      console.log('✅ Found BOM items:', data.data.length);
+
+      setFilteredBomItems(prev => ({ ...prev, [index]: data.data || [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: (data.data || []).length > 0 }));
+
+    } catch (error) {
+      console.error('Error searching BOM items:', error);
+      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  // ADD THIS FUNCTION to select BOM item from dropdown
+  const selectBomItem = (index, bomItem) => {
+    console.log('🎯 Selected BOM item:', bomItem);
+
+    const updated = [...templateData.bomItems];
+    updated[index] = {
+      ...updated[index],
+      item: bomItem.itemName,
+      specification: bomItem.specification || '',
+      unit: bomItem.defaultUnit || 'Nos',
+      tax: bomItem.defaultTaxPercent || '18'
+    };
+
+    setTemplateData({ ...templateData, bomItems: updated });
+    setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+    setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+  };
   //groups states
 
   const [groups, setGroups] = useState([]);
@@ -184,7 +419,7 @@ const ProposalsWithTemplate = () => {
       ...options.headers
     };
 
-    const response = await fetch(url, { ...options, headers,credentials: "include" });
+    const response = await fetch(url, { ...options, headers, credentials: "include" });
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
@@ -205,7 +440,7 @@ const ProposalsWithTemplate = () => {
   const fetchProposals = async () => {
     setLoading(true);
     try {
-      const url = `${API_BASE_URL}/proposals/getAll?page=${currentPage - 1}&size=${rowsPerPage}&groupName=${groupName || ''}`;
+      const url = `${API_BASE_URL}/proposals/getAll?page=${currentPage - 1}&size=${rowsPerPage}&groupName=${groupName || ''}&subGroupName=${subGroupName || ''}`;
       const data = await fetchWithHeaders(url);
 
       if (data.success) {
@@ -222,23 +457,27 @@ const ProposalsWithTemplate = () => {
   };
 
   // Fetch leads dropdown
-  const fetchLeads = async () => {
+  const fetchLeads = async (groupFilter = null, subGroupFilter = null) => {
     try {
-      let url;
-      url = `${API_BASE_URL}/leads/getAll`;
+      let url = `${API_BASE_URL}/leads/by-group-subgroup?`;
 
-      // if (currentUser.role === 'SUPERADMIN' || currentUser.role === 'ADMIN') {
-      //   url = `${API_BASE_URL}/leads/getAll`;
-      // } else {
-      //   url = `${API_BASE_URL}/leads/my-leads`;
-      // }
+      if (groupFilter) {
+        url += `groupName=${encodeURIComponent(groupFilter)}&`;
+      }
+      if (subGroupFilter) {
+        url += `subGroupName=${encodeURIComponent(subGroupFilter)}`;
+      }
+
+      console.log('📡 Fetching leads with filters:', { groupFilter, subGroupFilter });
 
       const data = await fetchWithHeaders(url);
       if (data.success) {
         setLeads(Array.isArray(data.data) ? data.data : data.data.content || []);
+        console.log('✅ Loaded leads:', data.data.length);
       }
     } catch (error) {
       console.error('Error fetching leads:', error);
+      setLeads([]);
     }
   };
 
@@ -286,6 +525,7 @@ const ProposalsWithTemplate = () => {
         searchTerm: searchTerm || null,
         filterStatus: filterStatus !== 'All' ? filterStatus : null,
         filterGroup: groupName || null,
+        filterGroup: subGroupName || null,
         filterSubGroup: subGroupName || null,
         filterPreparedBy: filterPreparedBy !== 'All' ? parseInt(filterPreparedBy) : null,
         page: currentPage - 1,
@@ -413,7 +653,7 @@ const ProposalsWithTemplate = () => {
         'User-Role': currentUser.role
       };
 
-      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials: "include",headers });
+      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials: "include", headers });
 
       if (!response.ok) {
         throw new Error('Failed to download PDF');
@@ -531,24 +771,60 @@ const ProposalsWithTemplate = () => {
   const addBOMRow = () => {
     setTemplateData({
       ...templateData,
-      bomItems: [...templateData.bomItems, { item: '', specification: '', quantity: '', unit: '', rate: '', amount: '' }]
+      bomItems: [...templateData.bomItems, {
+        item: '',
+        specification: '',
+        quantity: '',
+        unit: 'Nos',
+        rate: '',
+        tax: '18',  // Default 18% GST
+        amount: ''
+      }]
     });
   };
-
   const updateBOMRow = (index, field, value) => {
     const updated = [...templateData.bomItems];
     updated[index][field] = value;
 
-    // Auto-calculate amount if quantity and rate are present
-    if (field === 'quantity' || field === 'rate') {
+    // Auto-calculate amount if quantity, rate, or tax changes
+    if (field === 'quantity' || field === 'rate' || field === 'tax') {
       const quantity = parseFloat(updated[index].quantity) || 0;
       const rate = parseFloat(updated[index].rate) || 0;
-      updated[index].amount = (quantity * rate).toFixed(2);
+      const tax = parseFloat(updated[index].tax) || 0;
+
+      // Calculate: (quantity * rate) + tax
+      const subtotal = quantity * rate;
+      const taxAmount = (subtotal * tax) / 100;
+      updated[index].amount = (subtotal + taxAmount).toFixed(2);
     }
 
     setTemplateData({ ...templateData, bomItems: updated });
   };
+  const calculateBOMTotals = () => {
+    const subtotal = templateData.bomItems.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      return sum + (quantity * rate);
+    }, 0);
 
+    const totalTax = templateData.bomItems.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const tax = parseFloat(item.tax) || 0;
+      const itemSubtotal = quantity * rate;
+      return sum + ((itemSubtotal * tax) / 100);
+    }, 0);
+
+    const grandTotal = templateData.bomItems.reduce((sum, item) => {
+      return sum + (parseFloat(item.amount) || 0);
+    }, 0);
+
+    return {
+      subtotal: subtotal.toFixed(2),
+      totalTax: totalTax.toFixed(2),
+      grandTotal: grandTotal.toFixed(2)
+    };
+  };
   const removeBOMRow = (index) => {
     const updated = templateData.bomItems.filter((_, i) => i !== index);
     setTemplateData({ ...templateData, bomItems: updated });
@@ -583,14 +859,44 @@ const ProposalsWithTemplate = () => {
     }
   }, [currentPage, rowsPerPage, groupName, subGroupName]);
 
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.unit-input-container')) {
+        setShowUnitDropdown({});
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+
   useEffect(() => {
     fetchLeads();
-    // fetchCustomers();
     fetchUsers();
     fetchGroups();
-    // fetchSubGroups();
-
+    fetchBomItemsMaster(); // ADD THIS
   }, []);
+
+  useEffect(() => {
+    if (formData.groupName || formData.subGroupName) {
+      fetchLeads(formData.groupName, formData.subGroupName);
+    }
+  }, [formData.groupName, formData.subGroupName]);
+
+  // ADD click outside handler for BOM dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.bom-item-input-container')) {
+        setShowBomDropdown({});
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
 
   useEffect(() => {
     if (searchTerm || filterStatus !== 'All' || filterPreparedBy !== 'All') {
@@ -953,6 +1259,7 @@ const ProposalsWithTemplate = () => {
               )}
 
               {/* BOM */}
+
               {selectedProposal.bomItems && parseJSON(selectedProposal.bomItems)?.length > 0 && (
                 <div className="proposal-page-card">
                   <h3>Bill of Materials (BOM)</h3>
@@ -964,6 +1271,7 @@ const ProposalsWithTemplate = () => {
                         <th>Quantity</th>
                         <th>Unit</th>
                         <th>Rate (₹)</th>
+                        <th>Tax %</th>
                         <th>Amount (₹)</th>
                       </tr>
                     </thead>
@@ -975,12 +1283,39 @@ const ProposalsWithTemplate = () => {
                           <td>{item.quantity}</td>
                           <td>{item.unit}</td>
                           <td>₹{parseFloat(item.rate || 0).toLocaleString('en-IN')}</td>
+                          <td>{item.tax || 0}%</td>
                           <td>₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
                         </tr>
                       ))}
-                      <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
-                        <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
-                        <td>₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}</td>
+
+                      {/* Summary rows */}
+                      <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
+                        <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600' }}>Subtotal (Before Tax):</td>
+                        <td style={{ fontWeight: '600' }}>
+                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => {
+                            const quantity = parseFloat(item.quantity) || 0;
+                            const rate = parseFloat(item.rate) || 0;
+                            return sum + (quantity * rate);
+                          }, 0).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                      <tr style={{ backgroundColor: '#f7fafc' }}>
+                        <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600' }}>Total Tax:</td>
+                        <td style={{ fontWeight: '600', color: '#d69e2e' }}>
+                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => {
+                            const quantity = parseFloat(item.quantity) || 0;
+                            const rate = parseFloat(item.rate) || 0;
+                            const tax = parseFloat(item.tax) || 0;
+                            const itemSubtotal = quantity * rate;
+                            return sum + ((itemSubtotal * tax) / 100);
+                          }, 0).toLocaleString('en-IN')}
+                        </td>
+                      </tr>
+                      <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9', fontWeight: 'bold' }}>
+                        <td colSpan="6" style={{ textAlign: 'right' }}>Grand Total (Inc. Tax):</td>
+                        <td style={{ color: '#047857' }}>
+                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -1049,37 +1384,112 @@ const ProposalsWithTemplate = () => {
 
             <div className="proposal-page-modal-content">
               <div className="proposal-page-form">
+
+                {/* GROUP AND SUBGROUP AT THE TOP */}
+                <div className="proposal-page-form-row">
+                  <div className="proposal-page-form-group">
+                    <label>Group *</label>
+                    {isEditMode ? (
+                      <div style={{
+                        padding: '10px',
+                        background: '#f7fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '4px',
+                        color: '#2d3748',
+                        fontWeight: '500'
+                      }}>
+                        {formData.groupName || 'Not specified'}
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.groupName}
+                        onChange={(e) => {
+                          setFormData({ ...formData, groupName: e.target.value, subGroupName: '' });
+                          fetchLeads(e.target.value, null); // Fetch leads when group changes
+                        }}
+                      >
+                        <option value="">Select Group</option>
+                        {groups.map((group, index) => (
+                          <option key={group.value || group.label || index} value={group.value || group.label}>
+                            {group.label || group.value}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  <div className="proposal-page-form-group">
+                    <label>Category</label>
+                    {isEditMode ? (
+                      <div style={{
+                        padding: '10px',
+                        background: '#f7fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '4px',
+                        color: '#2d3748',
+                        fontWeight: '500'
+                      }}>
+                        {formData.subGroupName || 'Not specified'}
+                      </div>
+                    ) : (
+                      <select
+                        value={formData.subGroupName}
+                        onChange={(e) => {
+                          setFormData({ ...formData, subGroupName: e.target.value });
+                          fetchLeads(formData.groupName, e.target.value); // Fetch leads when subgroup changes
+                        }}
+                        disabled={!formData.groupName}
+                      >
+                        <option value="">Select Category</option>
+                        {subGroups.map((sub, index) => (
+                          <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
+                            {sub.label || sub.value}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+
+                {/* LEAD SELECTION - Shows filtered leads */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Lead *</label>
-                    <select
-                      value={formData.leadId}
-                      onChange={(e) => setFormData({ ...formData, leadId: e.target.value })}
-                    >
-                      <option value="">Select Lead</option>
-                      {leads.map(lead => (
-                        <option key={lead.id} value={lead.id}>
-                          {lead.leadCode} - {lead.name}
-                        </option>
-                      ))}
-                    </select>
+                    {isEditMode ? (
+                      <div style={{
+                        padding: '10px',
+                        background: '#f7fafc',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '4px',
+                        color: '#2d3748',
+                        fontWeight: '500'
+                      }}>
+                        {selectedProposal?.leadCode} - {selectedProposal?.leadName}
+                      </div>
+                    ) : (
+                      <>
+                        <select
+                          value={formData.leadId}
+                          onChange={(e) => setFormData({ ...formData, leadId: e.target.value })}
+                        >
+                          <option value="">Select Lead</option>
+                          {leads.map(lead => (
+                            <option key={lead.id} value={lead.id}>
+                              {lead.leadCode} - {lead.name}
+                            </option>
+                          ))}
+                        </select>
+                        {leads.length === 0 && formData.groupName && (
+                          <small style={{ color: '#e53e3e', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                            No leads found for selected Group/Category. Please select different filters.
+                          </small>
+                        )}
+                      </>
+                    )}
                   </div>
-                  {/* <div className="proposal-page-form-group">
-                    <label>Customer (Optional)</label>
-                    <select
-                      value={formData.customerId}
-                      onChange={(e) => setFormData({ ...formData, customerId: e.target.value })}
-                    >
-                      <option value="">Select Customer</option>
-                      {customers.map(customer => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.customerCode} - {customer.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div> */}
                 </div>
 
+                {/* TITLE AND VALUE */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Title *</label>
@@ -1101,37 +1511,7 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Group</label>
-                    <select
-                      value={formData.groupName}
-                      onChange={(e) => setFormData({ ...formData, groupName: e.target.value, subGroupName: '' })}
-                    >
-                      <option value="">Select Group</option>
-                      {groups.map((group, index) => (
-                        <option key={group.value || group.label || index} value={group.value || group.label}>
-                          {group.label || group.value}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="proposal-page-form-group">
-                    <label>Category</label>
-                    <select
-                      value={formData.subGroupName}
-                      onChange={(e) => setFormData({ ...formData, subGroupName: e.target.value })}
-                      disabled={!formData.groupName}
-                    >
-                      <option value="">Select Category</option>
-                      {subGroups.map((sub, index) => (
-                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
-                          {sub.label || sub.value}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
+                {/* STATUS */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Status</label>
@@ -1148,6 +1528,7 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
+                {/* DESCRIPTION */}
                 <div className="proposal-page-form-group">
                   <label>Description</label>
                   <textarea
@@ -1159,6 +1540,7 @@ const ProposalsWithTemplate = () => {
                 </div>
               </div>
 
+              {/* ACTIONS */}
               <div className="proposal-page-modal-actions">
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"
@@ -1402,30 +1784,54 @@ const ProposalsWithTemplate = () => {
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
                       <h3 style={{ margin: 0 }}>Bill of Materials (BOM)</h3>
-                      <button
-                        className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                        onClick={addBOMRow}
-                      >
-                        + Add Row
-                      </button>
+                      <div style={{ display: 'flex', gap: '10px' }}>
+                        <button
+                          className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
+                          onClick={() => fetchBomItemsMaster()}
+                          style={{ fontSize: '12px' }}
+                        >
+                          🔄 Refresh Items
+                        </button>
+                        <button
+                          className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
+                          onClick={addBOMRow}
+                        >
+                          + Add Row
+                        </button>
+                      </div>
                     </div>
+
+                    {/* <div style={{
+                      marginBottom: '15px',
+                      padding: '10px',
+                      background: '#e6fffa',
+                      border: '1px solid #81e6d9',
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      color: '#234e52'
+                    }}>
+                      💡 <strong>Tip:</strong> Start typing item name or description to see suggestions from our master database.
+                      Common items like Solar Modules, Inverters, Cables, etc. are pre-loaded.
+                    </div> */}
+
                     <div className="proposal-page-table-container">
                       <table className="proposal-page-table">
                         <thead>
                           <tr>
-                            <th>Item</th>
-                            <th>Specification</th>
-                            <th>Quantity</th>
-                            <th>Unit</th>
-                            <th>Rate (₹)</th>
-                            <th>Amount (₹)</th>
+                            <th style={{ width: '200px' }}>Item Name *</th>
+                            <th style={{ width: '200px' }}>Specification</th>
+                            <th style={{ width: '100px' }}>Quantity</th>
+                            <th style={{ width: '80px' }}>Unit</th>
+                            <th style={{ width: '120px' }}>Rate (₹)</th>
+                            <th style={{ width: '100px' }}>Tax %</th>
+                            <th style={{ width: '120px' }}>Amount (₹)</th>
                             <th style={{ width: '80px' }}>Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {templateData.bomItems.length === 0 ? (
                             <tr>
-                              <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
+                              <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
                                 No BOM items added. Click "Add Row" to start.
                               </td>
                             </tr>
@@ -1433,24 +1839,118 @@ const ProposalsWithTemplate = () => {
                             <>
                               {templateData.bomItems.map((row, index) => (
                                 <tr key={index}>
+                                  {/* ITEM NAME WITH AUTOCOMPLETE */}
                                   <td>
-                                    <input
-                                      type="text"
-                                      value={row.item}
-                                      onChange={(e) => updateBOMRow(index, 'item', e.target.value)}
-                                      placeholder="Item name"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
+                                    <div className="bom-item-input-container" style={{ position: 'relative' }}>
+                                      <input
+                                        type="text"
+                                        value={row.item}
+                                        onChange={(e) => {
+                                          updateBOMRow(index, 'item', e.target.value);
+                                          handleBomItemSearch(index, e.target.value);
+                                        }}
+                                        onFocus={() => {
+                                          if (row.item && row.item.length >= 2) {
+                                            handleBomItemSearch(index, row.item);
+                                          }
+                                        }}
+                                        placeholder="Start typing..."
+                                        style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                      />
+
+                                      {/* AUTOCOMPLETE DROPDOWN */}
+                                      {showBomDropdown[index] && filteredBomItems[index]?.length > 0 && (
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: '100%',
+                                          left: 0,
+                                          right: 0,
+                                          background: 'white',
+                                          border: '2px solid #3b82f6',
+                                          borderRadius: '6px',
+                                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                          maxHeight: '300px',
+                                          overflowY: 'auto',
+                                          zIndex: 1000,
+                                          marginTop: '4px'
+                                        }}>
+                                          <div style={{
+                                            padding: '8px 12px',
+                                            background: '#f8fafc',
+                                            borderBottom: '1px solid #e2e8f0',
+                                            fontWeight: 600,
+                                            fontSize: '11px',
+                                            color: '#475569'
+                                          }}>
+                                            📋 Select from Master Items ({filteredBomItems[index].length})
+                                          </div>
+
+                                          {filteredBomItems[index].map((bomItem) => (
+                                            <div
+                                              key={bomItem.id}
+                                              onClick={() => selectBomItem(index, bomItem)}
+                                              style={{
+                                                padding: '10px 12px',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #f1f5f9',
+                                                transition: 'background-color 0.2s'
+                                              }}
+                                              onMouseEnter={(e) => {
+                                                e.currentTarget.style.backgroundColor = '#f8fafc';
+                                                e.currentTarget.style.borderLeft = '3px solid #3b82f6';
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                e.currentTarget.style.backgroundColor = 'white';
+                                                e.currentTarget.style.borderLeft = 'none';
+                                              }}
+                                            >
+                                              <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px', fontSize: '13px' }}>
+                                                {bomItem.itemName}
+                                              </div>
+                                              {bomItem.specification && (
+                                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
+                                                  {bomItem.specification}
+                                                </div>
+                                              )}
+                                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
+                                                  {bomItem.category}
+                                                </span>
+                                                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
+                                                  {bomItem.defaultUnit}
+                                                </span>
+                                                {bomItem.makeBrand && (
+                                                  <span style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: '3px' }}>
+                                                    {bomItem.makeBrand}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
+
+                                  {/* SPECIFICATION */}
                                   <td>
-                                    <input
-                                      type="text"
+                                    <textarea
                                       value={row.specification}
                                       onChange={(e) => updateBOMRow(index, 'specification', e.target.value)}
-                                      placeholder="Specification"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                                      placeholder="Enter specs"
+                                      rows={2}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '4px',
+                                        resize: 'vertical',
+                                        fontSize: '12px'
+                                      }}
                                     />
                                   </td>
+
+                                  {/* QUANTITY */}
                                   <td>
                                     <input
                                       type="number"
@@ -1460,15 +1960,138 @@ const ProposalsWithTemplate = () => {
                                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
                                     />
                                   </td>
+
+                                  {/* UNIT */}
                                   <td>
-                                    <input
-                                      type="text"
-                                      value={row.unit}
-                                      onChange={(e) => updateBOMRow(index, 'unit', e.target.value)}
-                                      placeholder="Nos/Kg"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
+                                    <div className="unit-input-container" style={{ position: 'relative' }}>
+                                      <input
+                                        type="text"
+                                        value={row.unit || ''}
+                                        onChange={(e) => handleUnitChange(index, e.target.value)}
+                                        onFocus={() => {
+                                          filterUnits(index, row.unit || '');
+                                          setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
+                                        }}
+                                        onBlur={(e) => {
+                                          // Delay to allow click on dropdown
+                                          setTimeout(() => handleUnitBlur(index, e.target.value), 200);
+                                        }}
+                                        placeholder="Type or select"
+                                        autoComplete="off"
+                                        style={{
+                                          width: '100%',
+                                          padding: '8px',
+                                          border: '1px solid #e2e8f0',
+                                          borderRadius: '4px',
+                                          fontSize: '13px'
+                                        }}
+                                      />
+
+                                      {/* UNIT DROPDOWN */}
+                                      {showUnitDropdown[index] && (
+                                        <div style={{
+                                          position: 'absolute',
+                                          top: '100%',
+                                          left: 0,
+                                          right: 0,
+                                          background: 'white',
+                                          border: '2px solid #3b82f6',
+                                          borderRadius: '6px',
+                                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                          maxHeight: '250px',
+                                          overflowY: 'auto',
+                                          zIndex: 1000,
+                                          marginTop: '4px'
+                                        }}>
+                                          {/* Header */}
+                                          <div style={{
+                                            padding: '8px 12px',
+                                            background: '#f8fafc',
+                                            borderBottom: '1px solid #e2e8f0',
+                                            fontWeight: 600,
+                                            fontSize: '11px',
+                                            color: '#475569',
+                                            position: 'sticky',
+                                            top: 0,
+                                            zIndex: 1
+                                          }}>
+                                            📏 Select Unit ({filteredUnits[index]?.length || COMMON_UNITS.length})
+                                            <button
+                                              onClick={() => setShowUnitDropdown(prev => ({ ...prev, [index]: false }))}
+                                              style={{
+                                                float: 'right',
+                                                background: 'none',
+                                                border: 'none',
+                                                fontSize: '16px',
+                                                cursor: 'pointer',
+                                                color: '#94a3b8'
+                                              }}
+                                            >
+                                              ×
+                                            </button>
+                                          </div>
+
+                                          {/* Unit Options */}
+                                          <div>
+                                            {(filteredUnits[index]?.length > 0 ? filteredUnits[index] : COMMON_UNITS).map((unit) => (
+                                              <div
+                                                key={unit}
+                                                onClick={() => selectUnit(index, unit)}
+                                                style={{
+                                                  padding: '8px 12px',
+                                                  cursor: 'pointer',
+                                                  borderBottom: '1px solid #f1f5f9',
+                                                  transition: 'background-color 0.2s',
+                                                  fontSize: '13px'
+                                                }}
+                                                onMouseEnter={(e) => {
+                                                  e.currentTarget.style.backgroundColor = '#f8fafc';
+                                                  e.currentTarget.style.borderLeft = '3px solid #3b82f6';
+                                                }}
+                                                onMouseLeave={(e) => {
+                                                  e.currentTarget.style.backgroundColor = 'white';
+                                                  e.currentTarget.style.borderLeft = 'none';
+                                                }}
+                                              >
+                                                {unit}
+                                              </div>
+                                            ))}
+
+                                            {/* Show message if custom unit will be added */}
+                                            {row.unit && row.unit.trim().length > 0 &&
+                                              !COMMON_UNITS.some(u => u.toLowerCase() === row.unit.toLowerCase()) && (
+                                                <div style={{
+                                                  padding: '10px 12px',
+                                                  background: '#fef3c7',
+                                                  borderTop: '2px solid #fbbf24',
+                                                  fontSize: '11px',
+                                                  color: '#92400e',
+                                                  fontWeight: '500'
+                                                }}>
+                                                  ✨ Press Enter or Tab to add "{row.unit}" as custom unit
+                                                </div>
+                                              )}
+
+                                            {/* No results message */}
+                                            {filteredUnits[index]?.length === 0 && (
+                                              <div style={{
+                                                padding: '20px',
+                                                textAlign: 'center',
+                                                color: '#94a3b8',
+                                                fontSize: '12px'
+                                              }}>
+                                                No matching units found.
+                                                <br />
+                                                <strong>Type and press Enter</strong> to add "{row.unit}" as custom unit.
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
                                   </td>
+
+                                  {/* RATE */}
                                   <td>
                                     <input
                                       type="number"
@@ -1478,14 +2101,47 @@ const ProposalsWithTemplate = () => {
                                       style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
                                     />
                                   </td>
+
+                                  {/* TAX */}
+                                  <td>
+                                    <select
+                                      value={row.tax || '18'}
+                                      onChange={(e) => updateBOMRow(index, 'tax', e.target.value)}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '4px',
+                                        backgroundColor: 'white'
+                                      }}
+                                    >
+                                      <option value="0">0%</option>
+                                      <option value="5">5%</option>
+                                      <option value="12">12%</option>
+                                      <option value="18">18%</option>
+                                      <option value="28">28%</option>
+                                    </select>
+                                  </td>
+
+                                  {/* AMOUNT (READ-ONLY) */}
                                   <td>
                                     <input
                                       type="number"
                                       value={row.amount}
                                       readOnly
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', background: '#f7fafc' }}
+                                      style={{
+                                        width: '100%',
+                                        padding: '8px',
+                                        border: '1px solid #e2e8f0',
+                                        borderRadius: '4px',
+                                        background: '#f7fafc',
+                                        fontWeight: '600',
+                                        color: '#2d3748'
+                                      }}
                                     />
                                   </td>
+
+                                  {/* ACTIONS */}
                                   <td>
                                     <button
                                       onClick={() => removeBOMRow(index)}
@@ -1503,9 +2159,33 @@ const ProposalsWithTemplate = () => {
                                   </td>
                                 </tr>
                               ))}
-                              <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
-                                <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
-                                <td>₹{calculateBOMTotal()}</td>
+
+                              {/* SUMMARY ROWS */}
+                              <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
+                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
+                                  Subtotal (Before Tax):
+                                </td>
+                                <td style={{ fontWeight: '600', padding: '12px' }}>
+                                  ₹{calculateBOMTotals().subtotal}
+                                </td>
+                                <td></td>
+                              </tr>
+                              <tr style={{ backgroundColor: '#f7fafc' }}>
+                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
+                                  Total Tax:
+                                </td>
+                                <td style={{ fontWeight: '600', padding: '12px', color: '#d69e2e' }}>
+                                  ₹{calculateBOMTotals().totalTax}
+                                </td>
+                                <td></td>
+                              </tr>
+                              <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9' }}>
+                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold', padding: '12px', fontSize: '15px' }}>
+                                  Grand Total (Inc. Tax):
+                                </td>
+                                <td style={{ fontWeight: 'bold', padding: '12px', fontSize: '15px', color: '#047857' }}>
+                                  ₹{calculateBOMTotals().grandTotal}
+                                </td>
                                 <td></td>
                               </tr>
                             </>

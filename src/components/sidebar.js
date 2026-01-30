@@ -94,6 +94,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           permission: 'REPORTS',
           icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
         },
+
       ]
     },
     {
@@ -117,7 +118,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         permission: 'SALES_CLIENTS',
         icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4'
       },
-
+      {
+        name: 'OrderBook',
+        path: '/OrderBook',
+        permission: 'SALES_CLIENTS',
+        icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
+      },
 
       {
         name: 'Invoices',

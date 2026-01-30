@@ -36,7 +36,8 @@ import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import NewRolePermissions from './Pages/NewRolePermissions';
-import Projectdashboard from "./Pages/ProjectDashboard.js"
+import Projectdashboard from "./Pages/ProjectDashboard.js";
+import OrderBook from "./Pages/OrderBook.js"
 import './App.css';
 
 /* ---------------- APP WRAPPER ---------------- */
@@ -179,6 +180,9 @@ function AppShell({ hideShell }) {
           } />
           <Route path="/Projectdashboard" element={
             <ProtectedRoute><Projectdashboard /></ProtectedRoute>
+          } />
+          <Route path="/OrderBook" element={
+            <ProtectedRoute><OrderBook /></ProtectedRoute>
           } />
         </Routes>
       </main>

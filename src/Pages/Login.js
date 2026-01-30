@@ -115,7 +115,7 @@ export default function Login() {
           <div className="login-card">
             <h2 className="login-heading">Welcome back</h2>
             <p className="login-sub">
-              Sign in to continue to BD Portal
+              Sign in to continue to CRM Portal
             </p>
 
             <form className="login-form" onSubmit={handleSubmit}>

@@ -709,3 +709,66 @@ padding: 24px;
   filter: grayscale(100%);
   cursor: not-allowed;
 }
+* Unit Input Container */
+.unit-input-container {
+  position: relative;
+}
+
+.unit-input-container input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Unit Dropdown Scrollbar */
+.unit-input-container > div::-webkit-scrollbar {
+  width: 8px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
