@@ -15,18 +15,21 @@
   overflow-y: auto;
 }
 
-/* Modal Container */
+/* Modal Container - FIXED DIMENSIONS */
 .proposal-modal {
   background: white;
   border-radius: 16px;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   width: 100%;
-  max-width: 1000px;
-  max-height: 90vh;
+  max-width: 1200px;
+  height: 85vh; /* Fixed height */
+  min-height: 600px; /* Minimum height */
+  max-height: 900px; /* Maximum height */
   display: flex;
   flex-direction: column;
   animation: slideUp 0.3s ease-out;
   margin: auto;
+  overflow: hidden; /* Prevent overall modal from scrolling */
 }
 
 @keyframes slideUp {
@@ -40,18 +43,17 @@
   }
 }
 
-/* Modal Header */
+/* Modal Header - FIXED */
 .proposal-modal-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   padding: 24px;
   border-bottom: 1px solid #eef2f7;
-  position: sticky;
-  top: 0;
   background: white;
   z-index: 10;
   border-radius: 16px 16px 0 0;
+  flex-shrink: 0; /* Prevent header from shrinking */
 }
 
 .proposal-modal-header h2 {
@@ -88,7 +90,7 @@
   height: 20px;
 }
 
-/* Tabs */
+/* Tabs - FIXED */
 .proposal-modal-tabs {
   display: flex;
   gap: 8px;
@@ -96,9 +98,23 @@
   padding: 0 24px;
   background: white;
   overflow-x: auto;
-  position: sticky;
-  top: 73px;
-  z-index: 9;
+  overflow-y: hidden;
+  flex-shrink: 0; /* Prevent tabs from shrinking */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 #f1f5f9;
+}
+
+.proposal-modal-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.proposal-modal-tabs::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.proposal-modal-tabs::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
 }
 
 .proposal-modal-tab {
@@ -113,6 +129,7 @@
   margin-bottom: -2px;
   transition: all 0.2s ease;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .proposal-modal-tab:hover {
@@ -124,18 +141,41 @@
   border-bottom-color: #3b82f6;
 }
 
-/* Form */
+/* Form - FLEXIBLE */
 .proposal-modal-form {
   display: flex;
   flex-direction: column;
   flex: 1;
   overflow: hidden;
+  min-height: 0; /* Important for flex children */
 }
 
+/* Content Area - SCROLLABLE with FIXED HEIGHT */
 .proposal-modal-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px;
+  min-height: 0; /* Important for flex children */
+}
+
+/* Custom scrollbar for content */
+.proposal-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.proposal-modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.proposal-modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.proposal-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .proposal-form-section {
@@ -209,6 +249,24 @@
   overflow-x: auto;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  max-height: 400px; /* Limit table height within content area */
+  overflow-y: auto;
+}
+
+/* Custom scrollbar for table */
+.proposal-table-wrapper::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.proposal-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.proposal-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
 }
 
 .proposal-table {
@@ -219,6 +277,9 @@
 
 .proposal-table thead {
   background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
 .proposal-table th {
@@ -228,12 +289,14 @@
   font-weight: 600;
   color: #475569;
   border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
 }
 
 .proposal-table td {
   padding: 10px 14px;
   border-bottom: 1px solid #f1f5f9;
   font-size: 14px;
+  vertical-align: top;
 }
 
 .proposal-table-input {
@@ -264,6 +327,9 @@
 .proposal-table-total {
   font-weight: bold;
   background: #f8fafc;
+  position: sticky;
+  bottom: 0;
+  border-top: 2px solid #e2e8f0;
 }
 
 .proposal-delete-btn {
@@ -274,6 +340,7 @@
   border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s ease;
+  font-size: 14px;
 }
 
 .proposal-delete-btn:hover {
@@ -326,30 +393,68 @@
   cursor: not-allowed;
 }
 
-/* Modal Actions */
+/* Modal Actions - FIXED at bottom */
 .proposal-modal-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
   padding: 20px 24px;
   border-top: 1px solid #eef2f7;
-  position: sticky;
-  bottom: 0;
   background: white;
   border-radius: 0 0 16px 16px;
+  flex-shrink: 0; /* Prevent actions from shrinking */
+}
+
+/* Autocomplete Dropdowns */
+.bom-item-input-container,
+.unit-input-container {
+  position: relative;
+}
+
+/* BOM/Unit Dropdown Styles */
+.bom-item-input-container > div:last-child,
+.unit-input-container > div:last-child {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 2px solid #3b82f6;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-top: 4px;
 }
 
 /* Responsive */
+@media (max-width: 1024px) {
+  .proposal-modal {
+    max-width: 95%;
+    height: 90vh;
+  }
+}
+
 @media (max-width: 768px) {
   .proposal-modal {
     max-width: 100%;
     margin: 0;
     border-radius: 16px 16px 0 0;
-    max-height: 95vh;
+    height: 95vh;
+    max-height: none;
+  }
+
+  .proposal-modal-header {
+    padding: 16px;
   }
 
   .proposal-modal-tabs {
-    top: 90px;
+    padding: 0 16px;
+  }
+
+  .proposal-modal-content {
+    padding: 16px;
   }
 
   .proposal-form-grid {
@@ -358,9 +463,64 @@
 
   .proposal-modal-actions {
     flex-direction: column;
+    padding: 16px;
   }
 
   .proposal-modal-actions button {
     width: 100%;
+  }
+
+  .proposal-table-wrapper {
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 480px) {
+  .proposal-modal {
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .proposal-modal-header h2 {
+    font-size: 18px;
+  }
+
+  .proposal-modal-lead-info {
+    font-size: 12px;
+  }
+
+  .proposal-modal-tab {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+}
+
+/* Print Styles */
+@media print {
+  .proposal-modal-overlay {
+    position: static;
+    background: none;
+  }
+
+  .proposal-modal {
+    max-width: 100%;
+    height: auto;
+    max-height: none;
+    box-shadow: none;
+  }
+
+  .proposal-modal-tabs,
+  .proposal-modal-actions {
+    display: none;
+  }
+
+  .proposal-modal-content {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .proposal-table-wrapper {
+    max-height: none;
+    overflow: visible;
   }
 }

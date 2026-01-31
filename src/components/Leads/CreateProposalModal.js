@@ -5,20 +5,56 @@ import useToast from '../../hooks/useToast';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate }) {
+// Common units list
+const COMMON_UNITS = [
+  // Quantity
+  'Nos', 'Pcs', 'Units', 'Pairs', 'Dozen', 'Gross',
+  // Length
+  'Meter', 'Meters', 'Feet', 'Inch', 'Km', 'mm', 'cm',
+  // Area
+  'Sqft', 'Sq.ft', 'Sqm', 'Sq.m', 'Acres', 'Hectares',
+  // Volume
+  'Liters', 'Litres', 'ml', 'Gallons', 'Cu.ft', 'Cu.m',
+  // Weight
+  'Kg', 'Kgs', 'Grams', 'Tons', 'MT', 'Quintal', 'Lbs',
+  // Electrical
+  'Watt', 'KW', 'KVA', 'Amp', 'Volt',
+  // Set/Bundle
+  'Set', 'Sets', 'Kit', 'Kits', 'Bundle', 'Lot', 'Box', 'Boxes', 'Carton', 'Bag', 'Bags',
+  // Time
+  'Hours', 'Days', 'Months', 'Years',
+  // Others
+  'Roll', 'Rolls', 'Sheet', 'Sheets', 'Panel', 'Panels', 'RM', 'RMT', 'Running Meter', 'Coil', 'Drum'
+].sort();
+
+function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate, isEditMode = false, existingProposal = null }) {
   const { user } = useAuth();
   const { showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
 
+  // BOM and Unit states
+  const [bomItemsMaster, setBomItemsMaster] = useState([]);
+  const [filteredBomItems, setFilteredBomItems] = useState({});
+  const [showBomDropdown, setShowBomDropdown] = useState({});
+  const [showUnitDropdown, setShowUnitDropdown] = useState({});
+  const [filteredUnits, setFilteredUnits] = useState({});
+  const [customUnits, setCustomUnits] = useState({});
+
+  const currentUser = {
+    id: user.id,
+    role: user.role,
+    name: user.name
+  };
+
   // Form state - Basic Info
   const [formData, setFormData] = useState({
-    leadId: lead.id,
+    leadId: lead?.id || '',
     title: '',
     description: '',
     totalValue: '',
-    groupName: lead.groupName || '',
-    subGroupName: lead.subGroupName || '',
+    groupName: lead?.groupName || '',
+    subGroupName: lead?.subGroupName || '',
     status: 'Draft'
   });
 
@@ -32,6 +68,201 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
     systemPricing: [],
     bomItems: []
   });
+
+  // Load existing proposal data if in edit mode
+  useEffect(() => {
+    if (isEditMode && existingProposal) {
+      setFormData({
+        leadId: existingProposal.leadId || '',
+        title: existingProposal.title || '',
+        description: existingProposal.description || '',
+        totalValue: existingProposal.totalValue || '',
+        groupName: existingProposal.groupName || '',
+        subGroupName: existingProposal.subGroupName || '',
+        status: existingProposal.status || 'Draft'
+      });
+
+      const parseJSON = (jsonString) => {
+        if (!jsonString) return null;
+        try {
+          return typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+        } catch (e) {
+          return null;
+        }
+      };
+
+      setTemplateData({
+        companyName: existingProposal.companyName || defaultTemplate.companyName,
+        aboutUs: existingProposal.aboutUs || defaultTemplate.aboutUs,
+        aboutSystem: existingProposal.aboutSystem || defaultTemplate.aboutSystem,
+        paymentTerms: existingProposal.paymentTerms || defaultTemplate.paymentTerms,
+        defectLiabilityPeriod: existingProposal.defectLiabilityPeriod || defaultTemplate.defectLiabilityPeriod,
+        systemPricing: parseJSON(existingProposal.systemPricing) || [],
+        bomItems: parseJSON(existingProposal.bomItems) || []
+      });
+    }
+  }, [isEditMode, existingProposal]);
+
+  // Fetch BOM items master
+  const fetchBomItemsMaster = async (category = null) => {
+    try {
+      let url = `${API_BASE_URL}/api/bom-items-master/all`;
+      if (category) {
+        url = `${API_BASE_URL}/api/bom-items-master/by-category?category=${category}`;
+      }
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch BOM items');
+
+      const data = await response.json();
+      if (data.success) {
+        setBomItemsMaster(data.data || []);
+        console.log('✅ Loaded BOM items:', data.data.length);
+      }
+    } catch (error) {
+      console.error('Error fetching BOM items:', error);
+      setBomItemsMaster([]);
+    }
+  };
+
+  // Search/filter BOM items
+  const handleBomItemSearch = async (index, searchTerm) => {
+    console.log('🔍 Searching BOM items:', searchTerm);
+
+    if (!searchTerm || searchTerm.length < 2) {
+      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+      return;
+    }
+
+    try {
+      const url = `${API_BASE_URL}/api/bom-items-master/search?searchTerm=${encodeURIComponent(searchTerm)}`;
+
+      const response = await fetch(url, {
+        credentials: "include",
+        headers: {
+          'User-Id': currentUser.id,
+          'User-Role': currentUser.role
+        }
+      });
+
+      if (!response.ok) throw new Error('Failed to search BOM items');
+
+      const data = await response.json();
+      console.log('✅ Found BOM items:', data.data.length);
+
+      setFilteredBomItems(prev => ({ ...prev, [index]: data.data || [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: (data.data || []).length > 0 }));
+
+    } catch (error) {
+      console.error('Error searching BOM items:', error);
+      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  // Select BOM item from dropdown
+  const selectBomItem = (index, bomItem) => {
+    console.log('🎯 Selected BOM item:', bomItem);
+
+    const updated = [...templateData.bomItems];
+    updated[index] = {
+      ...updated[index],
+      item: bomItem.itemName,
+      specification: bomItem.specification || '',
+      unit: bomItem.defaultUnit || 'Nos',
+      tax: bomItem.defaultTaxPercent || '18'
+    };
+
+    setTemplateData({ ...templateData, bomItems: updated });
+    setShowBomDropdown(prev => ({ ...prev, [index]: false }));
+    setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
+  };
+
+  // Filter units based on search term
+  const filterUnits = (index, searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      setFilteredUnits(prev => ({ ...prev, [index]: COMMON_UNITS }));
+      return;
+    }
+
+    const search = searchTerm.toLowerCase().trim();
+    const filtered = COMMON_UNITS.filter(unit =>
+      unit.toLowerCase().includes(search)
+    );
+
+    setFilteredUnits(prev => ({ ...prev, [index]: filtered }));
+  };
+
+  // Handle unit input change
+  const handleUnitChange = (index, value) => {
+    updateBOMRow(index, 'unit', value);
+
+    if (value && value.length > 0) {
+      filterUnits(index, value);
+      setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
+    } else {
+      setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  // Select unit from dropdown
+  const selectUnit = (index, unit) => {
+    updateBOMRow(index, 'unit', unit);
+    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+    setFilteredUnits(prev => ({ ...prev, [index]: [] }));
+  };
+
+  // Handle unit blur - add to custom units if not in list
+  const handleUnitBlur = (index, value) => {
+    if (value && value.trim().length > 0) {
+      const trimmedValue = value.trim();
+
+      // Check if it's already in COMMON_UNITS (case-insensitive)
+      const existsInCommon = COMMON_UNITS.some(unit =>
+        unit.toLowerCase() === trimmedValue.toLowerCase()
+      );
+
+      // If not in common list and not already in custom, add it
+      if (!existsInCommon && !customUnits[trimmedValue.toLowerCase()]) {
+        setCustomUnits(prev => ({
+          ...prev,
+          [trimmedValue.toLowerCase()]: trimmedValue
+        }));
+        console.log('✅ Added custom unit:', trimmedValue);
+      }
+    }
+
+    // Close dropdown
+    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
+  };
+
+  // Load BOM items on mount
+  useEffect(() => {
+    fetchBomItemsMaster();
+  }, []);
+
+  // Click outside handlers
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.unit-input-container')) {
+        setShowUnitDropdown({});
+      }
+      if (!event.target.closest('.bom-item-input-container')) {
+        setShowBomDropdown({});
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,8 +282,12 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
         bomItems: JSON.stringify(templateData.bomItems)
       };
 
-      const response = await fetch(`${API_BASE_URL}/proposals/create`, {
-        method: 'POST',
+      const url = isEditMode 
+        ? `${API_BASE_URL}/proposals/update/${existingProposal.id}`
+        : `${API_BASE_URL}/proposals/create`;
+
+      const response = await fetch(url, {
+        method: isEditMode ? 'PUT' : 'POST',
         credentials: "include",
         headers: {
           'Content-Type': 'application/json',
@@ -64,18 +299,19 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to create proposal');
+        throw new Error(errorData.message || `Failed to ${isEditMode ? 'update' : 'create'} proposal`);
       }
 
       const data = await response.json();
       
       if (data.success) {
+        showSuccess(isEditMode ? 'Proposal updated successfully!' : 'Proposal created successfully!');
         onProposalCreated();
       } else {
-        throw new Error(data.message || 'Failed to create proposal');
+        throw new Error(data.message || `Failed to ${isEditMode ? 'update' : 'create'} proposal`);
       }
     } catch (err) {
-      showError(err.message || 'Error creating proposal');
+      showError(err.message || `Error ${isEditMode ? 'updating' : 'creating'} proposal`);
     } finally {
       setLoading(false);
     }
@@ -104,7 +340,15 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
   const addBOMRow = () => {
     setTemplateData({
       ...templateData,
-      bomItems: [...templateData.bomItems, { item: '', specification: '', quantity: '', unit: '', rate: '', amount: '' }]
+      bomItems: [...templateData.bomItems, { 
+        item: '', 
+        specification: '', 
+        quantity: '', 
+        unit: 'Nos', 
+        rate: '', 
+        tax: '18',
+        amount: '' 
+      }]
     });
   };
 
@@ -112,11 +356,16 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
     const updated = [...templateData.bomItems];
     updated[index][field] = value;
 
-    // Auto-calculate amount if quantity and rate are present
-    if (field === 'quantity' || field === 'rate') {
+    // Auto-calculate amount if quantity, rate, or tax changes
+    if (field === 'quantity' || field === 'rate' || field === 'tax') {
       const quantity = parseFloat(updated[index].quantity) || 0;
       const rate = parseFloat(updated[index].rate) || 0;
-      updated[index].amount = (quantity * rate).toFixed(2);
+      const tax = parseFloat(updated[index].tax) || 0;
+
+      // Calculate: (quantity * rate) + tax
+      const subtotal = quantity * rate;
+      const taxAmount = (subtotal * tax) / 100;
+      updated[index].amount = (subtotal + taxAmount).toFixed(2);
     }
 
     setTemplateData({ ...templateData, bomItems: updated });
@@ -127,11 +376,34 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
     setTemplateData({ ...templateData, bomItems: updated });
   };
 
-  // Calculate totals
-  const calculateBOMTotal = () => {
-    return templateData.bomItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
+  // Calculate BOM totals
+  const calculateBOMTotals = () => {
+    const subtotal = templateData.bomItems.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      return sum + (quantity * rate);
+    }, 0);
+
+    const totalTax = templateData.bomItems.reduce((sum, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const tax = parseFloat(item.tax) || 0;
+      const itemSubtotal = quantity * rate;
+      return sum + ((itemSubtotal * tax) / 100);
+    }, 0);
+
+    const grandTotal = templateData.bomItems.reduce((sum, item) => {
+      return sum + (parseFloat(item.amount) || 0);
+    }, 0);
+
+    return {
+      subtotal: subtotal.toFixed(2),
+      totalTax: totalTax.toFixed(2),
+      grandTotal: grandTotal.toFixed(2)
+    };
   };
 
+  // Calculate totals
   const calculateSystemPricingTotal = () => {
     return templateData.systemPricing.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
   };
@@ -141,10 +413,12 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
       <div className="proposal-modal" onClick={(e) => e.stopPropagation()}>
         <div className="proposal-modal-header">
           <div>
-            <h2>Create Proposal for {lead.name}</h2>
-            <p className="proposal-modal-lead-info">
-              Lead: {lead.leadCode} | {lead.email} | {lead.phone}
-            </p>
+            <h2>{isEditMode ? 'Edit Proposal' : `Create Proposal for ${lead?.name || 'Lead'}`}</h2>
+            {lead && (
+              <p className="proposal-modal-lead-info">
+                Lead: {lead.leadCode} | {lead.email} | {lead.phone}
+              </p>
+            )}
           </div>
           <button className="proposal-modal-close" onClick={onClose}>
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -416,31 +690,43 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
               <div className="proposal-form-section">
                 <div className="proposal-table-header">
                   <h3>Bill of Materials (BOM)</h3>
-                  <button
-                    type="button"
-                    className="proposal-btn proposal-btn-secondary proposal-btn-sm"
-                    onClick={addBOMRow}
-                  >
-                    + Add Row
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="proposal-btn proposal-btn-secondary proposal-btn-sm"
+                      onClick={() => fetchBomItemsMaster()}
+                      style={{ fontSize: '12px' }}
+                    >
+                      🔄 Refresh Items
+                    </button>
+                    <button
+                      type="button"
+                      className="proposal-btn proposal-btn-secondary proposal-btn-sm"
+                      onClick={addBOMRow}
+                    >
+                      + Add Row
+                    </button>
+                  </div>
                 </div>
+
                 <div className="proposal-table-wrapper">
                   <table className="proposal-table">
                     <thead>
                       <tr>
-                        <th>Item</th>
-                        <th>Specification</th>
-                        <th>Quantity</th>
-                        <th>Unit</th>
-                        <th>Rate (₹)</th>
-                        <th>Amount (₹)</th>
+                        <th style={{ width: '200px' }}>Item Name *</th>
+                        <th style={{ width: '200px' }}>Specification</th>
+                        <th style={{ width: '100px' }}>Quantity</th>
+                        <th style={{ width: '80px' }}>Unit</th>
+                        <th style={{ width: '120px' }}>Rate (₹)</th>
+                        <th style={{ width: '100px' }}>Tax %</th>
+                        <th style={{ width: '120px' }}>Amount (₹)</th>
                         <th style={{ width: '80px' }}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {templateData.bomItems.length === 0 ? (
                         <tr>
-                          <td colSpan="7" className="proposal-table-empty">
+                          <td colSpan="8" className="proposal-table-empty">
                             No BOM items added. Click "Add Row" to start.
                           </td>
                         </tr>
@@ -448,24 +734,118 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
                         <>
                           {templateData.bomItems.map((row, index) => (
                             <tr key={index}>
+                              {/* ITEM NAME WITH AUTOCOMPLETE */}
                               <td>
-                                <input
-                                  type="text"
-                                  value={row.item}
-                                  onChange={(e) => updateBOMRow(index, 'item', e.target.value)}
-                                  placeholder="Item name"
-                                  className="proposal-table-input"
-                                />
+                                <div className="bom-item-input-container" style={{ position: 'relative' }}>
+                                  <input
+                                    type="text"
+                                    value={row.item}
+                                    onChange={(e) => {
+                                      updateBOMRow(index, 'item', e.target.value);
+                                      handleBomItemSearch(index, e.target.value);
+                                    }}
+                                    onFocus={() => {
+                                      if (row.item && row.item.length >= 2) {
+                                        handleBomItemSearch(index, row.item);
+                                      }
+                                    }}
+                                    placeholder="Start typing..."
+                                    className="proposal-table-input"
+                                  />
+
+                                  {/* AUTOCOMPLETE DROPDOWN */}
+                                  {showBomDropdown[index] && filteredBomItems[index]?.length > 0 && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: '100%',
+                                      left: 0,
+                                      right: 0,
+                                      background: 'white',
+                                      border: '2px solid #3b82f6',
+                                      borderRadius: '6px',
+                                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                      maxHeight: '300px',
+                                      overflowY: 'auto',
+                                      zIndex: 1000,
+                                      marginTop: '4px'
+                                    }}>
+                                      <div style={{
+                                        padding: '8px 12px',
+                                        background: '#f8fafc',
+                                        borderBottom: '1px solid #e2e8f0',
+                                        fontWeight: 600,
+                                        fontSize: '11px',
+                                        color: '#475569'
+                                      }}>
+                                        📋 Select from Master Items ({filteredBomItems[index].length})
+                                      </div>
+
+                                      {filteredBomItems[index].map((bomItem) => (
+                                        <div
+                                          key={bomItem.id}
+                                          onClick={() => selectBomItem(index, bomItem)}
+                                          style={{
+                                            padding: '10px 12px',
+                                            cursor: 'pointer',
+                                            borderBottom: '1px solid #f1f5f9',
+                                            transition: 'background-color 0.2s'
+                                          }}
+                                          onMouseEnter={(e) => {
+                                            e.currentTarget.style.backgroundColor = '#f8fafc';
+                                            e.currentTarget.style.borderLeft = '3px solid #3b82f6';
+                                          }}
+                                          onMouseLeave={(e) => {
+                                            e.currentTarget.style.backgroundColor = 'white';
+                                            e.currentTarget.style.borderLeft = 'none';
+                                          }}
+                                        >
+                                          <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px', fontSize: '13px' }}>
+                                            {bomItem.itemName}
+                                          </div>
+                                          {bomItem.specification && (
+                                            <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
+                                              {bomItem.specification}
+                                            </div>
+                                          )}
+                                          <div style={{ fontSize: '10px', color: '#94a3b8' }}>
+                                            <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
+                                              {bomItem.category}
+                                            </span>
+                                            <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
+                                              {bomItem.defaultUnit}
+                                            </span>
+                                            {bomItem.makeBrand && (
+                                              <span style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: '3px' }}>
+                                                {bomItem.makeBrand}
+                                              </span>
+                                            )}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
                               </td>
+
+                              {/* SPECIFICATION */}
                               <td>
-                                <input
-                                  type="text"
+                                <textarea
                                   value={row.specification}
                                   onChange={(e) => updateBOMRow(index, 'specification', e.target.value)}
-                                  placeholder="Specification"
-                                  className="proposal-table-input"
+                                  placeholder="Enter specs"
+                                  rows={2}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '4px',
+                                    resize: 'vertical',
+                                    fontSize: '12px'
+                                  }}
                                 />
                               </td>
+
+                              {/* QUANTITY */}
                               <td>
                                 <input
                                   type="number"
@@ -475,15 +855,134 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
                                   className="proposal-table-input"
                                 />
                               </td>
+
+                              {/* UNIT */}
                               <td>
-                                <input
-                                  type="text"
-                                  value={row.unit}
-                                  onChange={(e) => updateBOMRow(index, 'unit', e.target.value)}
-                                  placeholder="Nos/Kg"
-                                  className="proposal-table-input"
-                                />
+                                <div className="unit-input-container" style={{ position: 'relative' }}>
+                                  <input
+                                    type="text"
+                                    value={row.unit || ''}
+                                    onChange={(e) => handleUnitChange(index, e.target.value)}
+                                    onFocus={() => {
+                                      filterUnits(index, row.unit || '');
+                                      setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
+                                    }}
+                                    onBlur={(e) => {
+                                      setTimeout(() => handleUnitBlur(index, e.target.value), 200);
+                                    }}
+                                    placeholder="Type or select"
+                                    autoComplete="off"
+                                    style={{
+                                      width: '100%',
+                                      padding: '8px',
+                                      border: '1px solid #e2e8f0',
+                                      borderRadius: '4px',
+                                      fontSize: '13px'
+                                    }}
+                                  />
+
+                                  {/* UNIT DROPDOWN */}
+                                  {showUnitDropdown[index] && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: '100%',
+                                      left: 0,
+                                      right: 0,
+                                      background: 'white',
+                                      border: '2px solid #3b82f6',
+                                      borderRadius: '6px',
+                                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                                      maxHeight: '250px',
+                                      overflowY: 'auto',
+                                      zIndex: 1000,
+                                      marginTop: '4px'
+                                    }}>
+                                      <div style={{
+                                        padding: '8px 12px',
+                                        background: '#f8fafc',
+                                        borderBottom: '1px solid #e2e8f0',
+                                        fontWeight: 600,
+                                        fontSize: '11px',
+                                        color: '#475569',
+                                        position: 'sticky',
+                                        top: 0,
+                                        zIndex: 1
+                                      }}>
+                                        📏 Select Unit ({filteredUnits[index]?.length || COMMON_UNITS.length})
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowUnitDropdown(prev => ({ ...prev, [index]: false }))}
+                                          style={{
+                                            float: 'right',
+                                            background: 'none',
+                                            border: 'none',
+                                            fontSize: '16px',
+                                            cursor: 'pointer',
+                                            color: '#94a3b8'
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+
+                                      <div>
+                                        {(filteredUnits[index]?.length > 0 ? filteredUnits[index] : COMMON_UNITS).map((unit) => (
+                                          <div
+                                            key={unit}
+                                            onClick={() => selectUnit(index, unit)}
+                                            style={{
+                                              padding: '8px 12px',
+                                              cursor: 'pointer',
+                                              borderBottom: '1px solid #f1f5f9',
+                                              transition: 'background-color 0.2s',
+                                              fontSize: '13px'
+                                            }}
+                                            onMouseEnter={(e) => {
+                                              e.currentTarget.style.backgroundColor = '#f8fafc';
+                                              e.currentTarget.style.borderLeft = '3px solid #3b82f6';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                              e.currentTarget.style.backgroundColor = 'white';
+                                              e.currentTarget.style.borderLeft = 'none';
+                                            }}
+                                          >
+                                            {unit}
+                                          </div>
+                                        ))}
+
+                                        {row.unit && row.unit.trim().length > 0 &&
+                                          !COMMON_UNITS.some(u => u.toLowerCase() === row.unit.toLowerCase()) && (
+                                            <div style={{
+                                              padding: '10px 12px',
+                                              background: '#fef3c7',
+                                              borderTop: '2px solid #fbbf24',
+                                              fontSize: '11px',
+                                              color: '#92400e',
+                                              fontWeight: '500'
+                                            }}>
+                                              ✨ Press Enter or Tab to add "{row.unit}" as custom unit
+                                            </div>
+                                          )}
+
+                                        {filteredUnits[index]?.length === 0 && (
+                                          <div style={{
+                                            padding: '20px',
+                                            textAlign: 'center',
+                                            color: '#94a3b8',
+                                            fontSize: '12px'
+                                          }}>
+                                            No matching units found.
+                                            <br />
+                                            <strong>Type and press Enter</strong> to add "{row.unit}" as custom unit.
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </td>
+
+                              {/* RATE */}
                               <td>
                                 <input
                                   type="number"
@@ -493,14 +992,43 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
                                   className="proposal-table-input"
                                 />
                               </td>
+
+                              {/* TAX */}
+                              <td>
+                                <select
+                                  value={row.tax || '18'}
+                                  onChange={(e) => updateBOMRow(index, 'tax', e.target.value)}
+                                  style={{
+                                    width: '100%',
+                                    padding: '8px',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: '4px',
+                                    backgroundColor: 'white'
+                                  }}
+                                >
+                                  <option value="0">0%</option>
+                                  <option value="5">5%</option>
+                                  <option value="12">12%</option>
+                                  <option value="18">18%</option>
+                                  <option value="28">28%</option>
+                                </select>
+                              </td>
+
+                              {/* AMOUNT (READ-ONLY) */}
                               <td>
                                 <input
                                   type="number"
                                   value={row.amount}
                                   readOnly
                                   className="proposal-table-input proposal-table-readonly"
+                                  style={{
+                                    fontWeight: '600',
+                                    color: '#2d3748'
+                                  }}
                                 />
                               </td>
+
+                              {/* ACTIONS */}
                               <td>
                                 <button
                                   type="button"
@@ -512,9 +1040,33 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
                               </td>
                             </tr>
                           ))}
-                          <tr className="proposal-table-total">
-                            <td colSpan="5" style={{ textAlign: 'right' }}>Total:</td>
-                            <td>₹{calculateBOMTotal()}</td>
+
+                          {/* SUMMARY ROWS */}
+                          <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
+                            <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
+                              Subtotal (Before Tax):
+                            </td>
+                            <td style={{ fontWeight: '600', padding: '12px' }}>
+                              ₹{calculateBOMTotals().subtotal}
+                            </td>
+                            <td></td>
+                          </tr>
+                          <tr style={{ backgroundColor: '#f7fafc' }}>
+                            <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
+                              Total Tax:
+                            </td>
+                            <td style={{ fontWeight: '600', padding: '12px', color: '#d69e2e' }}>
+                              ₹{calculateBOMTotals().totalTax}
+                            </td>
+                            <td></td>
+                          </tr>
+                          <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9' }}>
+                            <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold', padding: '12px', fontSize: '15px' }}>
+                              Grand Total (Inc. Tax):
+                            </td>
+                            <td style={{ fontWeight: 'bold', padding: '12px', fontSize: '15px', color: '#047857' }}>
+                              ₹{calculateBOMTotals().grandTotal}
+                            </td>
                             <td></td>
                           </tr>
                         </>
@@ -540,7 +1092,7 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
               className="proposal-btn proposal-btn-primary" 
               disabled={loading}
             >
-              {loading ? 'Creating...' : 'Create Proposal'}
+              {loading ? (isEditMode ? 'Updating...' : 'Creating...') : (isEditMode ? 'Update Proposal' : 'Create Proposal')}
             </button>
           </div>
         </form>

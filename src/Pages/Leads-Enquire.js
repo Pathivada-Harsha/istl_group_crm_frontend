@@ -1,4 +1,4 @@
-// Leads-Enquiries.js - Updated with Permissions
+// Leads-Enquiries.js - Updated with Enhanced Proposal Modal
 import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
@@ -7,11 +7,12 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
-import LeadTimelineModal from './../components/Leads/LeadTimelineModal.js'; // NEW
-import AddFollowupModal from './../components/Leads/AddFollowupModal.js'; // NEW
-import CreateProposalModal from './../components/Leads/CreateProposalModal'; // NEW
+import LeadTimelineModal from './../components/Leads/LeadTimelineModal.js';
+import AddFollowupModal from './../components/Leads/AddFollowupModal.js';
+import CreateProposalModal from './../components/Leads/CreateProposalModal'; // Enhanced modal with BOM filtering
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
 // DEFAULT TEMPLATE for proposals
 const DEFAULT_PROPOSAL_TEMPLATE = {
   companyName: "SESOLA POWER PROJECTS PROPOSAL PVT LTD",
@@ -42,6 +43,7 @@ Extended warranty options are available upon request.`,
   systemPricing: [],
   bomItems: []
 };
+
 function LeadsEnquiries() {
   const isFirstRender = useRef(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -63,13 +65,15 @@ function LeadsEnquiries() {
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions } = useAuth();
-  // NEW: Follow-up and Timeline states
+
+  // Follow-up and Timeline states
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [showTimelineModal, setShowTimelineModal] = useState(false);
   const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null);
   const [selectedLeadForTimeline, setSelectedLeadForTimeline] = useState(null);
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [selectedLeadForProposal, setSelectedLeadForProposal] = useState(null);
+
   // Extract permissions
   const leadsPermissions = pagePermissions?.LEADS || [];
   const canView = leadsPermissions.includes('VIEW');
@@ -162,7 +166,8 @@ function LeadsEnquiries() {
       setLoading(false);
     }
   };
-  // NEW: Handle Add Follow-up
+
+  // Handle Add Follow-up
   const handleAddFollowup = (lead) => {
     if (!canCreate) {
       showError('You do not have permission to create follow-ups');
@@ -171,7 +176,8 @@ function LeadsEnquiries() {
     setSelectedLeadForFollowup(lead);
     setShowFollowupModal(true);
   };
-  // NEW: Handle Create Proposal
+
+  // Handle Create Proposal
   const handleCreateProposal = (lead) => {
     if (!canCreate) {
       showError('You do not have permission to create proposals');
@@ -181,14 +187,15 @@ function LeadsEnquiries() {
     setShowProposalModal(true);
   };
 
-  // NEW: Handle Proposal Created
+  // Handle Proposal Created
   const handleProposalCreated = () => {
     setShowProposalModal(false);
     setSelectedLeadForProposal(null);
     showSuccess('Proposal created successfully');
     fetchLeads(); // Refresh to update any counts
   };
-  // NEW: Handle View Timeline
+
+  // Handle View Timeline
   const handleViewTimeline = async (lead) => {
     if (!canView) {
       showError('You do not have permission to view timeline');
@@ -206,13 +213,14 @@ function LeadsEnquiries() {
     }
   };
 
-  // NEW: Handle Follow-up Created
+  // Handle Follow-up Created
   const handleFollowupCreated = () => {
     setShowFollowupModal(false);
     setSelectedLeadForFollowup(null);
     showSuccess('Follow-up created successfully');
     fetchLeads(); // Refresh to update pending follow-up counts
   };
+
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
@@ -319,13 +327,13 @@ function LeadsEnquiries() {
   };
 
   useEffect(() => {
-    // ⛔ Skip first render
+    // Skip first render
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
 
-    // ⛔ Skip if filters are still default
+    // Skip if filters are still default
     const isDefaultFilter =
       !searchTerm &&
       statusFilter === 'All' &&
@@ -343,7 +351,6 @@ function LeadsEnquiries() {
     return () => clearTimeout(debounceTimer);
 
   }, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
-
 
   const handleSort = (column) => {
     const direction = sortColumn === column && sortDirection === 'asc' ? 'desc' : 'asc';
@@ -716,79 +723,77 @@ function LeadsEnquiries() {
                     <td>{lead.assignedToName || '-'}</td>
                     <td>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}</td>
                     <td>
-                      <td>
-                        <div className="leads-enquiries-action-buttons-cell">
-                          {canView && (
-                            <button
-                              className="leads-enquiries-action-btn leads-enquiries-action-view"
-                              onClick={() => handleView(lead)}
-                              title="View"
-                            >
-                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                          )}
-
-                          {/* Timeline Button */}
+                      <div className="leads-enquiries-action-buttons-cell">
+                        {canView && (
                           <button
-                            className="leads-enquiries-action-btn leads-enquiries-action-timeline"
-                            onClick={() => handleViewTimeline(lead)}
-                            title="View Timeline"
+                            className="leads-enquiries-action-btn leads-enquiries-action-view"
+                            onClick={() => handleView(lead)}
+                            title="View"
                           >
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
                           </button>
+                        )}
 
-                          {/* Add Follow-up Button */}
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleAddFollowup(lead)}
-                            title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
-                            disabled={!canCreate}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </button>
+                        {/* Timeline Button */}
+                        <button
+                          className="leads-enquiries-action-btn leads-enquiries-action-timeline"
+                          onClick={() => handleViewTimeline(lead)}
+                          title="View Timeline"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
 
-                          {/* NEW: Create Proposal Button */}
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleCreateProposal(lead)}
-                            title={!canCreate ? 'No permission to create proposals' : 'Create Proposal'}
-                            disabled={!canCreate}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </button>
+                        {/* Add Follow-up Button */}
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleAddFollowup(lead)}
+                          title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
+                          disabled={!canCreate}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </button>
 
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleEdit(lead)}
-                            title={!canEdit ? 'No permission to edit' : 'Edit'}
-                            disabled={!canEdit}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
+                        {/* Create Proposal Button */}
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleCreateProposal(lead)}
+                          title={!canCreate ? 'No permission to create proposals' : 'Create Proposal'}
+                          disabled={!canCreate}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
 
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleDelete(lead.id)}
-                            title={!canDelete ? 'No permission to delete' : 'Delete'}
-                            disabled={!canDelete}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleEdit(lead)}
+                          title={!canEdit ? 'No permission to edit' : 'Edit'}
+                          disabled={!canEdit}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleDelete(lead.id)}
+                          title={!canDelete ? 'No permission to delete' : 'Delete'}
+                          disabled={!canDelete}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -822,6 +827,7 @@ function LeadsEnquiries() {
         </div>
       </div>
 
+      {/* Add/Edit Lead Modal */}
       {showAddModal && (
         <div className="leads-enquiries-modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
@@ -942,6 +948,7 @@ function LeadsEnquiries() {
         </div>
       )}
 
+      {/* View Lead Modal */}
       {showViewModal && selectedLead && (
         <div className="leads-enquiries-modal-overlay" onClick={() => setShowViewModal(false)}>
           <div className="leads-enquiries-modal leads-enquiries-modal-large" onClick={(e) => e.stopPropagation()}>
@@ -1014,7 +1021,7 @@ function LeadsEnquiries() {
               </div>
 
               <div className="leads-enquiries-modal-actions">
-                {/* NEW: Add Follow-up from View Modal */}
+                {/* Add Follow-up from View Modal */}
                 {canCreate && (
                   <button
                     className="leads-enquiries-btn leads-enquiries-btn-success"
@@ -1030,7 +1037,7 @@ function LeadsEnquiries() {
                   </button>
                 )}
 
-                {/* NEW: View Timeline from View Modal */}
+                {/* View Timeline from View Modal */}
                 <button
                   className="leads-enquiries-btn leads-enquiries-btn-info"
                   onClick={() => {
@@ -1058,7 +1065,7 @@ function LeadsEnquiries() {
         </div>
       )}
 
-      {/* NEW: Follow-up Modal */}
+      {/* Follow-up Modal */}
       {showFollowupModal && selectedLeadForFollowup && (
         <AddFollowupModal
           lead={selectedLeadForFollowup}
@@ -1070,7 +1077,7 @@ function LeadsEnquiries() {
         />
       )}
 
-      {/* NEW: Timeline Modal */}
+      {/* Timeline Modal */}
       {showTimelineModal && selectedLeadForTimeline && (
         <LeadTimelineModal
           lead={selectedLeadForTimeline}
@@ -1084,7 +1091,8 @@ function LeadsEnquiries() {
           }}
         />
       )}
-    {/* Proposal Modal */}
+
+      {/* Enhanced Proposal Modal with BOM Filtering */}
       {showProposalModal && selectedLeadForProposal && (
         <CreateProposalModal
           lead={selectedLeadForProposal}
