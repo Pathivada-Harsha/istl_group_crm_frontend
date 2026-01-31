@@ -591,10 +591,10 @@ const BillsReceived = () => {
 
     // Validate items
     for (let item of formData.items) {
-      if (!item.description || item.description.trim() === '') {
-        showError('Please enter description for all items');
-        return;
-      }
+      // if (!item.description || item.description.trim() === '') {
+      //   showError('Please enter description for all items');
+      //   return;
+      // }
       if (!item.quantity || item.quantity <= 0) {
         showError('Please enter valid quantity for all items');
         return;
