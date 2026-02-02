@@ -1158,7 +1158,7 @@ function OrderBook() {
                             <th style={{ width: '100px' }}>Discount %</th>
                             <th style={{ width: '80px' }}>Tax %</th>
                             <th style={{ width: '120px' }}>Line Total</th>
-                            <th style={{ width: '200px' }}>Description</th>
+                            {/* <th style={{ width: '200px' }}>Description</th> */}
                             <th style={{ width: '60px' }}>Action</th>
                           </tr>
                         </thead>
@@ -1255,7 +1255,7 @@ function OrderBook() {
                               </td>
 
                               {/* Description */}
-                              <td>
+                              {/* <td>
                                 <input
                                   type="text"
                                   className="orderbook-table-input"
@@ -1263,7 +1263,7 @@ function OrderBook() {
                                   onChange={(e) => updateItem(index, 'description', e.target.value)}
                                   placeholder="Description"
                                 />
-                              </td>
+                              </td> */}
 
                               {/* Remove Button */}
                               <td className="orderbook-table-cell-centered">

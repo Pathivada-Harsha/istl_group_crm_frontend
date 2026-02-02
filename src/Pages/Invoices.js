@@ -8,7 +8,8 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
-
+import UnitTypeDropdown from './../components/Dropdowns/Unittypedropdown.js';
+import { normalizeUnit } from './../components/Dropdowns/unitUtils';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const InvoicesManagementPage = () => {
@@ -100,21 +101,21 @@ const InvoicesManagementPage = () => {
     notes: ''
   });
   const selectOrderBookItem = (index, item) => {
-    const newItems = [...formData.items];
-    newItems[index] = {
-      ...newItems[index],
-      description: item.itemName,
-      quantity: item.quantity || 1,
-      unitPrice: item.unitPrice || 0,
-      taxPercent: item.taxPercent || 18,
-      unitType: item.unit || 'Nos',
-      orderBookItemId: item.id
-    };
-
-    setFormData({ ...formData, items: newItems });
-    setShowDropdown(prev => ({ ...prev, [index]: false }));
-    setFilteredItems(prev => ({ ...prev, [index]: [] }));
+  const newItems = [...formData.items];
+  newItems[index] = {
+    ...newItems[index],
+    description: item.itemName,
+    quantity: item.quantity || 1,
+    unitPrice: item.unitPrice || 0,
+    taxPercent: item.taxPercent || 18,
+    unitType: normalizeUnit(item.unit),  // ✅ This fixes the unit matching
+    orderBookItemId: item.id
   };
+
+  setFormData({ ...formData, items: newItems });
+  setShowDropdown(prev => ({ ...prev, [index]: false }));
+  setFilteredItems(prev => ({ ...prev, [index]: [] }));
+};
   // Fetch invoices on mount and filter change
   useEffect(() => {
     fetchInvoices();
@@ -1286,17 +1287,10 @@ const InvoicesManagementPage = () => {
                         </div>
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Unit Type</label>
-                          <select
+                          <UnitTypeDropdown
                             value={item.unitType}
                             onChange={(e) => updateItem(index, 'unitType', e.target.value)}
-                          >
-                            <option value="Nos">Nos</option>
-                            <option value="Kgs">Kgs</option>
-                            <option value="Boxes">Boxes</option>
-                            <option value="Pcs">Pcs</option>
-                            <option value="Meters">Meters</option>
-                            <option value="Liters">Liters</option>
-                          </select>
+                          />
                         </div>
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Qty *</label>

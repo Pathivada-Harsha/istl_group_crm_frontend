@@ -12,6 +12,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -27,12 +28,12 @@ const BillsReceived = () => {
     linkedToPOPercentage: 0
   });
 
-  // Dropdown data
-  const [vendors, setVendors] = useState([]);
-  const [purchaseOrders, setPurchaseOrders] = useState([]);
-  const [groups, setGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
-  const [projects, setProjects] = useState([]);
+  // MODAL-SPECIFIC dropdown data (completely independent from main filters)
+  const [modalVendors, setModalVendors] = useState([]);
+  const [modalPurchaseOrders, setModalPurchaseOrders] = useState([]);
+  const [modalGroups, setModalGroups] = useState([]);
+  const [modalSubGroups, setModalSubGroups] = useState([]);
+  const [modalProjects, setModalProjects] = useState([]);
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const [filters, setFilters] = useState({
@@ -58,10 +59,19 @@ const BillsReceived = () => {
   const [paymentData, setPaymentData] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
 
-  // Modal dropdown states
+  // Modal dropdown states (completely independent)
   const [modalGroupName, setModalGroupName] = useState('');
   const [modalSubGroupName, setModalSubGroupName] = useState('');
   const [modalProjectId, setModalProjectId] = useState('');
+
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: '',
+    message: '',
+    type: 'confirm',
+    onConfirm: null
+  });
 
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user } = useAuth();
@@ -75,7 +85,7 @@ const BillsReceived = () => {
     'Content-Type': 'application/json'
   });
 
-  // Fetch bills and KPIs - API call each time pagination changes
+  // Fetch bills and KPIs
   useEffect(() => {
     fetchBills();
   }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize]);
@@ -84,19 +94,13 @@ const BillsReceived = () => {
     fetchKPIs();
   }, [projectId, groupName, subGroupName]);
 
-  // Fetch dropdown data when modal opens
+  // Fetch MODAL dropdown data when modal opens
   useEffect(() => {
     if (showCreateEditModal) {
-      fetchAllDropdownData();
+      // Only fetch groups on modal open, other dropdowns load on demand
+      fetchModalGroups();
     }
   }, [showCreateEditModal]);
-
-  // Refresh POs when group/subgroup/project changes in modal
-  useEffect(() => {
-    if (showCreateEditModal && (modalGroupName || modalSubGroupName || modalProjectId)) {
-      fetchPurchaseOrders();
-    }
-  }, [modalGroupName, modalSubGroupName, modalProjectId]);
 
   const fetchBills = async () => {
     setLoading(true);
@@ -166,20 +170,9 @@ const BillsReceived = () => {
     }
   };
 
-  // Fetch all dropdown data
-  const fetchAllDropdownData = async () => {
-    try {
-      await Promise.all([
-        fetchVendors(),
-        fetchPurchaseOrders(),
-        fetchGroups()
-      ]);
-    } catch (error) {
-      console.error('Error fetching dropdown data:', error);
-    }
-  };
-
-  const fetchVendors = async () => {
+  // ========== MODAL DROPDOWN FUNCTIONS (COMPLETELY INDEPENDENT) ==========
+  
+  const fetchModalVendors = async () => {
     try {
       const params = new URLSearchParams();
       if (modalGroupName) params.append('groupName', modalGroupName);
@@ -193,28 +186,26 @@ const BillsReceived = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setVendors(data || []);
-        console.log('✅ Loaded vendors (including PO vendors):', data.length);
+        setModalVendors(data || []);
+        console.log('✅ Loaded modal vendors:', data.length);
       }
     } catch (error) {
-      console.error('Failed to fetch vendors:', error);
-      setVendors([]);
+      console.error('Failed to fetch modal vendors:', error);
+      setModalVendors([]);
     }
   };
 
-  const fetchPurchaseOrders = async (vendorIdOrName = null) => {
+  const fetchModalPurchaseOrders = async (vendorIdOrName = null) => {
     try {
       const params = new URLSearchParams();
       if (modalGroupName) params.append('groupName', modalGroupName);
       if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
       if (modalProjectId) params.append('projectId', modalProjectId);
 
-      // Handle both vendorId (number) and vendorName (string from POs)
       if (vendorIdOrName) {
         if (typeof vendorIdOrName === 'number') {
           params.append('vendorId', vendorIdOrName);
         } else if (typeof vendorIdOrName === 'string' && vendorIdOrName.startsWith('PO_')) {
-          // This is a vendor from PO, extract vendor name
           const vendorName = vendorIdOrName.replace('PO_', '');
           params.append('vendorName', vendorName);
         }
@@ -227,14 +218,15 @@ const BillsReceived = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setPurchaseOrders(data || []);
-        console.log('✅ Loaded POs for vendor:', data.length);
+        setModalPurchaseOrders(data || []);
+        console.log('✅ Loaded modal POs:', data.length);
       }
     } catch (error) {
-      console.error('Failed to fetch purchase orders:', error);
-      setPurchaseOrders([]);
+      console.error('Failed to fetch modal purchase orders:', error);
+      setModalPurchaseOrders([]);
     }
   };
+
   const fetchPOItems = async (poId) => {
     if (!poId) return;
 
@@ -261,8 +253,8 @@ const BillsReceived = () => {
             orderedQty: item.orderedQty,
             deliveredQty: item.deliveredQty,
             pendingQty: item.pendingQty,
-            maxBillableQty: item.pendingQty, // Max = pending delivery
-            quantity: item.pendingQty, // Default to full pending
+            maxBillableQty: item.pendingQty,
+            quantity: item.pendingQty,
             unitPrice: item.unitPrice || 0,
             taxPercent: item.taxPercent || 18,
             deliveryStatus: item.deliveryStatus
@@ -273,9 +265,7 @@ const BillsReceived = () => {
             items: billItems
           }));
 
-          showSuccess(
-            `✅ Loaded ${billItems.length} items. Enter delivered quantities.`
-          );
+          showSuccess(`✅ Loaded ${billItems.length} items. Enter delivered quantities.`);
         } else {
           showError('All items fully delivered');
           setFormData(prev => ({ ...prev, items: [] }));
@@ -288,68 +278,71 @@ const BillsReceived = () => {
       setLoading(false);
     }
   };
-  const fetchGroups = async () => {
+
+  const fetchModalGroups = async () => {
     try {
       const groups = await filterApi.getAllGroups();
-      setGroups(groups || []);
+      setModalGroups(groups || []);
     } catch (error) {
-      console.error('Failed to fetch groups:', error);
-      setGroups([]);
+      console.error('Failed to fetch modal groups:', error);
+      setModalGroups([]);
     }
   };
 
-  const fetchSubGroups = async (groupName) => {
+  const fetchModalSubGroups = async (groupName) => {
     if (!groupName) {
-      setSubGroups([]);
+      setModalSubGroups([]);
       return;
     }
 
     try {
       const subGroups = await filterApi.getSubGroups(groupName);
-      setSubGroups(subGroups || []);
+      setModalSubGroups(subGroups || []);
     } catch (error) {
-      console.error('Failed to fetch subgroups:', error);
-      setSubGroups([]);
+      console.error('Failed to fetch modal subgroups:', error);
+      setModalSubGroups([]);
     }
   };
 
-  const fetchProjects = async (groupName, subGroupName) => {
+  const fetchModalProjects = async (groupName, subGroupName) => {
     if (!groupName || !subGroupName) {
-      setProjects([]);
+      setModalProjects([]);
       return;
     }
 
     try {
       const projects = await filterApi.getProjects(groupName, subGroupName);
-      setProjects(projects || []);
+      setModalProjects(projects || []);
     } catch (error) {
-      console.error('Failed to fetch projects:', error);
-      setProjects([]);
+      console.error('Failed to fetch modal projects:', error);
+      setModalProjects([]);
     }
   };
 
-  // Handle modal dropdown changes
+  // ========== MODAL DROPDOWN HANDLERS (COMPLETELY INDEPENDENT) ==========
+
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
     setModalGroupName(newGroupName);
     setModalSubGroupName('');
     setModalProjectId('');
-    setSubGroups([]);
-    setProjects([]);
-    setPurchaseOrders([]); // Clear POs
+    setModalSubGroups([]);
+    setModalProjects([]);
+    setModalPurchaseOrders([]);
+    setModalVendors([]);
 
     setFormData(prev => ({
       ...prev,
       groupId: newGroupName,
       subGroupId: '',
       projectId: '',
-      poId: '', // Clear PO selection
-      items: [] // Clear items
+      vendorId: '',
+      poId: '',
+      items: prev.items.filter(item => !item.poItemId) // Keep only manual items
     }));
 
     if (newGroupName) {
-      fetchSubGroups(newGroupName);
-      fetchVendors(); // Refresh vendors for new group
+      fetchModalSubGroups(newGroupName);
     }
   };
 
@@ -357,74 +350,77 @@ const BillsReceived = () => {
     const newSubGroupName = e.target.value;
     setModalSubGroupName(newSubGroupName);
     setModalProjectId('');
-    setProjects([]);
-    setPurchaseOrders([]);
+    setModalProjects([]);
+    setModalPurchaseOrders([]);
+    setModalVendors([]);
 
     setFormData(prev => ({
       ...prev,
       subGroupId: newSubGroupName,
       projectId: '',
-      vendorId: '', // ✅ Clear vendor
+      vendorId: '',
       poId: '',
-      items: []
+      items: prev.items.filter(item => !item.poItemId)
     }));
 
     if (modalGroupName && newSubGroupName) {
-      await fetchProjects(modalGroupName, newSubGroupName);
-      await fetchVendors(); // ✅ Re-fetch vendors!
+      await fetchModalProjects(modalGroupName, newSubGroupName);
     }
   };
 
   const handleModalProjectChange = async (e) => {
     const newProjectId = e.target.value;
     setModalProjectId(newProjectId);
-    setPurchaseOrders([]);
+    setModalPurchaseOrders([]);
+    setModalVendors([]);
 
     setFormData(prev => ({
       ...prev,
       projectId: newProjectId,
-      vendorId: '', // ✅ Clear vendor
+      vendorId: '',
       poId: '',
-      items: []
+      items: prev.items.filter(item => !item.poItemId)
     }));
 
     if (newProjectId) {
-      await fetchVendors(); // ✅ Re-fetch vendors for project!
+      await fetchModalVendors();
     }
   };
-  const handleVendorChange = (e) => {
+
+  const handleModalVendorChange = (e) => {
     const vendorIdOrName = e.target.value;
 
     setFormData(prev => ({
       ...prev,
       vendorId: vendorIdOrName,
-      poId: '', // Clear PO selection
-      items: [] // Clear items
+      poId: '',
+      items: prev.items.filter(item => !item.poItemId)
     }));
 
-    setPurchaseOrders([]); // Clear POs
+    setModalPurchaseOrders([]);
 
     if (vendorIdOrName) {
-      // Fetch POs for this vendor
       const vendorId = typeof vendorIdOrName === 'string' && !vendorIdOrName.startsWith('PO_')
         ? parseInt(vendorIdOrName)
         : vendorIdOrName;
-      fetchPurchaseOrders(vendorId);
+      fetchModalPurchaseOrders(vendorId);
     }
   };
-  const handlePOChange = (e) => {
+
+  const handleModalPOChange = (e) => {
     const poId = e.target.value;
 
     setFormData(prev => ({
       ...prev,
       poId: poId ? parseInt(poId) : null,
-      items: [] // Clear existing items
+      items: prev.items.filter(item => !item.poItemId)
     }));
 
     if (poId) {
       fetchPOItems(parseInt(poId));
     }
   };
+
   // Pagination handlers
   const handlePageChange = (newPage) => {
     setPagination(prev => ({
@@ -437,7 +433,7 @@ const BillsReceived = () => {
     setPagination(prev => ({
       ...prev,
       pageSize: parseInt(e.target.value),
-      currentPage: 0 // Reset to first page
+      currentPage: 0
     }));
   };
 
@@ -458,7 +454,7 @@ const BillsReceived = () => {
     }
   };
 
-  // View bill details
+  // ========== VIEW BILL - FIXED ==========
   const handleViewBill = async (billId) => {
     setLoading(true);
     try {
@@ -469,6 +465,18 @@ const BillsReceived = () => {
 
       if (response.ok) {
         const bill = await response.json();
+        
+        // ✅ CRITICAL FIX: Ensure items array exists
+        if (!bill.items) {
+          bill.items = [];
+        }
+        
+        // ✅ Ensure payment history exists
+        if (!bill.paymentHistory) {
+          bill.paymentHistory = [];
+        }
+        
+        console.log('✅ Bill loaded:', bill);
         setSelectedBill(bill);
         setShowDetailDrawer(true);
       } else {
@@ -482,18 +490,20 @@ const BillsReceived = () => {
     }
   };
 
-  // Create new bill
+  // ========== CREATE BILL - COMPLETELY FIXED ==========
   const handleCreateBill = () => {
     setEditMode(false);
+    
+    // ✅ CRITICAL FIX: Start with COMPLETELY EMPTY selections
     setFormData({
       vendorId: '',
       poId: '',
       billNo: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      projectId: projectId || '',
-      groupId: groupName || '',
-      subGroupId: subGroupName || '',
+      projectId: '',      // ✅ EMPTY - no default
+      groupId: '',        // ✅ EMPTY - no default
+      subGroupId: '',     // ✅ EMPTY - no default
       items: [{
         itemName: '',
         description: '',
@@ -504,45 +514,145 @@ const BillsReceived = () => {
       notes: ''
     });
 
-    setModalGroupName(groupName || '');
-    setModalSubGroupName(subGroupName || '');
-    setModalProjectId(projectId || '');
+    // ✅ Set modal dropdown states to EMPTY (completely independent)
+    setModalGroupName('');
+    setModalSubGroupName('');
+    setModalProjectId('');
+    
+    // ✅ Clear ALL modal dropdowns
+    setModalSubGroups([]);
+    setModalProjects([]);
+    setModalVendors([]);
+    setModalPurchaseOrders([]);
 
     setSelectedFile(null);
     setShowCreateEditModal(true);
-      fetchAllDropdownData();
+    
+    // ✅ Only fetch groups initially (other dropdowns load on selection)
+    fetchModalGroups();
   };
 
-  // Edit bill
-  const handleEditBill = (bill) => {
+  // ========== EDIT BILL - COMPLETELY FIXED ==========
+  const handleEditBill = async (bill) => {
     setEditMode(true);
-    setFormData({
-      ...bill,
-      billDate: bill.billDate ? bill.billDate.split('T')[0] : '',
-      dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : ''
-    });
-
-    setModalGroupName(bill.groupId || '');
-    setModalSubGroupName(bill.subGroupId || '');
-    setModalProjectId(bill.projectId || '');
-
-    // Fetch dropdowns for edit mode
-    if (bill.groupId) {
-      fetchSubGroups(bill.groupId);
-      if (bill.subGroupId) {
-        fetchProjects(bill.groupId, bill.subGroupId);
+    setLoading(true);
+    
+    try {
+      // ✅ Set modal dropdown states FIRST (independent from main filters)
+      setModalGroupName(bill.groupId || '');
+      setModalSubGroupName(bill.subGroupId || '');
+      setModalProjectId(bill.projectId || '');
+      
+      // ✅ Clear dependent dropdowns first
+      setModalSubGroups([]);
+      setModalProjects([]);
+      setModalVendors([]);
+      setModalPurchaseOrders([]);
+      
+      // ✅ Fetch dropdowns for edit mode in correct order
+      await fetchModalGroups();
+      
+      if (bill.groupId) {
+        await fetchModalSubGroups(bill.groupId);
+        if (bill.subGroupId) {
+          await fetchModalProjects(bill.groupId, bill.subGroupId);
+        }
       }
-    }
+      
+      // ✅ Fetch vendors for current selection
+      if (bill.projectId || bill.subGroupId) {
+        await fetchModalVendors();
+      }
+      
+      // ✅ Fetch POs if vendor is selected
+      if (bill.vendorId) {
+        await fetchModalPurchaseOrders(bill.vendorId);
+      }
+      
+      // ✅ If bill has PO items, fetch PO item details to get max quantities
+      let enrichedItems = bill.items && bill.items.length > 0 ? [...bill.items] : [{
+        itemName: '',
+        description: '',
+        quantity: 1,
+        unitPrice: 0,
+        taxPercent: 18
+      }];
+      
+      // ✅ For PO-linked bills, fetch current PO item status
+      if (bill.poId && bill.items && bill.items.length > 0) {
+        try {
+          const response = await fetch(
+            `${API_BASE_URL}/api/purchase-orders/${bill.poId}/items-for-bill`,
+            {
+              credentials: "include",
+              headers: getAuthHeaders()
+            }
+          );
+          
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.success && data.items) {
+              // Enrich items with current PO status
+              enrichedItems = bill.items.map(billItem => {
+                if (billItem.poItemId) {
+                  const poItem = data.items.find(pi => pi.id === billItem.poItemId);
+                  if (poItem) {
+                    return {
+                      ...billItem,
+                      orderedQty: poItem.orderedQty,
+                      deliveredQty: poItem.deliveredQty,
+                      pendingQty: poItem.pendingQty,
+                      // Max quantity = current bill quantity + remaining pending
+                      maxBillableQty: (billItem.quantity || 0) + (poItem.pendingQty || 0),
+                      originalBillQty: billItem.quantity,
+                      deliveryStatus: poItem.deliveryStatus
+                    };
+                  }
+                }
+                return billItem;
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch PO items for edit:', error);
+        }
+      }
+      
+      // ✅ Set form data with enriched items
+      setFormData({
+        ...bill,
+        billDate: bill.billDate ? bill.billDate.split('T')[0] : '',
+        dueDate: bill.dueDate ? bill.dueDate.split('T')[0] : '',
+        items: enrichedItems
+      });
 
-    setShowDetailDrawer(false);
-    setShowCreateEditModal(true);
+      setShowDetailDrawer(false);
+      setShowCreateEditModal(true);
+      
+    } catch (error) {
+      console.error('Error in handleEditBill:', error);
+      showError('Failed to load bill for editing');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  // Delete bill
-  const handleDeleteBill = async (billId) => {
-    if (!window.confirm('Are you sure you want to delete this bill?')) return;
+  // ========== DELETE BILL - WITH CONFIRMATION MODAL ==========
+  const handleDeleteBill = (billId) => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Bill',
+      message: 'Are you sure you want to delete this bill? This action cannot be undone.',
+      type: 'error',
+      onConfirm: () => performDeleteBill(billId)
+    });
+  };
 
+  const performDeleteBill = async (billId) => {
+    setConfirmModal({ show: false });
     setLoading(true);
+    
     try {
       const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
         method: 'DELETE',
@@ -566,7 +676,7 @@ const BillsReceived = () => {
     }
   };
 
-  // Save bill (create or update)
+  // ========== SAVE BILL - WITH ENHANCED VALIDATION ==========
   const handleSaveBill = async () => {
     // Validation
     if (!formData.vendorId || formData.vendorId === '') {
@@ -590,18 +700,28 @@ const BillsReceived = () => {
     }
 
     // Validate items
-    for (let item of formData.items) {
-      // if (!item.description || item.description.trim() === '') {
-      //   showError('Please enter description for all items');
-      //   return;
-      // }
+    for (let i = 0; i < formData.items.length; i++) {
+      const item = formData.items[i];
+      
       if (!item.quantity || item.quantity <= 0) {
-        showError('Please enter valid quantity for all items');
+        showError(`Item ${i + 1}: Please enter valid quantity`);
         return;
       }
+      
       if (item.unitPrice === undefined || item.unitPrice === null || item.unitPrice < 0) {
-        showError('Please enter valid price for all items');
+        showError(`Item ${i + 1}: Please enter valid price`);
         return;
+      }
+      
+      // ✅ Validate max quantity for PO items in edit mode
+      if (editMode && item.poItemId && item.maxBillableQty) {
+        if (item.quantity > item.maxBillableQty) {
+          showError(
+            `Item ${i + 1}: Quantity (${item.quantity}) exceeds maximum allowed (${item.maxBillableQty}). ` +
+            `You can bill up to: Original bill qty (${item.originalBillQty || 0}) + Pending (${item.pendingQty || 0})`
+          );
+          return;
+        }
       }
     }
 
@@ -750,11 +870,21 @@ const BillsReceived = () => {
     }
   };
 
-  // Mark as paid
-  const handleMarkPaid = async (billId) => {
-    if (!window.confirm('Mark this bill as fully paid?')) return;
+  // ========== MARK AS PAID - WITH CONFIRMATION MODAL ==========
+  const handleMarkPaid = (billId) => {
+    setConfirmModal({
+      show: true,
+      title: 'Mark Bill as Paid',
+      message: 'Mark this bill as fully paid?',
+      type: 'confirm',
+      onConfirm: () => performMarkPaid(billId)
+    });
+  };
 
+  const performMarkPaid = async (billId) => {
+    setConfirmModal({ show: false });
     setLoading(true);
+    
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/bills/${billId}/mark-paid`,
@@ -875,6 +1005,16 @@ const BillsReceived = () => {
     <div className="procurement-bills-received-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      
+      {/* ✅ CONFIRMATION MODAL */}
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
 
       {/* Header */}
       <div className="procurement-bills-received-header">
@@ -1109,7 +1249,7 @@ const BillsReceived = () => {
           </tbody>
         </table>
 
-        {/* PAGINATION - NEW UI */}
+        {/* Pagination */}
         {pagination.totalPages > 0 && (
           <div className="procurement-bills-received-pagination">
             <div className="pagination-info">
@@ -1192,28 +1332,31 @@ const BillsReceived = () => {
         )}
       </div>
 
-
-      {/* Create/Edit Bill Modal */}
+      {/* CREATE/EDIT MODAL - ✅ UNIQUE CLASSNAMES & COMPLETELY INDEPENDENT */}
       {showCreateEditModal && formData && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
-          <div className="procurement-bills-received-create-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="procurement-bills-received-modal-header">
-              <h2>{editMode ? 'Edit Bill' : 'Add New Bill'}</h2>
-              <button className="procurement-bills-received-modal-close" onClick={() => setShowCreateEditModal(false)}>
+        <div className="bill-form-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
+          <div className="bill-form-modal-container" onClick={(e) => e.stopPropagation()}>
+            <div className="bill-form-modal-header">
+              <h2>{editMode ? 'Edit Bill' : 'Create New Bill'}</h2>
+              <button className="bill-form-modal-close-btn" onClick={() => setShowCreateEditModal(false)}>
                 <X size={24} />
               </button>
             </div>
 
-            <div className="procurement-bills-received-form">
+            <div className="bill-form-modal-content">
               {/* Project Assignment Section */}
-              <div className="procurement-bills-received-form-section">
-                <h3>Project Assignment</h3>
-                <div className="procurement-bills-received-form-row">
-                  <div className="procurement-bills-received-form-group">
-                    <label>Group</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange}>
+              <div className="bill-form-section">
+                <h3 className="bill-form-section-title">Project Assignment</h3>
+                <div className="bill-form-row">
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Group</label>
+                    <select 
+                      className="bill-form-select"
+                      value={modalGroupName} 
+                      onChange={handleModalGroupChange}
+                    >
                       <option value="">Select Group</option>
-                      {groups.map(group => (
+                      {modalGroups.map(group => (
                         <option key={group.value} value={group.value}>
                           {group.label}
                         </option>
@@ -1221,15 +1364,16 @@ const BillsReceived = () => {
                     </select>
                   </div>
 
-                  <div className="procurement-bills-received-form-group">
-                    <label>Sub Group</label>
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Sub Group</label>
                     <select
+                      className="bill-form-select"
                       value={modalSubGroupName}
                       onChange={handleModalSubGroupChange}
                       disabled={!modalGroupName}
                     >
                       <option value="">{!modalGroupName ? 'Select Group First' : 'Select Sub Group'}</option>
-                      {subGroups.map(subGroup => (
+                      {modalSubGroups.map(subGroup => (
                         <option key={subGroup.value} value={subGroup.value}>
                           {subGroup.label}
                         </option>
@@ -1238,15 +1382,16 @@ const BillsReceived = () => {
                   </div>
                 </div>
 
-                <div className="procurement-bills-received-form-group">
-                  <label>Project (Optional)</label>
+                <div className="bill-form-field">
+                  <label className="bill-form-label">Project (Optional)</label>
                   <select
+                    className="bill-form-select"
                     value={modalProjectId}
                     onChange={handleModalProjectChange}
                     disabled={!modalSubGroupName}
                   >
                     <option value="">{!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}</option>
-                    {projects.map(project => (
+                    {modalProjects.map(project => (
                       <option key={project.id} value={project.id}>
                         {project.name} - {project.location}
                       </option>
@@ -1256,18 +1401,19 @@ const BillsReceived = () => {
               </div>
 
               {/* Vendor and PO Selection */}
-              <div className="procurement-bills-received-form-section">
-                <h3>Vendor & Purchase Order</h3>
-                <div className="procurement-bills-received-form-row">
-                  <div className="procurement-bills-received-form-group">
-                    <label>Vendor *</label>
+              <div className="bill-form-section">
+                <h3 className="bill-form-section-title">Vendor & Purchase Order</h3>
+                <div className="bill-form-row">
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Vendor *</label>
                     <select
+                      className="bill-form-select"
                       value={formData.vendorId || ''}
-                      onChange={handleVendorChange} // UPDATED: Use new handler
+                      onChange={handleModalVendorChange}
                       required
                     >
                       <option value="">Select Vendor</option>
-                      {vendors.map((vendor, index) => (
+                      {modalVendors.map((vendor, index) => (
                         <option key={vendor.id || index} value={vendor.id}>
                           {vendor.name}
                           {vendor.contact && ` - ${vendor.contact}`}
@@ -1275,33 +1421,34 @@ const BillsReceived = () => {
                         </option>
                       ))}
                     </select>
-                    {vendors.length === 0 && (
-                      <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '4px' }}>
-                        No vendors available for selected project. Create a PO with new vendor first.
+                    {modalVendors.length === 0 && modalProjectId && (
+                      <small className="bill-form-hint-error">
+                        No vendors available for selected project. Select project or create a PO first.
                       </small>
                     )}
                   </div>
 
-                  <div className="procurement-bills-received-form-group">
-                    <label>Linked PO (Optional)</label>
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Linked PO (Optional)</label>
                     <select
+                      className="bill-form-select"
                       value={formData.poId || ''}
-                      onChange={handlePOChange} // UPDATED: Use new handler
+                      onChange={handleModalPOChange}
                     >
                       <option value="">No PO Link</option>
-                      {purchaseOrders.map(po => (
+                      {modalPurchaseOrders.map(po => (
                         <option key={po.id} value={po.id}>
                           {po.poNo} - {po.vendorName} - {formatCurrency(po.totalValue)}
                         </option>
                       ))}
                     </select>
-                    {formData.vendorId && purchaseOrders.length === 0 && (
-                      <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px' }}>
+                    {formData.vendorId && modalPurchaseOrders.length === 0 && (
+                      <small className="bill-form-hint">
                         No POs found for selected vendor
                       </small>
                     )}
                     {formData.poId && (
-                      <small style={{ color: '#22c55e', fontSize: '12px', marginTop: '4px' }}>
+                      <small className="bill-form-hint-success">
                         ✓ PO items loaded below
                       </small>
                     )}
@@ -1310,21 +1457,23 @@ const BillsReceived = () => {
               </div>
 
               {/* Dates */}
-              <div className="procurement-bills-received-form-section">
-                <h3>Bill Dates</h3>
-                <div className="procurement-bills-received-form-row">
-                  <div className="procurement-bills-received-form-group">
-                    <label>Bill Date *</label>
+              <div className="bill-form-section">
+                <h3 className="bill-form-section-title">Bill Dates</h3>
+                <div className="bill-form-row">
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Bill Date *</label>
                     <input
+                      className="bill-form-input"
                       type="date"
                       value={formData.billDate}
                       onChange={(e) => setFormData({ ...formData, billDate: e.target.value })}
                       required
                     />
                   </div>
-                  <div className="procurement-bills-received-form-group">
-                    <label>Due Date *</label>
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Due Date *</label>
                     <input
+                      className="bill-form-input"
                       type="date"
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
@@ -1334,53 +1483,62 @@ const BillsReceived = () => {
                 </div>
               </div>
 
-              {/* Items Section - FIXED TABLE ALIGNMENT */}
-              <div className="procurement-bills-received-form-section">
-                <div className="procurement-bills-received-section-header">
-                  <h3>Bill Line Items</h3>
-                  <button
-                    className="procurement-bills-received-btn-add-item"
-                    onClick={handleAddItem}
-                    type="button"
-                  >
-                    + Add Item
-                  </button>
+              {/* Items Section */}
+              <div className="bill-form-section">
+                <div className="bill-form-section-header">
+                  <h3 className="bill-form-section-title">Bill Line Items</h3>
+                  {!editMode && (
+                    <button
+                      className="bill-form-add-item-btn"
+                      onClick={handleAddItem}
+                      type="button"
+                    >
+                      + Add Item
+                    </button>
+                  )}
                 </div>
 
-                <div className="procurement-bills-received-items-form">
-                  {/* FIXED: Table with proper alignment */}
-                  <table className="bills-items-table">
+                <div className="bill-form-items-table-container">
+                  <table className="bill-form-items-table">
                     <thead>
                       <tr>
                         <th style={{ width: '15%' }}>Item Name</th>
-                        <th style={{ width: '25%' }}>Description * {formData.poId && '(From PO)'}</th>
-                        <th style={{ width: '10%' }}>Qty *</th>
-                        <th style={{ width: '15%' }}>Price *</th>
-                        <th style={{ width: '10%' }}>Tax %</th>
-                        <th style={{ width: '15%' }}>Line Total</th>
-                        <th style={{ width: '10%' }}>Action</th>
+                        <th style={{ width: '20%' }}>Description</th>
+                        {editMode && <th style={{ width: '8%' }}>Ordered</th>}
+                        {editMode && <th style={{ width: '8%' }}>Delivered</th>}
+                        {editMode && <th style={{ width: '8%' }}>Pending</th>}
+                        <th style={{ width: editMode ? '10%' : '12%' }}>Bill Qty *</th>
+                        <th style={{ width: editMode ? '10%' : '12%' }}>Price *</th>
+                        <th style={{ width: '8%' }}>Tax %</th>
+                        <th style={{ width: '13%' }}>Line Total</th>
+                        {!editMode && <th style={{ width: '10%' }}>Action</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {formData.items.map((item, index) => (
-                        <tr key={index} className="bills-item-row">
+                      {formData.items && formData.items.map((item, index) => (
+                        <tr key={index} className="bill-form-item-row">
                           <td>
                             <input
+                              className="bill-form-table-input"
                               type="text"
                               placeholder="Item name"
                               value={item.itemName || ''}
                               onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
-                              className="item-input"
+                              readOnly={!!item.poItemId}
+                              style={{
+                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
+                                cursor: item.poItemId ? 'not-allowed' : 'text'
+                              }}
                             />
                           </td>
                           <td>
                             <input
+                              className="bill-form-table-input"
                               type="text"
                               placeholder={item.poItemId ? "From PO" : "Description"}
                               value={item.description || ''}
                               onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
-                              className="item-input"
-                              readOnly={!!item.poItemId} // Make read-only if from PO
+                              readOnly={!!item.poItemId}
                               style={{
                                 backgroundColor: item.poItemId ? '#f8fafc' : 'white',
                                 cursor: item.poItemId ? 'not-allowed' : 'text'
@@ -1392,56 +1550,82 @@ const BillsReceived = () => {
                               </small>
                             )}
                           </td>
+                          {editMode && (
+                            <>
+                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
+                                {item.orderedQty || '-'}
+                              </td>
+                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
+                                {item.deliveredQty || '-'}
+                              </td>
+                              <td style={{ color: '#22c55e', fontSize: '13px', textAlign: 'center', fontWeight: '600' }}>
+                                {item.pendingQty || '-'}
+                              </td>
+                            </>
+                          )}
                           <td>
                             <input
+                              className="bill-form-table-input"
                               type="number"
                               placeholder="Qty"
                               value={item.quantity || ''}
                               onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                              className="item-input"
                               min="0"
+                              max={item.maxBillableQty || undefined}
                               step="0.01"
+                              readOnly={editMode && !item.poItemId}
                             />
+                            {editMode && item.maxBillableQty && (
+                              <small style={{ fontSize: '11px', color: '#f59e0b', display: 'block', marginTop: '2px' }}>
+                                Max: {item.maxBillableQty}
+                              </small>
+                            )}
                           </td>
                           <td>
                             <input
+                              className="bill-form-table-input"
                               type="number"
                               placeholder="Price"
                               value={item.unitPrice || ''}
                               onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                              className="item-input"
                               min="0"
                               step="0.01"
+                              readOnly={!!item.poItemId}
+                              style={{
+                                backgroundColor: item.poItemId ? '#f8fafc' : 'white'
+                              }}
                             />
                           </td>
                           <td>
                             <input
+                              className="bill-form-table-input"
                               type="number"
                               placeholder="Tax %"
                               value={item.taxPercent || ''}
                               onChange={(e) => handleUpdateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
-                              className="item-input"
                               min="0"
                               max="100"
                               step="0.01"
                             />
                           </td>
                           <td>
-                            <span className="line-total-display">
+                            <span className="bill-form-line-total">
                               {formatCurrency(calculateLineTotal(item))}
                             </span>
                           </td>
-                          <td>
-                            {formData.items.length > 1 && (
-                              <button
-                                className="procurement-bills-received-btn-remove-item"
-                                onClick={() => handleRemoveItem(index)}
-                                type="button"
-                              >
-                                <X size={16} />
-                              </button>
-                            )}
-                          </td>
+                          {!editMode && (
+                            <td>
+                              {formData.items.length > 1 && (
+                                <button
+                                  className="bill-form-remove-item-btn"
+                                  onClick={() => handleRemoveItem(index)}
+                                  type="button"
+                                >
+                                  <X size={16} />
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
@@ -1449,24 +1633,31 @@ const BillsReceived = () => {
                 </div>
 
                 {/* Bill Total */}
-                <div className="procurement-bills-received-bill-total">
+                <div className="bill-form-total-row">
                   <strong>Total Bill Amount:</strong>
-                  <span className="total-amount">{formatCurrency(calculateBillTotal())}</span>
+                  <span className="bill-form-total-amount">{formatCurrency(calculateBillTotal())}</span>
                 </div>
+                
+                {editMode && formData.poId && (
+                  <div className="bill-form-edit-warning">
+                    <strong>⚠️ Edit Mode:</strong> You can adjust quantities within the available limits shown above. Price and tax are locked for PO items.
+                  </div>
+                )}
               </div>
 
               {/* File Upload */}
-              <div className="procurement-bills-received-form-section">
-                <h3>Attach Bill Document</h3>
-                <div className="procurement-bills-received-form-group">
-                  <label>Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
+              <div className="bill-form-section">
+                <h3 className="bill-form-section-title">Attach Bill Document</h3>
+                <div className="bill-form-field">
+                  <label className="bill-form-label">Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
                   <input
+                    className="bill-form-file-input"
                     type="file"
                     accept=".pdf,.png,.jpg,.jpeg"
                     onChange={handleFileChange}
                   />
                   {selectedFile && (
-                    <p style={{ fontSize: '13px', color: '#22c55e', marginTop: '4px' }}>
+                    <p className="bill-form-file-selected">
                       ✓ {selectedFile.name} selected
                     </p>
                   )}
@@ -1474,11 +1665,12 @@ const BillsReceived = () => {
               </div>
 
               {/* Notes */}
-              <div className="procurement-bills-received-form-section">
-                <h3>Additional Notes</h3>
-                <div className="procurement-bills-received-form-group">
-                  <label>Notes (Optional)</label>
+              <div className="bill-form-section">
+                <h3 className="bill-form-section-title">Additional Notes</h3>
+                <div className="bill-form-field">
+                  <label className="bill-form-label">Notes (Optional)</label>
                   <textarea
+                    className="bill-form-textarea"
                     rows="3"
                     value={formData.notes || ''}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
@@ -1488,11 +1680,11 @@ const BillsReceived = () => {
               </div>
             </div>
 
-            <div className="procurement-bills-received-modal-actions">
-              <button className="procurement-bills-received-btn-primary" onClick={handleSaveBill}>
+            <div className="bill-form-modal-actions">
+              <button className="bill-form-save-btn" onClick={handleSaveBill}>
                 {editMode ? 'Update Bill' : 'Create Bill'}
               </button>
-              <button className="procurement-bills-received-btn-secondary" onClick={() => setShowCreateEditModal(false)}>
+              <button className="bill-form-cancel-btn" onClick={() => setShowCreateEditModal(false)}>
                 Cancel
               </button>
             </div>
@@ -1500,7 +1692,7 @@ const BillsReceived = () => {
         </div>
       )}
 
-      {/* Detail Drawer */}
+      {/* DETAIL DRAWER - FIXED */}
       {showDetailDrawer && selectedBill && (
         <div className="procurement-bills-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
           <div className="procurement-bills-received-drawer" onClick={(e) => e.stopPropagation()}>
@@ -1575,7 +1767,7 @@ const BillsReceived = () => {
                 </div>
               )}
 
-              {/* Line Items */}
+              {/* Line Items - FIXED with Item Name */}
               {selectedBill.items && selectedBill.items.length > 0 && (
                 <div className="procurement-bills-received-drawer-section">
                   <h3>Bill Line Items</h3>
@@ -1584,60 +1776,30 @@ const BillsReceived = () => {
                       <tr>
                         <th>Item Name</th>
                         <th>Description</th>
-                        <th>Ordered</th>
-                        <th>Delivered</th>
-                        <th>Pending</th>
-                        <th>Deliver Qty *</th>
+                        <th>Quantity</th>
                         <th>Price</th>
                         <th>Tax %</th>
                         <th>Line Total</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {formData.items.map((item, index) => (
+                      {selectedBill.items.map((item, index) => (
                         <tr key={index}>
                           <td>
-                            {item.itemName}
-                            {item.deliveryStatus && (
-                              <div style={{ fontSize: '11px', color: '#64748b' }}>
-                                {item.deliveryStatus}
+                            <strong>{item.itemName || 'N/A'}</strong>
+                            {item.poItemId && (
+                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                                PO Item #{item.poItemId}
                               </div>
                             )}
                           </td>
-                          <td>{item.description}</td>
-                          <td>{item.orderedQty}</td>
-                          <td style={{ color: '#64748b' }}>{item.deliveredQty}</td>
-                          <td style={{ color: '#22c55e', fontWeight: '600' }}>
-                            {item.pendingQty}
+                          <td style={{ fontSize: '13px', color: '#64748b' }}>
+                            {item.description || '-'}
                           </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={item.quantity}
-                              onChange={(e) => handleUpdateItem(index, 'quantity', e.target.value)}
-                              max={item.maxBillableQty}
-                              min="0"
-                              step="0.01"
-                            />
-                            <small>Max: {item.pendingQty}</small>
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={item.unitPrice}
-                              readOnly
-                              style={{ backgroundColor: '#f8fafc' }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              value={item.taxPercent}
-                              readOnly
-                              style={{ backgroundColor: '#f8fafc' }}
-                            />
-                          </td>
-                          <td>{formatCurrency(calculateLineTotal(item))}</td>
+                          <td>{item.quantity}</td>
+                          <td>{formatCurrency(item.unitPrice)}</td>
+                          <td>{item.taxPercent}%</td>
+                          <td>{formatCurrency(item.lineTotal || calculateLineTotal(item))}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1753,9 +1915,7 @@ const BillsReceived = () => {
                     </button>
                     <button
                       className="procurement-bills-received-btn-secondary"
-                      onClick={() => {
-                        handleMarkPaid(selectedBill.id);
-                      }}
+                      onClick={() => handleMarkPaid(selectedBill.id)}
                     >
                       <Check size={18} style={{ marginRight: '8px' }} />
                       Mark Fully Paid

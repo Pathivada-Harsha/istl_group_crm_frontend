@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, Star, AlertCircle, ShoppingCart } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, Star, AlertCircle, ShoppingCart, Trash2 } from 'lucide-react';
 import '../pages-css/Procurement-Quatation-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -13,7 +13,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth(); // Removed pagePermissions since it's not used
+  const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
@@ -26,6 +26,7 @@ const QuotationsReceived = () => {
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
@@ -38,6 +39,7 @@ const QuotationsReceived = () => {
   const [showUploadQuotationModal, setShowUploadQuotationModal] = useState(false);
   const [quotationFormData, setQuotationFormData] = useState(null);
   const [stats, setStats] = useState(null);
+  const [isEditMode, setIsEditMode] = useState(false); // NEW: Track edit mode
 
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -65,25 +67,24 @@ const QuotationsReceived = () => {
   const canCreate = 'CREATE';
   const canEdit = 'EDIT';
   const canApprove = 'APPROVE';
-  // Removed canDelete since it's not used
+  const canDelete = 'DELETE'; // NEW: Delete permission
 
   // Fetch quotations on mount and filter change
   useEffect(() => {
-    if (canView) {
-      fetchQuotations();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
-
+  if (canView) {
+    fetchQuotations();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
   // Fetch stats on mount
   useEffect(() => {
-    if (canView) {
-      fetchStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  if (canView) {
+    fetchStats();
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [groupName, subGroupName, projectId]); // Add filter dependencies
 
-  // Rest of your code...
+
   /**
    * Get auth headers
    */
@@ -94,14 +95,14 @@ const QuotationsReceived = () => {
   });
 
   /**
-   * Fetch quotations from backend - ALREADY CORRECT (uses pageSize state)
+   * Fetch quotations from backend
    */
   const fetchQuotations = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
         page: currentPage,
-        size: pageSize, // Uses the state value
+        size: pageSize,
         sortBy: 'uploadedAt',
         sortDirection: 'DESC'
       });
@@ -133,27 +134,34 @@ const QuotationsReceived = () => {
     }
   };
 
-  // ... rest of your functions ...
-
   /**
    * Fetch statistics
    */
   const fetchStats = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/stats`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
+  try {
+    // Build query params based on current filters
+    const params = new URLSearchParams();
+    
+    if (groupName) params.append('groupName', groupName);
+    if (subGroupName) params.append('subGroupName', subGroupName);
+    if (projectId) params.append('projectId', projectId);
+    
+    console.log('📊 Fetching stats with filters:', { groupName, subGroupName, projectId });
+    
+    const response = await fetch(`${API_BASE_URL}/api/quotations/stats?${params}`, {
+      credentials: "include",
+      headers: getAuthHeaders()
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+    if (response.ok) {
+      const data = await response.json();
+      setStats(data);
+      console.log('✅ Stats loaded:', data);
     }
-  };
-
+  } catch (error) {
+    console.error('Failed to fetch stats:', error);
+  }
+};
 
   /**
    * Fetch vendors filtered by group/subgroup
@@ -187,7 +195,6 @@ const QuotationsReceived = () => {
     }
   };
 
-
   /**
    * Fetch order book items by project
    */
@@ -214,16 +221,16 @@ const QuotationsReceived = () => {
         setOrderBookItems(data.data || []);
         console.log('✅ Loaded order book items:', data.data.length);
 
-        // Auto-populate items in quotation form if in create mode
-        if (quotationFormData && data.data && data.data.length > 0) {
+        // Auto-populate items in quotation form if in create mode (not edit mode)
+        if (quotationFormData && !isEditMode && data.data && data.data.length > 0) {
           const formattedItems = data.data.map(item => ({
             itemName: item.itemName,
             description: item.specification || item.description || '',
             quantity: item.quantity || 1,
-            unitPrice: 0, // Vendor will provide price
+            unitPrice: '', // Empty instead of 0
             taxPercent: item.taxPercent || 18,
             orderBookItemId: item.id,
-            included: true // By default, all items are included
+            included: true
           }));
 
           setQuotationFormData(prev => ({ ...prev, items: formattedItems }));
@@ -238,6 +245,7 @@ const QuotationsReceived = () => {
       setLoadingOrderItems(false);
     }
   };
+
   /**
    * Fetch modal groups
    */
@@ -301,8 +309,8 @@ const QuotationsReceived = () => {
   };
 
   /**
-  * Handle modal group change - UPDATED to fetch vendors
-  */
+   * Handle modal group change
+   */
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
     setModalGroupName(newGroupName);
@@ -310,7 +318,7 @@ const QuotationsReceived = () => {
     setModalProjectId('');
     setModalSubGroups([]);
     setModalProjects([]);
-    setOrderBookItems([]); // Clear order items
+    setOrderBookItems([]);
 
     if (quotationFormData) {
       setQuotationFormData({
@@ -318,13 +326,12 @@ const QuotationsReceived = () => {
         groupName: newGroupName,
         subGroupName: '',
         projectId: '',
-        items: [] // Clear items when group changes
+        items: isEditMode ? quotationFormData.items : [] // Preserve items in edit mode
       });
     }
 
     if (newGroupName) {
       fetchModalSubGroups(newGroupName);
-      // Fetch vendors filtered by group
       fetchVendors(newGroupName, null);
     } else {
       setVendors([]);
@@ -332,34 +339,33 @@ const QuotationsReceived = () => {
   };
 
   /**
- * Handle modal subgroup change - UPDATED to fetch vendors
- */
+   * Handle modal subgroup change
+   */
   const handleModalSubGroupChange = (e) => {
     const newSubGroupName = e.target.value;
     setModalSubGroupName(newSubGroupName);
     setModalProjectId('');
     setModalProjects([]);
-    setOrderBookItems([]); // Clear order items
+    setOrderBookItems([]);
 
     if (quotationFormData) {
       setQuotationFormData({
         ...quotationFormData,
         subGroupName: newSubGroupName,
         projectId: '',
-        items: [] // Clear items when subgroup changes
+        items: isEditMode ? quotationFormData.items : [] // Preserve items in edit mode
       });
     }
 
     if (modalGroupName && newSubGroupName) {
       fetchModalProjects(modalGroupName, newSubGroupName);
-      // Fetch vendors filtered by group and subgroup
       fetchVendors(modalGroupName, newSubGroupName);
     }
   };
 
   /**
- * Handle modal project change - UPDATED to fetch order items
- */
+   * Handle modal project change
+   */
   const handleModalProjectChange = (e) => {
     const newProjectId = e.target.value;
     setModalProjectId(newProjectId);
@@ -371,8 +377,8 @@ const QuotationsReceived = () => {
       });
     }
 
-    // Fetch order book items when project is selected
-    if (newProjectId) {
+    // Only fetch order items in create mode
+    if (newProjectId && !isEditMode) {
       fetchOrderBookItems(newProjectId);
     }
   };
@@ -384,7 +390,6 @@ const QuotationsReceived = () => {
     setShowNewVendorForm(type === 'new');
 
     if (type === 'new') {
-      // Clear vendor selection
       setQuotationFormData({
         ...quotationFormData,
         vendorId: null,
@@ -393,7 +398,6 @@ const QuotationsReceived = () => {
       });
       setSelectedVendorDetails(null);
     } else {
-      // Clear new vendor fields
       setQuotationFormData({
         ...quotationFormData,
         vendorName: '',
@@ -406,7 +410,6 @@ const QuotationsReceived = () => {
    * Handle new vendor contact change (restrict to 10 digits)
    */
   const handleNewVendorContactChange = (value) => {
-    // Remove non-digits and limit to 10
     const cleaned = value.replace(/\D/g, '').slice(0, 10);
     setQuotationFormData({
       ...quotationFormData,
@@ -424,6 +427,7 @@ const QuotationsReceived = () => {
       setQuotationFormData({ ...quotationFormData, items: newItems });
     }
   };
+
   /**
    * Handle vendor selection from dropdown
    */
@@ -431,26 +435,22 @@ const QuotationsReceived = () => {
     const vendorId = e.target.value ? parseInt(e.target.value) : null;
 
     if (vendorId) {
-      // Find the selected vendor from the vendors list
       const selectedVendor = vendors.find(v => v.id === vendorId);
 
       if (selectedVendor) {
-        // Set vendor details from dropdown data (includes phone)
         setSelectedVendorDetails({
           id: selectedVendor.id,
           name: selectedVendor.name,
           phone: selectedVendor.phone
         });
 
-        // Update form data with vendor ID and phone
         setQuotationFormData({
           ...quotationFormData,
           vendorId: vendorId,
-          vendorContact: selectedVendor.phone || '' // Auto-populate from dropdown
+          vendorContact: selectedVendor.phone || ''
         });
       }
     } else {
-      // Clear selection
       setSelectedVendorDetails(null);
       setQuotationFormData({
         ...quotationFormData,
@@ -472,7 +472,6 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       showError('File size exceeds 5MB limit');
       e.target.value = '';
@@ -481,7 +480,6 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Validate file type
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
     if (!allowedTypes.includes(file.type)) {
       showError('Only PDF and image files (JPG, PNG) are allowed');
@@ -493,7 +491,6 @@ const QuotationsReceived = () => {
 
     setSelectedFile(file);
 
-    // Create preview for images
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -516,7 +513,6 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      // Fetch full quotation details with items
       const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
         credentials: "include",
         headers: getAuthHeaders()
@@ -526,7 +522,6 @@ const QuotationsReceived = () => {
 
       const quotationData = await response.json();
 
-      // Initialize PO form with quotation data
       setPOFormData({
         quotationId: quotationData.id,
         quoteNo: quotationData.quoteNo,
@@ -541,16 +536,15 @@ const QuotationsReceived = () => {
         paymentTerms: quotationData.paymentTerms || '',
         shippingAddress: '',
         notes: quotationData.notes || '',
-        // Map quotation items with quantity selection
         items: quotationData.items.map(item => ({
           quotationItemId: item.id,
           itemName: item.itemName,
           description: item.description,
           quotedQuantity: item.quantity,
-          selectedQuantity: item.quantity, // Default to full quantity
+          selectedQuantity: item.quantity,
           unitPrice: item.unitPrice,
           taxPercent: item.taxPercent,
-          lineTotal: 0 // Will be calculated
+          lineTotal: 0
         }))
       });
 
@@ -573,7 +567,6 @@ const QuotationsReceived = () => {
     const item = newItems[index];
     const qty = parseFloat(quantity) || 0;
 
-    // Validate quantity doesn't exceed quoted quantity
     if (qty > item.quotedQuantity) {
       showError(`Quantity cannot exceed quoted quantity of ${item.quotedQuantity}`);
       return;
@@ -581,7 +574,6 @@ const QuotationsReceived = () => {
 
     item.selectedQuantity = qty;
 
-    // Calculate line total
     const subtotal = qty * item.unitPrice;
     const taxAmount = subtotal * (item.taxPercent / 100);
     item.lineTotal = subtotal + taxAmount;
@@ -615,13 +607,11 @@ const QuotationsReceived = () => {
    * Create PO from quotation
    */
   const handleCreatePOFromQuotation = async () => {
-    // Validation
     if (!poFormData.expectedDelivery) {
       showError('Expected delivery date is required');
       return;
     }
 
-    // Check if at least one item has quantity > 0
     const hasItems = poFormData.items.some(item => item.selectedQuantity > 0);
     if (!hasItems) {
       showError('Please select quantity for at least one item');
@@ -634,7 +624,6 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      // Filter out items with 0 quantity and prepare data
       const poItems = poFormData.items
         .filter(item => item.selectedQuantity > 0)
         .map(item => ({
@@ -683,7 +672,6 @@ const QuotationsReceived = () => {
       setShowCreatePOFromQuotationModal(false);
       setPOFormData(null);
 
-      // Update quotation status to "PO Created"
       await handleUpdateStatus(poFormData.quotationId, 'PO Created');
 
       fetchQuotations();
@@ -698,7 +686,7 @@ const QuotationsReceived = () => {
   };
 
   /**
-   * View quotation details - UPDATED TO SHOW FULL DETAILS
+   * View quotation details
    */
   const handleViewQuotation = async (quotation) => {
     if (!canView) {
@@ -720,6 +708,104 @@ const QuotationsReceived = () => {
       setShowDetailDrawer(true);
     } catch (error) {
       console.error('Failed to fetch quotation details:', error);
+      showError('Failed to load quotation details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * NEW: Edit quotation - Load data into modal
+   */
+  const handleEditQuotation = async (quotation) => {
+    if (!canEdit) {
+      showError('You do not have permission to edit quotations');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch full quotation details
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+        credentials: "include",
+        headers: getAuthHeaders()
+      });
+
+      if (!response.ok) throw new Error('Failed to fetch quotation details');
+
+      const data = await response.json();
+
+      // Set edit mode
+      setIsEditMode(true);
+
+      // Populate form with existing data
+      setQuotationFormData({
+        id: data.id, // Important: Store ID for update
+        rfqId: data.rfqId || '',
+        validTill: data.validTill || '',
+        groupName: data.groupName || '',
+        subGroupName: data.subGroupName || '',
+        projectId: data.projectId || '',
+        category: data.category || 'IT Equipment',
+        vendorId: data.vendorId || null,
+        vendorName: data.vendorName || '',
+        vendorContact: data.vendorContact || '',
+        vendorRating: data.vendorRating || 0,
+        deliveryTime: data.deliveryTime || '',
+        paymentTerms: data.paymentTerms || '',
+        warranty: data.warranty || '',
+        notes: data.notes || '',
+        status: data.status || 'New', // NEW: Include current status
+        items: data.items ? data.items.map(item => ({
+          id: item.id, // Store item ID for update
+          itemName: item.itemName || '',
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice || '',
+          taxPercent: item.taxPercent || 18,
+          included: true
+        })) : []
+      });
+
+      // Set vendor selection state
+      if (data.vendorId) {
+        setShowNewVendorForm(false);
+        setSelectedVendorDetails({
+          id: data.vendorId,
+          name: data.vendorName,
+          phone: data.vendorContact
+        });
+      } else if (data.vendorName) {
+        setShowNewVendorForm(true);
+      }
+
+      // Set modal dropdown values
+      setModalGroupName(data.groupName || '');
+      setModalSubGroupName(data.subGroupName || '');
+      setModalProjectId(data.projectId || '');
+
+      // Clear file (can't edit existing file)
+      setSelectedFile(null);
+      setFilePreview(null);
+
+      // Fetch dropdown data
+      fetchModalGroups();
+
+      if (data.groupName) {
+        fetchModalSubGroups(data.groupName);
+        fetchVendors(data.groupName, null);
+
+        if (data.subGroupName) {
+          fetchModalProjects(data.groupName, data.subGroupName);
+          fetchVendors(data.groupName, data.subGroupName);
+        }
+      }
+
+      // Open modal
+      setShowUploadQuotationModal(true);
+
+    } catch (error) {
+      console.error('Failed to load quotation for editing:', error);
       showError('Failed to load quotation details');
     } finally {
       setLoading(false);
@@ -763,37 +849,36 @@ const QuotationsReceived = () => {
   };
 
   /**
-   * Create PO from quotation
+   * NEW: Delete quotation (soft delete)
    */
-  const handleCreatePO = async (quotationId) => {
-    if (!canCreate) {
-      showError('You do not have permission to create purchase orders');
+  const handleDeleteQuotation = async (quotationId) => {
+    if (!canDelete) {
+      showError('You do not have permission to delete quotations');
       return;
     }
 
-    if (!window.confirm('Create Purchase Order from this quotation? This will also create/update the vendor.')) {
+    if (!window.confirm('Are you sure you want to delete this quotation? This action cannot be undone.')) {
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/create-po`, {
+      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, {
         credentials: "include",
-        method: 'POST',
+        method: 'DELETE',
         headers: getAuthHeaders()
       });
 
-      if (!response.ok) throw new Error('Failed to create PO');
+      if (!response.ok) throw new Error('Failed to delete quotation');
 
-      const data = await response.json();
-      showSuccess(`Purchase Order created successfully!`);
-      setShowDetailDrawer(false);
+      showSuccess('Quotation deleted successfully');
       fetchQuotations();
       fetchStats();
+      setShowDetailDrawer(false);
 
     } catch (error) {
-      console.error('Failed to create PO:', error);
-      showError('Failed to create Purchase Order');
+      console.error('Failed to delete quotation:', error);
+      showError('Failed to delete quotation');
     } finally {
       setLoading(false);
     }
@@ -808,6 +893,8 @@ const QuotationsReceived = () => {
       return;
     }
 
+    setIsEditMode(false); // Set to create mode
+
     setQuotationFormData({
       rfqId: '',
       validTill: '',
@@ -816,53 +903,50 @@ const QuotationsReceived = () => {
       projectId: projectId || '',
       category: 'IT Equipment',
       vendorId: null,
-      vendorName: '', // NEW
+      vendorName: '',
       vendorContact: '',
       vendorRating: 0,
       deliveryTime: '',
       paymentTerms: '',
       warranty: '',
       notes: '',
+      status: 'New', // NEW: Default status for new quotations
       items: []
     });
 
-    // Reset vendor selection
     setSelectedVendorDetails(null);
     setShowNewVendorForm(false);
     setVendors([]);
     setOrderBookItems([]);
 
-    // Set modal dropdown values
     setModalGroupName(groupName || '');
     setModalSubGroupName(subGroupName || '');
     setModalProjectId(projectId || '');
 
-    // Reset file
     setSelectedFile(null);
     setFilePreview(null);
 
-    // Fetch data
     fetchModalGroups();
 
     if (groupName) {
       fetchModalSubGroups(groupName);
-      fetchVendors(groupName, null); // Fetch vendors for group
+      fetchVendors(groupName, null);
 
       if (subGroupName) {
         fetchModalProjects(groupName, subGroupName);
-        fetchVendors(groupName, subGroupName); // Fetch vendors for group+subgroup
+        fetchVendors(groupName, subGroupName);
       }
     }
 
     if (projectId) {
-      fetchOrderBookItems(projectId); // Fetch order items for project
+      fetchOrderBookItems(projectId);
     }
 
     setShowUploadQuotationModal(true);
   };
 
   /**
-   * Save new quotation with file upload
+   * Save quotation (create or update)
    */
   const handleSaveQuotation = async () => {
     // Validation
@@ -871,9 +955,7 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // NEW: Check vendor type and validate accordingly
     if (!quotationFormData.vendorId) {
-      // Creating new vendor - require name and contact
       if (!quotationFormData.vendorName || !quotationFormData.vendorName.trim()) {
         showError('Vendor name is required when creating a new vendor');
         return;
@@ -889,7 +971,6 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // Check if valid till is in the past
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const validTillDate = new Date(quotationFormData.validTill);
@@ -905,14 +986,12 @@ const QuotationsReceived = () => {
       return;
     }
 
-    // NEW: Check if at least one item is included
     const includedItems = quotationFormData.items.filter(item => item.included !== false);
     if (includedItems.length === 0) {
       showError('Please include at least one item in the quotation');
       return;
     }
 
-    // Validate all included items have required fields
     for (let i = 0; i < includedItems.length; i++) {
       const item = includedItems[i];
       if (!item.itemName || !item.itemName.trim()) {
@@ -923,30 +1002,28 @@ const QuotationsReceived = () => {
         showError(`Item ${i + 1}: Quantity must be greater than 0`);
         return;
       }
-      if (item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) {
-        showError(`Item ${i + 1}: Unit price must be 0 or greater`);
+      if (item.unitPrice === null || item.unitPrice === undefined || item.unitPrice === '' || item.unitPrice < 0) {
+        showError(`Item ${i + 1}: Unit price is required and must be 0 or greater`);
         return;
       }
     }
 
     setLoading(true);
     try {
-      // Create FormData for file upload
       const formData = new FormData();
 
-      // Clean items - remove calculated fields and only include selected items
       const cleanedItems = includedItems.map(item => ({
+        id: item.id || null, // Include ID for updates
         itemName: item.itemName.trim(),
         description: item.description ? item.description.trim() : '',
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
+        unitPrice: parseFloat(item.unitPrice),
         taxPercent: item.taxPercent
       }));
 
-      // Add quotation data as JSON
       const quotationData = {
         vendorId: quotationFormData.vendorId || null,
-        vendorName: quotationFormData.vendorName ? quotationFormData.vendorName.trim() : null, // NEW
+        vendorName: quotationFormData.vendorName ? quotationFormData.vendorName.trim() : null,
         vendorContact: quotationFormData.vendorContact ? quotationFormData.vendorContact.trim() : null,
         rfqId: quotationFormData.rfqId ? quotationFormData.rfqId.trim() : null,
         validTill: quotationFormData.validTill,
@@ -958,23 +1035,28 @@ const QuotationsReceived = () => {
         paymentTerms: quotationFormData.paymentTerms ? quotationFormData.paymentTerms.trim() : null,
         warranty: quotationFormData.warranty ? quotationFormData.warranty.trim() : null,
         notes: quotationFormData.notes ? quotationFormData.notes.trim() : null,
+        status: quotationFormData.status, // NEW: Include status
         items: cleanedItems,
-        type: 'Procurement',
-        status: 'New'
+        type: 'Procurement'
       };
 
       formData.append('quotation', new Blob([JSON.stringify(quotationData)], {
         type: 'application/json'
       }));
 
-      // Add file if selected
       if (selectedFile) {
         formData.append('file', selectedFile);
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/quotations/procurement`, {
+      const url = isEditMode
+        ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}`
+        : `${API_BASE_URL}/api/quotations/procurement`;
+
+      const method = isEditMode ? 'PUT' : 'POST';
+
+      const response = await fetch(url, {
         credentials: "include",
-        method: 'POST',
+        method: method,
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
           'X-User-Id': user?.id || localStorage.getItem('userId'),
@@ -985,11 +1067,11 @@ const QuotationsReceived = () => {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to create quotation');
+        throw new Error(error.message || 'Failed to save quotation');
       }
 
       const data = await response.json();
-      showSuccess(`Quotation uploaded successfully!`);
+      showSuccess(isEditMode ? 'Quotation updated successfully!' : 'Quotation uploaded successfully!');
       setShowUploadQuotationModal(false);
       setSelectedFile(null);
       setFilePreview(null);
@@ -997,12 +1079,13 @@ const QuotationsReceived = () => {
       setVendors([]);
       setOrderBookItems([]);
       setShowNewVendorForm(false);
+      setIsEditMode(false);
       fetchQuotations();
       fetchStats();
 
     } catch (error) {
       console.error('Failed to save quotation:', error);
-      showError(error.message || 'Failed to upload quotation');
+      showError(error.message || 'Failed to save quotation');
     } finally {
       setLoading(false);
     }
@@ -1013,7 +1096,13 @@ const QuotationsReceived = () => {
     if (quotationFormData) {
       setQuotationFormData({
         ...quotationFormData,
-        items: [...quotationFormData.items, { itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
+        items: [...quotationFormData.items, {
+          itemName: '',
+          description: '',
+          quantity: 1,
+          unitPrice: '', // Empty instead of 0
+          taxPercent: 18
+        }]
       });
     }
   };
@@ -1037,19 +1126,23 @@ const QuotationsReceived = () => {
   const calculateQuotationTotal = () => {
     if (!quotationFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
 
-    const subtotal = quotationFormData.items.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity) || 0;
-      const price = parseFloat(item.unitPrice) || 0;
-      return sum + (qty * price);
-    }, 0);
+    const subtotal = quotationFormData.items
+      .filter(item => item.included !== false)
+      .reduce((sum, item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const price = parseFloat(item.unitPrice) || 0;
+        return sum + (qty * price);
+      }, 0);
 
-    const taxAmount = quotationFormData.items.reduce((sum, item) => {
-      const qty = parseFloat(item.quantity) || 0;
-      const price = parseFloat(item.unitPrice) || 0;
-      const tax = parseFloat(item.taxPercent) || 0;
-      const lineSubtotal = qty * price;
-      return sum + (lineSubtotal * tax / 100);
-    }, 0);
+    const taxAmount = quotationFormData.items
+      .filter(item => item.included !== false)
+      .reduce((sum, item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const price = parseFloat(item.unitPrice) || 0;
+        const tax = parseFloat(item.taxPercent) || 0;
+        const lineSubtotal = qty * price;
+        return sum + (lineSubtotal * tax / 100);
+      }, 0);
 
     const total = subtotal + taxAmount;
 
@@ -1196,7 +1289,6 @@ const QuotationsReceived = () => {
       )}
 
       {/* Quotations Table */}
-      {/* Quotations Table */}
       <div className="procurement-quotation-received-table-container">
         <table className="procurement-quotation-received-table">
           <thead>
@@ -1238,7 +1330,6 @@ const QuotationsReceived = () => {
                   </td>
                   <td>
                     {quotation.fileName ? (
-
                       <a href={`${API_BASE_URL}/api/quotations/${quotation.id}/file`}
                         target="_blank"
                         rel="noopener noreferrer"
@@ -1266,6 +1357,21 @@ const QuotationsReceived = () => {
                       >
                         <Eye size={16} />
                       </button>
+
+                      {/* NEW: Edit Button */}
+                      <button
+                        className="procurement-quotation-received-action-btn"
+                        onClick={() => handleEditQuotation(quotation)}
+                        title="Edit Quotation"
+                        disabled={!canEdit || quotation.status === 'PO Created'}
+                        style={{
+                          opacity: (canEdit && quotation.status !== 'PO Created') ? 1 : 0.4,
+                          cursor: (canEdit && quotation.status !== 'PO Created') ? 'pointer' : 'not-allowed'
+                        }}
+                      >
+                        <Edit2 size={16} />
+                      </button>
+
                       {quotation.status === 'New' && (
                         <button
                           className="procurement-quotation-received-action-btn"
@@ -1299,6 +1405,21 @@ const QuotationsReceived = () => {
                           <ShoppingCart size={16} />
                         </button>
                       )}
+
+                      {/* NEW: Delete Button */}
+                      <button
+                        className="procurement-quotation-received-action-btn"
+                        onClick={() => handleDeleteQuotation(quotation.id)}
+                        title="Delete Quotation"
+                        disabled={!canDelete || quotation.status === 'PO Created'}
+                        style={{
+                          opacity: (canDelete && quotation.status !== 'PO Created') ? 1 : 0.4,
+                          cursor: (canDelete && quotation.status !== 'PO Created') ? 'pointer' : 'not-allowed',
+                          color: '#ef4444'
+                        }}
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1307,9 +1428,7 @@ const QuotationsReceived = () => {
           </tbody>
         </table>
 
-
         {/* Pagination */}
-        {/* Pagination - UPDATED */}
         <div className="table-footer">
           <div className="table-footer-left">
             <span>
@@ -1324,8 +1443,7 @@ const QuotationsReceived = () => {
                 onChange={(e) => {
                   const newSize = parseInt(e.target.value);
                   setPageSize(newSize);
-                  setCurrentPage(0); // Reset to first page when changing page size
-                  // fetchQuotations will be called automatically by useEffect
+                  setCurrentPage(0);
                 }}
                 className="page-size-select"
               >
@@ -1370,9 +1488,9 @@ const QuotationsReceived = () => {
             </button>
           </div>
         </div>
-
       </div>
-      {/* Detail Drawer - UPDATED WITH FULL DETAILS */}
+
+      {/* Detail Drawer - UPDATED WITH DELETE BUTTON */}
       {showDetailDrawer && selectedQuotation && (
         <div className="procurement-quotation-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
           <div className="procurement-quotation-received-drawer" onClick={(e) => e.stopPropagation()}>
@@ -1605,6 +1723,20 @@ const QuotationsReceived = () => {
                     <ShoppingCart size={18} /> Create Purchase Order
                   </button>
                 )}
+
+                {/* Edit Button in Drawer */}
+                {selectedQuotation.status !== 'PO Created' && canEdit && (
+                  <button
+                    className="procurement-quotation-received-btn-secondary"
+                    onClick={() => {
+                      setShowDetailDrawer(false);
+                      handleEditQuotation(selectedQuotation);
+                    }}
+                  >
+                    <Edit2 size={18} /> Edit Quotation
+                  </button>
+                )}
+
                 {selectedQuotation.status !== 'Approved' && selectedQuotation.status !== 'Rejected' && selectedQuotation.status !== 'PO Created' && (
                   <>
                     {selectedQuotation.status === 'New' && canEdit && (
@@ -1634,18 +1766,35 @@ const QuotationsReceived = () => {
                     )}
                   </>
                 )}
+
+                {/* NEW: Delete Button in Drawer */}
+                {selectedQuotation.status !== 'PO Created' && canDelete && (
+                  <button
+                    className="procurement-quotation-received-btn-secondary"
+                    style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}
+                    onClick={() => handleDeleteQuotation(selectedQuotation.id)}
+                  >
+                    <Trash2 size={18} /> Delete Quotation
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Upload Modal - COMPLETE CODE WITH PROPER ALIGNMENT */}
+      {/* Upload/Edit Modal - CONTINUED IN NEXT FILE DUE TO LENGTH */}
+      {/* I'll create a separate continuation file for the modal */}
       {showUploadQuotationModal && quotationFormData && (
         <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowUploadQuotationModal(false)}>
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px' }}>
             <div className="procurement-quotation-received-modal-header">
-              <h2>Upload New Quotation</h2>
+              <h2>{isEditMode ? 'Edit Quotation' : 'Upload New Quotation'}</h2>
+              {isEditMode && quotationFormData.quoteNo && (
+                <p style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>
+                  Quotation: {quotationFormData.quoteNo}
+                </p>
+              )}
               <button className="procurement-quotation-received-modal-close" onClick={() => setShowUploadQuotationModal(false)}>
                 ✕
               </button>
@@ -1718,14 +1867,14 @@ const QuotationsReceived = () => {
                   </div>
                 )}
 
-                {orderBookItems.length > 0 && (
+                {!isEditMode && orderBookItems.length > 0 && (
                   <div style={{ marginTop: '10px', color: '#059669', fontSize: '13px' }}>
                     ✅ Loaded {orderBookItems.length} items from order book
                   </div>
                 )}
               </div>
 
-              {/* VENDOR SELECTION - NEW/EXISTING */}
+              {/* VENDOR SELECTION */}
               <div className="procurement-quotation-received-form-section">
                 <h3>🏢 Vendor Information</h3>
 
@@ -1781,7 +1930,6 @@ const QuotationsReceived = () => {
                       )}
                     </div>
 
-                    {/* Display Selected Vendor Details */}
                     {quotationFormData.vendorId && selectedVendorDetails && (
                       <div className="procurement-quotation-received-form-group">
                         <label>Selected Vendor Details</label>
@@ -1886,6 +2034,27 @@ const QuotationsReceived = () => {
                       <option value="Office Supplies">Office Supplies</option>
                     </select>
                   </div>
+
+                  {/* NEW: Status Selection */}
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Status *</label>
+                    <select
+                      value={quotationFormData.status}
+                      onChange={(e) => setQuotationFormData({ ...quotationFormData, status: e.target.value })}
+                    >
+                      <option value="New">New</option>
+                      <option value="Under Review">Under Review</option>
+                      <option value="Shortlisted">Shortlisted</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Rejected">Rejected</option>
+                      {isEditMode && quotationFormData.status === 'PO Created' && (
+                        <option value="PO Created">PO Created</option>
+                      )}
+                    </select>
+                    <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                      Set the current status of this quotation
+                    </small>
+                  </div>
                 </div>
 
                 <div className="procurement-quotation-received-form-row">
@@ -1962,10 +2131,15 @@ const QuotationsReceived = () => {
                     <img src={filePreview} alt="Preview" style={{ maxWidth: '200px', marginTop: '10px' }} />
                   )}
                   <small style={{ color: '#64748b' }}>Max size: 5MB | Formats: PDF, JPG, PNG</small>
+                  {isEditMode && (
+                    <div style={{ marginTop: '8px', color: '#f59e0b', fontSize: '13px' }}>
+                      ℹ️ Uploading a new file will replace the existing file (if any)
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* ITEMS SECTION - WITH TOGGLE */}
+              {/* ITEMS SECTION - WITH IMPROVED INPUTS */}
               <div className="procurement-quotation-received-form-section">
                 <div className="procurement-quotation-received-section-header">
                   <h3>
@@ -1995,15 +2169,17 @@ const QuotationsReceived = () => {
                   }}>
                     <div style={{ fontSize: '48px', marginBottom: '10px' }}>📦</div>
                     <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '5px', color: '#64748b' }}>
-                      No Items Loaded
+                      No Items Added
                     </div>
                     <div style={{ fontSize: '14px', color: '#94a3b8' }}>
-                      Select a project above to load items from order book, or click "Add Item" to add manually
+                      {isEditMode
+                        ? 'Click "Add Item" to add items to this quotation'
+                        : 'Select a project above to load items from order book, or click "Add Item" to add manually'}
                     </div>
                   </div>
                 ) : (
                   <>
-                    {orderBookItems.length > 0 && (
+                    {!isEditMode && orderBookItems.length > 0 && (
                       <div style={{
                         marginBottom: '15px',
                         padding: '12px',
@@ -2082,6 +2258,7 @@ const QuotationsReceived = () => {
                                   <input
                                     type="number"
                                     min="1"
+                                    placeholder="Qty"
                                     value={item.quantity}
                                     onChange={(e) => handleUpdateQuotationItem(index, 'quantity', parseFloat(e.target.value) || 1)}
                                     className="table-input text-center"
@@ -2089,12 +2266,14 @@ const QuotationsReceived = () => {
                                   />
                                 </td>
                                 <td>
+                                  {/* IMPROVED: Empty placeholder, better UX */}
                                   <input
                                     type="number"
                                     min="0"
                                     step="0.01"
+                                    placeholder="Price"
                                     value={item.unitPrice}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                    onChange={(e) => handleUpdateQuotationItem(index, 'unitPrice', e.target.value)}
                                     className="table-input text-right"
                                     disabled={!included}
                                   />
@@ -2117,7 +2296,7 @@ const QuotationsReceived = () => {
                                   fontWeight: '600',
                                   color: included ? '#1e293b' : '#94a3b8'
                                 }}>
-                                  {included ? formatCurrency(totalWithTax) : '-'}
+                                  {included && item.unitPrice ? formatCurrency(totalWithTax) : '-'}
                                 </td>
                                 <td className="text-center">
                                   {quotationFormData.items.length > 1 && (
@@ -2138,32 +2317,15 @@ const QuotationsReceived = () => {
                       </table>
                     </div>
 
-                    {/* Quotation Summary - Only count included items */}
+                    {/* Quotation Summary */}
                     <div className="procurement-quotation-received-quote-summary">
                       <div className="procurement-quotation-received-summary-row">
                         <span>Subtotal:</span>
-                        <span>{formatCurrency(
-                          quotationFormData.items
-                            .filter(item => item.included !== false)
-                            .reduce((sum, item) => {
-                              const qty = parseFloat(item.quantity) || 0;
-                              const price = parseFloat(item.unitPrice) || 0;
-                              return sum + (qty * price);
-                            }, 0)
-                        )}</span>
+                        <span>{formatCurrency(calculateQuotationTotal().subtotal)}</span>
                       </div>
                       <div className="procurement-quotation-received-summary-row">
                         <span>Tax Amount:</span>
-                        <span>{formatCurrency(
-                          quotationFormData.items
-                            .filter(item => item.included !== false)
-                            .reduce((sum, item) => {
-                              const qty = parseFloat(item.quantity) || 0;
-                              const price = parseFloat(item.unitPrice) || 0;
-                              const tax = parseFloat(item.taxPercent) || 0;
-                              return sum + ((qty * price) * tax / 100);
-                            }, 0)
-                        )}</span>
+                        <span>{formatCurrency(calculateQuotationTotal().taxAmount)}</span>
                       </div>
                       <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total">
                         <span><strong>Total Value:</strong></span>
@@ -2181,11 +2343,14 @@ const QuotationsReceived = () => {
                 onClick={handleSaveQuotation}
                 disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}
               >
-                Upload Quotation
+                {isEditMode ? 'Update Quotation' : 'Upload Quotation'}
               </button>
               <button
                 className="procurement-quotation-received-btn-secondary"
-                onClick={() => setShowUploadQuotationModal(false)}
+                onClick={() => {
+                  setShowUploadQuotationModal(false);
+                  setIsEditMode(false);
+                }}
               >
                 Cancel
               </button>
@@ -2194,7 +2359,7 @@ const QuotationsReceived = () => {
         </div>
       )}
 
-      {/* Create PO Modal */}
+      {/* Create PO Modal - KEEP AS IS FROM ORIGINAL */}
       {showCreatePOFromQuotationModal && poFormData && (
         <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowCreatePOFromQuotationModal(false)}>
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
@@ -2320,6 +2485,7 @@ const QuotationsReceived = () => {
                               type="number"
                               min="0"
                               max={item.quotedQuantity}
+                              placeholder="Qty"
                               value={item.selectedQuantity}
                               onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)}
                               className="table-input text-center"
@@ -2375,6 +2541,8 @@ const QuotationsReceived = () => {
       )}
     </div>
   );
+
 };
+
 
 export default QuotationsReceived;
