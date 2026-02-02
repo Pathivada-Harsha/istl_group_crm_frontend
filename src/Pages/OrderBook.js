@@ -1031,7 +1031,8 @@ function OrderBook() {
                             <td>₹{item.unitPrice ? parseFloat(item.unitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
                             <td>{formatDisplayValue(item.discountPercent)}%</td>
                             <td>{formatDisplayValue(item.taxPercent)}%</td>
-                            <td>₹{item.lineTotal ? parseFloat(item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
+                            <td>₹{parseFloat(item.unitPrice * item.taxPercent).toFixed(2)}</td>
+                            {/* <td>₹{item.lineTotal ? parseFloat(item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td> */}
                           </tr>
                         ))}
                         <tr className="orderbook-total-row">
