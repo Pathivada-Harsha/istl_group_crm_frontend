@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag, Briefcase, Truck } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, IndianRupee,Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag, Briefcase, Truck } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -624,7 +624,7 @@ const VendorManagement = () => {
     { 
       title: 'Total Purchase Value', 
       value: formatCurrency(stats.totalPurchaseValue), 
-      icon: <DollarSign size={32} />, 
+      icon: <IndianRupee size={32} />, 
       color: '#8b5cf6' 
     },
     { 
@@ -970,7 +970,7 @@ const VendorManagement = () => {
                     </div>
                   </div>
                   <div className="vendor-stat-card">
-                    <DollarSign size={24} />
+                    <IndianRupee size={24} />
                     <div>
                       <div className="stat-value">{formatCurrency(selectedVendor.totalPurchaseValue)}</div>
                       <div className="stat-label">Total Purchase Value</div>
@@ -984,7 +984,7 @@ const VendorManagement = () => {
                     </div>
                   </div>
                   <div className="vendor-stat-card">
-                    <DollarSign size={24} />
+                    <IndianRupee size={24} />
                     <div>
                       <div className="stat-value">{formatCurrency(selectedVendor.lastPurchaseAmount)}</div>
                       <div className="stat-label">Last Purchase Amount</div>
