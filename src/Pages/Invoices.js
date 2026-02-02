@@ -68,7 +68,7 @@ const InvoicesManagementPage = () => {
     subGroupId: '',
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
-    items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+    items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
     status: 'DRAFT',
     company: 'ISTL'
   });
@@ -502,7 +502,7 @@ const fetchStats = async () => {
       subGroupId: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+      items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
       status: 'DRAFT',
       company: 'ISTL'
     });
@@ -527,7 +527,7 @@ const fetchStats = async () => {
       subGroupId: invoice.subGroupId,
       invoiceDate: invoice.invoiceDate.split('T')[0],
       dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
-      items: invoice.items || [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
+      items: invoice.items || [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
       status: invoice.status,
       company: invoice.company || 'ISTL'
     });
@@ -542,7 +542,7 @@ const fetchStats = async () => {
   const addItem = () => {
     setFormData({
       ...formData,
-      items: [...formData.items, { description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }]
+      items: [...formData.items, { description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }]
     });
   };
 
@@ -1322,8 +1322,8 @@ const fetchStats = async () => {
                           <input
                             type="number"
                             value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 1)}
-                            min="1"
+                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
+                       
                           />
                         </div>
 
@@ -1332,9 +1332,8 @@ const fetchStats = async () => {
                           <input
                             type="number"
                             value={item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
-                            min="0"
-                            step="0.01"
+                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
+                           
                           />
                         </div>
 
@@ -1446,9 +1445,7 @@ const fetchStats = async () => {
                   <input
                     type="number"
                     value={paymentData.amount}
-                    onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
-                    min="0"
-                    step="0.01"
+                    onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) })}                  
                     max={selectedInvoice.balanceAmount}
                   />
                 </div>
