@@ -1,4 +1,4 @@
-// Customers.js - Complete with Permissions
+// Customers.js - Complete with Permissions and Validations
 import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/Sales-Customer.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
@@ -10,12 +10,26 @@ import CrmPreloader from "../components/preLoader.js";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+// Indian States List
+const INDIAN_STATES = [
+  'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
+  'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh', 'Jharkhand', 'Karnataka',
+  'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram',
+  'Nagaland', 'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu',
+  'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand', 'West Bengal',
+  'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
+].sort();
+
 const CustomerDatabase = () => {
   const isFirstRender = useRef(true);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [showFollowupModal, setShowFollowupModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteCustomerId, setDeleteCustomerId] = useState(null);
+  const [deleteCustomerName, setDeleteCustomerName] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [selectedStatus, setSelectedStatus] = useState('All');
@@ -31,12 +45,12 @@ const CustomerDatabase = () => {
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions } = useAuth();
-  const [groups, setGroups] = useState([]);        // ADD THIS
-  const [subGroups, setSubGroups] = useState([]); // ADD THIS
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+
   // Extract permissions
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
   const canView = customersPermissions.includes('VIEW');
-
   const canCreate = customersPermissions.includes('CREATE');
   const canEdit = customersPermissions.includes('EDIT');
   const canDelete = customersPermissions.includes('DELETE');
@@ -51,7 +65,7 @@ const CustomerDatabase = () => {
     name: '',
     companyName: '',
     groupName: '',
-    subGroupName: '',    // ADD THIS LINE
+    subGroupName: '',
     contactPerson: '',
     designation: '',
     email: '',
@@ -76,6 +90,50 @@ const CustomerDatabase = () => {
     notes: ''
   });
 
+  /**
+   * Format date to DD-MM-YYYY HH:MM:SS
+   */
+  const formatDateTime = (dateString) => {
+    if (!dateString) return 'N/A';
+    
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+    
+    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+  };
+
+  /**
+   * Validate and format phone number (only digits)
+   */
+  const handlePhoneChange = (value, field) => {
+    const cleaned = value.replace(/\D/g, ''); // Remove non-digits
+    if (cleaned.length <= 10) {
+      setFormData({ ...formData, [field]: cleaned });
+    }
+  };
+
+  /**
+   * Validate and format email (convert to lowercase)
+   */
+  const handleEmailChange = (value) => {
+    setFormData({ ...formData, email: value.toLowerCase() });
+  };
+
+  /**
+   * Validate and format PAN (10 chars, uppercase)
+   */
+  const handlePanChange = (value) => {
+    const cleaned = value.replace(/[^A-Za-z0-9]/g, ''); // Remove special chars
+    if (cleaned.length <= 10) {
+      setFormData({ ...formData, pan: cleaned.toUpperCase() });
+    }
+  };
+
   const fetchWithHeaders = async (url, options = {}) => {
     const headers = {
       'Content-Type': 'application/json',
@@ -97,6 +155,7 @@ const CustomerDatabase = () => {
 
     return response.json();
   };
+
   const fetchGroups = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
@@ -118,6 +177,7 @@ const CustomerDatabase = () => {
       setGroups([]);
     }
   };
+
   const fetchSubGroupsForForm = async (group) => {
     if (!group) {
       setSubGroups([]);
@@ -144,6 +204,7 @@ const CustomerDatabase = () => {
       setSubGroups([]);
     }
   };
+
   useEffect(() => {
     if (canView) {
       fetchCustomers();
@@ -157,6 +218,7 @@ const CustomerDatabase = () => {
       fetchCustomers();
     }
   }, [groupName, subGroupName, currentPage, rowsPerPage, canView]);
+
   useEffect(() => {
     if (formData.groupName) {
       fetchSubGroupsForForm(formData.groupName);
@@ -164,6 +226,7 @@ const CustomerDatabase = () => {
       setSubGroups([]);
     }
   }, [formData.groupName]);
+
   const fetchCustomers = async () => {
     setLoading(true);
     setError(null);
@@ -256,13 +319,11 @@ const CustomerDatabase = () => {
   };
 
   useEffect(() => {
-    // ⛔ Skip first render (StrictMode safe)
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
 
-    // ⛔ Skip when filters are default
     const isDefaultFilter =
       !searchTerm &&
       selectedGroup === 'All' &&
@@ -311,7 +372,7 @@ const CustomerDatabase = () => {
       name: customer.name,
       companyName: customer.companyName || '',
       groupName: customer.groupName || '',
-      subGroupName: customer.subGroupName || '',  // ADD THIS LINE
+      subGroupName: customer.subGroupName || '',
       contactPerson: customer.contactPerson || '',
       designation: customer.designation || '',
       email: customer.email,
@@ -330,25 +391,32 @@ const CustomerDatabase = () => {
     setIsAddFormOpen(true);
   };
 
-  const handleDelete = async (customerId) => {
+  const handleDeleteClick = (customerId, customerName) => {
     if (!canDelete) {
       showError('You do not have permission to delete customers');
       return;
     }
+    setDeleteCustomerId(customerId);
+    setDeleteCustomerName(customerName);
+    setShowDeleteModal(true);
+  };
 
-    if (window.confirm('Are you sure you want to delete this customer?')) {
-      try {
-        const data = await fetchWithHeaders(`${API_BASE_URL}/customers/delete/${customerId}`, {
-          method: 'DELETE'
-        });
+  const handleDelete = async () => {
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/customers/delete/${deleteCustomerId}`, {
+        method: 'DELETE'
+      });
 
-        if (data.success) {
-          showSuccess('Customer deleted successfully');
-          fetchCustomers();
-        }
-      } catch (err) {
-        showError(err.message || 'Error deleting customer');
+      if (data.success) {
+        showSuccess('Customer deleted successfully');
+        setShowDeleteModal(false);
+        setDeleteCustomerId(null);
+        setDeleteCustomerName('');
+        fetchCustomers();
       }
+    } catch (err) {
+      showError(err.message || 'Error deleting customer');
+      setShowDeleteModal(false);
     }
   };
 
@@ -362,6 +430,18 @@ const CustomerDatabase = () => {
 
     if (!formData.id && !canCreate) {
       showError('You do not have permission to create customers');
+      return;
+    }
+
+    // Validate phone
+    if (formData.phone.length !== 10) {
+      showError('Phone number must be exactly 10 digits');
+      return;
+    }
+
+    // Validate PAN if provided
+    if (formData.pan && formData.pan.length !== 10) {
+      showError('PAN must be exactly 10 characters');
       return;
     }
 
@@ -450,7 +530,7 @@ const CustomerDatabase = () => {
       name: '',
       companyName: '',
       groupName: '',
-      subGroupName: '',  // ADD THIS LINE
+      subGroupName: '',
       contactPerson: '',
       designation: '',
       email: '',
@@ -563,7 +643,6 @@ const CustomerDatabase = () => {
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = Math.min(startIndex + rowsPerPage, totalCustomers);
 
-  // Check if user has no permissions at all
   if (!canView) {
     return (
       <div className="leads-enquiries-container">
@@ -600,7 +679,72 @@ const CustomerDatabase = () => {
       )}
 
       {/* KPI Cards */}
-      <div style={{
+      
+
+      <div className="leads-enquiries-action-bar">
+        <div className="leads-enquiries-search-wrapper">
+          <svg className="leads-enquiries-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            placeholder="Search by name, company, phone, email, GST..."
+            className="leads-enquiries-search-input"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+
+        <div className="leads-enquiries-filters">
+          <select className="leads-enquiries-filter-select" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
+            <option value="All">All Groups</option>
+            <option value="CCMS">CCMS</option>
+            <option value="Solar">Solar</option>
+            <option value="EPC">EPC</option>
+            <option value="IoT">IoT</option>
+            <option value="Hybrid">Hybrid</option>
+            <option value="Others">Others</option>
+          </select>
+
+          <select className="leads-enquiries-filter-select" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
+            <option value="All">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+            <option value="Prospect">Prospect</option>
+            <option value="Lead">Lead</option>
+          </select>
+        </div>
+
+        <div className="leads-enquiries-action-buttons">
+          <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
+            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Export
+          </button>
+          <button
+            className={`leads-enquiries-btn leads-enquiries-btn-primary ${!canCreate ? 'leads-enquiries-btn-disabled' : ''}`}
+            onClick={() => {
+              if (canCreate) {
+                resetForm();
+                setIsAddFormOpen(true);
+              } else {
+                showError('You do not have permission to create customers');
+              }
+            }}
+            disabled={!canCreate}
+            title={!canCreate ? 'No permission to create customers' : 'Add New Customer'}
+          >
+            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add New Customer
+          </button>
+        </div>
+      </div>
+
+
+<div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '1rem',
@@ -707,67 +851,6 @@ const CustomerDatabase = () => {
         </div>
       </div>
 
-      <div className="leads-enquiries-action-bar">
-        <div className="leads-enquiries-search-wrapper">
-          <svg className="leads-enquiries-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <input
-            type="text"
-            placeholder="Search by name, company, phone, email, GST..."
-            className="leads-enquiries-search-input"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-
-        <div className="leads-enquiries-filters">
-          <select className="leads-enquiries-filter-select" value={selectedGroup} onChange={(e) => setSelectedGroup(e.target.value)}>
-            <option value="All">All Groups</option>
-            <option value="CCMS">CCMS</option>
-            <option value="Solar">Solar</option>
-            <option value="EPC">EPC</option>
-            <option value="IoT">IoT</option>
-            <option value="Hybrid">Hybrid</option>
-            <option value="Others">Others</option>
-          </select>
-
-          <select className="leads-enquiries-filter-select" value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)}>
-            <option value="All">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-            <option value="Prospect">Prospect</option>
-            <option value="Lead">Lead</option>
-          </select>
-        </div>
-
-        <div className="leads-enquiries-action-buttons">
-          <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
-            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Export
-          </button>
-          <button
-            className={`leads-enquiries-btn leads-enquiries-btn-primary ${!canCreate ? 'leads-enquiries-btn-disabled' : ''}`}
-            onClick={() => {
-              if (canCreate) {
-                resetForm();
-                setIsAddFormOpen(true);
-              } else {
-                showError('You do not have permission to create customers');
-              }
-            }}
-            disabled={!canCreate}
-            title={!canCreate ? 'No permission to create customers' : 'Add New Customer'}
-          >
-            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add New Customer
-          </button>
-        </div>
-      </div>
 
       <div className="leads-enquiries-table-card">
         <div className="leads-enquiries-table-wrapper">
@@ -798,7 +881,7 @@ const CustomerDatabase = () => {
             <tbody>
               {customers.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="text-center py-4">
+                  <td colSpan="13" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
                     {loading ? 'Loading...' : 'No customers found'}
                   </td>
                 </tr>
@@ -812,31 +895,37 @@ const CustomerDatabase = () => {
                         onChange={() => handleSelectRow(customer.id)}
                       />
                     </td>
-                    <td className="leads-enquiries-font-medium">{customer.customerCode}</td>
-                    <td className="leads-enquiries-font-medium">{customer.name}</td>
-                    <td>{customer.companyName || '-'}</td>
+                    <td className="leads-enquiries-font-medium">{customer.customerCode || 'N/A'}</td>
+                    <td className="leads-enquiries-font-medium">{customer.name || 'N/A'}</td>
+                    <td style={{ textAlign: customer.companyName ? 'left' : 'center' }}>
+                      {customer.companyName || 'N/A'}
+                    </td>
                     <td>
                       <span className={`leads-enquiries-badge badge-${getGroupColor(customer.groupName)}`}>
                         {customer.groupName || 'Others'}
                       </span>
                     </td>
-                    <td>{customer.subGroupName || '-'}</td>
-                    <td>{customer.phone}</td>
-                    <td>{customer.email}</td>
-                    <td>{customer.city ? `${customer.city}, ${customer.state}` : '-'}</td>
+                    <td style={{ textAlign: customer.subGroupName ? 'left' : 'center' }}>
+                      {customer.subGroupName || 'N/A'}
+                    </td>
+                    <td>{customer.phone || 'N/A'}</td>
+                    <td>{customer.email || 'N/A'}</td>
+                    <td style={{ textAlign: customer.city ? 'left' : 'center' }}>
+                      {customer.city ? `${customer.city}, ${customer.state}` : 'N/A'}
+                    </td>
                     <td>
                       <span className={`leads-enquiries-badge status-${getStatusColor(customer.status)}`}>
                         {customer.status}
                       </span>
                     </td>
-                    <td>
-                      {customer.hasPendingFollowups && (
+                    <td style={{ textAlign: customer.hasPendingFollowups ? 'left' : 'center' }}>
+                      {customer.hasPendingFollowups ? (
                         <span className="leads-enquiries-badge leads-enquiries-badge-proposal">
                           {customer.pendingFollowupsCount} Pending
                         </span>
-                      )}
+                      ) : 'N/A'}
                     </td>
-                    <td>{customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : '-'}</td>
+                    <td>{formatDateTime(customer.createdAt)}</td>
                     <td>
                       <div className="leads-enquiries-action-buttons-cell">
                         {canView && (
@@ -863,7 +952,7 @@ const CustomerDatabase = () => {
                         </button>
                         <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleDelete(customer.id)}
+                          onClick={() => handleDeleteClick(customer.id, customer.name)}
                           title={!canDelete ? 'No permission to delete' : 'Delete'}
                           disabled={!canDelete}
                         >
@@ -921,13 +1010,46 @@ const CustomerDatabase = () => {
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="leads-enquiries-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="customer-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="customer-delete-modal-icon">
+              <div className="customer-delete-icon-circle">
+                <span>!</span>
+              </div>
+            </div>
+            <h2 className="customer-delete-modal-title">Delete Customer</h2>
+            <p className="customer-delete-modal-text">
+              Are you sure you want to delete customer "{deleteCustomerName}"?
+              <br />
+              This action cannot be undone.
+            </p>
+            <div className="customer-delete-modal-actions">
+              <button
+                className="leads-enquiries-btn leads-enquiries-btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="leads-enquiries-btn customer-delete-btn"
+                onClick={handleDelete}
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Customer Modal */}
       {isAddFormOpen && (
-        <div className="leads-enquiries-modal-overlay" onClick={() => setIsAddFormOpen(false)}>
-          <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="leads-enquiries-modal-overlay">
+          <div className="leads-enquiries-modal leads-enquiries-modal-xlarge" onClick={(e) => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>{formData.id ? 'Edit Customer' : 'Add New Customer'}</h2>
-              <button className="leads-enquiries-modal-close" onClick={() => setIsAddFormOpen(false)}>
+              <button className="leads-enquiries-modal-close" onClick={() => { setIsAddFormOpen(false); resetForm(); }}>
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -939,19 +1061,47 @@ const CustomerDatabase = () => {
                 <div className="leads-enquiries-form-grid">
                   <div className="leads-enquiries-form-group">
                     <label>Customer Name *</label>
-                    <input type="text" required value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} />
+                    <input 
+                      type="text" 
+                      required 
+                      value={formData.name} 
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Company Name</label>
-                    <input type="text" value={formData.companyName} onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.companyName} 
+                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} 
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Email *</label>
-                    <input type="email" required value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} />
+                    <input 
+                      type="email" 
+                      required 
+                      value={formData.email} 
+                      onChange={(e) => handleEmailChange(e.target.value)}
+                      placeholder="email@example.com"
+                    />
+                    <small style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                      Email will be converted to lowercase
+                    </small>
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Phone *</label>
-                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                    <input 
+                      type="tel" 
+                      required 
+                      value={formData.phone} 
+                      onChange={(e) => handlePhoneChange(e.target.value, 'phone')}
+                      placeholder="10 digit mobile number"
+                      maxLength="10"
+                    />
+                    <small style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                      Enter 10 digit mobile number (digits only)
+                    </small>
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Group</label>
@@ -993,43 +1143,102 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Contact Person</label>
-                    <input type="text" value={formData.contactPerson} onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.contactPerson} 
+                      onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })} 
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Designation</label>
-                    <input type="text" value={formData.designation} onChange={(e) => setFormData({ ...formData, designation: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.designation} 
+                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })} 
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Alternate Phone</label>
-                    <input type="tel" value={formData.altPhone} onChange={(e) => setFormData({ ...formData, altPhone: e.target.value })} />
+                    <input 
+                      type="tel" 
+                      value={formData.altPhone} 
+                      onChange={(e) => handlePhoneChange(e.target.value, 'altPhone')}
+                      placeholder="10 digit mobile number"
+                      maxLength="10"
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Website</label>
-                    <input type="url" value={formData.website} onChange={(e) => setFormData({ ...formData, website: e.target.value })} />
+                    <input 
+                      type="url" 
+                      value={formData.website} 
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })} 
+                      placeholder="https://example.com"
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>GST Number</label>
-                    <input type="text" value={formData.gstNumber} onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.gstNumber} 
+                      onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })}
+                      placeholder="22AAAAA0000A1Z5"
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>PAN Number</label>
-                    <input type="text" value={formData.pan} onChange={(e) => setFormData({ ...formData, pan: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.pan} 
+                      onChange={(e) => handlePanChange(e.target.value)}
+                      placeholder="ABCDE1234F"
+                      maxLength="10"
+                    />
+                    <small style={{ fontSize: '11px', color: '#64748b', marginTop: '4px' }}>
+                      Enter 10 character PAN (auto uppercase)
+                    </small>
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>City</label>
-                    <input type="text" value={formData.city} onChange={(e) => setFormData({ ...formData, city: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.city} 
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })} 
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>State</label>
-                    <input type="text" value={formData.state} onChange={(e) => setFormData({ ...formData, state: e.target.value })} />
+                    <select 
+                      value={formData.state} 
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value })}
+                    >
+                      <option value="">Select State</option>
+                      {INDIAN_STATES.map(state => (
+                        <option key={state} value={state}>{state}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Pincode</label>
-                    <input type="text" value={formData.pincode} onChange={(e) => setFormData({ ...formData, pincode: e.target.value })} />
+                    <input 
+                      type="text" 
+                      value={formData.pincode} 
+                      onChange={(e) => {
+                        const cleaned = e.target.value.replace(/\D/g, '');
+                        if (cleaned.length <= 6) {
+                          setFormData({ ...formData, pincode: cleaned });
+                        }
+                      }}
+                      maxLength="6"
+                      placeholder="6 digit pincode"
+                    />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select value={formData.assignedTo || ''} onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}>
+                    <select 
+                      value={formData.assignedTo || ''} 
+                      onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}
+                    >
                       <option value="">Select Member</option>
                       {users.map(user => (
                         <option key={user.id} value={user.id}>{user.name}</option>
@@ -1039,15 +1248,28 @@ const CustomerDatabase = () => {
                 </div>
                 <div className="leads-enquiries-form-group">
                   <label>Address</label>
-                  <textarea rows={3} value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} placeholder="Enter full address..." />
+                  <textarea 
+                    rows={3} 
+                    value={formData.address} 
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
+                    placeholder="Enter full address..." 
+                  />
                 </div>
               </div>
 
               <div className="leads-enquiries-form-actions">
-                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setIsAddFormOpen(false)}>
+                <button 
+                  type="button" 
+                  className="leads-enquiries-btn leads-enquiries-btn-secondary" 
+                  onClick={() => { setIsAddFormOpen(false); resetForm(); }}
+                >
                   Cancel
                 </button>
-                <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading}>
+                <button 
+                  type="submit" 
+                  className="leads-enquiries-btn leads-enquiries-btn-primary" 
+                  disabled={loading}
+                >
                   {loading ? 'Saving...' : (formData.id ? 'Update Customer' : 'Save Customer')}
                 </button>
               </div>
@@ -1058,7 +1280,7 @@ const CustomerDatabase = () => {
 
       {/* View Customer Modal with Follow-ups */}
       {isDrawerOpen && selectedCustomer && (
-        <div className="leads-enquiries-modal-overlay" onClick={() => setIsDrawerOpen(false)}>
+        <div className="leads-enquiries-modal-overlay">
           <div className="leads-enquiries-modal leads-enquiries-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>Customer Details - {selectedCustomer.customerCode}</h2>
@@ -1074,31 +1296,31 @@ const CustomerDatabase = () => {
                 <div className="leads-enquiries-detail-grid">
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Customer Code:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.customerCode}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.customerCode || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Name:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.name}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.name || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Company:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.companyName || '-'}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.companyName || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Email:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.email}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.email || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Phone:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.phone}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.phone || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Group:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.groupName || '-'}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.groupName || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Category:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.subGroupName || '-'}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.subGroupName || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Status:</span>
@@ -1108,19 +1330,19 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Assigned To:</span>
-                    <span className="leads-enquiries-detail-value">{selectedCustomer.assignedToName || '-'}</span>
+                    <span className="leads-enquiries-detail-value">{selectedCustomer.assignedToName || 'N/A'}</span>
                   </div>
                   <div className="leads-enquiries-detail-item">
                     <span className="leads-enquiries-detail-label">Address:</span>
                     <span className="leads-enquiries-detail-value">
-                      {selectedCustomer.address ? `${selectedCustomer.address}, ${selectedCustomer.city}, ${selectedCustomer.state} - ${selectedCustomer.pincode}` : '-'}
+                      {selectedCustomer.address ? `${selectedCustomer.address}, ${selectedCustomer.city}, ${selectedCustomer.state} - ${selectedCustomer.pincode}` : 'N/A'}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Follow-ups Section */}
-              <div className="leads-enquiries-detail-section">
+              {/* <div className="leads-enquiries-detail-section">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
                   <h3>Follow-Ups ({followups.length})</h3>
                   <button
@@ -1178,7 +1400,7 @@ const CustomerDatabase = () => {
                     ))}
                   </div>
                 )}
-              </div>
+              </div> */}
 
               <div className="leads-enquiries-modal-actions">
                 {canEdit && (
@@ -1197,11 +1419,11 @@ const CustomerDatabase = () => {
 
       {/* Add Follow-up Modal */}
       {showFollowupModal && (
-        <div className="leads-enquiries-modal-overlay" onClick={() => setShowFollowupModal(false)}>
+        <div className="leads-enquiries-modal-overlay">
           <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>Add Follow-Up</h2>
-              <button className="leads-enquiries-modal-close" onClick={() => setShowFollowupModal(false)}>
+              <button className="leads-enquiries-modal-close" onClick={() => { setShowFollowupModal(false); resetFollowupForm(); }}>
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
@@ -1274,7 +1496,11 @@ const CustomerDatabase = () => {
               </div>
 
               <div className="leads-enquiries-form-actions">
-                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowFollowupModal(false)}>
+                <button 
+                  type="button" 
+                  className="leads-enquiries-btn leads-enquiries-btn-secondary" 
+                  onClick={() => { setShowFollowupModal(false); resetFollowupForm(); }}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary">

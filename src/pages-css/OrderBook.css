@@ -129,6 +129,16 @@
   border-color: #cbd5e1;
 }
 
+.orderbook-btn-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: white;
+}
+
+.orderbook-btn-danger:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
 .orderbook-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -481,6 +491,64 @@
   padding: 24px;
 }
 
+/* Delete Modal */
+.orderbook-delete-modal {
+  background: white;
+  border-radius: 16px;
+  padding: 32px;
+  max-width: 450px;
+  width: 100%;
+  text-align: center;
+  animation: slideUp 0.3s ease-out;
+}
+
+.orderbook-delete-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 20px;
+  background: #fee2e2;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orderbook-delete-icon svg {
+  width: 32px;
+  height: 32px;
+  color: #dc2626;
+}
+
+.orderbook-delete-modal h3 {
+  margin: 0 0 12px 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.orderbook-delete-modal p {
+  margin: 0 0 8px 0;
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.orderbook-delete-warning {
+  color: #dc2626 !important;
+  font-weight: 500;
+  margin-bottom: 24px !important;
+}
+
+.orderbook-delete-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.orderbook-delete-actions button {
+  flex: 1;
+}
+
 /* Card */
 .orderbook-card {
   background: #f8fafc;
@@ -684,6 +752,71 @@
   transition: all 0.2s ease;
 }
 
+
+/* ===== OrderBook Inline Action Icons (Reference Style) ===== */
+
+.orderbook-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  white-space: nowrap;
+}
+
+/* Base icon button */
+.orderbook-icon-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, transform 0.15s ease;
+}
+
+.orderbook-icon-btn svg {
+  font-size: 18px;
+}
+
+/* Slight lift */
+.orderbook-icon-btn:hover {
+  transform: translateY(-1px);
+}
+
+/* View – Blue */
+.ob-view {
+  color: #5685eb;
+}
+.ob-view:hover {
+  background-color: rgba(37, 99, 235, 0.15);
+}
+
+/* Edit – Green */
+.ob-edit {
+  color: #16a34a;
+}
+.ob-edit:hover {
+  background-color: rgba(22, 163, 74, 0.15);
+}
+
+/* Upload – Violet */
+.ob-upload {
+  color: #7c3aed;
+}
+.ob-upload:hover {
+  background-color: rgba(124, 58, 237, 0.15);
+}
+
+/* Delete – Red */
+.ob-delete {
+  color: #dc2626;
+}
+.ob-delete:hover {
+  background-color: rgba(220, 38, 38, 0.15);
+}
+
+
 .orderbook-item-card:hover {
   border-color: #cbd5e1;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -733,7 +866,6 @@
 
 /* Grand Total */
 .orderbook-grand-total {
-  /* background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); */
   color: white;
   padding: 20px;
   border-radius: 12px;
@@ -772,110 +904,10 @@
   bottom: 0;
   background: white;
   border-radius: 0 0 16px 16px;
+  z-index:50
 }
 
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .orderbook-action-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .orderbook-search-filters {
-    width: 100%;
-  }
-
-  .orderbook-filter {
-    flex: 1;
-    min-width: auto;
-  }
-
-  .orderbook-info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .orderbook-financial-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .orderbook-page {
-    padding: 16px;
-  }
-
-  .orderbook-header h1 {
-    font-size: 24px;
-  }
-
-  .orderbook-form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .orderbook-item-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .orderbook-modal {
-    max-width: 100%;
-    margin: 0;
-    border-radius: 16px 16px 0 0;
-    max-height: 95vh;
-  }
-
-  .orderbook-modal-actions {
-    flex-direction: column;
-  }
-
-  .orderbook-modal-actions button {
-    width: 100%;
-  }
-
-  .orderbook-table-wrapper {
-    overflow-x: scroll;
-  }
-
-  .orderbook-table {
-    min-width: 1000px;
-  }
-
-  .orderbook-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .orderbook-pagination-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .orderbook-grand-total {
-    flex-direction: column;
-    gap: 8px;
-    text-align: center;
-  }
-}
-
-@media (max-width: 480px) {
-  .orderbook-actions {
-    flex-direction: column;
-  }
-
-  .orderbook-btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .orderbook-search {
-    min-width: 100%;
-  }
-}
-/* ADD THESE STYLES TO YOUR OrderBook.css */
-
-/* ============================================
-   ORDER ITEMS TABLE STYLES
-   ============================================ */
-
+/* ORDER ITEMS TABLE STYLES */
 .orderbook-items-table {
   width: 100%;
   border-collapse: separate;
@@ -989,62 +1021,107 @@
   border-radius: 8px;
 }
 
-/* Grand Total Styling (keep existing if you have it) */
-.orderbook-grand-total {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 1rem;
-  padding: 1rem;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  margin-top: 1rem;
-  border: 2px solid #e5e7eb;
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .orderbook-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orderbook-search-filters {
+    width: 100%;
+  }
+
+  .orderbook-filter {
+    flex: 1;
+    min-width: auto;
+  }
+
+  .orderbook-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .orderbook-financial-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
-.orderbook-grand-total span {
-  font-size: 16px;
-  font-weight: 500;
-  color: #374151;
+@media (max-width: 768px) {
+  .orderbook-page {
+    padding: 16px;
+  }
+
+  .orderbook-header h1 {
+    font-size: 24px;
+  }
+
+  .orderbook-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .orderbook-item-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .orderbook-modal {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 16px 16px 0 0;
+    max-height: 95vh;
+  }
+
+  .orderbook-modal-actions {
+    flex-direction: column;
+  }
+
+  .orderbook-modal-actions button {
+    width: 100%;
+  }
+
+  .orderbook-delete-actions {
+    flex-direction: column;
+  }
+
+  .orderbook-table-wrapper {
+    overflow-x: scroll;
+  }
+
+  .orderbook-table {
+    min-width: 1000px;
+  }
+
+  .orderbook-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orderbook-pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orderbook-grand-total {
+    flex-direction: column;
+    gap: 8px;
+    text-align: center;
+  }
 }
 
-.orderbook-grand-total strong {
-  font-size: 20px;
-  color: #059669;
+@media (max-width: 480px) {
+  .orderbook-actions {
+    flex-direction: column;
+  }
+
+  .orderbook-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .orderbook-search {
+    min-width: 100%;
+  }
 }
 
-/* Empty Items State */
-.orderbook-empty-items {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #6b7280;
-  background-color: #f9fafb;
-  border-radius: 8px;
-  border: 2px dashed #d1d5db;
-  margin-top: 1rem;
-}
-
-.orderbook-empty-items p {
-  margin: 0;
-  font-size: 14px;
-}
-
-/* Items Header (with Add Button) */
-.orderbook-items-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-}
-
-.orderbook-items-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-}
-
-/* Responsive Design for Items Table */
 @media (max-width: 1400px) {
   .orderbook-items-table {
     font-size: 13px;
@@ -1075,21 +1152,14 @@
   }
 }
 
-/* Make required fields more visible */
-.orderbook-items-table thead th:has(+ th) {
-  position: relative;
-}
-
 .orderbook-items-table input[required] {
   border-left: 3px solid #3b82f6;
 }
 
-/* Better visual feedback for editable cells */
 .orderbook-items-table tbody td:has(.orderbook-table-input) {
   padding: 4px;
 }
 
-/* Sticky first column (Line Number) for better UX on wide tables */
 .orderbook-items-table tbody td:first-child,
 .orderbook-items-table thead th:first-child {
   position: sticky;
@@ -1107,7 +1177,6 @@
   background-color: #f9fafb;
 }
 
-/* Loading state for table */
 .orderbook-items-table.loading {
   opacity: 0.6;
   pointer-events: none;

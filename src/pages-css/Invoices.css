@@ -475,7 +475,7 @@
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding-top: 24px;
+  padding: 14px;
   border-top: 1px solid #e2e8f0;
   margin-top: 24px;
 }

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { FaEye, FaEdit, FaTrash, FaFilePdf } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaFilePdf, FaCalendarAlt, FaFileAlt,FaRegTrashAlt } from 'react-icons/fa';
 import '../pages-css/Proposals.css';
 import { useAuth } from "../hooks/useAuth.js";
 import GroupCategoryFilter from "./../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -59,15 +60,14 @@ const ProposalsWithTemplate = () => {
     role: user.role,
     name: user.name
   };
-  // ADD THESE STATE VARIABLES (around line 70, after existing state)
+
+  // State variables
   const [bomItemsMaster, setBomItemsMaster] = useState([]);
   const [filteredBomItems, setFilteredBomItems] = useState({});
   const [showBomDropdown, setShowBomDropdown] = useState({});
   const [bomCategories, setBomCategories] = useState([]);
-  // State
   const [proposals, setProposals] = useState([]);
   const [leads, setLeads] = useState([]);
-  // const [customers, setCustomers] = useState([]);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -86,16 +86,19 @@ const ProposalsWithTemplate = () => {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteProposalId, setDeleteProposalId] = useState(null);
+  const [deleteProposalTitle, setDeleteProposalTitle] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [activeTab, setActiveTab] = useState('company');
-  const [showUnitDropdown, setShowUnitDropdown] = useState({});
-  const [filteredUnits, setFilteredUnits] = useState({});
-  const [customUnits, setCustomUnits] = useState({}); // Store custom units per row
+
+  // Custom unit tracking
+  const [customUnitInputs, setCustomUnitInputs] = useState({});
+
   // Form state - Basic Info
   const [formData, setFormData] = useState({
     leadId: '',
-
     title: '',
     description: '',
     totalValue: '',
@@ -103,155 +106,6 @@ const ProposalsWithTemplate = () => {
     subGroupName: '',
     status: 'Draft'
   });
-  const COMMON_UNITS = [
-    // Quantity
-    'Nos',
-    'Pcs',
-    'Units',
-    'Pairs',
-    'Dozen',
-    'Gross',
-
-    // Length
-    'Meter',
-    'Meters',
-    'Feet',
-    'Inch',
-    'Km',
-    'mm',
-    'cm',
-
-    // Area
-    'Sqft',
-    'Sq.ft',
-    'Sqm',
-    'Sq.m',
-    'Acres',
-    'Hectares',
-
-    // Volume
-    'Liters',
-    'Litres',
-    'ml',
-    'Gallons',
-    'Cu.ft',
-    'Cu.m',
-
-    // Weight
-    'Kg',
-    'Kgs',
-    'Grams',
-    'Tons',
-    'MT',
-    'Quintal',
-    'Lbs',
-
-    // Electrical
-    'Watt',
-    'KW',
-    'KVA',
-    'Amp',
-    'Volt',
-
-    // Set/Bundle
-    'Set',
-    'Sets',
-    'Kit',
-    'Kits',
-    'Bundle',
-    'Lot',
-    'Box',
-    'Boxes',
-    'Carton',
-    'Bag',
-    'Bags',
-
-    // Time
-    'Hours',
-    'Days',
-    'Months',
-    'Years',
-
-    // Others
-    'Roll',
-    'Rolls',
-    'Sheet',
-    'Sheets',
-    'Panel',
-    'Panels',
-    'RM',
-    'RMT',
-    'Running Meter',
-    'Coil',
-    'Drum'
-  ].sort(); // Sort alphabetically
-
-  /**
- * Filter units based on search term
- */
-  const filterUnits = (index, searchTerm) => {
-    if (!searchTerm || searchTerm.trim().length === 0) {
-      setFilteredUnits(prev => ({ ...prev, [index]: COMMON_UNITS }));
-      return;
-    }
-
-    const search = searchTerm.toLowerCase().trim();
-    const filtered = COMMON_UNITS.filter(unit =>
-      unit.toLowerCase().includes(search)
-    );
-
-    setFilteredUnits(prev => ({ ...prev, [index]: filtered }));
-  };
-
-  /**
-   * Handle unit input change
-   */
-  const handleUnitChange = (index, value) => {
-    updateBOMRow(index, 'unit', value);
-
-    if (value && value.length > 0) {
-      filterUnits(index, value);
-      setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
-    } else {
-      setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  /**
-   * Select unit from dropdown
-   */
-  const selectUnit = (index, unit) => {
-    updateBOMRow(index, 'unit', unit);
-    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
-    setFilteredUnits(prev => ({ ...prev, [index]: [] }));
-  };
-
-  /**
-   * Handle unit blur - add to custom units if not in list
-   */
-  const handleUnitBlur = (index, value) => {
-    if (value && value.trim().length > 0) {
-      const trimmedValue = value.trim();
-
-      // Check if it's already in COMMON_UNITS (case-insensitive)
-      const existsInCommon = COMMON_UNITS.some(unit =>
-        unit.toLowerCase() === trimmedValue.toLowerCase()
-      );
-
-      // If not in common list and not already in custom, add it
-      if (!existsInCommon && !customUnits[trimmedValue.toLowerCase()]) {
-        setCustomUnits(prev => ({
-          ...prev,
-          [trimmedValue.toLowerCase()]: trimmedValue
-        }));
-        console.log('✅ Added custom unit:', trimmedValue);
-      }
-    }
-
-    // Close dropdown
-    setShowUnitDropdown(prev => ({ ...prev, [index]: false }));
-  };
-
 
   // Template state
   const [templateData, setTemplateData] = useState({
@@ -263,8 +117,56 @@ const ProposalsWithTemplate = () => {
     systemPricing: [],
     bomItems: []
   });
-  //Toast
+
+  // Toast
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
+
+  // Groups states
+  const [groups, setGroups] = useState([]);
+  const [subGroups, setSubGroups] = useState([]);
+
+  /**
+   * Format date to DD-MM-YYYY HH:MM:SS
+   */
+  const formatDateTime = (dateString) => {
+    if (!dateString) return '-';
+
+    const date = new Date(dateString);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+  };
+
+  /**
+   * Handle unit change for BOM items
+   */
+  const handleBomUnitChange = (index, value) => {
+    if (value === 'Custom') {
+      // Enable custom input
+      setCustomUnitInputs(prev => ({ ...prev, [index]: '' }));
+      updateBOMRow(index, 'unit', '');
+    } else {
+      // Remove custom input if exists
+      const newCustomInputs = { ...customUnitInputs };
+      delete newCustomInputs[index];
+      setCustomUnitInputs(newCustomInputs);
+      updateBOMRow(index, 'unit', value);
+    }
+  };
+
+  /**
+   * Handle custom unit input change
+   */
+  const handleCustomUnitInput = (index, value) => {
+    setCustomUnitInputs(prev => ({ ...prev, [index]: value }));
+    updateBOMRow(index, 'unit', value);
+  };
+
   const fetchBomItemsMaster = async (category = null) => {
     try {
       let url = `${API_BASE_URL}/api/bom-items-master/all`;
@@ -293,7 +195,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // ADD THIS FUNCTION to search/filter BOM items
   const handleBomItemSearch = async (index, searchTerm) => {
     console.log('🔍 Searching BOM items:', searchTerm);
 
@@ -329,7 +230,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // ADD THIS FUNCTION to select BOM item from dropdown
   const selectBomItem = (index, bomItem) => {
     console.log('🎯 Selected BOM item:', bomItem);
 
@@ -346,11 +246,6 @@ const ProposalsWithTemplate = () => {
     setShowBomDropdown(prev => ({ ...prev, [index]: false }));
     setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
   };
-  //groups states
-
-  const [groups, setGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
-  const [filteredSubGroups, setFilteredSubGroups] = useState([]);
 
   const fetchGroups = async () => {
     try {
@@ -373,7 +268,6 @@ const ProposalsWithTemplate = () => {
       setGroups([]);
     }
   };
-
 
   const fetchSubGroupsForForm = async (group) => {
     if (!group) {
@@ -402,7 +296,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-
   useEffect(() => {
     if (formData.groupName) {
       fetchSubGroupsForForm(formData.groupName);
@@ -410,7 +303,7 @@ const ProposalsWithTemplate = () => {
       setSubGroups([]);
     }
   }, [formData.groupName]);
-  // Fetch with auth headers
+
   const fetchWithHeaders = async (url, options = {}) => {
     const headers = {
       'Content-Type': 'application/json',
@@ -426,7 +319,6 @@ const ProposalsWithTemplate = () => {
     return response.json();
   };
 
-  // Parse JSON fields
   const parseJSON = (jsonString) => {
     if (!jsonString) return null;
     try {
@@ -436,7 +328,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Fetch proposals
   const fetchProposals = async () => {
     setLoading(true);
     try {
@@ -456,7 +347,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Fetch leads dropdown
   const fetchLeads = async (groupFilter = null, subGroupFilter = null) => {
     try {
       let url = `${API_BASE_URL}/leads/by-group-subgroup?`;
@@ -481,20 +371,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Fetch customers dropdown
-  // const fetchCustomers = async () => {
-  //   try {
-  //     const url = `${API_BASE_URL}/customers/getAll`;
-  //     const data = await fetchWithHeaders(url);
-  //     if (data.success) {
-  //       setCustomers(Array.isArray(data.data) ? data.data : data.data.content || []);
-  //     }
-  //   } catch (error) {
-  //     console.error('Error fetching customers:', error);
-  //   }
-  // };
-
-  // Fetch users for prepared by filter
   const fetchUsers = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
@@ -517,7 +393,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Filter proposals
   const handleFilter = async () => {
     setLoading(true);
     try {
@@ -525,7 +400,6 @@ const ProposalsWithTemplate = () => {
         searchTerm: searchTerm || null,
         filterStatus: filterStatus !== 'All' ? filterStatus : null,
         filterGroup: groupName || null,
-        filterGroup: subGroupName || null,
         filterSubGroup: subGroupName || null,
         filterPreparedBy: filterPreparedBy !== 'All' ? parseInt(filterPreparedBy) : null,
         page: currentPage - 1,
@@ -550,7 +424,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Create proposal
   const handleCreate = async () => {
     if (!formData.title || !formData.leadId) {
       showWarning('Please fill in Title and Lead');
@@ -583,7 +456,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Update proposal
   const handleUpdate = async () => {
     if (!formData.title) {
       showError('Please fill in Title');
@@ -622,30 +494,32 @@ const ProposalsWithTemplate = () => {
     }
   };
 
+  const handleDeleteClick = (id, title) => {
+    setDeleteProposalId(id);
+    setDeleteProposalTitle(title);
+    setShowDeleteModal(true);
+  };
 
-
-  // Delete proposal
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this proposal?')) {
-      return;
-    }
-
+  const handleDelete = async () => {
     try {
-      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/delete/${id}`, {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/delete/${deleteProposalId}`, {
         method: 'DELETE'
       });
 
       if (data.success) {
         showSuccess('Proposal deleted successfully!');
+        setShowDeleteModal(false);
+        setDeleteProposalId(null);
+        setDeleteProposalTitle('');
         fetchProposals();
       }
     } catch (error) {
       console.error('Error deleting proposal:', error);
       showError('Failed to delete proposal');
+      setShowDeleteModal(false);
     }
   };
 
-  // Download PDF
   const handleDownloadPDF = async (id) => {
     try {
       const headers = {
@@ -674,7 +548,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // View proposal
   const handleView = async (id) => {
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/${id}`);
@@ -688,7 +561,6 @@ const ProposalsWithTemplate = () => {
     }
   };
 
-  // Edit proposal
   const handleEdit = (proposal) => {
     setSelectedProposal(proposal);
     setFormData({
@@ -716,11 +588,9 @@ const ProposalsWithTemplate = () => {
     setShowViewModal(false);
   };
 
-  // Reset form
   const resetForm = () => {
     setFormData({
       leadId: '',
-
       title: '',
       description: '',
       totalValue: '',
@@ -740,15 +610,14 @@ const ProposalsWithTemplate = () => {
     setIsEditMode(false);
     setSelectedProposal(null);
     setActiveTab('company');
+    setCustomUnitInputs({});
   };
 
-  // Open create modal
   const handleCreateNew = () => {
     resetForm();
     setShowCreateModal(true);
   };
 
-  // System Pricing handlers
   const addSystemPricingRow = () => {
     setTemplateData({
       ...templateData,
@@ -767,7 +636,6 @@ const ProposalsWithTemplate = () => {
     setTemplateData({ ...templateData, systemPricing: updated });
   };
 
-  // BOM handlers
   const addBOMRow = () => {
     setTemplateData({
       ...templateData,
@@ -777,22 +645,21 @@ const ProposalsWithTemplate = () => {
         quantity: '',
         unit: 'Nos',
         rate: '',
-        tax: '18',  // Default 18% GST
+        tax: '18',
         amount: ''
       }]
     });
   };
+
   const updateBOMRow = (index, field, value) => {
     const updated = [...templateData.bomItems];
     updated[index][field] = value;
 
-    // Auto-calculate amount if quantity, rate, or tax changes
     if (field === 'quantity' || field === 'rate' || field === 'tax') {
       const quantity = parseFloat(updated[index].quantity) || 0;
       const rate = parseFloat(updated[index].rate) || 0;
       const tax = parseFloat(updated[index].tax) || 0;
 
-      // Calculate: (quantity * rate) + tax
       const subtotal = quantity * rate;
       const taxAmount = (subtotal * tax) / 100;
       updated[index].amount = (subtotal + taxAmount).toFixed(2);
@@ -800,6 +667,7 @@ const ProposalsWithTemplate = () => {
 
     setTemplateData({ ...templateData, bomItems: updated });
   };
+
   const calculateBOMTotals = () => {
     const subtotal = templateData.bomItems.reduce((sum, item) => {
       const quantity = parseFloat(item.quantity) || 0;
@@ -825,22 +693,21 @@ const ProposalsWithTemplate = () => {
       grandTotal: grandTotal.toFixed(2)
     };
   };
+
   const removeBOMRow = (index) => {
     const updated = templateData.bomItems.filter((_, i) => i !== index);
     setTemplateData({ ...templateData, bomItems: updated });
+
+    // Remove custom input tracking if exists
+    const newCustomInputs = { ...customUnitInputs };
+    delete newCustomInputs[index];
+    setCustomUnitInputs(newCustomInputs);
   };
 
-  // Calculate total BOM amount
-  const calculateBOMTotal = () => {
-    return templateData.bomItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
-  };
-
-  // Calculate total System Pricing
   const calculateSystemPricingTotal = () => {
     return templateData.systemPricing.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
   };
 
-  // Status badge class
   const getStatusClass = (status) => {
     const statusMap = {
       'Draft': 'status-draft',
@@ -852,40 +719,12 @@ const ProposalsWithTemplate = () => {
     return statusMap[status] || 'status-draft';
   };
 
-  // Effects
   useEffect(() => {
     if (permissions.VIEW) {
       fetchProposals();
     }
   }, [currentPage, rowsPerPage, groupName, subGroupName]);
 
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.unit-input-container')) {
-        setShowUnitDropdown({});
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-
-  useEffect(() => {
-    fetchLeads();
-    fetchUsers();
-    fetchGroups();
-    fetchBomItemsMaster(); // ADD THIS
-  }, []);
-
-  useEffect(() => {
-    if (formData.groupName || formData.subGroupName) {
-      fetchLeads(formData.groupName, formData.subGroupName);
-    }
-  }, [formData.groupName, formData.subGroupName]);
-
-  // ADD click outside handler for BOM dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (!event.target.closest('.bom-item-input-container')) {
@@ -897,6 +736,18 @@ const ProposalsWithTemplate = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  useEffect(() => {
+    fetchLeads();
+    fetchUsers();
+    fetchGroups();
+    fetchBomItemsMaster();
+  }, []);
+
+  useEffect(() => {
+    if (formData.groupName || formData.subGroupName) {
+      fetchLeads(formData.groupName, formData.subGroupName);
+    }
+  }, [formData.groupName, formData.subGroupName]);
 
   useEffect(() => {
     if (searchTerm || filterStatus !== 'All' || filterPreparedBy !== 'All') {
@@ -909,7 +760,6 @@ const ProposalsWithTemplate = () => {
     }
   }, [searchTerm, filterStatus, filterPreparedBy]);
 
-  // If no VIEW permission, show message
   if (!permissions.VIEW) {
     return (
       <div className="proposal-page-container">
@@ -922,8 +772,8 @@ const ProposalsWithTemplate = () => {
 
   return (
     <div className="proposal-page-container">
-      {/* Header */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
       <div className="proposal-page-header">
         <div className="proposal-page-breadcrumb">
           Dashboard &gt; Proposals
@@ -939,7 +789,6 @@ const ProposalsWithTemplate = () => {
         />
       </div>
 
-      {/* Action Bar - Search & Filters in ONE ROW */}
       <div className="proposal-page-action-bar">
         <div className="proposal-page-search-filters">
           <input
@@ -987,7 +836,6 @@ const ProposalsWithTemplate = () => {
         </div>
       </div>
 
-      {/* Table */}
       <div className="proposal-page-table-container">
         <table className="proposal-page-table">
           <thead>
@@ -1030,43 +878,58 @@ const ProposalsWithTemplate = () => {
                     </span>
                   </td>
                   <td>{proposal.preparedByName}</td>
-                  <td>{new Date(proposal.updatedAt).toLocaleDateString('en-IN')}</td>
+                  <td>{formatDateTime(proposal.updatedAt)}</td>
                   <td>
-                    <div className="proposal-page-actions">
+                    <div className="proposal-actions-inline">
+
+                      {/* View */}
                       <button
-                        className="proposal-page-action-btn"
+                        className="proposal-action-icon proposal-view"
                         onClick={() => handleView(proposal.id)}
                         title="View"
                       >
                         <FaEye />
+                        {/* <span>View</span> */}
                       </button>
+
+                      {/* Edit */}
                       {permissions.EDIT && (
                         <button
-                          className="proposal-page-action-btn"
+                          className="proposal-action-icon proposal-edit"
                           onClick={() => handleEdit(proposal)}
                           title="Edit"
                         >
                           <FaEdit />
+                          {/* <span>Edit</span> */}
                         </button>
                       )}
+
+                      {/* PDF */}
                       <button
-                        className="proposal-page-action-btn"
+                        className="proposal-action-icon proposal-pdf"
                         onClick={() => handleDownloadPDF(proposal.id)}
                         title="Download PDF"
                       >
                         <FaFilePdf />
+                        {/* <span>PDF</span> */}
                       </button>
+
+                      {/* Delete */}
                       {permissions.DELETE && (
                         <button
-                          className="proposal-page-action-btn proposal-page-action-delete"
-                          onClick={() => handleDelete(proposal.id)}
+                          className="proposal-action-icon proposal-delete"
+                          onClick={() => handleDeleteClick(proposal.id, proposal.title)}
                           title="Delete"
                         >
-                          <FaTrash />
+                          <FaRegTrashAlt />
+                          {/* <span>Delete</span> */}
                         </button>
                       )}
+
                     </div>
                   </td>
+
+
                 </tr>
               ))
             ) : (
@@ -1080,7 +943,6 @@ const ProposalsWithTemplate = () => {
         </table>
       </div>
 
-      {/* Pagination */}
       <div className="proposal-page-pagination">
         <div className="proposal-page-pagination-info">
           {totalProposals > 0 ? (
@@ -1125,6 +987,39 @@ const ProposalsWithTemplate = () => {
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="proposal-page-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+          <div className="proposal-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="proposal-delete-modal-icon">
+              <div className="proposal-delete-icon-circle">
+                <span>!</span>
+              </div>
+            </div>
+            <h2 className="proposal-delete-modal-title">Delete Proposal</h2>
+            <p className="proposal-delete-modal-text">
+              Are you sure you want to delete proposal "{deleteProposalTitle}"?
+              <br />
+              This action cannot be undone.
+            </p>
+            <div className="proposal-delete-modal-actions">
+              <button
+                className="proposal-page-btn proposal-page-btn-secondary"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="proposal-page-btn proposal-delete-btn"
+                onClick={handleDelete}
+              >
+                Confirm Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* View Modal */}
       {showViewModal && selectedProposal && (
         <div className="proposal-page-modal-overlay" onClick={() => setShowViewModal(false)}>
@@ -1149,8 +1044,8 @@ const ProposalsWithTemplate = () => {
                   </span>
                 </div>
                 <div className="proposal-page-info-grid">
-                  <div><strong>Created:</strong> {new Date(selectedProposal.createdAt).toLocaleDateString('en-IN')}</div>
-                  <div><strong>Updated:</strong> {new Date(selectedProposal.updatedAt).toLocaleDateString('en-IN')}</div>
+                  <div><strong>Created:</strong> {formatDateTime(selectedProposal.createdAt)}</div>
+                  <div><strong>Updated:</strong> {formatDateTime(selectedProposal.updatedAt)}</div>
                   <div><strong>Prepared By:</strong> {selectedProposal.preparedByName}</div>
                   <div><strong>Value:</strong> ₹{selectedProposal.totalValue ? parseFloat(selectedProposal.totalValue).toLocaleString('en-IN') : '0'}</div>
                   <div><strong>Group:</strong> {selectedProposal.groupName || '-'}</div>
@@ -1158,7 +1053,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               </div>
 
-              {/* Lead/Customer Info */}
               {(selectedProposal.leadId || selectedProposal.customerId) && (
                 <div className="proposal-page-card">
                   <h3>Client Information</h3>
@@ -1179,7 +1073,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* Description */}
               {selectedProposal.description && (
                 <div className="proposal-page-card">
                   <h3>Description</h3>
@@ -1189,7 +1082,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* About Us */}
               {selectedProposal.aboutUs && (
                 <div className="proposal-page-card">
                   <h3>About Us</h3>
@@ -1199,7 +1091,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* About System */}
               {selectedProposal.aboutSystem && (
                 <div className="proposal-page-card">
                   <h3>About System</h3>
@@ -1209,7 +1100,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* System Pricing */}
               {selectedProposal.systemPricing && parseJSON(selectedProposal.systemPricing)?.length > 0 && (
                 <div className="proposal-page-card">
                   <h3>System Pricing</h3>
@@ -1238,7 +1128,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* Payment Terms */}
               {selectedProposal.paymentTerms && (
                 <div className="proposal-page-card">
                   <h3>Payment Terms</h3>
@@ -1248,7 +1137,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* Defect Liability Period */}
               {selectedProposal.defectLiabilityPeriod && (
                 <div className="proposal-page-card">
                   <h3>Defect Liability Period</h3>
@@ -1257,8 +1145,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
               )}
-
-              {/* BOM */}
 
               {selectedProposal.bomItems && parseJSON(selectedProposal.bomItems)?.length > 0 && (
                 <div className="proposal-page-card">
@@ -1288,7 +1174,6 @@ const ProposalsWithTemplate = () => {
                         </tr>
                       ))}
 
-                      {/* Summary rows */}
                       <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
                         <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600' }}>Subtotal (Before Tax):</td>
                         <td style={{ fontWeight: '600' }}>
@@ -1322,7 +1207,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               )}
 
-              {/* Actions */}
               <div className="proposal-page-modal-actions">
                 {permissions.EDIT && (
                   <button
@@ -1371,7 +1255,7 @@ const ProposalsWithTemplate = () => {
         </div>
       )}
 
-      {/* Create/Edit Modal - Basic Info */}
+      {/* Create/Edit Modal */}
       {showCreateModal && (
         <div className="proposal-page-modal-overlay" onClick={() => { setShowCreateModal(false); resetForm(); }}>
           <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()}>
@@ -1384,8 +1268,6 @@ const ProposalsWithTemplate = () => {
 
             <div className="proposal-page-modal-content">
               <div className="proposal-page-form">
-
-                {/* GROUP AND SUBGROUP AT THE TOP */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Group *</label>
@@ -1405,7 +1287,7 @@ const ProposalsWithTemplate = () => {
                         value={formData.groupName}
                         onChange={(e) => {
                           setFormData({ ...formData, groupName: e.target.value, subGroupName: '' });
-                          fetchLeads(e.target.value, null); // Fetch leads when group changes
+                          fetchLeads(e.target.value, null);
                         }}
                       >
                         <option value="">Select Group</option>
@@ -1436,7 +1318,7 @@ const ProposalsWithTemplate = () => {
                         value={formData.subGroupName}
                         onChange={(e) => {
                           setFormData({ ...formData, subGroupName: e.target.value });
-                          fetchLeads(formData.groupName, e.target.value); // Fetch leads when subgroup changes
+                          fetchLeads(formData.groupName, e.target.value);
                         }}
                         disabled={!formData.groupName}
                       >
@@ -1451,7 +1333,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
-                {/* LEAD SELECTION - Shows filtered leads */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Lead *</label>
@@ -1489,7 +1370,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
-                {/* TITLE AND VALUE */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Title *</label>
@@ -1511,7 +1391,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
-                {/* STATUS */}
                 <div className="proposal-page-form-row">
                   <div className="proposal-page-form-group">
                     <label>Status</label>
@@ -1528,7 +1407,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 </div>
 
-                {/* DESCRIPTION */}
                 <div className="proposal-page-form-group">
                   <label>Description</label>
                   <textarea
@@ -1540,7 +1418,6 @@ const ProposalsWithTemplate = () => {
                 </div>
               </div>
 
-              {/* ACTIONS */}
               <div className="proposal-page-modal-actions">
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"
@@ -1578,7 +1455,6 @@ const ProposalsWithTemplate = () => {
             </div>
 
             <div className="proposal-page-modal-content">
-              {/* Tabs */}
               <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', flexWrap: 'wrap' }}>
                 {[
                   { key: 'company', label: 'Company Info' },
@@ -1608,9 +1484,7 @@ const ProposalsWithTemplate = () => {
                 ))}
               </div>
 
-              {/* Tab Content */}
               <div style={{ minHeight: '400px' }}>
-                {/* Company Info Tab */}
                 {activeTab === 'company' && (
                   <div className="proposal-page-form">
                     <div className="proposal-page-form-group">
@@ -1625,7 +1499,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* About Us Tab */}
                 {activeTab === 'aboutUs' && (
                   <div className="proposal-page-form">
                     <div className="proposal-page-form-group">
@@ -1641,7 +1514,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* About System Tab */}
                 {activeTab === 'aboutSystem' && (
                   <div className="proposal-page-form">
                     <div className="proposal-page-form-group">
@@ -1657,7 +1529,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* System Pricing Tab */}
                 {activeTab === 'pricing' && (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -1747,7 +1618,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* Payment Terms Tab */}
                 {activeTab === 'payment' && (
                   <div className="proposal-page-form">
                     <div className="proposal-page-form-group">
@@ -1763,7 +1633,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* DLP Tab */}
                 {activeTab === 'dlp' && (
                   <div className="proposal-page-form">
                     <div className="proposal-page-form-group">
@@ -1779,7 +1648,6 @@ const ProposalsWithTemplate = () => {
                   </div>
                 )}
 
-                {/* BOM Tab */}
                 {activeTab === 'bom' && (
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -1801,19 +1669,6 @@ const ProposalsWithTemplate = () => {
                       </div>
                     </div>
 
-                    {/* <div style={{
-                      marginBottom: '15px',
-                      padding: '10px',
-                      background: '#e6fffa',
-                      border: '1px solid #81e6d9',
-                      borderRadius: '6px',
-                      fontSize: '13px',
-                      color: '#234e52'
-                    }}>
-                      💡 <strong>Tip:</strong> Start typing item name or description to see suggestions from our master database.
-                      Common items like Solar Modules, Inverters, Cables, etc. are pre-loaded.
-                    </div> */}
-
                     <div className="proposal-page-table-container">
                       <table className="proposal-page-table">
                         <thead>
@@ -1821,7 +1676,7 @@ const ProposalsWithTemplate = () => {
                             <th style={{ width: '200px' }}>Item Name *</th>
                             <th style={{ width: '200px' }}>Specification</th>
                             <th style={{ width: '100px' }}>Quantity</th>
-                            <th style={{ width: '80px' }}>Unit</th>
+                            <th style={{ width: '120px' }}>Unit</th>
                             <th style={{ width: '120px' }}>Rate (₹)</th>
                             <th style={{ width: '100px' }}>Tax %</th>
                             <th style={{ width: '120px' }}>Amount (₹)</th>
@@ -1839,7 +1694,6 @@ const ProposalsWithTemplate = () => {
                             <>
                               {templateData.bomItems.map((row, index) => (
                                 <tr key={index}>
-                                  {/* ITEM NAME WITH AUTOCOMPLETE */}
                                   <td>
                                     <div className="bom-item-input-container" style={{ position: 'relative' }}>
                                       <input
@@ -1858,7 +1712,6 @@ const ProposalsWithTemplate = () => {
                                         style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
                                       />
 
-                                      {/* AUTOCOMPLETE DROPDOWN */}
                                       {showBomDropdown[index] && filteredBomItems[index]?.length > 0 && (
                                         <div style={{
                                           position: 'absolute',
@@ -1932,7 +1785,6 @@ const ProposalsWithTemplate = () => {
                                     </div>
                                   </td>
 
-                                  {/* SPECIFICATION */}
                                   <td>
                                     <textarea
                                       value={row.specification}
@@ -1950,7 +1802,6 @@ const ProposalsWithTemplate = () => {
                                     />
                                   </td>
 
-                                  {/* QUANTITY */}
                                   <td>
                                     <input
                                       type="number"
@@ -1961,23 +1812,13 @@ const ProposalsWithTemplate = () => {
                                     />
                                   </td>
 
-                                  {/* UNIT */}
                                   <td>
-                                    <div className="unit-input-container" style={{ position: 'relative' }}>
+                                    {customUnitInputs[index] !== undefined ? (
                                       <input
                                         type="text"
-                                        value={row.unit || ''}
-                                        onChange={(e) => handleUnitChange(index, e.target.value)}
-                                        onFocus={() => {
-                                          filterUnits(index, row.unit || '');
-                                          setShowUnitDropdown(prev => ({ ...prev, [index]: true }));
-                                        }}
-                                        onBlur={(e) => {
-                                          // Delay to allow click on dropdown
-                                          setTimeout(() => handleUnitBlur(index, e.target.value), 200);
-                                        }}
-                                        placeholder="Type or select"
-                                        autoComplete="off"
+                                        value={customUnitInputs[index]}
+                                        onChange={(e) => handleCustomUnitInput(index, e.target.value)}
+                                        placeholder="Enter custom unit"
                                         style={{
                                           width: '100%',
                                           padding: '8px',
@@ -1986,112 +1827,16 @@ const ProposalsWithTemplate = () => {
                                           fontSize: '13px'
                                         }}
                                       />
-
-                                      {/* UNIT DROPDOWN */}
-                                      {showUnitDropdown[index] && (
-                                        <div style={{
-                                          position: 'absolute',
-                                          top: '100%',
-                                          left: 0,
-                                          right: 0,
-                                          background: 'white',
-                                          border: '2px solid #3b82f6',
-                                          borderRadius: '6px',
-                                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                                          maxHeight: '250px',
-                                          overflowY: 'auto',
-                                          zIndex: 1000,
-                                          marginTop: '4px'
-                                        }}>
-                                          {/* Header */}
-                                          <div style={{
-                                            padding: '8px 12px',
-                                            background: '#f8fafc',
-                                            borderBottom: '1px solid #e2e8f0',
-                                            fontWeight: 600,
-                                            fontSize: '11px',
-                                            color: '#475569',
-                                            position: 'sticky',
-                                            top: 0,
-                                            zIndex: 1
-                                          }}>
-                                            📏 Select Unit ({filteredUnits[index]?.length || COMMON_UNITS.length})
-                                            <button
-                                              onClick={() => setShowUnitDropdown(prev => ({ ...prev, [index]: false }))}
-                                              style={{
-                                                float: 'right',
-                                                background: 'none',
-                                                border: 'none',
-                                                fontSize: '16px',
-                                                cursor: 'pointer',
-                                                color: '#94a3b8'
-                                              }}
-                                            >
-                                              ×
-                                            </button>
-                                          </div>
-
-                                          {/* Unit Options */}
-                                          <div>
-                                            {(filteredUnits[index]?.length > 0 ? filteredUnits[index] : COMMON_UNITS).map((unit) => (
-                                              <div
-                                                key={unit}
-                                                onClick={() => selectUnit(index, unit)}
-                                                style={{
-                                                  padding: '8px 12px',
-                                                  cursor: 'pointer',
-                                                  borderBottom: '1px solid #f1f5f9',
-                                                  transition: 'background-color 0.2s',
-                                                  fontSize: '13px'
-                                                }}
-                                                onMouseEnter={(e) => {
-                                                  e.currentTarget.style.backgroundColor = '#f8fafc';
-                                                  e.currentTarget.style.borderLeft = '3px solid #3b82f6';
-                                                }}
-                                                onMouseLeave={(e) => {
-                                                  e.currentTarget.style.backgroundColor = 'white';
-                                                  e.currentTarget.style.borderLeft = 'none';
-                                                }}
-                                              >
-                                                {unit}
-                                              </div>
-                                            ))}
-
-                                            {/* Show message if custom unit will be added */}
-                                            {row.unit && row.unit.trim().length > 0 &&
-                                              !COMMON_UNITS.some(u => u.toLowerCase() === row.unit.toLowerCase()) && (
-                                                <div style={{
-                                                  padding: '10px 12px',
-                                                  background: '#fef3c7',
-                                                  borderTop: '2px solid #fbbf24',
-                                                  fontSize: '11px',
-                                                  color: '#92400e',
-                                                  fontWeight: '500'
-                                                }}>
-                                                  ✨ Press Enter or Tab to add "{row.unit}" as custom unit
-                                                </div>
-                                              )}
-
-                                            {/* No results message */}
-                                            {filteredUnits[index]?.length === 0 && (
-                                              <div style={{
-                                                padding: '20px',
-                                                textAlign: 'center',
-                                                color: '#94a3b8',
-                                                fontSize: '12px'
-                                              }}>
-                                                No matching units found.
-                                                <br />
-                                                <strong>Type and press Enter</strong> to add "{row.unit}" as custom unit.
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      )}
-                                    </div>
+                                    ) : (
+                                      <UnitTypeDropdown
+                                        value={row.unit || ''}
+                                        onChange={(e) => handleBomUnitChange(index, e.target.value)}
+                                        className="proposal-unit-dropdown"
+                                        placeholder="Select unit"
+                                      />
+                                    )}
                                   </td>
 
-                                  {/* RATE */}
                                   <td>
                                     <input
                                       type="number"
@@ -2102,7 +1847,6 @@ const ProposalsWithTemplate = () => {
                                     />
                                   </td>
 
-                                  {/* TAX */}
                                   <td>
                                     <select
                                       value={row.tax || '18'}
@@ -2123,7 +1867,6 @@ const ProposalsWithTemplate = () => {
                                     </select>
                                   </td>
 
-                                  {/* AMOUNT (READ-ONLY) */}
                                   <td>
                                     <input
                                       type="number"
@@ -2141,7 +1884,6 @@ const ProposalsWithTemplate = () => {
                                     />
                                   </td>
 
-                                  {/* ACTIONS */}
                                   <td>
                                     <button
                                       onClick={() => removeBOMRow(index)}
@@ -2160,7 +1902,6 @@ const ProposalsWithTemplate = () => {
                                 </tr>
                               ))}
 
-                              {/* SUMMARY ROWS */}
                               <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
                                 <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
                                   Subtotal (Before Tax):
@@ -2197,7 +1938,6 @@ const ProposalsWithTemplate = () => {
                 )}
               </div>
 
-              {/* Template Modal Actions */}
               <div className="proposal-page-modal-actions" style={{ marginTop: '30px' }}>
                 <button
                   className="proposal-page-btn proposal-page-btn-secondary"

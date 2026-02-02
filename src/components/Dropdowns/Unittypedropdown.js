@@ -57,6 +57,9 @@ const UnitTypeDropdown = ({
           {unit}
         </option>
       ))}
+      <option value="Custom" style={{ fontWeight: '600', color: '#3182ce', borderTop: '1px solid #e2e8f0' }}>
+        ✏️ Custom
+      </option>
     </select>
   );
 };

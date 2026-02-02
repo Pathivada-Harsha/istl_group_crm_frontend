@@ -10,6 +10,8 @@ import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import UnitTypeDropdown from './../components/Dropdowns/Unittypedropdown.js';
 import { normalizeUnit } from './../components/Dropdowns/unitUtils';
+import { FaIndianRupeeSign } from "react-icons/fa6";
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const InvoicesManagementPage = () => {
@@ -54,6 +56,7 @@ const InvoicesManagementPage = () => {
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
+  
   // Customer data
   const [customerData, setCustomerData] = useState(null);
 
@@ -66,7 +69,8 @@ const InvoicesManagementPage = () => {
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
-    status: 'DRAFT'
+    status: 'DRAFT',
+    company: 'ISTL'
   });
 
   const fetchOrderBookItemsForCustomer = async (customerId) => {
@@ -100,31 +104,34 @@ const InvoicesManagementPage = () => {
     transactionReference: '',
     notes: ''
   });
+
   const selectOrderBookItem = (index, item) => {
-  const newItems = [...formData.items];
-  newItems[index] = {
-    ...newItems[index],
-    description: item.itemName,
-    quantity: item.quantity || 1,
-    unitPrice: item.unitPrice || 0,
-    taxPercent: item.taxPercent || 18,
-    unitType: normalizeUnit(item.unit),  // ✅ This fixes the unit matching
-    orderBookItemId: item.id
+    const newItems = [...formData.items];
+    newItems[index] = {
+      ...newItems[index],
+      description: item.itemName,
+      quantity: item.quantity || 1,
+      unitPrice: item.unitPrice || 0,
+      taxPercent: item.taxPercent || 18,
+      unitType: normalizeUnit(item.unit),
+      orderBookItemId: item.id
+    };
+
+    setFormData({ ...formData, items: newItems });
+    setShowDropdown(prev => ({ ...prev, [index]: false }));
+    setFilteredItems(prev => ({ ...prev, [index]: [] }));
   };
 
-  setFormData({ ...formData, items: newItems });
-  setShowDropdown(prev => ({ ...prev, [index]: false }));
-  setFilteredItems(prev => ({ ...prev, [index]: [] }));
-};
   // Fetch invoices on mount and filter change
   useEffect(() => {
     fetchInvoices();
   }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
 
-  // Fetch stats on mount
+  // Fetch stats when filters change
   useEffect(() => {
     fetchStats();
-  }, []);
+  }, [groupName, subGroupName, projectId]);
+
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
     try {
@@ -135,7 +142,6 @@ const InvoicesManagementPage = () => {
 
       if (!response.ok) throw new Error('Failed to download PDF');
 
-      // Get filename from Content-Disposition header or use default
       const contentDisposition = response.headers.get('Content-Disposition');
       let filename = `Invoice-${invoice.invoiceNo}.pdf`;
       if (contentDisposition) {
@@ -143,7 +149,6 @@ const InvoicesManagementPage = () => {
         if (matches && matches[1]) filename = matches[1];
       }
 
-      // Download the file
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -163,6 +168,7 @@ const InvoicesManagementPage = () => {
       setLoading(false);
     }
   };
+
   /**
    * Get auth headers
    */
@@ -211,7 +217,8 @@ const InvoicesManagementPage = () => {
       setLoading(false);
     }
   };
-  // 7. Add click outside handler to close dropdown
+
+  // Click outside handler to close dropdown
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (!event.target.closest('.Invoices-page-form-group')) {
@@ -223,26 +230,53 @@ const InvoicesManagementPage = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // THAT'S IT! Simple and clean dropdown for each item row.
-
   /**
-   * Fetch statistics
+   * Fetch statistics with filters
    */
-  const fetchStats = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/stats`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
+const fetchStats = async () => {
+  try {
+    const params = new URLSearchParams();
 
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
+    // Existing filters
+    if (groupName) params.append("groupId", groupName);
+    if (subGroupName) params.append("subGroupId", subGroupName);
+    if (projectId) params.append("projectId", projectId);
+
+    // ✅ NEW: createdBy (same as user.id)
+    if (user?.id) params.append("createdBy", user.id);
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/invoices/summary?${params.toString()}`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: getAuthHeaders(),
       }
-    } catch (error) {
-      console.error('Failed to fetch stats:', error);
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      setStats(data);
+    } else {
+      console.error("Failed to fetch stats");
+      setStats({
+        totalCount: 0,
+        paidCount: 0,
+        pendingCount: 0,
+        totalAmount: 0,
+      });
     }
-  };
+  } catch (error) {
+    console.error("Failed to fetch stats:", error);
+    setStats({
+      totalCount: 0,
+      paidCount: 0,
+      pendingCount: 0,
+      totalAmount: 0,
+    });
+  }
+};
+
 
   /**
    * Fetch modal groups
@@ -312,7 +346,7 @@ const InvoicesManagementPage = () => {
   const fetchCustomerByProject = async (projectId) => {
     if (!projectId) {
       setCustomerData(null);
-      setOrderBookItems([]); // Clear items when no project
+      setOrderBookItems([]);
       return;
     }
 
@@ -326,8 +360,6 @@ const InvoicesManagementPage = () => {
         const data = await response.json();
         setCustomerData(data);
         setFormData(prev => ({ ...prev, customerId: data.customerId }));
-
-        // Fetch order book items for this customer
         fetchOrderBookItemsForCustomer(data.customerId);
       } else {
         setCustomerData(null);
@@ -340,6 +372,7 @@ const InvoicesManagementPage = () => {
       setOrderBookItems([]);
     }
   };
+
   const handleDescriptionChange = (index, value) => {
     updateItem(index, 'description', value);
 
@@ -349,16 +382,16 @@ const InvoicesManagementPage = () => {
       return;
     }
 
-    // Filter order book items
     const searchLower = value.toLowerCase();
     const filtered = orderBookItems.filter(item =>
       item.itemName?.toLowerCase().includes(searchLower) ||
       item.specification?.toLowerCase().includes(searchLower)
-    ).slice(0, 10); // Show max 10 items
+    ).slice(0, 10);
 
     setFilteredItems(prev => ({ ...prev, [index]: filtered }));
     setShowDropdown(prev => ({ ...prev, [index]: filtered.length > 0 }));
   };
+
   /**
    * Handle modal group change
    */
@@ -439,7 +472,6 @@ const InvoicesManagementPage = () => {
       const data = await response.json();
       setSelectedInvoice(data);
 
-      // Fetch payment history
       const historyResponse = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/payment-history`, {
         credentials: "include",
         headers: getAuthHeaders()
@@ -459,8 +491,6 @@ const InvoicesManagementPage = () => {
     }
   };
 
-
-
   /**
    * Create new invoice
    */
@@ -473,7 +503,8 @@ const InvoicesManagementPage = () => {
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       items: [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
-      status: 'DRAFT'
+      status: 'DRAFT',
+      company: 'ISTL'
     });
     setCustomerData(null);
     setModalGroupName('');
@@ -497,7 +528,8 @@ const InvoicesManagementPage = () => {
       invoiceDate: invoice.invoiceDate.split('T')[0],
       dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
       items: invoice.items || [{ description: '', quantity: 1, unitPrice: 0, taxPercent: 18, unitType: 'Nos' }],
-      status: invoice.status
+      status: invoice.status,
+      company: invoice.company || 'ISTL'
     });
     setSelectedInvoice(invoice);
     setEditMode(true);
@@ -558,7 +590,6 @@ const InvoicesManagementPage = () => {
    * Save invoice
    */
   const handleSaveInvoice = async (status) => {
-    // Validation
     if (!formData.customerId) {
       showError('Please select a project to auto-fill customer details');
       return;
@@ -801,25 +832,25 @@ const InvoicesManagementPage = () => {
       {stats && (
         <div className="Invoices-page-stats">
           <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">Total Invoices</div>
-            <div className="Invoices-page-stat-value">{stats.totalInvoices}</div>
+            <div className="Invoices-page-stat-label">TOTAL INVOICES</div>
+            <div className="Invoices-page-stat-value">{stats.totalCount || 0}</div>
           </div>
           <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">Paid</div>
+            <div className="Invoices-page-stat-label">PAID</div>
             <div className="Invoices-page-stat-value Invoices-page-stat-success">
-              {stats.paidInvoices}
+              {stats.paidCount || 0}
             </div>
           </div>
           <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">Pending</div>
+            <div className="Invoices-page-stat-label">PENDING</div>
             <div className="Invoices-page-stat-value Invoices-page-stat-warning">
-              {stats.sentInvoices + stats.partiallyPaidInvoices}
+              {stats.pendingCount || 0}
             </div>
           </div>
           <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">Total Amount</div>
+            <div className="Invoices-page-stat-label">TOTAL AMOUNT</div>
             <div className="Invoices-page-stat-value">
-              {formatCurrency(stats.totalPaidAmount)}
+              {formatCurrency(stats.totalAmount)}
             </div>
           </div>
         </div>
@@ -893,7 +924,7 @@ const InvoicesManagementPage = () => {
                         onClick={() => handleRecordPayment(invoice)}
                         title="Record Payment"
                       >
-                        <DollarSign size={16} />
+                        <FaIndianRupeeSign size={16} />
                       </button>
                       <button
                         className="Invoices-page-action-btn Invoices-page-btn-delete"
@@ -904,7 +935,6 @@ const InvoicesManagementPage = () => {
                       </button>
                     </div>
                   </td>
-
                 </tr>
               ))
             )}
@@ -918,14 +948,13 @@ const InvoicesManagementPage = () => {
           </div>
 
           <div className="Invoices-page-pagination-controls-wrapper">
-            {/* Rows per page selector */}
             <div className="Invoices-page-pagination-size">
               <label>Rows per page:</label>
               <select
                 value={pageSize}
                 onChange={(e) => {
                   setPageSize(Number(e.target.value));
-                  setCurrentPage(0); // Reset to first page when changing page size
+                  setCurrentPage(0);
                 }}
                 className="Invoices-page-pagination-size-select"
               >
@@ -937,7 +966,6 @@ const InvoicesManagementPage = () => {
               </select>
             </div>
 
-            {/* Page navigation */}
             <div className="Invoices-page-pagination-controls">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
@@ -987,7 +1015,6 @@ const InvoicesManagementPage = () => {
                   </div>
                 </div>
 
-                {/* Invoice Items */}
                 <div className="Invoices-page-invoice-section">
                   <h3>Invoice Items</h3>
                   <table className="Invoices-page-invoice-items-table">
@@ -1019,7 +1046,7 @@ const InvoicesManagementPage = () => {
                     </tbody>
                   </table>
                 </div>
-                {/* Payment History */}
+
                 {paymentHistory && paymentHistory.length > 0 && (
                   <div className="Invoices-page-invoice-section">
                     <h3>Payment History</h3>
@@ -1047,7 +1074,7 @@ const InvoicesManagementPage = () => {
                     </table>
                   </div>
                 )}
-                {/* Totals */}
+
                 <div className="Invoices-page-invoice-totals">
                   <div className="Invoices-page-total-row">
                     <span>Total Amount:</span>
@@ -1098,7 +1125,6 @@ const InvoicesManagementPage = () => {
 
             <div className="Invoices-page-modal-body">
               <div className="Invoices-page-form">
-                {/* Project Assignment */}
                 <div className="Invoices-page-form-section">
                   <h3>Project Assignment</h3>
                   <div className="Invoices-page-form-grid">
@@ -1155,6 +1181,7 @@ const InvoicesManagementPage = () => {
                         ))}
                       </select>
                     </div>
+
                     <div className="Invoices-page-form-group">
                       <label>Company *</label>
                       <select
@@ -1168,7 +1195,6 @@ const InvoicesManagementPage = () => {
                   </div>
                 </div>
 
-                {/* Customer Information (Auto-populated) */}
                 {customerData && (
                   <div className="Invoices-page-form-section">
                     <h3>Customer Information</h3>
@@ -1188,7 +1214,6 @@ const InvoicesManagementPage = () => {
                   </div>
                 )}
 
-                {/* Invoice Details */}
                 <div className="Invoices-page-form-section">
                   <h3>Invoice Details</h3>
                   <div className="Invoices-page-form-grid">
@@ -1212,7 +1237,6 @@ const InvoicesManagementPage = () => {
                   </div>
                 </div>
 
-                {/* Invoice Items */}
                 <div className="Invoices-page-form-section">
                   <div className="Invoices-page-section-header">
                     <h3>Invoice Items *</h3>
@@ -1236,7 +1260,6 @@ const InvoicesManagementPage = () => {
                             placeholder="Start typing item name..."
                           />
 
-                          {/* Dropdown for filtered items */}
                           {showDropdown[index] && filteredItems[index]?.length > 0 && (
                             <div
                               className="invoice-item-dropdown"
@@ -1285,6 +1308,7 @@ const InvoicesManagementPage = () => {
                             </div>
                           )}
                         </div>
+
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Unit Type</label>
                           <UnitTypeDropdown
@@ -1292,6 +1316,7 @@ const InvoicesManagementPage = () => {
                             onChange={(e) => updateItem(index, 'unitType', e.target.value)}
                           />
                         </div>
+
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Qty *</label>
                           <input
@@ -1301,6 +1326,7 @@ const InvoicesManagementPage = () => {
                             min="1"
                           />
                         </div>
+
                         <div className="Invoices-page-form-group">
                           <label>Unit Price *</label>
                           <input
@@ -1311,6 +1337,7 @@ const InvoicesManagementPage = () => {
                             step="0.01"
                           />
                         </div>
+
                         <div className="Invoices-page-form-group Invoices-page-form-group-small">
                           <label>Tax %</label>
                           <select
@@ -1324,6 +1351,7 @@ const InvoicesManagementPage = () => {
                             <option value="28">28%</option>
                           </select>
                         </div>
+
                         <div className="Invoices-page-form-group">
                           <label>Line Total</label>
                           <div className="Invoices-page-item-total">
@@ -1331,6 +1359,7 @@ const InvoicesManagementPage = () => {
                           </div>
                         </div>
                       </div>
+
                       {formData.items.length > 1 && (
                         <button
                           className="Invoices-page-btn-remove"
@@ -1423,6 +1452,7 @@ const InvoicesManagementPage = () => {
                     max={selectedInvoice.balanceAmount}
                   />
                 </div>
+
                 <div className="Invoices-page-form-group">
                   <label>Payment Method *</label>
                   <select
@@ -1436,6 +1466,7 @@ const InvoicesManagementPage = () => {
                     <option value="Credit Card">Credit Card</option>
                   </select>
                 </div>
+
                 <div className="Invoices-page-form-group">
                   <label>Notes</label>
                   <textarea
@@ -1445,6 +1476,7 @@ const InvoicesManagementPage = () => {
                     rows="3"
                   />
                 </div>
+
                 <div className="Invoices-page-form-group">
                   <label>Transaction Reference</label>
                   <input
