@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
-  Calendar, DollarSign, CheckCircle, CreditCard,
+  Calendar, DollarSign, IndianRupee,CheckCircle, CreditCard,
   Link as LinkIcon, Trash2, Download
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
@@ -1078,7 +1078,7 @@ const BillsReceived = () => {
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <DollarSign size={32} />
+            <IndianRupee size={32} />
           </div>
           <div className="procurement-bills-received-kpi-content">
             <div className="procurement-bills-received-kpi-value">{formatCurrency(kpis.outstandingAmount)}</div>

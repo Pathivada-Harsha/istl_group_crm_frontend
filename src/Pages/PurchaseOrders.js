@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck, CheckCircle, Clock, FileText, TrendingUp, DollarSign, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck, CheckCircle, IndianRupee,Clock, FileText, TrendingUp, DollarSign, AlertCircle, Trash2 } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -1349,7 +1349,7 @@ const PurchaseOrders = () => {
     { title: 'Total POs', value: stats.totalPOs.toString(), icon: <FileText size={32} />, color: '#2563eb' },
     { title: 'In Transit', value: stats.inTransit.toString(), icon: <Truck size={32} />, color: '#f59e0b' },
     { title: 'Delivered', value: stats.delivered.toString(), icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <DollarSign size={32} />, color: '#8b5cf6' }
+    { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <IndianRupee size={32} />, color: '#8b5cf6' }
   ] : [];
 
   return (

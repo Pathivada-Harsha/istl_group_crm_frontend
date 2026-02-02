@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  TrendingUp, TrendingDown, DollarSign, Package, FileText, Users,
+  TrendingUp, TrendingDown, DollarSign,IndianRupee, Package, FileText, Users,
   Calendar, Clock, AlertCircle, CheckCircle, XCircle, Activity,
   Briefcase, ShoppingCart, BarChart3, PieChart, Target, Zap,
   MapPin, Building2, Phone, Mail, User, Percent, ArrowUp, ArrowDown,
@@ -258,7 +258,7 @@ const ProjectDashboard = () => {
                 </div>
               </div>
               <div className="project-detail-item">
-                <DollarSign size={18} />
+                <IndianRupee size={18} />
                 <div>
                   <span className="detail-label">Total Project Value</span>
                   <span className="detail-value">{formatCurrency(dashboardData.budget)}</span>
@@ -273,7 +273,7 @@ const ProjectDashboard = () => {
             <>
               <div className="dashboard-section">
                 <h3 className="section-title">
-                  <DollarSign size={20} />
+                  <IndianRupee size={20} />
                   Project Financial Overview
                 </h3>
                 <div className="kpi-grid">
@@ -378,14 +378,14 @@ const ProjectDashboard = () => {
                 <div className="metrics-grid">
                   <div className="metric-card">
                     <div className="metric-header">
-                      <DollarSign size={24} />
-                      <span className="metric-title">Amount to be Received</span>
+                      <IndianRupee size={24} />
+                      <span className="metric-title">Billed Amount</span>
                     </div>
                     <div className="metric-value">
                       {formatCurrency(dashboardData.financialData.amountToBeReceived)}
                     </div>
                     <div className="metric-breakdown">
-                      <span className="metric-item">Total project budget</span>
+                      <span className="metric-item">Total Invoice Raised</span>
                     </div>
                   </div>
 
@@ -455,7 +455,7 @@ const ProjectDashboard = () => {
                 <div className="metrics-grid">
                   <div className="metric-card">
                     <div className="metric-header">
-                      <DollarSign size={24} />
+                      <IndianRupee size={24} />
                       <span className="metric-title">Total Procurement Cost</span>
                     </div>
                     <div className="metric-value">

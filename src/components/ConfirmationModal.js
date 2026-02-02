@@ -24,7 +24,8 @@ const ConfirmationModal = ({
   onCancel,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
-  showCancel = type === 'confirm'
+  showCancel = true
+
 }) => {
   if (!show) return null;
 
@@ -87,6 +88,7 @@ const ConfirmationModal = ({
             >
               {cancelText}
             </button>
+            
           )}
         </div>
       </div>
