@@ -27,9 +27,35 @@
   font-weight: 500;
 }
 
-/* Page Header */
+/* Page Header with Title and Icon */
 .leads-enquiries-header {
   margin-bottom: 16px;
+}
+
+.leads-enquiries-title-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.leads-enquiries-title-with-icon h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.leads-enquiries-info-icon {
+  font-size: 32px;
+  color: #2563eb;
+  cursor: help;
+  transition: all 0.3s ease;
+}
+
+.leads-enquiries-info-icon:hover {
+  color: #1d4ed8;
+  transform: scale(1.1);
 }
 
 /* Action Bar */
@@ -280,11 +306,12 @@
 
 .leads-enquiries-action-btn {
   padding: 6px;
-  border: none;
+  border: none !important;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   background-color: transparent;
+  
 }
 
 .leads-enquiries-action-btn svg {
@@ -293,7 +320,7 @@
 }
 
 .leads-enquiries-action-view {
-  color: #2563eb;
+  color: #4d7ce0;
 }
 
 .leads-enquiries-action-view:hover {
@@ -514,6 +541,15 @@
   min-height: 100px;
 }
 
+/* Phone Validation Error */
+.phone-error-message {
+  color: #dc2626;
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+  font-weight: 500;
+}
+
 .leads-enquiries-form-actions {
   display: flex;
   justify-content: flex-end;
@@ -657,65 +693,154 @@
   flex-wrap: wrap;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .leads-enquiries-container {
-    padding: 16px;
-  }
+/* Delete Confirmation Toast */
+.delete-confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  animation: fadeIn 0.3s ease-out;
+}
 
-  .leads-enquiries-action-bar {
-    padding: 16px;
-    flex-direction: column;
-    align-items: stretch;
+@keyframes fadeIn {
+  from {
+    opacity: 0;
   }
-
-  .leads-enquiries-search-wrapper {
-    min-width: 100%;
-  }
-
-  .leads-enquiries-filters {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .leads-enquiries-filter-select {
-    width: 100%;
-  }
-
-  .leads-enquiries-action-buttons {
-    flex-direction: column;
-    width: 100%;
-    margin-left: 0;
-  }
-
-  .leads-enquiries-btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .leads-enquiries-table {
-    font-size: 12px;
-  }
-
-  .leads-enquiries-table th,
-  .leads-enquiries-table td {
-    padding: 8px;
-  }
-
-  .leads-enquiries-pagination {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .leads-enquiries-modal {
-    max-width: 100%;
-    margin: 0;
-    border-radius: 0;
+  to {
+    opacity: 1;
   }
 }
-/* Add these new styles to your existing Leads-Enquire.css file */
 
-/* Disabled button styles - Add to existing button styles */
+.delete-confirmation-toast-wrapper {
+  animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.delete-confirmation-toast {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  min-width: 400px;
+  max-width: 500px;
+  border: 2px solid #fee2e2;
+  overflow: hidden;
+}
+
+.delete-confirmation-content {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 20px;
+  position: relative;
+}
+
+.delete-confirmation-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fee2e2;
+  border-radius: 50%;
+}
+
+.delete-confirmation-text {
+  flex: 1;
+  padding-right: 30px;
+}
+
+.delete-confirmation-text h4 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.delete-confirmation-text p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.delete-confirmation-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 4px;
+  color: #6b7280;
+  transition: all 0.2s;
+}
+
+.delete-confirmation-close:hover {
+  background-color: #f3f4f6;
+  color: #111827;
+}
+
+.delete-confirmation-actions {
+  display: flex;
+  gap: 12px;
+  padding: 16px 20px;
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  justify-content: center;
+}
+
+.delete-btn-cancel {
+  padding: 10px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background-color: white;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-btn-cancel:hover {
+  background-color: #f3f4f6;
+}
+
+.delete-btn-confirm {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 8px;
+  background-color: #dc2626;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-btn-confirm:hover {
+  background-color: #b91c1c;
+}
+
+/* Disabled button styles */
 .leads-enquiries-btn-disabled,
 .leads-enquiries-btn:disabled {
   opacity: 0.5;
@@ -836,6 +961,7 @@
   width: 18px;
   height: 18px;
 }
+
 /* Proposal Action Button */
 .leads-enquiries-action-proposal {
   color: #8b5cf6;
@@ -852,4 +978,75 @@
   border-color: #e5e7eb;
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .leads-enquiries-container {
+    padding: 16px;
+  }
+
+  .leads-enquiries-action-bar {
+    padding: 16px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .leads-enquiries-search-wrapper {
+    min-width: 100%;
+  }
+
+  .leads-enquiries-filters {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .leads-enquiries-filter-select {
+    width: 100%;
+  }
+
+  .leads-enquiries-action-buttons {
+    flex-direction: column;
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .leads-enquiries-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .leads-enquiries-table {
+    font-size: 12px;
+  }
+
+  .leads-enquiries-table th,
+  .leads-enquiries-table td {
+    padding: 8px;
+  }
+
+  .leads-enquiries-pagination {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .leads-enquiries-modal {
+    max-width: 100%;
+    margin: 0;
+    border-radius: 0;
+  }
+
+  .delete-confirmation-toast {
+    min-width: auto;
+    max-width: calc(100% - 40px);
+    margin: 0 20px;
+  }
+
+  .leads-enquiries-title-with-icon h1 {
+    font-size: 24px;
+  }
+
+  .leads-enquiries-info-icon {
+    font-size: 28px;
+  }
 }

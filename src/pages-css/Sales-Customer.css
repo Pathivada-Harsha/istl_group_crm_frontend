@@ -858,6 +858,7 @@
   z-index: 1000;
   animation: fadeIn 0.2s ease;
   padding: 20px;
+  overflow-y: auto;
 }
 
 .sales-customer-page-modal {
@@ -869,6 +870,11 @@
   overflow-y: auto;
   animation: scaleIn 0.3s ease;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  margin: auto;
+}
+
+.sales-customer-page-modal-xlarge {
+  max-width: 1200px;
 }
 
 @keyframes scaleIn {
@@ -926,7 +932,7 @@
 
 .sales-customer-page-form-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
@@ -951,6 +957,7 @@
   font-size: 14px;
   color: #1e293b;
   transition: all 0.2s;
+  width: 100%;
 }
 
 .sales-customer-page-form-group input:focus,
@@ -972,9 +979,106 @@
   justify-content: flex-end;
   padding-top: 16px;
   border-top: 1px solid #f1f5f9;
+  flex-wrap: wrap;
+}
+
+/* Delete Confirmation Modal */
+.customer-delete-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 480px;
+  width: 90%;
+  padding: 32px 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s;
+  text-align: center;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.customer-delete-modal-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.customer-delete-icon-circle {
+  width: 60px;
+  height: 60px;
+  background: #fed7d7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #c53030;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.customer-delete-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 12px 0;
+}
+
+.customer-delete-modal-text {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.customer-delete-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.customer-delete-btn {
+  background: #c53030;
+  color: white;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.customer-delete-btn:hover {
+  background: #9b2c2c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(197, 48, 48, 0.3);
 }
 
 /* Responsive */
+@media (max-width: 1400px) {
+  .sales-customer-page-modal-xlarge {
+    max-width: 95%;
+  }
+}
+
 @media (max-width: 1024px) {
   .sales-customer-page-kpi-card.wide {
     grid-column: span 1;
@@ -986,6 +1090,14 @@
 
   .sales-customer-page-info-item.full-width {
     grid-column: span 1;
+  }
+
+  .sales-customer-page-modal-xlarge {
+    max-width: 90%;
+  }
+
+  .sales-customer-page-form-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1041,6 +1153,24 @@
   .sales-customer-page-table td {
     padding: 10px 12px;
   }
+
+  .sales-customer-page-modal,
+  .sales-customer-page-modal-xlarge {
+    max-width: 95%;
+    max-height: 95vh;
+  }
+
+  .sales-customer-page-modal-overlay {
+    padding: 10px;
+  }
+
+  .sales-customer-page-form-actions {
+    flex-direction: column;
+  }
+
+  .sales-customer-page-form-actions button {
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1063,5 +1193,479 @@
   .sales-customer-page-pagination {
     width: 100%;
     justify-content: center;
+  }
+
+  .sales-customer-page-modal,
+  .sales-customer-page-modal-xlarge {
+    max-width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .sales-customer-page-modal-overlay {
+    padding: 0;
+  }
+
+  .customer-delete-modal {
+    max-width: 90%;
+  }
+}
+
+
+
+/* ===============================================
+   CUSTOMERS COMPONENT - RESPONSIVE CSS ADDITIONS
+   Add this to your existing Sales-Customer.css file
+   =============================================== */
+
+/* Additional Modal Sizes */
+.leads-enquiries-modal-xlarge {
+  max-width: 1200px !important;
+}
+
+/* Modal Overlay Improvements */
+.leads-enquiries-modal-overlay {
+  overflow-y: auto;
+}
+
+.leads-enquiries-modal {
+  margin: auto;
+}
+
+/* Form Grid Improvements for 2-column layout */
+.leads-enquiries-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* Delete Modal Responsive */
+.customer-delete-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 480px;
+  width: 90%;
+  padding: 32px 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s;
+  text-align: center;
+}
+
+.customer-delete-modal-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.customer-delete-icon-circle {
+  width: 60px;
+  height: 60px;
+  background: #fed7d7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #c53030;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.customer-delete-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 12px 0;
+}
+
+.customer-delete-modal-text {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.customer-delete-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.customer-delete-btn {
+  background: #c53030;
+  color: white;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.customer-delete-btn:hover {
+  background: #9b2c2c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(197, 48, 48, 0.3);
+}
+
+/* ===============================================
+   RESPONSIVE BREAKPOINTS
+   =============================================== */
+
+/* Large Desktops and Laptops (1400px and below) */
+@media (max-width: 1400px) {
+  .leads-enquiries-modal-xlarge {
+    max-width: 95% !important;
+  }
+}
+
+/* Tablets and Small Laptops (1024px and below) */
+@media (max-width: 1024px) {
+  .leads-enquiries-modal-xlarge {
+    max-width: 90% !important;
+  }
+
+  .leads-enquiries-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* KPI Cards */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  /* Table adjustments */
+  .leads-enquiries-table {
+    font-size: 13px;
+  }
+}
+
+/* Tablets Portrait (768px and below) */
+@media (max-width: 768px) {
+  /* Modals */
+  .leads-enquiries-modal,
+  .leads-enquiries-modal-large,
+  .leads-enquiries-modal-xlarge {
+    max-width: 95% !important;
+    max-height: 95vh !important;
+  }
+
+  .leads-enquiries-modal-overlay {
+    padding: 10px;
+  }
+
+  /* Form Actions */
+  .leads-enquiries-form-actions {
+    flex-direction: column;
+  }
+
+  .leads-enquiries-form-actions button {
+    width: 100%;
+  }
+
+  /* Action Bar */
+  .leads-enquiries-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .leads-enquiries-search-wrapper {
+    width: 100%;
+  }
+
+  .leads-enquiries-filters {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .leads-enquiries-filter-select {
+    width: 100%;
+  }
+
+  .leads-enquiries-action-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .leads-enquiries-action-buttons button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Pagination */
+  .leads-enquiries-pagination {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .leads-enquiries-pagination-info {
+    text-align: center;
+  }
+
+  .leads-enquiries-pagination-controls {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .leads-enquiries-rows-select {
+    width: 100%;
+  }
+
+  .leads-enquiries-pagination-buttons {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .leads-enquiries-pagination-btn {
+    flex: 1;
+  }
+
+  /* KPI Cards */
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Table */
+  .leads-enquiries-table {
+    font-size: 12px;
+  }
+
+  .leads-enquiries-table th,
+  .leads-enquiries-table td {
+    padding: 10px 8px;
+  }
+
+  /* Container */
+  .leads-enquiries-container {
+    padding: 12px;
+  }
+
+  /* Header */
+  .page-header-with-filter {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
+
+/* Mobile Devices (480px and below) */
+@media (max-width: 480px) {
+  /* Full Screen Modals */
+  .leads-enquiries-modal,
+  .leads-enquiries-modal-large,
+  .leads-enquiries-modal-xlarge {
+    max-width: 100% !important;
+    max-height: 100vh !important;
+    border-radius: 0;
+  }
+
+  .leads-enquiries-modal-overlay {
+    padding: 0;
+  }
+
+  /* Modal Header */
+  .leads-enquiries-modal-header {
+    padding: 16px;
+  }
+
+  .leads-enquiries-modal-header h2 {
+    font-size: 18px;
+  }
+
+  /* Modal Content */
+  .leads-enquiries-modal-body,
+  .leads-enquiries-form {
+    padding: 16px;
+  }
+
+  /* Table */
+  .leads-enquiries-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .leads-enquiries-table {
+    font-size: 11px;
+    min-width: 800px;
+  }
+
+  .leads-enquiries-table th,
+  .leads-enquiries-table td {
+    padding: 8px 6px;
+    white-space: nowrap;
+  }
+
+  /* Action Buttons in Table */
+  .leads-enquiries-action-buttons-cell {
+    display: flex;
+    gap: 4px;
+  }
+
+  .leads-enquiries-action-btn {
+    padding: 4px;
+  }
+
+  /* Delete Modal */
+  .customer-delete-modal {
+    max-width: 90% !important;
+    padding: 24px 16px;
+  }
+
+  .customer-delete-modal-title {
+    font-size: 20px;
+  }
+
+  .customer-delete-modal-text {
+    font-size: 13px;
+  }
+
+  .customer-delete-modal-actions {
+    flex-direction: column;
+  }
+
+  .customer-delete-modal-actions button {
+    width: 100%;
+  }
+
+  /* Form Section Titles */
+  .leads-enquiries-form-section-title {
+    font-size: 16px;
+  }
+
+  /* Badges */
+  .leads-enquiries-badge {
+    font-size: 10px;
+    padding: 3px 8px;
+  }
+
+  /* Pagination */
+  .leads-enquiries-pagination-current {
+    font-size: 13px;
+  }
+
+  /* Search */
+  .leads-enquiries-search-input {
+    font-size: 14px;
+  }
+
+  /* Breadcrumb */
+  .leads-enquiries-breadcrumb {
+    font-size: 12px;
+  }
+}
+
+/* Extra Small Devices (360px and below) */
+@media (max-width: 360px) {
+  .leads-enquiries-container {
+    padding: 8px;
+  }
+
+  .leads-enquiries-table {
+    font-size: 10px;
+  }
+
+  .customer-delete-icon-circle {
+    width: 50px;
+    height: 50px;
+    font-size: 28px;
+  }
+
+  .customer-delete-modal-title {
+    font-size: 18px;
+  }
+
+  .leads-enquiries-btn {
+    font-size: 13px;
+    padding: 8px 16px;
+  }
+}
+
+/* ===============================================
+   PRINT STYLES
+   =============================================== */
+@media print {
+  .leads-enquiries-action-bar,
+  .leads-enquiries-pagination,
+  .leads-enquiries-action-buttons-cell,
+  .leads-enquiries-modal-close,
+  .leads-enquiries-form-actions {
+    display: none !important;
+  }
+
+  .leads-enquiries-modal-overlay {
+    position: relative;
+    background: white;
+  }
+
+  .leads-enquiries-modal {
+    max-width: 100%;
+    box-shadow: none;
+  }
+}
+
+/* ===============================================
+   ACCESSIBILITY IMPROVEMENTS
+   =============================================== */
+
+/* Focus visible for keyboard navigation */
+.leads-enquiries-btn:focus-visible,
+.leads-enquiries-action-btn:focus-visible,
+.leads-enquiries-filter-select:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .leads-enquiries-modal {
+    border: 2px solid #000;
+  }
+
+  .leads-enquiries-badge,
+  .leads-enquiries-status {
+    border: 1px solid currentColor;
+  }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+  .leads-enquiries-modal,
+  .customer-delete-modal {
+    animation: none;
+  }
+
+  .customer-delete-icon-circle {
+    animation: none;
+  }
+
+  * {
+    transition: none !important;
   }
 }

@@ -1,5 +1,3 @@
-
-
 /* Container */
 .proposal-page-container {
 padding: 24px;
@@ -235,19 +233,25 @@ padding: 24px;
   background: transparent;
   border: none;
   cursor: pointer;
-  font-size: 18px;
-  padding: 4px 8px;
+  font-size: 16px;
+  padding: 6px 10px;
   border-radius: 4px;
   transition: all 0.2s;
+  color: #4a5568;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .proposal-page-action-btn:hover {
   background: #edf2f7;
   transform: scale(1.1);
+  color: #2d3748;
 }
 
 .proposal-page-action-delete:hover {
   background: #fed7d7;
+  color: #742a2a;
 }
 
 /* Pagination */
@@ -584,6 +588,133 @@ padding: 24px;
   color: #718096;
 }
 
+/* Delete Confirmation Modal */
+.proposal-delete-modal {
+  background: white;
+  border-radius: 12px;
+  max-width: 480px;
+  width: 90%;
+  padding: 32px 24px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideUp 0.3s;
+  text-align: center;
+}
+
+.proposal-delete-modal-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.proposal-delete-icon-circle {
+  width: 60px;
+  height: 60px;
+  background: #fed7d7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  color: #c53030;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.proposal-delete-modal-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a202c;
+  margin: 0 0 12px 0;
+}
+
+.proposal-delete-modal-text {
+  font-size: 14px;
+  color: #4a5568;
+  line-height: 1.6;
+  margin: 0 0 24px 0;
+}
+
+.proposal-delete-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.proposal-delete-btn {
+  background: #c53030;
+  color: white;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.proposal-delete-btn:hover {
+  background: #9b2c2c;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 6px rgba(197, 48, 48, 0.3);
+}
+
+/* Unit Dropdown Styling */
+.proposal-unit-dropdown {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 13px;
+  background-color: white;
+  cursor: pointer;
+  transition: border-color 0.3s;
+}
+
+.proposal-unit-dropdown:focus {
+  outline: none;
+  border-color: #3182ce;
+  box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+}
+
+/* Unit Input Container */
+.unit-input-container {
+  position: relative;
+}
+
+.unit-input-container input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  outline: none;
+}
+
+/* Unit Dropdown Scrollbar */
+.unit-input-container > div::-webkit-scrollbar {
+  width: 8px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.unit-input-container > div::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .proposal-page-action-bar {
@@ -677,98 +808,87 @@ padding: 24px;
 
 .proposal-page-table-container::-webkit-scrollbar-thumb:hover {
   background: #a0aec0;
-
-}
-.proposal-page-action-btn {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 6px 10px;
-  border-radius: 4px;
-  transition: all 0.2s;
-  color: #4a5568;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.proposal-page-action-btn:hover {
-  background: #edf2f7;
-  transform: scale(1.1);
-  color: #2d3748;
-}
-
-.proposal-page-action-delete:hover {
-  background: #fed7d7;
-  color: #742a2a;
-}
 .proposals-btn-disabled {
   opacity: 0.45;
   pointer-events: none;
   filter: grayscale(100%);
   cursor: not-allowed;
 }
-* Unit Input Container */
-.unit-input-container {
-  position: relative;
+
+/* Inline actions container */
+.proposal-actions-inline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  white-space: nowrap;
 }
 
-.unit-input-container input:focus {
-  border-color: #3b82f6 !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-  outline: none;
+/* Base button */
+.proposal-action-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 10px;   /* 👈 rounded hover background */
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
 
-/* Unit Dropdown Scrollbar */
-.unit-input-container > div::-webkit-scrollbar {
-  width: 8px;
-}
-
-.unit-input-container > div::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-.unit-input-container > div::-webkit-scrollbar-thumb {
-  background: #cbd5e0;
-  border-radius: 4px;
-}
-
-.unit-input-container > div::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+.proposal-action-icon svg {
+  font-size: 15px;
 }
 
 
+/* .proposal-action-icon:hover {
+  transform: translateY(-1px);
+} */
+
+/* ===== Individual hover backgrounds (lite color) ===== */
+
+/* View (Blue) */
+.proposal-view {
+  color: #2563eb;
+}
+.proposal-view:hover {
+  background-color: rgba(37, 99, 235, 0.12);
+}
+
+/* Edit (Green) */
+.proposal-edit {
+  color: #059669;
+}
+.proposal-edit:hover {
+  background-color: rgba(5, 150, 105, 0.12);
+}
+
+/* PDF (Red) */
+/* PDF (now uses DELETE color) */
+.proposal-pdf {
+  color: #7f1d1d;
+}
+.proposal-pdf:hover {
+  background-color: rgba(127, 29, 29, 0.12);
+}
 
 
+/* Delete (Dark Red) */
+/* Delete (now uses PDF color) */
+.proposal-delete {
+  color: #dc2626;
+}
+.proposal-delete:hover {
+  background-color: rgba(220, 38, 38, 0.12);
+}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+/* Disabled */
+.proposal-action-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}

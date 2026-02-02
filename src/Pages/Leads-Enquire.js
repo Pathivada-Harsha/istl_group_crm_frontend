@@ -1,4 +1,4 @@
-// Leads-Enquiries.js - Updated with Enhanced Proposal Modal
+// Leads-Enquiries.js - Updated with All Enhancements
 import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
@@ -9,7 +9,9 @@ import ToastContainer from './../components/Notification_Toast/ToastContainer.js
 import CrmPreloader from "../components/preLoader.js";
 import LeadTimelineModal from './../components/Leads/LeadTimelineModal.js';
 import AddFollowupModal from './../components/Leads/AddFollowupModal.js';
-import CreateProposalModal from './../components/Leads/CreateProposalModal'; // Enhanced modal with BOM filtering
+import CreateProposalModal from './../components/Leads/CreateProposalModal';
+import { TiInfo } from 'react-icons/ti'; // Import the info icon
+import { TiInfoLarge } from "react-icons/ti";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -44,6 +46,39 @@ Extended warranty options are available upon request.`,
   bomItems: []
 };
 
+// Delete Confirmation Toast Component
+const DeleteConfirmationToast = ({ onConfirm, onCancel, leadName }) => {
+  return (
+    <div className="delete-confirmation-toast">
+      <div className="delete-confirmation-content">
+        <div className="delete-confirmation-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="#DC2626" strokeWidth="2" />
+            <path d="M12 8V12M12 16H12.01" stroke="#DC2626" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        </div>
+        <div className="delete-confirmation-text">
+          <h4>Delete Lead</h4>
+          <p>Are you sure you want to delete lead "{leadName}"? This action cannot be undone.</p>
+        </div>
+        <button className="delete-confirmation-close" onClick={onCancel} title="Cancel">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="delete-confirmation-actions">
+        <button className="delete-btn-cancel" onClick={onCancel}>
+          Cancel
+        </button>
+        <button className="delete-btn-confirm" onClick={onConfirm}>
+          Confirm Delete
+        </button>
+      </div>
+    </div>
+  );
+};
+
 function LeadsEnquiries() {
   const isFirstRender = useRef(true);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -74,6 +109,12 @@ function LeadsEnquiries() {
   const [showProposalModal, setShowProposalModal] = useState(false);
   const [selectedLeadForProposal, setSelectedLeadForProposal] = useState(null);
 
+  // Delete confirmation state
+  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+
+  // Phone validation error
+  const [phoneError, setPhoneError] = useState('');
+
   // Extract permissions
   const leadsPermissions = pagePermissions?.LEADS || [];
   const canView = leadsPermissions.includes('VIEW');
@@ -89,6 +130,7 @@ function LeadsEnquiries() {
   };
 
   const [leads, setLeads] = useState([]);
+  const [allLeads, setAllLeads] = useState([]); // Store all leads for filtering
 
   const [formData, setFormData] = useState({
     customerId: null,
@@ -158,6 +200,7 @@ function LeadsEnquiries() {
 
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/getAll?${params}`);
       if (data.success) {
+        setAllLeads(data.data); // Store all leads
         setLeads(data.data);
       }
     } catch (err) {
@@ -192,7 +235,7 @@ function LeadsEnquiries() {
     setShowProposalModal(false);
     setSelectedLeadForProposal(null);
     showSuccess('Proposal created successfully');
-    fetchLeads(); // Refresh to update any counts
+    fetchLeads();
   };
 
   // Handle View Timeline
@@ -218,7 +261,7 @@ function LeadsEnquiries() {
     setShowFollowupModal(false);
     setSelectedLeadForFollowup(null);
     showSuccess('Follow-up created successfully');
-    fetchLeads(); // Refresh to update pending follow-up counts
+    fetchLeads();
   };
 
   const fetchUsers = async () => {
@@ -292,65 +335,53 @@ function LeadsEnquiries() {
     }
   };
 
-  const applyFilters = async () => {
-    if (!canView) return;
+  // Client-side filtering function
+  const applyClientSideFilters = () => {
+    let filteredLeads = [...allLeads];
 
-    setLoading(true);
-    setError(null);
-    try {
-      const filterRequest = {
-        searchTerm: searchTerm || null,
-        status: statusFilter !== 'All' ? statusFilter : null,
-        priority: priorityFilter !== 'All' ? priorityFilter : null,
-        source: sourceFilter !== 'All' ? sourceFilter : null,
-        groupName: groupName || null,
-        subGroupName: subGroupName || null,
-        assignedTo: null,
-        fromDate: null,
-        toDate: null
-      };
-
-      const data = await fetchWithHeaders(`${API_BASE_URL}/leads/filter`, {
-        method: 'POST',
-        body: JSON.stringify(filterRequest)
-      });
-
-      if (data.success) {
-        setLeads(data.data);
-        setCurrentPage(1);
-      }
-    } catch (err) {
-      setError(err.message || 'Error applying filters');
-    } finally {
-      setLoading(false);
+    // Apply search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      filteredLeads = filteredLeads.filter(lead =>
+        (lead.name && lead.name.toLowerCase().includes(searchLower)) ||
+        (lead.email && lead.email.toLowerCase().includes(searchLower)) ||
+        (lead.phone && lead.phone.toLowerCase().includes(searchLower)) ||
+        (lead.leadCode && lead.leadCode.toLowerCase().includes(searchLower))
+      );
     }
+
+    // Apply status filter
+    if (statusFilter !== 'All') {
+      filteredLeads = filteredLeads.filter(lead => lead.status === statusFilter);
+    }
+
+    // Apply priority filter
+    if (priorityFilter !== 'All') {
+      filteredLeads = filteredLeads.filter(lead => lead.priority === priorityFilter);
+    }
+
+    // Apply source filter
+    if (sourceFilter !== 'All') {
+      filteredLeads = filteredLeads.filter(lead => lead.source === sourceFilter);
+    }
+
+    setLeads(filteredLeads);
+    setCurrentPage(1);
   };
 
+  // Apply filters whenever filter values change
   useEffect(() => {
-    // Skip first render
     if (isFirstRender.current) {
       isFirstRender.current = false;
       return;
     }
 
-    // Skip if filters are still default
-    const isDefaultFilter =
-      !searchTerm &&
-      statusFilter === 'All' &&
-      priorityFilter === 'All' &&
-      sourceFilter === 'All';
-
-    if (isDefaultFilter) {
-      return;
-    }
-
     const debounceTimer = setTimeout(() => {
-      applyFilters();
-    }, 500);
+      applyClientSideFilters();
+    }, 300);
 
     return () => clearTimeout(debounceTimer);
-
-  }, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
+  }, [searchTerm, statusFilter, priorityFilter, sourceFilter, allLeads]);
 
   const handleSort = (column) => {
     const direction = sortColumn === column && sortDirection === 'asc' ? 'desc' : 'asc';
@@ -407,33 +438,78 @@ function LeadsEnquiries() {
       groupName: lead.groupName || '',
       subGroupName: lead.subGroupName || ''
     });
+    setPhoneError('');
     setShowAddModal(true);
   };
 
-  const handleDelete = async (leadId) => {
+  const handleDelete = (lead) => {
     if (!canDelete) {
       showError('You do not have permission to delete leads');
       return;
     }
 
-    if (window.confirm('Are you sure you want to delete this lead?')) {
-      try {
-        const data = await fetchWithHeaders(`${API_BASE_URL}/leads/delete/${leadId}`, {
-          method: 'DELETE'
-        });
+    setDeleteConfirmation({
+      id: lead.id,
+      name: lead.name
+    });
+  };
 
-        if (data.success) {
-          showSuccess('Lead deleted successfully');
-          fetchLeads();
-        }
-      } catch (err) {
-        showError(err.message || 'Error deleting lead');
+  const confirmDelete = async () => {
+    if (!deleteConfirmation) return;
+
+    try {
+      const data = await fetchWithHeaders(`${API_BASE_URL}/leads/delete/${deleteConfirmation.id}`, {
+        method: 'DELETE'
+      });
+
+      if (data.success) {
+        showSuccess('Lead deleted successfully');
+        setDeleteConfirmation(null);
+        fetchLeads();
       }
+    } catch (err) {
+      showError(err.message || 'Error deleting lead');
+      setDeleteConfirmation(null);
     }
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirmation(null);
+  };
+
+  // Phone validation function
+  const validatePhone = (value) => {
+    // Remove any non-digit characters
+    const cleaned = value.replace(/\D/g, '');
+
+    if (cleaned.length === 0) {
+      setPhoneError('');
+      return cleaned;
+    }
+
+    if (cleaned.length > 10) {
+      setPhoneError('Phone number must be maximum 10 digits');
+      return cleaned.slice(0, 10);
+    }
+
+    setPhoneError('');
+    return cleaned;
+  };
+
+  const handlePhoneChange = (e) => {
+    const value = e.target.value;
+    const validatedPhone = validatePhone(value);
+    setFormData({ ...formData, phone: validatedPhone });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Final phone validation
+    if (formData.phone && formData.phone.length !== 10) {
+      setPhoneError('Phone number must be exactly 10 digits');
+      return;
+    }
 
     if (formData.id && !canEdit) {
       showError('You do not have permission to edit leads');
@@ -502,6 +578,7 @@ function LeadsEnquiries() {
       groupName: '',
       subGroupName: ''
     });
+    setPhoneError('');
   };
 
   const getStatusClass = (status) => {
@@ -578,6 +655,19 @@ function LeadsEnquiries() {
       {loading && <CrmPreloader text="Loading Leads..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
+      {/* Delete Confirmation Toast */}
+      {deleteConfirmation && (
+        <div className="delete-confirmation-overlay">
+          <div className="delete-confirmation-toast-wrapper">
+            <DeleteConfirmationToast
+              onConfirm={confirmDelete}
+              onCancel={cancelDelete}
+              leadName={deleteConfirmation.name}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="leads-enquiries-breadcrumb">
         <span>Dashboard</span>
         <span className="leads-enquiries-breadcrumb-separator">&gt;</span>
@@ -585,6 +675,10 @@ function LeadsEnquiries() {
       </div>
 
       <div className="leads-enquiries-header page-header-with-filter">
+        <div className="leads-enquiries-title-with-icon">
+          <h1>Leads </h1>
+          {/* <TiInfoLarge className="leads-enquiries-info-icon" title="Manage your leads and enquiries" /> */}
+        </div>
         <GroupCategoryFilter
           groupValue={groupName}
           subGroupValue={subGroupName}
@@ -713,15 +807,38 @@ function LeadsEnquiries() {
                         {lead.status}
                       </span>
                     </td>
-                    <td>
-                      {lead.hasPendingFollowups && (
+                    <td style={{ textAlign: "center" }}>
+                      {lead.pendingFollowupsCount > 0 ? (
                         <span className="badge badge-orange">
                           {lead.pendingFollowupsCount} Pending
                         </span>
+                      ) : (
+                        "N/A"
                       )}
                     </td>
-                    <td>{lead.assignedToName || '-'}</td>
-                    <td>{lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-'}</td>
+
+                    <td style={{ textAlign: lead.assignedToName ? "left" : "center" }}>
+                      {lead.assignedToName || "N/A"}
+                    </td>
+
+                    <td>
+                      {lead.createdAt
+                        ? new Date(lead.createdAt)
+                          .toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                            hour12: false,
+                          })
+                          .replaceAll("/", "-")
+                          .replace(",", "")
+                        : "-"}
+                    </td>
+
+
                     <td>
                       <div className="leads-enquiries-action-buttons-cell">
                         {canView && (
@@ -737,7 +854,6 @@ function LeadsEnquiries() {
                           </button>
                         )}
 
-                        {/* Timeline Button */}
                         <button
                           className="leads-enquiries-action-btn leads-enquiries-action-timeline"
                           onClick={() => handleViewTimeline(lead)}
@@ -748,7 +864,6 @@ function LeadsEnquiries() {
                           </svg>
                         </button>
 
-                        {/* Add Follow-up Button */}
                         <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
                           onClick={() => handleAddFollowup(lead)}
@@ -760,7 +875,6 @@ function LeadsEnquiries() {
                           </svg>
                         </button>
 
-                        {/* Create Proposal Button */}
                         <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
                           onClick={() => handleCreateProposal(lead)}
@@ -785,7 +899,7 @@ function LeadsEnquiries() {
 
                         <button
                           className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                          onClick={() => handleDelete(lead.id)}
+                          onClick={() => handleDelete(lead)}
                           title={!canDelete ? 'No permission to delete' : 'Delete'}
                           disabled={!canDelete}
                         >
@@ -829,7 +943,7 @@ function LeadsEnquiries() {
 
       {/* Add/Edit Lead Modal */}
       {showAddModal && (
-        <div className="leads-enquiries-modal-overlay" onClick={() => setShowAddModal(false)}>
+        <div className="leads-enquiries-modal-overlay">
           <div className="leads-enquiries-modal" onClick={(e) => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>{formData.id ? 'Edit Lead' : 'Add New Lead'}</h2>
@@ -853,7 +967,15 @@ function LeadsEnquiries() {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Phone *</label>
-                    <input type="tel" required value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+                    <input
+                      type="text"
+                      required
+                      value={formData.phone}
+                      onChange={handlePhoneChange}
+                      placeholder="Enter 10 digit number"
+                      maxLength="10"
+                    />
+                    {phoneError && <span className="phone-error-message">{phoneError}</span>}
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Group</label>
@@ -939,7 +1061,7 @@ function LeadsEnquiries() {
                 <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading}>
+                <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading || phoneError}>
                   {loading ? 'Saving...' : (formData.id ? 'Update Lead' : 'Save Lead')}
                 </button>
               </div>
@@ -950,7 +1072,7 @@ function LeadsEnquiries() {
 
       {/* View Lead Modal */}
       {showViewModal && selectedLead && (
-        <div className="leads-enquiries-modal-overlay" onClick={() => setShowViewModal(false)}>
+        <div className="leads-enquiries-modal-overlay">
           <div className="leads-enquiries-modal leads-enquiries-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>Lead Details - {selectedLead.leadCode}</h2>
@@ -1021,7 +1143,6 @@ function LeadsEnquiries() {
               </div>
 
               <div className="leads-enquiries-modal-actions">
-                {/* Add Follow-up from View Modal */}
                 {canCreate && (
                   <button
                     className="leads-enquiries-btn leads-enquiries-btn-success"
@@ -1037,7 +1158,6 @@ function LeadsEnquiries() {
                   </button>
                 )}
 
-                {/* View Timeline from View Modal */}
                 <button
                   className="leads-enquiries-btn leads-enquiries-btn-info"
                   onClick={() => {

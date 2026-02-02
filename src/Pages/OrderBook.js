@@ -6,7 +6,9 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
-import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload } from 'react-icons/fa';
+import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload,FaCloudUploadAlt  } from 'react-icons/fa';
+import { RiDeleteBin6Line } from "react-icons/ri";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -39,6 +41,8 @@ function OrderBook() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPOUploadModal, setShowPOUploadModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteOrderId, setDeleteOrderId] = useState(null);
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedOrderBook, setSelectedOrderBook] = useState(null);
 
@@ -54,7 +58,7 @@ function OrderBook() {
     expectedDeliveryDate: '',
     poNumber: '',
     poDate: '',
-    advanceAmount: 0,
+    advanceAmount: '',
     status: 'Draft',
     remarks: '',
     items: []
@@ -64,7 +68,7 @@ function OrderBook() {
   const [poUploadData, setPoUploadData] = useState({
     file: null,
     poNumber: '',
-    poDate: ''
+    poDate: new Date().toISOString().split('T')[0]
   });
 
   useEffect(() => {
@@ -299,12 +303,14 @@ function OrderBook() {
           specification: item.specification,
           description: item.description,
           proposalItemId: item.id,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitPrice: item.unitPrice,
-          taxPercent: item.taxPercent,
-          discountPercent: 0,
-          itemRemarks: ''
+          quantity: item.quantity || '',
+          unit: item.unit || 'Nos',
+          unitPrice: item.unitPrice || '',
+          taxPercent: item.taxPercent || '',
+          discountPercent: '',
+          itemRemarks: '',
+          isCustomUnit: false,
+          customUnit: ''
         }));
 
         setFormData(prev => ({ ...prev, items }));
@@ -325,6 +331,23 @@ function OrderBook() {
   const handleEdit = async (orderBook) => {
     setSelectedOrderBook(orderBook);
 
+    // First, set the group and subgroup to trigger dropdown populations
+    setFormData(prev => ({
+      ...prev,
+      groupName: orderBook.groupName || '',
+      subGroupName: orderBook.subGroupName || ''
+    }));
+
+    // Fetch customers and proposals for the order book's group
+    if (orderBook.groupName) {
+      await fetchSubGroupsForForm(orderBook.groupName);
+      await fetchCustomersByGroup(orderBook.groupName, orderBook.subGroupName);
+    }
+
+    if (orderBook.customerId) {
+      await fetchProposalsByCustomer(orderBook.customerId);
+    }
+
     // Fetch items
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
@@ -339,22 +362,33 @@ function OrderBook() {
 
       const data = await response.json();
       if (data.success) {
-        setFormData({
-          customerId: orderBook.customerId || '',
-          proposalId: orderBook.proposalId || '',
-          groupName: orderBook.groupName || '',
-          subGroupName: orderBook.subGroupName || '',
-          orderTitle: orderBook.orderTitle || '',
-          orderDescription: orderBook.orderDescription || '',
-          orderDate: orderBook.orderDate || '',
-          expectedDeliveryDate: orderBook.expectedDeliveryDate || '',
-          poNumber: orderBook.poNumber || '',
-          poDate: orderBook.poDate || '',
-          advanceAmount: orderBook.advanceAmount || 0,
-          status: orderBook.status || 'Draft',
-          remarks: orderBook.remarks || '',
-          items: data.data || []
-        });
+        // Set form data after dropdowns are populated
+        setTimeout(() => {
+          setFormData({
+            customerId: orderBook.customerId || '',
+            proposalId: orderBook.proposalId || '',
+            groupName: orderBook.groupName || '',
+            subGroupName: orderBook.subGroupName || '',
+            orderTitle: orderBook.orderTitle || '',
+            orderDescription: orderBook.orderDescription || '',
+            orderDate: orderBook.orderDate || '',
+            expectedDeliveryDate: orderBook.expectedDeliveryDate || '',
+            poNumber: orderBook.poNumber || '',
+            poDate: orderBook.poDate || '',
+            advanceAmount: orderBook.advanceAmount || '',
+            status: orderBook.status || 'Draft',
+            remarks: orderBook.remarks || '',
+            items: (data.data || []).map(item => ({
+              ...item,
+              quantity: item.quantity || '',
+              unitPrice: item.unitPrice || '',
+              taxPercent: item.taxPercent || '',
+              discountPercent: item.discountPercent || '',
+              isCustomUnit: false,
+              customUnit: ''
+            }))
+          });
+        }, 300);
 
         setIsEditMode(true);
         setShowCreateModal(true);
@@ -389,12 +423,17 @@ function OrderBook() {
     }
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this order book?')) return;
+  const handleDeleteClick = (id) => {
+    setDeleteOrderId(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteOrderId) return;
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/order-book/delete/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/order-book/delete/${deleteOrderId}`, {
         method: 'DELETE',
         credentials: "include",
         headers: {
@@ -408,6 +447,8 @@ function OrderBook() {
       const data = await response.json();
       if (data.success) {
         showSuccess('Order book deleted successfully');
+        setShowDeleteConfirm(false);
+        setDeleteOrderId(null);
         fetchOrderBooks();
       }
     } catch (err) {
@@ -425,6 +466,22 @@ function OrderBook() {
       return;
     }
 
+    // Prepare items with proper unit values
+    const preparedItems = formData.items.map(item => ({
+      ...item,
+      unit: item.isCustomUnit ? item.customUnit : item.unit,
+      quantity: item.quantity || 0,
+      unitPrice: item.unitPrice || 0,
+      taxPercent: item.taxPercent || 0,
+      discountPercent: item.discountPercent || 0
+    }));
+
+    const submitData = {
+      ...formData,
+      advanceAmount: formData.advanceAmount || 0,
+      items: preparedItems
+    };
+
     setLoading(true);
     try {
       const url = isEditMode
@@ -441,7 +498,7 @@ function OrderBook() {
           'User-Id': user.id,
           'User-Role': user.role
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       });
 
       if (!response.ok) {
@@ -461,6 +518,16 @@ function OrderBook() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePOUploadClick = (orderBook) => {
+    setSelectedOrderBook(orderBook);
+    setPoUploadData({
+      file: null,
+      poNumber: orderBook.poNumber || '',
+      poDate: new Date().toISOString().split('T')[0]
+    });
+    setShowPOUploadModal(true);
   };
 
   const handlePOUpload = async (e) => {
@@ -499,7 +566,7 @@ function OrderBook() {
       if (data.success) {
         showSuccess('PO uploaded successfully');
         setShowPOUploadModal(false);
-        setPoUploadData({ file: null, poNumber: '', poDate: '' });
+        setPoUploadData({ file: null, poNumber: '', poDate: new Date().toISOString().split('T')[0] });
         fetchOrderBooks();
       }
     } catch (err) {
@@ -521,7 +588,7 @@ function OrderBook() {
       expectedDeliveryDate: '',
       poNumber: '',
       poDate: '',
-      advanceAmount: 0,
+      advanceAmount: '',
       status: 'Draft',
       remarks: '',
       items: []
@@ -530,6 +597,7 @@ function OrderBook() {
     setSelectedOrderBook(null);
     setCustomers([]);
     setProposals([]);
+    setSubGroups([]);
   };
 
   const addItem = () => {
@@ -543,12 +611,14 @@ function OrderBook() {
           specification: '',
           description: '',
           proposalItemId: null,
-          quantity: 1,
+          quantity: '',
           unit: 'Nos',
-          unitPrice: 0,
-          taxPercent: 0,
-          discountPercent: 0,
-          itemRemarks: ''
+          unitPrice: '',
+          taxPercent: '',
+          discountPercent: '',
+          itemRemarks: '',
+          isCustomUnit: false,
+          customUnit: ''
         }
       ]
     }));
@@ -557,7 +627,21 @@ function OrderBook() {
   const updateItem = (index, field, value) => {
     setFormData(prev => {
       const items = [...prev.items];
-      items[index][field] = value;
+
+      if (field === 'unit') {
+        if (value === 'Custom') {
+          items[index].isCustomUnit = true;
+          items[index].unit = 'Custom';
+          items[index].customUnit = '';
+        } else {
+          items[index].isCustomUnit = false;
+          items[index].unit = value;
+          items[index].customUnit = '';
+        }
+      } else {
+        items[index][field] = value;
+      }
+
       return { ...prev, items };
     });
   };
@@ -565,15 +649,23 @@ function OrderBook() {
   const removeItem = (index) => {
     setFormData(prev => ({
       ...prev,
-      items: prev.items.filter((_, i) => i !== index)
+      items: prev.items.filter((_, i) => i !== index).map((item, idx) => ({
+        ...item,
+        lineNo: idx + 1
+      }))
     }));
   };
 
   const calculateItemTotal = (item) => {
-    const subtotal = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
-    const discount = subtotal * ((parseFloat(item.discountPercent) || 0) / 100);
+    const quantity = parseFloat(item.quantity) || 0;
+    const unitPrice = parseFloat(item.unitPrice) || 0;
+    const discountPercent = parseFloat(item.discountPercent) || 0;
+    const taxPercent = parseFloat(item.taxPercent) || 0;
+
+    const subtotal = quantity * unitPrice;
+    const discount = subtotal * (discountPercent / 100);
     const taxable = subtotal - discount;
-    const tax = taxable * ((parseFloat(item.taxPercent) || 0) / 100);
+    const tax = taxable * (taxPercent / 100);
     return taxable + tax;
   };
 
@@ -592,6 +684,23 @@ function OrderBook() {
       'Cancelled': 'status-cancelled'
     };
     return statusMap[status] || 'status-draft';
+  };
+
+  const closeModal = (modalSetter) => {
+    modalSetter(false);
+    if (modalSetter === setShowCreateModal) {
+      resetForm();
+    }
+    if (modalSetter === setShowDeleteConfirm) {
+      setDeleteOrderId(null);
+    }
+  };
+
+  const formatDisplayValue = (value) => {
+    if (value === null || value === undefined || value === '' || value === 0) {
+      return '-';
+    }
+    return value;
   };
 
   return (
@@ -704,9 +813,27 @@ function OrderBook() {
                     </td>
                     <td>{order.groupName || '-'}</td>
                     <td>{order.orderTitle}</td>
-                    <td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-IN') : '-'}</td>
+                    <td>
+                      {order.orderDate
+                        ? new Date(order.orderDate)
+                          .toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                            hour12: false,
+                          })
+                          .replaceAll("/", " - ")
+                          .replace(",", "")
+                        : "-"}
+                    </td>
+
                     <td>{order.poNumber || '-'}</td>
-                    <td className="orderbook-amount">₹{order.totalAmount ? parseFloat(order.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}</td>
+                    <td className="orderbook-amount">
+                      ₹{order.totalAmount ? parseFloat(order.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
+                    </td>
                     <td>
                       <span className={`orderbook-status ${getStatusClass(order.status)}`}>
                         {order.status}
@@ -714,40 +841,43 @@ function OrderBook() {
                     </td>
                     <td>{order.createdByName || '-'}</td>
                     <td>
-                      <div className="orderbook-actions">
+                      <div className="orderbook-actions-inline">
+
                         <button
-                          className="orderbook-action-btn"
+                          className="orderbook-icon-btn ob-view"
                           onClick={() => handleView(order)}
                           title="View"
                         >
                           <FaEye />
                         </button>
+
                         <button
-                          className="orderbook-action-btn"
+                          className="orderbook-icon-btn ob-edit"
                           onClick={() => handleEdit(order)}
                           title="Edit"
                         >
                           <FaEdit />
                         </button>
+
                         <button
-                          className="orderbook-action-btn orderbook-action-upload"
-                          onClick={() => {
-                            setSelectedOrderBook(order);
-                            setShowPOUploadModal(true);
-                          }}
+                          className="orderbook-icon-btn ob-upload"
+                          onClick={() => handlePOUploadClick(order)}
                           title="Upload PO"
                         >
-                          <FaUpload />
+                          <FaCloudUploadAlt  />
                         </button>
+
                         <button
-                          className="orderbook-action-btn orderbook-action-delete"
-                          onClick={() => handleDelete(order.id)}
+                          className="orderbook-icon-btn ob-delete"
+                          onClick={() => handleDeleteClick(order.id)}
                           title="Delete"
                         >
-                          <FaTrash />
+                          <RiDeleteBin6Line />
                         </button>
+
                       </div>
                     </td>
+
                   </tr>
                 ))
               )}
@@ -798,13 +928,46 @@ function OrderBook() {
         </div>
       </div>
 
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="orderbook-modal-overlay">
+          <div className="orderbook-delete-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="orderbook-delete-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <circle cx="12" cy="12" r="10" strokeWidth="2" />
+                <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2" strokeLinecap="round" />
+                <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h3>Delete Order Book</h3>
+            <p>Are you sure you want to delete this order book?</p>
+            <p className="orderbook-delete-warning">This action cannot be undone.</p>
+            <div className="orderbook-delete-actions">
+              <button
+                className="orderbook-btn orderbook-btn-secondary"
+                onClick={() => closeModal(setShowDeleteConfirm)}
+              >
+                Cancel
+              </button>
+              <button
+                className="orderbook-btn orderbook-btn-danger"
+                onClick={handleDeleteConfirm}
+                disabled={loading}
+              >
+                {loading ? 'Deleting...' : 'Confirm Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* View Modal */}
       {showViewModal && selectedOrderBook && (
-        <div className="orderbook-modal-overlay" onClick={() => setShowViewModal(false)}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Order Book Details</h2>
-              <button className="orderbook-modal-close" onClick={() => setShowViewModal(false)}>×</button>
+              <button className="orderbook-modal-close" onClick={() => closeModal(setShowViewModal)}>×</button>
             </div>
 
             <div className="orderbook-modal-content">
@@ -863,12 +1026,12 @@ function OrderBook() {
                             <td>{item.lineNo}</td>
                             <td>{item.itemName}</td>
                             <td>{item.specification || '-'}</td>
-                            <td>{item.quantity}</td>
+                            <td>{formatDisplayValue(item.quantity)}</td>
                             <td>{item.unit}</td>
-                            <td>₹{parseFloat(item.unitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                            <td>{item.discountPercent}%</td>
-                            <td>{item.taxPercent}%</td>
-                            <td>₹{parseFloat(item.lineTotal || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                            <td>₹{item.unitPrice ? parseFloat(item.unitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
+                            <td>{formatDisplayValue(item.discountPercent)}%</td>
+                            <td>{formatDisplayValue(item.taxPercent)}%</td>
+                            <td>₹{item.lineTotal ? parseFloat(item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
                           </tr>
                         ))}
                         <tr className="orderbook-total-row">
@@ -922,11 +1085,11 @@ function OrderBook() {
 
       {/* Create/Edit Modal */}
       {showCreateModal && (
-        <div className="orderbook-modal-overlay" onClick={() => { setShowCreateModal(false); resetForm(); }}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>{isEditMode ? 'Edit Order Book' : 'Create Order Book'}</h2>
-              <button className="orderbook-modal-close" onClick={() => { setShowCreateModal(false); resetForm(); }}>×</button>
+              <button className="orderbook-modal-close" onClick={() => closeModal(setShowCreateModal)}>×</button>
             </div>
 
             <form onSubmit={handleSubmit} className="orderbook-modal-content">
@@ -1103,7 +1266,7 @@ function OrderBook() {
                       type="number"
                       step="0.01"
                       value={formData.advanceAmount}
-                      onChange={(e) => setFormData({ ...formData, advanceAmount: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setFormData({ ...formData, advanceAmount: e.target.value })}
                       placeholder="0.00"
                     />
                   </div>
@@ -1153,24 +1316,20 @@ function OrderBook() {
                             <th style={{ width: '200px' }}>Item Name *</th>
                             <th style={{ width: '150px' }}>Specification</th>
                             <th style={{ width: '100px' }}>Quantity *</th>
-                            <th style={{ width: '80px' }}>Unit</th>
+                            <th style={{ width: '120px' }}>Unit *</th>
                             <th style={{ width: '120px' }}>Unit Price (₹)</th>
                             <th style={{ width: '100px' }}>Discount %</th>
                             <th style={{ width: '80px' }}>Tax %</th>
                             <th style={{ width: '120px' }}>Line Total</th>
-                            {/* <th style={{ width: '200px' }}>Description</th> */}
                             <th style={{ width: '60px' }}>Action</th>
                           </tr>
                         </thead>
                         <tbody>
                           {formData.items.map((item, index) => (
                             <tr key={index}>
-                              {/* Line Number */}
                               <td className="orderbook-table-cell-centered">
                                 {item.lineNo}
                               </td>
-
-                              {/* Item Name */}
                               <td>
                                 <input
                                   type="text"
@@ -1181,8 +1340,6 @@ function OrderBook() {
                                   required
                                 />
                               </td>
-
-                              {/* Specification */}
                               <td>
                                 <input
                                   type="text"
@@ -1192,80 +1349,69 @@ function OrderBook() {
                                   placeholder="Specification"
                                 />
                               </td>
-
-                              {/* Quantity */}
                               <td>
                                 <input
                                   type="number"
                                   step="0.0001"
                                   className="orderbook-table-input orderbook-table-input-number"
                                   value={item.quantity}
-                                  onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => updateItem(index, 'quantity', e.target.value)}
+                                  placeholder="0"
                                   required
                                 />
                               </td>
-
-                              {/* Unit */}
                               <td>
-                                <input
-                                  type="text"
-                                  className="orderbook-table-input"
-                                  value={item.unit}
-                                  onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                  placeholder="Nos"
-                                />
+                                {item.isCustomUnit ? (
+                                  <input
+                                    type="text"
+                                    className="orderbook-table-input"
+                                    value={item.customUnit}
+                                    onChange={(e) => updateItem(index, 'customUnit', e.target.value)}
+                                    placeholder="Enter custom unit"
+                                    required
+                                  />
+                                ) : (
+                                  <UnitTypeDropdown
+                                    value={item.unit}
+                                    onChange={(e) => updateItem(index, 'unit', e.target.value)}
+                                    className="orderbook-table-input"
+                                    placeholder="Select Unit"
+                                  />
+                                )}
                               </td>
-
-                              {/* Unit Price */}
                               <td>
                                 <input
                                   type="number"
                                   step="0.01"
                                   className="orderbook-table-input orderbook-table-input-number"
                                   value={item.unitPrice}
-                                  onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
+                                  placeholder="0.00"
                                 />
                               </td>
-
-                              {/* Discount % */}
                               <td>
                                 <input
                                   type="number"
                                   step="0.01"
                                   className="orderbook-table-input orderbook-table-input-number"
                                   value={item.discountPercent}
-                                  onChange={(e) => updateItem(index, 'discountPercent', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => updateItem(index, 'discountPercent', e.target.value)}
+                                  placeholder="0"
                                 />
                               </td>
-
-                              {/* Tax % */}
                               <td>
                                 <input
                                   type="number"
                                   step="0.01"
                                   className="orderbook-table-input orderbook-table-input-number"
                                   value={item.taxPercent}
-                                  onChange={(e) => updateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) => updateItem(index, 'taxPercent', e.target.value)}
+                                  placeholder="0"
                                 />
                               </td>
-
-                              {/* Line Total (Read-only) */}
                               <td className="orderbook-table-cell-total">
                                 ₹{calculateItemTotal(item).toFixed(2)}
                               </td>
-
-                              {/* Description */}
-                              {/* <td>
-                                <input
-                                  type="text"
-                                  className="orderbook-table-input"
-                                  value={item.description}
-                                  onChange={(e) => updateItem(index, 'description', e.target.value)}
-                                  placeholder="Description"
-                                />
-                              </td> */}
-
-                              {/* Remove Button */}
                               <td className="orderbook-table-cell-centered">
                                 <button
                                   type="button"
@@ -1282,7 +1428,6 @@ function OrderBook() {
                       </table>
                     </div>
 
-                    {/* Grand Total */}
                     <div className="orderbook-grand-total">
                       <span>Grand Total:</span>
                       <strong>₹{calculateGrandTotal().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
@@ -1296,7 +1441,7 @@ function OrderBook() {
                 <button
                   type="button"
                   className="orderbook-btn orderbook-btn-secondary"
-                  onClick={() => { setShowCreateModal(false); resetForm(); }}
+                  onClick={() => closeModal(setShowCreateModal)}
                 >
                   Cancel
                 </button>
@@ -1308,8 +1453,6 @@ function OrderBook() {
                   {loading ? 'Saving...' : (isEditMode ? 'Update Order Book' : 'Create Order Book')}
                 </button>
               </div>
-
-              
             </form>
           </div>
         </div>
@@ -1317,11 +1460,11 @@ function OrderBook() {
 
       {/* PO Upload Modal */}
       {showPOUploadModal && selectedOrderBook && (
-        <div className="orderbook-modal-overlay" onClick={() => setShowPOUploadModal(false)}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-modal" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Upload PO for {selectedOrderBook.orderBookNo}</h2>
-              <button className="orderbook-modal-close" onClick={() => setShowPOUploadModal(false)}>×</button>
+              <button className="orderbook-modal-close" onClick={() => closeModal(setShowPOUploadModal)}>×</button>
             </div>
 
             <form onSubmit={handlePOUpload} className="orderbook-modal-content">
@@ -1362,7 +1505,7 @@ function OrderBook() {
                 <button
                   type="button"
                   className="orderbook-btn orderbook-btn-secondary"
-                  onClick={() => setShowPOUploadModal(false)}
+                  onClick={() => closeModal(setShowPOUploadModal)}
                 >
                   Cancel
                 </button>
