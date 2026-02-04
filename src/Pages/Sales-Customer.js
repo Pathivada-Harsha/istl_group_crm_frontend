@@ -95,7 +95,7 @@ const CustomerDatabase = () => {
    */
   const formatDateTime = (dateString) => {
     if (!dateString) return 'N/A';
-    
+
     const date = new Date(dateString);
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -103,7 +103,7 @@ const CustomerDatabase = () => {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
-    
+
     return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
   };
 
@@ -679,7 +679,7 @@ const CustomerDatabase = () => {
       )}
 
       {/* KPI Cards */}
-      
+
 
       <div className="leads-enquiries-action-bar">
         <div className="leads-enquiries-search-wrapper">
@@ -744,7 +744,7 @@ const CustomerDatabase = () => {
       </div>
 
 
-<div style={{
+      <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(4, 1fr)',
         gap: '1rem',
@@ -864,18 +864,19 @@ const CustomerDatabase = () => {
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Customer Code</th>
-                <th>Name</th>
-                <th>Company</th>
-                <th>Group</th>
-                <th>Category</th>
-                <th>Phone</th>
-                <th>Email</th>
-                <th>Location</th>
-                <th>Status</th>
-                <th>Follow-Ups</th>
-                <th>Created On</th>
-                <th>Actions</th>
+                {/* <th>Customer Code</th> */}
+                <th style={{ textAlign: "center" }}>Group</th>                
+                <th style={{ textAlign: "center" }}>Company</th>
+                <th style={{ textAlign: "center" }}>Name</th>
+                
+                {/* <th>Category</th> */}
+                <th style={{ textAlign: "center" }}>Phone</th>
+                <th style={{ textAlign: "center" }}>Email</th>
+                {/* <th>Location</th> */}
+                {/* <th>Status</th> */}
+                {/* <th>Follow-Ups</th> */}
+                {/* <th>Created On</th> */}
+                <th style={{ textAlign: "center" }} className="actions-col">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -888,29 +889,30 @@ const CustomerDatabase = () => {
               ) : (
                 customers.map((customer) => (
                   <tr key={customer.id}>
-                    <td>
+                    <td >
                       <input
                         type="checkbox"
                         checked={selectedRows.includes(customer.id)}
                         onChange={() => handleSelectRow(customer.id)}
                       />
                     </td>
-                    <td className="leads-enquiries-font-medium">{customer.customerCode || 'N/A'}</td>
-                    <td className="leads-enquiries-font-medium">{customer.name || 'N/A'}</td>
-                    <td style={{ textAlign: customer.companyName ? 'left' : 'center' }}>
-                      {customer.companyName || 'N/A'}
-                    </td>
-                    <td>
+                    {/* <td className="leads-enquiries-font-medium">{customer.customerCode || 'N/A'}</td> */}
+                    <td style={{ textAlign: "center" }}>
                       <span className={`leads-enquiries-badge badge-${getGroupColor(customer.groupName)}`}>
                         {customer.groupName || 'Others'}
                       </span>
                     </td>
-                    <td style={{ textAlign: customer.subGroupName ? 'left' : 'center' }}>
-                      {customer.subGroupName || 'N/A'}
+                    <td style={{ textAlign: customer.companyName ? 'left' : 'center', textAlign: "center" }}>
+                      {customer.companyName || 'N/A'}
                     </td>
-                    <td>{customer.phone || 'N/A'}</td>
-                    <td>{customer.email || 'N/A'}</td>
-                    <td style={{ textAlign: customer.city ? 'left' : 'center' }}>
+                    
+                    <td className="leads-enquiries-font-medium" style={{ textAlign: "center" }}>{customer.name || 'N/A'}</td>
+                    {/* <td style={{ textAlign: customer.subGroupName ? 'left' : 'center' }}>
+                      {customer.subGroupName || 'N/A'}
+                    </td> */}
+                    <td style={{ textAlign: "center" }}>{customer.phone || 'N/A'}</td>
+                    <td style={{ textAlign: "center" }}>{customer.email || 'N/A'}</td>
+                    {/* <td style={{ textAlign: customer.city ? 'left' : 'center' }}>
                       {customer.city ? `${customer.city}, ${customer.state}` : 'N/A'}
                     </td>
                     <td>
@@ -925,9 +927,9 @@ const CustomerDatabase = () => {
                         </span>
                       ) : 'N/A'}
                     </td>
-                    <td>{formatDateTime(customer.createdAt)}</td>
-                    <td>
-                      <div className="leads-enquiries-action-buttons-cell">
+                    <td>{formatDateTime(customer.createdAt)}</td> */}
+                    <td style={{textAlign:"center"}}>
+                      <div className="leads-enquiries-action-buttons-cell-center" style={{textAlign:"center"}}>
                         {canView && (
                           <button
                             className="leads-enquiries-action-btn leads-enquiries-action-view"
@@ -1061,27 +1063,27 @@ const CustomerDatabase = () => {
                 <div className="leads-enquiries-form-grid">
                   <div className="leads-enquiries-form-group">
                     <label>Customer Name *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={formData.name} 
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })} 
+                    <input
+                      type="text"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Company Name</label>
-                    <input 
-                      type="text" 
-                      value={formData.companyName} 
-                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })} 
+                    <input
+                      type="text"
+                      value={formData.companyName}
+                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Email *</label>
-                    <input 
-                      type="email" 
-                      required 
-                      value={formData.email} 
+                    <input
+                      type="email"
+                      required
+                      value={formData.email}
                       onChange={(e) => handleEmailChange(e.target.value)}
                       placeholder="email@example.com"
                     />
@@ -1091,10 +1093,10 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Phone *</label>
-                    <input 
-                      type="tel" 
-                      required 
-                      value={formData.phone} 
+                    <input
+                      type="tel"
+                      required
+                      value={formData.phone}
                       onChange={(e) => handlePhoneChange(e.target.value, 'phone')}
                       placeholder="10 digit mobile number"
                       maxLength="10"
@@ -1143,25 +1145,25 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Contact Person</label>
-                    <input 
-                      type="text" 
-                      value={formData.contactPerson} 
-                      onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })} 
+                    <input
+                      type="text"
+                      value={formData.contactPerson}
+                      onChange={(e) => setFormData({ ...formData, contactPerson: e.target.value })}
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Designation</label>
-                    <input 
-                      type="text" 
-                      value={formData.designation} 
-                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })} 
+                    <input
+                      type="text"
+                      value={formData.designation}
+                      onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Alternate Phone</label>
-                    <input 
-                      type="tel" 
-                      value={formData.altPhone} 
+                    <input
+                      type="tel"
+                      value={formData.altPhone}
                       onChange={(e) => handlePhoneChange(e.target.value, 'altPhone')}
                       placeholder="10 digit mobile number"
                       maxLength="10"
@@ -1169,27 +1171,27 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Website</label>
-                    <input 
-                      type="url" 
-                      value={formData.website} 
-                      onChange={(e) => setFormData({ ...formData, website: e.target.value })} 
+                    <input
+                      type="url"
+                      value={formData.website}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                       placeholder="https://example.com"
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>GST Number</label>
-                    <input 
-                      type="text" 
-                      value={formData.gstNumber} 
+                    <input
+                      type="text"
+                      value={formData.gstNumber}
                       onChange={(e) => setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })}
                       placeholder="22AAAAA0000A1Z5"
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>PAN Number</label>
-                    <input 
-                      type="text" 
-                      value={formData.pan} 
+                    <input
+                      type="text"
+                      value={formData.pan}
                       onChange={(e) => handlePanChange(e.target.value)}
                       placeholder="ABCDE1234F"
                       maxLength="10"
@@ -1200,16 +1202,16 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>City</label>
-                    <input 
-                      type="text" 
-                      value={formData.city} 
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })} 
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                     />
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>State</label>
-                    <select 
-                      value={formData.state} 
+                    <select
+                      value={formData.state}
                       onChange={(e) => setFormData({ ...formData, state: e.target.value })}
                     >
                       <option value="">Select State</option>
@@ -1220,9 +1222,9 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Pincode</label>
-                    <input 
-                      type="text" 
-                      value={formData.pincode} 
+                    <input
+                      type="text"
+                      value={formData.pincode}
                       onChange={(e) => {
                         const cleaned = e.target.value.replace(/\D/g, '');
                         if (cleaned.length <= 6) {
@@ -1235,8 +1237,8 @@ const CustomerDatabase = () => {
                   </div>
                   <div className="leads-enquiries-form-group">
                     <label>Assign To</label>
-                    <select 
-                      value={formData.assignedTo || ''} 
+                    <select
+                      value={formData.assignedTo || ''}
                       onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value ? Number(e.target.value) : null })}
                     >
                       <option value="">Select Member</option>
@@ -1248,26 +1250,26 @@ const CustomerDatabase = () => {
                 </div>
                 <div className="leads-enquiries-form-group">
                   <label>Address</label>
-                  <textarea 
-                    rows={3} 
-                    value={formData.address} 
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })} 
-                    placeholder="Enter full address..." 
+                  <textarea
+                    rows={3}
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Enter full address..."
                   />
                 </div>
               </div>
 
               <div className="leads-enquiries-form-actions">
-                <button 
-                  type="button" 
-                  className="leads-enquiries-btn leads-enquiries-btn-secondary" 
+                <button
+                  type="button"
+                  className="leads-enquiries-btn leads-enquiries-btn-secondary"
                   onClick={() => { setIsAddFormOpen(false); resetForm(); }}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="leads-enquiries-btn leads-enquiries-btn-primary" 
+                <button
+                  type="submit"
+                  className="leads-enquiries-btn leads-enquiries-btn-primary"
                   disabled={loading}
                 >
                   {loading ? 'Saving...' : (formData.id ? 'Update Customer' : 'Save Customer')}
@@ -1496,9 +1498,9 @@ const CustomerDatabase = () => {
               </div>
 
               <div className="leads-enquiries-form-actions">
-                <button 
-                  type="button" 
-                  className="leads-enquiries-btn leads-enquiries-btn-secondary" 
+                <button
+                  type="button"
+                  className="leads-enquiries-btn leads-enquiries-btn-secondary"
                   onClick={() => { setShowFollowupModal(false); resetFollowupForm(); }}
                 >
                   Cancel

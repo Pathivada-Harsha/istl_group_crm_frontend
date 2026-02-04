@@ -821,6 +821,7 @@ padding: 24px;
 .proposal-actions-inline {
   display: flex;
   align-items: center;
+   justify-content: center;
   gap: 14px;
   white-space: nowrap;
 }
