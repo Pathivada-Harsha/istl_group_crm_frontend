@@ -839,19 +839,19 @@ const ProposalsWithTemplate = () => {
       <div className="proposal-page-table-container">
         <table className="proposal-page-table">
           <thead>
-            <tr>
-              <th>Proposal No</th>
-              <th>Lead Code</th>
-              <th>Lead Name</th>
-              <th>Group</th>
-              <th>Sub-Group</th>
-              <th>Title</th>
-              <th>Value (₹)</th>
-              <th>Version</th>
-              <th>Status</th>
-              <th>Prepared By</th>
-              <th>Updated</th>
-              <th>Actions</th>
+            <tr >
+              {/* <th>Proposal No</th> */}
+              {/* <th>Lead Code</th> */}
+              <th style={{ textAlign: "center" }}>Lead Name</th>
+              <th style={{ textAlign: "center" }}>Group</th>
+              {/* <th>Sub-Group</th> */}
+              {/* <th>Title</th> */}
+              <th style={{ textAlign: "center" }}>Value (₹)</th>
+              {/* <th>Version</th> */}
+              <th style={{ textAlign: "center" }}>Status</th>
+              {/* <th>Prepared By</th> */}
+              <th style={{ textAlign: "center" }}>Updated</th>
+              <th style={{ textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -863,23 +863,23 @@ const ProposalsWithTemplate = () => {
               </tr>
             ) : proposals.length > 0 ? (
               proposals.map((proposal) => (
-                <tr key={proposal.id}>
-                  <td className="proposal-page-id">{proposal.proposalNo}</td>
-                  <td>{proposal.leadCode || '-'}</td>
+                <tr key={proposal.id} style={{ textAlign: "center" }}>
+                  {/* <td className="proposal-page-id">{proposal.proposalNo}</td>
+                  <td>{proposal.leadCode || '-'}</td> */}
                   <td>{proposal.leadName || '-'}</td>
                   <td>{proposal.groupName || '-'}</td>
-                  <td>{proposal.subGroupName || '-'}</td>
-                  <td>{proposal.title}</td>
+                  {/* <td>{proposal.subGroupName || '-'}</td>
+                  <td>{proposal.title}</td> */}
                   <td>₹{proposal.totalValue ? parseFloat(proposal.totalValue).toLocaleString('en-IN') : '0'}</td>
-                  <td><span className="proposal-page-version">v{proposal.version}</span></td>
+                  {/* <td><span className="proposal-page-version">v{proposal.version}</span></td> */}
                   <td>
                     <span className={`proposal-page-status ${getStatusClass(proposal.status)}`}>
                       {proposal.status}
                     </span>
                   </td>
-                  <td>{proposal.preparedByName}</td>
+                  {/* <td>{proposal.preparedByName}</td> */}
                   <td>{formatDateTime(proposal.updatedAt)}</td>
-                  <td>
+                  <td style={{ textAlign: "center" }}>
                     <div className="proposal-actions-inline">
 
                       {/* View */}

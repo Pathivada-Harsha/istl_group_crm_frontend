@@ -779,16 +779,16 @@ function OrderBook() {
           <table className="orderbook-table">
             <thead>
               <tr>
-                <th>Order No</th>
-                <th>Customer</th>
-                <th>Group</th>
-                <th>Order Title</th>
+                {/* <th>Order No</th> */}
+                <th style={{ textAlign: "center" }}>Customer</th>
+                <th style={{ textAlign: "center" }}>Group</th>
+                {/* <th>Order Title</th>
                 <th>Order Date</th>
-                <th>PO Number</th>
-                <th>Total Amount (₹)</th>
-                <th>Status</th>
-                <th>Created By</th>
-                <th>Actions</th>
+                <th>PO Number</th> */}
+                <th style={{ textAlign: "center" }}>Total Amount (₹)</th>
+                <th style={{ textAlign: "center" }}>Status</th>
+                {/* <th>Created By</th> */}
+                <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -804,15 +804,15 @@ function OrderBook() {
               ) : (
                 orderBooks.map((order) => (
                   <tr key={order.id}>
-                    <td className="orderbook-id">{order.orderBookNo}</td>
-                    <td>
+                    {/* <td className="orderbook-id">{order.orderBookNo}</td> */}
+                    <td style={{ textAlign: "center" }}>
                       <div className="orderbook-customer-info">
                         <strong>{order.customerName}</strong>
                         <span className="orderbook-customer-code">{order.customerCode}</span>
                       </div>
                     </td>
-                    <td>{order.groupName || '-'}</td>
-                    <td>{order.orderTitle}</td>
+                    <td style={{ textAlign: "center" }}>{order.groupName || '-'}</td>
+                    {/* <td>{order.orderTitle}</td>
                     <td>
                       {order.orderDate
                         ? new Date(order.orderDate)
@@ -830,17 +830,17 @@ function OrderBook() {
                         : "-"}
                     </td>
 
-                    <td>{order.poNumber || '-'}</td>
-                    <td className="orderbook-amount">
+                    <td>{order.poNumber || '-'}</td> */}
+                    <td className="orderbook-amount" style={{ textAlign: "center" }}>
                       ₹{order.totalAmount ? parseFloat(order.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
                     </td>
-                    <td>
+                    <td style={{ textAlign: "center" }}>
                       <span className={`orderbook-status ${getStatusClass(order.status)}`}>
                         {order.status}
                       </span>
                     </td>
-                    <td>{order.createdByName || '-'}</td>
-                    <td>
+                    {/* <td>{order.createdByName || '-'}</td> */}
+                    <td style={{ textAlign: "center" }}>
                       <div className="orderbook-actions-inline">
 
                         <button

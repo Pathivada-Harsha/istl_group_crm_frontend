@@ -89,7 +89,7 @@ const InvoicesManagementPage = () => {
 
       const data = await response.json();
       setOrderBookItems(data.data || []);
-      console.log('Loaded order book items:', data.data.length);
+      console.log('Loaded order book items:', data);
 
     } catch (error) {
       console.error('Failed to fetch order book items:', error);
@@ -205,6 +205,7 @@ const InvoicesManagementPage = () => {
       if (!response.ok) throw new Error('Failed to fetch invoices');
 
       const data = await response.json();
+      
       setInvoices(data.invoices || []);
       setTotalPages(data.totalPages || 0);
       setTotalElements(data.totalElements || 0);
@@ -861,9 +862,9 @@ const fetchStats = async () => {
         <table className="Invoices-page-table">
           <thead>
             <tr>
-              <th>Invoice ID</th>
+              {/* <th>Invoice ID</th> */}
               <th>Customer</th>
-              <th>Project</th>
+              {/* <th>Project</th> */}
               <th>Total Amount</th>
               <th>Paid Amount</th>
               <th>Balance</th>
@@ -883,9 +884,9 @@ const fetchStats = async () => {
             ) : (
               invoices.map((invoice) => (
                 <tr key={invoice.id}>
-                  <td className="Invoices-page-invoice-id">{invoice.invoiceNo}</td>
+                  {/* <td className="Invoices-page-invoice-id">{invoice.invoiceNo}</td> */}
                   <td>{invoice.customerId}</td>
-                  <td>{invoice.projectId || '—'}</td>
+                  {/* <td>{invoice.projectId || '—'}</td> */}
                   <td className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>
                   <td>{formatCurrency(invoice.paidAmount)}</td>
                   <td className="Invoices-page-total">{formatCurrency(invoice.balanceAmount)}</td>
