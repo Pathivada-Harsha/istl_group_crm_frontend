@@ -1523,10 +1523,21 @@
   }
 
   /* Action Buttons in Table */
-  .leads-enquiries-action-buttons-cell {
-    display: flex;
-    gap: 4px;
-  }
+  /* FORCE column width */
+.sales-customer-page-table .actions-col {
+  width: 140px;              /* 🔑 REQUIRED */
+  text-align: center;
+  vertical-align: middle;
+}
+
+/* Proper button layout */
+.leads-enquiries-action-buttons-cell-center {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 6px;
+}
+
 
   .leads-enquiries-action-btn {
     padding: 4px;
@@ -1613,7 +1624,7 @@
 @media print {
   .leads-enquiries-action-bar,
   .leads-enquiries-pagination,
-  .leads-enquiries-action-buttons-cell,
+  .leads-enquiries-action-buttons-cell-center,
   .leads-enquiries-modal-close,
   .leads-enquiries-form-actions {
     display: none !important;
