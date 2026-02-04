@@ -1,4 +1,4 @@
-/* Leads-Enquiries.css */
+/* Leads-Enquiries.css - Updated */
 
 /* Import Poppins Font */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
@@ -63,7 +63,7 @@
   background-color: white;
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 24px;
+  margin-bottom: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   border: 1px solid #e5e7eb;
   display: flex;
@@ -173,6 +173,54 @@
   height: 16px;
 }
 
+/* View Toggle Container - Positioned above table/grid, aligned right */
+.leads-enquiries-view-toggle-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+/* View Toggle Buttons */
+.leads-enquiries-view-toggle {
+  display: flex;
+  background-color: #f3f4f6;
+  border-radius: 8px;
+  padding: 4px;
+  gap: 4px;
+}
+
+.leads-enquiries-view-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  background-color: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.leads-enquiries-view-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.leads-enquiries-view-btn:hover {
+  background-color: #e5e7eb;
+  color: #374151;
+}
+
+.leads-enquiries-view-btn.active {
+  background-color: white;
+  color: #2563eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
 /* Table Card */
 .leads-enquiries-table-card {
   background-color: white;
@@ -211,8 +259,41 @@
   user-select: none;
 }
 
+/* Centered Actions Column Header */
+.leads-enquiries-table th.actions-column-header {
+  text-align: center;
+  cursor: default;
+}
+
+/* Table Header Content with Sort Icon */
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  justify-content: flex-start;
+}
+
+/* Sort Icons */
+.sort-icon {
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.sort-icon-default {
+  opacity: 0.3;
+}
+
+.sort-icon-active {
+  opacity: 1;
+  stroke: #2563eb;
+}
+
 .leads-enquiries-table th:hover {
   background-color: #f3f4f6;
+}
+
+.leads-enquiries-table th:hover .sort-icon-default {
+  opacity: 0.6;
 }
 
 .leads-enquiries-table tbody tr {
@@ -302,6 +383,7 @@
 .leads-enquiries-action-buttons-cell {
   display: flex;
   gap: 8px;
+  justify-content: center;
 }
 
 .leads-enquiries-action-btn {
@@ -311,7 +393,6 @@
   cursor: pointer;
   transition: all 0.2s;
   background-color: transparent;
-  
 }
 
 .leads-enquiries-action-btn svg {
@@ -341,6 +422,253 @@
 
 .leads-enquiries-action-delete:hover {
   background-color: #fee2e2;
+}
+
+.leads-enquiries-action-timeline {
+  color: #8b5cf6;
+}
+
+.leads-enquiries-action-timeline:hover {
+  background-color: #ede9fe;
+}
+
+.leads-enquiries-action-followup {
+  color: #10b981;
+}
+
+.leads-enquiries-action-followup:hover {
+  background-color: #d1fae5;
+}
+
+.leads-enquiries-action-proposal {
+  color: #f59e0b;
+}
+
+.leads-enquiries-action-proposal:hover {
+  background-color: #fef3c7;
+}
+
+/* ============================================ */
+/* GRID / CARD VIEW STYLES - SMALLER CARDS */
+/* ============================================ */
+
+.leads-enquiries-grid-container {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+  padding: 20px;
+}
+
+.leads-enquiries-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+/* Smaller Card Styles */
+.leads-enquiries-card {
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 16px;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.leads-enquiries-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+  border-color: #2563eb;
+}
+
+/* Card Header */
+.leads-enquiries-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.leads-enquiries-card-id {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  background-color: #dbeafe;
+  padding: 3px 8px;
+  border-radius: 5px;
+  letter-spacing: 0.02em;
+}
+
+.leads-enquiries-card-badges {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+/* Card Body */
+.leads-enquiries-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.leads-enquiries-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  margin: 0;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leads-enquiries-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.leads-enquiries-card-info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leads-enquiries-card-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #9ca3af;
+}
+
+.leads-enquiries-card-description {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.4;
+  margin-top: 6px;
+  padding: 10px;
+  background-color: #f9fafb;
+  border-radius: 5px;
+  border-left: 2px solid #2563eb;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Card Footer */
+.leads-enquiries-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e5e7eb;
+  gap: 8px;
+}
+
+.leads-enquiries-card-source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.leads-enquiries-card-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.leads-enquiries-card-action-btn {
+  padding: 5px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background-color: transparent;
+  flex-shrink: 0;
+}
+
+.leads-enquiries-card-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-view {
+  color: #2563eb;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-view:hover {
+  background-color: #dbeafe;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-timeline {
+  color: #8b5cf6;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-timeline:hover {
+  background-color: #ede9fe;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-followup {
+  color: #10b981;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-followup:hover {
+  background-color: #d1fae5;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-proposal {
+  color: #f59e0b;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-proposal:hover {
+  background-color: #fef3c7;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-edit {
+  color: #059669;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-edit:hover {
+  background-color: #d1fae5;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-delete {
+  color: #dc2626;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-delete:hover {
+  background-color: #fee2e2;
+}
+
+/* Disabled state for card action buttons */
+.leads-enquiries-card-action-btn.leads-enquiries-action-disabled {
+  opacity: 0.4;
+  cursor: not-allowed !important;
+  filter: blur(0.5px);
+  pointer-events: none;
 }
 
 /* Pagination */
@@ -888,34 +1216,6 @@
   border: 1px solid #fecaca;
 }
 
-/* Timeline and Follow-up Action Buttons */
-.leads-enquiries-action-timeline {
-  color: #8b5cf6;
-  border: 1px solid #8b5cf6;
-}
-
-.leads-enquiries-action-timeline:hover {
-  background: #8b5cf6;
-  color: white;
-}
-
-.leads-enquiries-action-followup {
-  color: #10b981;
-  border: 1px solid #10b981;
-}
-
-.leads-enquiries-action-followup:hover {
-  background: #10b981;
-  color: white;
-}
-
-.leads-enquiries-action-followup.leads-enquiries-action-disabled {
-  color: #9ca3af;
-  border-color: #e5e7eb;
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 /* Success Button (for Add Follow-up in modal) */
 .leads-enquiries-btn-success {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%);
@@ -956,34 +1256,50 @@
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
 }
 
-/* Button Icon Styling */
-.leads-enquiries-btn-icon {
-  width: 18px;
-  height: 18px;
+/* Text Center Utility */
+.text-center {
+  text-align: center;
 }
 
-/* Proposal Action Button */
-.leads-enquiries-action-proposal {
-  color: #8b5cf6;
-  border: 1px solid #8b5cf6;
+.py-4 {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
 }
 
-.leads-enquiries-action-proposal:hover {
-  background: #8b5cf6;
-  color: white;
+/* ============================================ */
+/* RESPONSIVE STYLES */
+/* ============================================ */
+
+/* Large Desktops */
+@media (min-width: 1400px) {
+  .leads-enquiries-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
 }
 
-.leads-enquiries-action-proposal.leads-enquiries-action-disabled {
-  color: #9ca3af;
-  border-color: #e5e7eb;
-  cursor: not-allowed;
-  opacity: 0.5;
+/* Desktop */
+@media (min-width: 1024px) {
+  .leads-enquiries-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+/* Tablet */
+@media (max-width: 1023px) and (min-width: 641px) {
+  .leads-enquiries-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
   .leads-enquiries-container {
     padding: 16px;
+  }
+
+  .page-header-with-filter {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .leads-enquiries-action-bar {
@@ -1014,6 +1330,31 @@
   .leads-enquiries-btn {
     width: 100%;
     justify-content: center;
+  }
+
+  .leads-enquiries-view-toggle-container {
+    justify-content: center;
+  }
+
+  .leads-enquiries-view-toggle {
+    width: 100%;
+  }
+
+  .leads-enquiries-view-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .leads-enquiries-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .leads-enquiries-grid-container {
+    padding: 16px;
+  }
+
+  .leads-enquiries-card {
+    padding: 14px;
   }
 
   .leads-enquiries-table {
@@ -1048,5 +1389,39 @@
 
   .leads-enquiries-info-icon {
     font-size: 28px;
+  }
+
+  /* Make action buttons stack in mobile for better UX */
+  .leads-enquiries-action-buttons-cell {
+    flex-wrap: wrap;
+  }
+
+  /* Card footer responsive - stack on mobile */
+  .leads-enquiries-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .leads-enquiries-card-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Small tablets and larger phones - Keep footer in single row but allow wrapping */
+@media (min-width: 641px) and (max-width: 900px) {
+  .leads-enquiries-card-footer {
+    flex-wrap: wrap;
+  }
+
+  .leads-enquiries-card-source {
+    flex-basis: 100%;
+    margin-bottom: 6px;
+  }
+
+  .leads-enquiries-card-actions {
+    flex-basis: 100%;
+    justify-content: center;
   }
 }

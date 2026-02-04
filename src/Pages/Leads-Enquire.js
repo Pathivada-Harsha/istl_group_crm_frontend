@@ -767,18 +767,18 @@ function LeadsEnquiries() {
           <table className="leads-enquiries-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort('leadCode')}>Lead ID</th>
+                {/* <th onClick={() => handleSort('leadCode')}>Lead ID</th> */}
                 <th onClick={() => handleSort('name')}>Client Name</th>
                 <th>Email</th>
                 <th>Phone</th>
-                <th>Source</th>
+                {/* <th>Source</th> */}
                 <th>Group</th>
-                <th>Category</th>
+                {/* <th>Category</th> */}
                 <th>Priority</th>
                 <th>Status</th>
-                <th>Follow-Ups</th>
-                <th>Assigned To</th>
-                <th onClick={() => handleSort('createdAt')}>Created At</th>
+                {/* <th>Follow-Ups</th> */}
+                {/* <th>Assigned To</th> */}
+                {/* <th onClick={() => handleSort('createdAt')}>Created At</th> */}
                 <th>Actions</th>
               </tr>
             </thead>
@@ -790,13 +790,13 @@ function LeadsEnquiries() {
               ) : (
                 currentLeads.map((lead) => (
                   <tr key={lead.id}>
-                    <td className="leads-enquiries-font-medium">{lead.leadCode}</td>
+                    {/* <td className="leads-enquiries-font-medium">{lead.leadCode}</td> */}
                     <td className="leads-enquiries-font-medium">{lead.name}</td>
                     <td>{lead.email}</td>
                     <td>{lead.phone}</td>
-                    <td>{lead.source}</td>
+                    {/* <td>{lead.source}</td> */}
                     <td>{lead.groupName || '-'}</td>
-                    <td>{lead.subGroupName || '-'}</td>
+                    {/* <td>{lead.subGroupName || '-'}</td> */}
                     <td>
                       <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>
                         {lead.priority}
@@ -807,7 +807,7 @@ function LeadsEnquiries() {
                         {lead.status}
                       </span>
                     </td>
-                    <td style={{ textAlign: "center" }}>
+                    {/* <td style={{ textAlign: "center" }}>
                       {lead.pendingFollowupsCount > 0 ? (
                         <span className="badge badge-orange">
                           {lead.pendingFollowupsCount} Pending
@@ -815,13 +815,13 @@ function LeadsEnquiries() {
                       ) : (
                         "N/A"
                       )}
-                    </td>
+                    </td> */}
 
-                    <td style={{ textAlign: lead.assignedToName ? "left" : "center" }}>
+                    {/* <td style={{ textAlign: lead.assignedToName ? "left" : "center" }}>
                       {lead.assignedToName || "N/A"}
-                    </td>
+                    </td> */}
 
-                    <td>
+                    {/* <td>
                       {lead.createdAt
                         ? new Date(lead.createdAt)
                           .toLocaleString("en-GB", {
@@ -836,7 +836,7 @@ function LeadsEnquiries() {
                           .replaceAll("/", "-")
                           .replace(",", "")
                         : "-"}
-                    </td>
+                    </td> */}
 
 
                     <td>

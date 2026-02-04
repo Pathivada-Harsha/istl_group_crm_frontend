@@ -22,7 +22,8 @@ export default function Login() {
     if (!loading && isAuthenticated) {
       // Get the page user was trying to access, or default to dashboard
       // const from = location.state?.from?.pathname || '/dashboard';
-      navigate('/dashboard', { replace: true });
+      // navigate('/dashboard', { replace: true });
+      navigate('/Projectdashboard', { replace: true });
     }
   }, [isAuthenticated, loading, navigate, location]);
 
@@ -59,7 +60,9 @@ export default function Login() {
         // const from = location.state?.from?.pathname || '/dashboard';
         
         // Navigate to the intended page
-        navigate('/dashboard', { replace: true });
+        // navigate('/dashboard', { replace: true });
+              navigate('/Projectdashboard', { replace: true });
+
       } else {
         setError(data.message || "Login failed. Please try again.");
       }

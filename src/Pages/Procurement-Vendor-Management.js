@@ -499,7 +499,7 @@ const VendorManagement = () => {
   // Format currency
   const formatCurrency = (amount) => {
     if (!amount) return '₹0';
-    return `₹${amount.toLocaleString('en-IN')}`;
+    return `${amount.toLocaleString('en-IN')}`;
   };
 
   // Format date

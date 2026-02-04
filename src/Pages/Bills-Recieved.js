@@ -924,7 +924,7 @@ const BillsReceived = () => {
 
   // Format currency
   const formatCurrency = (amount) => {
-    return `₹${(amount || 0).toLocaleString('en-IN')}`;
+    return `${(amount || 0).toLocaleString('en-IN')}`;
   };
 
   // Format date

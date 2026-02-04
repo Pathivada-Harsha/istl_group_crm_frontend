@@ -866,7 +866,7 @@
 
 /* Grand Total */
 .orderbook-grand-total {
-  color: white;
+  /* color: white; */
   padding: 20px;
   border-radius: 12px;
   display: flex;

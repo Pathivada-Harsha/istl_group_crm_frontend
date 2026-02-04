@@ -17,7 +17,7 @@ import SessionManager from './components/SessionManager';
 // Pages
 import Login from './Pages/Login';
 import Dashboardtabs from "./Pages/Dashboard-Sales-procurement";
-import Leads from "./Pages/Leads-Enquire";
+import Leads from "./Pages/Leads-Enquire1";
 import Proposals from "./Pages/Proposals";
 import Quatations from "./Pages/Quatations";
 import ProcurementQuatations from "./Pages/Procurement-Quatation-Recieved";
@@ -37,7 +37,8 @@ import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import NewRolePermissions from './Pages/NewRolePermissions';
 import Projectdashboard from "./Pages/ProjectDashboard.js";
-import OrderBook from "./Pages/OrderBook.js"
+import OrderBook from "./Pages/OrderBook.js";
+import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import './App.css';
 
 /* ---------------- APP WRAPPER ---------------- */
@@ -129,6 +130,9 @@ function AppShell({ hideShell }) {
 
           <Route path="/sales/SalesOrder" element={
             <ProtectedRoute><SalesOrder /></ProtectedRoute>
+          } />
+          <Route path="/projectCostExpenseManagement" element={
+            <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
           } />
 
           <Route path="/sales/followups" element={
