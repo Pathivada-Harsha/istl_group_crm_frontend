@@ -17,11 +17,13 @@ import SessionManager from './components/SessionManager';
 // Pages
 import Login from './Pages/Login';
 import Dashboardtabs from "./Pages/Dashboard-Sales-procurement";
-import Leads from "./Pages/Leads-Enquire1";
+import Leads from "./Pages/Leads-Enquire";
 import Proposals from "./Pages/Proposals";
 import Quatations from "./Pages/Quatations";
 import ProcurementQuatations from "./Pages/Procurement-Quatation-Recieved";
-import Invoices from "./Pages/Invoices";
+// import Invoices from "./Pages/Invoices";
+import Invoices from "./Pages/InvoicesReceiptsPage.js";
+
 import Customer_dashboard from "./Pages/Sales-Customer";
 import Follow_up from "./Pages/Follow-ups";
 import Analytics from "./Pages/Analytics";

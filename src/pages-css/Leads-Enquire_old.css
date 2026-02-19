@@ -63,7 +63,7 @@
   background-color: white;
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 10px;
+  margin-bottom: 16px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   border: 1px solid #e5e7eb;
   display: flex;
@@ -177,7 +177,7 @@
 .leads-enquiries-view-toggle-container {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: 1px;
+  margin-bottom: 16px;
 }
 
 /* View Toggle Buttons */
@@ -575,41 +575,44 @@
 /* Card Footer */
 .leads-enquiries-card-footer {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e5e7eb;
+  gap: 8px;
 }
 
 .leads-enquiries-card-source {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
+  gap: 4px;
+  font-size: 10px;
   color: #6b7280;
   font-weight: 500;
+  flex-shrink: 0;
 }
 
 .leads-enquiries-card-actions {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .leads-enquiries-card-action-btn {
-  padding: 6px;
+  padding: 5px;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
   transition: all 0.2s;
   background-color: transparent;
+  flex-shrink: 0;
 }
 
 .leads-enquiries-card-action-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .leads-enquiries-card-action-btn.leads-enquiries-action-view {
@@ -1300,7 +1303,7 @@
   }
 
   .leads-enquiries-action-bar {
-    padding: 10px;
+    padding: 16px;
     flex-direction: column;
     align-items: stretch;
   }
@@ -1391,5 +1394,34 @@
   /* Make action buttons stack in mobile for better UX */
   .leads-enquiries-action-buttons-cell {
     flex-wrap: wrap;
+  }
+
+  /* Card footer responsive - stack on mobile */
+  .leads-enquiries-card-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .leads-enquiries-card-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Small tablets and larger phones - Keep footer in single row but allow wrapping */
+@media (min-width: 641px) and (max-width: 900px) {
+  .leads-enquiries-card-footer {
+    flex-wrap: wrap;
+  }
+
+  .leads-enquiries-card-source {
+    flex-basis: 100%;
+    margin-bottom: 6px;
+  }
+
+  .leads-enquiries-card-actions {
+    flex-basis: 100%;
+    justify-content: center;
   }
 }

@@ -7,16 +7,17 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
-import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload,FaCloudUploadAlt  } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
-
+import * as XLSX from 'xlsx';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function OrderBook() {
   const { user } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
-
+  const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
+  const [excelFile, setExcelFile] = useState(null);
   // State
   const [orderBooks, setOrderBooks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -36,6 +37,38 @@ function OrderBook() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
+
+  // Sorting
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // Column order for drag-and-drop
+  const [columnOrder, setColumnOrder] = useState([
+    'orderNo','customer','group','subGroup','orderTitle','orderDate',
+    'expectedDelivery','poNumber','poDate','totalAmount','advanceAmount',
+    'balanceAmount','status','createdBy','actions'
+  ]);
+  const dragCol = React.useRef(null);
+  const dragOverCol = React.useRef(null);
+
+  // Column Visibility
+  const [visibleColumns, setVisibleColumns] = useState({
+    orderNo: true,
+    customer: true,
+    group: true,
+    subGroup: false,
+    orderTitle: true,
+    orderDate: true,
+    expectedDelivery: false,
+    poNumber: true,
+    poDate: false,
+    totalAmount: true,
+    advanceAmount: false,
+    balanceAmount: false,
+    status: true,
+    createdBy: false,
+    actions: true
+  });
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
 
   // Modals
   const [showViewModal, setShowViewModal] = useState(false);
@@ -87,7 +120,6 @@ function OrderBook() {
     }
   }, [searchTerm, statusFilter, fromDate, toDate]);
 
-  // Fetch customers when form group/subgroup changes
   useEffect(() => {
     if (formData.groupName) {
       fetchSubGroupsForForm(formData.groupName);
@@ -131,6 +163,124 @@ function OrderBook() {
       setLoading(false);
     }
   };
+
+  const handleExcelUpload = async (e) => {
+    e.preventDefault();
+
+    if (!excelFile) {
+      showWarning('Please select an Excel file');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const data = await excelFile.arrayBuffer();
+      const workbook = XLSX.read(data, { type: 'array' });
+
+      // Get the first sheet
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+
+      // Convert to JSON
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (jsonData.length === 0) {
+        showWarning('The Excel file is empty');
+        setLoading(false);
+        return;
+      }
+
+      // Map Excel data to items structure
+      const mappedItems = jsonData.map((row, index) => ({
+        lineNo: index + 1,
+        itemName: row['Item Name'] || row['itemName'] || '',
+        specification: row['Specification'] || row['specification'] || '',
+        description: row['Description'] || row['description'] || '',
+        quantity: row['Quantity'] || row['quantity'] || '',
+        unit: row['Unit'] || row['unit'] || 'Nos',
+        unitPrice: row['Unit Price'] || row['unitPrice'] || '',
+        taxPercent: row['Tax %'] || row['taxPercent'] || '',
+        discountPercent: row['Discount %'] || row['discountPercent'] || '',
+        itemRemarks: row['Remarks'] || row['itemRemarks'] || '',
+        proposalItemId: null,
+        isCustomUnit: false,
+        customUnit: ''
+      }));
+
+      // Filter out empty rows (where itemName is missing)
+      const validItems = mappedItems.filter(item => item.itemName && item.itemName.trim() !== '');
+
+      if (validItems.length === 0) {
+        showWarning('No valid items found in the Excel file');
+        setLoading(false);
+        return;
+      }
+
+      // Update formData with imported items
+      setFormData(prev => ({
+        ...prev,
+        items: validItems
+      }));
+
+      showSuccess(`Successfully imported ${validItems.length} items from Excel`);
+      setShowExcelUploadModal(false);
+      setExcelFile(null);
+
+    } catch (error) {
+      console.error('Error reading Excel file:', error);
+      showError('Failed to read Excel file. Please ensure it follows the correct format.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ============================================================
+  // ✅ ONLY THIS FUNCTION IS CHANGED — fetches template from backend
+  // ============================================================
+  const downloadExcelTemplate = async () => {
+    try {
+      setLoading(true);
+
+      const response = await fetch(`${API_BASE_URL}/order-book/download-template`, {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'User-Id': user.id,
+          'User-Role': user.role
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to download template');
+      }
+
+      // Get the file as a blob
+      const blob = await response.blob();
+
+      // Create a temporary download link
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Generate a filename with today's date
+      const date = new Date().toISOString().split('T')[0];
+      link.download = `OrderBook_Template_${date}.xlsx`;
+
+      // Trigger download and clean up
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      showSuccess('Template downloaded successfully! Check your Downloads folder.');
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      showError('Failed to download template. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  // ============================================================
 
   const handleSearch = async () => {
     setLoading(true);
@@ -331,14 +481,12 @@ function OrderBook() {
   const handleEdit = async (orderBook) => {
     setSelectedOrderBook(orderBook);
 
-    // First, set the group and subgroup to trigger dropdown populations
     setFormData(prev => ({
       ...prev,
       groupName: orderBook.groupName || '',
       subGroupName: orderBook.subGroupName || ''
     }));
 
-    // Fetch customers and proposals for the order book's group
     if (orderBook.groupName) {
       await fetchSubGroupsForForm(orderBook.groupName);
       await fetchCustomersByGroup(orderBook.groupName, orderBook.subGroupName);
@@ -348,7 +496,6 @@ function OrderBook() {
       await fetchProposalsByCustomer(orderBook.customerId);
     }
 
-    // Fetch items
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
         credentials: "include",
@@ -362,7 +509,6 @@ function OrderBook() {
 
       const data = await response.json();
       if (data.success) {
-        // Set form data after dropdowns are populated
         setTimeout(() => {
           setFormData({
             customerId: orderBook.customerId || '',
@@ -401,7 +547,6 @@ function OrderBook() {
   const handleView = async (orderBook) => {
     setSelectedOrderBook(orderBook);
 
-    // Fetch items
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
         credentials: "include",
@@ -466,7 +611,6 @@ function OrderBook() {
       return;
     }
 
-    // Prepare items with proper unit values
     const preparedItems = formData.items.map(item => ({
       ...item,
       unit: item.isCustomUnit ? item.customUnit : item.unit,
@@ -703,6 +847,192 @@ function OrderBook() {
     return value;
   };
 
+  const toggleColumnVisibility = (columnKey) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey]
+    }));
+  };
+
+  const columnDefinitions = [
+    { key: 'orderNo', label: 'Order No' },
+    { key: 'customer', label: 'Customer' },
+    { key: 'group', label: 'Group' },
+    { key: 'subGroup', label: 'Sub Group' },
+    { key: 'orderTitle', label: 'Order Title' },
+    { key: 'orderDate', label: 'Order Date' },
+    { key: 'expectedDelivery', label: 'Expected Delivery' },
+    { key: 'poNumber', label: 'PO Number' },
+    { key: 'poDate', label: 'PO Date' },
+    { key: 'totalAmount', label: 'Total Amount (₹)' },
+    { key: 'advanceAmount', label: 'Advance Amount (₹)' },
+    { key: 'balanceAmount', label: 'Balance Amount (₹)' },
+    { key: 'status', label: 'Status' },
+    { key: 'createdBy', label: 'Created By' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const sortedOrderBooks = [...orderBooks].sort((a, b) => {
+    if (!sortConfig.key) return 0;
+    const dir = sortConfig.direction === 'asc' ? 1 : -1;
+    const getVal = (obj, key) => {
+      const map = {
+        orderNo:          obj.orderBookNo || '',
+        customer:         obj.customerName || '',
+        group:            obj.groupName || '',
+        subGroup:         obj.subGroupName || '',
+        orderTitle:       obj.orderTitle || '',
+        orderDate:        obj.orderDate || '',
+        expectedDelivery: obj.expectedDeliveryDate || '',
+        poNumber:         obj.poNumber || '',
+        poDate:           obj.poDate || '',
+        totalAmount:      parseFloat(obj.totalAmount) || 0,
+        advanceAmount:    parseFloat(obj.advanceAmount) || 0,
+        balanceAmount:    parseFloat(obj.balanceAmount) || 0,
+        status:           obj.status || '',
+        createdBy:        obj.createdByName || '',
+      };
+      return map[key] ?? '';
+    };
+    const aVal = getVal(a, sortConfig.key);
+    const bVal = getVal(b, sortConfig.key);
+    if (typeof aVal === 'number') return (aVal - bVal) * dir;
+    if (sortConfig.key.toLowerCase().includes('date')) return aVal.localeCompare(bVal) * dir;
+    return String(aVal).localeCompare(String(bVal)) * dir;
+  });
+
+  // ── Drag-and-drop column reorder ──────────────────────────────
+  const handleDragStart = (key) => { dragCol.current = key; };
+  const handleDragEnter = (key) => { dragOverCol.current = key; };
+  const handleDragEnd   = () => {
+    const from = dragCol.current;
+    const to   = dragOverCol.current;
+    if (!from || !to || from === to) return;
+    setColumnOrder(prev => {
+      const next = [...prev];
+      const fi = next.indexOf(from);
+      const ti = next.indexOf(to);
+      next.splice(fi, 1);
+      next.splice(ti, 0, from);
+      return next;
+    });
+    dragCol.current     = null;
+    dragOverCol.current = null;
+  };
+
+  // Column metadata — label, cell renderer, sort key
+  const columnMeta = {
+    orderNo:          {
+      label: 'Order No',
+      sortKey: 'orderNo',
+      render: (o) => <td key="orderNo" className="orderbook-id">{o.orderBookNo}</td>
+    },
+    customer:         {
+      label: 'Customer',
+      sortKey: 'customer',
+      render: (o) => (
+        <td key="customer">
+          <div className="orderbook-customer-info">
+            <strong>{o.customerName}</strong>
+            <span className="orderbook-customer-code">{o.customerCode}</span>
+          </div>
+        </td>
+      )
+    },
+    group:            {
+      label: 'Group',
+      sortKey: 'group',
+      render: (o) => <td key="group">{o.groupName || '-'}</td>
+    },
+    subGroup:         {
+      label: 'Sub Group',
+      sortKey: 'subGroup',
+      render: (o) => <td key="subGroup">{o.subGroupName || '-'}</td>
+    },
+    orderTitle:       {
+      label: 'Order Title',
+      sortKey: 'orderTitle',
+      render: (o) => <td key="orderTitle">{o.orderTitle}</td>
+    },
+    orderDate:        {
+      label: 'Order Date',
+      sortKey: 'orderDate',
+      render: (o) => <td key="orderDate">{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td>
+    },
+    expectedDelivery: {
+      label: 'Expected Delivery',
+      sortKey: 'expectedDelivery',
+      render: (o) => <td key="expectedDelivery">{o.expectedDeliveryDate ? new Date(o.expectedDeliveryDate).toLocaleDateString('en-IN') : '-'}</td>
+    },
+    poNumber:         {
+      label: 'PO Number',
+      sortKey: 'poNumber',
+      render: (o) => <td key="poNumber">{o.poNumber || '-'}</td>
+    },
+    poDate:           {
+      label: 'PO Date',
+      sortKey: 'poDate',
+      render: (o) => <td key="poDate">{o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '-'}</td>
+    },
+    totalAmount:      {
+      label: 'Total Amount (₹)',
+      sortKey: 'totalAmount',
+      render: (o) => <td key="totalAmount" className="orderbook-amount">₹{o.totalAmount ? parseFloat(o.totalAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
+    },
+    advanceAmount:    {
+      label: 'Advance Amount (₹)',
+      sortKey: 'advanceAmount',
+      render: (o) => <td key="advanceAmount" className="orderbook-amount">₹{o.advanceAmount ? parseFloat(o.advanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
+    },
+    balanceAmount:    {
+      label: 'Balance Amount (₹)',
+      sortKey: 'balanceAmount',
+      render: (o) => <td key="balanceAmount" className="orderbook-amount orderbook-balance">₹{o.balanceAmount ? parseFloat(o.balanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
+    },
+    status:           {
+      label: 'Status',
+      sortKey: 'status',
+      render: (o) => (
+        <td key="status">
+          <span className={`orderbook-status ${getStatusClass(o.status)}`}>{o.status}</span>
+        </td>
+      )
+    },
+    createdBy:        {
+      label: 'Created By',
+      sortKey: 'createdBy',
+      render: (o) => <td key="createdBy">{o.createdByName || '-'}</td>
+    },
+    actions:          {
+      label: 'Actions',
+      sortKey: null,
+      render: (o) => (
+        <td key="actions">
+          <div className="orderbook-actions-inline">
+            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View">   <FaEye /></button>
+            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit">   <FaEdit /></button>
+            <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
+            <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>
+          </div>
+        </td>
+      )
+    },
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (sortConfig.key !== colKey) return <span className="ob-sort-icon ob-sort-none">⇅</span>;
+    return sortConfig.direction === 'asc'
+      ? <span className="ob-sort-icon ob-sort-active">↑</span>
+      : <span className="ob-sort-icon ob-sort-active">↓</span>;
+  };
+
   return (
     <div className="orderbook-page">
       {loading && <CrmPreloader text="Loading..." />}
@@ -751,26 +1081,80 @@ function OrderBook() {
             <option value="Cancelled">Cancelled</option>
           </select>
 
-          <input
-            type="date"
-            className="orderbook-filter"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            placeholder="From Date"
-          />
-
-          <input
-            type="date"
-            className="orderbook-filter"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            placeholder="To Date"
-          />
+          <div className="orderbook-date-range">
+            <div className="orderbook-date-field">
+              <label>From</label>
+              <input
+                type="date"
+                className="orderbook-filter"
+                value={fromDate}
+                onChange={(e) => setFromDate(e.target.value)}
+              />
+            </div>
+            <span className="orderbook-date-separator">→</span>
+            <div className="orderbook-date-field">
+              <label>To</label>
+              <input
+                type="date"
+                className="orderbook-filter"
+                value={toDate}
+                onChange={(e) => setToDate(e.target.value)}
+              />
+            </div>
+            {(fromDate || toDate) && (
+              <button
+                className="orderbook-date-clear"
+                onClick={() => { setFromDate(''); setToDate(''); }}
+                title="Clear dates"
+              >
+                ×
+              </button>
+            )}
+          </div>
         </div>
 
-        <button className="orderbook-btn orderbook-btn-primary" onClick={handleCreateNew}>
-          + Create Order Book
-        </button>
+        <div className="orderbook-action-buttons">
+          <div className="orderbook-column-picker-container">
+            <button
+              className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
+              onClick={() => setShowColumnPicker(!showColumnPicker)}
+              title="Manage Columns"
+            >
+              <FaColumns /> Columns
+            </button>
+
+            {showColumnPicker && (
+              <div className="orderbook-column-picker-dropdown">
+                <div className="orderbook-column-picker-header">
+                  <span>Show/Hide Columns</span>
+                  <button
+                    className="orderbook-column-picker-close"
+                    onClick={() => setShowColumnPicker(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="orderbook-column-picker-list">
+                  {columnDefinitions.map(col => (
+                    <label key={col.key} className="orderbook-column-picker-item">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[col.key]}
+                        onChange={() => toggleColumnVisibility(col.key)}
+                        disabled={col.key === 'actions'}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="orderbook-btn orderbook-btn-primary" onClick={handleCreateNew}>
+            + Create Order Book
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -779,22 +1163,35 @@ function OrderBook() {
           <table className="orderbook-table">
             <thead>
               <tr>
-                {/* <th>Order No</th> */}
-                <th style={{ textAlign: "center" }}>Customer</th>
-                <th style={{ textAlign: "center" }}>Group</th>
-                {/* <th>Order Title</th>
-                <th>Order Date</th>
-                <th>PO Number</th> */}
-                <th style={{ textAlign: "center" }}>Total Amount (₹)</th>
-                <th style={{ textAlign: "center" }}>Status</th>
-                {/* <th>Created By</th> */}
-                <th style={{ textAlign: "center" }}>Actions</th>
+                {columnOrder
+                  .filter(key => visibleColumns[key])
+                  .map(key => {
+                    const col = columnMeta[key];
+                    const isActive = sortConfig.key === col.sortKey;
+                    return (
+                      <th
+                        key={key}
+                        draggable
+                        onDragStart={() => handleDragStart(key)}
+                        onDragEnter={() => handleDragEnter(key)}
+                        onDragEnd={handleDragEnd}
+                        onDragOver={(e) => e.preventDefault()}
+                        className={`ob-draggable-th ${col.sortKey ? 'ob-sortable' : ''} ${isActive ? 'ob-th-sorted' : ''}`}
+                        onClick={() => col.sortKey && handleSort(col.sortKey)}
+                        title={col.sortKey ? 'Drag to reorder · Click to sort' : 'Drag to reorder'}
+                      >
+                        <span className="ob-th-grip">⠿</span>
+                        {col.label}
+                        {col.sortKey && <SortIcon colKey={col.sortKey} />}
+                      </th>
+                    );
+                  })}
               </tr>
             </thead>
             <tbody>
               {orderBooks.length === 0 ? (
                 <tr>
-                  <td colSpan="10" className="orderbook-empty-state">
+                  <td colSpan={columnOrder.filter(k => visibleColumns[k]).length} className="orderbook-empty-state">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
@@ -802,82 +1199,11 @@ function OrderBook() {
                   </td>
                 </tr>
               ) : (
-                orderBooks.map((order) => (
+                sortedOrderBooks.map((order) => (
                   <tr key={order.id}>
-                    {/* <td className="orderbook-id">{order.orderBookNo}</td> */}
-                    <td style={{ textAlign: "center" }}>
-                      <div className="orderbook-customer-info">
-                        <strong>{order.customerName}</strong>
-                        <span className="orderbook-customer-code">{order.customerCode}</span>
-                      </div>
-                    </td>
-                    <td style={{ textAlign: "center" }}>{order.groupName || '-'}</td>
-                    {/* <td>{order.orderTitle}</td>
-                    <td>
-                      {order.orderDate
-                        ? new Date(order.orderDate)
-                          .toLocaleString("en-GB", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            second: "2-digit",
-                            hour12: false,
-                          })
-                          .replaceAll("/", " - ")
-                          .replace(",", "")
-                        : "-"}
-                    </td>
-
-                    <td>{order.poNumber || '-'}</td> */}
-                    <td className="orderbook-amount" style={{ textAlign: "center" }}>
-                      ₹{order.totalAmount ? parseFloat(order.totalAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '0.00'}
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      <span className={`orderbook-status ${getStatusClass(order.status)}`}>
-                        {order.status}
-                      </span>
-                    </td>
-                    {/* <td>{order.createdByName || '-'}</td> */}
-                    <td style={{ textAlign: "center" }}>
-                      <div className="orderbook-actions-inline">
-
-                        <button
-                          className="orderbook-icon-btn ob-view"
-                          onClick={() => handleView(order)}
-                          title="View"
-                        >
-                          <FaEye />
-                        </button>
-
-                        <button
-                          className="orderbook-icon-btn ob-edit"
-                          onClick={() => handleEdit(order)}
-                          title="Edit"
-                        >
-                          <FaEdit />
-                        </button>
-
-                        <button
-                          className="orderbook-icon-btn ob-upload"
-                          onClick={() => handlePOUploadClick(order)}
-                          title="Upload PO"
-                        >
-                          <FaCloudUploadAlt  />
-                        </button>
-
-                        <button
-                          className="orderbook-icon-btn ob-delete"
-                          onClick={() => handleDeleteClick(order.id)}
-                          title="Delete"
-                        >
-                          <RiDeleteBin6Line />
-                        </button>
-
-                      </div>
-                    </td>
-
+                    {columnOrder
+                      .filter(key => visibleColumns[key])
+                      .map(key => columnMeta[key].render(order))}
                   </tr>
                 ))
               )}
@@ -930,7 +1256,7 @@ function OrderBook() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="orderbook-modal-overlay">
+        <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-delete-modal" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-delete-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -963,7 +1289,7 @@ function OrderBook() {
 
       {/* View Modal */}
       {showViewModal && selectedOrderBook && (
-        <div className="orderbook-modal-overlay">
+        <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Order Book Details</h2>
@@ -1032,7 +1358,6 @@ function OrderBook() {
                             <td>{formatDisplayValue(item.discountPercent)}%</td>
                             <td>{formatDisplayValue(item.taxPercent)}%</td>
                             <td>₹{parseFloat(item.unitPrice * item.taxPercent).toFixed(2)}</td>
-                            {/* <td>₹{item.lineTotal ? parseFloat(item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td> */}
                           </tr>
                         ))}
                         <tr className="orderbook-total-row">
@@ -1086,7 +1411,7 @@ function OrderBook() {
 
       {/* Create/Edit Modal */}
       {showCreateModal && (
-        <div className="orderbook-modal-overlay">
+        <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>{isEditMode ? 'Edit Order Book' : 'Create Order Book'}</h2>
@@ -1298,14 +1623,36 @@ function OrderBook() {
               <div className="orderbook-card">
                 <div className="orderbook-items-header">
                   <h3>Order Items</h3>
-                  <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={addItem}>
-                    + Add Item
-                  </button>
+                  <div style={{ display: 'flex', gap: '10px' }}>
+                    <button
+                      type="button"
+                      className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
+                      onClick={downloadExcelTemplate}
+                      title="Download Excel Template"
+                    >
+                      <FaFileDownload /> Download Template
+                    </button>
+                    <button
+                      type="button"
+                      className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
+                      onClick={() => setShowExcelUploadModal(true)}
+                      title="Import from Excel"
+                    >
+                      <FaUpload /> Import Excel
+                    </button>
+                    <button
+                      type="button"
+                      className="orderbook-btn orderbook-btn-secondary"
+                      onClick={addItem}
+                    >
+                      + Add Item
+                    </button>
+                  </div>
                 </div>
 
                 {formData.items.length === 0 ? (
                   <div className="orderbook-empty-items">
-                    <p>No items added. Click "Add Item" to start.</p>
+                    <p>No items added. Click "Add Item" to start or import from Excel.</p>
                   </div>
                 ) : (
                   <>
@@ -1461,7 +1808,7 @@ function OrderBook() {
 
       {/* PO Upload Modal */}
       {showPOUploadModal && selectedOrderBook && (
-        <div className="orderbook-modal-overlay">
+        <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-modal" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Upload PO for {selectedOrderBook.orderBookNo}</h2>
@@ -1516,6 +1863,96 @@ function OrderBook() {
                   disabled={loading}
                 >
                   {loading ? 'Uploading...' : 'Upload PO'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Excel Upload Modal */}
+      {showExcelUploadModal && (
+        <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
+          <div className="orderbook-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="orderbook-modal-header">
+              <h2>Import Items from Excel</h2>
+              <button className="orderbook-modal-close" onClick={() => {
+                setShowExcelUploadModal(false);
+                setExcelFile(null);
+              }}>×</button>
+            </div>
+
+            <form onSubmit={handleExcelUpload} className="orderbook-modal-content">
+              <div className="orderbook-info-box" style={{
+                background: '#e3f2fd',
+                padding: '15px',
+                borderRadius: '8px',
+                marginBottom: '20px',
+                border: '1px solid #90caf9'
+              }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>📋 Excel Format Instructions:</h4>
+                <ul style={{ margin: 0, paddingLeft: '20px', color: '#555' }}>
+                  <li>Use the downloaded template for correct format</li>
+                  <li>Required columns: Item Name, Quantity, Unit</li>
+                  <li>Optional columns: Specification, Description, Unit Price, Discount %, Tax %, Remarks</li>
+                  <li>First row must contain column headers</li>
+                  <li>Data should start from row 2</li>
+                </ul>
+              </div>
+
+              <div className="orderbook-form-group">
+                <label>
+                  Excel File *
+                  <button
+                    type="button"
+                    onClick={downloadExcelTemplate}
+                    style={{
+                      marginLeft: '10px',
+                      padding: '4px 12px',
+                      fontSize: '12px',
+                      background: '#4CAF50',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <FaFileDownload /> Download Template
+                  </button>
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setExcelFile(e.target.files[0])}
+                  accept=".xlsx,.xls"
+                  required
+                />
+                <small className="orderbook-help-text">
+                  Accepted formats: .xlsx, .xls
+                </small>
+                {excelFile && (
+                  <small style={{ display: 'block', marginTop: '8px', color: '#4CAF50' }}>
+                    ✓ Selected: {excelFile.name}
+                  </small>
+                )}
+              </div>
+
+              <div className="orderbook-modal-actions">
+                <button
+                  type="button"
+                  className="orderbook-btn orderbook-btn-secondary"
+                  onClick={() => {
+                    setShowExcelUploadModal(false);
+                    setExcelFile(null);
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="orderbook-btn orderbook-btn-primary"
+                  disabled={loading || !excelFile}
+                >
+                  {loading ? 'Importing...' : 'Import Items'}
                 </button>
               </div>
             </form>

@@ -1,0 +1,66 @@
+/* Invoices and Receipts Tab Navigation */
+.invoices-receipts-container {
+  min-height: 100vh;
+  background-color: #f5f7fa;
+}
+
+.tab-navigation {
+  display: flex;
+  gap: 8px;
+  padding: 20px 24px 0 24px;
+  background-color: white;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tab-button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background-color: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  bottom: -2px;
+}
+
+.tab-button:hover {
+  color: #2563eb;
+  background-color: #f8fafc;
+}
+
+.tab-button.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background-color: transparent;
+}
+
+.tab-button span {
+  white-space: nowrap;
+}
+
+.tab-content {
+  background-color: #f5f7fa;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tab-navigation {
+    padding: 16px 16px 0 16px;
+  }
+
+  .tab-button {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .tab-button svg {
+    width: 18px;
+    height: 18px;
+  }
+}

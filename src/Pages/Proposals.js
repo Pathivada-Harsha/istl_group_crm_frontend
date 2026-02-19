@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FaEye, FaEdit, FaTrash, FaFilePdf, FaCalendarAlt, FaFileAlt,FaRegTrashAlt } from 'react-icons/fa';
+import React, { useState, useEffect, useRef } from 'react';
+import { FaEye, FaEdit, FaTrash, FaFilePdf, FaCalendarAlt, FaFileAlt, FaRegTrashAlt } from 'react-icons/fa';
 import '../pages-css/Proposals.css';
 import { useAuth } from "../hooks/useAuth.js";
 import GroupCategoryFilter from "./../components/Dropdowns/groupCategoryFilter.js";
@@ -10,104 +10,180 @@ import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-// Default template content
 const DEFAULT_TEMPLATE = {
   companyName: "SESOLA POWER PROJECTS PROPOSAL PVT LTD",
-  aboutUs: `We are a leading provider of renewable energy solutions with expertise in solar power systems. Our team of experienced professionals is committed to delivering high-quality, sustainable energy solutions that meet the unique needs of our clients.
-
-With years of experience in the industry, we have successfully completed numerous projects across various sectors, establishing ourselves as a trusted partner in the transition to clean energy.`,
-  aboutSystem: `The proposed solar power system is designed to provide reliable, efficient, and sustainable energy generation. The system includes high-efficiency solar panels, advanced inverters, robust mounting structures, and comprehensive monitoring systems.
-
-Key features:
-- High-efficiency solar panels with excellent performance
-- Grid-tied inverter system for optimal power conversion
-- Durable mounting structures with wind load certification
-- Remote monitoring and management capabilities
-- Comprehensive safety features and protection systems`,
-  paymentTerms: `1. 30% advance payment upon signing of agreement
-2. 40% payment on delivery of materials at site
-3. 30% payment on successful commissioning and handover
-
-Payment can be made via bank transfer, cheque, or demand draft in favor of SESOLA POWER PROJECTS PROPOSAL PVT LTD.`,
-  defectLiabilityPeriod: `Standard 12 months warranty period from date of commissioning and handover.
-
-During this period, any defects in workmanship, materials, or performance will be rectified free of cost. This includes:
-- Repair or replacement of defective components
-- System performance issues
-- Installation-related defects
-
-Extended warranty options are available upon request.`,
+  aboutUs: `We are a leading provider of renewable energy solutions with expertise in solar power systems. Our team of experienced professionals is committed to delivering high-quality, sustainable energy solutions that meet the unique needs of our clients.\n\nWith years of experience in the industry, we have successfully completed numerous projects across various sectors, establishing ourselves as a trusted partner in the transition to clean energy.`,
+  aboutSystem: `The proposed solar power system is designed to provide reliable, efficient, and sustainable energy generation. The system includes high-efficiency solar panels, advanced inverters, robust mounting structures, and comprehensive monitoring systems.\n\nKey features:\n- High-efficiency solar panels with excellent performance\n- Grid-tied inverter system for optimal power conversion\n- Durable mounting structures with wind load certification\n- Remote monitoring and management capabilities\n- Comprehensive safety features and protection systems`,
+  paymentTerms: `1. 30% advance payment upon signing of agreement\n2. 40% payment on delivery of materials at site\n3. 30% payment on successful commissioning and handover\n\nPayment can be made via bank transfer, cheque, or demand draft in favor of SESOLA POWER PROJECTS PROPOSAL PVT LTD.`,
+  defectLiabilityPeriod: `Standard 12 months warranty period from date of commissioning and handover.\n\nDuring this period, any defects in workmanship, materials, or performance will be rectified free of cost.`,
   systemPricing: [],
   bomItems: []
 };
 
+// ── All columns definition ─────────────────────────────────────
+const ALL_COLUMNS = [
+  { key: 'leadName',    label: 'Lead Name',   sortable: true,  required: false },
+  { key: 'groupName',   label: 'Group',       sortable: true,  required: false },
+  { key: 'subGroupName',label: 'Category',    sortable: true,  required: false },
+  { key: 'proposalNo',  label: 'Proposal No', sortable: true,  required: false },
+  { key: 'title',       label: 'Title',       sortable: true,  required: false },
+  { key: 'totalValue',  label: 'Value (₹)',   sortable: true,  required: false },
+  { key: 'version',     label: 'Version',     sortable: true,  required: false },
+  { key: 'status',      label: 'Status',      sortable: true,  required: false },
+  { key: 'preparedByName', label: 'Prepared By', sortable: true, required: false },
+  { key: 'updatedAt',   label: 'Updated',     sortable: true,  required: false },
+  { key: 'actions',     label: 'Actions',     sortable: false, required: true  },
+];
+
+const DEFAULT_VISIBLE = ['leadName', 'groupName', 'totalValue', 'status', 'updatedAt', 'actions'];
+const DEFAULT_ORDER   = ALL_COLUMNS.map(c => c.key);
+
+// ── Column Visibility Dropdown ────────────────────────────────
+const ColumnVisibilityDropdown = ({ columns, visibleColumns, onToggle, onReset }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const hiddenCount = columns.filter(c => !c.required && !visibleColumns.includes(c.key)).length;
+
+  return (
+    <div className="p-col-vis-wrap" ref={ref}>
+      <button className={`p-col-vis-btn ${hiddenCount > 0 ? 'has-hidden' : ''}`} onClick={() => setOpen(o => !o)} title="Show/hide columns">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+        </svg>
+        Columns
+        {hiddenCount > 0 && <span className="p-col-vis-badge">{hiddenCount}</span>}
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="11" height="11" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <div className="p-col-vis-dropdown">
+          <div className="p-col-vis-hdr">
+            <span>Toggle Columns</span>
+            <button className="p-col-vis-reset" onClick={onReset}>Reset</button>
+          </div>
+          <div className="p-col-vis-list">
+            {columns.map(col => (
+              <label key={col.key} className={`p-col-vis-item ${col.required ? 'p-col-required' : ''}`}>
+                <input type="checkbox" checked={visibleColumns.includes(col.key)} onChange={() => !col.required && onToggle(col.key)} disabled={col.required} />
+                <span className="p-col-vis-label">{col.label}</span>
+                {col.required && <span className="p-col-req-tag">required</span>}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Draggable Header Cell ─────────────────────────────────────
+const DraggableHeaderCell = ({ col, index, sortCol, sortDir, onSort, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver }) => (
+  <th
+    draggable
+    onDragStart={(e) => onDragStart(e, index)}
+    onDragOver={(e) => onDragOver(e, index)}
+    onDrop={(e) => onDrop(e, index)}
+    onDragEnd={onDragEnd}
+    className={`p-th-draggable${isDragOver ? ' p-th-drag-over' : ''}${col.key === 'actions' ? ' p-th-actions' : ''}`}
+    onClick={() => col.sortable && onSort(col.key)}
+    style={{ cursor: col.sortable ? 'pointer' : 'grab' }}
+  >
+    <div className="p-th-inner">
+      <span className="p-drag-dots" title="Drag to reorder">
+        <svg fill="currentColor" viewBox="0 0 24 24" width="9" height="9">
+          <circle cx="9" cy="5" r="1.5"/><circle cx="15" cy="5" r="1.5"/>
+          <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+          <circle cx="9" cy="19" r="1.5"/><circle cx="15" cy="19" r="1.5"/>
+        </svg>
+      </span>
+      <span>{col.label}</span>
+      {col.sortable && (
+        <span className={`p-sort-icon ${sortCol === col.key ? 'active' : ''}`}>
+          {sortCol === col.key
+            ? (sortDir === 'asc'
+                ? <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="12" height="12"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7"/></svg>
+                : <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="12" height="12"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7"/></svg>)
+            : <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="12" height="12" style={{opacity:.3}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+          }
+        </span>
+      )}
+    </div>
+  </th>
+);
+
+// ── Main Component ────────────────────────────────────────────
 const ProposalsWithTemplate = () => {
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
 
-  // Permissions
   const permissions = {
-    VIEW: pagePermissions?.PROPOSALS?.includes('VIEW'),
-    CREATE: pagePermissions?.PROPOSALS?.includes('CREATE'),
-    EDIT: pagePermissions?.PROPOSALS?.includes('EDIT'),
-    DELETE: pagePermissions?.PROPOSALS?.includes('DELETE'),
-    APPROVE: pagePermissions?.PROPOSALS?.includes('APPROVE'),
+    VIEW:     pagePermissions?.PROPOSALS?.includes('VIEW'),
+    CREATE:   pagePermissions?.PROPOSALS?.includes('CREATE'),
+    EDIT:     pagePermissions?.PROPOSALS?.includes('EDIT'),
+    DELETE:   pagePermissions?.PROPOSALS?.includes('DELETE'),
+    APPROVE:  pagePermissions?.PROPOSALS?.includes('APPROVE'),
     DOWNLOAD: pagePermissions?.PROPOSALS?.includes('DOWNLOAD')
   };
 
-  const currentUser = {
-    id: user.id,
-    role: user.role,
-    name: user.name
-  };
+  const currentUser = { id: user.id, role: user.role, name: user.name };
 
-  // State variables
+  // ── Column state ─────────────────────────────────────────────
+  const [columnOrder,    setColumnOrder]    = useState(DEFAULT_ORDER);
+  const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
+  const [sortCol,        setSortCol]        = useState('');
+  const [sortDir,        setSortDir]        = useState('asc');
+  const dragIdx = useRef(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  // ── Data state ───────────────────────────────────────────────
   const [bomItemsMaster, setBomItemsMaster] = useState([]);
   const [filteredBomItems, setFilteredBomItems] = useState({});
-  const [showBomDropdown, setShowBomDropdown] = useState({});
-  const [bomCategories, setBomCategories] = useState([]);
+  const [showBomDropdown,  setShowBomDropdown]  = useState({});
   const [proposals, setProposals] = useState([]);
-  const [leads, setLeads] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [sortedProposals, setSortedProposals] = useState([]);
+  const [leads,    setLeads]    = useState([]);
+  const [users,    setUsers]    = useState([]);
+  const [groups,   setGroups]   = useState([]);
+  const [subGroups,setSubGroups]= useState([]);
+  const [loading,  setLoading]  = useState(false);
 
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // ── Pagination ───────────────────────────────────────────────
+  const [currentPage,    setCurrentPage]    = useState(1);
+  const [rowsPerPage,    setRowsPerPage]    = useState(10);
   const [totalProposals, setTotalProposals] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const [totalPages,     setTotalPages]     = useState(0);
 
-  // Filters
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
+  // ── Filters ──────────────────────────────────────────────────
+  const [searchTerm,       setSearchTerm]       = useState('');
+  const [filterStatus,     setFilterStatus]     = useState('All');
   const [filterPreparedBy, setFilterPreparedBy] = useState('All');
 
-  // Modals
-  const [showViewModal, setShowViewModal] = useState(false);
-  const [showCreateModal, setShowCreateModal] = useState(false);
+  // ── Modals ───────────────────────────────────────────────────
+  const [showViewModal,     setShowViewModal]     = useState(false);
+  const [showCreateModal,   setShowCreateModal]   = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteProposalId, setDeleteProposalId] = useState(null);
+  const [showDeleteModal,   setShowDeleteModal]   = useState(false);
+  const [deleteProposalId,  setDeleteProposalId]  = useState(null);
   const [deleteProposalTitle, setDeleteProposalTitle] = useState('');
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [selectedProposal, setSelectedProposal] = useState(null);
-  const [activeTab, setActiveTab] = useState('company');
+  const [isEditMode,        setIsEditMode]        = useState(false);
+  const [selectedProposal,  setSelectedProposal]  = useState(null);
+  const [activeTab,         setActiveTab]         = useState('company');
 
-  // Custom unit tracking
   const [customUnitInputs, setCustomUnitInputs] = useState({});
 
-  // Form state - Basic Info
   const [formData, setFormData] = useState({
-    leadId: '',
-    title: '',
-    description: '',
-    totalValue: '',
-    groupName: '',
-    subGroupName: '',
-    status: 'Draft'
+    leadId: '', title: '', description: '', totalValue: '',
+    groupName: '', subGroupName: '', status: 'Draft'
   });
 
-  // Template state
   const [templateData, setTemplateData] = useState({
     companyName: DEFAULT_TEMPLATE.companyName,
     aboutUs: DEFAULT_TEMPLATE.aboutUs,
@@ -118,692 +194,323 @@ const ProposalsWithTemplate = () => {
     bomItems: []
   });
 
-  // Toast
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
-  // Groups states
-  const [groups, setGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
+  // ── Derived: ordered visible columns ────────────────────────
+  const orderedVisibleCols = columnOrder
+    .map(k => ALL_COLUMNS.find(c => c.key === k))
+    .filter(c => c && visibleColumns.includes(c.key));
 
-  /**
-   * Format date to DD-MM-YYYY HH:MM:SS
-   */
-  const formatDateTime = (dateString) => {
-    if (!dateString) return '-';
-
-    const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-
-    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
+  // ── Column drag handlers ─────────────────────────────────────
+  const handleColDragStart = (e, idx) => {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+    e.currentTarget.classList.add('p-th-dragging');
+  };
+  const handleColDragOver = (e, idx) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIdx(idx);
+  };
+  const handleColDrop = (e, dropIdx) => {
+    e.preventDefault();
+    const fromIdx = dragIdx.current;
+    if (fromIdx === null || fromIdx === dropIdx) return;
+    const visKeys = orderedVisibleCols.map(c => c.key);
+    const fromKey = visKeys[fromIdx];
+    const toKey   = visKeys[dropIdx];
+    const newOrder = [...columnOrder];
+    const a = newOrder.indexOf(fromKey);
+    const b = newOrder.indexOf(toKey);
+    newOrder.splice(a, 1);
+    newOrder.splice(b, 0, fromKey);
+    setColumnOrder(newOrder);
+    setDragOverIdx(null);
+    dragIdx.current = null;
+  };
+  const handleColDragEnd = (e) => {
+    e.currentTarget.classList.remove('p-th-dragging');
+    setDragOverIdx(null);
+    dragIdx.current = null;
   };
 
-  /**
-   * Handle unit change for BOM items
-   */
-  const handleBomUnitChange = (index, value) => {
-    if (value === 'Custom') {
-      // Enable custom input
-      setCustomUnitInputs(prev => ({ ...prev, [index]: '' }));
-      updateBOMRow(index, 'unit', '');
-    } else {
-      // Remove custom input if exists
-      const newCustomInputs = { ...customUnitInputs };
-      delete newCustomInputs[index];
-      setCustomUnitInputs(newCustomInputs);
-      updateBOMRow(index, 'unit', value);
-    }
+  // ── Column visibility handlers ───────────────────────────────
+  const handleToggleCol = (key) => setVisibleColumns(p => p.includes(key) ? p.filter(k => k !== key) : [...p, key]);
+  const handleResetCols = () => { setColumnOrder(DEFAULT_ORDER); setVisibleColumns(DEFAULT_VISIBLE); };
+
+  // ── Sort handler ─────────────────────────────────────────────
+  const handleSort = (key) => {
+    const dir = sortCol === key && sortDir === 'asc' ? 'desc' : 'asc';
+    setSortCol(key); setSortDir(dir);
+    const sorted = [...sortedProposals].sort((a, b) => {
+      const av = a[key] ?? ''; const bv = b[key] ?? '';
+      return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
+    });
+    setSortedProposals(sorted);
   };
 
-  /**
-   * Handle custom unit input change
-   */
-  const handleCustomUnitInput = (index, value) => {
-    setCustomUnitInputs(prev => ({ ...prev, [index]: value }));
-    updateBOMRow(index, 'unit', value);
+  // Keep sortedProposals in sync when proposals change
+  useEffect(() => { setSortedProposals(proposals); }, [proposals]);
+
+  // ── Helpers ──────────────────────────────────────────────────
+  const formatDateTime = (ds) => {
+    if (!ds) return '-';
+    const d = new Date(ds);
+    return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
   };
 
-  const fetchBomItemsMaster = async (category = null) => {
-    try {
-      let url = `${API_BASE_URL}/api/bom-items-master/all`;
-      if (category) {
-        url = `${API_BASE_URL}/api/bom-items-master/by-category?category=${category}`;
-      }
-
-      const response = await fetch(url, {
-        credentials: "include",
-        headers: {
-          'User-Id': currentUser.id,
-          'User-Role': currentUser.role
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch BOM items');
-
-      const data = await response.json();
-      if (data.success) {
-        setBomItemsMaster(data.data || []);
-        console.log('Loaded BOM items:', data.data.length);
-      }
-    } catch (error) {
-      console.error('Error fetching BOM items:', error);
-      setBomItemsMaster([]);
-    }
+  const parseJSON = (s) => {
+    if (!s) return null;
+    try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; }
   };
 
-  const handleBomItemSearch = async (index, searchTerm) => {
-    console.log('🔍 Searching BOM items:', searchTerm);
-
-    if (!searchTerm || searchTerm.length < 2) {
-      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
-      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
-      return;
-    }
-
-    try {
-      const url = `${API_BASE_URL}/api/bom-items-master/search?searchTerm=${encodeURIComponent(searchTerm)}`;
-
-      const response = await fetch(url, {
-        credentials: "include",
-        headers: {
-          'User-Id': currentUser.id,
-          'User-Role': currentUser.role
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to search BOM items');
-
-      const data = await response.json();
-      console.log('✅ Found BOM items:', data.data.length);
-
-      setFilteredBomItems(prev => ({ ...prev, [index]: data.data || [] }));
-      setShowBomDropdown(prev => ({ ...prev, [index]: (data.data || []).length > 0 }));
-
-    } catch (error) {
-      console.error('Error searching BOM items:', error);
-      setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
-      setShowBomDropdown(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
-  const selectBomItem = (index, bomItem) => {
-    console.log('🎯 Selected BOM item:', bomItem);
-
-    const updated = [...templateData.bomItems];
-    updated[index] = {
-      ...updated[index],
-      item: bomItem.itemName,
-      specification: bomItem.specification || '',
-      unit: bomItem.defaultUnit || 'Nos',
-      tax: bomItem.defaultTaxPercent || '18'
-    };
-
-    setTemplateData({ ...templateData, bomItems: updated });
-    setShowBomDropdown(prev => ({ ...prev, [index]: false }));
-    setFilteredBomItems(prev => ({ ...prev, [index]: [] }));
-  };
-
-  const fetchGroups = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
-        credentials: "include",
-        headers: {
-          'User-Id': currentUser.id,
-          'User-Role': currentUser.role
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch groups');
-
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setGroups(data);
-      }
-    } catch (err) {
-      console.error('Error fetching groups:', err);
-      setGroups([]);
-    }
-  };
-
-  const fetchSubGroupsForForm = async (group) => {
-    if (!group) {
-      setSubGroups([]);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
-        credentials: "include",
-        headers: {
-          'User-Id': currentUser.id,
-          'User-Role': currentUser.role
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch subgroups');
-
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setSubGroups(data);
-      }
-    } catch (err) {
-      console.error('Error fetching subgroups:', err);
-      setSubGroups([]);
-    }
-  };
-
-  useEffect(() => {
-    if (formData.groupName) {
-      fetchSubGroupsForForm(formData.groupName);
-    } else {
-      setSubGroups([]);
-    }
-  }, [formData.groupName]);
+  const getStatusClass = (status) => ({
+    'Draft':'status-draft','Sent':'status-sent','Approved':'status-approved',
+    'Rejected':'status-rejected','On Hold':'status-hold'
+  }[status] || 'status-draft');
 
   const fetchWithHeaders = async (url, options = {}) => {
-    const headers = {
-      'Content-Type': 'application/json',
-      'User-Id': currentUser.id.toString(),
-      'User-Role': currentUser.role,
-      ...options.headers
-    };
-
-    const response = await fetch(url, { ...options, headers, credentials: "include" });
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return response.json();
+    const headers = { 'Content-Type': 'application/json', 'User-Id': currentUser.id.toString(), 'User-Role': currentUser.role, ...options.headers };
+    const res = await fetch(url, { ...options, headers, credentials: 'include' });
+    if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
+    return res.json();
   };
 
-  const parseJSON = (jsonString) => {
-    if (!jsonString) return null;
-    try {
-      return typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
-    } catch (e) {
-      return null;
-    }
-  };
-
+  // ── Fetch functions ──────────────────────────────────────────
   const fetchProposals = async () => {
     setLoading(true);
     try {
-      const url = `${API_BASE_URL}/proposals/getAll?page=${currentPage - 1}&size=${rowsPerPage}&groupName=${groupName || ''}&subGroupName=${subGroupName || ''}`;
-      const data = await fetchWithHeaders(url);
-
-      if (data.success) {
-        setProposals(data.data.content || []);
-        setTotalProposals(data.data.totalElements || 0);
-        setTotalPages(data.data.totalPages || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching proposals:', error);
-      showError('Failed to fetch proposals');
-    } finally {
-      setLoading(false);
-    }
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/getAll?page=${currentPage-1}&size=${rowsPerPage}&groupName=${groupName||''}&subGroupName=${subGroupName||''}`);
+      if (data.success) { setProposals(data.data.content||[]); setTotalProposals(data.data.totalElements||0); setTotalPages(data.data.totalPages||0); }
+    } catch(e) { showError('Failed to fetch proposals'); }
+    finally { setLoading(false); }
   };
 
-  const fetchLeads = async (groupFilter = null, subGroupFilter = null) => {
+  const fetchLeads = async (g=null, sg=null) => {
     try {
       let url = `${API_BASE_URL}/leads/by-group-subgroup?`;
-
-      if (groupFilter) {
-        url += `groupName=${encodeURIComponent(groupFilter)}&`;
-      }
-      if (subGroupFilter) {
-        url += `subGroupName=${encodeURIComponent(subGroupFilter)}`;
-      }
-
-      console.log('📡 Fetching leads with filters:', { groupFilter, subGroupFilter });
-
+      if (g) url += `groupName=${encodeURIComponent(g)}&`;
+      if (sg) url += `subGroupName=${encodeURIComponent(sg)}`;
       const data = await fetchWithHeaders(url);
-      if (data.success) {
-        setLeads(Array.isArray(data.data) ? data.data : data.data.content || []);
-        console.log('✅ Loaded leads:', data.data.length);
-      }
-    } catch (error) {
-      console.error('Error fetching leads:', error);
-      setLeads([]);
-    }
+      if (data.success) setLeads(Array.isArray(data.data) ? data.data : data.data.content || []);
+    } catch { setLeads([]); }
   };
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
-        credentials: "include",
-        headers: {
-          'User-Id': currentUser.id,
-          'User-Role': currentUser.role
-        }
-      });
+      const res = await fetch(`${API_BASE_URL}/api/filters/leads-users`, { credentials:'include', headers:{'User-Id':currentUser.id,'User-Role':currentUser.role} });
+      const data = await res.json();
+      if (Array.isArray(data)) setUsers(data);
+    } catch { setUsers([]); }
+  };
 
-      if (!response.ok) throw new Error('Failed to fetch users');
+  const fetchGroups = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, { credentials:'include', headers:{'User-Id':currentUser.id,'User-Role':currentUser.role} });
+      const data = await res.json();
+      if (Array.isArray(data)) setGroups(data);
+    } catch { setGroups([]); }
+  };
 
-      const data = await response.json();
-      if (Array.isArray(data)) {
-        setUsers(data);
-      }
-    } catch (err) {
-      console.error('Error fetching users:', err);
-      setUsers([]);
-    }
+  const fetchSubGroupsForForm = async (group) => {
+    if (!group) { setSubGroups([]); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, { credentials:'include', headers:{'User-Id':currentUser.id,'User-Role':currentUser.role} });
+      const data = await res.json();
+      if (Array.isArray(data)) setSubGroups(data);
+    } catch { setSubGroups([]); }
+  };
+
+  const fetchBomItemsMaster = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bom-items-master/all`, { credentials:'include', headers:{'User-Id':currentUser.id,'User-Role':currentUser.role} });
+      const data = await res.json();
+      if (data.success) setBomItemsMaster(data.data || []);
+    } catch { setBomItemsMaster([]); }
+  };
+
+  const handleBomItemSearch = async (index, term) => {
+    if (!term || term.length < 2) { setFilteredBomItems(p=>({...p,[index]:[]})); setShowBomDropdown(p=>({...p,[index]:false})); return; }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bom-items-master/search?searchTerm=${encodeURIComponent(term)}`, { credentials:'include', headers:{'User-Id':currentUser.id,'User-Role':currentUser.role} });
+      const data = await res.json();
+      setFilteredBomItems(p=>({...p,[index]:data.data||[]}));
+      setShowBomDropdown(p=>({...p,[index]:(data.data||[]).length>0}));
+    } catch { setFilteredBomItems(p=>({...p,[index]:[]})); setShowBomDropdown(p=>({...p,[index]:false})); }
+  };
+
+  const selectBomItem = (index, bomItem) => {
+    const updated = [...templateData.bomItems];
+    updated[index] = { ...updated[index], item: bomItem.itemName, specification: bomItem.specification||'', unit: bomItem.defaultUnit||'Nos', tax: bomItem.defaultTaxPercent||'18' };
+    setTemplateData({ ...templateData, bomItems: updated });
+    setShowBomDropdown(p=>({...p,[index]:false}));
+    setFilteredBomItems(p=>({...p,[index]:[]}));
   };
 
   const handleFilter = async () => {
     setLoading(true);
     try {
-      const filterRequest = {
-        searchTerm: searchTerm || null,
-        filterStatus: filterStatus !== 'All' ? filterStatus : null,
-        filterGroup: groupName || null,
-        filterSubGroup: subGroupName || null,
-        filterPreparedBy: filterPreparedBy !== 'All' ? parseInt(filterPreparedBy) : null,
-        page: currentPage - 1,
-        size: rowsPerPage
-      };
-
       const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/filter`, {
-        method: 'POST',
-        body: JSON.stringify(filterRequest)
+        method:'POST',
+        body: JSON.stringify({ searchTerm:searchTerm||null, filterStatus:filterStatus!=='All'?filterStatus:null, filterGroup:groupName||null, filterSubGroup:subGroupName||null, filterPreparedBy:filterPreparedBy!=='All'?parseInt(filterPreparedBy):null, page:currentPage-1, size:rowsPerPage })
       });
-
-      if (data.success) {
-        setProposals(data.data.content || []);
-        setTotalProposals(data.data.totalElements || 0);
-        setTotalPages(data.data.totalPages || 0);
-      }
-    } catch (error) {
-      console.error('Error filtering proposals:', error);
-      showError('Failed to filter proposals');
-    } finally {
-      setLoading(false);
-    }
+      if (data.success) { setProposals(data.data.content||[]); setTotalProposals(data.data.totalElements||0); setTotalPages(data.data.totalPages||0); }
+    } catch { showError('Failed to filter proposals'); }
+    finally { setLoading(false); }
   };
 
   const handleCreate = async () => {
-    if (!formData.title || !formData.leadId) {
-      showWarning('Please fill in Title and Lead');
-      return;
-    }
-
+    if (!formData.title || !formData.leadId) { showWarning('Please fill in Title and Lead'); return; }
     try {
-      const requestData = {
-        ...formData,
-        ...templateData,
-        systemPricing: JSON.stringify(templateData.systemPricing),
-        bomItems: JSON.stringify(templateData.bomItems)
-      };
-
-      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/create`, {
-        method: 'POST',
-        body: JSON.stringify(requestData)
-      });
-
-      if (data.success) {
-        showSuccess('Proposal created successfully!');
-        setShowCreateModal(false);
-        setShowTemplateModal(false);
-        resetForm();
-        fetchProposals();
-      }
-    } catch (error) {
-      console.error('Error creating proposal:', error);
-      showError('Failed to create proposal');
-    }
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/create`, { method:'POST', body: JSON.stringify({ ...formData, ...templateData, systemPricing: JSON.stringify(templateData.systemPricing), bomItems: JSON.stringify(templateData.bomItems) }) });
+      if (data.success) { showSuccess('Proposal created successfully!'); setShowCreateModal(false); setShowTemplateModal(false); resetForm(); fetchProposals(); }
+    } catch { showError('Failed to create proposal'); }
   };
 
   const handleUpdate = async () => {
-    if (!formData.title) {
-      showError('Please fill in Title');
-      return;
-    }
-
+    if (!formData.title) { showError('Please fill in Title'); return; }
     try {
-      const requestData = {
-        ...formData,
-        ...templateData,
-        systemPricing: JSON.stringify(templateData.systemPricing),
-        bomItems: JSON.stringify(templateData.bomItems)
-      };
-
-      const data = await fetchWithHeaders(
-        `${API_BASE_URL}/proposals/update/${selectedProposal.id}`,
-        {
-          method: 'PUT',
-          body: JSON.stringify(requestData)
-        }
-      );
-
-      if (data.success) {
-        showSuccess(data.message || 'Data saved successfully!');
-        setShowCreateModal(false);
-        setShowTemplateModal(false);
-        resetForm();
-        fetchProposals();
-      } else {
-        showError(data.message || 'Failed to load data');
-      }
-
-    } catch (error) {
-      console.error('Error updating proposal:', error);
-      showError('Failed to load data');
-    }
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`, { method:'PUT', body: JSON.stringify({ ...formData, ...templateData, systemPricing: JSON.stringify(templateData.systemPricing), bomItems: JSON.stringify(templateData.bomItems) }) });
+      if (data.success) { showSuccess(data.message||'Saved successfully!'); setShowCreateModal(false); setShowTemplateModal(false); resetForm(); fetchProposals(); }
+      else showError(data.message||'Failed to save');
+    } catch { showError('Failed to update proposal'); }
   };
 
-  const handleDeleteClick = (id, title) => {
-    setDeleteProposalId(id);
-    setDeleteProposalTitle(title);
-    setShowDeleteModal(true);
-  };
+  const handleDeleteClick = (id, title) => { setDeleteProposalId(id); setDeleteProposalTitle(title); setShowDeleteModal(true); };
 
   const handleDelete = async () => {
     try {
-      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/delete/${deleteProposalId}`, {
-        method: 'DELETE'
-      });
-
-      if (data.success) {
-        showSuccess('Proposal deleted successfully!');
-        setShowDeleteModal(false);
-        setDeleteProposalId(null);
-        setDeleteProposalTitle('');
-        fetchProposals();
-      }
-    } catch (error) {
-      console.error('Error deleting proposal:', error);
-      showError('Failed to delete proposal');
-      setShowDeleteModal(false);
-    }
+      const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/delete/${deleteProposalId}`, { method:'DELETE' });
+      if (data.success) { showSuccess('Proposal deleted!'); setShowDeleteModal(false); fetchProposals(); }
+    } catch { showError('Failed to delete'); setShowDeleteModal(false); }
   };
 
   const handleDownloadPDF = async (id) => {
     try {
-      const headers = {
-        'User-Id': currentUser.id.toString(),
-        'User-Role': currentUser.role
-      };
-
-      const response = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials: "include", headers });
-
-      if (!response.ok) {
-        throw new Error('Failed to download PDF');
-      }
-
-      const blob = await response.blob();
+      const res = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials:'include', headers:{'User-Id':currentUser.id.toString(),'User-Role':currentUser.role} });
+      if (!res.ok) throw new Error();
+      const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `proposal-${id}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
-      showError('Failed to download PDF');
-    }
+      const a = document.createElement('a'); a.href=url; a.download=`proposal-${id}.pdf`; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
+    } catch { showError('Failed to download PDF'); }
   };
 
   const handleView = async (id) => {
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/${id}`);
-      if (data.success) {
-        setSelectedProposal(data.data);
-        setShowViewModal(true);
-      }
-    } catch (error) {
-      console.error('Error fetching proposal:', error);
-      showError('Failed to fetch proposal details');
-    }
+      if (data.success) { setSelectedProposal(data.data); setShowViewModal(true); }
+    } catch { showError('Failed to fetch proposal details'); }
   };
 
   const handleEdit = (proposal) => {
     setSelectedProposal(proposal);
-    setFormData({
-      leadId: proposal.leadId || '',
-      title: proposal.title || '',
-      description: proposal.description || '',
-      totalValue: proposal.totalValue || '',
-      groupName: proposal.groupName || '',
-      subGroupName: proposal.subGroupName || '',
-      status: proposal.status || 'Draft'
-    });
-
-    setTemplateData({
-      companyName: proposal.companyName || DEFAULT_TEMPLATE.companyName,
-      aboutUs: proposal.aboutUs || DEFAULT_TEMPLATE.aboutUs,
-      aboutSystem: proposal.aboutSystem || DEFAULT_TEMPLATE.aboutSystem,
-      paymentTerms: proposal.paymentTerms || DEFAULT_TEMPLATE.paymentTerms,
-      defectLiabilityPeriod: proposal.defectLiabilityPeriod || DEFAULT_TEMPLATE.defectLiabilityPeriod,
-      systemPricing: parseJSON(proposal.systemPricing) || [],
-      bomItems: parseJSON(proposal.bomItems) || []
-    });
-
-    setIsEditMode(true);
-    setShowCreateModal(true);
-    setShowViewModal(false);
+    setFormData({ leadId: proposal.leadId||'', title: proposal.title||'', description: proposal.description||'', totalValue: proposal.totalValue||'', groupName: proposal.groupName||'', subGroupName: proposal.subGroupName||'', status: proposal.status||'Draft' });
+    setTemplateData({ companyName: proposal.companyName||DEFAULT_TEMPLATE.companyName, aboutUs: proposal.aboutUs||DEFAULT_TEMPLATE.aboutUs, aboutSystem: proposal.aboutSystem||DEFAULT_TEMPLATE.aboutSystem, paymentTerms: proposal.paymentTerms||DEFAULT_TEMPLATE.paymentTerms, defectLiabilityPeriod: proposal.defectLiabilityPeriod||DEFAULT_TEMPLATE.defectLiabilityPeriod, systemPricing: parseJSON(proposal.systemPricing)||[], bomItems: parseJSON(proposal.bomItems)||[] });
+    setIsEditMode(true); setShowCreateModal(true); setShowViewModal(false);
   };
 
   const resetForm = () => {
-    setFormData({
-      leadId: '',
-      title: '',
-      description: '',
-      totalValue: '',
-      groupName: groupName || '',
-      subGroupName: subGroupName || '',
-      status: 'Draft'
-    });
-    setTemplateData({
-      companyName: DEFAULT_TEMPLATE.companyName,
-      aboutUs: DEFAULT_TEMPLATE.aboutUs,
-      aboutSystem: DEFAULT_TEMPLATE.aboutSystem,
-      paymentTerms: DEFAULT_TEMPLATE.paymentTerms,
-      defectLiabilityPeriod: DEFAULT_TEMPLATE.defectLiabilityPeriod,
-      systemPricing: [],
-      bomItems: []
-    });
-    setIsEditMode(false);
-    setSelectedProposal(null);
-    setActiveTab('company');
-    setCustomUnitInputs({});
+    setFormData({ leadId:'', title:'', description:'', totalValue:'', groupName:groupName||'', subGroupName:subGroupName||'', status:'Draft' });
+    setTemplateData({ companyName: DEFAULT_TEMPLATE.companyName, aboutUs: DEFAULT_TEMPLATE.aboutUs, aboutSystem: DEFAULT_TEMPLATE.aboutSystem, paymentTerms: DEFAULT_TEMPLATE.paymentTerms, defectLiabilityPeriod: DEFAULT_TEMPLATE.defectLiabilityPeriod, systemPricing:[], bomItems:[] });
+    setIsEditMode(false); setSelectedProposal(null); setActiveTab('company'); setCustomUnitInputs({});
   };
 
-  const handleCreateNew = () => {
-    resetForm();
-    setShowCreateModal(true);
-  };
+  const addSystemPricingRow = () => setTemplateData({...templateData, systemPricing:[...templateData.systemPricing,{item:'',description:'',amount:''}]});
+  const updateSystemPricingRow = (i,f,v) => { const u=[...templateData.systemPricing]; u[i][f]=v; setTemplateData({...templateData,systemPricing:u}); };
+  const removeSystemPricingRow = (i) => setTemplateData({...templateData, systemPricing:templateData.systemPricing.filter((_,idx)=>idx!==i)});
 
-  const addSystemPricingRow = () => {
-    setTemplateData({
-      ...templateData,
-      systemPricing: [...templateData.systemPricing, { item: '', description: '', amount: '' }]
-    });
-  };
-
-  const updateSystemPricingRow = (index, field, value) => {
-    const updated = [...templateData.systemPricing];
-    updated[index][field] = value;
-    setTemplateData({ ...templateData, systemPricing: updated });
-  };
-
-  const removeSystemPricingRow = (index) => {
-    const updated = templateData.systemPricing.filter((_, i) => i !== index);
-    setTemplateData({ ...templateData, systemPricing: updated });
-  };
-
-  const addBOMRow = () => {
-    setTemplateData({
-      ...templateData,
-      bomItems: [...templateData.bomItems, {
-        item: '',
-        specification: '',
-        quantity: '',
-        unit: 'Nos',
-        rate: '',
-        tax: '18',
-        amount: ''
-      }]
-    });
-  };
-
-  const updateBOMRow = (index, field, value) => {
-    const updated = [...templateData.bomItems];
-    updated[index][field] = value;
-
-    if (field === 'quantity' || field === 'rate' || field === 'tax') {
-      const quantity = parseFloat(updated[index].quantity) || 0;
-      const rate = parseFloat(updated[index].rate) || 0;
-      const tax = parseFloat(updated[index].tax) || 0;
-
-      const subtotal = quantity * rate;
-      const taxAmount = (subtotal * tax) / 100;
-      updated[index].amount = (subtotal + taxAmount).toFixed(2);
+  const addBOMRow = () => setTemplateData({...templateData, bomItems:[...templateData.bomItems,{item:'',specification:'',quantity:'',unit:'Nos',rate:'',tax:'18',amount:''}]});
+  const updateBOMRow = (i,f,v) => {
+    const u=[...templateData.bomItems]; u[i][f]=v;
+    if (['quantity','rate','tax'].includes(f)) {
+      const q=parseFloat(u[i].quantity)||0, r=parseFloat(u[i].rate)||0, t=parseFloat(u[i].tax)||0;
+      u[i].amount = ((q*r)+(q*r*t/100)).toFixed(2);
     }
-
-    setTemplateData({ ...templateData, bomItems: updated });
+    setTemplateData({...templateData,bomItems:u});
   };
-
+  const removeBOMRow = (i) => { setTemplateData({...templateData,bomItems:templateData.bomItems.filter((_,idx)=>idx!==i)}); const nc={...customUnitInputs}; delete nc[i]; setCustomUnitInputs(nc); };
   const calculateBOMTotals = () => {
-    const subtotal = templateData.bomItems.reduce((sum, item) => {
-      const quantity = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      return sum + (quantity * rate);
-    }, 0);
-
-    const totalTax = templateData.bomItems.reduce((sum, item) => {
-      const quantity = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const tax = parseFloat(item.tax) || 0;
-      const itemSubtotal = quantity * rate;
-      return sum + ((itemSubtotal * tax) / 100);
-    }, 0);
-
-    const grandTotal = templateData.bomItems.reduce((sum, item) => {
-      return sum + (parseFloat(item.amount) || 0);
-    }, 0);
-
-    return {
-      subtotal: subtotal.toFixed(2),
-      totalTax: totalTax.toFixed(2),
-      grandTotal: grandTotal.toFixed(2)
-    };
+    const sub = templateData.bomItems.reduce((s,it)=>s+(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0),0);
+    const tax = templateData.bomItems.reduce((s,it)=>{ const st=(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0); return s+(st*(parseFloat(it.tax)||0)/100); },0);
+    const grand = templateData.bomItems.reduce((s,it)=>s+(parseFloat(it.amount)||0),0);
+    return { subtotal:sub.toFixed(2), totalTax:tax.toFixed(2), grandTotal:grand.toFixed(2) };
   };
-
-  const removeBOMRow = (index) => {
-    const updated = templateData.bomItems.filter((_, i) => i !== index);
-    setTemplateData({ ...templateData, bomItems: updated });
-
-    // Remove custom input tracking if exists
-    const newCustomInputs = { ...customUnitInputs };
-    delete newCustomInputs[index];
-    setCustomUnitInputs(newCustomInputs);
+  const calculateSystemPricingTotal = () => templateData.systemPricing.reduce((s,it)=>s+(parseFloat(it.amount)||0),0).toFixed(2);
+  const handleBomUnitChange = (i,v) => {
+    if (v==='Custom') { setCustomUnitInputs(p=>({...p,[i]:''})); updateBOMRow(i,'unit',''); }
+    else { const n={...customUnitInputs}; delete n[i]; setCustomUnitInputs(n); updateBOMRow(i,'unit',v); }
   };
+  const handleCustomUnitInput = (i,v) => { setCustomUnitInputs(p=>({...p,[i]:v})); updateBOMRow(i,'unit',v); };
 
-  const calculateSystemPricingTotal = () => {
-    return templateData.systemPricing.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toFixed(2);
-  };
-
-  const getStatusClass = (status) => {
-    const statusMap = {
-      'Draft': 'status-draft',
-      'Sent': 'status-sent',
-      'Approved': 'status-approved',
-      'Rejected': 'status-rejected',
-      'On Hold': 'status-hold'
-    };
-    return statusMap[status] || 'status-draft';
-  };
-
-  useEffect(() => {
-    if (permissions.VIEW) {
-      fetchProposals();
+  // ── Cell renderer ────────────────────────────────────────────
+  const renderCell = (p, key) => {
+    switch(key) {
+      case 'leadName':     return p.leadName || '-';
+      case 'groupName':    return p.groupName || '-';
+      case 'subGroupName': return p.subGroupName || '-';
+      case 'proposalNo':   return <span className="p-cell-code">{p.proposalNo}</span>;
+      case 'title':        return <span className="p-cell-title">{p.title}</span>;
+      case 'totalValue':   return `₹${p.totalValue ? parseFloat(p.totalValue).toLocaleString('en-IN') : '0'}`;
+      case 'version':      return <span className="p-cell-version">v{p.version}</span>;
+      case 'status':       return <span className={`p-status-badge ${getStatusClass(p.status)}`}>{p.status}</span>;
+      case 'preparedByName': return p.preparedByName || '-';
+      case 'updatedAt':    return formatDateTime(p.updatedAt);
+      case 'actions':      return (
+        <div className="p-actions-cell">
+          <button className="p-action-btn p-act-view"   onClick={() => handleView(p.id)}           title="View"><FaEye /></button>
+          {permissions.EDIT && <button className="p-action-btn p-act-edit" onClick={() => handleEdit(p)} title="Edit"><FaEdit /></button>}
+          <button className="p-action-btn p-act-pdf"    onClick={() => handleDownloadPDF(p.id)}    title="Download PDF"><FaFilePdf /></button>
+          {permissions.DELETE && <button className="p-action-btn p-act-delete" onClick={() => handleDeleteClick(p.id, p.title)} title="Delete"><FaRegTrashAlt /></button>}
+        </div>
+      );
+      default: return '-';
     }
-  }, [currentPage, rowsPerPage, groupName, subGroupName]);
+  };
 
+  // ── Pagination slice ─────────────────────────────────────────
+  const startIdx = (currentPage - 1) * rowsPerPage;
+  const pageData = sortedProposals; // server already pages
+
+  // ── Effects ──────────────────────────────────────────────────
+  useEffect(() => { if (permissions.VIEW) fetchProposals(); }, [currentPage, rowsPerPage, groupName, subGroupName]);
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (!event.target.closest('.bom-item-input-container')) {
-        setShowBomDropdown({});
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    const handler = (e) => { if (!e.target.closest('.bom-item-input-container')) setShowBomDropdown({}); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
-
+  useEffect(() => { fetchLeads(); fetchUsers(); fetchGroups(); fetchBomItemsMaster(); }, []);
+  useEffect(() => { if (formData.groupName||formData.subGroupName) fetchLeads(formData.groupName,formData.subGroupName); }, [formData.groupName,formData.subGroupName]);
+  useEffect(() => { if (formData.groupName) fetchSubGroupsForForm(formData.groupName); else setSubGroups([]); }, [formData.groupName]);
   useEffect(() => {
-    fetchLeads();
-    fetchUsers();
-    fetchGroups();
-    fetchBomItemsMaster();
-  }, []);
-
-  useEffect(() => {
-    if (formData.groupName || formData.subGroupName) {
-      fetchLeads(formData.groupName, formData.subGroupName);
-    }
-  }, [formData.groupName, formData.subGroupName]);
-
-  useEffect(() => {
-    if (searchTerm || filterStatus !== 'All' || filterPreparedBy !== 'All') {
-      const debounce = setTimeout(() => {
-        handleFilter();
-      }, 500);
-      return () => clearTimeout(debounce);
-    } else {
-      fetchProposals();
-    }
+    if (searchTerm||filterStatus!=='All'||filterPreparedBy!=='All') {
+      const t = setTimeout(handleFilter, 500);
+      return () => clearTimeout(t);
+    } else fetchProposals();
   }, [searchTerm, filterStatus, filterPreparedBy]);
 
-  if (!permissions.VIEW) {
-    return (
-      <div className="proposal-page-container">
-        <div style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
-          You don't have permission to view proposals.
-        </div>
-      </div>
-    );
-  }
+  if (!permissions.VIEW) return (
+    <div className="p-container"><div className="p-no-permission">You don't have permission to view proposals.</div></div>
+  );
 
   return (
-    <div className="proposal-page-container">
+    <div className="p-container">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
-      <div className="proposal-page-header">
-        <div className="proposal-page-breadcrumb">
-          Dashboard &gt; Proposals
-        </div>
+      {/* Header */}
+      <div className="p-breadcrumb">Dashboard &gt; Proposals</div>
+      <div className="page-header-with-filter p-page-hdr">
+        <h1 className="p-page-title">Proposals</h1>
+        <GroupCategoryFilter groupValue={groupName} subGroupValue={subGroupName} onChange={updateFilters} />
       </div>
 
-      <div className="page-header-with-filter">
-        <h1 className="proposal-page-title">Proposals</h1>
-        <GroupCategoryFilter
-          groupValue={groupName}
-          subGroupValue={subGroupName}
-          onChange={updateFilters}
-        />
-      </div>
-
-      <div className="proposal-page-action-bar">
-        <div className="proposal-page-search-filters">
-          <input
-            type="text"
-            className="proposal-page-search"
-            placeholder="Search by Proposal No, Title, Description..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-
-          <select
-            className="proposal-page-filter"
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-          >
+      {/* Action bar */}
+      <div className="p-action-bar">
+        <div className="p-search-filters">
+          <div className="p-search-wrap">
+            <svg className="p-search-ico" fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text" className="p-search-input" placeholder="Search proposals..." value={searchTerm} onChange={e=>setSearchTerm(e.target.value)} />
+          </div>
+          <select className="p-filter-sel" value={filterStatus} onChange={e=>setFilterStatus(e.target.value)}>
             <option value="All">All Status</option>
             <option value="Draft">Draft</option>
             <option value="Sent">Sent</option>
@@ -811,1126 +518,371 @@ const ProposalsWithTemplate = () => {
             <option value="Rejected">Rejected</option>
             <option value="On Hold">On Hold</option>
           </select>
-
-          <select
-            className="proposal-page-filter"
-            value={filterPreparedBy}
-            onChange={(e) => setFilterPreparedBy(e.target.value)}
-          >
+          <select className="p-filter-sel" value={filterPreparedBy} onChange={e=>setFilterPreparedBy(e.target.value)}>
             <option value="All">All Members</option>
-            {users.map(user => (
-              <option key={user.id} value={user.id}>{user.name}</option>
-            ))}
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
-
-        <div className="proposal-page-action-buttons">
+        <div className="p-action-btns">
           {permissions.CREATE && (
-            <button
-              className="proposal-page-btn proposal-page-btn-primary"
-              onClick={handleCreateNew}
-            >
-              + Create New Proposal
+            <button className="p-btn p-btn-primary" onClick={() => { resetForm(); setShowCreateModal(true); }}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
+              New Proposal
             </button>
           )}
         </div>
       </div>
 
-      <div className="proposal-page-table-container">
-        <table className="proposal-page-table">
-          <thead>
-            <tr >
-              {/* <th>Proposal No</th> */}
-              {/* <th>Lead Code</th> */}
-              <th style={{ textAlign: "center" }}>Lead Name</th>
-              <th style={{ textAlign: "center" }}>Group</th>
-              {/* <th>Sub-Group</th> */}
-              {/* <th>Title</th> */}
-              <th style={{ textAlign: "center" }}>Value (₹)</th>
-              {/* <th>Version</th> */}
-              <th style={{ textAlign: "center" }}>Status</th>
-              {/* <th>Prepared By</th> */}
-              <th style={{ textAlign: "center" }}>Updated</th>
-              <th style={{ textAlign: "center" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      {/* Table toolbar */}
+      <div className="p-table-toolbar">
+        <span className="p-toolbar-info">{totalProposals} proposal{totalProposals !== 1 ? 's' : ''}</span>
+        <ColumnVisibilityDropdown columns={ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleCol} onReset={handleResetCols} />
+      </div>
+
+      {/* Table */}
+      <div className="p-table-card">
+        <div className="p-table-wrap">
+          <table className="p-table">
+            <thead>
               <tr>
-                <td colSpan="12" style={{ textAlign: 'center', padding: '40px' }}>
-                  Loading...
-                </td>
+                {orderedVisibleCols.map((col, idx) => (
+                  <DraggableHeaderCell key={col.key} col={col} index={idx} sortCol={sortCol} sortDir={sortDir} onSort={handleSort}
+                    onDragStart={handleColDragStart} onDragOver={handleColDragOver} onDrop={handleColDrop} onDragEnd={handleColDragEnd}
+                    isDragOver={dragOverIdx === idx} />
+                ))}
               </tr>
-            ) : proposals.length > 0 ? (
-              proposals.map((proposal) => (
-                <tr key={proposal.id} style={{ textAlign: "center" }}>
-                  {/* <td className="proposal-page-id">{proposal.proposalNo}</td>
-                  <td>{proposal.leadCode || '-'}</td> */}
-                  <td>{proposal.leadName || '-'}</td>
-                  <td>{proposal.groupName || '-'}</td>
-                  {/* <td>{proposal.subGroupName || '-'}</td>
-                  <td>{proposal.title}</td> */}
-                  <td>₹{proposal.totalValue ? parseFloat(proposal.totalValue).toLocaleString('en-IN') : '0'}</td>
-                  {/* <td><span className="proposal-page-version">v{proposal.version}</span></td> */}
-                  <td>
-                    <span className={`proposal-page-status ${getStatusClass(proposal.status)}`}>
-                      {proposal.status}
-                    </span>
-                  </td>
-                  {/* <td>{proposal.preparedByName}</td> */}
-                  <td>{formatDateTime(proposal.updatedAt)}</td>
-                  <td style={{ textAlign: "center" }}>
-                    <div className="proposal-actions-inline">
-
-                      {/* View */}
-                      <button
-                        className="proposal-action-icon proposal-view"
-                        onClick={() => handleView(proposal.id)}
-                        title="View"
-                      >
-                        <FaEye />
-                        {/* <span>View</span> */}
-                      </button>
-
-                      {/* Edit */}
-                      {permissions.EDIT && (
-                        <button
-                          className="proposal-action-icon proposal-edit"
-                          onClick={() => handleEdit(proposal)}
-                          title="Edit"
-                        >
-                          <FaEdit />
-                          {/* <span>Edit</span> */}
-                        </button>
-                      )}
-
-                      {/* PDF */}
-                      <button
-                        className="proposal-action-icon proposal-pdf"
-                        onClick={() => handleDownloadPDF(proposal.id)}
-                        title="Download PDF"
-                      >
-                        <FaFilePdf />
-                        {/* <span>PDF</span> */}
-                      </button>
-
-                      {/* Delete */}
-                      {permissions.DELETE && (
-                        <button
-                          className="proposal-action-icon proposal-delete"
-                          onClick={() => handleDeleteClick(proposal.id, proposal.title)}
-                          title="Delete"
-                        >
-                          <FaRegTrashAlt />
-                          {/* <span>Delete</span> */}
-                        </button>
-                      )}
-
-                    </div>
-                  </td>
-
-
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={orderedVisibleCols.length} className="p-td-center p-td-loading">
+                  <div className="p-loading-spinner"></div> Loading...
+                </td></tr>
+              ) : pageData.length === 0 ? (
+                <tr><td colSpan={orderedVisibleCols.length} className="p-td-center p-td-empty">
+                  No proposals found. {permissions.CREATE && 'Create one to get started.'}
+                </td></tr>
+              ) : pageData.map(p => (
+                <tr key={p.id} className="p-tr">
+                  {orderedVisibleCols.map(col => (
+                    <td key={col.key} className={col.key === 'actions' ? 'p-td-actions' : ''}>{renderCell(p, col.key)}</td>
+                  ))}
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="12" style={{ textAlign: 'center', padding: '40px', color: '#718096' }}>
-                  No proposals found. {permissions.CREATE && 'Create a new proposal to get started.'}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="proposal-page-pagination">
-        <div className="proposal-page-pagination-info">
-          {totalProposals > 0 ? (
-            <>
-              Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, totalProposals)} of {totalProposals} entries
-            </>
-          ) : (
-            <>No entries to display</>
-          )}
+              ))}
+            </tbody>
+          </table>
         </div>
-        <div className="proposal-page-pagination-controls">
-          <select
-            value={rowsPerPage}
-            onChange={(e) => {
-              setRowsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="proposal-page-rows-select"
-          >
-            <option value={10}>10 rows</option>
-            <option value={25}>25 rows</option>
-            <option value={50}>50 rows</option>
-            <option value={100}>100 rows</option>
-          </select>
-          <button
-            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-            disabled={currentPage === 1}
-            className="proposal-page-pagination-btn"
-          >
-            Previous
-          </button>
-          <span className="proposal-page-pagination-current">
-            Page {currentPage} of {totalPages || 1}
-          </span>
-          <button
-            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-            disabled={currentPage === totalPages || totalPages === 0}
-            className="proposal-page-pagination-btn"
-          >
-            Next
-          </button>
+
+        {/* Pagination */}
+        <div className="p-pagination">
+          <div className="p-pagination-info">
+            {totalProposals > 0
+              ? `Showing ${((currentPage-1)*rowsPerPage)+1} – ${Math.min(currentPage*rowsPerPage, totalProposals)} of ${totalProposals}`
+              : 'No entries'}
+          </div>
+          <div className="p-pagination-ctrl">
+            <select className="p-rows-sel" value={rowsPerPage} onChange={e=>{setRowsPerPage(Number(e.target.value));setCurrentPage(1);}}>
+              <option value={10}>10 rows</option><option value={25}>25 rows</option>
+              <option value={50}>50 rows</option><option value={100}>100 rows</option>
+            </select>
+            <button className="p-page-btn" onClick={()=>setCurrentPage(p=>Math.max(1,p-1))} disabled={currentPage===1}>Prev</button>
+            <span className="p-page-cur">Page {currentPage} of {totalPages||1}</span>
+            <button className="p-page-btn" onClick={()=>setCurrentPage(p=>Math.min(totalPages,p+1))} disabled={currentPage===totalPages||totalPages===0}>Next</button>
+          </div>
         </div>
       </div>
 
-      {/* Delete Confirmation Modal */}
+      {/* ── Delete Modal ── */}
       {showDeleteModal && (
-        <div className="proposal-page-modal-overlay" onClick={() => setShowDeleteModal(false)}>
-          <div className="proposal-delete-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="proposal-delete-modal-icon">
-              <div className="proposal-delete-icon-circle">
-                <span>!</span>
-              </div>
-            </div>
-            <h2 className="proposal-delete-modal-title">Delete Proposal</h2>
-            <p className="proposal-delete-modal-text">
-              Are you sure you want to delete proposal "{deleteProposalTitle}"?
-              <br />
-              This action cannot be undone.
-            </p>
-            <div className="proposal-delete-modal-actions">
-              <button
-                className="proposal-page-btn proposal-page-btn-secondary"
-                onClick={() => setShowDeleteModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                className="proposal-page-btn proposal-delete-btn"
-                onClick={handleDelete}
-              >
-                Confirm Delete
-              </button>
+        <div className="p-modal-overlay" onClick={()=>setShowDeleteModal(false)}>
+          <div className="p-delete-modal" onClick={e=>e.stopPropagation()}>
+            <div className="p-delete-icon-wrap"><div className="p-delete-icon-circle">!</div></div>
+            <h2 className="p-delete-title">Delete Proposal</h2>
+            <p className="p-delete-text">Are you sure you want to delete "<strong>{deleteProposalTitle}</strong>"? This action cannot be undone.</p>
+            <div className="p-delete-actions">
+              <button className="p-btn p-btn-secondary" onClick={()=>setShowDeleteModal(false)}>Cancel</button>
+              <button className="p-btn p-btn-danger" onClick={handleDelete}>Confirm Delete</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* View Modal */}
+      {/* ── View Modal ── */}
       {showViewModal && selectedProposal && (
-        <div className="proposal-page-modal-overlay" onClick={() => setShowViewModal(false)}>
-          <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()}>
-            <div className="proposal-page-modal-header">
-              <h2>Proposal Details</h2>
-              <button className="proposal-page-modal-close" onClick={() => setShowViewModal(false)}>
-                ×
-              </button>
+        <div className="p-modal-overlay" onClick={()=>setShowViewModal(false)}>
+          <div className="p-modal p-modal-lg" onClick={e=>e.stopPropagation()}>
+            <div className="p-modal-hdr">
+              <div>
+                <h2>Proposal Details</h2>
+                <span className="p-modal-subtitle">{selectedProposal.proposalNo} · v{selectedProposal.version}</span>
+              </div>
+              <button className="p-modal-close" onClick={()=>setShowViewModal(false)}>×</button>
             </div>
-
-            <div className="proposal-page-modal-content">
-              <div className="proposal-page-card">
-                <div className="proposal-page-card-header">
+            <div className="p-modal-body">
+              <div className="p-view-card">
+                <div className="p-view-card-hdr">
                   <div>
-                    <h3>{selectedProposal.companyName || 'SESOLA POWER PROJECTS PROPOSAL PVT LTD'}</h3>
-                    <h3>{selectedProposal.title} - v{selectedProposal.version}</h3>
-                    <p className="proposal-page-id">{selectedProposal.proposalNo}</p>
+                    <p className="p-view-company">{selectedProposal.companyName||'SESOLA POWER PROJECTS PROPOSAL PVT LTD'}</p>
+                    <h3 className="p-view-title">{selectedProposal.title}</h3>
                   </div>
-                  <span className={`proposal-page-status ${getStatusClass(selectedProposal.status)}`}>
-                    {selectedProposal.status}
-                  </span>
+                  <span className={`p-status-badge ${getStatusClass(selectedProposal.status)}`}>{selectedProposal.status}</span>
                 </div>
-                <div className="proposal-page-info-grid">
-                  <div><strong>Created:</strong> {formatDateTime(selectedProposal.createdAt)}</div>
-                  <div><strong>Updated:</strong> {formatDateTime(selectedProposal.updatedAt)}</div>
-                  <div><strong>Prepared By:</strong> {selectedProposal.preparedByName}</div>
-                  <div><strong>Value:</strong> ₹{selectedProposal.totalValue ? parseFloat(selectedProposal.totalValue).toLocaleString('en-IN') : '0'}</div>
-                  <div><strong>Group:</strong> {selectedProposal.groupName || '-'}</div>
-                  <div><strong>Sub-Group:</strong> {selectedProposal.subGroupName || '-'}</div>
+                <div className="p-info-grid">
+                  {[['Created', formatDateTime(selectedProposal.createdAt)],['Updated', formatDateTime(selectedProposal.updatedAt)],['Prepared By', selectedProposal.preparedByName],['Value', `₹${selectedProposal.totalValue?parseFloat(selectedProposal.totalValue).toLocaleString('en-IN'):'0'}`],['Group', selectedProposal.groupName||'-'],['Sub-Group', selectedProposal.subGroupName||'-']].map(([l,v])=>(
+                    <div key={l} className="p-info-item"><span className="p-info-label">{l}</span><span className="p-info-val">{v}</span></div>
+                  ))}
                 </div>
               </div>
 
-              {(selectedProposal.leadId || selectedProposal.customerId) && (
-                <div className="proposal-page-card">
-                  <h3>Client Information</h3>
-                  <div className="proposal-page-info-grid">
-                    {selectedProposal.leadId && (
-                      <>
-                        <div><strong>Lead Code:</strong> {selectedProposal.leadCode}</div>
-                        <div><strong>Lead Name:</strong> {selectedProposal.leadName}</div>
-                      </>
-                    )}
-                    {selectedProposal.customerId && (
-                      <>
-                        <div><strong>Customer Code:</strong> {selectedProposal.customerCode}</div>
-                        <div><strong>Customer Name:</strong> {selectedProposal.customerName}</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {selectedProposal.description && (
-                <div className="proposal-page-card">
-                  <h3>Description</h3>
-                  <div className="proposal-page-content-section">
-                    <p>{selectedProposal.description}</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedProposal.aboutUs && (
-                <div className="proposal-page-card">
-                  <h3>About Us</h3>
-                  <div className="proposal-page-content-section">
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.aboutUs}</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedProposal.aboutSystem && (
-                <div className="proposal-page-card">
-                  <h3>About System</h3>
-                  <div className="proposal-page-content-section">
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.aboutSystem}</p>
-                  </div>
-                </div>
-              )}
+              {selectedProposal.description && <div className="p-view-section"><h4>Description</h4><p>{selectedProposal.description}</p></div>}
+              {selectedProposal.aboutUs && <div className="p-view-section"><h4>About Us</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedProposal.aboutUs}</p></div>}
+              {selectedProposal.aboutSystem && <div className="p-view-section"><h4>About System</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedProposal.aboutSystem}</p></div>}
 
               {selectedProposal.systemPricing && parseJSON(selectedProposal.systemPricing)?.length > 0 && (
-                <div className="proposal-page-card">
-                  <h3>System Pricing</h3>
-                  <table className="proposal-page-table" style={{ marginTop: '10px' }}>
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>Description</th>
-                        <th>Amount (₹)</th>
-                      </tr>
-                    </thead>
+                <div className="p-view-section">
+                  <h4>System Pricing</h4>
+                  <table className="p-inner-table">
+                    <thead><tr><th>Item</th><th>Description</th><th>Amount (₹)</th></tr></thead>
                     <tbody>
-                      {parseJSON(selectedProposal.systemPricing).map((item, idx) => (
-                        <tr key={idx}>
-                          <td>{item.item}</td>
-                          <td>{item.description}</td>
-                          <td>₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
-                      <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
-                        <td colSpan="2" style={{ textAlign: 'right' }}>Total:</td>
-                        <td>₹{parseJSON(selectedProposal.systemPricing).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}</td>
-                      </tr>
+                      {parseJSON(selectedProposal.systemPricing).map((it,i)=><tr key={i}><td>{it.item}</td><td>{it.description}</td><td>₹{parseFloat(it.amount||0).toLocaleString('en-IN')}</td></tr>)}
+                      <tr className="p-total-row"><td colSpan="2" style={{textAlign:'right'}}>Total:</td><td>₹{parseJSON(selectedProposal.systemPricing).reduce((s,it)=>s+(parseFloat(it.amount)||0),0).toLocaleString('en-IN')}</td></tr>
                     </tbody>
                   </table>
                 </div>
               )}
 
-              {selectedProposal.paymentTerms && (
-                <div className="proposal-page-card">
-                  <h3>Payment Terms</h3>
-                  <div className="proposal-page-content-section">
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.paymentTerms}</p>
-                  </div>
-                </div>
-              )}
-
-              {selectedProposal.defectLiabilityPeriod && (
-                <div className="proposal-page-card">
-                  <h3>Defect Liability Period</h3>
-                  <div className="proposal-page-content-section">
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{selectedProposal.defectLiabilityPeriod}</p>
-                  </div>
-                </div>
-              )}
+              {selectedProposal.paymentTerms && <div className="p-view-section"><h4>Payment Terms</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedProposal.paymentTerms}</p></div>}
+              {selectedProposal.defectLiabilityPeriod && <div className="p-view-section"><h4>Defect Liability Period</h4><p style={{whiteSpace:'pre-wrap'}}>{selectedProposal.defectLiabilityPeriod}</p></div>}
 
               {selectedProposal.bomItems && parseJSON(selectedProposal.bomItems)?.length > 0 && (
-                <div className="proposal-page-card">
-                  <h3>Bill of Materials (BOM)</h3>
-                  <table className="proposal-page-table" style={{ marginTop: '10px' }}>
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>Specification</th>
-                        <th>Quantity</th>
-                        <th>Unit</th>
-                        <th>Rate (₹)</th>
-                        <th>Tax %</th>
-                        <th>Amount (₹)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {parseJSON(selectedProposal.bomItems).map((item, idx) => (
-                        <tr key={idx}>
-                          <td>{item.item}</td>
-                          <td>{item.specification}</td>
-                          <td>{item.quantity}</td>
-                          <td>{item.unit}</td>
-                          <td>₹{parseFloat(item.rate || 0).toLocaleString('en-IN')}</td>
-                          <td>{item.tax || 0}%</td>
-                          <td>₹{parseFloat(item.amount || 0).toLocaleString('en-IN')}</td>
-                        </tr>
-                      ))}
-
-                      <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
-                        <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600' }}>Subtotal (Before Tax):</td>
-                        <td style={{ fontWeight: '600' }}>
-                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => {
-                            const quantity = parseFloat(item.quantity) || 0;
-                            const rate = parseFloat(item.rate) || 0;
-                            return sum + (quantity * rate);
-                          }, 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                      <tr style={{ backgroundColor: '#f7fafc' }}>
-                        <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600' }}>Total Tax:</td>
-                        <td style={{ fontWeight: '600', color: '#d69e2e' }}>
-                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => {
-                            const quantity = parseFloat(item.quantity) || 0;
-                            const rate = parseFloat(item.rate) || 0;
-                            const tax = parseFloat(item.tax) || 0;
-                            const itemSubtotal = quantity * rate;
-                            return sum + ((itemSubtotal * tax) / 100);
-                          }, 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                      <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9', fontWeight: 'bold' }}>
-                        <td colSpan="6" style={{ textAlign: 'right' }}>Grand Total (Inc. Tax):</td>
-                        <td style={{ color: '#047857' }}>
-                          ₹{parseJSON(selectedProposal.bomItems).reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0).toLocaleString('en-IN')}
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                <div className="p-view-section">
+                  <h4>Bill of Materials</h4>
+                  <div style={{overflowX:'auto'}}>
+                    <table className="p-inner-table">
+                      <thead><tr><th>Item</th><th>Spec</th><th>Qty</th><th>Unit</th><th>Rate</th><th>Tax%</th><th>Amount</th></tr></thead>
+                      <tbody>
+                        {parseJSON(selectedProposal.bomItems).map((it,i)=><tr key={i}><td>{it.item}</td><td>{it.specification}</td><td>{it.quantity}</td><td>{it.unit}</td><td>₹{parseFloat(it.rate||0).toLocaleString('en-IN')}</td><td>{it.tax||0}%</td><td>₹{parseFloat(it.amount||0).toLocaleString('en-IN')}</td></tr>)}
+                        <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Subtotal:</td><td style={{fontWeight:600}}>₹{parseJSON(selectedProposal.bomItems).reduce((s,it)=>(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0)+s,0).toLocaleString('en-IN')}</td></tr>
+                        <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Tax:</td><td style={{fontWeight:600,color:'#d69e2e'}}>₹{parseJSON(selectedProposal.bomItems).reduce((s,it)=>{const st=(parseFloat(it.quantity)||0)*(parseFloat(it.rate)||0);return s+st*(parseFloat(it.tax)||0)/100;},0).toLocaleString('en-IN')}</td></tr>
+                        <tr className="p-total-row"><td colSpan="6" style={{textAlign:'right'}}>Grand Total:</td><td style={{color:'#047857'}}>₹{parseJSON(selectedProposal.bomItems).reduce((s,it)=>s+(parseFloat(it.amount)||0),0).toLocaleString('en-IN')}</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
 
-              <div className="proposal-page-modal-actions">
-                {permissions.EDIT && (
-                  <button
-                    className="proposal-page-btn proposal-page-btn-secondary"
-                    onClick={() => handleEdit(selectedProposal)}
-                  >
-                    Edit Proposal
-                  </button>
-                )}
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => handleDownloadPDF(selectedProposal.id)}
-                >
-                  Download PDF
-                </button>
+              <div className="p-modal-footer">
+                {permissions.EDIT && <button className="p-btn p-btn-secondary" onClick={()=>handleEdit(selectedProposal)}>Edit</button>}
+                <button className="p-btn p-btn-secondary" onClick={()=>handleDownloadPDF(selectedProposal.id)}>Download PDF</button>
                 {permissions.APPROVE && (
-                  <select
-                    className="proposal-page-status-dropdown"
-                    value={selectedProposal.status}
-                    onChange={async (e) => {
-                      try {
-                        const data = await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`, {
-                          method: 'PUT',
-                          body: JSON.stringify({ status: e.target.value })
-                        });
-                        if (data.success) {
-                          showSuccess('Status updated successfully!');
-                          setSelectedProposal({ ...selectedProposal, status: e.target.value });
-                          fetchProposals();
-                        }
-                      } catch (error) {
-                        showError('Failed to update status');
-                      }
-                    }}
-                  >
-                    <option value="Draft">Draft</option>
-                    <option value="Sent">Sent</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Rejected">Rejected</option>
-                    <option value="On Hold">On Hold</option>
+                  <select className="p-status-sel" value={selectedProposal.status} onChange={async e=>{
+                    try { const data=await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`,{method:'PUT',body:JSON.stringify({status:e.target.value})}); if(data.success){showSuccess('Status updated!');setSelectedProposal({...selectedProposal,status:e.target.value});fetchProposals();} } catch { showError('Failed'); }
+                  }}>
+                    <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="On Hold">On Hold</option>
                   </select>
                 )}
+                <button className="p-btn p-btn-secondary" onClick={()=>setShowViewModal(false)}>Close</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* ── Create/Edit Modal ── */}
       {showCreateModal && (
-        <div className="proposal-page-modal-overlay" onClick={() => { setShowCreateModal(false); resetForm(); }}>
-          <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()}>
-            <div className="proposal-page-modal-header">
-              <h2>{isEditMode ? 'Edit Proposal' : 'Create New Proposal'}</h2>
-              <button className="proposal-page-modal-close" onClick={() => { setShowCreateModal(false); resetForm(); }}>
-                ×
-              </button>
+        <div className="p-modal-overlay" onClick={()=>{setShowCreateModal(false);resetForm();}}>
+          <div className="p-modal p-modal-lg" onClick={e=>e.stopPropagation()}>
+            <div className="p-modal-hdr">
+              <h2>{isEditMode ? 'Edit Proposal' : 'New Proposal'}</h2>
+              <button className="p-modal-close" onClick={()=>{setShowCreateModal(false);resetForm();}}>×</button>
             </div>
-
-            <div className="proposal-page-modal-content">
-              <div className="proposal-page-form">
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Group *</label>
-                    {isEditMode ? (
-                      <div style={{
-                        padding: '10px',
-                        background: '#f7fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '4px',
-                        color: '#2d3748',
-                        fontWeight: '500'
-                      }}>
-                        {formData.groupName || 'Not specified'}
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.groupName}
-                        onChange={(e) => {
-                          setFormData({ ...formData, groupName: e.target.value, subGroupName: '' });
-                          fetchLeads(e.target.value, null);
-                        }}
-                      >
-                        <option value="">Select Group</option>
-                        {groups.map((group, index) => (
-                          <option key={group.value || group.label || index} value={group.value || group.label}>
-                            {group.label || group.value}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-
-                  <div className="proposal-page-form-group">
-                    <label>Category</label>
-                    {isEditMode ? (
-                      <div style={{
-                        padding: '10px',
-                        background: '#f7fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '4px',
-                        color: '#2d3748',
-                        fontWeight: '500'
-                      }}>
-                        {formData.subGroupName || 'Not specified'}
-                      </div>
-                    ) : (
-                      <select
-                        value={formData.subGroupName}
-                        onChange={(e) => {
-                          setFormData({ ...formData, subGroupName: e.target.value });
-                          fetchLeads(formData.groupName, e.target.value);
-                        }}
-                        disabled={!formData.groupName}
-                      >
-                        <option value="">Select Category</option>
-                        {subGroups.map((sub, index) => (
-                          <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
-                            {sub.label || sub.value}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </div>
-                </div>
-
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Lead *</label>
-                    {isEditMode ? (
-                      <div style={{
-                        padding: '10px',
-                        background: '#f7fafc',
-                        border: '1px solid #e2e8f0',
-                        borderRadius: '4px',
-                        color: '#2d3748',
-                        fontWeight: '500'
-                      }}>
-                        {selectedProposal?.leadCode} - {selectedProposal?.leadName}
-                      </div>
-                    ) : (
-                      <>
-                        <select
-                          value={formData.leadId}
-                          onChange={(e) => setFormData({ ...formData, leadId: e.target.value })}
-                        >
-                          <option value="">Select Lead</option>
-                          {leads.map(lead => (
-                            <option key={lead.id} value={lead.id}>
-                              {lead.leadCode} - {lead.name}
-                            </option>
-                          ))}
-                        </select>
-                        {leads.length === 0 && formData.groupName && (
-                          <small style={{ color: '#e53e3e', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                            No leads found for selected Group/Category. Please select different filters.
-                          </small>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Title *</label>
-                    <input
-                      type="text"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      placeholder="Enter proposal title"
-                    />
-                  </div>
-                  <div className="proposal-page-form-group">
-                    <label>Total Value (₹)</label>
-                    <input
-                      type="number"
-                      value={formData.totalValue}
-                      onChange={(e) => setFormData({ ...formData, totalValue: e.target.value })}
-                      placeholder="Enter total value"
-                    />
-                  </div>
-                </div>
-
-                <div className="proposal-page-form-row">
-                  <div className="proposal-page-form-group">
-                    <label>Status</label>
-                    <select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    >
-                      <option value="Draft">Draft</option>
-                      <option value="Sent">Sent</option>
-                      <option value="Approved">Approved</option>
-                      <option value="Rejected">Rejected</option>
-                      <option value="On Hold">On Hold</option>
+            <div className="p-modal-body">
+              <div className="p-form-grid">
+                <div className="p-form-group">
+                  <label>Group *</label>
+                  {isEditMode ? <div className="p-form-static">{formData.groupName||'Not specified'}</div> : (
+                    <select value={formData.groupName} onChange={e=>{setFormData({...formData,groupName:e.target.value,subGroupName:''});fetchLeads(e.target.value,null);}}>
+                      <option value="">Select Group</option>
+                      {groups.map((g,i)=><option key={g.value||i} value={g.value||g.label}>{g.label||g.value}</option>)}
                     </select>
-                  </div>
+                  )}
                 </div>
-
-                <div className="proposal-page-form-group">
+                <div className="p-form-group">
+                  <label>Category</label>
+                  {isEditMode ? <div className="p-form-static">{formData.subGroupName||'Not specified'}</div> : (
+                    <select value={formData.subGroupName} onChange={e=>{setFormData({...formData,subGroupName:e.target.value});fetchLeads(formData.groupName,e.target.value);}} disabled={!formData.groupName}>
+                      <option value="">Select Category</option>
+                      {subGroups.map((s,i)=><option key={s.value||i} value={s.value||s.label}>{s.label||s.value}</option>)}
+                    </select>
+                  )}
+                </div>
+                <div className="p-form-group p-form-full">
+                  <label>Lead *</label>
+                  {isEditMode ? <div className="p-form-static">{selectedProposal?.leadCode} – {selectedProposal?.leadName}</div> : (
+                    <select value={formData.leadId} onChange={e=>setFormData({...formData,leadId:e.target.value})}>
+                      <option value="">Select Lead</option>
+                      {leads.map(l=><option key={l.id} value={l.id}>{l.leadCode} – {l.name}</option>)}
+                    </select>
+                  )}
+                </div>
+                <div className="p-form-group">
+                  <label>Title *</label>
+                  <input type="text" value={formData.title} onChange={e=>setFormData({...formData,title:e.target.value})} placeholder="Proposal title" />
+                </div>
+                <div className="p-form-group">
+                  <label>Total Value (₹)</label>
+                  <input type="number" value={formData.totalValue} onChange={e=>setFormData({...formData,totalValue:e.target.value})} placeholder="0.00" />
+                </div>
+                <div className="p-form-group">
+                  <label>Status</label>
+                  <select value={formData.status} onChange={e=>setFormData({...formData,status:e.target.value})}>
+                    <option value="Draft">Draft</option><option value="Sent">Sent</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="On Hold">On Hold</option>
+                  </select>
+                </div>
+                <div className="p-form-group p-form-full">
                   <label>Description</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    placeholder="Enter proposal description"
-                    rows={3}
-                  />
+                  <textarea value={formData.description} onChange={e=>setFormData({...formData,description:e.target.value})} placeholder="Proposal description" rows={3} />
                 </div>
               </div>
-
-              <div className="proposal-page-modal-actions">
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => { setShowCreateModal(false); resetForm(); }}
-                >
-                  Cancel
-                </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => setShowTemplateModal(true)}
-                >
-                  📝 Edit Template Content
-                </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-primary"
-                  onClick={isEditMode ? handleUpdate : handleCreate}
-                >
-                  {isEditMode ? 'Update Proposal' : 'Create Proposal'}
-                </button>
+              <div className="p-modal-footer">
+                <button className="p-btn p-btn-secondary" onClick={()=>{setShowCreateModal(false);resetForm();}}>Cancel</button>
+                <button className="p-btn p-btn-outline" onClick={()=>setShowTemplateModal(true)}>📝 Edit Template</button>
+                <button className="p-btn p-btn-primary" onClick={isEditMode?handleUpdate:handleCreate}>{isEditMode?'Update':'Create'} Proposal</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Template Editor Modal */}
+      {/* ── Template Editor Modal ── */}
       {showTemplateModal && (
-        <div className="proposal-page-modal-overlay" onClick={() => setShowTemplateModal(false)}>
-          <div className="proposal-page-modal proposal-page-modal-large" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1200px' }}>
-            <div className="proposal-page-modal-header">
-              <h2>📝 Edit Proposal Template</h2>
-              <button className="proposal-page-modal-close" onClick={() => setShowTemplateModal(false)}>
-                ×
-              </button>
+        <div className="p-modal-overlay" onClick={()=>setShowTemplateModal(false)}>
+          <div className="p-modal p-modal-xl" onClick={e=>e.stopPropagation()}>
+            <div className="p-modal-hdr">
+              <h2>📝 Edit Template Content</h2>
+              <button className="p-modal-close" onClick={()=>setShowTemplateModal(false)}>×</button>
             </div>
-
-            <div className="proposal-page-modal-content">
-              <div style={{ display: 'flex', gap: '8px', borderBottom: '2px solid #e2e8f0', marginBottom: '20px', flexWrap: 'wrap' }}>
-                {[
-                  { key: 'company', label: 'Company Info' },
-                  { key: 'aboutUs', label: 'About Us' },
-                  { key: 'aboutSystem', label: 'About System' },
-                  { key: 'pricing', label: 'System Pricing' },
-                  { key: 'payment', label: 'Payment Terms' },
-                  { key: 'dlp', label: 'DLP' },
-                  { key: 'bom', label: 'BOM' }
-                ].map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key)}
-                    style={{
-                      padding: '10px 20px',
-                      border: 'none',
-                      background: activeTab === tab.key ? '#3182ce' : 'transparent',
-                      color: activeTab === tab.key ? 'white' : '#4a5568',
-                      fontWeight: activeTab === tab.key ? '600' : '400',
-                      cursor: 'pointer',
-                      borderRadius: '6px 6px 0 0',
-                      transition: 'all 0.2s'
-                    }}
-                  >
-                    {tab.label}
-                  </button>
+            <div className="p-modal-body">
+              {/* Tabs */}
+              <div className="p-tabs">
+                {[{k:'company',l:'Company'},{k:'aboutUs',l:'About Us'},{k:'aboutSystem',l:'System'},{k:'pricing',l:'Pricing'},{k:'payment',l:'Payment'},{k:'dlp',l:'DLP'},{k:'bom',l:'BOM'}].map(t=>(
+                  <button key={t.k} className={`p-tab${activeTab===t.k?' active':''}`} onClick={()=>setActiveTab(t.k)}>{t.l}</button>
                 ))}
               </div>
 
-              <div style={{ minHeight: '400px' }}>
-                {activeTab === 'company' && (
-                  <div className="proposal-page-form">
-                    <div className="proposal-page-form-group">
-                      <label>Company Name</label>
-                      <input
-                        type="text"
-                        value={templateData.companyName}
-                        onChange={(e) => setTemplateData({ ...templateData, companyName: e.target.value })}
-                        placeholder="Enter company name"
-                      />
-                    </div>
+              <div className="p-tab-content">
+                {activeTab==='company' && (
+                  <div className="p-form-group">
+                    <label>Company Name</label>
+                    <input type="text" value={templateData.companyName} onChange={e=>setTemplateData({...templateData,companyName:e.target.value})} />
                   </div>
                 )}
-
-                {activeTab === 'aboutUs' && (
-                  <div className="proposal-page-form">
-                    <div className="proposal-page-form-group">
-                      <label>About Us</label>
-                      <textarea
-                        value={templateData.aboutUs}
-                        onChange={(e) => setTemplateData({ ...templateData, aboutUs: e.target.value })}
-                        placeholder="Enter company information..."
-                        rows={15}
-                        style={{ fontSize: '14px', lineHeight: '1.6' }}
-                      />
-                    </div>
+                {activeTab==='aboutUs' && (
+                  <div className="p-form-group">
+                    <label>About Us</label>
+                    <textarea value={templateData.aboutUs} onChange={e=>setTemplateData({...templateData,aboutUs:e.target.value})} rows={14} />
                   </div>
                 )}
-
-                {activeTab === 'aboutSystem' && (
-                  <div className="proposal-page-form">
-                    <div className="proposal-page-form-group">
-                      <label>About System</label>
-                      <textarea
-                        value={templateData.aboutSystem}
-                        onChange={(e) => setTemplateData({ ...templateData, aboutSystem: e.target.value })}
-                        placeholder="Enter system description..."
-                        rows={15}
-                        style={{ fontSize: '14px', lineHeight: '1.6' }}
-                      />
-                    </div>
+                {activeTab==='aboutSystem' && (
+                  <div className="p-form-group">
+                    <label>About System</label>
+                    <textarea value={templateData.aboutSystem} onChange={e=>setTemplateData({...templateData,aboutSystem:e.target.value})} rows={14} />
                   </div>
                 )}
-
-                {activeTab === 'pricing' && (
+                {activeTab==='pricing' && (
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                      <h3 style={{ margin: 0 }}>System Pricing</h3>
-                      <button
-                        className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                        onClick={addSystemPricingRow}
-                      >
-                        + Add Row
-                      </button>
+                    <div className="p-section-hdr">
+                      <h4>System Pricing</h4>
+                      <button className="p-btn p-btn-sm p-btn-secondary" onClick={addSystemPricingRow}>+ Add Row</button>
                     </div>
-                    <div className="proposal-page-table-container">
-                      <table className="proposal-page-table">
-                        <thead>
-                          <tr>
-                            <th>Item</th>
-                            <th>Description</th>
-                            <th>Amount (₹)</th>
-                            <th style={{ width: '80px' }}>Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {templateData.systemPricing.length === 0 ? (
-                            <tr>
-                              <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
-                                No pricing items added. Click "Add Row" to start.
-                              </td>
+                    <table className="p-inner-table p-edit-table">
+                      <thead><tr><th>Item</th><th>Description</th><th>Amount (₹)</th><th style={{width:50}}>–</th></tr></thead>
+                      <tbody>
+                        {templateData.systemPricing.length===0 ? (
+                          <tr><td colSpan="4" className="p-td-empty">No items. Click "+ Add Row".</td></tr>
+                        ) : <>
+                          {templateData.systemPricing.map((row,i)=>(
+                            <tr key={i}>
+                              <td><input value={row.item} onChange={e=>updateSystemPricingRow(i,'item',e.target.value)} placeholder="Item name" /></td>
+                              <td><input value={row.description} onChange={e=>updateSystemPricingRow(i,'description',e.target.value)} placeholder="Description" /></td>
+                              <td><input type="number" value={row.amount} onChange={e=>updateSystemPricingRow(i,'amount',e.target.value)} placeholder="0.00" /></td>
+                              <td><button className="p-del-row-btn" onClick={()=>removeSystemPricingRow(i)}>🗑️</button></td>
                             </tr>
-                          ) : (
-                            <>
-                              {templateData.systemPricing.map((row, index) => (
-                                <tr key={index}>
-                                  <td>
-                                    <input
-                                      type="text"
-                                      value={row.item}
-                                      onChange={(e) => updateSystemPricingRow(index, 'item', e.target.value)}
-                                      placeholder="Item name"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      type="text"
-                                      value={row.description}
-                                      onChange={(e) => updateSystemPricingRow(index, 'description', e.target.value)}
-                                      placeholder="Description"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <input
-                                      type="number"
-                                      value={row.amount}
-                                      onChange={(e) => updateSystemPricingRow(index, 'amount', e.target.value)}
-                                      placeholder="0.00"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
-                                  </td>
-                                  <td>
-                                    <button
-                                      onClick={() => removeSystemPricingRow(index)}
-                                      style={{
-                                        background: '#fed7d7',
-                                        color: '#742a2a',
-                                        border: 'none',
-                                        padding: '6px 12px',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      🗑️
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-                              <tr style={{ fontWeight: 'bold', backgroundColor: '#f7fafc' }}>
-                                <td colSpan="2" style={{ textAlign: 'right' }}>Total:</td>
-                                <td>₹{calculateSystemPricingTotal()}</td>
-                                <td></td>
-                              </tr>
-                            </>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                          ))}
+                          <tr className="p-total-row"><td colSpan="2" style={{textAlign:'right'}}>Total:</td><td>₹{calculateSystemPricingTotal()}</td><td></td></tr>
+                        </>}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-
-                {activeTab === 'payment' && (
-                  <div className="proposal-page-form">
-                    <div className="proposal-page-form-group">
-                      <label>Payment Terms</label>
-                      <textarea
-                        value={templateData.paymentTerms}
-                        onChange={(e) => setTemplateData({ ...templateData, paymentTerms: e.target.value })}
-                        placeholder="Enter payment terms..."
-                        rows={12}
-                        style={{ fontSize: '14px', lineHeight: '1.6' }}
-                      />
-                    </div>
+                {activeTab==='payment' && (
+                  <div className="p-form-group">
+                    <label>Payment Terms</label>
+                    <textarea value={templateData.paymentTerms} onChange={e=>setTemplateData({...templateData,paymentTerms:e.target.value})} rows={12} />
                   </div>
                 )}
-
-                {activeTab === 'dlp' && (
-                  <div className="proposal-page-form">
-                    <div className="proposal-page-form-group">
-                      <label>Defect Liability Period</label>
-                      <textarea
-                        value={templateData.defectLiabilityPeriod}
-                        onChange={(e) => setTemplateData({ ...templateData, defectLiabilityPeriod: e.target.value })}
-                        placeholder="Enter defect liability period details..."
-                        rows={12}
-                        style={{ fontSize: '14px', lineHeight: '1.6' }}
-                      />
-                    </div>
+                {activeTab==='dlp' && (
+                  <div className="p-form-group">
+                    <label>Defect Liability Period</label>
+                    <textarea value={templateData.defectLiabilityPeriod} onChange={e=>setTemplateData({...templateData,defectLiabilityPeriod:e.target.value})} rows={12} />
                   </div>
                 )}
-
-                {activeTab === 'bom' && (
+                {activeTab==='bom' && (
                   <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                      <h3 style={{ margin: 0 }}>Bill of Materials (BOM)</h3>
-                      <div style={{ display: 'flex', gap: '10px' }}>
-                        <button
-                          className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                          onClick={() => fetchBomItemsMaster()}
-                          style={{ fontSize: '12px' }}
-                        >
-                          🔄 Refresh Items
-                        </button>
-                        <button
-                          className="proposal-page-btn proposal-page-btn-secondary proposal-page-btn-sm"
-                          onClick={addBOMRow}
-                        >
-                          + Add Row
-                        </button>
+                    <div className="p-section-hdr">
+                      <h4>Bill of Materials</h4>
+                      <div style={{display:'flex',gap:8}}>
+                        <button className="p-btn p-btn-sm p-btn-secondary" onClick={fetchBomItemsMaster}>🔄 Refresh</button>
+                        <button className="p-btn p-btn-sm p-btn-secondary" onClick={addBOMRow}>+ Add Row</button>
                       </div>
                     </div>
-
-                    <div className="proposal-page-table-container">
-                      <table className="proposal-page-table">
-                        <thead>
-                          <tr>
-                            <th style={{ width: '200px' }}>Item Name *</th>
-                            <th style={{ width: '200px' }}>Specification</th>
-                            <th style={{ width: '100px' }}>Quantity</th>
-                            <th style={{ width: '120px' }}>Unit</th>
-                            <th style={{ width: '120px' }}>Rate (₹)</th>
-                            <th style={{ width: '100px' }}>Tax %</th>
-                            <th style={{ width: '120px' }}>Amount (₹)</th>
-                            <th style={{ width: '80px' }}>Actions</th>
-                          </tr>
-                        </thead>
+                    <div style={{overflowX:'auto'}}>
+                      <table className="p-inner-table p-edit-table p-bom-table">
+                        <thead><tr><th>Item Name*</th><th>Spec</th><th>Qty</th><th>Unit</th><th>Rate(₹)</th><th>Tax%</th><th>Amount</th><th style={{width:40}}>–</th></tr></thead>
                         <tbody>
-                          {templateData.bomItems.length === 0 ? (
-                            <tr>
-                              <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#718096' }}>
-                                No BOM items added. Click "Add Row" to start.
-                              </td>
-                            </tr>
-                          ) : (
-                            <>
-                              {templateData.bomItems.map((row, index) => (
-                                <tr key={index}>
-                                  <td>
-                                    <div className="bom-item-input-container" style={{ position: 'relative' }}>
-                                      <input
-                                        type="text"
-                                        value={row.item}
-                                        onChange={(e) => {
-                                          updateBOMRow(index, 'item', e.target.value);
-                                          handleBomItemSearch(index, e.target.value);
-                                        }}
-                                        onFocus={() => {
-                                          if (row.item && row.item.length >= 2) {
-                                            handleBomItemSearch(index, row.item);
-                                          }
-                                        }}
-                                        placeholder="Start typing..."
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                      />
-
-                                      {showBomDropdown[index] && filteredBomItems[index]?.length > 0 && (
-                                        <div style={{
-                                          position: 'absolute',
-                                          top: '100%',
-                                          left: 0,
-                                          right: 0,
-                                          background: 'white',
-                                          border: '2px solid #3b82f6',
-                                          borderRadius: '6px',
-                                          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                                          maxHeight: '300px',
-                                          overflowY: 'auto',
-                                          zIndex: 1000,
-                                          marginTop: '4px'
-                                        }}>
-                                          <div style={{
-                                            padding: '8px 12px',
-                                            background: '#f8fafc',
-                                            borderBottom: '1px solid #e2e8f0',
-                                            fontWeight: 600,
-                                            fontSize: '11px',
-                                            color: '#475569'
-                                          }}>
-                                            📋 Select from Master Items ({filteredBomItems[index].length})
+                          {templateData.bomItems.length===0 ? (
+                            <tr><td colSpan="8" className="p-td-empty">No BOM items. Click "+ Add Row".</td></tr>
+                          ) : <>
+                            {templateData.bomItems.map((row,i)=>(
+                              <tr key={i}>
+                                <td>
+                                  <div className="bom-item-input-container" style={{position:'relative'}}>
+                                    <input value={row.item} onChange={e=>{updateBOMRow(i,'item',e.target.value);handleBomItemSearch(i,e.target.value);}} onFocus={()=>{if(row.item?.length>=2)handleBomItemSearch(i,row.item);}} placeholder="Type to search..." />
+                                    {showBomDropdown[i] && filteredBomItems[i]?.length > 0 && (
+                                      <div className="p-bom-dropdown">
+                                        <div className="p-bom-dropdown-hdr">📋 {filteredBomItems[i].length} items</div>
+                                        {filteredBomItems[i].map(bom=>(
+                                          <div key={bom.id} className="p-bom-dropdown-item" onClick={()=>selectBomItem(i,bom)}>
+                                            <strong>{bom.itemName}</strong>
+                                            {bom.specification && <span>{bom.specification}</span>}
+                                            <div className="p-bom-tags"><span>{bom.category}</span><span>{bom.defaultUnit}</span>{bom.makeBrand&&<span>{bom.makeBrand}</span>}</div>
                                           </div>
-
-                                          {filteredBomItems[index].map((bomItem) => (
-                                            <div
-                                              key={bomItem.id}
-                                              onClick={() => selectBomItem(index, bomItem)}
-                                              style={{
-                                                padding: '10px 12px',
-                                                cursor: 'pointer',
-                                                borderBottom: '1px solid #f1f5f9',
-                                                transition: 'background-color 0.2s'
-                                              }}
-                                              onMouseEnter={(e) => {
-                                                e.currentTarget.style.backgroundColor = '#f8fafc';
-                                                e.currentTarget.style.borderLeft = '3px solid #3b82f6';
-                                              }}
-                                              onMouseLeave={(e) => {
-                                                e.currentTarget.style.backgroundColor = 'white';
-                                                e.currentTarget.style.borderLeft = 'none';
-                                              }}
-                                            >
-                                              <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px', fontSize: '13px' }}>
-                                                {bomItem.itemName}
-                                              </div>
-                                              {bomItem.specification && (
-                                                <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '2px' }}>
-                                                  {bomItem.specification}
-                                                </div>
-                                              )}
-                                              <div style={{ fontSize: '10px', color: '#94a3b8' }}>
-                                                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
-                                                  {bomItem.category}
-                                                </span>
-                                                <span style={{ background: '#f1f5f9', padding: '2px 6px', borderRadius: '3px', marginRight: '4px' }}>
-                                                  {bomItem.defaultUnit}
-                                                </span>
-                                                {bomItem.makeBrand && (
-                                                  <span style={{ background: '#fef3c7', padding: '2px 6px', borderRadius: '3px' }}>
-                                                    {bomItem.makeBrand}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </td>
-
-                                  <td>
-                                    <textarea
-                                      value={row.specification}
-                                      onChange={(e) => updateBOMRow(index, 'specification', e.target.value)}
-                                      placeholder="Enter specs"
-                                      rows={2}
-                                      style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '4px',
-                                        resize: 'vertical',
-                                        fontSize: '12px'
-                                      }}
-                                    />
-                                  </td>
-
-                                  <td>
-                                    <input
-                                      type="number"
-                                      value={row.quantity}
-                                      onChange={(e) => updateBOMRow(index, 'quantity', e.target.value)}
-                                      placeholder="0"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
-                                  </td>
-
-                                  <td>
-                                    {customUnitInputs[index] !== undefined ? (
-                                      <input
-                                        type="text"
-                                        value={customUnitInputs[index]}
-                                        onChange={(e) => handleCustomUnitInput(index, e.target.value)}
-                                        placeholder="Enter custom unit"
-                                        style={{
-                                          width: '100%',
-                                          padding: '8px',
-                                          border: '1px solid #e2e8f0',
-                                          borderRadius: '4px',
-                                          fontSize: '13px'
-                                        }}
-                                      />
-                                    ) : (
-                                      <UnitTypeDropdown
-                                        value={row.unit || ''}
-                                        onChange={(e) => handleBomUnitChange(index, e.target.value)}
-                                        className="proposal-unit-dropdown"
-                                        placeholder="Select unit"
-                                      />
+                                        ))}
+                                      </div>
                                     )}
-                                  </td>
-
-                                  <td>
-                                    <input
-                                      type="number"
-                                      value={row.rate}
-                                      onChange={(e) => updateBOMRow(index, 'rate', e.target.value)}
-                                      placeholder="0.00"
-                                      style={{ width: '100%', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px' }}
-                                    />
-                                  </td>
-
-                                  <td>
-                                    <select
-                                      value={row.tax || '18'}
-                                      onChange={(e) => updateBOMRow(index, 'tax', e.target.value)}
-                                      style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '4px',
-                                        backgroundColor: 'white'
-                                      }}
-                                    >
-                                      <option value="0">0%</option>
-                                      <option value="5">5%</option>
-                                      <option value="12">12%</option>
-                                      <option value="18">18%</option>
-                                      <option value="28">28%</option>
-                                    </select>
-                                  </td>
-
-                                  <td>
-                                    <input
-                                      type="number"
-                                      value={row.amount}
-                                      readOnly
-                                      style={{
-                                        width: '100%',
-                                        padding: '8px',
-                                        border: '1px solid #e2e8f0',
-                                        borderRadius: '4px',
-                                        background: '#f7fafc',
-                                        fontWeight: '600',
-                                        color: '#2d3748'
-                                      }}
-                                    />
-                                  </td>
-
-                                  <td>
-                                    <button
-                                      onClick={() => removeBOMRow(index)}
-                                      style={{
-                                        background: '#fed7d7',
-                                        color: '#742a2a',
-                                        border: 'none',
-                                        padding: '6px 12px',
-                                        borderRadius: '4px',
-                                        cursor: 'pointer'
-                                      }}
-                                    >
-                                      🗑️
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
-
-                              <tr style={{ backgroundColor: '#f7fafc', borderTop: '2px solid #cbd5e0' }}>
-                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
-                                  Subtotal (Before Tax):
+                                  </div>
                                 </td>
-                                <td style={{ fontWeight: '600', padding: '12px' }}>
-                                  ₹{calculateBOMTotals().subtotal}
+                                <td><textarea value={row.specification} onChange={e=>updateBOMRow(i,'specification',e.target.value)} rows={2} placeholder="Specs" /></td>
+                                <td><input type="number" value={row.quantity} onChange={e=>updateBOMRow(i,'quantity',e.target.value)} placeholder="0" /></td>
+                                <td>
+                                  {customUnitInputs[i]!==undefined
+                                    ? <input type="text" value={customUnitInputs[i]} onChange={e=>handleCustomUnitInput(i,e.target.value)} placeholder="Unit" />
+                                    : <UnitTypeDropdown value={row.unit||''} onChange={e=>handleBomUnitChange(i,e.target.value)} className="proposal-unit-dropdown" placeholder="Unit" />
+                                  }
                                 </td>
-                                <td></td>
+                                <td><input type="number" value={row.rate} onChange={e=>updateBOMRow(i,'rate',e.target.value)} placeholder="0.00" /></td>
+                                <td>
+                                  <select value={row.tax||'18'} onChange={e=>updateBOMRow(i,'tax',e.target.value)}>
+                                    <option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option>
+                                  </select>
+                                </td>
+                                <td><input type="number" value={row.amount} readOnly className="p-amount-field" /></td>
+                                <td><button className="p-del-row-btn" onClick={()=>removeBOMRow(i)}>🗑️</button></td>
                               </tr>
-                              <tr style={{ backgroundColor: '#f7fafc' }}>
-                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: '600', padding: '12px' }}>
-                                  Total Tax:
-                                </td>
-                                <td style={{ fontWeight: '600', padding: '12px', color: '#d69e2e' }}>
-                                  ₹{calculateBOMTotals().totalTax}
-                                </td>
-                                <td></td>
-                              </tr>
-                              <tr style={{ backgroundColor: '#e6fffa', borderTop: '2px solid #81e6d9' }}>
-                                <td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold', padding: '12px', fontSize: '15px' }}>
-                                  Grand Total (Inc. Tax):
-                                </td>
-                                <td style={{ fontWeight: 'bold', padding: '12px', fontSize: '15px', color: '#047857' }}>
-                                  ₹{calculateBOMTotals().grandTotal}
-                                </td>
-                                <td></td>
-                              </tr>
-                            </>
-                          )}
+                            ))}
+                            <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Subtotal:</td><td style={{fontWeight:600}}>₹{calculateBOMTotals().subtotal}</td><td></td></tr>
+                            <tr className="p-subtotal-row"><td colSpan="6" style={{textAlign:'right',fontWeight:600}}>Tax:</td><td style={{fontWeight:600,color:'#d69e2e'}}>₹{calculateBOMTotals().totalTax}</td><td></td></tr>
+                            <tr className="p-total-row"><td colSpan="6" style={{textAlign:'right',fontWeight:'bold'}}>Grand Total:</td><td style={{fontWeight:'bold',color:'#047857'}}>₹{calculateBOMTotals().grandTotal}</td><td></td></tr>
+                          </>}
                         </tbody>
                       </table>
                     </div>
@@ -1938,22 +890,9 @@ const ProposalsWithTemplate = () => {
                 )}
               </div>
 
-              <div className="proposal-page-modal-actions" style={{ marginTop: '30px' }}>
-                <button
-                  className="proposal-page-btn proposal-page-btn-secondary"
-                  onClick={() => setShowTemplateModal(false)}
-                >
-                  Close
-                </button>
-                <button
-                  className="proposal-page-btn proposal-page-btn-primary"
-                  onClick={() => {
-                    setShowTemplateModal(false);
-                    showWarning('Template content saved! Now you can create/update the proposal.');
-                  }}
-                >
-                  ✓ Save Template
-                </button>
+              <div className="p-modal-footer">
+                <button className="p-btn p-btn-secondary" onClick={()=>setShowTemplateModal(false)}>Close</button>
+                <button className="p-btn p-btn-primary" onClick={()=>{setShowTemplateModal(false);showWarning('Template saved! Submit the proposal form to apply.');}}>✓ Save Template</button>
               </div>
             </div>
           </div>

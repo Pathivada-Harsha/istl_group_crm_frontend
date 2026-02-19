@@ -1,3 +1,4 @@
+// Old Invoices page
 import React, { useState, useEffect } from 'react';
 import { Eye, Edit2, Trash2, DollarSign, Download, Send } from 'lucide-react';
 import '../pages-css/Invoices.css';

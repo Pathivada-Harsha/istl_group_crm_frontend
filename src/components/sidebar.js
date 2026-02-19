@@ -89,6 +89,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           permission: 'REPORTS',
           icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
         },
+        {
+          name: 'ProjectCostExpenseManagement',
+          path: '/ProjectCostExpenseManagement',
+          permission: 'SALES_CLIENTS',
+          icon: 'M12 1v22M17 5H9a4 4 0 000 8h6a4 4 0 010 8H6'
+        },
 
       ]
     },
@@ -119,12 +125,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         permission: 'SALES_CLIENTS',
         icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
       },
-      {
-        name: 'ProjectCostExpenseManagement',
-        path: '/ProjectCostExpenseManagement',
-        permission: 'SALES_CLIENTS',
-        icon: 'M12 1v22M17 5H9a4 4 0 000 8h6a4 4 0 010 8H6'
-      },
+
 
 
       {
@@ -166,6 +167,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         },
       ]
     },
+
     {
       title: 'Office Use',
       collapsible: true,

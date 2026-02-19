@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Check, XCircle, FileText, Upload, Calendar, DollarSign, TrendingUp, Clock, Package, CheckCircle, Star, AlertCircle, ShoppingCart, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Search, Filter, Download, X, Edit2, Eye, Check, XCircle, FileText, Upload,
+  Clock, CheckCircle, Star, AlertCircle,
+  ShoppingCart, Trash2, Columns, GripVertical, ChevronUp, ChevronDown, ChevronsUpDown,
+  FileSpreadsheet } from 'lucide-react';
 import '../pages-css/Procurement-Quatation-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -8,7 +11,41 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
+import * as XLSX from 'xlsx';
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+// ── Column definitions ───────────────────────────────────────────────────────
+const ALL_QUOTATION_COLUMNS = [
+  { id: 'quotationNo',    label: 'Quotation No',    visible: true  },
+  { id: 'vendorId',       label: 'Vendor ID',        visible: true  },
+  { id: 'rfqId',          label: 'RFQ ID',           visible: false },
+  { id: 'category',       label: 'Category',         visible: true  },
+  { id: 'quotationValue', label: 'Quotation Value',  visible: true  },
+  { id: 'validUntil',     label: 'Valid Until',      visible: true  },
+  { id: 'file',           label: 'File',             visible: false },
+  { id: 'status',         label: 'Status',           visible: true  },
+  { id: 'uploadedOn',     label: 'Uploaded On',      visible: true  },
+  { id: 'actions',        label: 'Actions',          visible: true,  fixed: true },
+];
+
+const SORTABLE_COLUMNS = new Set([
+  'quotationNo', 'vendorId', 'rfqId', 'category',
+  'quotationValue', 'validUntil', 'status', 'uploadedOn',
+]);
+
+// ── Sort icon component ──────────────────────────────────────────────────────
+const SortIcon = ({ columnId, sortConfig }) => {
+  if (sortConfig.key !== columnId)
+    return <ChevronsUpDown size={12} style={{ opacity: 0.35, marginLeft: 4, verticalAlign: 'middle' }} />;
+  return sortConfig.direction === 'asc'
+    ? <ChevronUp   size={12} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#2563eb' }} />
+    : <ChevronDown size={12} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#2563eb' }} />;
+};
+
+// ── Validation sets for import ───────────────────────────────────────────────
+const VALID_GST   = new Set([0, 5, 12, 18, 28]);
+const CATEGORIES  = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies'];
 
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
@@ -18,11 +55,7 @@ const QuotationsReceived = () => {
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
   const [poFormData, setPOFormData] = useState(null);
-  const [filters, setFilters] = useState({
-    search: '',
-    status: 'all',
-    category: 'all'
-  });
+  const [filters, setFilters] = useState({ search: '', status: 'all', category: 'all' });
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
@@ -33,1175 +66,660 @@ const QuotationsReceived = () => {
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize, setPageSize] = useState(20);
 
+  // ── Column state (drag + visibility) ────────────────────────────────────
+  const [columns, setColumns] = useState(() => {
+    try {
+      const saved = localStorage.getItem('quotationColumns');
+      return saved ? JSON.parse(saved) : ALL_QUOTATION_COLUMNS;
+    } catch { return ALL_QUOTATION_COLUMNS; }
+  });
+  const [showColumnManager, setShowColumnManager] = useState(false);
+
+  // ── Drag-and-drop table column state ────────────────────────────────────
+  const [draggedColIndex, setDraggedColIndex] = useState(null);
+  const [dragOverColIndex, setDragOverColIndex] = useState(null);
+
+  // ── Sort state ───────────────────────────────────────────────────────────
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // ── Excel import state ───────────────────────────────────────────────────
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importErrors, setImportErrors] = useState([]);
+  const [importFileName, setImportFileName] = useState('');
+  const xlsxFileRef = useRef(null);
+
   // Detail drawer and modals
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedQuotation, setSelectedQuotation] = useState(null);
   const [showUploadQuotationModal, setShowUploadQuotationModal] = useState(false);
   const [quotationFormData, setQuotationFormData] = useState(null);
   const [stats, setStats] = useState(null);
-  const [isEditMode, setIsEditMode] = useState(false); // NEW: Track edit mode
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // File upload state
   const [selectedFile, setSelectedFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
 
-  // Modal dropdown state for project assignment
+  // Modal dropdown state
   const [modalGroups, setModalGroups] = useState([]);
   const [modalSubGroups, setModalSubGroups] = useState([]);
   const [modalProjects, setModalProjects] = useState([]);
   const [modalGroupName, setModalGroupName] = useState('');
   const [modalSubGroupName, setModalSubGroupName] = useState('');
   const [modalProjectId, setModalProjectId] = useState('');
-  const [modalDropdownLoading, setModalDropdownLoading] = useState({
-    groups: false,
-    subGroups: false,
-    projects: false
-  });
+  const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
 
   // Vendor state
   const [vendors, setVendors] = useState([]);
   const [selectedVendorDetails, setSelectedVendorDetails] = useState(null);
 
-  // Extract permissions
-  const canView = 'VIEW';
-  const canCreate = 'CREATE';
-  const canEdit = 'EDIT';
+  const canView    = 'VIEW';
+  const canCreate  = 'CREATE';
+  const canEdit    = 'EDIT';
   const canApprove = 'APPROVE';
-  const canDelete = 'DELETE'; // NEW: Delete permission
+  const canDelete  = 'DELETE';
 
-  // Fetch quotations on mount and filter change
+  // ── Persist column config ────────────────────────────────────────────────
   useEffect(() => {
-  if (canView) {
-    fetchQuotations();
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
-  // Fetch stats on mount
-  useEffect(() => {
-  if (canView) {
-    fetchStats();
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [groupName, subGroupName, projectId]); // Add filter dependencies
+    localStorage.setItem('quotationColumns', JSON.stringify(columns));
+  }, [columns]);
 
+  // ── Data fetching effects ────────────────────────────────────────────────
+  useEffect(() => { fetchQuotations(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
+  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
 
-  /**
-   * Get auth headers
-   */
+  // ── Sorting logic ────────────────────────────────────────────────────────
+  const sortedQuotations = useMemo(() => {
+    if (!sortConfig.key) return quotations;
+    return [...quotations].sort((a, b) => {
+      let aVal, bVal;
+      switch (sortConfig.key) {
+        case 'quotationNo':    aVal = a.quoteNo || '';        bVal = b.quoteNo || '';        break;
+        case 'vendorId':       aVal = a.vendorId || '';       bVal = b.vendorId || '';       break;
+        case 'rfqId':          aVal = a.rfqId || '';          bVal = b.rfqId || '';          break;
+        case 'category':       aVal = a.category || '';       bVal = b.category || '';       break;
+        case 'quotationValue': aVal = parseFloat(a.totalValue) || 0; bVal = parseFloat(b.totalValue) || 0; break;
+        case 'validUntil':     aVal = new Date(a.validTill || 0); bVal = new Date(b.validTill || 0); break;
+        case 'status':         aVal = a.status || '';         bVal = b.status || '';         break;
+        case 'uploadedOn':     aVal = new Date(a.uploadedAt || 0); bVal = new Date(b.uploadedAt || 0); break;
+        default: return 0;
+      }
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }, [quotations, sortConfig]);
+
+  const handleSort = (colId) => {
+    if (!SORTABLE_COLUMNS.has(colId)) return;
+    setSortConfig(prev => ({
+      key: colId,
+      direction: prev.key === colId && prev.direction === 'asc' ? 'desc' : 'asc',
+    }));
+  };
+
+  // ── Table-header drag-and-drop ───────────────────────────────────────────
+  const handleColDragStart = (e, index) => {
+    setDraggedColIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+  const handleColDragOver = (e, index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverColIndex(index);
+  };
+  const handleColDrop = (e, index) => {
+    e.preventDefault();
+    if (draggedColIndex === null || draggedColIndex === index) {
+      setDraggedColIndex(null); setDragOverColIndex(null); return;
+    }
+    const visibleCols  = columns.filter(c => c.visible);
+    const newVisible   = [...visibleCols];
+    const [moved]      = newVisible.splice(draggedColIndex, 1);
+    newVisible.splice(index, 0, moved);
+    const hiddenCols   = columns.filter(c => !c.visible);
+    setColumns([...newVisible, ...hiddenCols]);
+    setDraggedColIndex(null); setDragOverColIndex(null);
+  };
+  const handleColDragEnd = () => { setDraggedColIndex(null); setDragOverColIndex(null); };
+
+  // ── Column visibility toggle ─────────────────────────────────────────────
+  const toggleColumnVisibility = (colId) =>
+    setColumns(cols => cols.map(c => c.id === colId ? { ...c, visible: !c.visible } : c));
+
+  const resetColumns = () => {
+    setColumns(ALL_QUOTATION_COLUMNS);
+    localStorage.removeItem('quotationColumns');
+  };
+
+  // ── Excel import handlers ────────────────────────────────────────────────
+  const handleXlsxFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Always clear previous results first before parsing new file
+    setImportErrors([]);
+    setImportPreview([]);
+    setImportFileName(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const wb   = XLSX.read(evt.target.result, { type: 'binary' });
+        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+        // Find header row by looking for a cell that contains "item name" (case-insensitive)
+        const headerRowIdx = data.findIndex(row =>
+          row.some(cell => typeof cell === 'string' && cell.toLowerCase().includes('item name'))
+        );
+        if (headerRowIdx === -1) {
+          showError('Invalid template. Please use the provided quotation items template.');
+          return;
+        }
+
+        // Helper: returns true if a cell value looks like a column header label rather than real data
+        const isHeaderLike = (val) => {
+          const s = String(val || '').trim().toLowerCase();
+          return (
+            s === '' ||
+            s.includes('item name') ||
+            s.includes('unit price') ||
+            s.includes('quantity') ||
+            s.includes('gst') ||
+            s.includes('description') ||
+            s.includes('delivery') ||
+            s.includes('warranty') ||
+            s.includes('notes') ||
+            s.includes('order book')
+          );
+        };
+
+        // Slice everything after the header row, then filter:
+        //  - skip blank rows (col[0] empty)
+        //  - skip any row whose first cell still looks like a header/label
+        const rows = data
+          .slice(headerRowIdx + 1)
+          .filter(row => {
+            const firstCell = String(row[0] || '').trim();
+            return firstCell !== '' && !isHeaderLike(firstCell);
+          });
+
+        const errors = [];
+        const parsed = rows.map((row, i) => {
+          const rowNum       = headerRowIdx + 2 + i;
+          const itemName     = String(row[0] || '').trim();
+          const description  = String(row[1] || '').trim();
+          const quantity     = parseFloat(row[2]);
+          const unitPrice    = parseFloat(row[3]);
+          const gst          = parseFloat(row[4]);
+          const obItemId     = String(row[5] || '').trim();
+          const notes        = String(row[6] || '').trim();
+          const deliveryTime = String(row[7] || '').trim();
+          const warranty     = String(row[8] || '').trim();
+
+          if (!itemName)                              errors.push(`Row ${rowNum}: Item Name is required`);
+          if (isNaN(quantity) || quantity <= 0)       errors.push(`Row ${rowNum}: Invalid quantity "${row[2]}"`);
+          if (isNaN(unitPrice) || unitPrice < 0)      errors.push(`Row ${rowNum}: Invalid unit price "${row[3]}"`);
+          if (!VALID_GST.has(isNaN(gst) ? -1 : gst)) errors.push(`Row ${rowNum}: GST must be 0, 5, 12, 18, or 28 (got "${row[4]}")`);
+
+          return {
+            itemName,
+            description,
+            quantity:    isNaN(quantity) ? 1 : quantity,
+            unitPrice:   isNaN(unitPrice) ? '' : unitPrice,
+            taxPercent:  VALID_GST.has(gst) ? gst : 18,
+            orderBookItemId: obItemId,
+            notes,
+            deliveryTime,
+            warranty,
+            included: true,
+          };
+        });
+
+        setImportErrors(errors);
+        setImportPreview(parsed);
+      } catch (err) {
+        showError('Failed to read file. Please use a valid Excel file.');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleConfirmImport = () => {
+    if (importErrors.length > 0) { showError('Fix errors before importing'); return; }
+    if (importPreview.length === 0) { showError('No valid rows to import'); return; }
+
+    // Merge imported items into existing form data
+    setQuotationFormData(prev => ({
+      ...prev,
+      items: importPreview.map(row => ({
+        itemName:    row.itemName,
+        description: row.description,
+        quantity:    row.quantity,
+        unitPrice:   row.unitPrice,
+        taxPercent:  row.taxPercent,
+        included:    true,
+      })),
+      // Carry across delivery time / warranty from first row if not set
+      deliveryTime: prev.deliveryTime || importPreview[0].deliveryTime || '',
+      warranty:     prev.warranty     || importPreview[0].warranty     || '',
+    }));
+
+    handleCloseImportModal();
+    showSuccess(`Imported ${importPreview.length} item${importPreview.length !== 1 ? 's' : ''} into the quotation form`);
+  };
+
+  const handleCloseImportModal = () => {
+    setShowImportModal(false);
+    setImportPreview([]);
+    setImportErrors([]);
+    setImportFileName('');
+    if (xlsxFileRef.current) xlsxFileRef.current.value = '';
+  };
+
+  const handleDownloadTemplate = () => {
+    const link = document.createElement('a');
+    link.href = '/templates/quotation_items_template.xlsx';
+    link.download = 'quotation_items_template.xlsx';
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  };
+
+  // ── Auth helper ──────────────────────────────────────────────────────────
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'User-Id': user?.id || localStorage.getItem('userId'),
-    'User-Role': user?.role || localStorage.getItem('userRole')
+    'User-Id':   user?.id   || localStorage.getItem('userId'),
+    'User-Role': user?.role || localStorage.getItem('userRole'),
   });
 
-  /**
-   * Fetch quotations from backend
-   */
+  // ── API calls ────────────────────────────────────────────────────────────
   const fetchQuotations = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({
-        page: currentPage,
-        size: pageSize,
-        sortBy: 'uploadedAt',
-        sortDirection: 'DESC'
-      });
-
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId) params.append('projectId', projectId);
+      const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
+      if (groupName)          params.append('groupName', groupName);
+      if (subGroupName)       params.append('subGroupName', subGroupName);
+      if (projectId)          params.append('projectId', projectId);
       if (filters.status !== 'all') params.append('status', filters.status);
-      if (filters.search) params.append('searchTerm', filters.search);
+      if (filters.search)     params.append('searchTerm', filters.search);
 
-      const response = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch quotations');
-
-      const data = await response.json();
+      const res  = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
       setQuotations(data.quotations || []);
       setTotalPages(data.totalPages || 0);
       setTotalElements(data.totalElements || 0);
-
-    } catch (error) {
-      console.error('Failed to fetch quotations:', error);
-      showError('Failed to load quotations');
-      setQuotations([]);
-    } finally {
-      setLoading(false);
-    }
+    } catch { showError('Failed to load quotations'); setQuotations([]); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * Fetch statistics
-   */
   const fetchStats = async () => {
-  try {
-    // Build query params based on current filters
-    const params = new URLSearchParams();
-    
-    if (groupName) params.append('groupName', groupName);
-    if (subGroupName) params.append('subGroupName', subGroupName);
-    if (projectId) params.append('projectId', projectId);
-    
-    console.log('📊 Fetching stats with filters:', { groupName, subGroupName, projectId });
-    
-    const response = await fetch(`${API_BASE_URL}/api/quotations/stats?${params}`, {
-      credentials: "include",
-      headers: getAuthHeaders()
-    });
+    try {
+      const params = new URLSearchParams();
+      if (groupName)    params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId)    params.append('projectId', projectId);
+      const res = await fetch(`${API_BASE_URL}/api/quotations/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) setStats(await res.json());
+    } catch {}
+  };
 
-    if (response.ok) {
-      const data = await response.json();
-      setStats(data);
-      console.log('✅ Stats loaded:', data);
-    }
-  } catch (error) {
-    console.error('Failed to fetch stats:', error);
-  }
-};
-
-  /**
-   * Fetch vendors filtered by group/subgroup
-   */
-  const fetchVendors = async (groupName = null, subGroupName = null) => {
+  const fetchVendors = async (gn, sg) => {
     try {
       let url = `${API_BASE_URL}/api/vendors/by-group-subgroup?`;
-      if (groupName) url += `groupName=${encodeURIComponent(groupName)}&`;
-      if (subGroupName) url += `subGroupName=${encodeURIComponent(subGroupName)}`;
-
-      console.log('📡 Fetching vendors:', url);
-
-      const response = await fetch(url, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setVendors(data.data || []);
-          console.log('✅ Loaded vendors:', data.data.length);
-        }
-      } else {
-        throw new Error('Failed to fetch vendors');
-      }
-    } catch (error) {
-      console.error('Failed to fetch vendors:', error);
-      showError('Failed to load vendors');
-      setVendors([]);
-    }
+      if (gn) url += `groupName=${encodeURIComponent(gn)}&`;
+      if (sg) url += `subGroupName=${encodeURIComponent(sg)}`;
+      const res  = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
+      const data = await res.json();
+      if (data.success) setVendors(data.data || []);
+    } catch { setVendors([]); }
   };
 
-  /**
-   * Fetch order book items by project
-   */
-  const fetchOrderBookItems = async (projectId) => {
-    if (!projectId) {
-      setOrderBookItems([]);
-      return;
-    }
-
+  const fetchOrderBookItems = async (pid) => {
+    if (!pid) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
     try {
-      const url = `${API_BASE_URL}/api/quotations/orderbook-items/${projectId}`;
-      console.log('📡 Fetching order book items for project:', projectId);
-
-      const response = await fetch(url, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch order book items');
-
-      const data = await response.json();
+      const res  = await fetch(`${API_BASE_URL}/api/quotations/orderbook-items/${pid}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
       if (data.success) {
         setOrderBookItems(data.data || []);
-        console.log('✅ Loaded order book items:', data.data.length);
-
-        // Auto-populate items in quotation form if in create mode (not edit mode)
-        if (quotationFormData && !isEditMode && data.data && data.data.length > 0) {
-          const formattedItems = data.data.map(item => ({
-            itemName: item.itemName,
-            description: item.specification || item.description || '',
-            quantity: item.quantity || 1,
-            unitPrice: '', // Empty instead of 0
-            taxPercent: item.taxPercent || 18,
-            orderBookItemId: item.id,
-            included: true
+        if (quotationFormData && !isEditMode && data.data?.length > 0) {
+          setQuotationFormData(prev => ({
+            ...prev,
+            items: data.data.map(item => ({
+              itemName: item.itemName, description: item.specification || item.description || '',
+              quantity: item.quantity || 1, unitPrice: '', taxPercent: item.taxPercent || 18,
+              orderBookItemId: item.id, included: true,
+            })),
           }));
-
-          setQuotationFormData(prev => ({ ...prev, items: formattedItems }));
-          console.log('✅ Pre-populated items from order book');
         }
       }
-    } catch (error) {
-      console.error('❌ Error fetching order book items:', error);
-      showError('Failed to load order book items');
-      setOrderBookItems([]);
-    } finally {
-      setLoadingOrderItems(false);
-    }
+    } catch { showError('Failed to load order book items'); setOrderBookItems([]); }
+    finally { setLoadingOrderItems(false); }
   };
 
-  /**
-   * Fetch modal groups
-   */
-  const fetchModalGroups = async () => {
-    setModalDropdownLoading(prev => ({ ...prev, groups: true }));
-    try {
-      const groups = await filterApi.getAllGroups();
-      setModalGroups(groups || []);
-    } catch (error) {
-      console.error('Failed to fetch groups:', error);
-      showError('Failed to load groups');
-      setModalGroups([]);
-    } finally {
-      setModalDropdownLoading(prev => ({ ...prev, groups: false }));
-    }
-  };
+  const fetchModalGroups    = async () => { setModalDropdownLoading(p => ({ ...p, groups: true })); try { setModalGroups(await filterApi.getAllGroups() || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, groups: false })); } };
+  const fetchModalSubGroups = async (gn) => { if (!gn) { setModalSubGroups([]); setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, subGroups: true })); try { setModalSubGroups(await filterApi.getSubGroups(gn) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, subGroups: false })); } };
+  const fetchModalProjects  = async (gn, sg) => { if (!gn || !sg) { setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, projects: true })); try { setModalProjects(await filterApi.getProjects(gn, sg) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, projects: false })); } };
 
-  /**
-   * Fetch modal subgroups
-   */
-  const fetchModalSubGroups = async (groupName) => {
-    if (!groupName) {
-      setModalSubGroups([]);
-      setModalProjects([]);
-      return;
-    }
-
-    setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
-    try {
-      const subGroups = await filterApi.getSubGroups(groupName);
-      setModalSubGroups(subGroups || []);
-    } catch (error) {
-      console.error('Failed to fetch subgroups:', error);
-      showError('Failed to load categories');
-      setModalSubGroups([]);
-    } finally {
-      setModalDropdownLoading(prev => ({ ...prev, subGroups: false }));
-    }
-  };
-
-  /**
-   * Fetch modal projects
-   */
-  const fetchModalProjects = async (groupName, subGroupName) => {
-    if (!groupName || !subGroupName) {
-      setModalProjects([]);
-      return;
-    }
-
-    setModalDropdownLoading(prev => ({ ...prev, projects: true }));
-    try {
-      const projects = await filterApi.getProjects(groupName, subGroupName);
-      setModalProjects(projects || []);
-    } catch (error) {
-      console.error('Failed to fetch projects:', error);
-      showError('Failed to load projects');
-      setModalProjects([]);
-    } finally {
-      setModalDropdownLoading(prev => ({ ...prev, projects: false }));
-    }
-  };
-
-  /**
-   * Handle modal group change
-   */
+  // ── Modal dropdown change handlers ───────────────────────────────────────
   const handleModalGroupChange = (e) => {
-    const newGroupName = e.target.value;
-    setModalGroupName(newGroupName);
-    setModalSubGroupName('');
-    setModalProjectId('');
-    setModalSubGroups([]);
-    setModalProjects([]);
-    setOrderBookItems([]);
-
-    if (quotationFormData) {
-      setQuotationFormData({
-        ...quotationFormData,
-        groupName: newGroupName,
-        subGroupName: '',
-        projectId: '',
-        items: isEditMode ? quotationFormData.items : [] // Preserve items in edit mode
-      });
-    }
-
-    if (newGroupName) {
-      fetchModalSubGroups(newGroupName);
-      fetchVendors(newGroupName, null);
-    } else {
-      setVendors([]);
-    }
+    const g = e.target.value;
+    setModalGroupName(g); setModalSubGroupName(''); setModalProjectId('');
+    setModalSubGroups([]); setModalProjects([]); setOrderBookItems([]);
+    if (quotationFormData) setQuotationFormData({ ...quotationFormData, groupName: g, subGroupName: '', projectId: '', items: isEditMode ? quotationFormData.items : [] });
+    if (g) { fetchModalSubGroups(g); fetchVendors(g, null); } else setVendors([]);
   };
 
-  /**
-   * Handle modal subgroup change
-   */
   const handleModalSubGroupChange = (e) => {
-    const newSubGroupName = e.target.value;
-    setModalSubGroupName(newSubGroupName);
-    setModalProjectId('');
-    setModalProjects([]);
-    setOrderBookItems([]);
-
-    if (quotationFormData) {
-      setQuotationFormData({
-        ...quotationFormData,
-        subGroupName: newSubGroupName,
-        projectId: '',
-        items: isEditMode ? quotationFormData.items : [] // Preserve items in edit mode
-      });
-    }
-
-    if (modalGroupName && newSubGroupName) {
-      fetchModalProjects(modalGroupName, newSubGroupName);
-      fetchVendors(modalGroupName, newSubGroupName);
-    }
+    const sg = e.target.value;
+    setModalSubGroupName(sg); setModalProjectId(''); setModalProjects([]); setOrderBookItems([]);
+    if (quotationFormData) setQuotationFormData({ ...quotationFormData, subGroupName: sg, projectId: '', items: isEditMode ? quotationFormData.items : [] });
+    if (modalGroupName && sg) { fetchModalProjects(modalGroupName, sg); fetchVendors(modalGroupName, sg); }
   };
 
-  /**
-   * Handle modal project change
-   */
   const handleModalProjectChange = (e) => {
-    const newProjectId = e.target.value;
-    setModalProjectId(newProjectId);
-
-    if (quotationFormData) {
-      setQuotationFormData({
-        ...quotationFormData,
-        projectId: newProjectId
-      });
-    }
-
-    // Only fetch order items in create mode
-    if (newProjectId && !isEditMode) {
-      fetchOrderBookItems(newProjectId);
-    }
+    const pid = e.target.value;
+    setModalProjectId(pid);
+    if (quotationFormData) setQuotationFormData({ ...quotationFormData, projectId: pid });
+    if (pid && !isEditMode) fetchOrderBookItems(pid);
   };
 
-  /**
-   * Toggle vendor type (existing vs new)
-   */
+  // ── Vendor handlers ──────────────────────────────────────────────────────
   const handleVendorTypeChange = (type) => {
     setShowNewVendorForm(type === 'new');
-
-    if (type === 'new') {
-      setQuotationFormData({
-        ...quotationFormData,
-        vendorId: null,
-        vendorName: '',
-        vendorContact: ''
-      });
-      setSelectedVendorDetails(null);
-    } else {
-      setQuotationFormData({
-        ...quotationFormData,
-        vendorName: '',
-        vendorContact: ''
-      });
-    }
+    if (type === 'new') { setQuotationFormData({ ...quotationFormData, vendorId: null, vendorName: '', vendorContact: '' }); setSelectedVendorDetails(null); }
+    else setQuotationFormData({ ...quotationFormData, vendorName: '', vendorContact: '' });
   };
 
-  /**
-   * Handle new vendor contact change (restrict to 10 digits)
-   */
-  const handleNewVendorContactChange = (value) => {
-    const cleaned = value.replace(/\D/g, '').slice(0, 10);
-    setQuotationFormData({
-      ...quotationFormData,
-      vendorContact: cleaned
-    });
+  const handleNewVendorContactChange = (val) => {
+    setQuotationFormData({ ...quotationFormData, vendorContact: val.replace(/\D/g, '').slice(0, 10) });
   };
 
-  /**
-   * Toggle item inclusion in quotation
-   */
-  const toggleItemInclusion = (index) => {
-    if (quotationFormData) {
-      const newItems = [...quotationFormData.items];
-      newItems[index].included = !newItems[index].included;
-      setQuotationFormData({ ...quotationFormData, items: newItems });
-    }
-  };
-
-  /**
-   * Handle vendor selection from dropdown
-   */
   const handleVendorSelection = (e) => {
-    const vendorId = e.target.value ? parseInt(e.target.value) : null;
-
-    if (vendorId) {
-      const selectedVendor = vendors.find(v => v.id === vendorId);
-
-      if (selectedVendor) {
-        setSelectedVendorDetails({
-          id: selectedVendor.id,
-          name: selectedVendor.name,
-          phone: selectedVendor.phone
-        });
-
-        setQuotationFormData({
-          ...quotationFormData,
-          vendorId: vendorId,
-          vendorContact: selectedVendor.phone || ''
-        });
-      }
-    } else {
-      setSelectedVendorDetails(null);
-      setQuotationFormData({
-        ...quotationFormData,
-        vendorId: null,
-        vendorContact: ''
-      });
-    }
+    const vid = e.target.value ? parseInt(e.target.value) : null;
+    if (vid) {
+      const v = vendors.find(x => x.id === vid);
+      if (v) { setSelectedVendorDetails({ id: v.id, name: v.name, phone: v.phone }); setQuotationFormData({ ...quotationFormData, vendorId: vid, vendorContact: v.phone || '' }); }
+    } else { setSelectedVendorDetails(null); setQuotationFormData({ ...quotationFormData, vendorId: null, vendorContact: '' }); }
   };
 
-  /**
-   * Handle file selection
-   */
+  const toggleItemInclusion = (idx) => {
+    if (!quotationFormData) return;
+    const items = [...quotationFormData.items];
+    items[idx].included = !items[idx].included;
+    setQuotationFormData({ ...quotationFormData, items });
+  };
+
+  // ── File select for quotation attachment ─────────────────────────────────
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
-
-    if (!file) {
-      setSelectedFile(null);
-      setFilePreview(null);
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showError('File size exceeds 5MB limit');
-      e.target.value = '';
-      setSelectedFile(null);
-      setFilePreview(null);
-      return;
-    }
-
-    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!allowedTypes.includes(file.type)) {
-      showError('Only PDF and image files (JPG, PNG) are allowed');
-      e.target.value = '';
-      setSelectedFile(null);
-      setFilePreview(null);
-      return;
-    }
-
+    if (!file) { setSelectedFile(null); setFilePreview(null); return; }
+    if (file.size > 5 * 1024 * 1024) { showError('File size exceeds 5MB'); e.target.value = ''; setSelectedFile(null); return; }
+    const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowed.includes(file.type)) { showError('Only PDF and image files are allowed'); e.target.value = ''; setSelectedFile(null); return; }
     setSelectedFile(file);
-
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFilePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      setFilePreview(null);
-    }
+    if (file.type.startsWith('image/')) { const r = new FileReader(); r.onloadend = () => setFilePreview(r.result); r.readAsDataURL(file); }
+    else setFilePreview(null);
   };
 
-  /**
-   * Open PO creation modal with quotation data
-   */
+  // ── PO handlers ──────────────────────────────────────────────────────────
   const handleOpenCreatePOModal = async (quotation) => {
-    if (!canCreate) {
-      showError('You do not have permission to create purchase orders');
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch quotation details');
-
-      const quotationData = await response.json();
-
+      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const qd   = await res.json();
       setPOFormData({
-        quotationId: quotationData.id,
-        quoteNo: quotationData.quoteNo,
-        vendorId: quotationData.vendorId,
-        vendorContact: quotationData.vendorContact,
-        rfqId: quotationData.rfqId,
-        groupName: quotationData.groupName,
-        subGroupName: quotationData.subGroupName,
-        projectId: quotationData.projectId,
-        orderDate: new Date().toISOString().split('T')[0],
-        expectedDelivery: '',
-        paymentTerms: quotationData.paymentTerms || '',
-        shippingAddress: '',
-        notes: quotationData.notes || '',
-        items: quotationData.items.map(item => ({
-          quotationItemId: item.id,
-          itemName: item.itemName,
-          description: item.description,
-          quotedQuantity: item.quantity,
-          selectedQuantity: item.quantity,
-          unitPrice: item.unitPrice,
-          taxPercent: item.taxPercent,
-          lineTotal: 0
-        }))
+        quotationId: qd.id, quoteNo: qd.quoteNo, vendorId: qd.vendorId, vendorContact: qd.vendorContact,
+        rfqId: qd.rfqId, groupName: qd.groupName, subGroupName: qd.subGroupName, projectId: qd.projectId,
+        orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '',
+        paymentTerms: qd.paymentTerms || '', shippingAddress: '', notes: qd.notes || '',
+        items: qd.items.map(item => ({ quotationItemId: item.id, itemName: item.itemName, description: item.description, quotedQuantity: item.quantity, selectedQuantity: item.quantity, unitPrice: item.unitPrice, taxPercent: item.taxPercent, lineTotal: 0 })),
       });
-
       setShowCreatePOFromQuotationModal(true);
-    } catch (error) {
-      console.error('Failed to load quotation:', error);
-      showError('Failed to load quotation details');
-    } finally {
-      setLoading(false);
-    }
+    } catch { showError('Failed to load quotation details'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * Update PO item quantity
-   */
   const handleUpdatePOItemQuantity = (index, quantity) => {
     if (!poFormData) return;
-
-    const newItems = [...poFormData.items];
-    const item = newItems[index];
-    const qty = parseFloat(quantity) || 0;
-
-    if (qty > item.quotedQuantity) {
-      showError(`Quantity cannot exceed quoted quantity of ${item.quotedQuantity}`);
-      return;
-    }
-
+    const items = [...poFormData.items];
+    const item  = items[index];
+    const qty   = parseFloat(quantity) || 0;
+    if (qty > item.quotedQuantity) { showError(`Cannot exceed quoted qty of ${item.quotedQuantity}`); return; }
     item.selectedQuantity = qty;
-
-    const subtotal = qty * item.unitPrice;
-    const taxAmount = subtotal * (item.taxPercent / 100);
-    item.lineTotal = subtotal + taxAmount;
-
-    setPOFormData({ ...poFormData, items: newItems });
+    item.lineTotal = qty * item.unitPrice * (1 + item.taxPercent / 100);
+    setPOFormData({ ...poFormData, items });
   };
 
-  /**
-   * Calculate PO total
-   */
   const calculatePOTotal = () => {
     if (!poFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
-
-    const subtotal = poFormData.items.reduce((sum, item) => {
-      return sum + (item.selectedQuantity * item.unitPrice);
-    }, 0);
-
-    const taxAmount = poFormData.items.reduce((sum, item) => {
-      const itemSubtotal = item.selectedQuantity * item.unitPrice;
-      return sum + (itemSubtotal * item.taxPercent / 100);
-    }, 0);
-
-    return {
-      subtotal,
-      taxAmount,
-      total: subtotal + taxAmount
-    };
+    const subtotal  = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice, 0);
+    const taxAmount = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice * i.taxPercent / 100, 0);
+    return { subtotal, taxAmount, total: subtotal + taxAmount };
   };
 
-  /**
-   * Create PO from quotation
-   */
   const handleCreatePOFromQuotation = async () => {
-    if (!poFormData.expectedDelivery) {
-      showError('Expected delivery date is required');
-      return;
-    }
-
-    const hasItems = poFormData.items.some(item => item.selectedQuantity > 0);
-    if (!hasItems) {
-      showError('Please select quantity for at least one item');
-      return;
-    }
-
-    if (!window.confirm('Create Purchase Order from this quotation?')) {
-      return;
-    }
-
+    if (!poFormData.expectedDelivery) { showError('Expected delivery date is required'); return; }
+    if (!poFormData.items.some(i => i.selectedQuantity > 0)) { showError('Select quantity for at least one item'); return; }
+    if (!window.confirm('Create Purchase Order from this quotation?')) return;
     setLoading(true);
     try {
-      const poItems = poFormData.items
-        .filter(item => item.selectedQuantity > 0)
-        .map(item => ({
-          itemName: item.itemName,
-          itemDescription: item.description || '',
-          quantity: item.selectedQuantity,
-          unitPrice: item.unitPrice,
-          gst: item.taxPercent,
-          discount: 0
-        }));
-
       const poData = {
-        quotationId: poFormData.quotationId,
-        vendorId: poFormData.vendorId,
-        rfqId: poFormData.rfqId,
-        groupName: poFormData.groupName,
-        subGroupName: poFormData.subGroupName,
-        projectId: poFormData.projectId,
-        orderDate: poFormData.orderDate,
-        expectedDelivery: poFormData.expectedDelivery,
-        paymentTerms: poFormData.paymentTerms,
-        shippingAddress: poFormData.shippingAddress,
-        notes: poFormData.notes,
-        items: poItems,
-        status: 'Draft',
-        paymentStatus: 'Pending'
+        quotationId: poFormData.quotationId, vendorId: poFormData.vendorId, rfqId: poFormData.rfqId,
+        groupName: poFormData.groupName, subGroupName: poFormData.subGroupName, projectId: poFormData.projectId,
+        orderDate: poFormData.orderDate, expectedDelivery: poFormData.expectedDelivery,
+        paymentTerms: poFormData.paymentTerms, shippingAddress: poFormData.shippingAddress, notes: poFormData.notes,
+        items: poFormData.items.filter(i => i.selectedQuantity > 0).map(i => ({
+          itemName: i.itemName, itemDescription: i.description || '', quantity: i.selectedQuantity,
+          unitPrice: i.unitPrice, gst: i.taxPercent, discount: 0,
+        })),
+        status: 'Draft', paymentStatus: 'Pending',
       };
-
-      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
-        credentials: "include",
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(poData)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create PO');
-      }
-
-      const createdPO = await response.json();
-      showSuccess(`Purchase Order ${createdPO.poNo} created successfully!`);
-      setShowCreatePOFromQuotationModal(false);
-      setPOFormData(null);
-
+      const res = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, { credentials: 'include', method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(poData) });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
+      const created = await res.json();
+      showSuccess(`Purchase Order ${created.poNo} created!`);
+      setShowCreatePOFromQuotationModal(false); setPOFormData(null);
       await handleUpdateStatus(poFormData.quotationId, 'PO Created');
-
-      fetchQuotations();
-      fetchStats();
-
-    } catch (error) {
-      console.error('Failed to create PO:', error);
-      showError(error.message || 'Failed to create Purchase Order');
-    } finally {
-      setLoading(false);
-    }
+      fetchQuotations(); fetchStats();
+    } catch (err) { showError(err.message || 'Failed to create Purchase Order'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * View quotation details
-   */
+  // ── Quotation CRUD ───────────────────────────────────────────────────────
   const handleViewQuotation = async (quotation) => {
-    if (!canView) {
-      showError('You do not have permission to view quotations');
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch quotation details');
-
-      const data = await response.json();
-      setSelectedQuotation(data);
-      setShowDetailDrawer(true);
-    } catch (error) {
-      console.error('Failed to fetch quotation details:', error);
-      showError('Failed to load quotation details');
-    } finally {
-      setLoading(false);
-    }
+      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      setSelectedQuotation(await res.json()); setShowDetailDrawer(true);
+    } catch { showError('Failed to load quotation details'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * NEW: Edit quotation - Load data into modal
-   */
   const handleEditQuotation = async (quotation) => {
-    if (!canEdit) {
-      showError('You do not have permission to edit quotations');
-      return;
-    }
-
     setLoading(true);
     try {
-      // Fetch full quotation details
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
-        credentials: "include",
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to fetch quotation details');
-
-      const data = await response.json();
-
-      // Set edit mode
+      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
       setIsEditMode(true);
-
-      // Populate form with existing data
       setQuotationFormData({
-        id: data.id, // Important: Store ID for update
-        rfqId: data.rfqId || '',
-        validTill: data.validTill || '',
-        groupName: data.groupName || '',
-        subGroupName: data.subGroupName || '',
-        projectId: data.projectId || '',
-        category: data.category || 'IT Equipment',
-        vendorId: data.vendorId || null,
-        vendorName: data.vendorName || '',
-        vendorContact: data.vendorContact || '',
-        vendorRating: data.vendorRating || 0,
-        deliveryTime: data.deliveryTime || '',
-        paymentTerms: data.paymentTerms || '',
-        warranty: data.warranty || '',
-        notes: data.notes || '',
-        status: data.status || 'New', // NEW: Include current status
-        items: data.items ? data.items.map(item => ({
-          id: item.id, // Store item ID for update
-          itemName: item.itemName || '',
-          description: item.description || '',
-          quantity: item.quantity || 1,
-          unitPrice: item.unitPrice || '',
-          taxPercent: item.taxPercent || 18,
-          included: true
-        })) : []
+        id: data.id, rfqId: data.rfqId || '', validTill: data.validTill || '',
+        groupName: data.groupName || '', subGroupName: data.subGroupName || '', projectId: data.projectId || '',
+        category: data.category || 'IT Equipment', vendorId: data.vendorId || null,
+        vendorName: data.vendorName || '', vendorContact: data.vendorContact || '',
+        vendorRating: data.vendorRating || 0, deliveryTime: data.deliveryTime || '',
+        paymentTerms: data.paymentTerms || '', warranty: data.warranty || '',
+        notes: data.notes || '', status: data.status || 'New',
+        items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', quantity: item.quantity || 1, unitPrice: item.unitPrice || '', taxPercent: item.taxPercent || 18, included: true })),
       });
-
-      // Set vendor selection state
-      if (data.vendorId) {
-        setShowNewVendorForm(false);
-        setSelectedVendorDetails({
-          id: data.vendorId,
-          name: data.vendorName,
-          phone: data.vendorContact
-        });
-      } else if (data.vendorName) {
-        setShowNewVendorForm(true);
-      }
-
-      // Set modal dropdown values
-      setModalGroupName(data.groupName || '');
-      setModalSubGroupName(data.subGroupName || '');
-      setModalProjectId(data.projectId || '');
-
-      // Clear file (can't edit existing file)
-      setSelectedFile(null);
-      setFilePreview(null);
-
-      // Fetch dropdown data
+      if (data.vendorId) { setShowNewVendorForm(false); setSelectedVendorDetails({ id: data.vendorId, name: data.vendorName, phone: data.vendorContact }); }
+      else if (data.vendorName) setShowNewVendorForm(true);
+      setModalGroupName(data.groupName || ''); setModalSubGroupName(data.subGroupName || ''); setModalProjectId(data.projectId || '');
+      setSelectedFile(null); setFilePreview(null);
       fetchModalGroups();
-
-      if (data.groupName) {
-        fetchModalSubGroups(data.groupName);
-        fetchVendors(data.groupName, null);
-
-        if (data.subGroupName) {
-          fetchModalProjects(data.groupName, data.subGroupName);
-          fetchVendors(data.groupName, data.subGroupName);
-        }
-      }
-
-      // Open modal
+      if (data.groupName) { fetchModalSubGroups(data.groupName); fetchVendors(data.groupName, null); if (data.subGroupName) { fetchModalProjects(data.groupName, data.subGroupName); fetchVendors(data.groupName, data.subGroupName); } }
       setShowUploadQuotationModal(true);
-
-    } catch (error) {
-      console.error('Failed to load quotation for editing:', error);
-      showError('Failed to load quotation details');
-    } finally {
-      setLoading(false);
-    }
+    } catch { showError('Failed to load quotation details'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * Update quotation status
-   */
   const handleUpdateStatus = async (quotationId, newStatus) => {
-    if (!canEdit && !canApprove) {
-      showError('You do not have permission to update quotation status');
-      return;
-    }
-
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, {
-        credentials: "include",
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ status: newStatus })
-      });
-
-      if (!response.ok) throw new Error('Failed to update status');
-
+      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, { credentials: 'include', method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ status: newStatus }) });
+      if (!res.ok) throw new Error();
       showSuccess(`Quotation ${newStatus.toLowerCase()} successfully`);
-      fetchQuotations();
-      fetchStats();
-      setShowDetailDrawer(false);
-
-    } catch (error) {
-      console.error('Failed to update status:', error);
-      showError('Failed to update quotation status');
-    } finally {
-      setLoading(false);
-    }
+      fetchQuotations(); fetchStats(); setShowDetailDrawer(false);
+    } catch { showError('Failed to update status'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * NEW: Delete quotation (soft delete)
-   */
   const handleDeleteQuotation = async (quotationId) => {
-    if (!canDelete) {
-      showError('You do not have permission to delete quotations');
-      return;
-    }
-
-    if (!window.confirm('Are you sure you want to delete this quotation? This action cannot be undone.')) {
-      return;
-    }
-
+    if (!window.confirm('Delete this quotation? This cannot be undone.')) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, {
-        credentials: "include",
-        method: 'DELETE',
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to delete quotation');
-
-      showSuccess('Quotation deleted successfully');
-      fetchQuotations();
-      fetchStats();
-      setShowDetailDrawer(false);
-
-    } catch (error) {
-      console.error('Failed to delete quotation:', error);
-      showError('Failed to delete quotation');
-    } finally {
-      setLoading(false);
-    }
+      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, { credentials: 'include', method: 'DELETE', headers: getAuthHeaders() });
+      if (!res.ok) throw new Error();
+      showSuccess('Quotation deleted'); fetchQuotations(); fetchStats(); setShowDetailDrawer(false);
+    } catch { showError('Failed to delete quotation'); }
+    finally { setLoading(false); }
   };
 
-  /**
-   * Upload new quotation
-   */
   const handleUploadQuotation = () => {
-    if (!canCreate) {
-      showError('You do not have permission to create quotations');
-      return;
-    }
-
-    setIsEditMode(false); // Set to create mode
-
-    setQuotationFormData({
-      rfqId: '',
-      validTill: '',
-      groupName: groupName || '',
-      subGroupName: subGroupName || '',
-      projectId: projectId || '',
-      category: 'IT Equipment',
-      vendorId: null,
-      vendorName: '',
-      vendorContact: '',
-      vendorRating: 0,
-      deliveryTime: '',
-      paymentTerms: '',
-      warranty: '',
-      notes: '',
-      status: 'New', // NEW: Default status for new quotations
-      items: []
-    });
-
-    setSelectedVendorDetails(null);
-    setShowNewVendorForm(false);
-    setVendors([]);
-    setOrderBookItems([]);
-
-    setModalGroupName(groupName || '');
-    setModalSubGroupName(subGroupName || '');
-    setModalProjectId(projectId || '');
-
-    setSelectedFile(null);
-    setFilePreview(null);
-
+    setIsEditMode(false);
+    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'IT Equipment', vendorId: null, vendorName: '', vendorContact: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', items: [] });
+    setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
+    setModalGroupName(groupName || ''); setModalSubGroupName(subGroupName || ''); setModalProjectId(projectId || '');
+    setSelectedFile(null); setFilePreview(null);
     fetchModalGroups();
-
-    if (groupName) {
-      fetchModalSubGroups(groupName);
-      fetchVendors(groupName, null);
-
-      if (subGroupName) {
-        fetchModalProjects(groupName, subGroupName);
-        fetchVendors(groupName, subGroupName);
-      }
-    }
-
-    if (projectId) {
-      fetchOrderBookItems(projectId);
-    }
-
+    if (groupName) { fetchModalSubGroups(groupName); fetchVendors(groupName, null); if (subGroupName) { fetchModalProjects(groupName, subGroupName); fetchVendors(groupName, subGroupName); } }
+    if (projectId) fetchOrderBookItems(projectId);
     setShowUploadQuotationModal(true);
   };
 
-  /**
-   * Save quotation (create or update)
-   */
   const handleSaveQuotation = async () => {
-    // Validation
-    if (!quotationFormData.groupName) {
-      showError('Group is required');
-      return;
-    }
-
+    if (!quotationFormData.groupName) { showError('Group is required'); return; }
     if (!quotationFormData.vendorId) {
-      if (!quotationFormData.vendorName || !quotationFormData.vendorName.trim()) {
-        showError('Vendor name is required when creating a new vendor');
-        return;
-      }
-      if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) {
-        showError('Please enter a valid 10-digit contact number for the new vendor');
-        return;
-      }
+      if (!quotationFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
+      if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
     }
-
-    if (!quotationFormData.validTill) {
-      showError('Valid until date is required');
-      return;
+    if (!quotationFormData.validTill) { showError('Valid until date is required'); return; }
+    const today = new Date(); today.setHours(0,0,0,0);
+    const vtd = new Date(quotationFormData.validTill); vtd.setHours(0,0,0,0);
+    if (vtd < today) { showError('Valid until date cannot be in the past'); return; }
+    const included = quotationFormData.items.filter(i => i.included !== false);
+    if (included.length === 0) { showError('Please include at least one item'); return; }
+    for (let i = 0; i < included.length; i++) {
+      const item = included[i];
+      if (!item.itemName?.trim()) { showError(`Item ${i+1}: Name is required`); return; }
+      if (!item.quantity || item.quantity <= 0) { showError(`Item ${i+1}: Quantity must be > 0`); return; }
+      if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showError(`Item ${i+1}: Unit price is required`); return; }
     }
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const validTillDate = new Date(quotationFormData.validTill);
-    validTillDate.setHours(0, 0, 0, 0);
-
-    if (validTillDate < today) {
-      showError('Valid until date cannot be in the past');
-      return;
-    }
-
-    if (quotationFormData.items.length === 0 || !quotationFormData.items[0].itemName) {
-      showError('Please add at least one item with a name');
-      return;
-    }
-
-    const includedItems = quotationFormData.items.filter(item => item.included !== false);
-    if (includedItems.length === 0) {
-      showError('Please include at least one item in the quotation');
-      return;
-    }
-
-    for (let i = 0; i < includedItems.length; i++) {
-      const item = includedItems[i];
-      if (!item.itemName || !item.itemName.trim()) {
-        showError(`Item ${i + 1}: Item name is required`);
-        return;
-      }
-      if (!item.quantity || item.quantity <= 0) {
-        showError(`Item ${i + 1}: Quantity must be greater than 0`);
-        return;
-      }
-      if (item.unitPrice === null || item.unitPrice === undefined || item.unitPrice === '' || item.unitPrice < 0) {
-        showError(`Item ${i + 1}: Unit price is required and must be 0 or greater`);
-        return;
-      }
-    }
-
     setLoading(true);
     try {
-      const formData = new FormData();
-
-      const cleanedItems = includedItems.map(item => ({
-        id: item.id || null, // Include ID for updates
-        itemName: item.itemName.trim(),
-        description: item.description ? item.description.trim() : '',
-        quantity: item.quantity,
-        unitPrice: parseFloat(item.unitPrice),
-        taxPercent: item.taxPercent
-      }));
-
-      const quotationData = {
-        vendorId: quotationFormData.vendorId || null,
-        vendorName: quotationFormData.vendorName ? quotationFormData.vendorName.trim() : null,
-        vendorContact: quotationFormData.vendorContact ? quotationFormData.vendorContact.trim() : null,
-        rfqId: quotationFormData.rfqId ? quotationFormData.rfqId.trim() : null,
-        validTill: quotationFormData.validTill,
-        groupName: quotationFormData.groupName,
-        subGroupName: quotationFormData.subGroupName || null,
-        projectId: quotationFormData.projectId || null,
-        category: quotationFormData.category,
-        deliveryTime: quotationFormData.deliveryTime ? quotationFormData.deliveryTime.trim() : null,
-        paymentTerms: quotationFormData.paymentTerms ? quotationFormData.paymentTerms.trim() : null,
-        warranty: quotationFormData.warranty ? quotationFormData.warranty.trim() : null,
-        notes: quotationFormData.notes ? quotationFormData.notes.trim() : null,
-        status: quotationFormData.status, // NEW: Include status
-        items: cleanedItems,
-        type: 'Procurement'
+      const fd = new FormData();
+      const qd = {
+        vendorId: quotationFormData.vendorId || null, vendorName: quotationFormData.vendorName?.trim() || null,
+        vendorContact: quotationFormData.vendorContact?.trim() || null, rfqId: quotationFormData.rfqId?.trim() || null,
+        validTill: quotationFormData.validTill, groupName: quotationFormData.groupName,
+        subGroupName: quotationFormData.subGroupName || null, projectId: quotationFormData.projectId || null,
+        category: quotationFormData.category, deliveryTime: quotationFormData.deliveryTime?.trim() || null,
+        paymentTerms: quotationFormData.paymentTerms?.trim() || null, warranty: quotationFormData.warranty?.trim() || null,
+        notes: quotationFormData.notes?.trim() || null, status: quotationFormData.status, type: 'Procurement',
+        items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent })),
       };
-
-      formData.append('quotation', new Blob([JSON.stringify(quotationData)], {
-        type: 'application/json'
-      }));
-
-      if (selectedFile) {
-        formData.append('file', selectedFile);
-      }
-
-      const url = isEditMode
-        ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}`
-        : `${API_BASE_URL}/api/quotations/procurement`;
-
+      fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
+      if (selectedFile) fd.append('file', selectedFile);
+      const url    = isEditMode ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}` : `${API_BASE_URL}/api/quotations/procurement`;
       const method = isEditMode ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        credentials: "include",
-        method: method,
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'X-User-Id': user?.id || localStorage.getItem('userId'),
-          'X-User-Role': user?.role || localStorage.getItem('userRole')
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to save quotation');
-      }
-
-      const data = await response.json();
-      showSuccess(isEditMode ? 'Quotation updated successfully!' : 'Quotation uploaded successfully!');
-      setShowUploadQuotationModal(false);
-      setSelectedFile(null);
-      setFilePreview(null);
-      setSelectedVendorDetails(null);
-      setVendors([]);
-      setOrderBookItems([]);
-      setShowNewVendorForm(false);
-      setIsEditMode(false);
-      fetchQuotations();
-      fetchStats();
-
-    } catch (error) {
-      console.error('Failed to save quotation:', error);
-      showError(error.message || 'Failed to save quotation');
-    } finally {
-      setLoading(false);
-    }
+      const res    = await fetch(url, { credentials: 'include', method, headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}`, 'X-User-Id': user?.id || localStorage.getItem('userId'), 'X-User-Role': user?.role || localStorage.getItem('userRole') }, body: fd });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
+      showSuccess(isEditMode ? 'Quotation updated!' : 'Quotation uploaded!');
+      setShowUploadQuotationModal(false); setSelectedFile(null); setFilePreview(null);
+      setSelectedVendorDetails(null); setVendors([]); setOrderBookItems([]); setShowNewVendorForm(false); setIsEditMode(false);
+      fetchQuotations(); fetchStats();
+    } catch (err) { showError(err.message || 'Failed to save quotation'); }
+    finally { setLoading(false); }
   };
 
-  // Add/Remove/Update item handlers
-  const handleAddQuotationItem = () => {
-    if (quotationFormData) {
-      setQuotationFormData({
-        ...quotationFormData,
-        items: [...quotationFormData.items, {
-          itemName: '',
-          description: '',
-          quantity: 1,
-          unitPrice: '', // Empty instead of 0
-          taxPercent: 18
-        }]
-      });
-    }
-  };
+  const handleAddQuotationItem    = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', quantity: 1, unitPrice: '', taxPercent: 18 }] }); };
+  const handleRemoveQuotationItem = (idx) => { if (quotationFormData?.items.length > 1) setQuotationFormData({ ...quotationFormData, items: quotationFormData.items.filter((_, i) => i !== idx) }); };
+  const handleUpdateQuotationItem = (idx, field, val) => { if (quotationFormData) { const items = [...quotationFormData.items]; items[idx] = { ...items[idx], [field]: val }; setQuotationFormData({ ...quotationFormData, items }); } };
 
-  const handleRemoveQuotationItem = (index) => {
-    if (quotationFormData && quotationFormData.items.length > 1) {
-      const newItems = quotationFormData.items.filter((_, i) => i !== index);
-      setQuotationFormData({ ...quotationFormData, items: newItems });
-    }
-  };
-
-  const handleUpdateQuotationItem = (index, field, value) => {
-    if (quotationFormData) {
-      const newItems = [...quotationFormData.items];
-      newItems[index] = { ...newItems[index], [field]: value };
-      setQuotationFormData({ ...quotationFormData, items: newItems });
-    }
-  };
-
-  // Calculate totals
   const calculateQuotationTotal = () => {
     if (!quotationFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
-
-    const subtotal = quotationFormData.items
-      .filter(item => item.included !== false)
-      .reduce((sum, item) => {
-        const qty = parseFloat(item.quantity) || 0;
-        const price = parseFloat(item.unitPrice) || 0;
-        return sum + (qty * price);
-      }, 0);
-
-    const taxAmount = quotationFormData.items
-      .filter(item => item.included !== false)
-      .reduce((sum, item) => {
-        const qty = parseFloat(item.quantity) || 0;
-        const price = parseFloat(item.unitPrice) || 0;
-        const tax = parseFloat(item.taxPercent) || 0;
-        const lineSubtotal = qty * price;
-        return sum + (lineSubtotal * tax / 100);
-      }, 0);
-
-    const total = subtotal + taxAmount;
-
-    return { subtotal, taxAmount, total };
+    const inc = quotationFormData.items.filter(i => i.included !== false);
+    const subtotal  = inc.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0);
+    const taxAmount = inc.reduce((s, i) => { const sub = (parseFloat(i.quantity)||0)*(parseFloat(i.unitPrice)||0); return s + sub * (parseFloat(i.taxPercent)||0) / 100; }, 0);
+    return { subtotal, taxAmount, total: subtotal + taxAmount };
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    if (!amount && amount !== 0) return '₹0.00';
-    const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
-    return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+  // ── Utility formatters ───────────────────────────────────────────────────
+  const formatCurrency  = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+  const formatDate      = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
+  const formatFileSize  = (b) => { if (!b) return '0 B'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(2) + ' KB'; return (b/1048576).toFixed(2) + ' MB'; };
 
-  // Format date
-  const formatDate = (dateStr) => {
-    if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
-  };
+  const getStatusBadgeClass = (s) => ({ 'New': 'procurement-quotation-received-badge-new', 'Under Review': 'procurement-quotation-received-badge-review', 'Shortlisted': 'procurement-quotation-received-badge-shortlisted', 'Approved': 'procurement-quotation-received-badge-approved', 'PO Created': 'procurement-quotation-received-badge-po-created', 'Rejected': 'procurement-quotation-received-badge-rejected', 'Expired': 'procurement-quotation-received-badge-expired' })[s] || '';
 
-  // Format file size
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '0 B';
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
-  };
-
-  // Get status badge class
-  const getStatusBadgeClass = (status) => {
-    const statusClasses = {
-      'New': 'procurement-quotation-received-badge-new',
-      'Under Review': 'procurement-quotation-received-badge-review',
-      'Shortlisted': 'procurement-quotation-received-badge-shortlisted',
-      'Approved': 'procurement-quotation-received-badge-approved',
-      'PO Created': 'procurement-quotation-received-badge-po-created',
-      'Rejected': 'procurement-quotation-received-badge-rejected',
-      'Expired': 'procurement-quotation-received-badge-expired'
-    };
-    return statusClasses[status] || '';
-  };
-
-  // Check if expiring soon
   const isExpiringSoon = (validTill) => {
     if (!validTill) return false;
-    const today = new Date();
-    const valid = new Date(validTill);
-    const diffDays = Math.ceil((valid - today) / (1000 * 60 * 60 * 24));
-    return diffDays <= 7 && diffDays > 0;
+    const diff = Math.ceil((new Date(validTill) - new Date()) / 86400000);
+    return diff <= 7 && diff > 0;
   };
 
-  // KPI data from stats
   const kpiData = stats ? [
-    { title: 'Total Quotations', value: stats.totalQuotations?.toString() || '0', icon: <FileText size={32} />, color: '#2563eb' },
-    { title: 'New', value: stats.newQuotations?.toString() || '0', icon: <Clock size={32} />, color: '#f59e0b' },
-    { title: 'Approved', value: stats.approved?.toString() || '0', icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Rejected', value: stats.rejected?.toString() || '0', icon: <XCircle size={32} />, color: '#ef4444' }
+    { title: 'Total Quotations', value: stats.totalQuotations?.toString() || '0', icon: <FileText size={28} />, color: '#2563eb' },
+    { title: 'New',              value: stats.newQuotations?.toString()   || '0', icon: <Clock size={28} />,     color: '#f59e0b' },
+    { title: 'Approved',         value: stats.approved?.toString()        || '0', icon: <CheckCircle size={28} />, color: '#22c55e' },
+    { title: 'Rejected',         value: stats.rejected?.toString()        || '0', icon: <XCircle size={28} />,   color: '#ef4444' },
   ] : [];
 
+  const visibleColumns = columns.filter(c => c.visible);
+
+  // ── Render column cell ───────────────────────────────────────────────────
+  const renderCell = (col, q) => {
+    switch (col.id) {
+      case 'quotationNo':    return <td className="procurement-quotation-received-table-id">{q.quoteNo}</td>;
+      case 'vendorId':       return <td>{q.vendorId || '—'}</td>;
+      case 'rfqId':          return <td>{q.rfqId || '—'}</td>;
+      case 'category':       return <td>{q.category || 'N/A'}</td>;
+      case 'quotationValue': return <td className="procurement-quotation-received-table-value">{formatCurrency(q.totalValue)}</td>;
+      case 'validUntil':     return (
+        <td className={isExpiringSoon(q.validTill) ? 'procurement-quotation-received-expiring' : ''}>
+          {formatDate(q.validTill)}
+          {isExpiringSoon(q.validTill) && <span className="procurement-quotation-received-warning-icon"><AlertCircle size={14} /></span>}
+        </td>
+      );
+      case 'file': return (
+        <td>{q.fileName ? <a href={`${API_BASE_URL}/api/quotations/${q.id}/file`} target="_blank" rel="noopener noreferrer" className="file-link" title={`${q.fileName} (${formatFileSize(q.fileSize)})`}>📄 {q.fileName.substring(0, 15)}…</a> : '—'}</td>
+      );
+      case 'status': return (
+        <td><span className={`procurement-quotation-received-badge ${getStatusBadgeClass(q.status)}`}>{q.status}</span></td>
+      );
+      case 'uploadedOn': return <td>{formatDate(q.uploadedAt)}</td>;
+      case 'actions':    return (
+        <td>
+          <div className="procurement-quotation-received-actions-cell">
+            <button className="procurement-quotation-received-action-btn" onClick={() => handleViewQuotation(q)} title="View"><Eye size={14} /></button>
+            <button className="procurement-quotation-received-action-btn" onClick={() => handleEditQuotation(q)} title="Edit" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Edit2 size={14} /></button>
+            {q.status === 'New' && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Shortlisted')} title="Shortlist"><Star size={14} /></button>}
+            {(q.status === 'Shortlisted' || q.status === 'New') && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Approved')} title="Approve"><Check size={14} /></button>}
+            {q.status === 'Approved' && <button className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn" onClick={() => handleOpenCreatePOModal(q)} title="Create PO"><ShoppingCart size={14} /></button>}
+            <button className="procurement-quotation-received-action-btn" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4, color: '#ef4444' }}><Trash2 size={14} /></button>
+          </div>
+        </td>
+      );
+      default: return <td>—</td>;
+    }
+  };
+
+  // ────────────────────────────────────────────────────────────────────────
   return (
     <div className="procurement-quotation-received-container">
       {loading && <CrmPreloader text="Loading..." />}
@@ -1209,47 +727,20 @@ const QuotationsReceived = () => {
 
       {/* Header */}
       <div className="procurement-quotation-received-header">
-        <div className="procurement-quotation-received-breadcrumb">
-          Dashboard &gt; Procurement &gt; Quotations Received
-        </div>
-
+        <div className="procurement-quotation-received-breadcrumb">Dashboard &gt; Procurement &gt; Quotations Received</div>
         <div className="page-header-with-filter">
-          <h1 className="procurement-quotation-received-title">
-            Quotations Received <span className="procurement-quotation-received-count">({totalElements})</span>
-          </h1>
-          <GroupProjectFilter
-            groupValue={groupName}
-            subGroupValue={subGroupName}
-            projectValue={projectId}
-            onChange={updateFilters}
-          />
+          <h1 className="procurement-quotation-received-title">Quotations Received <span className="procurement-quotation-received-count">({totalElements})</span></h1>
+          <GroupProjectFilter groupValue={groupName} subGroupValue={subGroupName} projectValue={projectId} onChange={updateFilters} />
         </div>
       </div>
 
       {/* Action Bar */}
       <div className="procurement-quotation-received-action-bar">
         <div className="procurement-quotation-received-search-filters">
-          <input
-            type="text"
-            placeholder="Search by Quotation No, Vendor ID, RFQ ID..."
-            className="procurement-quotation-received-search"
-            value={filters.search}
-            onChange={(e) => {
-              setFilters({ ...filters, search: e.target.value });
-              setCurrentPage(0);
-            }}
-            disabled={!canView}
-          />
-
-          <select
-            className="procurement-quotation-received-filter"
-            value={filters.status}
-            onChange={(e) => {
-              setFilters({ ...filters, status: e.target.value });
-              setCurrentPage(0);
-            }}
-            disabled={!canView}
-          >
+          <input type="text" placeholder="Search by Quotation No, Vendor ID, RFQ ID…" className="procurement-quotation-received-search" value={filters.search}
+            onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
+          <select className="procurement-quotation-received-filter" value={filters.status}
+            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
             <option value="all">All Status</option>
             <option value="New">New</option>
             <option value="Under Review">Under Review</option>
@@ -1262,13 +753,35 @@ const QuotationsReceived = () => {
         </div>
 
         <div className="procurement-quotation-received-actions">
-          <button
-            className="procurement-quotation-received-btn-primary"
-            onClick={handleUploadQuotation}
-            disabled={!canCreate}
-            style={{ opacity: canCreate ? 1 : 0.5, cursor: canCreate ? 'pointer' : 'not-allowed' }}
-          >
-            <Upload size={18} /> Upload Quotation
+          {/* Column manager */}
+          <div style={{ position: 'relative' }}>
+            <button className="procurement-quotation-received-btn-secondary procurement-btn-icon" onClick={() => setShowColumnManager(!showColumnManager)} title="Manage Columns">
+              <Columns size={15} style={{ marginRight: 6 }} /> Columns
+            </button>
+            {showColumnManager && (
+              <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.14)', minWidth: 220, padding: '12px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 14px 10px', borderBottom: '1px solid #f1f5f9', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>Manage Columns</span>
+                  <button onClick={() => setShowColumnManager(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 18, lineHeight: 1 }}>×</button>
+                </div>
+                {columns.map(col => (
+                  <label key={col.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 16px', cursor: col.fixed ? 'default' : 'pointer', fontSize: 13, color: '#334155', background: 'none' }}
+                    onMouseEnter={e => { if (!col.fixed) e.currentTarget.style.background = '#f8fafc'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'none'; }}>
+                    <input type="checkbox" checked={col.visible} onChange={() => toggleColumnVisibility(col.id)} disabled={col.fixed} style={{ width: 15, height: 15, cursor: col.fixed ? 'default' : 'pointer' }} />
+                    <span>{col.label}</span>
+                    {col.fixed && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 4, padding: '1px 5px' }}>fixed</span>}
+                  </label>
+                ))}
+                <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 6, padding: '8px 16px 0' }}>
+                  <button onClick={resetColumns} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Reset to default</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button className="procurement-quotation-received-btn-primary" onClick={handleUploadQuotation}>
+            <Upload size={15} style={{ marginRight: 6 }} /> Upload Quotation
           </button>
         </div>
       </div>
@@ -1276,8 +789,8 @@ const QuotationsReceived = () => {
       {/* KPI Cards */}
       {stats && (
         <div className="procurement-quotation-received-kpi-grid">
-          {kpiData.map((kpi, index) => (
-            <div key={index} className="procurement-quotation-received-kpi-card" style={{ borderTopColor: kpi.color }}>
+          {kpiData.map((kpi, i) => (
+            <div key={i} className="procurement-quotation-received-kpi-card" style={{ borderTopColor: kpi.color }}>
               <div className="procurement-quotation-received-kpi-icon">{kpi.icon}</div>
               <div className="procurement-quotation-received-kpi-content">
                 <div className="procurement-quotation-received-kpi-value">{kpi.value}</div>
@@ -1288,348 +801,134 @@ const QuotationsReceived = () => {
         </div>
       )}
 
-      {/* Quotations Table */}
+      {/* ── Main Table with draggable + sortable headers ── */}
       <div className="procurement-quotation-received-table-container">
-        <table className="procurement-quotation-received-table">
-          <thead>
-            <tr>
-              <th>Quotation No</th>
-              <th>Vendor ID</th>
-              <th>RFQ ID</th>
-              <th>Category</th>
-              <th>Quotation Value</th>
-              <th>Valid Until</th>
-              <th>File</th>
-              <th>Status</th>
-              <th>Uploaded On</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {quotations.length === 0 ? (
+        <div className="procurement-table-wrapper">
+          <table className="procurement-quotation-received-table">
+            <thead>
               <tr>
-                <td colSpan="10" className="empty-state">
-                  {canView ? 'No quotations found' : 'You do not have permission to view quotations'}
-                </td>
-              </tr>
-            ) : (
-              quotations.map((quotation) => (
-                <tr key={quotation.id} className="procurement-quotation-received-table-row">
-                  <td className="procurement-quotation-received-table-id">{quotation.quoteNo}</td>
-                  <td>{quotation.vendorId || '—'}</td>
-                  <td>{quotation.rfqId || '—'}</td>
-                  <td>{quotation.category || 'N/A'}</td>
-                  <td className="procurement-quotation-received-table-value">{formatCurrency(quotation.totalValue)}</td>
-                  <td className={isExpiringSoon(quotation.validTill) ? 'procurement-quotation-received-expiring' : ''}>
-                    {formatDate(quotation.validTill)}
-                    {isExpiringSoon(quotation.validTill) && (
-                      <span className="procurement-quotation-received-warning-icon">
-                        <AlertCircle size={16} />
-                      </span>
+                {visibleColumns.map((col, index) => (
+                  <th
+                    key={col.id}
+                    draggable={!col.fixed}
+                    onDragStart={(e) => handleColDragStart(e, index)}
+                    onDragOver={(e)  => handleColDragOver(e, index)}
+                    onDrop={(e)      => handleColDrop(e, index)}
+                    onDragEnd={handleColDragEnd}
+                    onClick={() => handleSort(col.id)}
+                    style={{
+                      cursor: SORTABLE_COLUMNS.has(col.id) ? 'pointer' : (col.fixed ? 'default' : 'grab'),
+                      userSelect: 'none',
+                      background: dragOverColIndex === index ? '#dbeafe' : undefined,
+                      transition: 'background 0.15s',
+                      whiteSpace: 'nowrap',
+                    }}
+                    title={SORTABLE_COLUMNS.has(col.id) ? `Sort by ${col.label}` : (col.fixed ? '' : 'Drag to reorder')}
+                  >
+                    {!col.fixed && (
+                      <GripVertical size={11} style={{ opacity: 0.28, marginRight: 3, verticalAlign: 'middle', display: 'inline-block' }} />
                     )}
-                  </td>
-                  <td>
-                    {quotation.fileName ? (
-                      <a href={`${API_BASE_URL}/api/quotations/${quotation.id}/file`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="file-link"
-                        title={`${quotation.fileName} (${formatFileSize(quotation.fileSize)})`}
-                      >
-                        📄 {quotation.fileName.substring(0, 15)}...
-                      </a>
-                    ) : '—'}
-                  </td>
-                  <td>
-                    <span className={`procurement-quotation-received-badge ${getStatusBadgeClass(quotation.status)}`}>
-                      {quotation.status}
-                    </span>
-                  </td>
-                  <td>{formatDate(quotation.uploadedAt)}</td>
-                  <td>
-                    <div className="procurement-quotation-received-actions-cell">
-                      <button
-                        className="procurement-quotation-received-action-btn"
-                        onClick={() => handleViewQuotation(quotation)}
-                        title="View Details"
-                        disabled={!canView}
-                        style={{ opacity: canView ? 1 : 0.4, cursor: canView ? 'pointer' : 'not-allowed' }}
-                      >
-                        <Eye size={16} />
-                      </button>
-
-                      {/* NEW: Edit Button */}
-                      <button
-                        className="procurement-quotation-received-action-btn"
-                        onClick={() => handleEditQuotation(quotation)}
-                        title="Edit Quotation"
-                        disabled={!canEdit || quotation.status === 'PO Created'}
-                        style={{
-                          opacity: (canEdit && quotation.status !== 'PO Created') ? 1 : 0.4,
-                          cursor: (canEdit && quotation.status !== 'PO Created') ? 'pointer' : 'not-allowed'
-                        }}
-                      >
-                        <Edit2 size={16} />
-                      </button>
-
-                      {quotation.status === 'New' && (
-                        <button
-                          className="procurement-quotation-received-action-btn"
-                          onClick={() => handleUpdateStatus(quotation.id, 'Shortlisted')}
-                          title="Shortlist"
-                          disabled={!canEdit}
-                          style={{ opacity: canEdit ? 1 : 0.4, cursor: canEdit ? 'pointer' : 'not-allowed' }}
-                        >
-                          <Star size={16} />
-                        </button>
-                      )}
-                      {(quotation.status === 'Shortlisted' || quotation.status === 'New') && (
-                        <button
-                          className="procurement-quotation-received-action-btn"
-                          onClick={() => handleUpdateStatus(quotation.id, 'Approved')}
-                          title="Approve"
-                          disabled={!canApprove}
-                          style={{ opacity: canApprove ? 1 : 0.4, cursor: canApprove ? 'pointer' : 'not-allowed' }}
-                        >
-                          <Check size={16} />
-                        </button>
-                      )}
-                      {quotation.status === 'Approved' && (
-                        <button
-                          className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn"
-                          onClick={() => handleOpenCreatePOModal(quotation)}
-                          title="Create PO"
-                          disabled={!canCreate}
-                          style={{ opacity: canCreate ? 1 : 0.4, cursor: canCreate ? 'pointer' : 'not-allowed' }}
-                        >
-                          <ShoppingCart size={16} />
-                        </button>
-                      )}
-
-                      {/* NEW: Delete Button */}
-                      <button
-                        className="procurement-quotation-received-action-btn"
-                        onClick={() => handleDeleteQuotation(quotation.id)}
-                        title="Delete Quotation"
-                        disabled={!canDelete || quotation.status === 'PO Created'}
-                        style={{
-                          opacity: (canDelete && quotation.status !== 'PO Created') ? 1 : 0.4,
-                          cursor: (canDelete && quotation.status !== 'PO Created') ? 'pointer' : 'not-allowed',
-                          color: '#ef4444'
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    {col.label}
+                    {SORTABLE_COLUMNS.has(col.id) && <SortIcon columnId={col.id} sortConfig={sortConfig} />}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {sortedQuotations.length === 0 ? (
+                <tr><td colSpan={visibleColumns.length} className="empty-state">No quotations found</td></tr>
+              ) : (
+                sortedQuotations.map(q => (
+                  <tr key={q.id} className="procurement-quotation-received-table-row">
+                    {visibleColumns.map(col => <React.Fragment key={col.id}>{renderCell(col, q)}</React.Fragment>)}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
         {/* Pagination */}
         <div className="table-footer">
           <div className="table-footer-left">
-            <span>
-              Showing {currentPage * pageSize + 1}-
-              {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} quotations
-            </span>
+            <span>Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} quotations</span>
             <div className="records-per-page">
               <label htmlFor="pageSize">Records per page:</label>
-              <select
-                id="pageSize"
-                value={pageSize}
-                onChange={(e) => {
-                  const newSize = parseInt(e.target.value);
-                  setPageSize(newSize);
-                  setCurrentPage(0);
-                }}
-                className="page-size-select"
-              >
-                <option value="20">20</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
+              <select id="pageSize" value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(0); }} className="page-size-select">
+                <option value="20">20</option><option value="50">50</option><option value="100">100</option>
               </select>
             </div>
           </div>
-
           <div className="pagination">
-            <button
-              className="page-btn"
-              onClick={() => setCurrentPage(p => p - 1)}
-              disabled={currentPage === 0}
-            >
-              Previous
-            </button>
-
-            {[...Array(Math.min(5, totalPages))].map((_, index) => {
-              const pageNum = currentPage < 3 ? index : currentPage + index - 2;
-              if (pageNum >= 0 && pageNum < totalPages) {
-                return (
-                  <button
-                    key={pageNum}
-                    className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum + 1}
-                  </button>
-                );
-              }
+            <button className="page-btn" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0}>Previous</button>
+            {[...Array(Math.min(5, totalPages))].map((_, i) => {
+              const pn = currentPage < 3 ? i : currentPage + i - 2;
+              if (pn >= 0 && pn < totalPages) return <button key={pn} className={`page-btn ${pn === currentPage ? 'active' : ''}`} onClick={() => setCurrentPage(pn)}>{pn + 1}</button>;
               return null;
             })}
-
-            <button
-              className="page-btn"
-              onClick={() => setCurrentPage(p => p + 1)}
-              disabled={currentPage >= totalPages - 1}
-            >
-              Next
-            </button>
+            <button className="page-btn" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages - 1}>Next</button>
           </div>
         </div>
       </div>
 
-      {/* Detail Drawer - UPDATED WITH DELETE BUTTON */}
+      {/* ── Detail Drawer ── */}
       {showDetailDrawer && selectedQuotation && (
-        <div className="procurement-quotation-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
-          <div className="procurement-quotation-received-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="procurement-quotation-received-drawer-overlay">
+          <div className="procurement-quotation-received-drawer">
             <div className="procurement-quotation-received-drawer-header">
               <div>
                 <h2>{selectedQuotation.quoteNo}</h2>
-                <p className="procurement-quotation-received-drawer-subtitle">
-                  Vendor ID: {selectedQuotation.vendorId || 'N/A'} |
-                  Category: {selectedQuotation.category || 'N/A'}
-                </p>
+                <p className="procurement-quotation-received-drawer-subtitle">Vendor ID: {selectedQuotation.vendorId || 'N/A'} | Category: {selectedQuotation.category || 'N/A'}</p>
               </div>
-              <button className="procurement-quotation-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>
-                ✕
-              </button>
+              <button className="procurement-quotation-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>✕</button>
             </div>
-
             <div className="procurement-quotation-received-drawer-content">
-              {/* Basic Information */}
               <div className="procurement-quotation-received-drawer-section">
                 <h3>Quotation Details</h3>
                 <div className="quotation-details-grid">
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Status:</span>
-                    <span className={`procurement-quotation-received-badge ${getStatusBadgeClass(selectedQuotation.status)}`}>
-                      {selectedQuotation.status}
-                    </span>
-                  </div>
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">RFQ ID:</span>
-                    <span>{selectedQuotation.rfqId || '—'}</span>
-                  </div>
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Valid Until:</span>
-                    <span>{formatDate(selectedQuotation.validTill)}</span>
-                  </div>
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Uploaded On:</span>
-                    <span>{formatDate(selectedQuotation.uploadedAt)}</span>
-                  </div>
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Total Value:</span>
-                    <span className="quotation-value">{formatCurrency(selectedQuotation.totalValue)}</span>
-                  </div>
-                  <div className="quotation-detail-item">
-                    <span className="quotation-detail-label">Vendor Contact:</span>
-                    <span>{selectedQuotation.vendorContact || '—'}</span>
-                  </div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">Status:</span><span className={`procurement-quotation-received-badge ${getStatusBadgeClass(selectedQuotation.status)}`}>{selectedQuotation.status}</span></div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">RFQ ID:</span><span>{selectedQuotation.rfqId || '—'}</span></div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">Valid Until:</span><span>{formatDate(selectedQuotation.validTill)}</span></div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">Uploaded On:</span><span>{formatDate(selectedQuotation.uploadedAt)}</span></div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">Total Value:</span><span className="quotation-value">{formatCurrency(selectedQuotation.totalValue)}</span></div>
+                  <div className="quotation-detail-item"><span className="quotation-detail-label">Vendor Contact:</span><span>{selectedQuotation.vendorContact || '—'}</span></div>
                 </div>
               </div>
-
-              {/* Project Assignment */}
               {(selectedQuotation.groupName || selectedQuotation.subGroupName || selectedQuotation.projectId) && (
                 <div className="procurement-quotation-received-drawer-section">
                   <h3>Project Assignment</h3>
                   <div className="quotation-details-grid">
-                    {selectedQuotation.groupName && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Group:</span>
-                        <span>{selectedQuotation.groupName}</span>
-                      </div>
-                    )}
-                    {selectedQuotation.subGroupName && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Sub Group:</span>
-                        <span>{selectedQuotation.subGroupName}</span>
-                      </div>
-                    )}
-                    {selectedQuotation.projectId && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Project ID:</span>
-                        <span>{selectedQuotation.projectId}</span>
-                      </div>
-                    )}
+                    {selectedQuotation.groupName    && <div className="quotation-detail-item"><span className="quotation-detail-label">Group:</span><span>{selectedQuotation.groupName}</span></div>}
+                    {selectedQuotation.subGroupName && <div className="quotation-detail-item"><span className="quotation-detail-label">Sub Group:</span><span>{selectedQuotation.subGroupName}</span></div>}
+                    {selectedQuotation.projectId    && <div className="quotation-detail-item"><span className="quotation-detail-label">Project ID:</span><span>{selectedQuotation.projectId}</span></div>}
                   </div>
                 </div>
               )}
-
-              {/* Terms & Conditions */}
               {(selectedQuotation.deliveryTime || selectedQuotation.paymentTerms || selectedQuotation.warranty) && (
                 <div className="procurement-quotation-received-drawer-section">
                   <h3>Terms & Conditions</h3>
                   <div className="quotation-details-grid">
-                    {selectedQuotation.deliveryTime && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Delivery Time:</span>
-                        <span>{selectedQuotation.deliveryTime}</span>
-                      </div>
-                    )}
-                    {selectedQuotation.paymentTerms && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Payment Terms:</span>
-                        <span>{selectedQuotation.paymentTerms}</span>
-                      </div>
-                    )}
-                    {selectedQuotation.warranty && (
-                      <div className="quotation-detail-item">
-                        <span className="quotation-detail-label">Warranty:</span>
-                        <span>{selectedQuotation.warranty}</span>
-                      </div>
-                    )}
+                    {selectedQuotation.deliveryTime && <div className="quotation-detail-item"><span className="quotation-detail-label">Delivery Time:</span><span>{selectedQuotation.deliveryTime}</span></div>}
+                    {selectedQuotation.paymentTerms && <div className="quotation-detail-item"><span className="quotation-detail-label">Payment Terms:</span><span>{selectedQuotation.paymentTerms}</span></div>}
+                    {selectedQuotation.warranty     && <div className="quotation-detail-item"><span className="quotation-detail-label">Warranty:</span><span>{selectedQuotation.warranty}</span></div>}
                   </div>
                 </div>
               )}
-
-              {/* Items Section */}
-              {selectedQuotation.items && selectedQuotation.items.length > 0 && (
+              {selectedQuotation.items?.length > 0 && (
                 <div className="procurement-quotation-received-drawer-section">
                   <h3>Quotation Items ({selectedQuotation.items.length})</h3>
                   <div className="quotation-items-table-wrapper">
                     <table className="quotation-items-table">
-                      <thead>
-                        <tr>
-                          <th>Line</th>
-                          <th>Item Name</th>
-                          <th>Description</th>
-                          <th>Quantity</th>
-                          <th>Unit Price</th>
-                          <th>Tax %</th>
-                          <th>Line Total</th>
-                        </tr>
-                      </thead>
+                      <thead><tr><th>Line</th><th>Item Name</th><th>Description</th><th>Qty</th><th>Unit Price</th><th>Tax %</th><th>Line Total</th></tr></thead>
                       <tbody>
-                        {selectedQuotation.items.map((item, index) => {
-                          const qty = parseFloat(item.quantity) || 0;
-                          const price = parseFloat(item.unitPrice) || 0;
-                          const tax = parseFloat(item.taxPercent) || 0;
-                          const subtotal = qty * price;
-                          const taxAmount = subtotal * (tax / 100);
-                          const total = subtotal + taxAmount;
-
+                        {selectedQuotation.items.map((item, idx) => {
+                          const qty = parseFloat(item.quantity) || 0, price = parseFloat(item.unitPrice) || 0, tax = parseFloat(item.taxPercent) || 0;
+                          const sub = qty * price, total = sub + sub * tax / 100;
                           return (
-                            <tr key={item.id || index}>
-                              <td>{item.lineNo || index + 1}</td>
-                              <td>{item.itemName}</td>
-                              <td>{item.description || '—'}</td>
-                              <td className="text-right">{qty}</td>
-                              <td className="text-right">{formatCurrency(price)}</td>
-                              <td className="text-center">{tax}%</td>
-                              <td className="text-right" style={{ fontWeight: '600' }}>{formatCurrency(total)}</td>
+                            <tr key={item.id || idx}>
+                              <td>{item.lineNo || idx + 1}</td><td>{item.itemName}</td><td>{item.description || '—'}</td>
+                              <td className="text-right">{qty}</td><td className="text-right">{formatCurrency(price)}</td>
+                              <td className="text-center">{tax}%</td><td className="text-right" style={{ fontWeight: 600 }}>{formatCurrency(total)}</td>
                             </tr>
                           );
                         })}
@@ -1638,144 +937,35 @@ const QuotationsReceived = () => {
                   </div>
                 </div>
               )}
-
-              {/* Notes */}
-              {selectedQuotation.notes && (
-                <div className="procurement-quotation-received-drawer-section">
-                  <h3>Notes</h3>
-                  <p style={{ color: '#475569', lineHeight: '1.6' }}>{selectedQuotation.notes}</p>
-                </div>
-              )}
-
-              {/* Attached Files */}
+              {selectedQuotation.notes && <div className="procurement-quotation-received-drawer-section"><h3>Notes</h3><p style={{ color: '#475569', lineHeight: 1.6 }}>{selectedQuotation.notes}</p></div>}
               <div className="procurement-quotation-received-drawer-section">
                 <h3>Attached Files</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {selectedQuotation.fileName ? (
-                    <div style={{
-                      padding: '12px',
-                      backgroundColor: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <FileText size={24} color="#64748b" />
-                        <div>
-                          <div style={{ fontWeight: '500', color: '#1e293b' }}>
-                            {selectedQuotation.fileName}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#64748b' }}>
-                            {formatFileSize(selectedQuotation.fileSize)} • Uploaded Quotation
-                          </div>
-                        </div>
-                      </div>
-
-                      <a href={`${API_BASE_URL}/api/quotations/${selectedQuotation.id}/file`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="procurement-quotation-received-btn-secondary"
-                        style={{ padding: '6px 12px', fontSize: '14px' }}
-                      >
-                        <Download size={16} /> View
-                      </a>
+                {selectedQuotation.fileName ? (
+                  <div style={{ padding: 12, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <FileText size={24} color="#64748b" />
+                      <div><div style={{ fontWeight: 500, color: '#1e293b' }}>{selectedQuotation.fileName}</div><div style={{ fontSize: 12, color: '#64748b' }}>{formatFileSize(selectedQuotation.fileSize)}</div></div>
                     </div>
-                  ) : (
-                    <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No quotation file attached</p>
-                  )}
-
-                  {selectedQuotation.poId && (
-                    <div style={{
-                      padding: '12px',
-                      backgroundColor: '#f0fdf4',
-                      border: '1px solid #bbf7d0',
-                      borderRadius: '6px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '10px'
-                    }}>
-                      <Package size={24} color="#22c55e" />
-                      <div>
-                        <div style={{ fontWeight: '500', color: '#166534' }}>
-                          Purchase Order Created
-                        </div>
-                        <div style={{ fontSize: '12px', color: '#16a34a' }}>
-                          PO ID: {selectedQuotation.poId}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                    <a href={`${API_BASE_URL}/api/quotations/${selectedQuotation.id}/file`} target="_blank" rel="noopener noreferrer" className="procurement-quotation-received-btn-secondary" style={{ padding: '6px 12px', fontSize: 14 }}><Download size={16} /> View</a>
+                  </div>
+                ) : <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No file attached</p>}
               </div>
-
-              {/* Action Buttons */}
               <div className="procurement-quotation-received-drawer-actions">
                 {selectedQuotation.status === 'Approved' && !selectedQuotation.poId && canCreate && (
-                  <button
-                    className="procurement-quotation-received-btn-primary"
-                    onClick={() => {
-                      setShowDetailDrawer(false);
-                      handleOpenCreatePOModal(selectedQuotation);
-                    }}
-                  >
-                    <ShoppingCart size={18} /> Create Purchase Order
-                  </button>
+                  <button className="procurement-quotation-received-btn-primary" onClick={() => { setShowDetailDrawer(false); handleOpenCreatePOModal(selectedQuotation); }}><ShoppingCart size={18} /> Create Purchase Order</button>
                 )}
-
-                {/* Edit Button in Drawer */}
                 {selectedQuotation.status !== 'PO Created' && canEdit && (
-                  <button
-                    className="procurement-quotation-received-btn-secondary"
-                    onClick={() => {
-                      setShowDetailDrawer(false);
-                      handleEditQuotation(selectedQuotation);
-                    }}
-                  >
-                    <Edit2 size={18} /> Edit Quotation
-                  </button>
+                  <button className="procurement-quotation-received-btn-secondary" onClick={() => { setShowDetailDrawer(false); handleEditQuotation(selectedQuotation); }}><Edit2 size={18} /> Edit Quotation</button>
                 )}
-
                 {selectedQuotation.status !== 'Approved' && selectedQuotation.status !== 'Rejected' && selectedQuotation.status !== 'PO Created' && (
                   <>
-                    {selectedQuotation.status === 'New' && canEdit && (
-                      <button
-                        className="procurement-quotation-received-btn-secondary"
-                        onClick={() => handleUpdateStatus(selectedQuotation.id, 'Shortlisted')}
-                      >
-                        <Star size={18} /> Shortlist
-                      </button>
-                    )}
-                    {(selectedQuotation.status === 'Shortlisted' || selectedQuotation.status === 'New') && canApprove && (
-                      <button
-                        className="procurement-quotation-received-btn-secondary"
-                        onClick={() => handleUpdateStatus(selectedQuotation.id, 'Approved')}
-                      >
-                        <Check size={18} /> Approve
-                      </button>
-                    )}
-                    {canEdit && (
-                      <button
-                        className="procurement-quotation-received-btn-secondary"
-                        style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}
-                        onClick={() => handleUpdateStatus(selectedQuotation.id, 'Rejected')}
-                      >
-                        <XCircle size={18} /> Reject
-                      </button>
-                    )}
+                    {selectedQuotation.status === 'New' && canEdit && <button className="procurement-quotation-received-btn-secondary" onClick={() => handleUpdateStatus(selectedQuotation.id, 'Shortlisted')}><Star size={18} /> Shortlist</button>}
+                    {(selectedQuotation.status === 'Shortlisted' || selectedQuotation.status === 'New') && canApprove && <button className="procurement-quotation-received-btn-secondary" onClick={() => handleUpdateStatus(selectedQuotation.id, 'Approved')}><Check size={18} /> Approve</button>}
+                    {canEdit && <button className="procurement-quotation-received-btn-secondary" style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }} onClick={() => handleUpdateStatus(selectedQuotation.id, 'Rejected')}><XCircle size={18} /> Reject</button>}
                   </>
                 )}
-
-                {/* NEW: Delete Button in Drawer */}
                 {selectedQuotation.status !== 'PO Created' && canDelete && (
-                  <button
-                    className="procurement-quotation-received-btn-secondary"
-                    style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }}
-                    onClick={() => handleDeleteQuotation(selectedQuotation.id)}
-                  >
-                    <Trash2 size={18} /> Delete Quotation
-                  </button>
+                  <button className="procurement-quotation-received-btn-secondary" style={{ backgroundColor: '#fee2e2', color: '#dc2626', borderColor: '#fecaca' }} onClick={() => handleDeleteQuotation(selectedQuotation.id)}><Trash2 size={18} /> Delete Quotation</button>
                 )}
               </div>
             </div>
@@ -1783,554 +973,251 @@ const QuotationsReceived = () => {
         </div>
       )}
 
-      {/* Upload/Edit Modal - CONTINUED IN NEXT FILE DUE TO LENGTH */}
-      {/* I'll create a separate continuation file for the modal */}
+      {/* ── Upload / Edit Quotation Modal ── */}
       {showUploadQuotationModal && quotationFormData && (
-        <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowUploadQuotationModal(false)}>
-          <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px' }}>
+        <div className="procurement-quotation-received-modal-overlay">
+          <div className="procurement-quotation-received-upload-modal" style={{ maxWidth: 1400 }}>
             <div className="procurement-quotation-received-modal-header">
-              <h2>{isEditMode ? 'Edit Quotation' : 'Upload New Quotation'}</h2>
-              {isEditMode && quotationFormData.quoteNo && (
-                <p style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>
-                  Quotation: {quotationFormData.quoteNo}
-                </p>
-              )}
-              <button className="procurement-quotation-received-modal-close" onClick={() => setShowUploadQuotationModal(false)}>
-                ✕
-              </button>
+              <div>
+                <h2>{isEditMode ? 'Edit Quotation' : 'Upload New Quotation'}</h2>
+                {isEditMode && quotationFormData.quoteNo && <p style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>Quotation: {quotationFormData.quoteNo}</p>}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Excel Import trigger button — only show when creating */}
+                {!isEditMode && (
+                  <button
+                    onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                    title="Import items from Excel"
+                  >
+                    <FileSpreadsheet size={15} /> Import Items from Excel
+                  </button>
+                )}
+                <button className="procurement-quotation-received-modal-close" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); }}>✕</button>
+              </div>
             </div>
 
             <div className="procurement-quotation-received-upload-form">
-
-              {/* PROJECT SELECTION AT TOP */}
-              <div className="procurement-quotation-received-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px' }}>
+              {/* Project Assignment */}
+              <div className="procurement-quotation-received-form-section" style={{ background: '#f8fafc', padding: 20, borderRadius: 8 }}>
                 <h3>📂 Project Assignment</h3>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Group *</label>
-                    <select
-                      value={modalGroupName}
-                      onChange={handleModalGroupChange}
-                      disabled={modalDropdownLoading.groups}
-                    >
-                      <option value="">
-                        {modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
-                      </option>
-                      {modalGroups.map((group, index) => (
-                        <option key={group.value || index} value={group.value}>
-                          {group.label}
-                        </option>
-                      ))}
+                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
+                      <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
+                      {modalGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
                     </select>
                   </div>
-
                   <div className="procurement-quotation-received-form-group">
                     <label>Sub Group</label>
-                    <select
-                      value={modalSubGroupName}
-                      onChange={handleModalSubGroupChange}
-                      disabled={!modalGroupName || modalDropdownLoading.subGroups}
-                    >
-                      <option value="">
-                        {modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
-                      </option>
-                      {modalSubGroups.map((subGroup, index) => (
-                        <option key={subGroup.value || index} value={subGroup.value}>
-                          {subGroup.label}
-                        </option>
-                      ))}
+                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
+                      <option value="">{modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub Group'}</option>
+                      {modalSubGroups.map((sg, i) => <option key={sg.value || i} value={sg.value}>{sg.label}</option>)}
                     </select>
                   </div>
-
                   <div className="procurement-quotation-received-form-group">
                     <label>Project (Optional)</label>
-                    <select
-                      value={modalProjectId}
-                      onChange={handleModalProjectChange}
-                      disabled={!modalSubGroupName || modalDropdownLoading.projects}
-                    >
-                      <option value="">
-                        {modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
-                      </option>
-                      {modalProjects.map((project, index) => (
-                        <option key={project.id || index} value={project.id}>
-                          {project.name}
-                        </option>
-                      ))}
+                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
+                      <option value="">{modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}</option>
+                      {modalProjects.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
                     </select>
                   </div>
                 </div>
-
-                {loadingOrderItems && (
-                  <div style={{ marginTop: '10px', color: '#3b82f6', fontSize: '13px' }}>
-                    🔄 Loading order book items...
-                  </div>
-                )}
-
-                {!isEditMode && orderBookItems.length > 0 && (
-                  <div style={{ marginTop: '10px', color: '#059669', fontSize: '13px' }}>
-                    ✅ Loaded {orderBookItems.length} items from order book
-                  </div>
-                )}
+                {loadingOrderItems && <div style={{ marginTop: 10, color: '#3b82f6', fontSize: 13 }}>🔄 Loading order book items…</div>}
+                {!isEditMode && orderBookItems.length > 0 && <div style={{ marginTop: 10, color: '#059669', fontSize: 13 }}>✅ Loaded {orderBookItems.length} items from order book</div>}
               </div>
 
-              {/* VENDOR SELECTION */}
+              {/* Vendor */}
               <div className="procurement-quotation-received-form-section">
                 <h3>🏢 Vendor Information</h3>
-
-                {/* Vendor Type Radio Buttons */}
-                <div style={{ marginBottom: '15px', display: 'flex', gap: '20px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="vendorType"
-                      checked={!showNewVendorForm}
-                      onChange={() => handleVendorTypeChange('existing')}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span>Select Existing Vendor</span>
-                  </label>
-
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      name="vendorType"
-                      checked={showNewVendorForm}
-                      onChange={() => handleVendorTypeChange('new')}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <span>Add New Vendor</span>
-                  </label>
+                <div style={{ marginBottom: 15, display: 'flex', gap: 20 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}><input type="radio" name="vendorType" checked={!showNewVendorForm} onChange={() => handleVendorTypeChange('existing')} style={{ marginRight: 8 }} /><span>Select Existing Vendor</span></label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}><input type="radio" name="vendorType" checked={showNewVendorForm}  onChange={() => handleVendorTypeChange('new')}      style={{ marginRight: 8 }} /><span>Add New Vendor</span></label>
                 </div>
-
-                {/* EXISTING VENDOR SELECTION */}
                 {!showNewVendorForm && (
                   <div className="procurement-quotation-received-form-row">
                     <div className="procurement-quotation-received-form-group">
                       <label>Select Vendor *</label>
-                      <select
-                        value={quotationFormData.vendorId || ''}
-                        onChange={handleVendorSelection}
-                        disabled={vendors.length === 0}
-                      >
-                        <option value="">
-                          {vendors.length === 0 ? 'No vendors available for selected group/subgroup' : 'Select Vendor'}
-                        </option>
-                        {vendors.map((vendor) => (
-                          <option key={vendor.id} value={vendor.id}>
-                            {vendor.name}
-                            {vendor.phone ? ` - ${vendor.phone}` : ''}
-                          </option>
-                        ))}
+                      <select value={quotationFormData.vendorId || ''} onChange={handleVendorSelection} disabled={vendors.length === 0}>
+                        <option value="">{vendors.length === 0 ? 'No vendors for selected group' : 'Select Vendor'}</option>
+                        {vendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.phone ? ` – ${v.phone}` : ''}</option>)}
                       </select>
-                      {vendors.length === 0 && modalGroupName && (
-                        <small style={{ color: '#ef4444', marginTop: '4px', display: 'block' }}>
-                          ⚠️ No vendors found for selected Group/Sub-Group. Please add a new vendor or select a different group.
-                        </small>
-                      )}
                     </div>
-
                     {quotationFormData.vendorId && selectedVendorDetails && (
                       <div className="procurement-quotation-received-form-group">
                         <label>Selected Vendor Details</label>
-                        <div style={{
-                          padding: '12px',
-                          backgroundColor: '#f0f9ff',
-                          border: '1px solid #bae6fd',
-                          borderRadius: '6px',
-                          fontSize: '14px',
-                          color: '#0c4a6e'
-                        }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <strong>📋 Name:</strong> {selectedVendorDetails.name}
-                          </div>
-                          {selectedVendorDetails.phone && (
-                            <div>
-                              <strong>📞 Contact:</strong> {selectedVendorDetails.phone}
-                            </div>
-                          )}
+                        <div style={{ padding: 12, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 6, fontSize: 14, color: '#0c4a6e' }}>
+                          <div style={{ marginBottom: 6 }}><strong>📋 Name:</strong> {selectedVendorDetails.name}</div>
+                          {selectedVendorDetails.phone && <div><strong>📞 Contact:</strong> {selectedVendorDetails.phone}</div>}
                         </div>
                       </div>
                     )}
                   </div>
                 )}
-
-                {/* NEW VENDOR FORM */}
                 {showNewVendorForm && (
-                  <div style={{
-                    padding: '20px',
-                    background: '#f0fdf4',
-                    border: '2px solid #86efac',
-                    borderRadius: '8px'
-                  }}>
+                  <div style={{ padding: 20, background: '#f0fdf4', border: '2px solid #86efac', borderRadius: 8 }}>
                     <div className="procurement-quotation-received-form-row">
                       <div className="procurement-quotation-received-form-group">
                         <label>Vendor Name *</label>
-                        <input
-                          type="text"
-                          value={quotationFormData.vendorName || ''}
-                          onChange={(e) => setQuotationFormData({
-                            ...quotationFormData,
-                            vendorName: e.target.value
-                          })}
-                          placeholder="Enter vendor name"
-                        />
+                        <input type="text" value={quotationFormData.vendorName || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorName: e.target.value })} placeholder="Enter vendor name" />
                       </div>
-
                       <div className="procurement-quotation-received-form-group">
                         <label>Contact Number * (10 digits)</label>
-                        <input
-                          type="tel"
-                          value={quotationFormData.vendorContact || ''}
-                          onChange={(e) => handleNewVendorContactChange(e.target.value)}
-                          placeholder="Enter 10-digit mobile"
-                          maxLength={10}
-                        />
-                        {quotationFormData.vendorContact && quotationFormData.vendorContact.length < 10 && (
-                          <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                            Contact must be exactly 10 digits
-                          </small>
-                        )}
+                        <input type="tel" value={quotationFormData.vendorContact || ''} onChange={(e) => handleNewVendorContactChange(e.target.value)} placeholder="10-digit mobile" maxLength={10} />
+                        {quotationFormData.vendorContact && quotationFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: 12, marginTop: 4, display: 'block' }}>Must be exactly 10 digits</small>}
                       </div>
-                    </div>
-
-                    <div style={{
-                      marginTop: '12px',
-                      padding: '10px',
-                      background: '#dbeafe',
-                      border: '1px solid #93c5fd',
-                      borderRadius: '6px',
-                      fontSize: '12px',
-                      color: '#1e40af'
-                    }}>
-                      💡 <strong>Note:</strong> This vendor will be automatically created in the system after quotation is saved.
                     </div>
                   </div>
                 )}
               </div>
 
-              {/* BASIC INFORMATION */}
+              {/* Basic Info */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Basic Information</h3>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>RFQ ID</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.rfqId}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, rfqId: e.target.value })}
-                      placeholder="e.g., RFQ-2024-001"
-                    />
+                    <input type="text" value={quotationFormData.rfqId} onChange={(e) => setQuotationFormData({ ...quotationFormData, rfqId: e.target.value })} placeholder="e.g., RFQ-2024-001" />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Category *</label>
-                    <select
-                      value={quotationFormData.category}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, category: e.target.value })}
-                    >
-                      <option value="IT Equipment">IT Equipment</option>
-                      <option value="Office Furniture">Office Furniture</option>
-                      <option value="Manufacturing">Manufacturing</option>
-                      <option value="Office Supplies">Office Supplies</option>
+                    <select value={quotationFormData.category} onChange={(e) => setQuotationFormData({ ...quotationFormData, category: e.target.value })}>
+                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
-
-                  {/* NEW: Status Selection */}
                   <div className="procurement-quotation-received-form-group">
                     <label>Status *</label>
-                    <select
-                      value={quotationFormData.status}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, status: e.target.value })}
-                    >
-                      <option value="New">New</option>
-                      <option value="Under Review">Under Review</option>
-                      <option value="Shortlisted">Shortlisted</option>
-                      <option value="Approved">Approved</option>
+                    <select value={quotationFormData.status} onChange={(e) => setQuotationFormData({ ...quotationFormData, status: e.target.value })}>
+                      <option value="New">New</option><option value="Under Review">Under Review</option>
+                      <option value="Shortlisted">Shortlisted</option><option value="Approved">Approved</option>
                       <option value="Rejected">Rejected</option>
-                      {isEditMode && quotationFormData.status === 'PO Created' && (
-                        <option value="PO Created">PO Created</option>
-                      )}
+                      {isEditMode && quotationFormData.status === 'PO Created' && <option value="PO Created">PO Created</option>}
                     </select>
-                    <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                      Set the current status of this quotation
-                    </small>
                   </div>
                 </div>
-
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Valid Till *</label>
-                    <input
-                      type="date"
-                      value={quotationFormData.validTill}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, validTill: e.target.value })}
-                      min={new Date().toISOString().split('T')[0]}
-                    />
+                    <input type="date" value={quotationFormData.validTill} onChange={(e) => setQuotationFormData({ ...quotationFormData, validTill: e.target.value })} min={new Date().toISOString().split('T')[0]} />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Payment Terms</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.paymentTerms}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, paymentTerms: e.target.value })}
-                      placeholder="e.g., Net 30"
-                    />
+                    <input type="text" value={quotationFormData.paymentTerms} onChange={(e) => setQuotationFormData({ ...quotationFormData, paymentTerms: e.target.value })} placeholder="e.g., Net 30" />
                   </div>
                 </div>
-
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Delivery Time</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.deliveryTime}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, deliveryTime: e.target.value })}
-                      placeholder="e.g., 2 weeks"
-                    />
+                    <input type="text" value={quotationFormData.deliveryTime} onChange={(e) => setQuotationFormData({ ...quotationFormData, deliveryTime: e.target.value })} placeholder="e.g., 2 weeks" />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Warranty</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.warranty}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, warranty: e.target.value })}
-                      placeholder="e.g., 1 year"
-                    />
+                    <input type="text" value={quotationFormData.warranty} onChange={(e) => setQuotationFormData({ ...quotationFormData, warranty: e.target.value })} placeholder="e.g., 1 year" />
                   </div>
                 </div>
-
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group" style={{ flex: '1 1 100%' }}>
                     <label>Notes</label>
-                    <input
-                      type="text"
-                      value={quotationFormData.notes}
-                      onChange={(e) => setQuotationFormData({ ...quotationFormData, notes: e.target.value })}
-                      placeholder="Additional notes"
-                    />
+                    <input type="text" value={quotationFormData.notes} onChange={(e) => setQuotationFormData({ ...quotationFormData, notes: e.target.value })} placeholder="Additional notes" />
                   </div>
                 </div>
               </div>
 
-              {/* FILE UPLOAD */}
+              {/* File Upload */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Attach Quotation File (Optional)</h3>
                 <div className="procurement-quotation-received-form-group">
-                  <input
-                    type="file"
-                    accept=".pdf,.jpg,.jpeg,.png"
-                    onChange={handleFileSelect}
-                    style={{ marginBottom: '10px' }}
-                  />
-                  {selectedFile && (
-                    <div className="file-info-box">
-                      📄 {selectedFile.name} ({formatFileSize(selectedFile.size)})
-                    </div>
-                  )}
-                  {filePreview && (
-                    <img src={filePreview} alt="Preview" style={{ maxWidth: '200px', marginTop: '10px' }} />
-                  )}
-                  <small style={{ color: '#64748b' }}>Max size: 5MB | Formats: PDF, JPG, PNG</small>
-                  {isEditMode && (
-                    <div style={{ marginTop: '8px', color: '#f59e0b', fontSize: '13px' }}>
-                      ℹ️ Uploading a new file will replace the existing file (if any)
-                    </div>
-                  )}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFileSelect} style={{ marginBottom: 10 }} />
+                  {selectedFile && <div className="file-info-box">📄 {selectedFile.name} ({formatFileSize(selectedFile.size)})</div>}
+                  {filePreview && <img src={filePreview} alt="Preview" style={{ maxWidth: 200, marginTop: 10 }} />}
+                  <small style={{ color: '#64748b' }}>Max 5MB | PDF, JPG, PNG</small>
+                  {isEditMode && <div style={{ marginTop: 8, color: '#f59e0b', fontSize: 13 }}>ℹ️ Uploading a new file will replace the existing one</div>}
                 </div>
               </div>
 
-              {/* ITEMS SECTION - WITH IMPROVED INPUTS */}
+              {/* Items */}
               <div className="procurement-quotation-received-form-section">
                 <div className="procurement-quotation-received-section-header">
                   <h3>
                     Quotation Items *
                     {quotationFormData.items.length > 0 && (
-                      <span style={{ fontSize: '14px', color: '#64748b', fontWeight: 'normal', marginLeft: '8px' }}>
+                      <span style={{ fontSize: 14, color: '#64748b', fontWeight: 'normal', marginLeft: 8 }}>
                         ({quotationFormData.items.filter(i => i.included !== false).length} of {quotationFormData.items.length} included)
                       </span>
                     )}
                   </h3>
-                  <button
-                    type="button"
-                    className="procurement-quotation-received-btn-add-item"
-                    onClick={handleAddQuotationItem}
-                  >
-                    + Add Item
-                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {!isEditMode && (
+                      <button type="button" onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>
+                        <FileSpreadsheet size={13} /> Import from Excel
+                      </button>
+                    )}
+                    <button type="button" className="procurement-quotation-received-btn-add-item" onClick={handleAddQuotationItem}>+ Add Item</button>
+                  </div>
                 </div>
 
                 {quotationFormData.items.length === 0 ? (
-                  <div style={{
-                    padding: '40px',
-                    textAlign: 'center',
-                    background: '#f8fafc',
-                    border: '2px dashed #cbd5e0',
-                    borderRadius: '8px'
-                  }}>
-                    <div style={{ fontSize: '48px', marginBottom: '10px' }}>📦</div>
-                    <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '5px', color: '#64748b' }}>
-                      No Items Added
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#94a3b8' }}>
-                      {isEditMode
-                        ? 'Click "Add Item" to add items to this quotation'
-                        : 'Select a project above to load items from order book, or click "Add Item" to add manually'}
+                  <div style={{ padding: 40, textAlign: 'center', background: '#f8fafc', border: '2px dashed #cbd5e0', borderRadius: 8 }}>
+                    <div style={{ fontSize: 48, marginBottom: 10 }}>📦</div>
+                    <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 5, color: '#64748b' }}>No Items Added</div>
+                    <div style={{ fontSize: 14, color: '#94a3b8' }}>
+                      {isEditMode ? 'Click "+ Add Item" to add items' : 'Click "Import from Excel" to bulk-add items, or "+ Add Item" to add manually'}
                     </div>
                   </div>
                 ) : (
                   <>
                     {!isEditMode && orderBookItems.length > 0 && (
-                      <div style={{
-                        marginBottom: '15px',
-                        padding: '12px',
-                        background: '#eff6ff',
-                        border: '1px solid #bfdbfe',
-                        borderRadius: '6px',
-                        fontSize: '13px',
-                        color: '#1e40af'
-                      }}>
-                        💡 <strong>Tip:</strong> Items loaded from order book. Uncheck items you don't want in this quotation,
-                        and enter vendor prices for included items.
+                      <div style={{ marginBottom: 15, padding: 12, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, fontSize: 13, color: '#1e40af' }}>
+                        💡 <strong>Tip:</strong> Items loaded from order book. Uncheck items you don't want and enter vendor prices.
                       </div>
                     )}
-
                     <div className="procurement-quotation-received-items-table-wrapper">
                       <table className="procurement-quotation-received-items-table">
                         <thead>
                           <tr>
-                            <th style={{ width: '50px' }}>Include</th>
-                            <th style={{ minWidth: '200px' }}>Item Name *</th>
-                            <th style={{ minWidth: '200px' }}>Description</th>
-                            <th style={{ width: '100px' }}>Quantity *</th>
-                            <th style={{ width: '130px' }}>Unit Price (₹) *</th>
-                            <th style={{ width: '100px' }}>GST %</th>
-                            <th style={{ width: '130px' }}>Line Total</th>
-                            <th style={{ width: '60px' }}>Action</th>
+                            <th style={{ width: 50 }}>Include</th>
+                            <th style={{ minWidth: 200 }}>Item Name *</th>
+                            <th style={{ minWidth: 200 }}>Description</th>
+                            <th style={{ width: 100 }}>Qty *</th>
+                            <th style={{ width: 130 }}>Unit Price (₹) *</th>
+                            <th style={{ width: 100 }}>GST %</th>
+                            <th style={{ width: 130 }}>Line Total</th>
+                            <th style={{ width: 60 }}>Del</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {quotationFormData.items.map((item, index) => {
-                            const included = item.included !== false;
-                            const qty = parseFloat(item.quantity) || 0;
+                          {quotationFormData.items.map((item, idx) => {
+                            const inc   = item.included !== false;
+                            const qty   = parseFloat(item.quantity) || 0;
                             const price = parseFloat(item.unitPrice) || 0;
-                            const tax = parseFloat(item.taxPercent) || 0;
-                            const lineTotal = qty * price;
-                            const taxAmount = lineTotal * (tax / 100);
-                            const totalWithTax = lineTotal + taxAmount;
-
+                            const tax   = parseFloat(item.taxPercent) || 0;
+                            const total = qty * price * (1 + tax / 100);
                             return (
-                              <tr
-                                key={index}
-                                style={{
-                                  background: included ? 'white' : '#f8fafc',
-                                  opacity: included ? 1 : 0.5
-                                }}
-                              >
-                                <td style={{ textAlign: 'center' }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={included}
-                                    onChange={() => toggleItemInclusion(index)}
-                                    style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                                  />
-                                </td>
+                              <tr key={idx} style={{ background: inc ? 'white' : '#f8fafc', opacity: inc ? 1 : 0.5 }}>
+                                <td style={{ textAlign: 'center' }}><input type="checkbox" checked={inc} onChange={() => toggleItemInclusion(idx)} style={{ width: 18, height: 18, cursor: 'pointer' }} /></td>
+                                <td><input type="text" placeholder="Item name" value={item.itemName} onChange={(e) => handleUpdateQuotationItem(idx, 'itemName', e.target.value)} className="table-input" disabled={!inc} /></td>
+                                <td><input type="text" placeholder="Description" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} /></td>
+                                <td><input type="number" min="1" placeholder="Qty" value={item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', parseFloat(e.target.value) || 1)} className="table-input text-center" disabled={!inc} /></td>
+                                <td><input type="number" min="0" step="0.01" placeholder="Price" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
                                 <td>
-                                  <input
-                                    type="text"
-                                    placeholder="Enter item name"
-                                    value={item.itemName}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'itemName', e.target.value)}
-                                    className="table-input"
-                                    disabled={!included}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="text"
-                                    placeholder="Enter description"
-                                    value={item.description}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'description', e.target.value)}
-                                    className="table-input"
-                                    disabled={!included}
-                                  />
-                                </td>
-                                <td>
-                                  <input
-                                    type="number"
-                                    min="1"
-                                    placeholder="Qty"
-                                    value={item.quantity}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'quantity', parseFloat(e.target.value) || 1)}
-                                    className="table-input text-center"
-                                    disabled={!included}
-                                  />
-                                </td>
-                                <td>
-                                  {/* IMPROVED: Empty placeholder, better UX */}
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    placeholder="Price"
-                                    value={item.unitPrice}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'unitPrice', e.target.value)}
-                                    className="table-input text-right"
-                                    disabled={!included}
-                                  />
-                                </td>
-                                <td>
-                                  <select
-                                    value={item.taxPercent}
-                                    onChange={(e) => handleUpdateQuotationItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
-                                    className="table-input"
-                                    disabled={!included}
-                                  >
-                                    <option value="0">0%</option>
-                                    <option value="5">5%</option>
-                                    <option value="12">12%</option>
-                                    <option value="18">18%</option>
-                                    <option value="28">28%</option>
+                                  <select value={item.taxPercent} onChange={(e) => handleUpdateQuotationItem(idx, 'taxPercent', parseFloat(e.target.value) || 0)} className="table-input" disabled={!inc}>
+                                    {[0,5,12,18,28].map(t => <option key={t} value={t}>{t}%</option>)}
                                   </select>
                                 </td>
-                                <td className="text-right" style={{
-                                  fontWeight: '600',
-                                  color: included ? '#1e293b' : '#94a3b8'
-                                }}>
-                                  {included && item.unitPrice ? formatCurrency(totalWithTax) : '-'}
-                                </td>
-                                <td className="text-center">
-                                  {quotationFormData.items.length > 1 && (
-                                    <button
-                                      type="button"
-                                      className="procurement-quotation-received-btn-remove-item"
-                                      onClick={() => handleRemoveQuotationItem(index)}
-                                      title="Remove item"
-                                    >
-                                      ✕
-                                    </button>
-                                  )}
-                                </td>
+                                <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(total) : '-'}</td>
+                                <td className="text-center">{quotationFormData.items.length > 1 && <button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button>}</td>
                               </tr>
                             );
                           })}
                         </tbody>
                       </table>
                     </div>
-
-                    {/* Quotation Summary */}
                     <div className="procurement-quotation-received-quote-summary">
-                      <div className="procurement-quotation-received-summary-row">
-                        <span>Subtotal:</span>
-                        <span>{formatCurrency(calculateQuotationTotal().subtotal)}</span>
-                      </div>
-                      <div className="procurement-quotation-received-summary-row">
-                        <span>Tax Amount:</span>
-                        <span>{formatCurrency(calculateQuotationTotal().taxAmount)}</span>
-                      </div>
-                      <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total">
-                        <span><strong>Total Value:</strong></span>
-                        <span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span>
-                      </div>
+                      <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(calculateQuotationTotal().subtotal)}</span></div>
+                      <div className="procurement-quotation-received-summary-row"><span>Tax Amount:</span><span>{formatCurrency(calculateQuotationTotal().taxAmount)}</span></div>
+                      <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total Value:</strong></span><span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span></div>
                     </div>
                   </>
                 )}
@@ -2338,211 +1225,188 @@ const QuotationsReceived = () => {
             </div>
 
             <div className="procurement-quotation-received-modal-actions">
-              <button
-                className="procurement-quotation-received-btn-primary"
-                onClick={handleSaveQuotation}
-                disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}
-              >
+              <button className="procurement-quotation-received-btn-primary" onClick={handleSaveQuotation} disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}>
                 {isEditMode ? 'Update Quotation' : 'Upload Quotation'}
               </button>
+              <button className="procurement-quotation-received-btn-secondary" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Excel Import Modal ── */}
+      {showImportModal && (
+        <div className="procurement-quotation-received-modal-overlay">
+          <div className="procurement-quotation-received-upload-modal" style={{ maxWidth: 900 }}>
+            <div className="procurement-quotation-received-modal-header">
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <FileSpreadsheet size={22} color="#2563eb" /> Import Quotation Items from Excel
+              </h2>
+              <button className="procurement-quotation-received-modal-close" onClick={handleCloseImportModal}>✕</button>
+            </div>
+
+            <div className="procurement-quotation-received-upload-form" style={{ padding: '20px 24px' }}>
+
+              {/* Step 1 */}
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ background: '#2563eb', color: '#fff', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>1</div>
+                    <div>
+                      <strong style={{ fontSize: 14, color: '#1e40af', display: 'block' }}>Download Quotation Items Template</strong>
+                      <span style={{ fontSize: 12, color: '#3b82f6' }}>Row 4 = headers, data from Row 5. Do not modify headers. Example rows in green.</span>
+                    </div>
+                  </div>
+                  <button onClick={handleDownloadTemplate} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>
+                    <Download size={14} /> Download Template
+                  </button>
+                </div>
+              </div>
+
+              {/* Step 2 */}
+              <div style={{ border: '2px dashed #93c5fd', borderRadius: 10, padding: 22, marginBottom: 16, textAlign: 'center', background: '#f8fafc' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, justifyContent: 'center' }}>
+                  <div style={{ background: '#1d4ed8', color: '#fff', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>2</div>
+                  <strong style={{ fontSize: 14, color: '#1e40af' }}>Upload Filled Excel File</strong>
+                </div>
+                <Upload size={32} color="#93c5fd" style={{ marginBottom: 10 }} />
+                <p style={{ color: '#64748b', margin: '0 0 14px 0', fontSize: 13 }}>All valid rows will populate the Items table in the quotation form</p>
+                <input ref={xlsxFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleXlsxFileSelect} style={{ display: 'none' }} />
+                <button onClick={() => xlsxFileRef.current?.click()} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '9px 22px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <Upload size={15} /> Browse File
+                </button>
+                {importFileName && <p style={{ marginTop: 10, color: '#2563eb', fontWeight: 600, fontSize: 13 }}>📎 {importFileName}</p>}
+              </div>
+
+              {/* Errors */}
+              {importErrors.length > 0 && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+                  <strong style={{ color: '#dc2626', display: 'block', marginBottom: 6 }}>⚠ Fix these errors before importing:</strong>
+                  <ul style={{ margin: 0, paddingLeft: 18, color: '#b91c1c', fontSize: 12, lineHeight: 1.7 }}>
+                    {importErrors.map((err, i) => <li key={i}>{err}</li>)}
+                  </ul>
+                </div>
+              )}
+
+              {/* Preview */}
+              {importPreview.length > 0 && importErrors.length === 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <strong style={{ color: '#1e40af', fontSize: 14 }}>✓ {importPreview.length} item{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
+                    <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: 12 }}>
+                      Est. total: {formatCurrency(importPreview.reduce((s, r) => s + (parseFloat(r.quantity)||0) * (parseFloat(r.unitPrice)||0) * (1 + (r.taxPercent||18)/100), 0))}
+                    </span>
+                  </div>
+                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, maxHeight: 280, overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
+                        <tr style={{ background: '#1e3a5f' }}>
+                          {['#', 'Item Name', 'Description', 'Qty', 'Unit Price', 'GST %', 'Line Total'].map(h => (
+                            <th key={h} style={{ padding: '9px 11px', textAlign: 'left', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.map((row, i) => {
+                          const lt = (parseFloat(row.quantity)||0) * (parseFloat(row.unitPrice)||0) * (1 + (row.taxPercent||18)/100);
+                          return (
+                            <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
+                              <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
+                              <td style={{ padding: '7px 11px', fontWeight: 600 }}>{row.itemName}</td>
+                              <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.description || '—'}</td>
+                              <td style={{ padding: '7px 11px', textAlign: 'center' }}>{row.quantity}</td>
+                              <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(row.unitPrice)}</td>
+                              <td style={{ padding: '7px 11px', textAlign: 'center' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '1px 7px', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{row.taxPercent}%</span></td>
+                              <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(lt)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="procurement-quotation-received-modal-actions">
+              <button className="procurement-quotation-received-btn-secondary" onClick={handleCloseImportModal}>Cancel</button>
               <button
-                className="procurement-quotation-received-btn-secondary"
-                onClick={() => {
-                  setShowUploadQuotationModal(false);
-                  setIsEditMode(false);
-                }}
+                className="procurement-quotation-received-btn-primary"
+                onClick={handleConfirmImport}
+                disabled={importPreview.length === 0 || importErrors.length > 0}
+                style={{ opacity: (importPreview.length === 0 || importErrors.length > 0) ? 0.5 : 1 }}
               >
-                Cancel
+                Import {importPreview.length > 0 ? `${importPreview.length} Item${importPreview.length !== 1 ? 's' : ''}` : 'Items'} into Form
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Create PO Modal - KEEP AS IS FROM ORIGINAL */}
+      {/* ── Create PO Modal ── */}
       {showCreatePOFromQuotationModal && poFormData && (
-        <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowCreatePOFromQuotationModal(false)}>
-          <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="procurement-quotation-received-modal-overlay">
+          <div className="procurement-quotation-received-upload-modal">
             <div className="procurement-quotation-received-modal-header">
-              <h2>Create Purchase Order</h2>
-              <p style={{ fontSize: '14px', color: '#64748b', marginTop: '4px' }}>
-                From Quotation: {poFormData.quoteNo}
-              </p>
-              <button className="procurement-quotation-received-modal-close" onClick={() => setShowCreatePOFromQuotationModal(false)}>
-                ✕
-              </button>
+              <div>
+                <h2>Create Purchase Order</h2>
+                <p style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>From Quotation: {poFormData.quoteNo}</p>
+              </div>
+              <button className="procurement-quotation-received-modal-close" onClick={() => setShowCreatePOFromQuotationModal(false)}>✕</button>
             </div>
-
             <div className="procurement-quotation-received-upload-form">
-              {/* PO Details */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Purchase Order Details</h3>
-
                 <div className="procurement-quotation-received-form-row">
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Vendor Contact</label>
-                    <input
-                      type="text"
-                      value={poFormData.vendorContact || 'N/A'}
-                      disabled
-                      style={{ backgroundColor: '#f1f5f9' }}
-                    />
-                  </div>
-                  <div className="procurement-quotation-received-form-group">
-                    <label>RFQ ID</label>
-                    <input
-                      type="text"
-                      value={poFormData.rfqId || 'N/A'}
-                      disabled
-                      style={{ backgroundColor: '#f1f5f9' }}
-                    />
-                  </div>
+                  <div className="procurement-quotation-received-form-group"><label>Vendor Contact</label><input type="text" value={poFormData.vendorContact || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
+                  <div className="procurement-quotation-received-form-group"><label>RFQ ID</label><input type="text" value={poFormData.rfqId || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
                 </div>
-
                 <div className="procurement-quotation-received-form-row">
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Order Date</label>
-                    <input
-                      type="date"
-                      value={poFormData.orderDate}
-                      onChange={(e) => setPOFormData({ ...poFormData, orderDate: e.target.value })}
-                    />
-                  </div>
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Expected Delivery *</label>
-                    <input
-                      type="date"
-                      value={poFormData.expectedDelivery}
-                      onChange={(e) => setPOFormData({ ...poFormData, expectedDelivery: e.target.value })}
-                      min={poFormData.orderDate}
-                    />
-                  </div>
+                  <div className="procurement-quotation-received-form-group"><label>Order Date</label><input type="date" value={poFormData.orderDate} onChange={(e) => setPOFormData({ ...poFormData, orderDate: e.target.value })} /></div>
+                  <div className="procurement-quotation-received-form-group"><label>Expected Delivery *</label><input type="date" value={poFormData.expectedDelivery} onChange={(e) => setPOFormData({ ...poFormData, expectedDelivery: e.target.value })} min={poFormData.orderDate} /></div>
                 </div>
-
                 <div className="procurement-quotation-received-form-row">
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Payment Terms</label>
-                    <input
-                      type="text"
-                      value={poFormData.paymentTerms}
-                      onChange={(e) => setPOFormData({ ...poFormData, paymentTerms: e.target.value })}
-                      placeholder="e.g., Net 30"
-                    />
-                  </div>
-                  <div className="procurement-quotation-received-form-group">
-                    <label>Shipping Address</label>
-                    <input
-                      type="text"
-                      value={poFormData.shippingAddress}
-                      onChange={(e) => setPOFormData({ ...poFormData, shippingAddress: e.target.value })}
-                      placeholder="Enter shipping address"
-                    />
-                  </div>
+                  <div className="procurement-quotation-received-form-group"><label>Payment Terms</label><input type="text" value={poFormData.paymentTerms} onChange={(e) => setPOFormData({ ...poFormData, paymentTerms: e.target.value })} placeholder="e.g., Net 30" /></div>
+                  <div className="procurement-quotation-received-form-group"><label>Shipping Address</label><input type="text" value={poFormData.shippingAddress} onChange={(e) => setPOFormData({ ...poFormData, shippingAddress: e.target.value })} placeholder="Enter shipping address" /></div>
                 </div>
-
-                <div className="procurement-quotation-received-form-group">
-                  <label>Notes</label>
-                  <textarea
-                    rows={2}
-                    value={poFormData.notes}
-                    onChange={(e) => setPOFormData({ ...poFormData, notes: e.target.value })}
-                    placeholder="Additional notes"
-                    style={{ width: '100%', padding: '8px', borderRadius: '4px', border: '1px solid #e2e8f0' }}
-                  />
-                </div>
+                <div className="procurement-quotation-received-form-group"><label>Notes</label><textarea rows={2} value={poFormData.notes} onChange={(e) => setPOFormData({ ...poFormData, notes: e.target.value })} placeholder="Additional notes" style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #e2e8f0' }} /></div>
               </div>
-
-              {/* Items Section */}
               <div className="procurement-quotation-received-form-section">
                 <h3>Select Items & Quantities</h3>
-                <p style={{ fontSize: '14px', color: '#64748b', marginBottom: '12px' }}>
-                  Adjust quantities as needed (cannot exceed quoted quantities)
-                </p>
-
+                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>Adjust quantities as needed (cannot exceed quoted quantities)</p>
                 <div className="procurement-quotation-received-items-table-wrapper">
                   <table className="procurement-quotation-received-items-table">
-                    <thead>
-                      <tr>
-                        <th style={{ minWidth: '200px' }}>Item Name</th>
-                        <th style={{ minWidth: '200px' }}>Description</th>
-                        <th style={{ width: '120px' }}>Quoted Qty</th>
-                        <th style={{ width: '120px' }}>PO Qty *</th>
-                        <th style={{ width: '130px' }}>Unit Price (₹)</th>
-                        <th style={{ width: '100px' }}>GST %</th>
-                        <th style={{ width: '130px' }}>Line Total</th>
-                      </tr>
-                    </thead>
+                    <thead><tr><th>Item Name</th><th>Description</th><th>Quoted Qty</th><th>PO Qty *</th><th>Unit Price (₹)</th><th>GST %</th><th>Line Total</th></tr></thead>
                     <tbody>
-                      {poFormData.items.map((item, index) => (
-                        <tr key={index}>
-                          <td>{item.itemName}</td>
-                          <td>{item.description || '—'}</td>
-                          <td className="text-center" style={{ fontWeight: '600' }}>
-                            {item.quotedQuantity}
-                          </td>
-                          <td>
-                            <input
-                              type="number"
-                              min="0"
-                              max={item.quotedQuantity}
-                              placeholder="Qty"
-                              value={item.selectedQuantity}
-                              onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)}
-                              className="table-input text-center"
-                              style={{ fontWeight: '600' }}
-                            />
-                          </td>
+                      {poFormData.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td>{item.itemName}</td><td>{item.description || '—'}</td>
+                          <td className="text-center" style={{ fontWeight: 600 }}>{item.quotedQuantity}</td>
+                          <td><input type="number" min="0" max={item.quotedQuantity} value={item.selectedQuantity} onChange={(e) => handleUpdatePOItemQuantity(idx, e.target.value)} className="table-input text-center" style={{ fontWeight: 600 }} /></td>
                           <td className="text-right">{formatCurrency(item.unitPrice)}</td>
                           <td className="text-center">{item.taxPercent}%</td>
-                          <td className="text-right" style={{ fontWeight: '600', color: '#1e293b' }}>
-                            {formatCurrency(item.lineTotal)}
-                          </td>
+                          <td className="text-right" style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(item.lineTotal)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-
-                {/* PO Summary */}
                 <div className="procurement-quotation-received-quote-summary">
-                  <div className="procurement-quotation-received-summary-row">
-                    <span>Subtotal:</span>
-                    <span>{formatCurrency(calculatePOTotal().subtotal)}</span>
-                  </div>
-                  <div className="procurement-quotation-received-summary-row">
-                    <span>Tax Amount:</span>
-                    <span>{formatCurrency(calculatePOTotal().taxAmount)}</span>
-                  </div>
-                  <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total">
-                    <span><strong>Total PO Value:</strong></span>
-                    <span><strong>{formatCurrency(calculatePOTotal().total)}</strong></span>
-                  </div>
+                  <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(calculatePOTotal().subtotal)}</span></div>
+                  <div className="procurement-quotation-received-summary-row"><span>Tax Amount:</span><span>{formatCurrency(calculatePOTotal().taxAmount)}</span></div>
+                  <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total PO Value:</strong></span><span><strong>{formatCurrency(calculatePOTotal().total)}</strong></span></div>
                 </div>
               </div>
             </div>
-
             <div className="procurement-quotation-received-modal-actions">
-              <button
-                className="procurement-quotation-received-btn-primary"
-                onClick={handleCreatePOFromQuotation}
-                disabled={!poFormData.expectedDelivery || !poFormData.items.some(i => i.selectedQuantity > 0)}
-              >
-                Create Purchase Order
-              </button>
-              <button
-                className="procurement-quotation-received-btn-secondary"
-                onClick={() => setShowCreatePOFromQuotationModal(false)}
-              >
-                Cancel
-              </button>
+              <button className="procurement-quotation-received-btn-primary" onClick={handleCreatePOFromQuotation} disabled={!poFormData.expectedDelivery || !poFormData.items.some(i => i.selectedQuantity > 0)}>Create Purchase Order</button>
+              <button className="procurement-quotation-received-btn-secondary" onClick={() => setShowCreatePOFromQuotationModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-
 };
-
 
 export default QuotationsReceived;

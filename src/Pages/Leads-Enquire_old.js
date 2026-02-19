@@ -1,16 +1,16 @@
-// Leads-Enquiries.js - Updated with Grid View and Enhancements
+// Leads-Enquiries.js - Updated with All Enhancements
 import React, { useState, useEffect, useRef } from 'react';
-import '../pages-css/Leads-Enquire1.css';
-import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
-import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import '../pages-css/Leads-Enquire_old.css';
+import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
+import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
-import useToast from '../hooks/useToast';
-import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
+import useToast from '../hooks/useToast.js';
+import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
-import LeadTimelineModal from './../components/Leads/LeadTimelineModal.js';
-import AddFollowupModal from './../components/Leads/AddFollowupModal.js';
-import CreateProposalModal from './../components/Leads/CreateProposalModal';
-import { TiInfo } from 'react-icons/ti';
+import LeadTimelineModal from '../components/Leads/LeadTimelineModal.js';
+import AddFollowupModal from '../components/Leads/AddFollowupModal.js';
+import CreateProposalModal from '../components/Leads/CreateProposalModal.js';
+import { TiInfo } from 'react-icons/ti'; // Import the info icon
 import { TiInfoLarge } from "react-icons/ti";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -92,7 +92,6 @@ function LeadsEnquiries() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState('');
   const [sortDirection, setSortDirection] = useState('asc');
-  const [viewMode, setViewMode] = useState('table'); // 'table' or 'grid'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [users, setUsers] = useState([]);
@@ -640,29 +639,6 @@ function LeadsEnquiries() {
     a.click();
   };
 
-  // Get sort icon
-  const getSortIcon = (column) => {
-    if (sortColumn !== column) {
-      return (
-        <svg className="sort-icon sort-icon-default" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
-        </svg>
-      );
-    }
-    if (sortDirection === 'asc') {
-      return (
-        <svg className="sort-icon sort-icon-active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-        </svg>
-      );
-    }
-    return (
-      <svg className="sort-icon sort-icon-active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-      </svg>
-    );
-  };
-
   // Check if user has no permissions at all
   if (!canView) {
     return (
@@ -701,6 +677,7 @@ function LeadsEnquiries() {
       <div className="leads-enquiries-header page-header-with-filter">
         <div className="leads-enquiries-title-with-icon">
           <h1>Leads </h1>
+          {/* <TiInfoLarge className="leads-enquiries-info-icon" title="Manage your leads and enquiries" /> */}
         </div>
         <GroupCategoryFilter
           groupValue={groupName}
@@ -785,372 +762,184 @@ function LeadsEnquiries() {
         </div>
       </div>
 
-      {/* View Toggle - Positioned above table/grid */}
-      <div className="leads-enquiries-view-toggle-container">
-        <div className="leads-enquiries-view-toggle">
-          <button
-            className={`leads-enquiries-view-btn ${viewMode === 'table' ? 'active' : ''}`}
-            onClick={() => setViewMode('table')}
-            title="Table View"
-          >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-            Table
-          </button>
-          <button
-            className={`leads-enquiries-view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-            onClick={() => setViewMode('grid')}
-            title="Grid View"
-          >
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-            Grid
-          </button>
+      <div className="leads-enquiries-table-card">
+        <div className="leads-enquiries-table-wrapper">
+          <table className="leads-enquiries-table">
+            <thead>
+              <tr>
+                {/* <th onClick={() => handleSort('leadCode')}>Lead ID</th> */}
+                <th onClick={() => handleSort('name')}>Client Name</th>
+                <th>Email</th>
+                <th>Phone</th>
+                {/* <th>Source</th> */}
+                <th>Group</th>
+                {/* <th>Category</th> */}
+                <th>Priority</th>
+                <th>Status</th>
+                {/* <th>Follow-Ups</th> */}
+                {/* <th>Assigned To</th> */}
+                {/* <th onClick={() => handleSort('createdAt')}>Created At</th> */}
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {currentLeads.length === 0 ? (
+                <tr>
+                  <td colSpan="13" className="text-center py-4">No leads found</td>
+                </tr>
+              ) : (
+                currentLeads.map((lead) => (
+                  <tr key={lead.id}>
+                    {/* <td className="leads-enquiries-font-medium">{lead.leadCode}</td> */}
+                    <td className="leads-enquiries-font-medium">{lead.name}</td>
+                    <td>{lead.email}</td>
+                    <td>{lead.phone}</td>
+                    {/* <td>{lead.source}</td> */}
+                    <td>{lead.groupName || '-'}</td>
+                    {/* <td>{lead.subGroupName || '-'}</td> */}
+                    <td>
+                      <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>
+                        {lead.priority}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>
+                        {lead.status}
+                      </span>
+                    </td>
+                    {/* <td style={{ textAlign: "center" }}>
+                      {lead.pendingFollowupsCount > 0 ? (
+                        <span className="badge badge-orange">
+                          {lead.pendingFollowupsCount} Pending
+                        </span>
+                      ) : (
+                        "N/A"
+                      )}
+                    </td> */}
+
+                    {/* <td style={{ textAlign: lead.assignedToName ? "left" : "center" }}>
+                      {lead.assignedToName || "N/A"}
+                    </td> */}
+
+                    {/* <td>
+                      {lead.createdAt
+                        ? new Date(lead.createdAt)
+                          .toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit",
+                            hour12: false,
+                          })
+                          .replaceAll("/", "-")
+                          .replace(",", "")
+                        : "-"}
+                    </td> */}
+
+
+                    <td>
+                      <div className="leads-enquiries-action-buttons-cell">
+                        {canView && (
+                          <button
+                            className="leads-enquiries-action-btn leads-enquiries-action-view"
+                            onClick={() => handleView(lead)}
+                            title="View"
+                          >
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
+                        )}
+
+                        <button
+                          className="leads-enquiries-action-btn leads-enquiries-action-timeline"
+                          onClick={() => handleViewTimeline(lead)}
+                          title="View Timeline"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleAddFollowup(lead)}
+                          title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
+                          disabled={!canCreate}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleCreateProposal(lead)}
+                          title={!canCreate ? 'No permission to create proposals' : 'Create Proposal'}
+                          disabled={!canCreate}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleEdit(lead)}
+                          title={!canEdit ? 'No permission to edit' : 'Edit'}
+                          disabled={!canEdit}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+
+                        <button
+                          className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
+                          onClick={() => handleDelete(lead)}
+                          title={!canDelete ? 'No permission to delete' : 'Delete'}
+                          disabled={!canDelete}
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="leads-enquiries-pagination">
+          <div className="leads-enquiries-pagination-info">
+            Showing {startIndex + 1} to {Math.min(endIndex, leads.length)} of {leads.length} entries
+          </div>
+          <div className="leads-enquiries-pagination-controls">
+            <select className="leads-enquiries-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
+              <option value={10}>10 rows</option>
+              <option value={25}>25 rows</option>
+              <option value={50}>50 rows</option>
+            </select>
+            <div className="leads-enquiries-pagination-buttons">
+              <button className="leads-enquiries-pagination-btn" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
+                Previous
+              </button>
+              <span className="leads-enquiries-pagination-current">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button className="leads-enquiries-pagination-btn" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Conditional Rendering: Table View or Grid View */}
-      {viewMode === 'table' ? (
-        <div className="leads-enquiries-table-card">
-          <div className="leads-enquiries-table-wrapper">
-            <table className="leads-enquiries-table">
-              <thead>
-                <tr>
-                  <th onClick={() => handleSort('name')}>
-                    <div className="th-content">
-                      Client Name
-                      {getSortIcon('name')}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('email')}>
-                    <div className="th-content">
-                      Email
-                      {getSortIcon('email')}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('phone')}>
-                    <div className="th-content">
-                      Phone
-                      {getSortIcon('phone')}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('groupName')}>
-                    <div className="th-content">
-                      Group
-                      {getSortIcon('groupName')}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('priority')}>
-                    <div className="th-content">
-                      Priority
-                      {getSortIcon('priority')}
-                    </div>
-                  </th>
-                  <th onClick={() => handleSort('status')}>
-                    <div className="th-content">
-                      Status
-                      {getSortIcon('status')}
-                    </div>
-                  </th>
-                  <th className="actions-column-header">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentLeads.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="text-center py-4">No leads found</td>
-                  </tr>
-                ) : (
-                  currentLeads.map((lead) => (
-                    <tr key={lead.id}>
-                      <td className="leads-enquiries-font-medium">{lead.name}</td>
-                      <td>{lead.email}</td>
-                      <td>{lead.phone}</td>
-                      <td>{lead.groupName || '-'}</td>
-                      <td>
-                        <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>
-                          {lead.priority}
-                        </span>
-                      </td>
-                      <td>
-                        <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>
-                          {lead.status}
-                        </span>
-                      </td>
-                      <td>
-                        <div className="leads-enquiries-action-buttons-cell">
-                          {canView && (
-                            <button
-                              className="leads-enquiries-action-btn leads-enquiries-action-view"
-                              onClick={() => handleView(lead)}
-                              title="View"
-                            >
-                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                          )}
-
-                          <button
-                            className="leads-enquiries-action-btn leads-enquiries-action-timeline"
-                            onClick={() => handleViewTimeline(lead)}
-                            title="View Timeline"
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleAddFollowup(lead)}
-                            title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
-                            disabled={!canCreate}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleCreateProposal(lead)}
-                            title={!canCreate ? 'No permission to create proposals' : 'Create Proposal'}
-                            disabled={!canCreate}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleEdit(lead)}
-                            title={!canEdit ? 'No permission to edit' : 'Edit'}
-                            disabled={!canEdit}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`}
-                            onClick={() => handleDelete(lead)}
-                            title={!canDelete ? 'No permission to delete' : 'Delete'}
-                            disabled={!canDelete}
-                          >
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="leads-enquiries-pagination">
-            <div className="leads-enquiries-pagination-info">
-              Showing {startIndex + 1} to {Math.min(endIndex, leads.length)} of {leads.length} entries
-            </div>
-            <div className="leads-enquiries-pagination-controls">
-              <select className="leads-enquiries-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
-                <option value={10}>10 rows</option>
-                <option value={25}>25 rows</option>
-                <option value={50}>50 rows</option>
-              </select>
-              <div className="leads-enquiries-pagination-buttons">
-                <button className="leads-enquiries-pagination-btn" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1}>
-                  Previous
-                </button>
-                <span className="leads-enquiries-pagination-current">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button className="leads-enquiries-pagination-btn" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages}>
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* GRID VIEW */
-        <div className="leads-enquiries-grid-container">
-          <div className="leads-enquiries-grid">
-            {currentLeads.map((lead) => (
-              <div key={lead.id} className="leads-enquiries-card">
-                <div className="leads-enquiries-card-header">
-                  <div className="leads-enquiries-card-id">{lead.leadCode}</div>
-                  <div className="leads-enquiries-card-badges">
-                    <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>
-                      {lead.priority}
-                    </span>
-                    <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>
-                      {lead.status}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="leads-enquiries-card-body">
-                  <h3 className="leads-enquiries-card-title">{lead.name}</h3>
-                  
-                  <div className="leads-enquiries-card-info">
-                    <div className="leads-enquiries-card-info-item">
-                      <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span>{lead.email}</span>
-                    </div>
-                    <div className="leads-enquiries-card-info-item">
-                      <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                      <span>{lead.phone}</span>
-                    </div>
-                    {lead.groupName && (
-                      <div className="leads-enquiries-card-info-item">
-                        <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                        </svg>
-                        <span>{lead.groupName}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {lead.enquiry && (
-                    <div className="leads-enquiries-card-description">
-                      {lead.enquiry}
-                    </div>
-                  )}
-                </div>
-
-                <div className="leads-enquiries-card-footer">
-                  <div className="leads-enquiries-card-source">
-                    <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                    </svg>
-                    {lead.source}
-                  </div>
-                  <div className="leads-enquiries-card-actions">
-                    {canView && (
-                      <button
-                        className="leads-enquiries-card-action-btn leads-enquiries-action-view"
-                        onClick={() => handleView(lead)}
-                        title="View Details"
-                      >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                      </button>
-                    )}
-
-                    <button
-                      className="leads-enquiries-card-action-btn leads-enquiries-action-timeline"
-                      onClick={() => handleViewTimeline(lead)}
-                      title="View Timeline"
-                    >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                    </button>
-
-                    <button
-                      className={`leads-enquiries-card-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                      onClick={() => handleAddFollowup(lead)}
-                      title={!canCreate ? 'No permission to add follow-ups' : 'Add Follow-up'}
-                      disabled={!canCreate}
-                    >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
-                    </button>
-
-                    <button
-                      className={`leads-enquiries-card-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`}
-                      onClick={() => handleCreateProposal(lead)}
-                      title={!canCreate ? 'No permission to create proposals' : 'Create Proposal'}
-                      disabled={!canCreate}
-                    >
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </button>
-
-                    {canEdit && (
-                      <button
-                        className="leads-enquiries-card-action-btn leads-enquiries-action-edit"
-                        onClick={() => handleEdit(lead)}
-                        title="Edit Lead"
-                      >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-                    )}
-
-                    {canDelete && (
-                      <button
-                        className="leads-enquiries-card-action-btn leads-enquiries-action-delete"
-                        onClick={() => handleDelete(lead)}
-                        title="Delete Lead"
-                      >
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination for Grid View */}
-          <div className="leads-enquiries-pagination">
-            <div className="leads-enquiries-pagination-info">
-              Showing {startIndex + 1} to {Math.min(endIndex, leads.length)} of {leads.length} entries
-            </div>
-            <div className="leads-enquiries-pagination-controls">
-              <select
-                className="leads-enquiries-rows-select"
-                value={rowsPerPage}
-                onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              >
-                <option value={10}>10 items</option>
-                <option value={25}>25 items</option>
-                <option value={50}>50 items</option>
-              </select>
-              <div className="leads-enquiries-pagination-buttons">
-                <button
-                  className="leads-enquiries-pagination-btn"
-                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <span className="leads-enquiries-pagination-current">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  className="leads-enquiries-pagination-btn"
-                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Add/Edit Lead Modal */}
       {showAddModal && (

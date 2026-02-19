@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck, CheckCircle, IndianRupee,Clock, FileText, TrendingUp, DollarSign, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck, CheckCircle, IndianRupee, Clock, Columns, FileText, TrendingUp, DollarSign, AlertCircle, Trash2 } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -51,6 +51,31 @@ const PurchaseOrders = () => {
   const [vendors, setVendors] = useState([]);
   const [quotations, setQuotations] = useState([]);
 
+  // Column Visibility
+  const [visibleColumns, setVisibleColumns] = useState({
+    poNumber: true,
+    vendorId: true,
+    vendorName: true,
+    orderDate: true,
+    totalValue: true,
+    deliveryProgress: true,
+    paymentStatus: true,
+    status: true,
+    actions: true
+  });
+  // Column definitions
+  const columnDefinitions = [
+    { key: 'poNumber', label: 'PO Number' },
+    { key: 'vendorId', label: 'Vendor ID' },
+    { key: 'vendorName', label: 'Vendor Name' },
+    { key: 'orderDate', label: 'Order Date' },
+    { key: 'totalValue', label: 'Total Value' },
+    { key: 'deliveryProgress', label: 'Delivery Progress' },
+    { key: 'paymentStatus', label: 'Payment Status' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
   // ✅ INDEPENDENT MODAL DROPDOWNS (not linked to main filter)
   const [modalGroupName, setModalGroupName] = useState('');
   const [modalSubGroupName, setModalSubGroupName] = useState('');
@@ -143,6 +168,14 @@ const PurchaseOrders = () => {
     'User-Id': user?.id || localStorage.getItem('userId'),
     'User-Role': user?.role || localStorage.getItem('userRole')
   });
+
+  // Toggle column visibility
+  const toggleColumnVisibility = (columnKey) => {
+    setVisibleColumns(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey]
+    }));
+  };
 
   /**
    * ✅ Fetch modal groups (independent)
@@ -866,92 +899,92 @@ const PurchaseOrders = () => {
     }
 
     setLoading(true);
-  try {
-    // ✅ Use the ACTUAL items from form state, not recreated items
-    const selectedItems = createPOFormData.items.filter(item => item.selected);
-    
-    // Map to API format
-    const poItems = selectedItems.map(({ itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
-      itemName,
-      itemDescription,
-      quantity: parseFloat(quantity),
-      unitPrice: parseFloat(unitPrice) || 0, // ✅ Convert to number, default 0
-      gst: parseFloat(gst),
-      discount: parseFloat(discount) || 0
-    }));
+    try {
+      // ✅ Use the ACTUAL items from form state, not recreated items
+      const selectedItems = createPOFormData.items.filter(item => item.selected);
 
-    const poData = {
-      quotationId: createPOFormData.quotationId || null,
-      vendorId: createPOFormData.vendorId || null,
-      vendorName: showNewVendorForm ? createPOFormData.vendorName : null,
-      vendorContact: createPOFormData.vendorContact || null,
-      rfqId: createPOFormData.quotation?.rfqId || null,
-      groupName: modalGroupName,
-      subGroupName: modalSubGroupName || null,
-      projectId: modalProjectId || null,
-      orderDate: createPOFormData.orderDate,
-      expectedDelivery: createPOFormData.expectedDelivery,
-      paymentTerms: createPOFormData.paymentTerms,
-      shippingAddress: createPOFormData.shippingAddress,
-      notes: createPOFormData.notes,
-      items: poItems, // ✅ Now using correct items
-      status: 'Draft',
-      paymentStatus: 'Pending'
-    };
+      // Map to API format
+      const poItems = selectedItems.map(({ itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
+        itemName,
+        itemDescription,
+        quantity: parseFloat(quantity),
+        unitPrice: parseFloat(unitPrice) || 0, // ✅ Convert to number, default 0
+        gst: parseFloat(gst),
+        discount: parseFloat(discount) || 0
+      }));
 
-    let response;
-    if (isEditMode && editingPOId) {
-      // UPDATE existing PO
-      response = await fetch(`${API_BASE_URL}/api/purchase-orders/${editingPOId}`, {
-        credentials: "include",
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(poData)
-      });
-    } else {
-      // CREATE new PO
-      const endpoint = createPOFormData.quotationId
-        ? `${API_BASE_URL}/api/purchase-orders/from-quotation`
-        : `${API_BASE_URL}/api/purchase-orders`;
+      const poData = {
+        quotationId: createPOFormData.quotationId || null,
+        vendorId: createPOFormData.vendorId || null,
+        vendorName: showNewVendorForm ? createPOFormData.vendorName : null,
+        vendorContact: createPOFormData.vendorContact || null,
+        rfqId: createPOFormData.quotation?.rfqId || null,
+        groupName: modalGroupName,
+        subGroupName: modalSubGroupName || null,
+        projectId: modalProjectId || null,
+        orderDate: createPOFormData.orderDate,
+        expectedDelivery: createPOFormData.expectedDelivery,
+        paymentTerms: createPOFormData.paymentTerms,
+        shippingAddress: createPOFormData.shippingAddress,
+        notes: createPOFormData.notes,
+        items: poItems, // ✅ Now using correct items
+        status: 'Draft',
+        paymentStatus: 'Pending'
+      };
 
-      response = await fetch(endpoint, {
-        credentials: "include",
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(poData)
-      });
+      let response;
+      if (isEditMode && editingPOId) {
+        // UPDATE existing PO
+        response = await fetch(`${API_BASE_URL}/api/purchase-orders/${editingPOId}`, {
+          credentials: "include",
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(poData)
+        });
+      } else {
+        // CREATE new PO
+        const endpoint = createPOFormData.quotationId
+          ? `${API_BASE_URL}/api/purchase-orders/from-quotation`
+          : `${API_BASE_URL}/api/purchase-orders`;
+
+        response = await fetch(endpoint, {
+          credentials: "include",
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
+          body: JSON.stringify(poData)
+        });
+      }
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} PO`);
+      }
+
+      const result = await response.json();
+      const poNo = result.poNo || result.data?.poNo;
+
+      showSuccess(
+        isEditMode
+          ? `Purchase Order ${poNo} updated successfully!`
+          : `Purchase Order ${poNo} created successfully!`
+      );
+
+      handleCloseCreatePOModal();
+      fetchPurchaseOrders();
+      fetchStats();
+
+    } catch (error) {
+      console.error(`Failed to ${isEditMode ? 'update' : 'create'} PO:`, error);
+      showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`);
+    } finally {
+      setLoading(false);
     }
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || `Failed to ${isEditMode ? 'update' : 'create'} PO`);
-    }
-
-    const result = await response.json();
-    const poNo = result.poNo || result.data?.poNo;
-
-    showSuccess(
-      isEditMode 
-        ? `Purchase Order ${poNo} updated successfully!`
-        : `Purchase Order ${poNo} created successfully!`
-    );
-
-    handleCloseCreatePOModal();
-    fetchPurchaseOrders();
-    fetchStats();
-
-  } catch (error) {
-    console.error(`Failed to ${isEditMode ? 'update' : 'create'} PO:`, error);
-    showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`);
-  } finally {
-    setLoading(false);
-  }
 
   };
 
@@ -1432,14 +1465,52 @@ const PurchaseOrders = () => {
         </div>
 
         <div className="purchase-orders-actions">
+          {/* NEW: Column Picker */}
+          <div className="purchase-column-picker-container">
+            <button
+              className="purchase-orders-btn-secondary"
+              onClick={() => setShowColumnPicker(!showColumnPicker)}
+              title="Manage Columns"
+            >
+              <Columns size={16} /> Columns
+            </button>
+
+            {showColumnPicker && (
+              <div className="purchase-column-picker-dropdown">
+                <div className="purchase-column-picker-header">
+                  <span>Show/Hide Columns</span>
+                  <button
+                    className="purchase-column-picker-close"
+                    onClick={() => setShowColumnPicker(false)}
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="purchase-column-picker-list">
+                  {columnDefinitions.map(col => (
+                    <label key={col.key} className="purchase-column-picker-item">
+                      <input
+                        type="checkbox"
+                        checked={visibleColumns[col.key]}
+                        onChange={() => toggleColumnVisibility(col.key)}
+                        disabled={col.key === 'actions'}
+                      />
+                      <span>{col.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <button
             className="purchase-orders-btn-primary"
             onClick={handleOpenCreatePO}
           >
-            <Plus size={18} /> Create PO
+            <Plus size={16} /> Create PO
           </button>
           <button className="purchase-orders-btn-secondary">
-            <Download size={18} /> Export
+            <Download size={16} /> Export
           </button>
         </div>
       </div>
@@ -1464,15 +1535,15 @@ const PurchaseOrders = () => {
         <table className="purchase-orders-table">
           <thead>
             <tr>
-              <th>PO Number</th>
-              <th>Vendor ID</th>
-              <th>Vendor Name</th>
-              <th>Order Date</th>
-              <th>Total Value</th>
-              <th>Delivery Progress</th>
-              <th>Payment Status</th>
-              <th>Status</th>
-              <th>Actions</th>
+              {visibleColumns.poNumber && <th>PO Number</th>}
+              {visibleColumns.vendorId && <th>Vendor ID</th>}
+              {visibleColumns.vendorName && <th>Vendor Name</th>}
+              {visibleColumns.orderDate && <th>Order Date</th>}
+              {visibleColumns.totalValue && <th>Total Value</th>}
+              {visibleColumns.deliveryProgress && <th>Delivery Progress</th>}
+              {visibleColumns.paymentStatus && <th>Payment Status</th>}
+              {visibleColumns.status && <th>Status</th>}
+              {visibleColumns.actions && <th>Actions</th>}
             </tr>
           </thead>
           <tbody>
@@ -1483,86 +1554,102 @@ const PurchaseOrders = () => {
                 </td>
               </tr>
             ) : (
-              purchaseOrders.map((po) => {
-                const progress = calculateDeliveryProgress(po);
-                return (
-                  <tr key={po.id} className="purchase-orders-table-row">
-                    <td className="purchase-orders-table-id">{po.poNo}</td>
-                    <td>
-                      <button
-                        className="vendor-link"
-                        onClick={() => handleViewVendorPOs(po.vendorId)}
-                      >
-                        Vendor #{po.vendorId}
-                      </button>
-                    </td>
-                    <td>{po.vendorName}</td>
-                    <td>{formatDate(po.orderDate)}</td>
-                    <td className="purchase-orders-table-value">{formatCurrency(po.totalValue)}</td>
-                    <td>
-                      <div className="delivery-progress">
-                        <div className="progress-bar">
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                        <span className="progress-text">
-                          {po.totalItemsDelivered}/{po.totalItemsOrdered} items ({progress}%)
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`purchase-orders-badge ${getPaymentBadgeClass(po.paymentStatus)}`}>
-                        {po.paymentStatus}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`purchase-orders-badge ${getStatusBadgeClass(po.status)}`}>
-                        {po.status}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="purchase-orders-actions-cell">
-                        <button
-                          className="purchase-orders-action-btn"
-                          onClick={() => handleViewPO(po)}
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        <button
-                          className="purchase-orders-action-btn"
-                          onClick={() => handleEditPO(po.id)}
-                          title="Edit PO"
-                          style={{ color: '#3b82f6' }}
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
-                          <>
+              
+                purchaseOrders.map((po) => {
+                  const progress = calculateDeliveryProgress(po);
+                  return (
+                    <tr key={po.id} className="purchase-orders-table-row">
+                      {visibleColumns.poNumber && (
+                        <td className="purchase-orders-table-id">{po.poNo}</td>
+                      )}
+                      {visibleColumns.vendorId && (
+                        <td>
+                          <button
+                            className="vendor-link"
+                            onClick={() => handleViewVendorPOs(po.vendorId)}
+                          >
+                            Vendor #{po.vendorId}
+                          </button>
+                        </td>
+                      )}
+                      {visibleColumns.vendorName && <td>{po.vendorName}</td>}
+                      {visibleColumns.orderDate && <td>{formatDate(po.orderDate)}</td>}
+                      {visibleColumns.totalValue && (
+                        <td className="purchase-orders-table-value">{formatCurrency(po.totalValue)}</td>
+                      )}
+                      {visibleColumns.deliveryProgress && (
+                        <td>
+                          <div className="delivery-progress">
+                            <div className="progress-bar">
+                              <div
+                                className="progress-fill"
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <span className="progress-text">
+                              {po.totalItemsDelivered}/{po.totalItemsOrdered} items ({progress}%)
+                            </span>
+                          </div>
+                        </td>
+                      )}
+                      {visibleColumns.paymentStatus && (
+                        <td>
+                          <span className={`purchase-orders-badge ${getPaymentBadgeClass(po.paymentStatus)}`}>
+                            {po.paymentStatus}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.status && (
+                        <td>
+                          <span className={`purchase-orders-badge ${getStatusBadgeClass(po.status)}`}>
+                            {po.status}
+                          </span>
+                        </td>
+                      )}
+                      {visibleColumns.actions && (
+                        <td>
+                          <div className="purchase-orders-actions-cell">
                             <button
                               className="purchase-orders-action-btn"
-                              onClick={() => handleUpdateStatus(po.id, 'Delivered')}
-                              title="Mark Delivered"
+                              onClick={() => handleViewPO(po)}
+                              title="View Details"
                             >
-                              <CheckCircle size={16} />
+                              <Eye size={14} />
                             </button>
                             <button
                               className="purchase-orders-action-btn"
-                              onClick={() => handleDeletePO(po.id)}
-                              title="Delete PO"
-                              style={{ color: '#ef4444' }}
+                              onClick={() => handleEditPO(po.id)}
+                              title="Edit PO"
+                              style={{ color: '#3b82f6' }}
                             >
-                              <Trash2 size={16} />
+                              <Edit2 size={14} />
                             </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
+                            {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
+                              <>
+                                <button
+                                  className="purchase-orders-action-btn"
+                                  onClick={() => handleUpdateStatus(po.id, 'Delivered')}
+                                  title="Mark Delivered"
+                                >
+                                  <CheckCircle size={14} />
+                                </button>
+                                <button
+                                  className="purchase-orders-action-btn"
+                                  onClick={() => handleDeletePO(po.id)}
+                                  title="Delete PO"
+                                  style={{ color: '#ef4444' }}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              
             )}
           </tbody>
         </table>
