@@ -9,7 +9,7 @@ import {
 
 import { AuthProvider } from './context/AuthContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-
+import { useAuth } from './hooks/useAuth.js';
 import Navbar from './components/Navbar';
 import Sidebar from './components/sidebar';
 import SessionManager from './components/SessionManager';
@@ -21,9 +21,8 @@ import Leads from "./Pages/Leads-Enquire";
 import Proposals from "./Pages/Proposals";
 import Quatations from "./Pages/Quatations";
 import ProcurementQuatations from "./Pages/Procurement-Quatation-Recieved";
-// import Invoices from "./Pages/Invoices";
 import Invoices from "./Pages/InvoicesReceiptsPage.js";
-
+import TelecallerLeadsPage from "./Pages/Telecallerleadspage.js";
 import Customer_dashboard from "./Pages/Sales-Customer";
 import Follow_up from "./Pages/Follow-ups";
 import Analytics from "./Pages/Analytics";
@@ -47,8 +46,6 @@ import './App.css';
 
 function AppWrapper() {
   const location = useLocation();
-
-  // Hide navbar & sidebar on login page
   const hideShell =
     location.pathname === "/login" ||
     location.pathname === "/";
@@ -60,7 +57,12 @@ function AppWrapper() {
 
 function AppShell({ hideShell }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed]     = useState(true);
+
+  // ── FIX: user may be null before login ───────────────────────────────────
+  const { user } = useAuth();
+  const userRole = user?.role || null;   // safely null when not logged in
+  // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebarCollapsed");
@@ -78,7 +80,6 @@ function AppShell({ hideShell }) {
   return (
     <div className={`app ${collapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
 
-      {/* 🔐 Session Manager (ONLY when logged in) */}
       {!hideShell && <SessionManager />}
 
       {!hideShell && (
@@ -97,18 +98,26 @@ function AppShell({ hideShell }) {
       <main className={`main-content ${hideShell ? "fullpage" : ""}`}>
         <Routes>
 
-          {/* ---------- PUBLIC ROUTES ---------- */}
-          <Route path="/" element={<Login />} />
+          {/* ---------- PUBLIC ---------- */}
+          <Route path="/"      element={<Login />} />
           <Route path="/login" element={<Login />} />
 
-          {/* ---------- PROTECTED ROUTES ---------- */}
+          {/* ---------- PROTECTED ---------- */}
           <Route path="/dashboard" element={
             <ProtectedRoute><Dashboardtabs /></ProtectedRoute>
           } />
 
-          <Route path="/sales/leads" element={
-            <ProtectedRoute><Leads /></ProtectedRoute>
-          } />
+          {/* Leads — telecallers see their own stripped view */}
+          <Route
+            path="/sales/leads"
+            element={
+              <ProtectedRoute>
+                {userRole === "TELECALLER"
+                  ? <TelecallerLeadsPage />
+                  : <Leads />}
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="/sales/proposals" element={
             <ProtectedRoute><Proposals /></ProtectedRoute>
@@ -133,6 +142,7 @@ function AppShell({ hideShell }) {
           <Route path="/sales/SalesOrder" element={
             <ProtectedRoute><SalesOrder /></ProtectedRoute>
           } />
+
           <Route path="/projectCostExpenseManagement" element={
             <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
           } />
@@ -184,12 +194,15 @@ function AppShell({ hideShell }) {
           <Route path="/officeuse/roles-permissions" element={
             <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
           } />
+
           <Route path="/Projectdashboard" element={
             <ProtectedRoute><Projectdashboard /></ProtectedRoute>
           } />
+
           <Route path="/OrderBook" element={
             <ProtectedRoute><OrderBook /></ProtectedRoute>
           } />
+
         </Routes>
       </main>
     </div>

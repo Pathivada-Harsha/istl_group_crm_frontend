@@ -1671,4 +1671,650 @@
    ============================================================ */
 .leads-enquiries-table {
   -webkit-user-drag: none;
+
+}/* ============================================================
+   LEAD DETAIL PAGE — full in-page view (no modal)
+   Append this to your Leads-Enquire.css
+   ============================================================ */
+
+/* ── Detail page wrapper ── */
+.ld-detail-page {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+
+/* ── Top bar with back button ── */
+.ld-detail-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.ld-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all .18s;
+}
+.ld-back-btn:hover { background: #f3f4f6; border-color: #2563eb; color: #2563eb; }
+
+.ld-detail-breadcrumb {
+  font-size: 12px;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Hero card ── */
+.ld-hero {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+}
+
+.ld-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 200px;
+}
+
+.ld-hero-avatar {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb 0%, #7c3aed 100%);
+  color: white;
+  font-size: 20px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ld-hero-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0 0 3px;
+}
+
+.ld-hero-code {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563eb;
+  background: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+.ld-hero-badges {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ld-hero-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ── Tabs ── */
+.ld-tabs {
+  display: flex;
+  border-bottom: 2px solid #e5e7eb;
+  padding: 0 16px;
+  background: #fafafa;
+  gap: 0;
+}
+
+.ld-tab {
+  padding: 10px 18px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all .18s;
+}
+.ld-tab:hover  { color: #374151; background: #f3f4f6; }
+.ld-tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; background: transparent; }
+
+/* ── Tab content wrapper ── */
+.ld-tab-content {
+  padding: 18px 20px;
+  min-height: 280px;
+}
+
+/* ── Info grid (overview tab) ── */
+.ld-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.ld-info-card {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  padding: 14px;
+}
+
+.ld-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin: 0 0 12px;
+}
+
+.ld-field-list { display: flex; flex-direction: column; gap: 8px; }
+
+.ld-field-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+}
+.ld-field-label { color: #6b7280; font-weight: 500; flex-shrink: 0; }
+.ld-field-val   { color: #111827; font-weight: 500; text-align: right; word-break: break-word; }
+
+.ld-enquiry-card {
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 7px;
+  padding: 14px;
+  border-left: 4px solid #2563eb;
+}
+.ld-enquiry-text { font-size: 13px; color: #374151; line-height: 1.6; margin: 0; }
+
+/* ── Proposals tab ── */
+.ld-proposals-list { display: flex; flex-direction: column; gap: 10px; }
+
+.ld-proposal-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 13px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: white;
+  transition: all .18s;
+  flex-wrap: wrap;
+}
+.ld-proposal-card:hover { border-color: #2563eb; box-shadow: 0 2px 6px rgba(37,99,235,.1); }
+
+.ld-proposal-card-left { flex: 1; min-width: 180px; }
+.ld-proposal-no   { font-size: 10px; font-weight: 700; color: #2563eb; background: #dbeafe; padding: 2px 7px; border-radius: 4px; display: inline-block; margin-bottom: 4px; font-family: monospace; }
+.ld-proposal-title{ font-size: 13px; font-weight: 600; color: #111827; margin-bottom: 4px; }
+.ld-proposal-meta { font-size: 11px; color: #6b7280; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+.ld-proposal-card-right { display: flex; align-items: center; gap: 10px; }
+
+.ld-proposal-status {
+  display: inline-flex; padding: 3px 9px; border-radius: 9999px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+.ld-ps-draft    { background:#f3f4f6; color:#374151; }
+.ld-ps-sent     { background:#dbeafe; color:#1e40af; }
+.ld-ps-approved { background:#d1fae5; color:#065f46; }
+.ld-ps-rejected { background:#fee2e2; color:#991b1b; }
+.ld-ps-hold     { background:#fef3c7; color:#92400e; }
+
+.ld-proposal-actions { display: flex; gap: 6px; }
+.ld-pact-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 10px; border: 1px solid #d1d5db; border-radius: 5px;
+  background: white; color: #374151; font-size: 11px; font-weight: 500;
+  font-family: 'Poppins', sans-serif; cursor: pointer; transition: all .18s;
+}
+.ld-pact-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
+.ld-pact-edit:hover { border-color: #059669; color: #059669; background: #ecfdf5; }
+
+/* ── History tab ── */
+.ld-history-list { display: flex; flex-direction: column; gap: 0; }
+
+.ld-history-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f3f4f6;
+  position: relative;
+}
+.ld-history-item:last-child { border-bottom: none; }
+
+.ld-history-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f3f4f6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.ld-history-body  { flex: 1; }
+.ld-history-hdr   { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.ld-history-type  { font-size: 11px; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: .04em; }
+.ld-history-date  { font-size: 11px; color: #9ca3af; }
+.ld-history-by    { font-size: 11px; color: #6b7280; font-style: italic; }
+.ld-history-desc  { font-size: 12px; color: #374151; line-height: 1.5; margin-bottom: 4px; }
+
+.ld-history-change { display: flex; align-items: center; gap: 4px; font-size: 11px; flex-wrap: wrap; }
+.ld-chg-field { font-weight: 600; color: #374151; }
+.ld-chg-old   { text-decoration: line-through; color: #ef4444; background:#fee2e2; padding: 1px 5px; border-radius: 3px; }
+.ld-chg-new   { color: #059669; background: #d1fae5; padding: 1px 5px; border-radius: 3px; font-weight: 600; }
+
+/* ── Empty state ── */
+.ld-empty-state {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6b7280;
+}
+.ld-empty-icon { font-size: 40px; margin-bottom: 10px; }
+.ld-empty-state p { font-size: 13px; margin: 0 0 14px; }
+
+.ld-loading-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 30px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+/* ── Section header ── */
+.ld-section-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+/* ── Buttons (within detail page) ── */
+.ld-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px; border: none; border-radius: 6px;
+  font-size: 12px; font-weight: 600; font-family: 'Poppins', sans-serif;
+  cursor: pointer; transition: all .18s; white-space: nowrap;
+}
+.ld-btn-pri { background: #2563eb; color: white; }
+.ld-btn-pri:hover { background: #1d4ed8; }
+.ld-btn-sec { background: white; color: #374151; border: 1px solid #d1d5db; }
+.ld-btn-sec:hover { background: #f9fafb; border-color: #9ca3af; }
+.ld-btn-sm  { padding: 4px 9px; font-size: 11px; }
+
+/* ── Proposal form (inline in lead detail) ── */
+.ld-proposal-form {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.ld-ptabs {
+  display: flex;
+  gap: 2px;
+  padding: 10px 14px 0;
+  border-bottom: 2px solid #e5e7eb;
+  background: #fafafa;
+  flex-wrap: wrap;
+}
+
+.ld-ptab {
+  padding: 7px 14px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 5px 5px 0 0;
+  transition: all .15s;
+}
+.ld-ptab:hover  { color: #374151; background: #f0f0f0; }
+.ld-ptab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 700; background: white; }
+
+.ld-ptab-body {
+  padding: 16px;
+  min-height: 220px;
+}
+
+.ld-pform-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+/* ── Form groups inside proposal form ── */
+.ld-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.ld-full { grid-column: 1 / -1; }
+
+.ld-fgroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ld-fgroup label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.ld-fgroup input,
+.ld-fgroup select,
+.ld-fgroup textarea {
+  padding: 7px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color .15s;
+}
+.ld-fgroup input:focus,
+.ld-fgroup select:focus,
+.ld-fgroup textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.08); }
+.ld-fgroup textarea { resize: vertical; min-height: 60px; }
+
+/* ── Inner tables (pricing / BOM) ── */
+.ld-inner-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ld-inner-table th {
+  padding: 7px 10px;
+  background: #f9fafb;
+  font-weight: 600;
+  font-size: 10px;
+  color: #374151;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+.ld-inner-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: middle;
+}
+.ld-inner-table td input,
+.ld-inner-table td select,
+.ld-inner-table td textarea {
+  width: 100%;
+  padding: 5px 7px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  box-sizing: border-box;
+  background: white;
+}
+.ld-inner-table td input:focus,
+.ld-inner-table td select:focus,
+.ld-inner-table td textarea:focus { outline: none; border-color: #2563eb; }
+.ld-inner-table td textarea { resize: vertical; min-height: 36px; }
+
+.ld-subtotal-row td { background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 12px; }
+.ld-total-row td    { background: #ecfdf5; border-top: 2px solid #86efac; font-size: 12px; font-weight: 700; }
+
+.ld-del-row {
+  background: #fee2e2;
+  color: #991b1b;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.ld-del-row:hover { background: #fecaca; }
+
+/* BOM specific */
+.ld-bom-tbl th:first-child { min-width: 150px; }
+.ld-bom-tbl th:nth-child(2) { min-width: 120px; }
+
+.ld-bom-drop {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 500;
+  background: white;
+  border: 2px solid #2563eb;
+  border-radius: 6px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+.ld-bom-drop-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: background .12s;
+}
+.ld-bom-drop-item:hover { background: #eff6ff; border-left: 3px solid #2563eb; padding-left: 7px; }
+.ld-bom-drop-item strong { font-size: 12px; color: #111827; }
+
+/* ── Closed Lost reason in form ── */
+.leads-enquiries-form-group textarea[style*="fca5a5"] {
+  background: #fff5f5;
+}
+
+/* ── Responsive adjustments ── */
+@media (max-width: 640px) {
+  .ld-hero { flex-direction: column; gap: 10px; }
+  .ld-hero-actions { width: 100%; }
+  .ld-info-grid { grid-template-columns: 1fr; }
+  .ld-form-grid { grid-template-columns: 1fr; }
+  .ld-full { grid-column: auto; }
+  .ld-proposal-card { flex-direction: column; align-items: flex-start; }
+  .ld-detail-topbar { flex-direction: column; align-items: flex-start; }
+}
+
+/* ── Overview Proposals Summary card ── */
+.ld-overview-proposals {
+  margin-top: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: white;
+}
+
+.ld-overview-proposals-empty {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fafafa;
+  color: #6b7280;
+}
+.ld-ovp-icon { font-size: 22px; flex-shrink: 0; }
+.ld-ovp-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.ld-ovp-label { font-size: 13px; font-weight: 600; color: #374151; }
+.ld-ovp-sub   { font-size: 11px; color: #9ca3af; }
+
+.ld-ovp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ld-ovp-stats {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+  border-top: 1px solid #f3f4f6;
+  border-bottom: 1px solid #f3f4f6;
+  margin-bottom: 12px;
+}
+
+.ld-ovp-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 60px;
+}
+
+.ld-ovp-stat-val {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.ld-ovp-stat-money .ld-ovp-stat-val {
+  color: #059669;
+  font-size: 16px;
+}
+
+.ld-ovp-stat-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+}
+
+.ld-ovp-latest {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.ld-ovp-latest-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  flex-shrink: 0;
+}
+
+.ld-ovp-latest-title {
+  font-weight: 500;
+  color: #374151;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .ld-ovp-stats { gap: 16px; }
+  .ld-ovp-stat-val { font-size: 15px; }
+}
+
+/* ── Clickable table row ── */
+.leads-enquiries-clickable-row:hover td {
+  background: #f0f4ff !important;
+  transition: background 0.12s ease;
+}
+
+/* ── Clickable grid card top area ── */
+.leads-enquiries-card-clickable {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.leads-enquiries-card-clickable:hover .leads-enquiries-card-title {
+  color: #2563eb;
+  transition: color 0.12s ease;
+}
+
+.leads-enquiries-card:has(.leads-enquiries-card-clickable:hover) {
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.12);
+  border-color: #bfdbfe;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+/* ============================================================
+   SERVER-SIDE PAGINATION ADDITIONS
+   Append these rules to Leads-Enquire.css
+   ============================================================ */
+
+/* Active page number pill */
+.leads-enquiries-pagination-btn-active {
+  background-color: #2563eb !important;
+  color: white !important;
+  border-color: #2563eb !important;
+  font-weight: 600;
+}
+
+.leads-enquiries-pagination-btn-active:hover {
+  background-color: #1d4ed8 !important;
+}
+
+/* Ellipsis between page numbers */
+.leads-enquiries-pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 13px;
+  color: #9ca3af;
+  user-select: none;
+}
+
+/* First / Last (« ») buttons — narrower */
+.leads-enquiries-pagination-btn:first-child,
+.leads-enquiries-pagination-btn:last-child {
+  min-width: 32px;
+  padding: 5px 6px;
+  font-size: 14px;
 }

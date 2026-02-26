@@ -92,7 +92,7 @@ function Navbar({ onMenuClick }) {
             <div className="brand-logo">
               <img src={logo} alt="BD Portal" className="brand-logo-img" />
             </div>
-            <h1 className="brand-title">BD Portal</h1>
+            <h1 className="brand-title">CRM Portal</h1>
           </div>
         </div>
 
