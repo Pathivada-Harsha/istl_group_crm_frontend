@@ -66,7 +66,7 @@ const ConfirmModal = ({
   };
 
   return (
-    <div className="confirm-modal-overlay" onClick={onClose}>
+    <div className="confirm-modal-overlay">
       <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
         <div className={`confirm-modal-icon confirm-modal-icon-${type}`}>
           <span>{getIcon()}</span>
@@ -1359,7 +1359,7 @@ const UsersPage = () => {
 
       {/* Add User Modal */}
       {showAddUserModal && (
-        <div className="users-page-modal-overlay" onClick={() => setShowAddUserModal(false)}>
+        <div className="users-page-modal-overlay">
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <h2>Add New User</h2>
@@ -1612,7 +1612,7 @@ const UsersPage = () => {
 
       {/* Edit User Modal */}
       {showEditUserModal && selectedUser && (
-        <div className="users-page-modal-overlay" onClick={() => setShowEditUserModal(false)}>
+        <div className="users-page-modal-overlay" >
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <h2>Edit User</h2>
@@ -1716,7 +1716,7 @@ const UsersPage = () => {
 
       {/* View Menu Permissions Modal */}
       {showMenuPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" onClick={() => setShowMenuPermissionsModal(false)}>
+        <div className="users-page-modal-overlay" >
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <div>
@@ -1779,7 +1779,7 @@ const UsersPage = () => {
 
       {/* Edit Menu Permissions Modal */}
       {showEditMenuPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" onClick={() => setShowEditMenuPermissionsModal(false)}>
+        <div className="users-page-modal-overlay" >
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <div>
@@ -1864,7 +1864,7 @@ const UsersPage = () => {
 
       {/* View User Permissions Modal */}
       {showUserPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" onClick={() => setShowUserPermissionsModal(false)}>
+        <div className="users-page-modal-overlay" >
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <div>
@@ -1933,7 +1933,7 @@ const UsersPage = () => {
 
       {/* Edit User Permissions Modal */}
       {showEditUserPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" onClick={() => setShowEditUserPermissionsModal(false)}>
+        <div className="users-page-modal-overlay" >
           <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <div>
