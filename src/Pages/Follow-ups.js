@@ -470,7 +470,7 @@ export default function ClientDashboardFollowUps() {
         notes: editForm.notes,
         outcome: editForm.outcome
       };
-
+console.log(requestData);
       const response = await fetch(`${API_BASE_URL}/followups/update/${editingFollowup.id}`, {
         method: 'PUT',
         credentials: "include",
@@ -503,14 +503,58 @@ export default function ClientDashboardFollowUps() {
     }
   };
 
+  /**
+   * FIX: Robust datetime parser that handles multiple formats from the database:
+   * - "2026-02-27 16:59:00"   (space-separated, from MySQL/PostgreSQL)
+   * - "2026-02-27T16:59:00"   (ISO with T separator)
+   * - "2026-02-27T16:59:00Z"  (ISO with timezone)
+   * - "2026-02-27T16:59:00.000Z" (ISO with milliseconds)
+   * - "2026-02-27"            (date only)
+   */
+  const parseDateTimeFromDB = (dateTimeString) => {
+    if (!dateTimeString) return { date: '', time: '' };
+
+    // Normalize: replace space separator with T for consistent JS Date parsing
+    // Also strip any trailing timezone info that might cause offset issues
+    const normalized = String(dateTimeString).trim();
+
+    // Extract date and time parts using regex — handles both "YYYY-MM-DD HH:MM:SS" and ISO formats
+    const match = normalized.match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+
+    if (match) {
+      const date = match[1];           // "2026-02-27"
+      const time = match[2];           // "16:59"
+      return { date, time };
+    }
+
+    // Fallback: date only (no time part)
+    const dateOnlyMatch = normalized.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (dateOnlyMatch) {
+      return { date: dateOnlyMatch[1], time: '' };
+    }
+
+    // Last resort: try native Date parsing
+    try {
+      const d = new Date(normalized);
+      if (!isNaN(d.getTime())) {
+        const date = d.toISOString().split('T')[0];
+        const hours = String(d.getHours()).padStart(2, '0');
+        const minutes = String(d.getMinutes()).padStart(2, '0');
+        return { date, time: `${hours}:${minutes}` };
+      }
+    } catch (_) {}
+
+    return { date: '', time: '' };
+  };
+
   const handleEdit = (followup) => {
-    const scheduledDate = followup.scheduledAt ? followup.scheduledAt.split(' ')[0] : '';
-    const scheduledTime = followup.scheduledAt ? followup.scheduledAt.split(' ')[1]?.substring(0, 5) : '';
+    // FIX: Use the robust parser instead of simple string split
+    const { date: scheduledDate, time: scheduledTime } = parseDateTimeFromDB(followup.scheduledAt);
 
     setEditForm({
       followupType: followup.followupType || 'Call',
-      scheduledDate: scheduledDate,
-      scheduledTime: scheduledTime,
+      scheduledDate,
+      scheduledTime,
       assignedTo: followup.assignedTo || user.id,
       status: followup.status || 'Pending',
       priority: followup.priority || 'Medium',
@@ -584,7 +628,10 @@ export default function ClientDashboardFollowUps() {
 
   const formatDateTime = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
+    // Normalize space-separated datetime for safe JS Date parsing
+    const normalized = String(dateString).replace(' ', 'T');
+    const date = new Date(normalized);
+    if (isNaN(date.getTime())) return dateString;
     return date.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -615,8 +662,9 @@ export default function ClientDashboardFollowUps() {
 
   const isOverdue = (followup) => {
     if (followup.status !== 'Pending') return false;
-    const scheduledDate = new Date(followup.scheduledAt);
-    return scheduledDate < new Date();
+    const normalized = String(followup.scheduledAt || '').replace(' ', 'T');
+    const scheduledDate = new Date(normalized);
+    return !isNaN(scheduledDate.getTime()) && scheduledDate < new Date();
   };
 
   // Pagination
