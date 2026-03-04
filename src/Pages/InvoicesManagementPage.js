@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, Edit2, Trash2, Download, Send, Settings, GripVertical, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Eye, Edit2, Trash2, Download, Settings, GripVertical, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
 import '../pages-css/Invoices.css';
@@ -12,7 +12,37 @@ import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import UnitTypeDropdown from './../components/Dropdowns/Unittypedropdown.js';
 import { normalizeUnit } from './../components/Dropdowns/unitUtils';
-import { FaIndianRupeeSign } from "react-icons/fa6";
+import ConfirmationModal from '../components/ConfirmationModal';
+
+// Inline hook — no separate file needed
+const useConfirmationModal = () => {
+  const [confirmModal, setConfirmModal] = useState({
+    show: false, title: '', message: '', type: 'confirm',
+    onConfirm: null, onCancel: null,
+    confirmText: 'Confirm', cancelText: 'Cancel', showCancel: true
+  });
+
+  const showConfirmation = (config) => {
+    return new Promise((resolve) => {
+      const showCancel = config.showCancel !== undefined
+        ? config.showCancel
+        : (config.type === 'confirm' || config.type === 'alert');
+      setConfirmModal({
+        show: true,
+        title: config.title || 'Confirm Action',
+        message: config.message || 'Are you sure you want to proceed?',
+        type: config.type || 'confirm',
+        confirmText: config.confirmText || 'Confirm',
+        cancelText: config.cancelText || 'Cancel',
+        showCancel,
+        onConfirm: () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(true); },
+        onCancel:  () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(false); }
+      });
+    });
+  };
+
+  return { confirmModal, showConfirmation };
+};
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -47,6 +77,9 @@ const InvoicesManagementPage = () => {
   const [loading, setLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [filters, setFilters] = useState({ search: '', status: 'all', paymentStatus: 'all' });
+
+  // ✅ Confirmation modal hook
+  const { confirmModal, showConfirmation } = useConfirmationModal();
 
   // Column management
   const [columns, setColumns] = useState(() => {
@@ -166,7 +199,6 @@ const InvoicesManagementPage = () => {
 
   // ---------- Excel Import ----------
   const VALID_TAX = new Set([0, 5, 12, 18, 28]);
-  const VALID_UNITS = new Set(['nos', 'kg', 'mt', 'lt', 'sqft', 'sqmt', 'rmt', 'set', 'lot', 'lumpsum', '']);
 
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
@@ -243,7 +275,9 @@ const InvoicesManagementPage = () => {
     } catch (error) { console.error('Failed to fetch order book items:', error); setOrderBookItems([]); }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchInvoices(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
 
   const handleDownloadPdf = async (invoice) => {
@@ -438,8 +472,18 @@ const InvoicesManagementPage = () => {
     finally { setLoading(false); }
   };
 
+  // ✅ Updated: uses ConfirmationModal instead of window.confirm
   const handleDeleteInvoice = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this invoice?')) return;
+    const confirmed = await showConfirmation({
+      title: 'Delete Invoice',
+      message: 'Are you sure you want to delete this invoice? This action cannot be undone.',
+      type: 'alert',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+
+    if (!confirmed) return;
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/invoices/${id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
@@ -498,6 +542,19 @@ const InvoicesManagementPage = () => {
     <div className="Invoices-page-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* ✅ Confirmation Modal — rendered at root level so it's always on top */}
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        showCancel={confirmModal.showCancel}
+      />
 
       <div className="Invoices-page-breadcrumb">
         <span>Pages</span>
@@ -769,7 +826,6 @@ const InvoicesManagementPage = () => {
                   <div className="Invoices-page-section-header">
                     <h3>Invoice Items *</h3>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      {/* Excel Import Button */}
                       <button
                         type="button"
                         className="Invoices-page-btn-secondary"
@@ -867,7 +923,6 @@ const InvoicesManagementPage = () => {
               <button className="Invoices-page-modal-close" onClick={() => setShowImportModal(false)}>×</button>
             </div>
             <div className="Invoices-page-modal-body">
-              {/* Step 1: Download Template */}
               <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '18px', marginBottom: '20px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
                   <div style={{ background: '#16a34a', color: 'white', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px', flexShrink: 0 }}>1</div>
@@ -879,7 +934,6 @@ const InvoicesManagementPage = () => {
                 </button>
               </div>
 
-              {/* Step 2: Upload */}
               <div style={{ border: '2px dashed #93c5fd', borderRadius: '10px', padding: '24px', marginBottom: '20px', textAlign: 'center', background: '#f8fafc' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', justifyContent: 'center' }}>
                   <div style={{ background: '#1e40af', color: 'white', width: '28px', height: '28px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '14px', flexShrink: 0 }}>2</div>
@@ -894,7 +948,6 @@ const InvoicesManagementPage = () => {
                 {importFileName && <p style={{ marginTop: '10px', color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>📎 {importFileName}</p>}
               </div>
 
-              {/* Errors */}
               {importErrors.length > 0 && (
                 <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '14px', marginBottom: '16px' }}>
                   <strong style={{ color: '#dc2626', display: 'block', marginBottom: '8px' }}>⚠ Please fix these errors before importing:</strong>
@@ -904,7 +957,6 @@ const InvoicesManagementPage = () => {
                 </div>
               )}
 
-              {/* Preview */}
               {importPreview.length > 0 && (
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>

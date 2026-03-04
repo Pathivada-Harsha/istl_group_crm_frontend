@@ -10,9 +10,41 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
-import { FaIndianRupeeSign } from "react-icons/fa6";
+import ConfirmationModal from '../components/ConfirmationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+// ✅ Inline hook — no separate file needed
+const useConfirmationModal = () => {
+  const [confirmModal, setConfirmModal] = useState({
+    show: false, title: '', message: '', type: 'confirm',
+    onConfirm: null, onCancel: null,
+    confirmText: 'Confirm', cancelText: 'Cancel', showCancel: true
+  });
+
+  const showConfirmation = (config) => {
+    return new Promise((resolve) => {
+      const showCancel = config.showCancel !== undefined
+        ? config.showCancel
+        : (config.type === 'confirm' || config.type === 'alert');
+      setConfirmModal({
+        show: true,
+        title: config.title || 'Confirm Action',
+        message: config.message || 'Are you sure you want to proceed?',
+        type: config.type || 'confirm',
+        confirmText: config.confirmText || 'Confirm',
+        cancelText: config.cancelText || 'Cancel',
+        showCancel,
+        onConfirm: () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(true); },
+        onCancel:  () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(false); }
+      });
+    });
+  };
+
+  const hideConfirmation = () => setConfirmModal(prev => ({ ...prev, show: false }));
+
+  return { confirmModal, showConfirmation, hideConfirmation };
+};
 
 const ALL_RECEIPT_COLUMNS = [
   { id: 'receiptNo', label: 'Receipt No', visible: true },
@@ -42,6 +74,9 @@ const ReceiptsManagementPage = () => {
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
+
+  // ✅ Confirmation modal hook
+  const { confirmModal, showConfirmation } = useConfirmationModal();
 
   // Column management
   const [columns, setColumns] = useState(() => {
@@ -76,7 +111,7 @@ const ReceiptsManagementPage = () => {
   const [importPreview, setImportPreview] = useState([]);
   const [importErrors, setImportErrors] = useState([]);
   const [importFileName, setImportFileName] = useState('');
-  const [bulkImportProgress, setBulkImportProgress] = useState(null); // { current, total, results }
+  const [bulkImportProgress, setBulkImportProgress] = useState(null);
   const [bulkImportDone, setBulkImportDone] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -92,7 +127,6 @@ const ReceiptsManagementPage = () => {
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
   const [stats, setStats] = useState(null);
 
   // Dropdown states
@@ -104,12 +138,18 @@ const ReceiptsManagementPage = () => {
   const [modalProjectId, setModalProjectId] = useState('');
   const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
 
+  // eslint-disable-next-line no-unused-vars
+  const [editMode, setEditMode] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [availableAdvances, setAvailableAdvances] = useState([]);
+  // eslint-disable-next-line no-unused-vars
+  const [loadingAdvances, setLoadingAdvances] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [selectedInvoices, setSelectedInvoices] = useState([]);
+
   const [customerData, setCustomerData] = useState(null);
   const [invoicesForCustomer, setInvoicesForCustomer] = useState([]);
-  const [availableAdvances, setAvailableAdvances] = useState([]);
   const [loadingInvoices, setLoadingInvoices] = useState(false);
-  const [loadingAdvances, setLoadingAdvances] = useState(false);
-  const [selectedInvoices, setSelectedInvoices] = useState([]);
 
   const [receiptFormData, setReceiptFormData] = useState({
     customerId: null, projectId: '', groupId: '', subGroupId: '',
@@ -121,7 +161,9 @@ const ReceiptsManagementPage = () => {
   const [adjustmentData, setAdjustmentData] = useState({ receiptId: null, customerId: null, availableAmount: 0, invoiceAllocations: [] });
 
   useEffect(() => { localStorage.setItem('receiptColumns', JSON.stringify(columns)); }, [columns]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchReceipts(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
 
   // ---------- Sorting ----------
@@ -211,7 +253,6 @@ const ReceiptsManagementPage = () => {
     reader.readAsBinaryString(file);
   };
 
-  // Bulk import: submits all rows to the API sequentially with progress tracking
   const handleConfirmImport = async () => {
     if (importErrors.length > 0) { showError('Please fix errors before importing'); return; }
     if (importPreview.length === 0) { showError('No valid rows to import'); return; }
@@ -233,7 +274,7 @@ const ReceiptsManagementPage = () => {
           groupId: receiptFormData.groupId,
           subGroupId: receiptFormData.subGroupId,
           receiptDate: row.receiptDate,
-          receiptType: row.receiptType, // already 'ADVANCE' or 'INVOICE_PAYMENT'
+          receiptType: row.receiptType,
           amount: parseFloat(row.amount),
           paymentMethod: row.paymentMethod,
           transactionReference: row.transactionReference || '',
@@ -340,8 +381,17 @@ const ReceiptsManagementPage = () => {
     finally { setLoading(false); }
   };
 
+  // ✅ Updated: uses ConfirmationModal instead of window.confirm
   const handleRemoveAllocation = async (invoiceId) => {
-    if (!window.confirm('Are you sure you want to remove this allocation?')) return;
+    const confirmed = await showConfirmation({
+      title: 'Remove Allocation',
+      message: 'Are you sure you want to remove this allocation? This will reverse the applied amount on the invoice.',
+      type: 'alert',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${editingAllocation.id}/allocations/${invoiceId}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
@@ -362,6 +412,18 @@ const ReceiptsManagementPage = () => {
 
   const handleSaveEditedReceipt = async () => {
     if (editReceiptFormData.amount <= 0) { showError('Amount must be greater than zero'); return; }
+    const confirmed = await showConfirmation({
+      title: 'Update Receipt',
+      message: `Save changes to receipt ${editingReceipt.receiptNo}?
+
+Amount: ${formatCurrency(editReceiptFormData.amount)}
+Date: ${editReceiptFormData.receiptDate}
+Method: ${editReceiptFormData.paymentMethod}`,
+      type: 'confirm',
+      confirmText: 'Save Changes',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
     setLoading(true);
     try {
       const receiptData = { ...editReceiptFormData, receiptType: editingReceipt.receiptType, invoiceId: editingReceipt.invoiceId, customerId: editingReceipt.customerId, projectId: editingReceipt.projectId, groupId: editingReceipt.groupId, subGroupId: editingReceipt.subGroupId };
@@ -372,14 +434,24 @@ const ReceiptsManagementPage = () => {
     finally { setLoading(false); }
   };
 
-  const handleDeleteReceiptClick = (receipt) => { setReceiptToDelete(receipt); setShowDeleteConfirmModal(true); };
-  const handleConfirmDelete = async () => {
-    if (!receiptToDelete) return;
+  const handleDeleteReceiptClick = async (receipt) => {
+    const hasAlloc = receipt.receiptType === 'ADVANCE' && receipt.appliedAmount > 0;
+    const receiptType = receipt.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice Payment';
+    const warningLine = hasAlloc ? ('\n\n⚠ Warning: ' + formatCurrency(receipt.appliedAmount) + ' is already allocated to invoices. Deleting will reverse all allocations.') : '';
+    const msg = 'Are you sure you want to delete receipt ' + receipt.receiptNo + '?\n\nDate: ' + formatDate(receipt.receiptDate) + '\nAmount: ' + formatCurrency(receipt.amount) + '\nType: ' + receiptType + warningLine + '\n\nNote: This is a soft delete and can be restored later.';
+    const confirmed = await showConfirmation({
+      title: 'Delete Receipt',
+      message: msg,
+      type: 'alert',
+      confirmText: 'Delete Receipt',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receiptToDelete.id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receipt.id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to delete receipt'); }
-      showSuccess('Receipt deleted successfully!'); setShowDeleteConfirmModal(false); setReceiptToDelete(null); fetchReceipts(); fetchStats();
+      showSuccess('Receipt deleted successfully!'); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to delete receipt'); }
     finally { setLoading(false); }
   };
@@ -394,8 +466,17 @@ const ReceiptsManagementPage = () => {
     finally { setLoading(false); }
   };
 
+  // ✅ Updated: uses ConfirmationModal instead of window.confirm
   const handleRestoreReceipt = async (receiptId) => {
-    if (!window.confirm('Are you sure you want to restore this receipt?')) return;
+    const confirmed = await showConfirmation({
+      title: 'Restore Receipt',
+      message: 'Are you sure you want to restore this receipt? It will be moved back to the active receipts list.',
+      type: 'confirm',
+      confirmText: 'Restore',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
+
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receiptId}/restore`, { credentials: "include", method: 'POST', headers: getAuthHeaders() });
@@ -633,6 +714,19 @@ const ReceiptsManagementPage = () => {
     <div className="receipts-page-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+      {/* ✅ Confirmation Modal — rendered at root level so it's always on top */}
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        showCancel={confirmModal.showCancel}
+      />
 
       <div className="receipts-page-breadcrumb">
         <span>Pages</span>
@@ -1013,8 +1107,6 @@ const ReceiptsManagementPage = () => {
             </div>
 
             <div className="receipts-page-modal-body">
-
-              {/* Step 1: Template */}
               {!bulkImportProgress && (
                 <>
                   <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '16px 18px', marginBottom: '16px' }}>
@@ -1032,7 +1124,6 @@ const ReceiptsManagementPage = () => {
                     </div>
                   </div>
 
-                  {/* Step 2: Customer selection warning */}
                   {!receiptFormData.customerId && (
                     <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e' }}>
                       <strong>⚠ Required before importing:</strong> Please close this modal, select a Group → Sub Group → Project first so receipts are linked to the correct customer.
@@ -1045,7 +1136,6 @@ const ReceiptsManagementPage = () => {
                     </div>
                   )}
 
-                  {/* Step 3: Upload */}
                   <div style={{ border: '2px dashed #6ee7b7', borderRadius: '10px', padding: '22px', marginBottom: '16px', textAlign: 'center', background: '#f8fafc' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', justifyContent: 'center' }}>
                       <div style={{ background: '#059669', color: 'white', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>2</div>
@@ -1062,7 +1152,6 @@ const ReceiptsManagementPage = () => {
                     )}
                   </div>
 
-                  {/* Validation errors */}
                   {importErrors.length > 0 && (
                     <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
                       <strong style={{ color: '#dc2626', display: 'block', marginBottom: '6px' }}>⚠ Fix these errors in the Excel file before importing:</strong>
@@ -1072,7 +1161,6 @@ const ReceiptsManagementPage = () => {
                     </div>
                   )}
 
-                  {/* Preview table */}
                   {importPreview.length > 0 && importErrors.length === 0 && (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -1120,7 +1208,6 @@ const ReceiptsManagementPage = () => {
               {/* Progress state */}
               {bulkImportProgress && (
                 <div>
-                  {/* Progress bar */}
                   <div style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <strong style={{ fontSize: '14px', color: bulkImportDone ? '#166534' : '#0f172a' }}>
@@ -1145,31 +1232,23 @@ const ReceiptsManagementPage = () => {
                     </div>
                   </div>
 
-                  {/* Summary badges when done */}
                   {bulkImportDone && (
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
                       <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a' }}>
-                          {bulkImportProgress.results.filter(r => r.status === 'success').length}
-                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a' }}>{bulkImportProgress.results.filter(r => r.status === 'success').length}</div>
                         <div style={{ fontSize: '12px', color: '#166534', fontWeight: 600 }}>Successful</div>
                       </div>
                       <div style={{ flex: 1, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#dc2626' }}>
-                          {bulkImportProgress.results.filter(r => r.status === 'error').length}
-                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#dc2626' }}>{bulkImportProgress.results.filter(r => r.status === 'error').length}</div>
                         <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 600 }}>Failed</div>
                       </div>
                       <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>
-                          {formatCurrency(bulkImportProgress.results.filter(r => r.status === 'success').reduce((s, r) => s + (r.amount || 0), 0))}
-                        </div>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(bulkImportProgress.results.filter(r => r.status === 'success').reduce((s, r) => s + (r.amount || 0), 0))}</div>
                         <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Total Saved</div>
                       </div>
                     </div>
                   )}
 
-                  {/* Per-row results table */}
                   <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '320px', overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
@@ -1180,33 +1259,25 @@ const ReceiptsManagementPage = () => {
                         </tr>
                       </thead>
                       <tbody>
-                        {/* Completed rows */}
                         {bulkImportProgress.results.map((result, i) => (
                           <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: result.status === 'success' ? '#f0fdf4' : '#fef2f2' }}>
                             <td style={{ padding: '7px 12px', color: '#64748b', fontWeight: 600 }}>#{result.row}</td>
                             <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>{result.date}</td>
                             <td style={{ padding: '7px 12px', fontWeight: 600 }}>{formatCurrency(result.amount)}</td>
                             <td style={{ padding: '7px 12px' }}>
-                              <span style={{
-                                background: result.status === 'success' ? '#dcfce7' : '#fee2e2',
-                                color: result.status === 'success' ? '#166534' : '#dc2626',
-                                padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700
-                              }}>
+                              <span style={{ background: result.status === 'success' ? '#dcfce7' : '#fee2e2', color: result.status === 'success' ? '#166534' : '#dc2626', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
                                 {result.status === 'success' ? '✓ Saved' : '✗ Failed'}
                               </span>
                             </td>
                             <td style={{ padding: '7px 12px', color: result.status === 'error' ? '#b91c1c' : '#64748b' }}>{result.message}</td>
                           </tr>
                         ))}
-                        {/* Pending rows (not yet processed) */}
                         {!bulkImportDone && importPreview.slice(bulkImportProgress.results.length).map((row, i) => (
                           <tr key={`pending-${i}`} style={{ borderBottom: '1px solid #f1f5f9', background: '#fff', opacity: 0.45 }}>
                             <td style={{ padding: '7px 12px', color: '#94a3b8', fontWeight: 600 }}>#{bulkImportProgress.results.length + i + 1}</td>
                             <td style={{ padding: '7px 12px', color: '#94a3b8' }}>{row.receiptDate}</td>
                             <td style={{ padding: '7px 12px', color: '#94a3b8' }}>{formatCurrency(row.amount)}</td>
-                            <td style={{ padding: '7px 12px' }}>
-                              <span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Pending</span>
-                            </td>
+                            <td style={{ padding: '7px 12px' }}><span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Pending</span></td>
                             <td style={{ padding: '7px 12px', color: '#94a3b8' }}>—</td>
                           </tr>
                         ))}
@@ -1231,12 +1302,7 @@ const ReceiptsManagementPage = () => {
                   </button>
                 </>
               ) : (
-                <button
-                  className="receipts-page-btn-primary"
-                  onClick={handleCloseImportModal}
-                  disabled={!bulkImportDone}
-                  style={{ opacity: bulkImportDone ? 1 : 0.5 }}
-                >
+                <button className="receipts-page-btn-primary" onClick={handleCloseImportModal} disabled={!bulkImportDone} style={{ opacity: bulkImportDone ? 1 : 0.5 }}>
                   {bulkImportDone ? 'Close' : 'Please wait...'}
                 </button>
               )}
@@ -1372,37 +1438,7 @@ const ReceiptsManagementPage = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirmModal && receiptToDelete && (
-        <div className="receipts-page-modal-overlay">
-          <div className="receipts-page-modal receipts-page-modal-small">
-            <div className="receipts-page-modal-header">
-              <h2>Delete Receipt</h2>
-              <button className="receipts-page-modal-close" onClick={() => setShowDeleteConfirmModal(false)}>×</button>
-            </div>
-            <div className="receipts-page-modal-body">
-              <div className="delete-confirmation-content">
-                <div className="warning-icon"><Trash2 size={48} color="#dc2626" /></div>
-                <h3>Are you sure you want to delete this receipt?</h3>
-                <div className="receipt-delete-info">
-                  <div className="info-row"><strong>Receipt No:</strong><span>{receiptToDelete.receiptNo}</span></div>
-                  <div className="info-row"><strong>Date:</strong><span>{formatDate(receiptToDelete.receiptDate)}</span></div>
-                  <div className="info-row"><strong>Amount:</strong><span className="amount-highlight">{formatCurrency(receiptToDelete.amount)}</span></div>
-                  <div className="info-row"><strong>Type:</strong><span className={`receipt-badge ${receiptToDelete.receiptType === 'ADVANCE' ? 'receipt-type-advance' : 'receipt-type-invoice'}`}>{receiptToDelete.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice Payment'}</span></div>
-                </div>
-                {receiptToDelete.receiptType === 'ADVANCE' && receiptToDelete.appliedAmount > 0 && (
-                  <div className="delete-warning"><strong>⚠️ Warning:</strong><p>This advance has {formatCurrency(receiptToDelete.appliedAmount)} allocated to invoices. Deleting will reverse all allocations.</p></div>
-                )}
-                <p className="delete-note"><em>Note: This is a soft delete. The receipt can be restored later if needed.</em></p>
-              </div>
-            </div>
-            <div className="receipts-page-modal-actions">
-              <button className="receipts-page-btn-secondary" onClick={() => setShowDeleteConfirmModal(false)}>Cancel</button>
-              <button className="receipts-page-btn-danger" onClick={handleConfirmDelete}><Trash2 size={16} style={{ marginRight: '8px' }} />Delete Receipt</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Delete Confirmation Modal — handled by ConfirmationModal component */}
 
       {/* Edit Allocation Modal */}
       {showEditAllocationModal && editingAllocation && (
