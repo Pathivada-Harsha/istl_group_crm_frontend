@@ -45,6 +45,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
   const [showAdd,    setShowAdd]    = useState(false);
   const [completing, setCompleting] = useState(null);
   const [toast,      setToast]      = useState(null);
+  const [users,      setUsers]      = useState([]);
 
   const toast$ = (msg, type = "success") => {
     setToast({ msg, type });
@@ -60,7 +61,12 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
     finally { setLoading(false); }
   }, [lead.id]);
 
-  useEffect(() => { fetch$(); }, [fetch$]);
+  useEffect(() => {
+    fetch$();
+    api.get("/api/filters/leads-users")
+      .then(data => setUsers(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, [fetch$]);
 
   const counts = {
     All:       followups.length,
@@ -124,6 +130,8 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
       {showAdd && (
         <AddForm
           lead={lead}
+          currentUser={currentUser}
+          users={users}
           onCreated={() => { setShowAdd(false); fetch$(); onRefreshLead?.(); toast$("Follow-up scheduled!"); }}
           onCancel={() => setShowAdd(false)}
         />
@@ -297,7 +305,7 @@ function FollowupCard({ followup: f, index, onComplete, onCancelled, showToast, 
 }
 
 // ── Schedule new follow-up form ───────────────────────────────────────────────
-function AddForm({ lead, onCreated, onCancel }) {
+function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
   const [saving, setSaving] = useState(false);
   const nowPlus30 = new Date(Date.now() + 30 * 60000);
   const defaultDT = new Date(nowPlus30.getTime() - nowPlus30.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -307,6 +315,7 @@ function AddForm({ lead, onCreated, onCancel }) {
     scheduledAt: defaultDT,
     priority: "Medium",
     notes: "",
+    assignedTo: currentUser?.id || "",
   });
   const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
 
@@ -326,6 +335,7 @@ function AddForm({ lead, onCreated, onCancel }) {
         priority:     form.priority,
         notes:        form.notes.trim() || null,
         status:       "Pending",
+        assignedTo:   form.assignedTo ? parseInt(form.assignedTo) : null,
       });
       onCreated();
     } catch (e) { if (e.message !== "SESSION_EXPIRED") alert(e.message || "Failed to save"); }
@@ -369,6 +379,17 @@ function AddForm({ lead, onCreated, onCancel }) {
               <option>High</option><option>Medium</option><option>Low</option>
             </select>
           </div>
+        </div>
+
+        <div className="lfu-form-group">
+          <label>Assign To *</label>
+          <select value={form.assignedTo} onChange={set("assignedTo")} required>
+            {users.map(u => (
+              <option key={u.id} value={u.id}>
+                {u.name}{u.id === currentUser?.id ? " (Me)" : ""}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="lfu-form-group">

@@ -16,7 +16,7 @@ import SessionManager from './components/SessionManager';
 
 // Pages
 import Login from './Pages/Login';
-import Dashboardtabs from "./Pages/Dashboard-Sales-procurement";
+import Dashboardtabs from "./Pages/RoleDashboard.js";
 import Leads from "./Pages/Leads-Enquire";
 import Proposals from "./Pages/Proposals";
 import Quatations from "./Pages/Quatations";

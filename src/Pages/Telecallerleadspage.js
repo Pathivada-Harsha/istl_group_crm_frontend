@@ -37,6 +37,14 @@ export default function TelecallerLeadsPage() {
   const [saving,      setSaving]      = useState(false);
   const [toast,       setToast]       = useState(null);
 
+  // INTERESTED extra fields
+  const [intLocation,     setIntLocation]     = useState("");
+  const [intSiteDate,     setIntSiteDate]      = useState("");
+  const [intPropertyType, setIntPropertyType] = useState("");
+  const [intQuotedPrice,  setIntQuotedPrice]  = useState("");
+  const [intAddons,       setIntAddons]       = useState("");
+  const [intOtherComment, setIntOtherComment] = useState("");
+
   // ── Fetch ────────────────────────────────────────────────────────────────
   const fetchLeads = useCallback(async (p = 0, statusFilter = filter) => {
     setLoading(true);
@@ -82,6 +90,12 @@ export default function TelecallerLeadsPage() {
     setNewStatus("");
     setReason("");
     setDiscussion("");
+    setIntLocation(lead.city ? `${lead.city}${lead.district ? ", " + lead.district : ""}${lead.state ? ", " + lead.state : ""}` : "");
+    setIntSiteDate("");
+    setIntPropertyType("");
+    setIntQuotedPrice("");
+    setIntAddons("");
+    setIntOtherComment("");
     setStatusModal(true);
   };
 
@@ -92,7 +106,11 @@ export default function TelecallerLeadsPage() {
       return;
     }
     if (newStatus === "INTERESTED" && !discussion.trim()) {
-      showToast("Discussion note is required when marking Interested", "error");
+      showToast("Discussion summary is required when marking Interested", "error");
+      return;
+    }
+    if (newStatus === "INTERESTED" && !intPropertyType) {
+      showToast("Please select Commercial or Residential", "error");
       return;
     }
     setSaving(true);
@@ -101,6 +119,14 @@ export default function TelecallerLeadsPage() {
         telecallerStatus: newStatus,
         reason:           reason.trim(),
         discussionNote:   discussion.trim(),
+        ...(newStatus === "INTERESTED" && {
+          tcLocation:      intLocation.trim() || null,
+          tcSiteVisitDate: intSiteDate || null,
+          tcPropertyType:  intPropertyType || null,
+          tcQuotedPrice:   intQuotedPrice.trim() || null,
+          tcAddons:        intAddons.trim() || null,
+          tcOtherComments: intOtherComment.trim() || null,
+        }),
       });
       showToast("Status updated!", "success");
       setStatusModal(false);
@@ -350,11 +376,85 @@ export default function TelecallerLeadsPage() {
 
               {/* Discussion note — INTERESTED */}
               {newStatus === "INTERESTED" && (
-                <div className="tc-reason-field">
-                  <label>Discussion Summary <span className="tc-req">*</span></label>
-                  <textarea rows={4}
-                    placeholder="Summarise your conversation with the customer — what they discussed, their requirements, budget, timeline, etc. This will be handed to the BD team."
-                    value={discussion} onChange={e => setDiscussion(e.target.value)} />
+                <div className="tc-interested-fields">
+
+                  {/* Discussion Summary */}
+                  <div className="tc-reason-field">
+                    <label>Discussion Summary <span className="tc-req">*</span></label>
+                    <textarea rows={3}
+                      placeholder="Summarise your conversation — requirements, budget, timeline, key points discussed…"
+                      value={discussion} onChange={e => setDiscussion(e.target.value)} />
+                  </div>
+
+                  {/* Location */}
+                  <div className="tc-reason-field">
+                    <label>
+                      Location / Address
+                      {!(selected.city || selected.state) && (
+                        <span className="tc-field-hint"> — no location on record, please enter below</span>
+                      )}
+                    </label>
+                    <input type="text"
+                      placeholder={
+                        selected.city || selected.state
+                          ? `Current: ${[selected.city, selected.district, selected.state].filter(Boolean).join(", ")} — update if needed`
+                          : "Enter city, district or full address…"
+                      }
+                      value={intLocation}
+                      onChange={e => setIntLocation(e.target.value)} />
+                  </div>
+
+                  {/* Site Visit Date */}
+                  <div className="tc-reason-field">
+                    <label>Site Visit Availability</label>
+                    <input type="date"
+                      value={intSiteDate}
+                      onChange={e => setIntSiteDate(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]} />
+                    <span className="tc-field-hint">When is the customer available for a site visit?</span>
+                  </div>
+
+                  {/* Commercial / Residential */}
+                  <div className="tc-reason-field">
+                    <label>Property Type <span className="tc-req">*</span></label>
+                    <div className="tc-property-toggle">
+                      {["Residential", "Commercial", "Industrial"].map(pt => (
+                        <button key={pt} type="button"
+                          className={`tc-prop-btn ${intPropertyType === pt ? "active" : ""}`}
+                          onClick={() => setIntPropertyType(pt)}>
+                          {pt === "Residential" ? "🏠" : pt === "Commercial" ? "🏢" : "🏭"} {pt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pricing / Quoted Amount */}
+                  <div className="tc-reason-field">
+                    <label>Pricing Quoted (₹)</label>
+                    <input type="text"
+                      placeholder="e.g. 1,20,000 or 1.2L — amount discussed with customer"
+                      value={intQuotedPrice}
+                      onChange={e => setIntQuotedPrice(e.target.value)} />
+                  </div>
+
+                  {/* Addons */}
+                  <div className="tc-reason-field">
+                    <label>Add-ons / Additional Requirements</label>
+                    <input type="text"
+                      placeholder="e.g. Battery backup, EV charger, Net metering, Subsidy scheme…"
+                      value={intAddons}
+                      onChange={e => setIntAddons(e.target.value)} />
+                  </div>
+
+                  {/* Other Comments */}
+                  <div className="tc-reason-field">
+                    <label>Any Other Comments</label>
+                    <textarea rows={2}
+                      placeholder="Anything else the BD team should know before visiting the customer…"
+                      value={intOtherComment}
+                      onChange={e => setIntOtherComment(e.target.value)} />
+                  </div>
+
                   <div className="tc-handoff-note">
                     ℹ️ After saving, this lead will be automatically assigned to a BD Executive via round-robin.
                     You will retain read-only access to track progress.

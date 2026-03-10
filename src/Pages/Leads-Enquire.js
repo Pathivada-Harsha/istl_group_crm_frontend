@@ -749,6 +749,34 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                 </div>
               </div>
             )}
+
+            {/* Telecaller interaction details — shown when TC has marked Interested */}
+            {(lead.tcDiscussionNote || lead.tcLocation || lead.tcSiteVisitDate || lead.tcPropertyType || lead.tcQuotedPrice || lead.tcAddons || lead.tcOtherComments) && (
+              <div className="ld-info-card">
+                <h4 className="ld-card-title">Telecaller Interaction Details</h4>
+                <div className="ld-field-list">
+                  {lead.tcDiscussionNote && (
+                    <div className="ld-field-row ld-field-row--block" key="disc">
+                      <span className="ld-field-label">Discussion Summary</span>
+                      <span className="ld-field-val ld-field-val--note">{lead.tcDiscussionNote}</span>
+                    </div>
+                  )}
+                  {[
+                    ['Location', lead.tcLocation],
+                    ['Site Visit Date', lead.tcSiteVisitDate],
+                    ['Property Type', lead.tcPropertyType],
+                    ['Pricing Quoted', lead.tcQuotedPrice ? `₹${lead.tcQuotedPrice}` : null],
+                    ['Add-ons', lead.tcAddons],
+                    ['Other Comments', lead.tcOtherComments],
+                  ].filter(([, v]) => v).map(([l, v]) => (
+                    <div className="ld-field-row" key={l}>
+                      <span className="ld-field-label">{l}</span>
+                      <span className="ld-field-val">{v}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <div className="ld-enquiry-card">
             <h4 className="ld-card-title">Enquiry Description</h4>

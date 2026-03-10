@@ -2318,3 +2318,23 @@
   padding: 5px 6px;
   font-size: 14px;
 }
+/* Telecaller interaction detail block */
+.ld-field-row--block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.ld-field-row--block .ld-field-val {
+  text-align: left;
+}
+.ld-field-val--note {
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  padding: 8px 10px;
+  font-size: 13px;
+  line-height: 1.55;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+}
