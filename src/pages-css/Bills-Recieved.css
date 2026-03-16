@@ -4,7 +4,6 @@
   padding: 24px;
   background-color: #f5f7fa;
   min-height: 100vh;
-  /* font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; */
 }
 
 /* Header */
@@ -36,7 +35,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -50,7 +49,7 @@
 
 .procurement-bills-received-search {
   flex: 1;
-  min-width: 300px;
+  min-width: 200px;
   padding: 10px 16px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -73,6 +72,7 @@
   background-color: white;
   cursor: pointer;
   transition: all 0.2s;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-filter:hover {
@@ -87,6 +87,7 @@
 .procurement-bills-received-actions {
   display: flex;
   gap: 12px;
+  flex-shrink: 0;
 }
 
 .procurement-bills-received-btn-primary {
@@ -99,6 +100,9 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-btn-primary:hover {
@@ -117,6 +121,9 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-btn-secondary:hover {
@@ -134,6 +141,10 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-btn-link:hover {
@@ -143,20 +154,21 @@
 /* KPI Cards */
 .procurement-bills-received-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 20px;
-  margin-bottom: 24px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
 }
 
 .procurement-bills-received-kpi-card {
   background: white;
-  padding: 20px;
+  padding:16px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   transition: all 0.2s;
+  min-width: 0;
 }
 
 .procurement-bills-received-kpi-card:hover {
@@ -165,9 +177,9 @@
 }
 
 .procurement-bills-received-kpi-icon {
-  font-size: 32px;
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -177,55 +189,101 @@
 
 .procurement-bills-received-kpi-content {
   flex: 1;
+  min-width: 0;
 }
 
 .procurement-bills-received-kpi-value {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .procurement-bills-received-kpi-label {
-  font-size: 13px;
+  font-size: 12px;
   color: #64748b;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* Table */
+/* =============================================
+   TABLE WITH FIXED HEIGHT + VERTICAL SCROLL
+   ============================================= */
+
 .procurement-bills-received-table-container {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Wrapper that constrains height and enables scroll */
+.procurement-bills-received-table-scroll-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px; /* Fixed height - shows ~6 rows before scroll */
+  position: relative;
+}
+
+/* Scrollbar styling */
+.procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .procurement-bills-received-table {
   width: 100%;
-  border-collapse: collapse;
-  min-width: 1300px;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 1100px;
 }
 
+/* Sticky header inside scroll container */
 .procurement-bills-received-table thead {
-  background-color: #f8fafc;
   position: sticky;
   top: 0;
   z-index: 10;
 }
 
+.procurement-bills-received-table thead tr {
+  background-color: #f8fafc;
+}
+
 .procurement-bills-received-table th {
-  padding: 14px 16px;
+  padding: 13px 14px;
   text-align: left;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-bottom: 2px solid #e2e8f0;
+  background-color: #f8fafc;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-table td {
-  padding: 14px 16px;
+  padding: 13px 14px;
   font-size: 14px;
   color: #334155;
   border-bottom: 1px solid #f1f5f9;
@@ -239,9 +297,14 @@
   background-color: #f8fafc;
 }
 
+.procurement-bills-received-table-row:last-child td {
+  border-bottom: none;
+}
+
 .procurement-bills-received-table-id {
   font-weight: 600;
   color: #3b82f6;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-table-vendor {
@@ -252,22 +315,26 @@
 .procurement-bills-received-table-amount {
   font-weight: 600;
   color: #1e293b;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-table-paid {
   color: #059669;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-table-balance {
   color: #ea580c;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-link {
   color: #3b82f6;
   cursor: pointer;
   text-decoration: underline;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-link:hover {
@@ -281,12 +348,13 @@
 /* Status Badges */
 .procurement-bills-received-badge {
   display: inline-block;
-  padding: 4px 12px;
+  padding: 4px 10px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-badge-pending {
@@ -307,26 +375,111 @@
 /* Action Buttons in Table */
 .procurement-bills-received-actions-cell {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: center;
+  flex-wrap: nowrap;
 }
 
 .procurement-bills-received-action-btn {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 18px;
   padding: 6px;
   border-radius: 6px;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: #64748b;
+  flex-shrink: 0;
 }
 
 .procurement-bills-received-action-btn:hover {
-  background-color: #f1f5f9;
+  background-color: #eff6ff;
+  color: #3b82f6;
   transform: scale(1.1);
+}
+
+/* Pagination */
+.procurement-bills-received-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: white;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-info span {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.page-size-selector {
+  padding: 6px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-size-selector:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.pagination-controls .procurement-bills-received-btn-secondary {
+  padding: 7px 14px;
+  font-size: 13px;
+  min-width: unset;
+}
+
+.page-numbers {
+  display: flex;
+  gap: 4px;
+}
+
+.page-number {
+  padding: 7px 12px;
+  min-width: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-number:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.page-number.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
 }
 
 /* Drawer */
@@ -345,12 +498,8 @@
 }
 
 @keyframes procurement-bills-received-fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .procurement-bills-received-drawer {
@@ -364,12 +513,8 @@
 }
 
 @keyframes procurement-bills-received-slideIn {
-  from {
-    transform: translateX(100%);
-  }
-  to {
-    transform: translateX(0);
-  }
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 .procurement-bills-received-drawer-header {
@@ -386,8 +531,9 @@
 
 .procurement-bills-received-drawer-header h2 {
   margin: 0 0 4px 0;
-  font-size: 24px;
+  font-size: 22px;
   color: #1e293b;
+  word-break: break-word;
 }
 
 .procurement-bills-received-drawer-vendor {
@@ -399,13 +545,13 @@
 .procurement-bills-received-drawer-close {
   background: none;
   border: none;
-  font-size: 24px;
   cursor: pointer;
   color: #64748b;
   padding: 4px;
   line-height: 1;
   transition: all 0.2s;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .procurement-bills-received-drawer-close:hover {
@@ -500,6 +646,7 @@
   background-color: #f8fafc;
   border-radius: 8px;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .procurement-bills-received-trace-label {
@@ -531,6 +678,7 @@
   color: #475569;
   text-transform: uppercase;
   border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-items-table td {
@@ -541,33 +689,6 @@
 
 .procurement-bills-received-items-table tbody tr:last-child td {
   border-bottom: none;
-}
-
-/* Totals Section */
-.procurement-bills-received-totals {
-  background-color: #f8fafc;
-  padding: 16px;
-  border-radius: 8px;
-}
-
-.procurement-bills-received-total-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 0;
-  font-size: 14px;
-  color: #475569;
-}
-
-.procurement-bills-received-grand-total {
-  padding-top: 12px;
-  margin-top: 8px;
-  border-top: 2px solid #e2e8f0;
-  font-size: 16px;
-  color: #1e293b;
-}
-
-.procurement-bills-received-grand-total span {
-  color: #1e293b;
 }
 
 /* Payment Section */
@@ -628,6 +749,7 @@
   color: #475569;
   text-transform: uppercase;
   border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
 }
 
 .procurement-bills-received-payment-table td {
@@ -656,20 +778,8 @@
   border-radius: 6px;
   font-size: 14px;
   color: #475569;
-}
-
-.procurement-bills-received-attachment-download {
-  background: none;
-  border: none;
-  font-size: 16px;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-attachment-download:hover {
-  background-color: #e2e8f0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* Notes */
@@ -716,11 +826,10 @@
   animation: procurement-bills-received-fadeIn 0.2s;
 }
 
-.procurement-bills-received-create-modal,
 .procurement-bills-received-payment-modal {
   background: white;
   border-radius: 12px;
-  max-width: 800px;
+  max-width: 600px;
   width: 100%;
   max-height: 90vh;
   overflow-y: auto;
@@ -729,18 +838,8 @@
 }
 
 @keyframes procurement-bills-received-scaleIn {
-  from {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.procurement-bills-received-payment-modal {
-  max-width: 600px;
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .procurement-bills-received-modal-header {
@@ -753,14 +852,13 @@
 
 .procurement-bills-received-modal-header h2 {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   color: #1e293b;
 }
 
 .procurement-bills-received-modal-close {
   background: none;
   border: none;
-  font-size: 24px;
   cursor: pointer;
   color: #64748b;
   padding: 4px;
@@ -828,86 +926,6 @@
   gap: 16px;
 }
 
-.procurement-bills-received-form-section {
-  padding: 20px;
-  background-color: #f8fafc;
-  border-radius: 8px;
-}
-
-.procurement-bills-received-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.procurement-bills-received-section-header h3 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1e293b;
-  margin: 0;
-}
-
-.procurement-bills-received-btn-add-item {
-  padding: 6px 14px;
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-btn-add-item:hover {
-  background-color: #2563eb;
-}
-
-.procurement-bills-received-items-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.procurement-bills-received-item-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.procurement-bills-received-item-row input {
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
-  flex: 1;
-}
-
-.procurement-bills-received-item-row input:focus {
-  outline: none;
-  border-color: #3b82f6;
-}
-
-.procurement-bills-received-btn-remove-item {
-  background: #ef4444;
-  color: white;
-  border: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-btn-remove-item:hover {
-  background: #dc2626;
-}
-
 .procurement-bills-received-modal-actions {
   padding: 20px 24px;
   border-top: 1px solid #e2e8f0;
@@ -916,69 +934,6 @@
   justify-content: flex-end;
   flex-wrap: wrap;
 }
-
-/* Responsive Design */
-@media (max-width: 1024px) {
-  .procurement-bills-received-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .procurement-bills-received-info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .procurement-bills-received-form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .procurement-bills-received-payment-summary {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .procurement-bills-received-container {
-    padding: 16px;
-  }
-
-  .procurement-bills-received-title {
-    font-size: 22px;
-  }
-
-  .procurement-bills-received-action-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .procurement-bills-received-search-filters {
-    flex-direction: column;
-  }
-
-  .procurement-bills-received-search {
-    min-width: 100%;
-  }
-
-  .procurement-bills-received-actions {
-    flex-direction: column;
-  }
-
-  .procurement-bills-received-kpi-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .procurement-bills-received-drawer {
-    width: 100%;
-    max-width: 100vw;
-  }
-
-  .procurement-bills-received-item-row {
-    flex-wrap: wrap;
-  }
-}
-/* ============================================
-   Additional CSS for Bills Received
-   Add these styles to Bills-Recieved.css
-   ============================================ */
 
 /* File View Modal */
 .procurement-bills-received-file-view-modal {
@@ -992,492 +947,10 @@
   animation: procurement-bills-received-scaleIn 0.3s ease-out;
 }
 
-/* Pagination */
-.procurement-bills-received-pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 24px;
-  background: white;
-  border-radius: 12px;
-  margin-top: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.procurement-bills-received-pagination button {
-  padding: 8px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: white;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-pagination button:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.procurement-bills-received-pagination button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.procurement-bills-received-pagination span {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-/* Empty State */
-.procurement-bills-received-table tbody td[colspan] {
-  text-align: center;
-  padding: 60px 20px;
-}
-
-.procurement-bills-received-table tbody td[colspan] svg {
-  margin: 0 auto 16px;
-  display: block;
-}
-
-/* File Upload Input */
-.procurement-bills-received-form-group input[type="file"] {
-  padding: 10px 12px;
-  border: 2px dashed #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-form-group input[type="file"]:hover {
-  border-color: #3b82f6;
-  background: #f8fafc;
-}
-
-/* Modal Animations */
-@keyframes procurement-bills-received-scaleIn {
-  from {
-    transform: scale(0.9);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* Button with Icons */
-.procurement-bills-received-btn-primary svg,
-.procurement-bills-received-btn-secondary svg {
-  display: inline-block;
-  vertical-align: middle;
-}
-
-/* Action Button Hover States */
-.procurement-bills-received-action-btn:hover {
-  background-color: #eff6ff;
-  color: #3b82f6;
-  transform: scale(1.1);
-}
-
-/* Link Buttons */
-.procurement-bills-received-btn-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  background: none;
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.procurement-bills-received-btn-link:hover {
-  background-color: #eff6ff;
-  transform: translateY(-1px);
-}
-
-.procurement-bills-received-btn-link svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* Responsive Adjustments */
-@media (max-width: 768px) {
-  .procurement-bills-received-file-view-modal {
-    width: 100vw;
-    height: 100vh;
-    border-radius: 0;
-  }
-
-  .procurement-bills-received-pagination {
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  .procurement-bills-received-pagination button {
-    width: 100%;
-  }
-}
-
-
-/* ADD THESE STYLES TO Bills-Recieved.css */
-
-/* ========================================
-   PAGINATION STYLES
-   ======================================== */
-
-.procurement-bills-received-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px;
-  background: white;
-  border-radius: 12px;
-  margin-top: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.pagination-info span {
-  font-size: 14px;
-  color: #64748b;
-  font-weight: 500;
-}
-
-.page-size-selector {
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 14px;
-  background-color: white;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-size-selector:hover {
-  border-color: #cbd5e1;
-}
-
-.page-size-selector:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.pagination-controls button {
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: white;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  min-width: 80px;
-}
-
-.pagination-controls button:hover:not(:disabled) {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.pagination-controls button:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.page-numbers {
-  display: flex;
-  gap: 4px;
-  margin: 0 8px;
-}
-
-.page-number {
-  padding: 8px 12px;
-  min-width: 40px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: white;
-  color: #475569;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.page-number:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
-}
-
-.page-number.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
-}
-
-/* ========================================
-   FIXED TABLE ALIGNMENT FOR ITEMS
-   ======================================== */
-
-.bills-items-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.bills-items-table thead {
-  background-color: #f8fafc;
-}
-
-.bills-items-table th {
-  padding: 12px 10px;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.bills-items-table tbody tr {
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.bills-items-table tbody tr:last-child {
-  border-bottom: none;
-}
-
-.bills-items-table td {
-  padding: 8px;
-  vertical-align: middle;
-}
-
-.bills-item-row .item-input {
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  font-size: 13px;
-  transition: all 0.2s;
-}
-
-.bills-item-row .item-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.line-total-display {
-  display: inline-block;
-  font-weight: 600;
-  color: #059669;
-  font-size: 14px;
-  padding: 8px;
-}
-
-.procurement-bills-received-btn-remove-item {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-  width: 100%;
-}
-
-.procurement-bills-received-btn-remove-item:hover {
-  background: #dc2626;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
-}
-
-/* Ensure columns have fixed widths */
-.bills-items-table th:nth-child(1),
-.bills-items-table td:nth-child(1) {
-  width: 15%;
-}
-
-.bills-items-table th:nth-child(2),
-.bills-items-table td:nth-child(2) {
-  width: 25%;
-}
-
-.bills-items-table th:nth-child(3),
-.bills-items-table td:nth-child(3) {
-  width: 10%;
-}
-
-.bills-items-table th:nth-child(4),
-.bills-items-table td:nth-child(4) {
-  width: 15%;
-}
-
-.bills-items-table th:nth-child(5),
-.bills-items-table td:nth-child(5) {
-  width: 10%;
-}
-
-.bills-items-table th:nth-child(6),
-.bills-items-table td:nth-child(6) {
-  width: 15%;
-}
-
-.bills-items-table th:nth-child(7),
-.bills-items-table td:nth-child(7) {
-  width: 10%;
-}
-
-/* ========================================
-   RESPONSIVE DESIGN FOR PAGINATION
-   ======================================== */
-
-@media (max-width: 768px) {
-  .procurement-bills-received-pagination {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .pagination-info {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .page-size-selector {
-    width: 100%;
-  }
-
-  .pagination-controls {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .pagination-controls button {
-    min-width: 60px;
-    padding: 8px;
-    font-size: 13px;
-  }
-
-  .page-numbers {
-    margin: 0;
-  }
-
-  .page-number {
-    min-width: 36px;
-    padding: 6px 8px;
-    font-size: 13px;
-  }
-
-  /* Responsive table for items */
-  .bills-items-table {
-    font-size: 12px;
-  }
-
-  .bills-item-row .item-input {
-    padding: 6px 8px;
-    font-size: 12px;
-  }
-
-  .line-total-display {
-    font-size: 12px;
-  }
-}
-
-/* ========================================
-   BILL TOTAL DISPLAY
-   ======================================== */
-
-.procurement-bills-received-bill-total {
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  gap: 16px;
-  padding: 16px;
-  background-color: #f1f5f9;
-  border-radius: 8px;
-  margin-top: 16px;
-  font-size: 16px;
-}
-
-.procurement-bills-received-bill-total strong {
-  color: #475569;
-  font-weight: 600;
-}
-
-.procurement-bills-received-bill-total .total-amount {
-  color: #059669;
-  font-weight: 700;
-  font-size: 20px;
-}
-
-/* ========================================
-   FIX FOR MODAL SCROLLING
-   ======================================== */
-
-.procurement-bills-received-create-modal {
-  max-height: 90vh;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 #f1f5f9;
-}
-
-.procurement-bills-received-create-modal::-webkit-scrollbar {
-  width: 8px;
-}
-
-.procurement-bills-received-create-modal::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-.procurement-bills-received-create-modal::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.procurement-bills-received-create-modal::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-/* ========================================
+/* =============================================
    BILL FORM MODAL - UNIQUE STYLES
-   (Completely independent from main page)
-   ======================================== */
+   ============================================= */
 
-/* Modal Overlay */
 .bill-form-modal-overlay {
   position: fixed;
   top: 0;
@@ -1491,13 +964,13 @@
   justify-content: center;
   z-index: 9999;
   animation: fadeIn 0.2s ease-in-out;
+  padding: 16px;
 }
 
-/* Modal Container */
 .bill-form-modal-container {
   background: white;
   border-radius: 12px;
-  width: 95%;
+  width: 100%;
   max-width: 1200px;
   max-height: 90vh;
   display: flex;
@@ -1506,18 +979,17 @@
   animation: slideUp 0.3s ease-out;
 }
 
-/* Modal Header */
 .bill-form-modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 24px 32px;
+  padding: 20px 28px;
   border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
 }
 
 .bill-form-modal-header h2 {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: #1e293b;
   margin: 0;
@@ -1534,6 +1006,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
 }
 
 .bill-form-modal-close-btn:hover {
@@ -1541,16 +1014,32 @@
   color: #1e293b;
 }
 
-/* Modal Content (Scrollable) */
 .bill-form-modal-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 32px;
+  padding: 24px 28px;
 }
 
-/* Form Sections */
+.bill-form-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bill-form-modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.bill-form-modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.bill-form-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .bill-form-section {
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .bill-form-section:last-child {
@@ -1558,7 +1047,7 @@
 }
 
 .bill-form-section-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #1e293b;
   margin: 0 0 16px 0;
@@ -1573,6 +1062,8 @@
   margin-bottom: 16px;
   padding-bottom: 8px;
   border-bottom: 2px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .bill-form-section-header .bill-form-section-title {
@@ -1581,7 +1072,6 @@
   border: none;
 }
 
-/* Form Rows and Fields */
 .bill-form-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1596,12 +1086,11 @@
 }
 
 .bill-form-label {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: #475569;
 }
 
-/* Form Inputs */
 .bill-form-input,
 .bill-form-select,
 .bill-form-textarea {
@@ -1613,6 +1102,7 @@
   color: #1e293b;
   background: white;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .bill-form-input:focus,
@@ -1624,8 +1114,7 @@
 }
 
 .bill-form-input:disabled,
-.bill-form-select:disabled,
-.bill-form-textarea:disabled {
+.bill-form-select:disabled {
   background: #f1f5f9;
   cursor: not-allowed;
   color: #94a3b8;
@@ -1634,34 +1123,21 @@
 .bill-form-file-input {
   padding: 8px;
   font-size: 14px;
+  border: 2px dashed #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
-/* Hints and Messages */
-.bill-form-hint {
-  font-size: 12px;
-  color: #64748b;
-  margin-top: 4px;
+.bill-form-file-input:hover {
+  border-color: #3b82f6;
+  background: #f8fafc;
 }
 
-.bill-form-hint-success {
-  font-size: 12px;
-  color: #22c55e;
-  margin-top: 4px;
-}
+.bill-form-hint { font-size: 12px; color: #64748b; margin-top: 4px; }
+.bill-form-hint-success { font-size: 12px; color: #22c55e; margin-top: 4px; }
+.bill-form-hint-error { font-size: 12px; color: #ef4444; margin-top: 4px; }
+.bill-form-file-selected { font-size: 13px; color: #22c55e; margin-top: 8px; }
 
-.bill-form-hint-error {
-  font-size: 12px;
-  color: #ef4444;
-  margin-top: 4px;
-}
-
-.bill-form-file-selected {
-  font-size: 13px;
-  color: #22c55e;
-  margin-top: 8px;
-}
-
-/* Items Table */
 .bill-form-items-table-container {
   overflow-x: auto;
   border: 1px solid #e2e8f0;
@@ -1680,12 +1156,13 @@
 }
 
 .bill-form-items-table th {
-  padding: 12px 8px;
+  padding: 10px 8px;
   text-align: left;
   font-weight: 600;
   color: #475569;
   border-bottom: 2px solid #e2e8f0;
   white-space: nowrap;
+  font-size: 12px;
 }
 
 .bill-form-items-table td {
@@ -1703,6 +1180,7 @@
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 13px;
+  box-sizing: border-box;
 }
 
 .bill-form-table-input:focus {
@@ -1714,22 +1192,23 @@
   font-weight: 600;
   color: #1e293b;
   font-size: 13px;
+  white-space: nowrap;
 }
 
-/* Buttons */
 .bill-form-add-item-btn {
   padding: 8px 16px;
   background: #3b82f6;
   color: white;
   border: none;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 
 .bill-form-add-item-btn:hover {
@@ -1755,17 +1234,17 @@
   background: #fecaca;
 }
 
-/* Total Row */
 .bill-form-total-row {
   display: flex;
   justify-content: flex-end;
   align-items: center;
   gap: 16px;
-  padding: 16px;
+  padding: 14px 16px;
   background: #f8fafc;
   border-radius: 8px;
-  font-size: 16px;
+  font-size: 15px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
 }
 
 .bill-form-total-amount {
@@ -1774,7 +1253,6 @@
   color: #1e293b;
 }
 
-/* Edit Warning */
 .bill-form-edit-warning {
   padding: 12px 16px;
   background: #fef3c7;
@@ -1785,23 +1263,23 @@
   line-height: 1.6;
 }
 
-/* Modal Actions (Footer) */
 .bill-form-modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 20px 32px;
+  padding: 18px 28px;
   border-top: 1px solid #e2e8f0;
   flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .bill-form-save-btn {
-  padding: 12px 28px;
+  padding: 11px 28px;
   background: #3b82f6;
   color: white;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -1814,12 +1292,12 @@
 }
 
 .bill-form-cancel-btn {
-  padding: 12px 28px;
+  padding: 11px 28px;
   background: #f1f5f9;
   color: #475569;
   border: none;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
@@ -1827,48 +1305,206 @@
 
 .bill-form-cancel-btn:hover {
   background: #e2e8f0;
-  transform: translateY(-1px);
 }
 
-/* ========================================
+/* =============================================
+   ANIMATIONS
+   ============================================= */
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* =============================================
    RESPONSIVE DESIGN
-   ======================================== */
+   ============================================= */
 
-@media (max-width: 1024px) {
-  .bill-form-modal-container {
-    width: 98%;
-    max-width: none;
+/* Large screens: keep 5 KPI columns */
+@media (max-width: 1400px) {
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: repeat(5, 1fr);
   }
-
-  .bill-form-modal-header,
-  .bill-form-modal-content,
-  .bill-form-modal-actions {
-    padding-left: 20px;
-    padding-right: 20px;
+  .procurement-bills-received-kpi-value {
+    font-size: 20px;
   }
 }
 
-@media (max-width: 768px) {
+/* Medium-large: switch to 3 KPI columns */
+@media (max-width: 1100px) {
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .procurement-bills-received-kpi-value {
+    font-size: 22px;
+  }
+}
+
+/* Tablet */
+@media (max-width: 900px) {
+  .procurement-bills-received-container {
+    padding: 16px;
+  }
+
+  .procurement-bills-received-title {
+    font-size: 22px;
+  }
+
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .procurement-bills-received-info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-payment-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-table-scroll-wrapper {
+    max-height: 420px;
+  }
+
   .bill-form-row {
     grid-template-columns: 1fr;
     gap: 16px;
   }
 
-  .bill-form-modal-header h2 {
+  .bill-form-modal-container {
+    max-width: none;
+    width: 100%;
+  }
+
+  .bill-form-modal-header,
+  .bill-form-modal-content,
+  .bill-form-modal-actions {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Mobile */
+@media (max-width: 640px) {
+  .procurement-bills-received-container {
+    padding: 12px;
+  }
+
+  .procurement-bills-received-title {
     font-size: 20px;
   }
 
-  .bill-form-section-title {
-    font-size: 16px;
+  .procurement-bills-received-action-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .bill-form-items-table {
-    font-size: 12px;
+  .procurement-bills-received-search-filters {
+    flex-direction: column;
   }
 
-  .bill-form-items-table th,
-  .bill-form-items-table td {
-    padding: 8px 4px;
+  .procurement-bills-received-search {
+    min-width: 100%;
+  }
+
+  .procurement-bills-received-actions {
+    flex-direction: column;
+  }
+
+  .procurement-bills-received-btn-primary,
+  .procurement-bills-received-btn-secondary {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .procurement-bills-received-kpi-card {
+    padding: 14px 12px;
+    gap: 10px;
+  }
+
+  .procurement-bills-received-kpi-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .procurement-bills-received-kpi-value {
+    font-size: 18px;
+  }
+
+  .procurement-bills-received-kpi-label {
+    font-size: 11px;
+  }
+
+  .procurement-bills-received-table-scroll-wrapper {
+    max-height: 380px;
+  }
+
+  .procurement-bills-received-drawer {
+    width: 100%;
+    max-width: 100vw;
+  }
+
+  .procurement-bills-received-payment-info {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-modal-actions {
+    flex-direction: column;
+  }
+
+  .procurement-bills-received-modal-actions .procurement-bills-received-btn-primary,
+  .procurement-bills-received-modal-actions .procurement-bills-received-btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .procurement-bills-received-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-size-selector {
+    width: 100%;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .bill-form-modal-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .bill-form-modal-container {
+    border-radius: 16px 16px 0 0;
+    max-height: 95vh;
   }
 
   .bill-form-modal-actions {
@@ -1878,83 +1514,46 @@
   .bill-form-save-btn,
   .bill-form-cancel-btn {
     width: 100%;
+    text-align: center;
+  }
+
+  .procurement-bills-received-file-view-modal {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+
+  .procurement-bills-received-drawer-actions {
+    flex-direction: column;
+  }
+
+  .procurement-bills-received-drawer-actions .procurement-bills-received-btn-primary,
+  .procurement-bills-received-drawer-actions .procurement-bills-received-btn-secondary {
+    width: 100%;
     justify-content: center;
   }
 }
 
-/* ========================================
-   ANIMATIONS
-   ======================================== */
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+/* Very small screens */
+@media (max-width: 400px) {
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: 1fr;
   }
-  to {
-    opacity: 1;
+
+  .procurement-bills-received-kpi-card {
+    flex-direction: row;
   }
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* ========================================
-   ACCESSIBILITY
-   ======================================== */
-
+/* Accessibility */
 @media (prefers-reduced-motion: reduce) {
   .bill-form-modal-overlay,
   .bill-form-modal-container,
-  .bill-form-add-item-btn,
-  .bill-form-save-btn,
-  .bill-form-cancel-btn {
-    animation: none;
-    transition: none;
+  .procurement-bills-received-drawer,
+  .procurement-bills-received-kpi-card,
+  * {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
   }
-
-  .bill-form-add-item-btn:hover,
-  .bill-form-save-btn:hover,
-  .bill-form-cancel-btn:hover {
-    transform: none;
-  }
-}
-
-/* High contrast mode */
-@media (prefers-contrast: high) {
-  .bill-form-modal-container {
-    border: 2px solid #000;
-  }
-
-  .bill-form-input,
-  .bill-form-select,
-  .bill-form-textarea {
-    border: 2px solid #000;
-  }
-}
-
-/* Scrollbar Styling for Modal Content */
-.bill-form-modal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.bill-form-modal-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-.bill-form-modal-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.bill-form-modal-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
 }

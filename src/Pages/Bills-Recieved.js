@@ -45,7 +45,7 @@ const BillsReceived = () => {
     currentPage: 0,
     totalPages: 0,
     totalItems: 0,
-    pageSize: 20
+    pageSize: 10
   });
 
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
@@ -97,7 +97,6 @@ const BillsReceived = () => {
   // Fetch MODAL dropdown data when modal opens
   useEffect(() => {
     if (showCreateEditModal) {
-      // Only fetch groups on modal open, other dropdowns load on demand
       fetchModalGroups();
     }
   }, [showCreateEditModal]);
@@ -187,7 +186,6 @@ const BillsReceived = () => {
       if (response.ok) {
         const data = await response.json();
         setModalVendors(data || []);
-        console.log('✅ Loaded modal vendors:', data.length);
       }
     } catch (error) {
       console.error('Failed to fetch modal vendors:', error);
@@ -219,7 +217,6 @@ const BillsReceived = () => {
       if (response.ok) {
         const data = await response.json();
         setModalPurchaseOrders(data || []);
-        console.log('✅ Loaded modal POs:', data.length);
       }
     } catch (error) {
       console.error('Failed to fetch modal purchase orders:', error);
@@ -338,7 +335,7 @@ const BillsReceived = () => {
       projectId: '',
       vendorId: '',
       poId: '',
-      items: prev.items.filter(item => !item.poItemId) // Keep only manual items
+      items: prev.items.filter(item => !item.poItemId)
     }));
 
     if (newGroupName) {
@@ -454,7 +451,7 @@ const BillsReceived = () => {
     }
   };
 
-  // ========== VIEW BILL - FIXED ==========
+  // ========== VIEW BILL ==========
   const handleViewBill = async (billId) => {
     setLoading(true);
     try {
@@ -465,18 +462,8 @@ const BillsReceived = () => {
 
       if (response.ok) {
         const bill = await response.json();
-        
-        // ✅ CRITICAL FIX: Ensure items array exists
-        if (!bill.items) {
-          bill.items = [];
-        }
-        
-        // ✅ Ensure payment history exists
-        if (!bill.paymentHistory) {
-          bill.paymentHistory = [];
-        }
-        
-        console.log('✅ Bill loaded:', bill);
+        if (!bill.items) bill.items = [];
+        if (!bill.paymentHistory) bill.paymentHistory = [];
         setSelectedBill(bill);
         setShowDetailDrawer(true);
       } else {
@@ -490,20 +477,19 @@ const BillsReceived = () => {
     }
   };
 
-  // ========== CREATE BILL - COMPLETELY FIXED ==========
+  // ========== CREATE BILL ==========
   const handleCreateBill = () => {
     setEditMode(false);
     
-    // ✅ CRITICAL FIX: Start with COMPLETELY EMPTY selections
     setFormData({
       vendorId: '',
       poId: '',
       billNo: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      projectId: '',      // ✅ EMPTY - no default
-      groupId: '',        // ✅ EMPTY - no default
-      subGroupId: '',     // ✅ EMPTY - no default
+      projectId: '',
+      groupId: '',
+      subGroupId: '',
       items: [{
         itemName: '',
         description: '',
@@ -514,12 +500,9 @@ const BillsReceived = () => {
       notes: ''
     });
 
-    // ✅ Set modal dropdown states to EMPTY (completely independent)
     setModalGroupName('');
     setModalSubGroupName('');
     setModalProjectId('');
-    
-    // ✅ Clear ALL modal dropdowns
     setModalSubGroups([]);
     setModalProjects([]);
     setModalVendors([]);
@@ -527,29 +510,24 @@ const BillsReceived = () => {
 
     setSelectedFile(null);
     setShowCreateEditModal(true);
-    
-    // ✅ Only fetch groups initially (other dropdowns load on selection)
     fetchModalGroups();
   };
 
-  // ========== EDIT BILL - COMPLETELY FIXED ==========
+  // ========== EDIT BILL ==========
   const handleEditBill = async (bill) => {
     setEditMode(true);
     setLoading(true);
     
     try {
-      // ✅ Set modal dropdown states FIRST (independent from main filters)
       setModalGroupName(bill.groupId || '');
       setModalSubGroupName(bill.subGroupId || '');
       setModalProjectId(bill.projectId || '');
       
-      // ✅ Clear dependent dropdowns first
       setModalSubGroups([]);
       setModalProjects([]);
       setModalVendors([]);
       setModalPurchaseOrders([]);
       
-      // ✅ Fetch dropdowns for edit mode in correct order
       await fetchModalGroups();
       
       if (bill.groupId) {
@@ -559,17 +537,14 @@ const BillsReceived = () => {
         }
       }
       
-      // ✅ Fetch vendors for current selection
       if (bill.projectId || bill.subGroupId) {
         await fetchModalVendors();
       }
       
-      // ✅ Fetch POs if vendor is selected
       if (bill.vendorId) {
         await fetchModalPurchaseOrders(bill.vendorId);
       }
       
-      // ✅ If bill has PO items, fetch PO item details to get max quantities
       let enrichedItems = bill.items && bill.items.length > 0 ? [...bill.items] : [{
         itemName: '',
         description: '',
@@ -578,7 +553,6 @@ const BillsReceived = () => {
         taxPercent: 18
       }];
       
-      // ✅ For PO-linked bills, fetch current PO item status
       if (bill.poId && bill.items && bill.items.length > 0) {
         try {
           const response = await fetch(
@@ -593,7 +567,6 @@ const BillsReceived = () => {
             const data = await response.json();
             
             if (data.success && data.items) {
-              // Enrich items with current PO status
               enrichedItems = bill.items.map(billItem => {
                 if (billItem.poItemId) {
                   const poItem = data.items.find(pi => pi.id === billItem.poItemId);
@@ -603,7 +576,6 @@ const BillsReceived = () => {
                       orderedQty: poItem.orderedQty,
                       deliveredQty: poItem.deliveredQty,
                       pendingQty: poItem.pendingQty,
-                      // Max quantity = current bill quantity + remaining pending
                       maxBillableQty: (billItem.quantity || 0) + (poItem.pendingQty || 0),
                       originalBillQty: billItem.quantity,
                       deliveryStatus: poItem.deliveryStatus
@@ -619,7 +591,6 @@ const BillsReceived = () => {
         }
       }
       
-      // ✅ Set form data with enriched items
       setFormData({
         ...bill,
         billDate: bill.billDate ? bill.billDate.split('T')[0] : '',
@@ -638,7 +609,7 @@ const BillsReceived = () => {
     }
   };
 
-  // ========== DELETE BILL - WITH CONFIRMATION MODAL ==========
+  // ========== DELETE BILL ==========
   const handleDeleteBill = (billId) => {
     setConfirmModal({
       show: true,
@@ -676,30 +647,25 @@ const BillsReceived = () => {
     }
   };
 
-  // ========== SAVE BILL - WITH ENHANCED VALIDATION ==========
+  // ========== SAVE BILL ==========
   const handleSaveBill = async () => {
-    // Validation
     if (!formData.vendorId || formData.vendorId === '') {
       showError('Please select a vendor');
       return;
     }
-
     if (!formData.billDate) {
       showError('Please select bill date');
       return;
     }
-
     if (!formData.dueDate) {
       showError('Please select due date');
       return;
     }
-
     if (formData.items.length === 0) {
       showError('Please add at least one item');
       return;
     }
 
-    // Validate items
     for (let i = 0; i < formData.items.length; i++) {
       const item = formData.items[i];
       
@@ -713,7 +679,6 @@ const BillsReceived = () => {
         return;
       }
       
-      // ✅ Validate max quantity for PO items in edit mode
       if (editMode && item.poItemId && item.maxBillableQty) {
         if (item.quantity > item.maxBillableQty) {
           showError(
@@ -742,7 +707,6 @@ const BillsReceived = () => {
       if (response.ok) {
         const savedBill = await response.json();
 
-        // Upload file if selected
         if (selectedFile && savedBill.id) {
           await uploadBillFile(savedBill.id, selectedFile);
         }
@@ -870,7 +834,7 @@ const BillsReceived = () => {
     }
   };
 
-  // ========== MARK AS PAID - WITH CONFIRMATION MODAL ==========
+  // ========== MARK AS PAID ==========
   const handleMarkPaid = (billId) => {
     setConfirmModal({
       show: true,
@@ -922,9 +886,30 @@ const BillsReceived = () => {
     return statusClasses[status] || '';
   };
 
-  // Format currency
+  // ========== INDIAN NUMBER FORMAT (SHORT) ==========
+  // Converts: 1000 → 1K, 100000 → 1L, 10000000 → 1Cr
+  const formatIndianShort = (amount) => {
+    const num = parseFloat(amount) || 0;
+    if (num >= 10000000) {
+      // Crore: 1,00,00,000+
+      const val = num / 10000000;
+      return `${val % 1 === 0 ? val.toFixed(0) : val.toFixed(2)} Cr`;
+    } else if (num >= 100000) {
+      // Lakh: 1,00,000+
+      const val = num / 100000;
+      return `${val % 1 === 0 ? val.toFixed(0) : val.toFixed(2)} L`;
+    } else if (num >= 1000) {
+      // Thousand: 1,000+
+      const val = num / 1000;
+      return `${val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)} K`;
+    } else {
+      return num.toLocaleString('en-IN');
+    }
+  };
+
+  // Full Indian format (for tables and details): 1,14,59,385.6
   const formatCurrency = (amount) => {
-    return `${(amount || 0).toLocaleString('en-IN')}`;
+    return `${(parseFloat(amount) || 0).toLocaleString('en-IN')}`;
   };
 
   // Format date
@@ -1006,7 +991,7 @@ const BillsReceived = () => {
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       
-      {/* ✅ CONFIRMATION MODAL */}
+      {/* CONFIRMATION MODAL */}
       <ConfirmationModal
         show={confirmModal.show}
         title={confirmModal.title}
@@ -1068,7 +1053,7 @@ const BillsReceived = () => {
       <div className="procurement-bills-received-kpi-grid">
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <FileText size={32} />
+            <FileText size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
             <div className="procurement-bills-received-kpi-value">{kpis.totalBills}</div>
@@ -1078,17 +1063,23 @@ const BillsReceived = () => {
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <IndianRupee size={32} />
+            <IndianRupee size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{formatCurrency(kpis.outstandingAmount)}</div>
+            {/* ✅ INDIAN SHORT FORMAT for KPI: shows 1L, 1Cr etc. */}
+            <div
+              className="procurement-bills-received-kpi-value"
+              title={`₹${formatCurrency(kpis.outstandingAmount)}`}
+            >
+              {formatIndianShort(kpis.outstandingAmount)}
+            </div>
             <div className="procurement-bills-received-kpi-label">Outstanding Amount</div>
           </div>
         </div>
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <Calendar size={32} />
+            <Calendar size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
             <div className="procurement-bills-received-kpi-value">{kpis.billsThisMonth}</div>
@@ -1098,7 +1089,7 @@ const BillsReceived = () => {
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <CheckCircle size={32} />
+            <CheckCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
             <div className="procurement-bills-received-kpi-value">{kpis.paidBills}</div>
@@ -1108,7 +1099,7 @@ const BillsReceived = () => {
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <LinkIcon size={32} />
+            <LinkIcon size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
             <div className="procurement-bills-received-kpi-value">{kpis.linkedToPOPercentage}%</div>
@@ -1119,137 +1110,142 @@ const BillsReceived = () => {
 
       {/* Bills Table */}
       <div className="procurement-bills-received-table-container">
-        <table className="procurement-bills-received-table">
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  onChange={handleSelectAll}
-                  checked={selectedBills.length === bills.length && bills.length > 0}
-                />
-              </th>
-              <th>Bill ID</th>
-              <th>Vendor Name</th>
-              <th>Linked PO</th>
-              <th>Bill Date</th>
-              <th>Due Date</th>
-              <th>Amount</th>
-              <th>Paid Amount</th>
-              <th>Balance</th>
-              <th>Payment Status</th>
-              <th>Uploaded By</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bills.length === 0 ? (
+        {/* ✅ Fixed-height scrollable wrapper */}
+        <div className="procurement-bills-received-table-scroll-wrapper">
+          <table className="procurement-bills-received-table">
+            <thead>
               <tr>
-                <td colSpan="12" style={{ textAlign: 'center', padding: '40px' }}>
-                  <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px' }} />
-                  <p style={{ color: '#64748b', fontSize: '16px' }}>No bills found. Click "Add New Bill" to create one.</p>
-                </td>
+                <th>
+                  <input
+                    type="checkbox"
+                    onChange={handleSelectAll}
+                    checked={selectedBills.length === bills.length && bills.length > 0}
+                  />
+                </th>
+                <th>Bill ID</th>
+                <th>Vendor Name</th>
+                <th>Linked PO</th>
+                <th>Bill Date</th>
+                <th>Due Date</th>
+                <th>Amount</th>
+                <th>Paid Amount</th>
+                <th>Balance</th>
+                <th>Payment Status</th>
+                <th>Uploaded By</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              bills.map(bill => (
-                <tr key={bill.id} className="procurement-bills-received-table-row">
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={selectedBills.includes(bill.id)}
-                      onChange={() => handleSelectBill(bill.id)}
-                    />
-                  </td>
-                  <td className="procurement-bills-received-table-id">{bill.billNo}</td>
-                  <td className="procurement-bills-received-table-vendor">{bill.vendorName}</td>
-                  <td>
-                    {bill.poNumber ? (
-                      <span className="procurement-bills-received-link">{bill.poNumber}</span>
-                    ) : (
-                      <span className="procurement-bills-received-no-link">—</span>
-                    )}
-                  </td>
-                  <td>{formatDate(bill.billDate)}</td>
-                  <td>{formatDate(bill.dueDate)}</td>
-                  <td className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>
-                  <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
-                  <td className="procurement-bills-received-table-balance">
-                    {formatCurrency(bill.balanceAmount)}
-                  </td>
-                  <td>
-                    <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
-                      {bill.status}
-                    </span>
-                  </td>
-                  <td>{bill.uploadedByName}</td>
-                  <td>
-                    <div className="procurement-bills-received-actions-cell">
-                      <button
-                        className="procurement-bills-received-action-btn"
-                        onClick={() => handleViewBill(bill.id)}
-                        title="View Details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      {bill.status !== 'Paid' && (
-                        <>
-                          <button
-                            className="procurement-bills-received-action-btn"
-                            onClick={() => handleEditBill(bill)}
-                            title="Edit"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            className="procurement-bills-received-action-btn"
-                            onClick={() => handleAddPayment(bill)}
-                            title="Add Payment"
-                          >
-                            <CreditCard size={16} />
-                          </button>
-                          <button
-                            className="procurement-bills-received-action-btn"
-                            onClick={() => handleMarkPaid(bill.id)}
-                            title="Mark Paid"
-                          >
-                            <Check size={16} />
-                          </button>
-                        </>
-                      )}
-                      {bill.billFilePath && (
-                        <>
-                          <button
-                            className="procurement-bills-received-action-btn"
-                            onClick={() => handleViewFile(bill.id)}
-                            title="View File"
-                          >
-                            <Eye size={16} />
-                          </button>
-                          <button
-                            className="procurement-bills-received-action-btn"
-                            onClick={() => handleDownloadFile(bill.id, bill.billFileName)}
-                            title="Download"
-                          >
-                            <Download size={16} />
-                          </button>
-                        </>
-                      )}
-                      <button
-                        className="procurement-bills-received-action-btn"
-                        onClick={() => handleDeleteBill(bill.id)}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
+            </thead>
+            <tbody>
+              {bills.length === 0 ? (
+                <tr>
+                  <td colSpan="12" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                    <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
+                    <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>
+                      No bills found. Click "Add New Bill" to create one.
+                    </p>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                bills.map(bill => (
+                  <tr key={bill.id} className="procurement-bills-received-table-row">
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={selectedBills.includes(bill.id)}
+                        onChange={() => handleSelectBill(bill.id)}
+                      />
+                    </td>
+                    <td className="procurement-bills-received-table-id">{bill.billNo}</td>
+                    <td className="procurement-bills-received-table-vendor">{bill.vendorName}</td>
+                    <td>
+                      {bill.poNumber ? (
+                        <span className="procurement-bills-received-link">{bill.poNumber}</span>
+                      ) : (
+                        <span className="procurement-bills-received-no-link">—</span>
+                      )}
+                    </td>
+                    <td>{formatDate(bill.billDate)}</td>
+                    <td>{formatDate(bill.dueDate)}</td>
+                    <td className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>
+                    <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
+                    <td className="procurement-bills-received-table-balance">
+                      {formatCurrency(bill.balanceAmount)}
+                    </td>
+                    <td>
+                      <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
+                        {bill.status}
+                      </span>
+                    </td>
+                    <td>{bill.uploadedByName}</td>
+                    <td>
+                      <div className="procurement-bills-received-actions-cell">
+                        <button
+                          className="procurement-bills-received-action-btn"
+                          onClick={() => handleViewBill(bill.id)}
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+                        {bill.status !== 'Paid' && (
+                          <>
+                            <button
+                              className="procurement-bills-received-action-btn"
+                              onClick={() => handleEditBill(bill)}
+                              title="Edit"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              className="procurement-bills-received-action-btn"
+                              onClick={() => handleAddPayment(bill)}
+                              title="Add Payment"
+                            >
+                              <CreditCard size={16} />
+                            </button>
+                            <button
+                              className="procurement-bills-received-action-btn"
+                              onClick={() => handleMarkPaid(bill.id)}
+                              title="Mark Paid"
+                            >
+                              <Check size={16} />
+                            </button>
+                          </>
+                        )}
+                        {bill.billFilePath && (
+                          <>
+                            <button
+                              className="procurement-bills-received-action-btn"
+                              onClick={() => handleViewFile(bill.id)}
+                              title="View File"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              className="procurement-bills-received-action-btn"
+                              onClick={() => handleDownloadFile(bill.id, bill.billFileName)}
+                              title="Download"
+                            >
+                              <Download size={16} />
+                            </button>
+                          </>
+                        )}
+                        <button
+                          className="procurement-bills-received-action-btn"
+                          onClick={() => handleDeleteBill(bill.id)}
+                          title="Delete"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
 
-        {/* Pagination */}
+        {/* Pagination - outside scroll wrapper so it's always visible */}
         {pagination.totalPages > 0 && (
           <div className="procurement-bills-received-pagination">
             <div className="pagination-info">
@@ -1263,10 +1259,10 @@ const BillsReceived = () => {
                 value={pagination.pageSize}
                 onChange={handlePageSizeChange}
               >
-                <option value="10">10 per page</option>
-                <option value="20">20 per page</option>
-                <option value="50">50 per page</option>
-                <option value="100">100 per page</option>
+                <option value="10">10 Rows</option>
+                <option value="20">20 Rows</option>
+                <option value="50">50 Rows</option>
+                <option value="100">100 Rows</option>
               </select>
             </div>
 
@@ -1284,7 +1280,7 @@ const BillsReceived = () => {
                 disabled={pagination.currentPage === 0}
                 className="procurement-bills-received-btn-secondary"
               >
-                ‹ Previous
+                Previous
               </button>
 
               <span className="page-numbers">
@@ -1317,7 +1313,7 @@ const BillsReceived = () => {
                 disabled={pagination.currentPage >= pagination.totalPages - 1}
                 className="procurement-bills-received-btn-secondary"
               >
-                Next ›
+                Next
               </button>
               <button
                 onClick={() => handlePageChange(pagination.totalPages - 1)}
@@ -1332,7 +1328,7 @@ const BillsReceived = () => {
         )}
       </div>
 
-      {/* CREATE/EDIT MODAL - ✅ UNIQUE CLASSNAMES & COMPLETELY INDEPENDENT */}
+      {/* CREATE/EDIT MODAL */}
       {showCreateEditModal && formData && (
         <div className="bill-form-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
           <div className="bill-form-modal-container" onClick={(e) => e.stopPropagation()}>
@@ -1443,14 +1439,10 @@ const BillsReceived = () => {
                       ))}
                     </select>
                     {formData.vendorId && modalPurchaseOrders.length === 0 && (
-                      <small className="bill-form-hint">
-                        No POs found for selected vendor
-                      </small>
+                      <small className="bill-form-hint">No POs found for selected vendor</small>
                     )}
                     {formData.poId && (
-                      <small className="bill-form-hint-success">
-                        ✓ PO items loaded below
-                      </small>
+                      <small className="bill-form-hint-success">✓ PO items loaded below</small>
                     )}
                   </div>
                 </div>
@@ -1591,9 +1583,7 @@ const BillsReceived = () => {
                               min="0"
                               step="0.01"
                               readOnly={!!item.poItemId}
-                              style={{
-                                backgroundColor: item.poItemId ? '#f8fafc' : 'white'
-                              }}
+                              style={{ backgroundColor: item.poItemId ? '#f8fafc' : 'white' }}
                             />
                           </td>
                           <td>
@@ -1657,9 +1647,7 @@ const BillsReceived = () => {
                     onChange={handleFileChange}
                   />
                   {selectedFile && (
-                    <p className="bill-form-file-selected">
-                      ✓ {selectedFile.name} selected
-                    </p>
+                    <p className="bill-form-file-selected">✓ {selectedFile.name} selected</p>
                   )}
                 </div>
               </div>
@@ -1692,7 +1680,7 @@ const BillsReceived = () => {
         </div>
       )}
 
-      {/* DETAIL DRAWER - FIXED */}
+      {/* DETAIL DRAWER */}
       {showDetailDrawer && selectedBill && (
         <div className="procurement-bills-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
           <div className="procurement-bills-received-drawer" onClick={(e) => e.stopPropagation()}>
@@ -1734,13 +1722,13 @@ const BillsReceived = () => {
                   <div className="procurement-bills-received-info-item">
                     <label>Total Amount:</label>
                     <span className="procurement-bills-received-amount-highlight">
-                      {formatCurrency(selectedBill.totalAmount)}
+                      ₹{formatCurrency(selectedBill.totalAmount)}
                     </span>
                   </div>
                   <div className="procurement-bills-received-info-item">
                     <label>Balance Due:</label>
                     <span className="procurement-bills-received-balance-highlight">
-                      {formatCurrency(selectedBill.balanceAmount)}
+                      ₹{formatCurrency(selectedBill.balanceAmount)}
                     </span>
                   </div>
                 </div>
@@ -1767,7 +1755,7 @@ const BillsReceived = () => {
                 </div>
               )}
 
-              {/* Line Items - FIXED with Item Name */}
+              {/* Line Items */}
               {selectedBill.items && selectedBill.items.length > 0 && (
                 <div className="procurement-bills-received-drawer-section">
                   <h3>Bill Line Items</h3>
@@ -1814,13 +1802,13 @@ const BillsReceived = () => {
                   <div className="procurement-bills-received-payment-stat">
                     <label>Total Paid:</label>
                     <span className="procurement-bills-received-paid-amount">
-                      {formatCurrency(selectedBill.paidAmount)}
+                      ₹{formatCurrency(selectedBill.paidAmount)}
                     </span>
                   </div>
                   <div className="procurement-bills-received-payment-stat">
                     <label>Remaining Balance:</label>
                     <span className="procurement-bills-received-balance-amount">
-                      {formatCurrency(selectedBill.balanceAmount)}
+                      ₹{formatCurrency(selectedBill.balanceAmount)}
                     </span>
                   </div>
                 </div>
@@ -1844,7 +1832,7 @@ const BillsReceived = () => {
                             <td>{formatDate(payment.paymentDate)}</td>
                             <td>{payment.paymentMode}</td>
                             <td>{payment.referenceNumber}</td>
-                            <td>{formatCurrency(payment.amount)}</td>
+                            <td>₹{formatCurrency(payment.amount)}</td>
                             <td>{payment.paidByName}</td>
                           </tr>
                         ))}
@@ -1860,7 +1848,9 @@ const BillsReceived = () => {
                   <h3>Bill Document</h3>
                   <div className="procurement-bills-received-attachments">
                     <div className="procurement-bills-received-attachment-item">
-                      <FileText size={16} /> {selectedBill.billFileName}
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <FileText size={16} /> {selectedBill.billFileName}
+                      </span>
                       <div style={{ display: 'flex', gap: '8px' }}>
                         <button
                           className="procurement-bills-received-btn-link"
@@ -1957,7 +1947,7 @@ const BillsReceived = () => {
                 <div className="procurement-bills-received-info-item">
                   <label>Total Balance Due:</label>
                   <span className="procurement-bills-received-balance-highlight">
-                    {formatCurrency(selectedBill.balanceAmount)}
+                    ₹{formatCurrency(selectedBill.balanceAmount)}
                   </span>
                 </div>
               </div>
@@ -2041,7 +2031,7 @@ const BillsReceived = () => {
                 <X size={24} />
               </button>
             </div>
-            <div style={{ width: '100%', height: 'calc(100vh - 120px)', overflow: 'auto' }}>
+            <div style={{ width: '100%', height: 'calc(100% - 73px)', overflow: 'auto' }}>
               <iframe
                 src={fileViewUrl}
                 style={{ width: '100%', height: '100%', border: 'none' }}

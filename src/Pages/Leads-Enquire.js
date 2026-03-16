@@ -952,10 +952,14 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 function LeadsEnquiries() {
+  //  console.log('🔄 RENDER');
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
-
+// ── Guard refs ────────────────────────────────────────────────────
+const initialFetchDone    = useRef(false);
+const isFirstGroupRender  = useRef(true);
+const isFirstFilterRender = useRef(true);
   // ── Permissions ──────────────────────────────────────────────────
   const leadsPermissions = pagePermissions?.LEADS || [];
   const canView = leadsPermissions.includes('VIEW');
@@ -1042,37 +1046,37 @@ function LeadsEnquiries() {
   // SERVER-SIDE FETCH — called whenever page / size / filters change
   // Uses POST /leads/filter so all filter params go in the body.
   // ─────────────────────────────────────────────────────────────────
-  const fetchLeads = useCallback(async (page = currentPage, size = rowsPerPage) => {
-    setLoading(true); setError(null);
-    try {
-      // page param is 1-based in state, backend expects 0-based
-      const zeroPage = page - 1;
+  const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason) => {
+  // console.trace('🚀 fetchLeads called — reason:', _reason);
+  setLoading(true);
+  setError(null);
+  try {
+    const filterBody = {
+      searchTerm: search    || null,               // ← param, NOT searchTerm
+      status:     status   !== 'All' ? status   : null,  // ← param, NOT statusFilter
+      priority:   priority !== 'All' ? priority : null,  // ← param, NOT priorityFilter
+      source:     source   !== 'All' ? source   : null,  // ← param, NOT sourceFilter
+      groupName:    group    || null,              // ← param, NOT groupName
+      subGroupName: subGroup || null,              // ← param, NOT subGroupName
+    };
 
-      const filterBody = {
-        searchTerm: searchTerm || null,
-        status: statusFilter !== 'All' ? statusFilter : null,
-        priority: priorityFilter !== 'All' ? priorityFilter : null,
-        source: sourceFilter !== 'All' ? sourceFilter : null,
-        groupName: groupName || null,
-        subGroupName: subGroupName || null,
-      };
+    const data = await fetchWithHeaders(
+      `${API_BASE_URL}/leads/filter?page=${page - 1}&size=${size}`,  // ← page param
+      { method: 'POST', body: JSON.stringify(filterBody) }
+    );
 
-      const data = await fetchWithHeaders(
-        `${API_BASE_URL}/leads/filter?page=${zeroPage}&size=${size}`,
-        { method: 'POST', body: JSON.stringify(filterBody) }
-      );
-
-      if (data.success) {
-        setLeads(data.data || []);
-        setTotalRecords(data.count ?? 0);
-        setTotalPages(data.totalPages ?? Math.ceil((data.count ?? 0) / size));
-      }
-    } catch (e) {
-      setError(e.message || 'Error fetching leads');
-    } finally {
-      setLoading(false);
+    if (data.success) {
+      setLeads(data.data || []);
+      setTotalRecords(data.count ?? 0);
+      setTotalPages(data.totalPages ?? Math.ceil((data.count ?? 0) / size));
     }
-  }, [currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName]);
+  } catch (e) {
+    setError(e.message || 'Error fetching leads');
+  } finally {
+    setLoading(false);
+  }
+  // ← NO }, [...]) at the end — this is NOT a useCallback
+};
 
   const fetchUsers = async () => {
     try {
@@ -1095,25 +1099,35 @@ function LeadsEnquiries() {
       const data = await res.json(); if (Array.isArray(data)) setSubGroups(data);
     } catch { setSubGroups([]); }
   };
+// Effect 1 — initial load
+useEffect(() => {
+  // console.log('⚡ Effect1 fired | canView:', canView, '| initialFetchDone:', initialFetchDone.current);
+  if (!canView || initialFetchDone.current) return;
+  initialFetchDone.current = true;
+  fetchUsers();
+  fetchGroups();
+  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'INITIAL_LOAD');
+}, [canView]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Initial load ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (canView) { fetchLeads(1, rowsPerPage); fetchUsers(); fetchGroups(); }
-  }, [canView]);
+// Effect 2 — group/subGroup changes
+useEffect(() => {
+  // console.log('⚡ Effect2 fired | isFirstGroupRender:', isFirstGroupRender.current, '| groupName:', groupName, '| subGroupName:', subGroupName);
+  if (isFirstGroupRender.current) { isFirstGroupRender.current = false; return; }
+  if (!canView) return;
+  setCurrentPage(1);
+  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'GROUP_CHANGE');
+}, [groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Re-fetch when group/subGroup filter (from header) changes ─────
-  useEffect(() => {
-    if (canView) { setCurrentPage(1); fetchLeads(1, rowsPerPage); }
-  }, [groupName, subGroupName]);
-
-  // ── Debounced re-fetch when search / filter dropdowns change ──────
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (canView) { setCurrentPage(1); fetchLeads(1, rowsPerPage); }
-    }, 400); // 400 ms debounce on search
-    return () => clearTimeout(timer);
-  }, [searchTerm, statusFilter, priorityFilter, sourceFilter]);
-
+// Effect 3 — search/filter debounced
+useEffect(() => {
+  // console.log('⚡ Effect3 fired | isFirstFilterRender:', isFirstFilterRender.current);
+  if (isFirstFilterRender.current) { isFirstFilterRender.current = false; return; }
+  if (!canView) return;
+  const timer = setTimeout(() => {
+    fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FILTER_CHANGE');
+  }, 400);
+  return () => clearTimeout(timer);
+}, [searchTerm, statusFilter, priorityFilter, sourceFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── Form subgroup load ─────────────────────────────────────────────
   useEffect(() => {
     if (formData.groupName) fetchSubGroupsForForm(formData.groupName); else setSubGroups([]);
@@ -1381,7 +1395,7 @@ function LeadsEnquiries() {
 
       {/* Breadcrumb */}
       <div className="leads-enquiries-breadcrumb">
-        <span>Dashboard</span>
+        <span>Sales</span>
         <span className="leads-enquiries-breadcrumb-separator">&gt;</span>
         <span className="leads-enquiries-breadcrumb-active">Leads / Enquiries</span>
       </div>
@@ -1600,19 +1614,21 @@ const ServerPagination = ({
         {totalRecords === 0
           ? 'No records found'
           : `Showing ${startRecord}–${endRecord} of ${totalRecords} leads`}
-      </div>
-      <div className="leads-enquiries-pagination-controls">
-        {/* Rows per page */}
-        <select
+
+           <select
           className="leads-enquiries-rows-select"
           value={rowsPerPage}
           onChange={e => onRowsPerPageChange(Number(e.target.value))}
         >
-          <option value={10}>10 / page</option>
-          <option value={25}>25 / page</option>
-          <option value={50}>50 / page</option>
-          <option value={100}>100 / page</option>
+          <option value={10}>10 Rows</option>
+          <option value={20}>20 Rows</option>
+          <option value={50}>50 Rows</option>
+          <option value={100}>100 Rows</option>
         </select>
+      </div>
+      <div className="leads-enquiries-pagination-controls">
+        {/* Rows per page */}
+       
 
         <div className="leads-enquiries-pagination-buttons">
           {/* First + Prev */}

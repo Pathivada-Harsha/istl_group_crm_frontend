@@ -179,8 +179,7 @@
 }
 .cust-view-btn svg { flex-shrink: 0; }
 
-/* ── Grid View ───────────────────────────────────────────────── */
-.cust-grid-container { }
+
 
 .cust-grid {
   display: grid;
@@ -225,7 +224,7 @@
   flex-wrap: wrap;
 }
 
-.cust-card-body { }
+
 
 .cust-card-title {
   font-size: 14px;
@@ -430,7 +429,6 @@
 .ld-tab:hover { color: #0f172a; }
 .ld-tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 600; }
 
-.ld-tab-content { }
 
 /* Info Grid */
 .ld-info-grid {
@@ -703,8 +701,7 @@
 /* Loading row */
 .ld-loading-row { display: flex; align-items: center; gap: 8px; padding: 20px; color: #64748b; font-size: 13px; justify-content: center; }
 
-/* OrderBook Form wrapper */
-.ob-form-wrapper { }
+
 
 /* Badge color helpers */
 .badge-blue   { background:#dbeafe; color:#1e40af; }
@@ -820,13 +817,20 @@
   .cust-view-btn span { display: none; }   /* icon-only on very small screens */
 }
 
+
+.clients-title{
+  margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: #111827;
+}
 /* ═══════════════════════════════════════════════════════════════
    CUST- BASE STYLES  (renamed from leads- prefix to avoid
    collision with the Leads page shared stylesheet)
    ═══════════════════════════════════════════════════════════════ */
 
 /* Container */
-.cust-container { padding: 1.5rem; background: #f8fafc; min-height: 100vh; }
+.cust-container { padding: 24px 24px 0px 24px;}
 
 /* Breadcrumb */
 .cust-breadcrumb { display:flex; align-items:center; gap:6px; font-size:13px; color:#6b7280; margin-bottom:1rem; }
@@ -843,25 +847,27 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 .cust-search-wrapper {
   position: relative;
   flex: 1;
   min-width: 200px;
+  
 }
 .cust-search-icon {
   position: absolute;
   left: 10px;
   top: 50%;
   transform: translateY(-50%);
-  width: 16px; height: 16px;
+  width: 16px; 
+  height: 16px;
   color: #9ca3af;
   pointer-events: none;
 }
 .cust-search-input {
   width: 100%;
-  padding: 8px 12px 8px 34px;
+  padding: 10px 12px 10px 34px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
@@ -873,7 +879,7 @@
 
 .cust-filters { display:flex; gap:0.5rem; flex-wrap:wrap; }
 .cust-filter-select {
-  padding: 7px 10px;
+  padding: 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 13px;
@@ -900,9 +906,9 @@
   transition: all 0.15s;
   white-space: nowrap;
 }
-.cust-btn-primary  { background:#3b82f6; color:#fff; }
+.cust-btn-primary  { background:#3b82f6; color:#fff; padding: 8px;}
 .cust-btn-primary:hover  { background:#2563eb; }
-.cust-btn-secondary { background:#fff; color:#374151; border:1px solid #e2e8f0; }
+.cust-btn-secondary { background:#fff; color:#374151; border:1px solid #e2e8f0;padding: 10px; }
 .cust-btn-secondary:hover { background:#f8fafc; border-color:#cbd5e1; }
 .cust-btn-disabled { opacity:0.5; cursor:not-allowed; pointer-events:none; }
 .cust-btn-icon { width:14px; height:14px; }
@@ -914,7 +920,38 @@
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   overflow: hidden;
 }
-.cust-table-wrapper { overflow-x: auto; }
+.cust-table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+/* Sticky header inside scroll */
+.cust-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Scrollbar styling — 5px */
+.cust-table-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.cust-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.cust-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.cust-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
 .cust-table {
   width: 100%;
   border-collapse: collapse;
@@ -968,8 +1005,6 @@
 .cust-action-delete:hover { background: #fef2f2; }
 .cust-action-disabled { opacity:0.4; cursor:not-allowed; }
 
-/* ── Grid View ─────────────────────────────────────────────────── */
-.cust-grid-container { }
 .cust-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

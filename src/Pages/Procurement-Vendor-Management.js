@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, IndianRupee,Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag, Briefcase, Truck } from 'lucide-react';
+import { Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp, DollarSign, IndianRupee, Package, Calendar, Phone, Mail, MapPin, ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag, Briefcase, Truck } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -21,7 +21,7 @@ const VendorManagement = () => {
 
   const [filters, setFilters] = useState({
     search: '',
-    category: 'all',   
+    category: 'all',
     vendorType: 'all',
     rating: 'all',
     status: 'all'
@@ -512,19 +512,19 @@ const VendorManagement = () => {
   // Format time ago
   const formatTimeAgo = (dateStr) => {
     if (!dateStr) return 'N/A';
-    
+
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now - date;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
     if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
+
     return formatDate(dateStr);
   };
 
@@ -571,14 +571,14 @@ const VendorManagement = () => {
     return (
       <div className="po-timeline">
         {statusSteps.map((step, index) => (
-          <div 
-            key={step} 
+          <div
+            key={step}
             className={`timeline-step ${index <= currentIndex ? 'completed' : ''}`}
           >
-            <div 
-              className="timeline-dot" 
-              style={{ 
-                backgroundColor: index <= currentIndex ? getStatusColor(step) : '#e2e8f0' 
+            <div
+              className="timeline-dot"
+              style={{
+                backgroundColor: index <= currentIndex ? getStatusColor(step) : '#e2e8f0'
               }}
             />
             <div className="timeline-label">
@@ -588,10 +588,10 @@ const VendorManagement = () => {
               )}
             </div>
             {index < statusSteps.length - 1 && (
-              <div 
-                className="timeline-line" 
-                style={{ 
-                  backgroundColor: index < currentIndex ? getStatusColor(step) : '#e2e8f0' 
+              <div
+                className="timeline-line"
+                style={{
+                  backgroundColor: index < currentIndex ? getStatusColor(step) : '#e2e8f0'
                 }}
               />
             )}
@@ -603,41 +603,41 @@ const VendorManagement = () => {
 
   // KPI data from stats
   const kpiData = stats ? [
-    { 
-      title: 'Total Vendors', 
-      value: stats.totalVendors.toString(), 
-      icon: <Package size={32} />, 
-      color: '#2563eb' 
+    {
+      title: 'Total Vendors',
+      value: stats.totalVendors.toString(),
+      icon: <Package size={32} />,
+      color: '#2563eb'
     },
-    { 
-      title: 'Approved Vendors', 
-      value: stats.activeVendors.toString(), 
-      icon: <CheckCircle size={32} />, 
-      color: '#22c55e' 
+    {
+      title: 'Approved Vendors',
+      value: stats.activeVendors.toString(),
+      icon: <CheckCircle size={32} />,
+      color: '#22c55e'
     },
-    { 
-      title: 'Average Rating', 
-      value: stats.averageRating.toFixed(1) + '/5', 
-      icon: <Star size={32} />, 
-      color: '#f59e0b' 
+    {
+      title: 'Average Rating',
+      value: stats.averageRating.toFixed(1) + '/5',
+      icon: <Star size={32} />,
+      color: '#f59e0b'
     },
-    { 
-      title: 'Total Purchase Value', 
-      value: formatCurrency(stats.totalPurchaseValue), 
-      icon: <IndianRupee size={32} />, 
-      color: '#8b5cf6' 
+    {
+      title: 'Total Purchase Value',
+      value: formatCurrency(stats.totalPurchaseValue),
+      icon: <IndianRupee size={32} />,
+      color: '#8b5cf6'
     },
-    { 
-      title: 'Pending Quotations', 
-      value: stats.pendingQuotations.toString(), 
-      icon: <FileText size={32} />, 
-      color: '#06b6d4' 
+    {
+      title: 'Pending Quotations',
+      value: stats.pendingQuotations.toString(),
+      icon: <FileText size={32} />,
+      color: '#06b6d4'
     },
-    { 
-      title: 'Last Updated', 
-      value: formatTimeAgo(stats.lastUpdated), 
-      icon: <Clock size={32} />, 
-      color: '#64748b' 
+    {
+      title: 'Last Updated',
+      value: formatTimeAgo(stats.lastUpdated),
+      icon: <Clock size={32} />,
+      color: '#64748b'
     }
   ] : [];
 
@@ -740,135 +740,180 @@ const VendorManagement = () => {
 
       {/* Vendors Table */}
       <div className="vendor-management-table-container">
-        <table className="vendor-management-table">
-          <thead>
-            <tr>
-              <th>Vendor Name</th>
-              <th>Contact</th>
-              <th>Category</th>
-              <th>Rating</th>
-              <th>Total Orders</th>
-              <th>Total Purchase Value</th>
-              <th>Last Purchase</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {vendors.length === 0 ? (
+
+        {/* Scrollable Table */}
+        <div className="vendor-management-table-scroll">
+          <table className="vendor-management-table">
+            <thead>
               <tr>
-                <td colSpan="9" className="empty-state">
-                  No vendors found. Vendors appear here after placing purchase orders.
-                </td>
+                <th>Vendor Name</th>
+                <th>Contact</th>
+                <th>Category</th>
+                <th>Rating</th>
+                <th>Total Orders</th>
+                <th>Total Purchase Value</th>
+                <th>Last Purchase</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              vendors.map((vendor) => (
-                <tr key={vendor.id} className="vendor-management-table-row">
-                  <td className="vendor-name-cell">
-                    <div className="vendor-name-info">
-                      <span className="vendor-name">{vendor.name}</span>
-                      {vendor.vendorCode && (
-                        <span className="vendor-code">{vendor.vendorCode}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="vendor-contact-cell">
-                    <div className="vendor-contact">
-                      {vendor.email && (
-                        <div className="contact-item">
-                          <Mail size={14} />
-                          <span>{vendor.email}</span>
-                        </div>
-                      )}
-                      {vendor.phone && (
-                        <div className="contact-item">
-                          <Phone size={14} />
-                          <span>{vendor.phone}</span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td>{vendor.category || 'N/A'}</td>
-                  <td>{renderStarRating(vendor.rating)}</td>
-                  <td className="vendor-orders-cell">
-                    <div className="orders-badge">
-                      <ShoppingCart size={14} />
-                      <span>{vendor.totalOrders || 0}</span>
-                    </div>
-                  </td>
-                  <td className="vendor-value-cell">{formatCurrency(vendor.totalPurchaseValue)}</td>
-                  <td>{formatDate(vendor.lastPurchaseDate)}</td>
-                  <td>
-                    <span className={`vendor-management-badge ${getStatusBadgeClass(vendor.status)}`}>
-                      {vendor.status}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="vendor-management-actions-cell">
-                      <button
-                        className="vendor-management-action-btn"
-                        onClick={() => handleViewVendor(vendor)}
-                        title="View Details"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        className="vendor-management-action-btn"
-                        onClick={() => handleEditVendor(vendor)}
-                        title="Edit Vendor"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                    </div>
+            </thead>
+
+            <tbody>
+              {vendors.length === 0 ? (
+                <tr>
+                  <td colSpan="9" className="empty-state">
+                    No vendors found. Vendors appear here after placing purchase orders.
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                vendors.map((vendor) => (
+                  <tr key={vendor.id} className="vendor-management-table-row">
 
-        {/* Pagination */}
+                    {/* Vendor Name */}
+                    <td className="vendor-name-cell">
+                      <div className="vendor-name-info">
+                        <span className="vendor-name">{vendor.name}</span>
+                        {vendor.vendorCode && (
+                          <span className="vendor-code">{vendor.vendorCode}</span>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Contact */}
+                    <td className="vendor-contact-cell">
+                      <div className="vendor-contact">
+                        {vendor.email && (
+                          <div className="contact-item">
+                            <Mail size={14} />
+                            <span>{vendor.email}</span>
+                          </div>
+                        )}
+
+                        {vendor.phone && (
+                          <div className="contact-item">
+                            <Phone size={14} />
+                            <span>{vendor.phone}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    {/* Category */}
+                    <td>{vendor.category || "N/A"}</td>
+
+                    {/* Rating */}
+                    <td>{renderStarRating(vendor.rating)}</td>
+
+                    {/* Orders */}
+                    <td className="vendor-orders-cell">
+                      <div className="orders-badge">
+                        <ShoppingCart size={14} />
+                        <span>{vendor.totalOrders || 0}</span>
+                      </div>
+                    </td>
+
+                    {/* Purchase Value */}
+                    <td className="vendor-value-cell">
+                      {formatCurrency(vendor.totalPurchaseValue)}
+                    </td>
+
+                    {/* Last Purchase */}
+                    <td>{formatDate(vendor.lastPurchaseDate)}</td>
+
+                    {/* Status */}
+                    <td>
+                      <span
+                        className={`vendor-management-badge ${getStatusBadgeClass(
+                          vendor.status
+                        )}`}
+                      >
+                        {vendor.status}
+                      </span>
+                    </td>
+
+                    {/* Actions */}
+                    <td>
+                      <div className="vendor-management-actions-cell">
+
+                        <button
+                          className="vendor-management-action-btn"
+                          onClick={() => handleViewVendor(vendor)}
+                          title="View Details"
+                        >
+                          <Eye size={16} />
+                        </button>
+
+                        <button
+                          className="vendor-management-action-btn"
+                          onClick={() => handleEditVendor(vendor)}
+                          title="Edit Vendor"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+
+                      </div>
+                    </td>
+
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Fixed Footer Pagination */}
         <div className="table-footer">
+
           <span>
-            Showing {currentPage * pageSize + 1}-
+            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} -
             {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} vendors
           </span>
+
           <div className="pagination">
+
+            {/* Previous */}
             <button
               className="page-btn"
-              onClick={() => setCurrentPage(p => p - 1)}
+              onClick={() => setCurrentPage((p) => p - 1)}
               disabled={currentPage === 0}
             >
               Previous
             </button>
 
+            {/* Page Numbers */}
             {[...Array(Math.min(5, totalPages))].map((_, index) => {
               const pageNum = currentPage < 3 ? index : currentPage + index - 2;
+
               if (pageNum >= 0 && pageNum < totalPages) {
                 return (
                   <button
                     key={pageNum}
-                    className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
+                    className={`page-btn ${pageNum === currentPage ? "active" : ""
+                      }`}
                     onClick={() => setCurrentPage(pageNum)}
                   >
                     {pageNum + 1}
                   </button>
                 );
               }
+
               return null;
             })}
 
+            {/* Next */}
             <button
               className="page-btn"
-              onClick={() => setCurrentPage(p => p + 1)}
+              onClick={() => setCurrentPage((p) => p + 1)}
               disabled={currentPage >= totalPages - 1}
             >
               Next
             </button>
-          </div>
-        </div>
-      </div>
 
+          </div>
+
+        </div>
+
+      </div>
       {/* Detail Drawer */}
       {showDetailDrawer && selectedVendor && (
         <div className="vendor-management-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
@@ -1011,16 +1056,16 @@ const VendorManagement = () => {
                           </div>
                           <span className="po-value">{formatCurrency(po.totalValue)}</span>
                         </div>
-                        
+
                         {/* PO Timeline */}
                         <POTimeline po={po} />
-                        
+
                         <div className="po-item-details">
                           <span><Calendar size={14} /> Order: {formatDate(po.orderDate)}</span>
                           <span><Truck size={14} /> Expected: {formatDate(po.expectedDelivery)}</span>
                           <span><Package size={14} /> {po.totalItemsOrdered} items ({po.totalItemsDelivered} delivered)</span>
                         </div>
-                        
+
                         {po.notes && (
                           <div className="po-notes">
                             <FileText size={14} />

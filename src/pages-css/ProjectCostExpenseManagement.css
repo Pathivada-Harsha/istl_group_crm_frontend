@@ -2,13 +2,13 @@
    PROJECT COST & EXPENSE MANAGEMENT STYLES - COMPACT VERSION
    ================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+/* @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap'); */
 
 .expense-management-container {
-  padding: 16px;
-  background-color: #f8f9fa;
+  padding: 24px 24px 0px 24px;
+  /* background-color: #f8f9fa;
   min-height: 100vh;
-  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; */
 }
 
 /* ================================
@@ -361,6 +361,17 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
+
+/* Scroll wrapper for horizontal scroll on medium screens */
+.exp-table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.exp-table-scroll-wrapper::-webkit-scrollbar { height: 5px; }
+.exp-table-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
+.exp-table-scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
 .expense-management-table {
   width: 100%;
@@ -1149,228 +1160,8 @@
   font-size: 16px;
 }
 
-/* ================================
-   RESPONSIVE DESIGN
-   ================================ */
-
-@media (max-width: 1200px) {
-  .expense-management-kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  }
-}
-
-@media (max-width: 992px) {
-  .expense-management-container {
-    padding: 12px;
-  }
-
-  .expense-management-title {
-    font-size: 20px;
-  }
-
-  .page-header-with-filter {
-    flex-direction: column;
-  }
-
-  .expense-management-action-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .expense-management-search-filters {
-    flex-direction: column;
-  }
-
-  .expense-management-actions {
-    flex-direction: column;
-  }
-
-  .expense-management-kpi-grid {
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 10px;
-  }
-
-  .expense-management-drawer {
-    max-width: 100%;
-  }
-}
-
-@media (max-width: 768px) {
-  .expense-management-container {
-    padding: 10px;
-  }
-
-  .expense-management-title {
-    font-size: 18px;
-  }
-
-  .expense-management-subtitle {
-    font-size: 11px;
-  }
-
-  .expense-management-action-bar {
-    padding: 10px;
-  }
-
-  .expense-management-kpi-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .expense-management-kpi-card {
-    padding: 12px;
-  }
-
-  .expense-management-kpi-icon {
-    width: 40px;
-    height: 40px;
-  }
-
-  .expense-management-kpi-icon svg {
-    width: 20px;
-    height: 20px;
-  }
-
-  .expense-management-kpi-value {
-    font-size: 16px;
-  }
-
-  .expense-management-table-container {
-    overflow-x: auto;
-  }
-
-  .expense-management-table {
-    min-width: 900px;
-  }
-
-  .expense-management-table th,
-  .expense-management-table td {
-    padding: 8px;
-  }
-
-  .table-footer {
-    flex-direction: column;
-    gap: 12px;
-    text-align: center;
-  }
-
-  .pagination {
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-
-  .expense-management-edit-modal {
-    max-width: 100%;
-    margin: 0;
-    border-radius: 0;
-    max-height: 100vh;
-  }
-
-  .expense-form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .expense-info-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .expense-management-drawer-actions {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 480px) {
-  .expense-management-action-bar {
-    padding: 8px;
-  }
-
-  .expense-management-search-filters {
-    gap: 6px;
-  }
-
-  .expense-management-search,
-  .expense-management-filter {
-    font-size: 12px;
-    padding: 6px 10px;
-  }
-
-  .expense-management-btn-primary,
-  .expense-management-btn-secondary,
-  .expense-management-btn-success,
-  .expense-management-btn-danger {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
-
-  .expense-management-kpi-value {
-    font-size: 15px;
-  }
-
-  .expense-management-kpi-label {
-    font-size: 10px;
-  }
-
-  .expense-management-table th,
-  .expense-management-table td {
-    padding: 8px 6px;
-    font-size: 11px;
-  }
-
-  .expense-tab {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
-}
-
-/* ================================
-   UTILITY CLASSES
-   ================================ */
-
-.text-muted {
-  color: #6c757d;
-}
-
-.text-primary {
-  color: #3b82f6;
-}
-
-.text-success {
-  color: #22c55e;
-}
-
-.text-danger {
-  color: #ef4444;
-}
-
-.text-warning {
-  color: #f59e0b;
-}
-
-.font-weight-bold {
-  font-weight: 600;
-}
-
-.mb-0 {
-  margin-bottom: 0;
-}
-
-.mt-3 {
-  margin-top: 12px;
-}
-
-.d-flex {
-  display: flex;
-}
-
-.align-items-center {
-  align-items: center;
-}
-
-.gap-2 {
-  gap: 6px;
-}
 /* ════════════════════════════════════════════════════════════════════════════
-   PROJECT COST & EXPENSE MANAGEMENT — Full Page CSS
-   Place this file at:  src/pages-css/ProjectCostExpenseManagement.css
+   PROJECT COST & EXPENSE MANAGEMENT — Full Page CSS (New Design System)
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* ─── CSS Variables ──────────────────────────────────────────────────────── */
@@ -1395,9 +1186,9 @@
 /* ─── Container ──────────────────────────────────────────────────────────── */
 .exp-mgmt-container {
   font-family: var(--exp-font);
-  background: var(--exp-bg);
-  min-height: 100vh;
-  padding: 0 0 48px;
+  /* background: var(--exp-bg); */
+  /* min-height: 100vh; */
+  /* padding: 0 0 48px; */
   color: var(--exp-text);
   box-sizing: border-box;
 }
@@ -1418,14 +1209,6 @@
   letter-spacing: .3px;
 }
 
-.page-header-with-filter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
 .exp-mgmt-title {
   font-size: 22px;
   font-weight: 700;
@@ -1440,16 +1223,6 @@
   font-size: 15px;
   font-weight: 500;
   opacity: .75;
-}
-
-/* ─── GroupProjectFilter integration ─────────────────────────────────────── */
-/* No overrides — GroupProjectFilter uses its own styles */
-.page-header-with-filter {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
 }
 
 /* ─── Action Bar ─────────────────────────────────────────────────────────── */
@@ -1599,7 +1372,6 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  border-top: 4px solid;
   transition: transform .15s, box-shadow .15s;
 }
 .exp-mgmt-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--exp-shadow-lg); }
@@ -1670,8 +1442,7 @@
   display: flex;
   gap: 0;
   padding: 20px 28px 0;
-  border-bottom: 2px solid var(--exp-border);
-  margin: 16px 0 0;
+  margin: 16px 0 10px;
 }
 
 .exp-tab {
@@ -1693,7 +1464,7 @@
 .exp-tab:hover { color: var(--exp-primary); }
 .exp-tab.active { color: var(--exp-primary); border-bottom-color: var(--exp-primary); }
 
-/* ─── Tables ─────────────────────────────────────────────────────────────── */
+/* ─── Table Container ────────────────────────────────────────────────────── */
 .exp-mgmt-table-container {
   margin: 0 28px 24px;
   background: var(--exp-surface);
@@ -1703,6 +1474,18 @@
   border: 1px solid var(--exp-border);
 }
 
+/* Scroll wrapper — enables horizontal scroll on medium screens */
+.exp-table-scroll-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.exp-table-scroll-wrapper::-webkit-scrollbar { height: 5px; }
+.exp-table-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
+.exp-table-scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+
+/* ─── Tables ─────────────────────────────────────────────────────────────── */
 .exp-mgmt-table {
   width: 100%;
   border-collapse: collapse;
@@ -1937,7 +1720,7 @@
   border-radius: 0 0 14px 14px;
 }
 
-/* ─── Form Sections (reused from Vendor pattern) ─────────────────────────── */
+/* ─── Form Sections ──────────────────────────────────────────────────────── */
 .exp-form-section {
   background: #f8fafc;
   border: 1px solid var(--exp-border);
@@ -1956,7 +1739,6 @@
 }
 .commission-section { border-color: var(--exp-purple); background: #faf5ff; }
 
-/* Reuse vendor form layout classes (already in your vendor CSS, but add here as fallback) */
 .vendor-form-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -2015,7 +1797,7 @@
 .info-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--exp-muted); }
 .info-value { font-size: 13px; font-weight: 500; color: var(--exp-text); word-break: break-word; }
 
-/* ─── Expense Items (multi-item form) ────────────────────────────────────── */
+/* ─── Expense Items ──────────────────────────────────────────────────────── */
 .exp-items-header {
   display: flex;
   align-items: center;
@@ -2201,9 +1983,9 @@
   to   { transform: translateX(0);    opacity: 1; }
 }
 
-@keyframes slideIn {
-  from { transform: translateX(100%); opacity: 0; }
-  to   { transform: translateX(0);    opacity: 1; }
+@keyframes sheetUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
 }
 
 @keyframes spin {
@@ -2211,7 +1993,7 @@
   to   { transform: rotate(360deg); }
 }
 
-/* ─── Toast (if not globally defined) ───────────────────────────────────── */
+/* ─── Toast ──────────────────────────────────────────────────────────────── */
 .exp-toast-container {
   position: fixed;
   top: 20px;
@@ -2222,21 +2004,185 @@
   gap: 8px;
 }
 
-/* ─── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 900px) {
-  .exp-mgmt-header      { padding: 16px 18px; }
-  .exp-mgmt-action-bar  { padding: 12px 18px; }
-  .exp-mgmt-kpi-grid    { padding: 16px 18px 0; }
-  .exp-mgmt-table-container { margin: 0 18px 20px; }
-  .exp-user-breakdown   { margin: 16px 18px 0; }
-  .exp-tabs             { padding: 14px 18px 0; }
-  .exp-mgmt-drawer      { width: 100vw; }
+/* ════════════════════════════════════════════════════════════════════════════
+   FULLY RESPONSIVE TABLE SYSTEM
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── Medium screens: sticky columns + horizontal scroll ─────────────────── */
+@media (max-width: 1200px) {
+  .exp-mgmt-table {
+    min-width: 900px;
+  }
+
+  /* Sticky Code column */
+  .exp-mgmt-table thead th:first-child,
+  .exp-mgmt-table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: 2px 0 6px -2px rgba(0,0,0,.08);
+  }
+  .exp-mgmt-table tbody td:first-child { background: #fff; }
+  .exp-mgmt-table-row:hover td:first-child { background: #f8fafc; }
+
+  /* Sticky Actions column */
+  .exp-mgmt-table thead th:last-child,
+  .exp-mgmt-table tbody td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: -2px 0 6px -2px rgba(0,0,0,.08);
+  }
+  .exp-mgmt-table tbody td:last-child { background: #fff; }
+  .exp-mgmt-table-row:hover td:last-child { background: #f8fafc; }
 }
 
+/* ─── Action bar: stack on narrow screens ────────────────────────────────── */
+@media (max-width: 900px) {
+  .exp-mgmt-header      { padding: 16px 18px; }
+  .exp-mgmt-action-bar  { padding: 12px 18px; flex-direction: column; align-items: stretch; }
+  .exp-mgmt-search-filters { flex-direction: column; }
+  .exp-mgmt-search { width: 100%; }
+  .exp-mgmt-filter { width: 100%; }
+  .exp-mgmt-actions { flex-wrap: wrap; }
+  .exp-mgmt-actions button { flex: 1 1 auto; justify-content: center; min-width: 120px; }
+  .exp-mgmt-kpi-grid { padding: 16px 18px 0; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .exp-mgmt-kpi-card { padding: 14px 16px; }
+  .exp-mgmt-kpi-value { font-size: 17px; }
+  .exp-mgmt-table-container { margin: 0 18px 20px; }
+  .exp-user-breakdown { margin: 16px 18px 0; }
+  .exp-tabs { padding: 14px 18px 0; }
+  .exp-mgmt-drawer { width: 100vw; }
+}
+
+/* ─── TABLE CARD LAYOUT — mobile < 768px ─────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Remove horizontal scroll — switch to card layout */
+  .exp-table-scroll-wrapper {
+    overflow-x: visible;
+  }
+
+  /* Force block display on all table elements */
+  .exp-mgmt-table,
+  .exp-mgmt-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  /* Hide the header row */
+  .exp-mgmt-table thead {
+    display: none;
+  }
+
+  /* Each table row becomes a card */
+  .exp-mgmt-table-row {
+    display: block;
+    margin: 0 0 12px;
+    border: 1px solid var(--exp-border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    background: #fff;
+  }
+  .exp-mgmt-table-row:hover { background: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+
+  /* Each cell = one row with label + value */
+  .exp-mgmt-table-row td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13px;
+    gap: 10px;
+    min-height: 40px;
+  }
+  .exp-mgmt-table-row td:last-child { border-bottom: none; }
+
+  /* data-label via ::before */
+  .exp-mgmt-table-row td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    color: #94a3b8;
+    flex-shrink: 0;
+    min-width: 95px;
+  }
+
+  /* Actions cell — full width, right-aligned, light bg */
+  .exp-mgmt-table-row td.actions-td {
+    justify-content: flex-end;
+    background: #f8fafc;
+    border-top: 1px solid var(--exp-border);
+    padding: 10px 14px;
+  }
+  .exp-mgmt-table-row td.actions-td::before { display: none; }
+
+  /* Bigger touch targets */
+  .exp-act-btn { width: 34px; height: 34px; }
+  .exp-act-btn svg { width: 16px; height: 16px; }
+
+  /* Adjust the table container */
+  .exp-mgmt-table-container { margin: 0 14px 20px; overflow: visible; border: none; box-shadow: none; background: transparent; }
+
+  /* Pagination */
+  .table-footer {
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    text-align: center;
+    padding: 14px;
+    background: var(--exp-surface);
+    border-radius: 0 0 var(--exp-radius) var(--exp-radius);
+    border: 1px solid var(--exp-border);
+    margin-top: -12px;
+  }
+  .pagination { flex-wrap: wrap; justify-content: center; gap: 5px; }
+  .page-btn { padding: 7px 11px; min-width: 36px; }
+
+  /* Modal as bottom sheet */
+  .exp-mgmt-modal-overlay { padding: 0; align-items: flex-end; }
+  .exp-mgmt-edit-modal {
+    max-width: 100%;
+    max-height: 95vh;
+    border-radius: 16px 16px 0 0;
+    animation: sheetUp .25s ease;
+  }
+  .exp-mgmt-modal-header { border-radius: 16px 16px 0 0; }
+  .vendor-form-row { grid-template-columns: 1fr; }
+  .exp-mgmt-modal-actions { flex-direction: column; }
+  .exp-mgmt-modal-actions button { width: 100%; justify-content: center; }
+
+  /* Drawer full-screen */
+  .exp-mgmt-drawer-actions { flex-direction: column; }
+  .exp-mgmt-drawer-actions button { width: 100%; justify-content: center; }
+  .vendor-info-grid { grid-template-columns: 1fr; }
+}
+
+/* ─── Small screens ──────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
-  .exp-mgmt-kpi-grid    { grid-template-columns: 1fr 1fr; }
-  .exp-mgmt-search      { width: 100%; }
+  .exp-mgmt-kpi-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
   .page-header-with-filter { flex-direction: column; align-items: flex-start; }
-  .exp-tabs             { overflow-x: auto; flex-wrap: nowrap; }
-  .vendor-info-grid     { grid-template-columns: 1fr; }
+  .exp-tabs { overflow-x: auto; flex-wrap: nowrap; padding: 12px 14px 0; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .exp-tabs::-webkit-scrollbar { display: none; }
+  .exp-tab { white-space: nowrap; flex-shrink: 0; font-size: 12px; padding: 8px 12px; }
+  .exp-user-breakdown { margin: 12px 14px 0; padding: 14px; }
+  .exp-user-grid { grid-template-columns: 1fr; }
+  .exp-col-panel { position: fixed; inset: auto 0 0 0; border-radius: 16px 16px 0 0; right: 0; min-width: unset; padding: 18px 20px; animation: sheetUp .2s ease; }
+}
+
+/* ─── Extra small ────────────────────────────────────────────────────────── */
+@media (max-width: 400px) {
+  .exp-mgmt-table-row td { padding: 9px 12px; font-size: 12px; }
+  .exp-mgmt-table-row td::before { min-width: 80px; font-size: 9px; }
+  .exp-mgmt-table-container { margin: 0 10px 16px; }
+  .exp-act-btn { width: 30px; height: 30px; }
+  .exp-mgmt-kpi-card { padding: 10px 12px; gap: 8px; }
+  .exp-mgmt-kpi-value { font-size: 14px; }
+  .exp-mgmt-kpi-label { font-size: 10px; }
 }

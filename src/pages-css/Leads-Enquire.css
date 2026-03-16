@@ -4,7 +4,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 .leads-enquiries-container {
-  padding: 16px;
+  padding: 24px 24px 0px 24px;
   font-family: 'Poppins', sans-serif;
 }
 
@@ -232,6 +232,34 @@
 
 .leads-enquiries-table-wrapper {
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 500px;
+}
+
+/* Sticky header inside scroll */
+.leads-enquiries-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Scrollbar styling — 5px */
+.leads-enquiries-table-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.leads-enquiries-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.leads-enquiries-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.leads-enquiries-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .leads-enquiries-table {
@@ -694,6 +722,7 @@
   font-family: 'Poppins', sans-serif;
   background-color: white;
   cursor: pointer;
+  margin-left: 8px;
 }
 
 .leads-enquiries-pagination-buttons {

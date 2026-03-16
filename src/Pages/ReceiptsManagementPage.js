@@ -36,7 +36,7 @@ const useConfirmationModal = () => {
         cancelText: config.cancelText || 'Cancel',
         showCancel,
         onConfirm: () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(true); },
-        onCancel:  () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(false); }
+        onCancel: () => { setConfirmModal(prev => ({ ...prev, show: false })); resolve(false); }
       });
     });
   };
@@ -812,59 +812,69 @@ Method: ${editReceiptFormData.paymentMethod}`,
 
       {/* Main Table with draggable headers */}
       <div className="receipts-page-table-container">
-        <table className="receipts-page-table">
-          <thead>
-            <tr>
-              {visibleColumns.map((column, index) => (
-                <th
-                  key={column.id}
-                  draggable={!column.fixed}
-                  onDragStart={(e) => handleColDragStart(e, index)}
-                  onDragOver={(e) => handleColDragOver(e, index)}
-                  onDrop={(e) => handleColDrop(e, index)}
-                  onDragEnd={handleColDragEnd}
-                  onClick={() => handleSort(column.id)}
-                  style={{
-                    cursor: SORTABLE_RECEIPT_COLUMNS.has(column.id) ? 'pointer' : (column.fixed ? 'default' : 'grab'),
-                    userSelect: 'none',
-                    background: dragOverColIndex === index ? '#d1fae5' : undefined,
-                    transition: 'background 0.15s',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={SORTABLE_RECEIPT_COLUMNS.has(column.id) ? `Sort by ${column.label}` : (column.fixed ? '' : 'Drag to reorder')}
-                >
-                  {!column.fixed && (
-                    <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4, verticalAlign: 'middle', display: 'inline-block' }} />
-                  )}
-                  {column.label}
-                  {SORTABLE_RECEIPT_COLUMNS.has(column.id) && <SortIcon columnId={column.id} sortConfig={sortConfig} />}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedReceipts.length === 0 ? (
-              <tr><td colSpan={visibleColumns.length} className="empty-state">No receipts found</td></tr>
-            ) : (
-              sortedReceipts.map((receipt) => (
-                <tr key={receipt.id}>
-                  {visibleColumns.map(column => <React.Fragment key={column.id}>{renderColumnValue(column, receipt)}</React.Fragment>)}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
 
+        {/* Scrollable table */}
+        <div className="receipts-page-table-scroll">
+          <table className="receipts-page-table">
+            <thead>
+              <tr>
+                {visibleColumns.map((column, index) => (
+                  <th
+                    key={column.id}
+                    draggable={!column.fixed}
+                    onDragStart={(e) => handleColDragStart(e, index)}
+                    onDragOver={(e) => handleColDragOver(e, index)}
+                    onDrop={(e) => handleColDrop(e, index)}
+                    onDragEnd={handleColDragEnd}
+                    onClick={() => handleSort(column.id)}
+                  >
+                    {!column.fixed && (
+                      <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4 }} />
+                    )}
+                    {column.label}
+                    {SORTABLE_RECEIPT_COLUMNS.has(column.id) && (
+                      <SortIcon columnId={column.id} sortConfig={sortConfig} />
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+
+            <tbody>
+              {sortedReceipts.length === 0 ? (
+                <tr>
+                  <td colSpan={visibleColumns.length} className="empty-state">
+                    No receipts found
+                  </td>
+                </tr>
+              ) : (
+                sortedReceipts.map((receipt) => (
+                  <tr key={receipt.id}>
+                    {visibleColumns.map(column => (
+                      <React.Fragment key={column.id}>
+                        {renderColumnValue(column, receipt)}
+                      </React.Fragment>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Fixed footer */}
         <div className="receipts-page-pagination">
           <div className="receipts-page-pagination-info">
-            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} receipts
+            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}  
+
+            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="receipts-page-pagination-size-select">
+                <option value="10">10 Rows</option><option value="20">20 Rows</option><option value="50">50 Rows</option><option value="100">100 Rows</option>
+              </select>
           </div>
           <div className="receipts-page-pagination-controls-wrapper">
             <div className="receipts-page-pagination-size">
-              <label>Rows per page:</label>
-              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="receipts-page-pagination-size-select">
-                <option value="5">5</option><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
-              </select>
+
+              
             </div>
             <div className="receipts-page-pagination-controls">
               <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0} className="receipts-page-pagination-btn">Previous</button>

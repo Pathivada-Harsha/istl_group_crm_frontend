@@ -14,7 +14,7 @@ export default function ClientDashboardFollowUps() {
   const { user } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
-  
+
   const [followUps, setFollowUps] = useState([]);
   const [filteredFollowUps, setFilteredFollowUps] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -26,7 +26,7 @@ export default function ClientDashboardFollowUps() {
   const [allLeads, setAllLeads] = useState([]);
   const [groups, setGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
-  
+
   // Filters
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
@@ -113,7 +113,7 @@ export default function ClientDashboardFollowUps() {
     setLoading(true);
     try {
       let url = `${API_BASE_URL}/followups/my-followups`;
-      
+
       if (user.role === 'SUPERADMIN' || user.role === 'ADMIN') {
         url = `${API_BASE_URL}/followups/all`;
       }
@@ -128,7 +128,7 @@ export default function ClientDashboardFollowUps() {
       });
 
       if (!response.ok) throw new Error('Failed to fetch follow-ups');
-      
+
       const data = await response.json();
       if (data.success) {
         setFollowUps(data.data || []);
@@ -282,7 +282,7 @@ export default function ClientDashboardFollowUps() {
 
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(f => 
+      filtered = filtered.filter(f =>
         (f.notes && f.notes.toLowerCase().includes(term)) ||
         (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
         (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
@@ -301,7 +301,7 @@ export default function ClientDashboardFollowUps() {
     const total = filteredFollowUps.length;
     const pending = filteredFollowUps.filter(f => f.status === 'Pending').length;
     const completed = filteredFollowUps.filter(f => f.status === 'Completed').length;
-    
+
     const overdue = filteredFollowUps.filter(f => {
       if (f.status !== 'Pending') return false;
       const scheduledDate = new Date(f.scheduledAt);
@@ -354,8 +354,8 @@ export default function ClientDashboardFollowUps() {
 
     // Reset subgroup and lead when group changes
     if (name === 'modalGroupName') {
-      setAddForm(prev => ({ 
-        ...prev, 
+      setAddForm(prev => ({
+        ...prev,
         [name]: value,
         modalSubGroupName: '',
         leadId: ''
@@ -364,8 +364,8 @@ export default function ClientDashboardFollowUps() {
 
     // Reset lead when subgroup changes
     if (name === 'modalSubGroupName') {
-      setAddForm(prev => ({ 
-        ...prev, 
+      setAddForm(prev => ({
+        ...prev,
         [name]: value,
         leadId: ''
       }));
@@ -379,7 +379,7 @@ export default function ClientDashboardFollowUps() {
 
   const handleAddSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!addForm.scheduledDate) {
       showError('Please select a date');
       return;
@@ -394,8 +394,8 @@ export default function ClientDashboardFollowUps() {
 
     try {
       const selectedLead = allLeads.find(l => l.id === parseInt(addForm.leadId));
-      
-      const scheduledAt = addForm.scheduledTime 
+
+      const scheduledAt = addForm.scheduledTime
         ? `${addForm.scheduledDate} ${addForm.scheduledTime}:00`
         : `${addForm.scheduledDate} 09:00:00`;
 
@@ -432,7 +432,7 @@ export default function ClientDashboardFollowUps() {
       }
 
       const data = await response.json();
-      
+
       if (data.success) {
         showSuccess('Follow-up created successfully');
         setShowAddModal(false);
@@ -448,7 +448,7 @@ export default function ClientDashboardFollowUps() {
 
   const handleEditSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!editForm.scheduledDate) {
       showError('Please select a date');
       return;
@@ -457,7 +457,7 @@ export default function ClientDashboardFollowUps() {
     setLoading(true);
 
     try {
-      const scheduledAt = editForm.scheduledTime 
+      const scheduledAt = editForm.scheduledTime
         ? `${editForm.scheduledDate} ${editForm.scheduledTime}:00`
         : `${editForm.scheduledDate} 09:00:00`;
 
@@ -470,7 +470,7 @@ export default function ClientDashboardFollowUps() {
         notes: editForm.notes,
         outcome: editForm.outcome
       };
-console.log(requestData);
+
       const response = await fetch(`${API_BASE_URL}/followups/update/${editingFollowup.id}`, {
         method: 'PUT',
         credentials: "include",
@@ -488,7 +488,7 @@ console.log(requestData);
       }
 
       const data = await response.json();
-      
+
       if (data.success) {
         showSuccess('Follow-up updated successfully');
         setShowEditModal(false);
@@ -542,7 +542,7 @@ console.log(requestData);
         const minutes = String(d.getMinutes()).padStart(2, '0');
         return { date, time: `${hours}:${minutes}` };
       }
-    } catch (_) {}
+    } catch (_) { }
 
     return { date: '', time: '' };
   };
@@ -580,7 +580,7 @@ console.log(requestData);
       });
 
       if (!response.ok) throw new Error('Failed to delete follow-up');
-      
+
       const data = await response.json();
       if (data.success) {
         showSuccess('Follow-up deleted successfully');
@@ -613,7 +613,7 @@ console.log(requestData);
       });
 
       if (!response.ok) throw new Error('Failed to update status');
-      
+
       const data = await response.json();
       if (data.success) {
         showSuccess('Status updated successfully');
@@ -797,11 +797,11 @@ console.log(requestData);
           </select>
         </div>
 
-        <button 
-          className="followups-btn followups-btn-primary" 
-          onClick={() => { 
-            resetAddForm(); 
-            setShowAddModal(true); 
+        <button
+          className="followups-btn followups-btn-primary"
+          onClick={() => {
+            resetAddForm();
+            setShowAddModal(true);
           }}
         >
           <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -811,9 +811,10 @@ console.log(requestData);
         </button>
       </div>
 
+
       {/* Table */}
       <div className="followups-table-card">
-        <div className="followups-table-wrapper">
+        <div className="followups-table-scroll-wrapper">  {/* ← new wrapper */}
           <table className="followups-table">
             <thead>
               <tr>
@@ -840,7 +841,7 @@ console.log(requestData);
               ) : (
                 currentFollowUps.map((followup) => (
                   <tr key={followup.id} className={isOverdue(followup) ? 'followup-overdue' : ''}>
-                    <td>
+                    <td data-label="Lead">
                       <div className="followup-lead-info">
                         <strong>{followup.leadCode || 'N/A'}</strong>
                         {followup.groupName && (
@@ -848,7 +849,7 @@ console.log(requestData);
                         )}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Type">
                       <span className="followup-type-badge">
                         {followup.followupType === 'Call' && '📞'}
                         {followup.followupType === 'Email' && '📧'}
@@ -860,7 +861,7 @@ console.log(requestData);
                         {' '}{followup.followupType}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Scheduled">
                       <div className="followup-scheduled">
                         {formatDateTime(followup.scheduledAt)}
                         {isOverdue(followup) && (
@@ -868,12 +869,12 @@ console.log(requestData);
                         )}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Priority">
                       <span className={`followup-priority-badge priority-${getPriorityClass(followup.priority)}`}>
                         {followup.priority}
                       </span>
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <button
                         className={`followup-status-btn status-${getStatusClass(followup.status)}`}
                         onClick={() => {
@@ -885,16 +886,16 @@ console.log(requestData);
                         {followup.status}
                       </button>
                     </td>
-                    <td>{followup.assignedToName || 'Unassigned'}</td>
-                    <td>
+                    <td data-label="Assigned To">{followup.assignedToName || 'Unassigned'}</td>
+                    <td data-label="Notes">
                       <div className="followup-notes-preview">
                         {followup.notes ? followup.notes.substring(0, 50) + (followup.notes.length > 50 ? '...' : '') : '-'}
                       </div>
                     </td>
-                    <td>
+                    <td data-label="Actions" className="followup-actions-td">  {/* ← actions class */}
                       <div className="followup-actions">
-                        <button 
-                          className="followup-action-btn action-edit" 
+                        <button
+                          className="followup-action-btn action-edit"
                           onClick={() => handleEdit(followup)}
                           title="Edit"
                         >
@@ -902,8 +903,8 @@ console.log(requestData);
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                           </svg>
                         </button>
-                        <button 
-                          className="followup-action-btn action-delete" 
+                        <button
+                          className="followup-action-btn action-delete"
                           onClick={() => handleDelete(followup.id)}
                           title="Delete"
                         >
@@ -918,23 +919,26 @@ console.log(requestData);
               )}
             </tbody>
           </table>
-        </div>
+        </div>{/* end followups-table-scroll-wrapper */}
 
-        {/* Pagination */}
+        {/* Pagination — unchanged */}
         <div className="followups-pagination">
+
           <div className="followups-pagination-info">
             Showing {startIndex + 1} to {Math.min(endIndex, filteredFollowUps.length)} of {filteredFollowUps.length} entries
+             <select className="followups-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
+              <option value={10}>10 Rows</option>
+              <option value={20}>20 Rows</option>
+              <option value={50}>50 Rows</option>
+              <option value={100}>100 Rows</option>
+            </select>
           </div>
           <div className="followups-pagination-controls">
-            <select className="followups-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
-              <option value={10}>10 rows</option>
-              <option value={25}>25 rows</option>
-              <option value={50}>50 rows</option>
-            </select>
+           
             <div className="followups-pagination-buttons">
-              <button 
-                className="followups-pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} 
+              <button
+                className="followups-pagination-btn"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
               >
                 Previous
@@ -942,9 +946,9 @@ console.log(requestData);
               <span className="followups-pagination-current">
                 Page {currentPage} of {totalPages || 1}
               </span>
-              <button 
-                className="followups-pagination-btn" 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} 
+              <button
+                className="followups-pagination-btn"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                 disabled={currentPage === totalPages || totalPages === 0}
               >
                 Next
@@ -973,9 +977,9 @@ console.log(requestData);
                 <div className="followup-form-grid">
                   <div className="followup-form-group">
                     <label>Group *</label>
-                    <select 
-                      name="modalGroupName" 
-                      value={addForm.modalGroupName} 
+                    <select
+                      name="modalGroupName"
+                      value={addForm.modalGroupName}
                       onChange={handleAddFormChange}
                       required
                     >
@@ -990,9 +994,9 @@ console.log(requestData);
 
                   <div className="followup-form-group">
                     <label>Sub Group</label>
-                    <select 
-                      name="modalSubGroupName" 
-                      value={addForm.modalSubGroupName} 
+                    <select
+                      name="modalSubGroupName"
+                      value={addForm.modalSubGroupName}
                       onChange={handleAddFormChange}
                       disabled={!addForm.modalGroupName}
                     >
@@ -1007,9 +1011,9 @@ console.log(requestData);
 
                   <div className="followup-form-group followup-form-full">
                     <label>Lead *</label>
-                    <select 
-                      name="leadId" 
-                      value={addForm.leadId} 
+                    <select
+                      name="leadId"
+                      value={addForm.leadId}
                       onChange={handleAddFormChange}
                       required
                       disabled={!addForm.modalGroupName}
@@ -1113,16 +1117,16 @@ console.log(requestData);
               </div>
 
               <div className="followup-modal-actions">
-                <button 
-                  type="button" 
-                  className="followups-btn followups-btn-secondary" 
+                <button
+                  type="button"
+                  className="followups-btn followups-btn-secondary"
                   onClick={() => { setShowAddModal(false); resetAddForm(); }}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="followups-btn followups-btn-primary" 
+                <button
+                  type="submit"
+                  className="followups-btn followups-btn-primary"
                   disabled={loading}
                 >
                   {loading ? 'Creating...' : 'Create Follow-up'}
@@ -1254,16 +1258,16 @@ console.log(requestData);
               </div>
 
               <div className="followup-modal-actions">
-                <button 
-                  type="button" 
-                  className="followups-btn followups-btn-secondary" 
+                <button
+                  type="button"
+                  className="followups-btn followups-btn-secondary"
                   onClick={() => { setShowEditModal(false); resetEditForm(); setEditingFollowup(null); }}
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
-                  className="followups-btn followups-btn-primary" 
+                <button
+                  type="submit"
+                  className="followups-btn followups-btn-primary"
                   disabled={loading}
                 >
                   {loading ? 'Updating...' : 'Update Follow-up'}

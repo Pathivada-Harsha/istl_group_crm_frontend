@@ -1,11 +1,7 @@
 import React, { useEffect } from "react";
 import "../components_css/SessionTimeoutModal.css";
 
-export default function SessionTimeoutModal({
-  seconds,
-  onStay,
-  onLogout
-}) {
+export default function SessionTimeoutModal({ seconds, onStay, onLogout }) {
   useEffect(() => {
     document.body.classList.add("session-modal-open");
     return () => {
@@ -26,11 +22,9 @@ export default function SessionTimeoutModal({
           <p className="session-text">
             Your session will expire due to inactivity in
           </p>
-
           <div className="session-timer">
             {seconds}s
           </div>
-
           <p className="session-subtext">
             Do you want to stay logged in?
           </p>
@@ -43,7 +37,6 @@ export default function SessionTimeoutModal({
           >
             Stay Logged In
           </button>
-
           <button
             className="session-btn session-btn-danger"
             onClick={onLogout}

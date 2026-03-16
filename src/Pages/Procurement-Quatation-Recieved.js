@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search, Filter, Download, X, Edit2, Eye, Check, XCircle, FileText, Upload,
+import {
+  Search, Filter, Download, X, Edit2, Eye, Check, XCircle, FileText, Upload,
   Clock, CheckCircle, Star, AlertCircle,
   ShoppingCart, Trash2, Columns, GripVertical, ChevronUp, ChevronDown, ChevronsUpDown,
-  FileSpreadsheet } from 'lucide-react';
+  FileSpreadsheet
+} from 'lucide-react';
 import '../pages-css/Procurement-Quatation-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -17,16 +19,16 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ── Column definitions ───────────────────────────────────────────────────────
 const ALL_QUOTATION_COLUMNS = [
-  { id: 'quotationNo',    label: 'Quotation No',    visible: true  },
-  { id: 'vendorId',       label: 'Vendor ID',        visible: true  },
-  { id: 'rfqId',          label: 'RFQ ID',           visible: false },
-  { id: 'category',       label: 'Category',         visible: true  },
-  { id: 'quotationValue', label: 'Quotation Value',  visible: true  },
-  { id: 'validUntil',     label: 'Valid Until',      visible: true  },
-  { id: 'file',           label: 'File',             visible: false },
-  { id: 'status',         label: 'Status',           visible: true  },
-  { id: 'uploadedOn',     label: 'Uploaded On',      visible: true  },
-  { id: 'actions',        label: 'Actions',          visible: true,  fixed: true },
+  { id: 'quotationNo', label: 'Quotation No', visible: true },
+  { id: 'vendorId', label: 'Vendor ID', visible: true },
+  { id: 'rfqId', label: 'RFQ ID', visible: false },
+  { id: 'category', label: 'Category', visible: true },
+  { id: 'quotationValue', label: 'Quotation Value', visible: true },
+  { id: 'validUntil', label: 'Valid Until', visible: true },
+  { id: 'file', label: 'File', visible: false },
+  { id: 'status', label: 'Status', visible: true },
+  { id: 'uploadedOn', label: 'Uploaded On', visible: true },
+  { id: 'actions', label: 'Actions', visible: true, fixed: true },
 ];
 
 const SORTABLE_COLUMNS = new Set([
@@ -39,13 +41,13 @@ const SortIcon = ({ columnId, sortConfig }) => {
   if (sortConfig.key !== columnId)
     return <ChevronsUpDown size={12} style={{ opacity: 0.35, marginLeft: 4, verticalAlign: 'middle' }} />;
   return sortConfig.direction === 'asc'
-    ? <ChevronUp   size={12} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#2563eb' }} />
+    ? <ChevronUp size={12} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#2563eb' }} />
     : <ChevronDown size={12} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#2563eb' }} />;
 };
 
 // ── Validation sets for import ───────────────────────────────────────────────
-const VALID_GST   = new Set([0, 5, 12, 18, 28]);
-const CATEGORIES  = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies'];
+const VALID_GST = new Set([0, 5, 12, 18, 28]);
+const CATEGORIES = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies'];
 
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
@@ -64,7 +66,7 @@ const QuotationsReceived = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(10);
 
   // ── Column state (drag + visibility) ────────────────────────────────────
   const [columns, setColumns] = useState(() => {
@@ -114,11 +116,11 @@ const QuotationsReceived = () => {
   const [vendors, setVendors] = useState([]);
   const [selectedVendorDetails, setSelectedVendorDetails] = useState(null);
 
-  const canView    = 'VIEW';
-  const canCreate  = 'CREATE';
-  const canEdit    = 'EDIT';
+  const canView = 'VIEW';
+  const canCreate = 'CREATE';
+  const canEdit = 'EDIT';
   const canApprove = 'APPROVE';
-  const canDelete  = 'DELETE';
+  const canDelete = 'DELETE';
 
   // ── Persist column config ────────────────────────────────────────────────
   useEffect(() => {
@@ -135,18 +137,18 @@ const QuotationsReceived = () => {
     return [...quotations].sort((a, b) => {
       let aVal, bVal;
       switch (sortConfig.key) {
-        case 'quotationNo':    aVal = a.quoteNo || '';        bVal = b.quoteNo || '';        break;
-        case 'vendorId':       aVal = a.vendorId || '';       bVal = b.vendorId || '';       break;
-        case 'rfqId':          aVal = a.rfqId || '';          bVal = b.rfqId || '';          break;
-        case 'category':       aVal = a.category || '';       bVal = b.category || '';       break;
+        case 'quotationNo': aVal = a.quoteNo || ''; bVal = b.quoteNo || ''; break;
+        case 'vendorId': aVal = a.vendorId || ''; bVal = b.vendorId || ''; break;
+        case 'rfqId': aVal = a.rfqId || ''; bVal = b.rfqId || ''; break;
+        case 'category': aVal = a.category || ''; bVal = b.category || ''; break;
         case 'quotationValue': aVal = parseFloat(a.totalValue) || 0; bVal = parseFloat(b.totalValue) || 0; break;
-        case 'validUntil':     aVal = new Date(a.validTill || 0); bVal = new Date(b.validTill || 0); break;
-        case 'status':         aVal = a.status || '';         bVal = b.status || '';         break;
-        case 'uploadedOn':     aVal = new Date(a.uploadedAt || 0); bVal = new Date(b.uploadedAt || 0); break;
+        case 'validUntil': aVal = new Date(a.validTill || 0); bVal = new Date(b.validTill || 0); break;
+        case 'status': aVal = a.status || ''; bVal = b.status || ''; break;
+        case 'uploadedOn': aVal = new Date(a.uploadedAt || 0); bVal = new Date(b.uploadedAt || 0); break;
         default: return 0;
       }
       if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ?  1 : -1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
   }, [quotations, sortConfig]);
@@ -174,11 +176,11 @@ const QuotationsReceived = () => {
     if (draggedColIndex === null || draggedColIndex === index) {
       setDraggedColIndex(null); setDragOverColIndex(null); return;
     }
-    const visibleCols  = columns.filter(c => c.visible);
-    const newVisible   = [...visibleCols];
-    const [moved]      = newVisible.splice(draggedColIndex, 1);
+    const visibleCols = columns.filter(c => c.visible);
+    const newVisible = [...visibleCols];
+    const [moved] = newVisible.splice(draggedColIndex, 1);
     newVisible.splice(index, 0, moved);
-    const hiddenCols   = columns.filter(c => !c.visible);
+    const hiddenCols = columns.filter(c => !c.visible);
     setColumns([...newVisible, ...hiddenCols]);
     setDraggedColIndex(null); setDragOverColIndex(null);
   };
@@ -206,8 +208,8 @@ const QuotationsReceived = () => {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const wb   = XLSX.read(evt.target.result, { type: 'binary' });
-        const ws   = wb.Sheets[wb.SheetNames[0]];
+        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
         // Find header row by looking for a cell that contains "item name" (case-insensitive)
@@ -248,28 +250,28 @@ const QuotationsReceived = () => {
 
         const errors = [];
         const parsed = rows.map((row, i) => {
-          const rowNum       = headerRowIdx + 2 + i;
-          const itemName     = String(row[0] || '').trim();
-          const description  = String(row[1] || '').trim();
-          const quantity     = parseFloat(row[2]);
-          const unitPrice    = parseFloat(row[3]);
-          const gst          = parseFloat(row[4]);
-          const obItemId     = String(row[5] || '').trim();
-          const notes        = String(row[6] || '').trim();
+          const rowNum = headerRowIdx + 2 + i;
+          const itemName = String(row[0] || '').trim();
+          const description = String(row[1] || '').trim();
+          const quantity = parseFloat(row[2]);
+          const unitPrice = parseFloat(row[3]);
+          const gst = parseFloat(row[4]);
+          const obItemId = String(row[5] || '').trim();
+          const notes = String(row[6] || '').trim();
           const deliveryTime = String(row[7] || '').trim();
-          const warranty     = String(row[8] || '').trim();
+          const warranty = String(row[8] || '').trim();
 
-          if (!itemName)                              errors.push(`Row ${rowNum}: Item Name is required`);
-          if (isNaN(quantity) || quantity <= 0)       errors.push(`Row ${rowNum}: Invalid quantity "${row[2]}"`);
-          if (isNaN(unitPrice) || unitPrice < 0)      errors.push(`Row ${rowNum}: Invalid unit price "${row[3]}"`);
+          if (!itemName) errors.push(`Row ${rowNum}: Item Name is required`);
+          if (isNaN(quantity) || quantity <= 0) errors.push(`Row ${rowNum}: Invalid quantity "${row[2]}"`);
+          if (isNaN(unitPrice) || unitPrice < 0) errors.push(`Row ${rowNum}: Invalid unit price "${row[3]}"`);
           if (!VALID_GST.has(isNaN(gst) ? -1 : gst)) errors.push(`Row ${rowNum}: GST must be 0, 5, 12, 18, or 28 (got "${row[4]}")`);
 
           return {
             itemName,
             description,
-            quantity:    isNaN(quantity) ? 1 : quantity,
-            unitPrice:   isNaN(unitPrice) ? '' : unitPrice,
-            taxPercent:  VALID_GST.has(gst) ? gst : 18,
+            quantity: isNaN(quantity) ? 1 : quantity,
+            unitPrice: isNaN(unitPrice) ? '' : unitPrice,
+            taxPercent: VALID_GST.has(gst) ? gst : 18,
             orderBookItemId: obItemId,
             notes,
             deliveryTime,
@@ -295,16 +297,16 @@ const QuotationsReceived = () => {
     setQuotationFormData(prev => ({
       ...prev,
       items: importPreview.map(row => ({
-        itemName:    row.itemName,
+        itemName: row.itemName,
         description: row.description,
-        quantity:    row.quantity,
-        unitPrice:   row.unitPrice,
-        taxPercent:  row.taxPercent,
-        included:    true,
+        quantity: row.quantity,
+        unitPrice: row.unitPrice,
+        taxPercent: row.taxPercent,
+        included: true,
       })),
       // Carry across delivery time / warranty from first row if not set
       deliveryTime: prev.deliveryTime || importPreview[0].deliveryTime || '',
-      warranty:     prev.warranty     || importPreview[0].warranty     || '',
+      warranty: prev.warranty || importPreview[0].warranty || '',
     }));
 
     handleCloseImportModal();
@@ -329,7 +331,7 @@ const QuotationsReceived = () => {
   // ── Auth helper ──────────────────────────────────────────────────────────
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'User-Id':   user?.id   || localStorage.getItem('userId'),
+    'User-Id': user?.id || localStorage.getItem('userId'),
     'User-Role': user?.role || localStorage.getItem('userRole'),
   });
 
@@ -338,13 +340,13 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
-      if (groupName)          params.append('groupName', groupName);
-      if (subGroupName)       params.append('subGroupName', subGroupName);
-      if (projectId)          params.append('projectId', projectId);
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId) params.append('projectId', projectId);
       if (filters.status !== 'all') params.append('status', filters.status);
-      if (filters.search)     params.append('searchTerm', filters.search);
+      if (filters.search) params.append('searchTerm', filters.search);
 
-      const res  = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setQuotations(data.quotations || []);
@@ -357,12 +359,12 @@ const QuotationsReceived = () => {
   const fetchStats = async () => {
     try {
       const params = new URLSearchParams();
-      if (groupName)    params.append('groupName', groupName);
+      if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId)    params.append('projectId', projectId);
+      if (projectId) params.append('projectId', projectId);
       const res = await fetch(`${API_BASE_URL}/api/quotations/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) setStats(await res.json());
-    } catch {}
+    } catch { }
   };
 
   const fetchVendors = async (gn, sg) => {
@@ -370,7 +372,7 @@ const QuotationsReceived = () => {
       let url = `${API_BASE_URL}/api/vendors/by-group-subgroup?`;
       if (gn) url += `groupName=${encodeURIComponent(gn)}&`;
       if (sg) url += `subGroupName=${encodeURIComponent(sg)}`;
-      const res  = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
       const data = await res.json();
       if (data.success) setVendors(data.data || []);
     } catch { setVendors([]); }
@@ -380,7 +382,7 @@ const QuotationsReceived = () => {
     if (!pid) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/quotations/orderbook-items/${pid}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/quotations/orderbook-items/${pid}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       if (data.success) {
@@ -400,9 +402,9 @@ const QuotationsReceived = () => {
     finally { setLoadingOrderItems(false); }
   };
 
-  const fetchModalGroups    = async () => { setModalDropdownLoading(p => ({ ...p, groups: true })); try { setModalGroups(await filterApi.getAllGroups() || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, groups: false })); } };
+  const fetchModalGroups = async () => { setModalDropdownLoading(p => ({ ...p, groups: true })); try { setModalGroups(await filterApi.getAllGroups() || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, groups: false })); } };
   const fetchModalSubGroups = async (gn) => { if (!gn) { setModalSubGroups([]); setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, subGroups: true })); try { setModalSubGroups(await filterApi.getSubGroups(gn) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, subGroups: false })); } };
-  const fetchModalProjects  = async (gn, sg) => { if (!gn || !sg) { setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, projects: true })); try { setModalProjects(await filterApi.getProjects(gn, sg) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, projects: false })); } };
+  const fetchModalProjects = async (gn, sg) => { if (!gn || !sg) { setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, projects: true })); try { setModalProjects(await filterApi.getProjects(gn, sg) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, projects: false })); } };
 
   // ── Modal dropdown change handlers ───────────────────────────────────────
   const handleModalGroupChange = (e) => {
@@ -469,9 +471,9 @@ const QuotationsReceived = () => {
   const handleOpenCreatePOModal = async (quotation) => {
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
-      const qd   = await res.json();
+      const qd = await res.json();
       setPOFormData({
         quotationId: qd.id, quoteNo: qd.quoteNo, vendorId: qd.vendorId, vendorContact: qd.vendorContact,
         rfqId: qd.rfqId, groupName: qd.groupName, subGroupName: qd.subGroupName, projectId: qd.projectId,
@@ -487,8 +489,8 @@ const QuotationsReceived = () => {
   const handleUpdatePOItemQuantity = (index, quantity) => {
     if (!poFormData) return;
     const items = [...poFormData.items];
-    const item  = items[index];
-    const qty   = parseFloat(quantity) || 0;
+    const item = items[index];
+    const qty = parseFloat(quantity) || 0;
     if (qty > item.quotedQuantity) { showError(`Cannot exceed quoted qty of ${item.quotedQuantity}`); return; }
     item.selectedQuantity = qty;
     item.lineTotal = qty * item.unitPrice * (1 + item.taxPercent / 100);
@@ -497,7 +499,7 @@ const QuotationsReceived = () => {
 
   const calculatePOTotal = () => {
     if (!poFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
-    const subtotal  = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice, 0);
+    const subtotal = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice, 0);
     const taxAmount = poFormData.items.reduce((s, i) => s + i.selectedQuantity * i.unitPrice * i.taxPercent / 100, 0);
     return { subtotal, taxAmount, total: subtotal + taxAmount };
   };
@@ -534,7 +536,7 @@ const QuotationsReceived = () => {
   const handleViewQuotation = async (quotation) => {
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       setSelectedQuotation(await res.json()); setShowDetailDrawer(true);
     } catch { showError('Failed to load quotation details'); }
@@ -544,7 +546,7 @@ const QuotationsReceived = () => {
   const handleEditQuotation = async (quotation) => {
     setLoading(true);
     try {
-      const res  = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setIsEditMode(true);
@@ -610,16 +612,16 @@ const QuotationsReceived = () => {
       if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
     }
     if (!quotationFormData.validTill) { showError('Valid until date is required'); return; }
-    const today = new Date(); today.setHours(0,0,0,0);
-    const vtd = new Date(quotationFormData.validTill); vtd.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const vtd = new Date(quotationFormData.validTill); vtd.setHours(0, 0, 0, 0);
     if (vtd < today) { showError('Valid until date cannot be in the past'); return; }
     const included = quotationFormData.items.filter(i => i.included !== false);
     if (included.length === 0) { showError('Please include at least one item'); return; }
     for (let i = 0; i < included.length; i++) {
       const item = included[i];
-      if (!item.itemName?.trim()) { showError(`Item ${i+1}: Name is required`); return; }
-      if (!item.quantity || item.quantity <= 0) { showError(`Item ${i+1}: Quantity must be > 0`); return; }
-      if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showError(`Item ${i+1}: Unit price is required`); return; }
+      if (!item.itemName?.trim()) { showError(`Item ${i + 1}: Name is required`); return; }
+      if (!item.quantity || item.quantity <= 0) { showError(`Item ${i + 1}: Quantity must be > 0`); return; }
+      if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showError(`Item ${i + 1}: Unit price is required`); return; }
     }
     setLoading(true);
     try {
@@ -636,9 +638,9 @@ const QuotationsReceived = () => {
       };
       fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
       if (selectedFile) fd.append('file', selectedFile);
-      const url    = isEditMode ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}` : `${API_BASE_URL}/api/quotations/procurement`;
+      const url = isEditMode ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}` : `${API_BASE_URL}/api/quotations/procurement`;
       const method = isEditMode ? 'PUT' : 'POST';
-      const res    = await fetch(url, { credentials: 'include', method, headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}`, 'X-User-Id': user?.id || localStorage.getItem('userId'), 'X-User-Role': user?.role || localStorage.getItem('userRole') }, body: fd });
+      const res = await fetch(url, { credentials: 'include', method, headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}`, 'X-User-Id': user?.id || localStorage.getItem('userId'), 'X-User-Role': user?.role || localStorage.getItem('userRole') }, body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       showSuccess(isEditMode ? 'Quotation updated!' : 'Quotation uploaded!');
       setShowUploadQuotationModal(false); setSelectedFile(null); setFilePreview(null);
@@ -648,22 +650,22 @@ const QuotationsReceived = () => {
     finally { setLoading(false); }
   };
 
-  const handleAddQuotationItem    = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', quantity: 1, unitPrice: '', taxPercent: 18 }] }); };
+  const handleAddQuotationItem = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', quantity: 1, unitPrice: '', taxPercent: 18 }] }); };
   const handleRemoveQuotationItem = (idx) => { if (quotationFormData?.items.length > 1) setQuotationFormData({ ...quotationFormData, items: quotationFormData.items.filter((_, i) => i !== idx) }); };
   const handleUpdateQuotationItem = (idx, field, val) => { if (quotationFormData) { const items = [...quotationFormData.items]; items[idx] = { ...items[idx], [field]: val }; setQuotationFormData({ ...quotationFormData, items }); } };
 
   const calculateQuotationTotal = () => {
     if (!quotationFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
     const inc = quotationFormData.items.filter(i => i.included !== false);
-    const subtotal  = inc.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0);
-    const taxAmount = inc.reduce((s, i) => { const sub = (parseFloat(i.quantity)||0)*(parseFloat(i.unitPrice)||0); return s + sub * (parseFloat(i.taxPercent)||0) / 100; }, 0);
+    const subtotal = inc.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0);
+    const taxAmount = inc.reduce((s, i) => { const sub = (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0); return s + sub * (parseFloat(i.taxPercent) || 0) / 100; }, 0);
     return { subtotal, taxAmount, total: subtotal + taxAmount };
   };
 
   // ── Utility formatters ───────────────────────────────────────────────────
-  const formatCurrency  = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
-  const formatDate      = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
-  const formatFileSize  = (b) => { if (!b) return '0 B'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b/1024).toFixed(2) + ' KB'; return (b/1048576).toFixed(2) + ' MB'; };
+  const formatCurrency = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+  const formatDate = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
+  const formatFileSize = (b) => { if (!b) return '0 B'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(2) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; };
 
   const getStatusBadgeClass = (s) => ({ 'New': 'procurement-quotation-received-badge-new', 'Under Review': 'procurement-quotation-received-badge-review', 'Shortlisted': 'procurement-quotation-received-badge-shortlisted', 'Approved': 'procurement-quotation-received-badge-approved', 'PO Created': 'procurement-quotation-received-badge-po-created', 'Rejected': 'procurement-quotation-received-badge-rejected', 'Expired': 'procurement-quotation-received-badge-expired' })[s] || '';
 
@@ -675,9 +677,9 @@ const QuotationsReceived = () => {
 
   const kpiData = stats ? [
     { title: 'Total Quotations', value: stats.totalQuotations?.toString() || '0', icon: <FileText size={28} />, color: '#2563eb' },
-    { title: 'New',              value: stats.newQuotations?.toString()   || '0', icon: <Clock size={28} />,     color: '#f59e0b' },
-    { title: 'Approved',         value: stats.approved?.toString()        || '0', icon: <CheckCircle size={28} />, color: '#22c55e' },
-    { title: 'Rejected',         value: stats.rejected?.toString()        || '0', icon: <XCircle size={28} />,   color: '#ef4444' },
+    { title: 'New', value: stats.newQuotations?.toString() || '0', icon: <Clock size={28} />, color: '#f59e0b' },
+    { title: 'Approved', value: stats.approved?.toString() || '0', icon: <CheckCircle size={28} />, color: '#22c55e' },
+    { title: 'Rejected', value: stats.rejected?.toString() || '0', icon: <XCircle size={28} />, color: '#ef4444' },
   ] : [];
 
   const visibleColumns = columns.filter(c => c.visible);
@@ -685,12 +687,12 @@ const QuotationsReceived = () => {
   // ── Render column cell ───────────────────────────────────────────────────
   const renderCell = (col, q) => {
     switch (col.id) {
-      case 'quotationNo':    return <td className="procurement-quotation-received-table-id">{q.quoteNo}</td>;
-      case 'vendorId':       return <td>{q.vendorId || '—'}</td>;
-      case 'rfqId':          return <td>{q.rfqId || '—'}</td>;
-      case 'category':       return <td>{q.category || 'N/A'}</td>;
+      case 'quotationNo': return <td className="procurement-quotation-received-table-id">{q.quoteNo}</td>;
+      case 'vendorId': return <td>{q.vendorId || '—'}</td>;
+      case 'rfqId': return <td>{q.rfqId || '—'}</td>;
+      case 'category': return <td>{q.category || 'N/A'}</td>;
       case 'quotationValue': return <td className="procurement-quotation-received-table-value">{formatCurrency(q.totalValue)}</td>;
-      case 'validUntil':     return (
+      case 'validUntil': return (
         <td className={isExpiringSoon(q.validTill) ? 'procurement-quotation-received-expiring' : ''}>
           {formatDate(q.validTill)}
           {isExpiringSoon(q.validTill) && <span className="procurement-quotation-received-warning-icon"><AlertCircle size={14} /></span>}
@@ -703,7 +705,7 @@ const QuotationsReceived = () => {
         <td><span className={`procurement-quotation-received-badge ${getStatusBadgeClass(q.status)}`}>{q.status}</span></td>
       );
       case 'uploadedOn': return <td>{formatDate(q.uploadedAt)}</td>;
-      case 'actions':    return (
+      case 'actions': return (
         <td>
           <div className="procurement-quotation-received-actions-cell">
             <button className="procurement-quotation-received-action-btn" onClick={() => handleViewQuotation(q)} title="View"><Eye size={14} /></button>
@@ -803,70 +805,141 @@ const QuotationsReceived = () => {
 
       {/* ── Main Table with draggable + sortable headers ── */}
       <div className="procurement-quotation-received-table-container">
-        <div className="procurement-table-wrapper">
-          <table className="procurement-quotation-received-table">
-            <thead>
-              <tr>
-                {visibleColumns.map((col, index) => (
-                  <th
-                    key={col.id}
-                    draggable={!col.fixed}
-                    onDragStart={(e) => handleColDragStart(e, index)}
-                    onDragOver={(e)  => handleColDragOver(e, index)}
-                    onDrop={(e)      => handleColDrop(e, index)}
-                    onDragEnd={handleColDragEnd}
-                    onClick={() => handleSort(col.id)}
-                    style={{
-                      cursor: SORTABLE_COLUMNS.has(col.id) ? 'pointer' : (col.fixed ? 'default' : 'grab'),
-                      userSelect: 'none',
-                      background: dragOverColIndex === index ? '#dbeafe' : undefined,
-                      transition: 'background 0.15s',
-                      whiteSpace: 'nowrap',
-                    }}
-                    title={SORTABLE_COLUMNS.has(col.id) ? `Sort by ${col.label}` : (col.fixed ? '' : 'Drag to reorder')}
-                  >
-                    {!col.fixed && (
-                      <GripVertical size={11} style={{ opacity: 0.28, marginRight: 3, verticalAlign: 'middle', display: 'inline-block' }} />
-                    )}
-                    {col.label}
-                    {SORTABLE_COLUMNS.has(col.id) && <SortIcon columnId={col.id} sortConfig={sortConfig} />}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {sortedQuotations.length === 0 ? (
-                <tr><td colSpan={visibleColumns.length} className="empty-state">No quotations found</td></tr>
-              ) : (
-                sortedQuotations.map(q => (
-                  <tr key={q.id} className="procurement-quotation-received-table-row">
-                    {visibleColumns.map(col => <React.Fragment key={col.id}>{renderCell(col, q)}</React.Fragment>)}
+
+        {/* Scrollable table */}
+        <div className="procurement-table-scroll">
+          <div className="procurement-table-wrapper">
+            <table className="procurement-quotation-received-table">
+              <thead>
+                <tr>
+                  {visibleColumns.map((col, index) => (
+                    <th
+                      key={col.id}
+                      draggable={!col.fixed}
+                      onDragStart={(e) => handleColDragStart(e, index)}
+                      onDragOver={(e) => handleColDragOver(e, index)}
+                      onDrop={(e) => handleColDrop(e, index)}
+                      onDragEnd={handleColDragEnd}
+                      onClick={() => handleSort(col.id)}
+                      style={{
+                        cursor: SORTABLE_COLUMNS.has(col.id)
+                          ? "pointer"
+                          : col.fixed
+                            ? "default"
+                            : "grab",
+                        userSelect: "none",
+                        background: dragOverColIndex === index ? "#dbeafe" : undefined,
+                        transition: "background 0.15s",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {!col.fixed && (
+                        <GripVertical
+                          size={11}
+                          style={{
+                            opacity: 0.28,
+                            marginRight: 3,
+                            verticalAlign: "middle",
+                            display: "inline-block",
+                          }}
+                        />
+                      )}
+
+                      {col.label}
+
+                      {SORTABLE_COLUMNS.has(col.id) && (
+                        <SortIcon columnId={col.id} sortConfig={sortConfig} />
+                      )}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {sortedQuotations.length === 0 ? (
+                  <tr>
+                    <td colSpan={visibleColumns.length} className="empty-state">
+                      No quotations found
+                    </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  sortedQuotations.map((q) => (
+                    <tr key={q.id} className="procurement-quotation-received-table-row">
+                      {visibleColumns.map((col) => (
+                        <React.Fragment key={col.id}>
+                          {renderCell(col, q)}
+                        </React.Fragment>
+                      ))}
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Pagination */}
+        {/* Fixed Footer */}
         <div className="table-footer">
           <div className="table-footer-left">
-            <span>Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} quotations</span>
+            <span>
+              Showing {currentPage * pageSize + 1}–
+              {Math.min((currentPage + 1) * pageSize, totalElements)} of{" "}
+              {totalElements} quotations
+            </span>
+
             <div className="records-per-page">
-              <label htmlFor="pageSize">Records per page:</label>
-              <select id="pageSize" value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(0); }} className="page-size-select">
-                <option value="20">20</option><option value="50">50</option><option value="100">100</option>
+             
+              <select
+                id="pageSize"
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(parseInt(e.target.value));
+                  setCurrentPage(0);
+                }}
+                className="page-size-select"
+              >
+                <option value="10">10 Rows</option>
+                <option value="20">20 Rows</option>
+                <option value="50">50 Rows</option>
+                <option value="100">100 Rows</option>
               </select>
             </div>
           </div>
+
           <div className="pagination">
-            <button className="page-btn" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0}>Previous</button>
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage((p) => p - 1)}
+              disabled={currentPage === 0}
+            >
+              Previous
+            </button>
+
             {[...Array(Math.min(5, totalPages))].map((_, i) => {
               const pn = currentPage < 3 ? i : currentPage + i - 2;
-              if (pn >= 0 && pn < totalPages) return <button key={pn} className={`page-btn ${pn === currentPage ? 'active' : ''}`} onClick={() => setCurrentPage(pn)}>{pn + 1}</button>;
+
+              if (pn >= 0 && pn < totalPages) {
+                return (
+                  <button
+                    key={pn}
+                    className={`page-btn ${pn === currentPage ? "active" : ""}`}
+                    onClick={() => setCurrentPage(pn)}
+                  >
+                    {pn + 1}
+                  </button>
+                );
+              }
+
               return null;
             })}
-            <button className="page-btn" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages - 1}>Next</button>
+
+            <button
+              className="page-btn"
+              onClick={() => setCurrentPage((p) => p + 1)}
+              disabled={currentPage >= totalPages - 1}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -898,9 +971,9 @@ const QuotationsReceived = () => {
                 <div className="procurement-quotation-received-drawer-section">
                   <h3>Project Assignment</h3>
                   <div className="quotation-details-grid">
-                    {selectedQuotation.groupName    && <div className="quotation-detail-item"><span className="quotation-detail-label">Group:</span><span>{selectedQuotation.groupName}</span></div>}
+                    {selectedQuotation.groupName && <div className="quotation-detail-item"><span className="quotation-detail-label">Group:</span><span>{selectedQuotation.groupName}</span></div>}
                     {selectedQuotation.subGroupName && <div className="quotation-detail-item"><span className="quotation-detail-label">Sub Group:</span><span>{selectedQuotation.subGroupName}</span></div>}
-                    {selectedQuotation.projectId    && <div className="quotation-detail-item"><span className="quotation-detail-label">Project ID:</span><span>{selectedQuotation.projectId}</span></div>}
+                    {selectedQuotation.projectId && <div className="quotation-detail-item"><span className="quotation-detail-label">Project ID:</span><span>{selectedQuotation.projectId}</span></div>}
                   </div>
                 </div>
               )}
@@ -910,7 +983,7 @@ const QuotationsReceived = () => {
                   <div className="quotation-details-grid">
                     {selectedQuotation.deliveryTime && <div className="quotation-detail-item"><span className="quotation-detail-label">Delivery Time:</span><span>{selectedQuotation.deliveryTime}</span></div>}
                     {selectedQuotation.paymentTerms && <div className="quotation-detail-item"><span className="quotation-detail-label">Payment Terms:</span><span>{selectedQuotation.paymentTerms}</span></div>}
-                    {selectedQuotation.warranty     && <div className="quotation-detail-item"><span className="quotation-detail-label">Warranty:</span><span>{selectedQuotation.warranty}</span></div>}
+                    {selectedQuotation.warranty && <div className="quotation-detail-item"><span className="quotation-detail-label">Warranty:</span><span>{selectedQuotation.warranty}</span></div>}
                   </div>
                 </div>
               )}
@@ -1033,7 +1106,7 @@ const QuotationsReceived = () => {
                 <h3>🏢 Vendor Information</h3>
                 <div style={{ marginBottom: 15, display: 'flex', gap: 20 }}>
                   <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}><input type="radio" name="vendorType" checked={!showNewVendorForm} onChange={() => handleVendorTypeChange('existing')} style={{ marginRight: 8 }} /><span>Select Existing Vendor</span></label>
-                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}><input type="radio" name="vendorType" checked={showNewVendorForm}  onChange={() => handleVendorTypeChange('new')}      style={{ marginRight: 8 }} /><span>Add New Vendor</span></label>
+                  <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}><input type="radio" name="vendorType" checked={showNewVendorForm} onChange={() => handleVendorTypeChange('new')} style={{ marginRight: 8 }} /><span>Add New Vendor</span></label>
                 </div>
                 {!showNewVendorForm && (
                   <div className="procurement-quotation-received-form-row">
@@ -1189,10 +1262,10 @@ const QuotationsReceived = () => {
                         </thead>
                         <tbody>
                           {quotationFormData.items.map((item, idx) => {
-                            const inc   = item.included !== false;
-                            const qty   = parseFloat(item.quantity) || 0;
+                            const inc = item.included !== false;
+                            const qty = parseFloat(item.quantity) || 0;
                             const price = parseFloat(item.unitPrice) || 0;
-                            const tax   = parseFloat(item.taxPercent) || 0;
+                            const tax = parseFloat(item.taxPercent) || 0;
                             const total = qty * price * (1 + tax / 100);
                             return (
                               <tr key={idx} style={{ background: inc ? 'white' : '#f8fafc', opacity: inc ? 1 : 0.5 }}>
@@ -1203,7 +1276,7 @@ const QuotationsReceived = () => {
                                 <td><input type="number" min="0" step="0.01" placeholder="Price" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
                                 <td>
                                   <select value={item.taxPercent} onChange={(e) => handleUpdateQuotationItem(idx, 'taxPercent', parseFloat(e.target.value) || 0)} className="table-input" disabled={!inc}>
-                                    {[0,5,12,18,28].map(t => <option key={t} value={t}>{t}%</option>)}
+                                    {[0, 5, 12, 18, 28].map(t => <option key={t} value={t}>{t}%</option>)}
                                   </select>
                                 </td>
                                 <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(total) : '-'}</td>
@@ -1294,7 +1367,7 @@ const QuotationsReceived = () => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <strong style={{ color: '#1e40af', fontSize: 14 }}>✓ {importPreview.length} item{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
                     <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: 12 }}>
-                      Est. total: {formatCurrency(importPreview.reduce((s, r) => s + (parseFloat(r.quantity)||0) * (parseFloat(r.unitPrice)||0) * (1 + (r.taxPercent||18)/100), 0))}
+                      Est. total: {formatCurrency(importPreview.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unitPrice) || 0) * (1 + (r.taxPercent || 18) / 100), 0))}
                     </span>
                   </div>
                   <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, maxHeight: 280, overflowY: 'auto' }}>
@@ -1308,7 +1381,7 @@ const QuotationsReceived = () => {
                       </thead>
                       <tbody>
                         {importPreview.map((row, i) => {
-                          const lt = (parseFloat(row.quantity)||0) * (parseFloat(row.unitPrice)||0) * (1 + (row.taxPercent||18)/100);
+                          const lt = (parseFloat(row.quantity) || 0) * (parseFloat(row.unitPrice) || 0) * (1 + (row.taxPercent || 18) / 100);
                           return (
                             <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                               <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
