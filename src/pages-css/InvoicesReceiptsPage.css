@@ -1,8 +1,8 @@
 /* Invoices and Receipts Tab Navigation */
-.invoices-receipts-container {
+/* .invoices-receipts-container {
   min-height: 100vh;
   background-color: #f5f7fa;
-}
+} */
 
 .tab-navigation {
   display: flex;

@@ -22,7 +22,7 @@ const useConfirmationModal = () => {
     confirmText: 'Confirm', cancelText: 'Cancel', showCancel: true
   });
 
-  const showConfirmation = (config) => {
+  const showConfirmation = (config) => { 
     return new Promise((resolve) => {
       const showCancel = config.showCancel !== undefined
         ? config.showCancel
@@ -634,70 +634,110 @@ const InvoicesManagementPage = () => {
 
       {/* Main Table with draggable column headers */}
       <div className="Invoices-page-table-container">
-        <table className="Invoices-page-table">
-          <thead>
-            <tr>
-              {visibleColumns.map((column, index) => (
-                <th
-                  key={column.id}
-                  draggable={!column.fixed}
-                  onDragStart={(e) => handleColDragStart(e, index)}
-                  onDragOver={(e) => handleColDragOver(e, index)}
-                  onDrop={(e) => handleColDrop(e, index)}
-                  onDragEnd={handleColDragEnd}
-                  onClick={() => handleSort(column.id)}
-                  style={{
-                    cursor: SORTABLE_COLUMNS.has(column.id) ? 'pointer' : (column.fixed ? 'default' : 'grab'),
-                    userSelect: 'none',
-                    background: dragOverColIndex === index ? '#dbeafe' : undefined,
-                    transition: 'background 0.15s',
-                    whiteSpace: 'nowrap'
-                  }}
-                  title={SORTABLE_COLUMNS.has(column.id) ? `Sort by ${column.label}` : (column.fixed ? '' : 'Drag to reorder')}
-                >
-                  {!column.fixed && (
-                    <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4, verticalAlign: 'middle', display: 'inline-block' }} />
-                  )}
-                  {column.label}
-                  {SORTABLE_COLUMNS.has(column.id) && <SortIcon columnId={column.id} sortConfig={sortConfig} />}
-                </th>
+
+  {/* Scrollable table area */}
+  <div className="Invoices-page-table-scroll">
+    <table className="Invoices-page-table">
+      <thead>
+        <tr>
+          {visibleColumns.map((column, index) => (
+            <th
+              key={column.id}
+              draggable={!column.fixed}
+              onDragStart={(e) => handleColDragStart(e, index)}
+              onDragOver={(e) => handleColDragOver(e, index)}
+              onDrop={(e) => handleColDrop(e, index)}
+              onDragEnd={handleColDragEnd}
+              onClick={() => handleSort(column.id)}
+            >
+              {!column.fixed && (
+                <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4 }} />
+              )}
+              {column.label}
+              {SORTABLE_COLUMNS.has(column.id) && (
+                <SortIcon columnId={column.id} sortConfig={sortConfig} />
+              )}
+            </th>
+          ))}
+        </tr>
+      </thead>
+
+      <tbody>
+        {sortedInvoices.length === 0 ? (
+          <tr>
+            <td colSpan={visibleColumns.length} className="empty-state">
+              No invoices found
+            </td>
+          </tr>
+        ) : (
+          sortedInvoices.map((invoice) => (
+            <tr key={invoice.id}>
+              {visibleColumns.map((column) => (
+                <React.Fragment key={column.id}>
+                  {renderColumnValue(column, invoice)}
+                </React.Fragment>
               ))}
             </tr>
-          </thead>
-          <tbody>
-            {sortedInvoices.length === 0 ? (
-              <tr><td colSpan={visibleColumns.length} className="empty-state">No invoices found</td></tr>
-            ) : (
-              sortedInvoices.map((invoice) => (
-                <tr key={invoice.id}>
-                  {visibleColumns.map(column => (
-                    <React.Fragment key={column.id}>{renderColumnValue(column, invoice)}</React.Fragment>
-                  ))}
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
 
-        <div className="Invoices-page-pagination">
-          <div className="Invoices-page-pagination-info">
-            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} invoices
-          </div>
-          <div className="Invoices-page-pagination-controls-wrapper">
-            <div className="Invoices-page-pagination-size">
-              <label>Rows per page:</label>
-              <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="Invoices-page-pagination-size-select">
-                <option value="5">5</option><option value="10">10</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
-              </select>
-            </div>
-            <div className="Invoices-page-pagination-controls">
-              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0} className="Invoices-page-pagination-btn">Previous</button>
-              <span className="Invoices-page-pagination-current">Page {currentPage + 1} of {totalPages}</span>
-              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))} disabled={currentPage >= totalPages - 1} className="Invoices-page-pagination-btn">Next</button>
-            </div>
-          </div>
-        </div>
+  {/* Fixed footer */}
+  <div className="Invoices-page-pagination">
+    <div className="Invoices-page-pagination-info">
+      Showing {currentPage * pageSize + 1} to{" "}
+      {Math.min((currentPage + 1) * pageSize, totalElements)} of{" "}
+      {totalElements} invoices
+
+    
+        <select
+          value={pageSize}
+          onChange={(e) => {
+            setPageSize(Number(e.target.value));
+            setCurrentPage(0);
+          }}
+          className="Invoices-page-pagination-size-select"
+        >
+          <option value="10">10 Rows</option>
+          <option value="20">20 Rows</option>
+          <option value="50">50 Rows</option>
+          <option value="100">100 Rows</option>
+        </select>
+     
+    </div>
+
+    <div className="Invoices-page-pagination-controls-wrapper">
+      
+
+      <div className="Invoices-page-pagination-controls">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 0))}
+          disabled={currentPage === 0}
+          className="Invoices-page-pagination-btn"
+        >
+          Previous
+        </button>
+
+        <span className="Invoices-page-pagination-current">
+          Page {currentPage + 1} of {totalPages}
+        </span>
+
+        <button
+          onClick={() =>
+            setCurrentPage((prev) => Math.min(prev + 1, totalPages - 1))
+          }
+          disabled={currentPage >= totalPages - 1}
+          className="Invoices-page-pagination-btn"
+        >
+          Next
+        </button>
       </div>
+    </div>
+  </div>
+
+</div>
 
       {/* View Invoice Modal */}
       {showInvoiceModal && selectedInvoice && (

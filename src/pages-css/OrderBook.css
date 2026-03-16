@@ -2,9 +2,9 @@
 
 /* ── Page ────────────────────────────────────────────────────── */
 .orderbook-page {
-  padding: 12px 16px;
-  background: #f8fafc;
-  min-height: 100vh;
+  padding: 24px 24px 0px 24px;
+  /* background: #f8fafc;
+  min-height: 100vh; */
 }
 
 /* ── Breadcrumb ───────────────────────────────────────────────── */
@@ -179,7 +179,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 .orderbook-search-filters {
@@ -196,7 +196,7 @@
 .orderbook-search {
   flex: 1;
   min-width: 180px;
-  padding: 5px 10px;
+  padding:10px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 12px;
@@ -208,7 +208,7 @@
   box-shadow: 0 0 0 2px rgba(59,130,246,0.1);
 }
 .orderbook-filter {
-  padding: 5px 8px;
+  padding: 10px;
   border: 1px solid #e2e8f0;
   border-radius: 6px;
   font-size: 12px;
@@ -239,6 +239,7 @@
 .orderbook-btn-primary {
   background: linear-gradient(135deg,#3b82f6,#2563eb);
   color: white;
+  padding: 10px;
 }
 .orderbook-btn-primary:hover:not(:disabled) {
   box-shadow: 0 3px 8px rgba(59,130,246,0.35);
@@ -248,6 +249,7 @@
   background: white;
   color: #64748b;
   border: 1px solid #e2e8f0;
+  padding: 10px;
 }
 .orderbook-btn-secondary:hover:not(:disabled) {
   background: #f8fafc;
@@ -339,7 +341,32 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   overflow: hidden;
 }
-.orderbook-table-wrapper { overflow-x: auto; }
+.orderbook-table-card .orderbook-table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+}
+
+.orderbook-table-card .orderbook-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.orderbook-table-card .orderbook-table-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.orderbook-table-card .orderbook-table-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.orderbook-table-card .orderbook-table-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.orderbook-table-card .orderbook-table-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 .orderbook-table {
   width: 100%;
   border-collapse: collapse;
@@ -438,7 +465,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-top: 1px solid #f1f5f9;
   flex-wrap: wrap;
   gap: 8px;
@@ -446,15 +473,16 @@
 .orderbook-pagination-info { font-size: 11px; color:#64748b; }
 .orderbook-pagination-controls { display:flex; align-items:center; gap:6px; }
 .orderbook-rows-select {
-  padding: 4px 8px;
+  padding: 8px;
   border: 1px solid #e2e8f0;
   border-radius: 5px;
   font-size: 11px;
   background: white;
   cursor: pointer;
+  margin-left: 8px;
 }
 .orderbook-pagination-btn {
-  padding: 4px 10px;
+  padding:8px;
   border: 1px solid #e2e8f0;
   background: white;
   border-radius: 5px;
@@ -888,5 +916,9 @@
 }
 @media (max-width: 1200px) {
   .orderbook-items-table { min-width:1100px; }
-  .orderbook-table-wrapper { overflow-x:auto; }
+  .orderbook-table-wrapper {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+}
 }

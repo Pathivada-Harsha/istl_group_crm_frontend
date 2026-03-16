@@ -7,32 +7,28 @@ export default function SessionManager() {
   const { logout, sessionTimeout, warningTime } = useAuth();
   const navigate = useNavigate();
 
-  // ✅ Use backend configuration values
-  const SESSION_LIMIT = sessionTimeout || 15 * 60; // fallback to 15 minutes
-  const WARNING_AT = warningTime || 60; // fallback to 60 seconds
+  const SESSION_LIMIT = sessionTimeout || 15 * 60;
+  const WARNING_AT = warningTime || 60;
 
   const [secondsLeft, setSecondsLeft] = useState(SESSION_LIMIT);
   const [showPopup, setShowPopup] = useState(false);
   const lastActivityRef = useRef(Date.now());
+  const isStayingActiveRef = useRef(false); // 🔒 Race condition guard
 
-  // ✅ Update timer when SESSION_LIMIT changes (when backend config loads)
   useEffect(() => {
     setSecondsLeft(SESSION_LIMIT);
   }, [SESSION_LIMIT]);
 
-  /* 🔄 Reset timer on user activity */
   const resetTimer = useCallback(() => {
     lastActivityRef.current = Date.now();
     setSecondsLeft(SESSION_LIMIT);
     setShowPopup(false);
   }, [SESSION_LIMIT]);
 
-  /* 👆 Detect user activity */
   useEffect(() => {
     const events = ['mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
-    
+
     const handleActivity = () => {
-      // Only reset if not in warning state or if user was recently active
       if (!showPopup || secondsLeft > WARNING_AT) {
         resetTimer();
       }
@@ -53,15 +49,12 @@ export default function SessionManager() {
   useEffect(() => {
     const timer = setInterval(() => {
       setSecondsLeft(prev => {
-        if (prev <= 1) {
-          return 0;
-        }
+        if (prev <= 1) return 0;
         return prev - 1;
       });
     }, 1000);
-
     return () => clearInterval(timer);
-  }, []);
+  }, []); // ← Empty deps: interval always runs cleanly
 
   /* ⚠ Trigger modal + auto logout */
   useEffect(() => {
@@ -69,7 +62,7 @@ export default function SessionManager() {
       setShowPopup(true);
     }
 
-    if (secondsLeft <= 0) {
+    if (secondsLeft <= 0 && !isStayingActiveRef.current) { // ← Guard added
       handleLogout();
     }
   }, [secondsLeft, showPopup, WARNING_AT]);
@@ -83,6 +76,7 @@ export default function SessionManager() {
 
   /* ✅ Stay logged in */
   const handleStayActive = async () => {
+    isStayingActiveRef.current = true; // 🔒 Block auto-logout during ping
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL}/login/ping`, {
         method: "GET",
@@ -90,16 +84,15 @@ export default function SessionManager() {
       });
 
       if (response.ok) {
-        // ✅ Backend session refreshed
         resetTimer();
       } else {
-        // Session invalid on backend
         handleLogout();
       }
     } catch (err) {
-      // If ping fails → force logout
       console.error("Ping failed:", err);
       handleLogout();
+    } finally {
+      isStayingActiveRef.current = false; // 🔓 Unblock after ping completes
     }
   };
 

@@ -881,7 +881,7 @@ const getStatusColor = (status) => {
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 const CustomerDatabase = () => {
-  const isFirstRender = useRef(true);
+  // const isFirstRender = useRef(true);
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
@@ -1025,33 +1025,55 @@ const CustomerDatabase = () => {
   };
 
   // ── Effects ──────────────────────────────────────────────────────
-  // Initial load only
-  useEffect(() => {
-    if (canView) { fetchCustomers(); fetchUsers(); fetchGroups(); }
-  }, []);
 
-  // Re-fetch when page or pageSize changes — these never need a page reset
-  useEffect(() => {
-    if (isFirstRender.current) { isFirstRender.current = false; return; }
-    if (canView) fetchCustomers();
-  }, [currentPage, rowsPerPage]);
+// Debounce timer ref (same pattern as UsersPage)
+const filterDebounceTimer = useRef(null);
 
-  // Any filter change → reset to page 1 and fetch with page=1 explicitly
-  // groupName/subGroupName come from GroupCategoryFilter (URL/context state)
-  // searchTerm, selectedGroup, selectedStatus are local state
-  useEffect(() => {
-    if (!canView) return;
-    // Always reset to page 1 when any filter changes, pass page=1 explicitly
-    // to avoid stale currentPage closure
-    const t = setTimeout(() => {
+// Effect 1 — search/filter changes → debounced fetch (fires on mount too, which is correct)
+useEffect(() => {
+  if (!canView) return;
+
+  // Clear any existing timer
+  if (filterDebounceTimer.current) clearTimeout(filterDebounceTimer.current);
+
+  const hasFilters = searchTerm.trim() !== ''
+    || selectedGroup !== 'All'
+    || selectedStatus !== 'All'
+    || groupName !== ''
+    || subGroupName !== '';
+
+  if (hasFilters) {
+    // Debounce filter changes by 300ms (same as UsersPage uses 1000ms)
+    filterDebounceTimer.current = setTimeout(() => {
       setCurrentPage(1);
       fetchCustomers(1);
     }, 300);
-    return () => clearTimeout(t);
-  }, [groupName, subGroupName, searchTerm, selectedGroup, selectedStatus]);
+  } else {
+    // No filters — fetch immediately (covers initial mount)
+    fetchCustomers(1);
+    fetchUsers();
+    fetchGroups();
+  }
 
-  useEffect(() => { if (formData.groupName) fetchSubGroupsForForm(formData.groupName); else setSubGroups([]); }, [formData.groupName]);
+  return () => {
+    if (filterDebounceTimer.current) clearTimeout(filterDebounceTimer.current);
+  };
+}, [canView, searchTerm, selectedGroup, selectedStatus, groupName, subGroupName]);
+// eslint-disable-line react-hooks/exhaustive-deps
 
+// Effect 2 — pagination changes → immediate fetch (skip is handled by Effect 1 covering page 1)
+useEffect(() => {
+  if (!canView) return;
+  fetchCustomers();
+}, [currentPage, rowsPerPage]);
+// eslint-disable-line react-hooks/exhaustive-deps
+
+// Effect 3 — subgroups for form dropdown
+useEffect(() => {
+  if (formData.groupName) fetchSubGroupsForForm(formData.groupName);
+  else setSubGroups([]);
+}, [formData.groupName]);
+// eslint-disable-line react-hooks/exhaustive-deps
   // ── Sort ──────────────────────────────────────────────────────────
   const handleSort = (colKey) => {
     const dir = sortColumn === colKey && sortDirection === 'asc' ? 'desc' : 'asc';
@@ -1268,12 +1290,13 @@ const CustomerDatabase = () => {
       <ToastContainer toasts={toasts} removeToast={removeToast}/>
 
       <div className="cust-breadcrumb">
-        <span>Dashboard</span>
+        <span>Sales</span>
         <span className="cust-breadcrumb-separator">&gt;</span>
-        <span className="cust-breadcrumb-active">Customers</span>
+        <span className="cust-breadcrumb-active">Clients</span>
       </div>
 
       <div className="cust-header page-header-with-filter">
+        <h1 class="clients-title">Clients</h1>
         <GroupCategoryFilter groupValue={groupName} subGroupValue={subGroupName} onChange={updateFilters}/>
       </div>
 
@@ -1316,7 +1339,7 @@ const CustomerDatabase = () => {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'1.5rem' }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'0.5rem' }}>
         {[
           {icon:'👥', bg:'#eff6ff', val:kpiData.totalCustomers,    label:'Total Customers'},
           {icon:'✨', bg:'#fef3c7', val:kpiData.newThisMonth,      label:'New This Month'},
@@ -1675,14 +1698,16 @@ const CustPagination = ({ startRecord, endRecord, totalRecords, currentPage, tot
         {totalRecords === 0
           ? 'No records found'
           : `Showing ${startRecord}–${endRecord} of ${totalRecords} customers`}
+
+          <select className="leads-enquiries-rows-select" value={rowsPerPage} onChange={e => onRowsPerPageChange(Number(e.target.value))}>
+          <option value={10}>10 Rows</option>
+          <option value={20}>20 Rows</option>
+          <option value={50}>50 Rows</option>
+          <option value={100}>100 Rows</option>
+        </select>
       </div>
       <div className="leads-enquiries-pagination-controls">
-        <select className="leads-enquiries-rows-select" value={rowsPerPage} onChange={e => onRowsPerPageChange(Number(e.target.value))}>
-          <option value={10}>10 / page</option>
-          <option value={25}>25 / page</option>
-          <option value={50}>50 / page</option>
-          <option value={100}>100 / page</option>
-        </select>
+        
         <div className="leads-enquiries-pagination-buttons">
           <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(1)} disabled={currentPage === 1} title="First page">«</button>
           <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>Previous</button>

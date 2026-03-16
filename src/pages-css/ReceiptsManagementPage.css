@@ -1,15 +1,15 @@
 /* Receipts Management Page - Complete Optimized Compact Styles */
 
-* {
+/* * {
   margin: 0;
   padding: 0;
   box-sizing: border-box;
-}
+} */
 
 .receipts-page-container {
-  padding: 16px;
-  background-color: #f5f7fa;
-  min-height: 100vh;
+  padding: 24px 24px 0px 24px;
+  /* background-color: #f5f7fa;
+  min-height: 100vh; */
   color: #1a202c;
 }
 
@@ -214,11 +214,44 @@
 .receipts-page-table-container {
   background: white;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  max-height: 480px;
+}
+/* .receipts-page-table-container::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.receipts-page-table-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.receipts-page-table-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.receipts-page-table-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+} */
+
+.receipts-page-table-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.receipts-page-table-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
 }
 
+.receipts-page-table-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.receipts-page-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
 .receipts-page-table {
   width: 100%;
   border-collapse: collapse;
@@ -489,13 +522,14 @@
 }
 
 .receipts-page-pagination-size-select {
-  padding: 4px 8px;
+  padding:8px;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   background-color: white;
   font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
+  margin-left: 8px;
 }
 
 .receipts-page-pagination-size-select:hover {
@@ -515,7 +549,7 @@
 }
 
 .receipts-page-pagination-btn {
-  padding: 4px 12px;
+  padding: 8px;
   background-color: white;
   color: #475569;
   border: 1px solid #e2e8f0;

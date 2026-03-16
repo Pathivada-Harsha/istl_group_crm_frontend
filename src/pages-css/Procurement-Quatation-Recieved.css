@@ -1,9 +1,9 @@
 /* Quotations Received Page Styles - Compacted & Responsive */
 
 .procurement-quotation-received-container {
-  padding: 20px;
-  background-color: #f5f7fa;
-  min-height: 100vh;
+  padding: 24px 24px 0px 24px;
+  /* background-color: #f5f7fa;
+  min-height: 100vh; */
 }
 
 /* Header */
@@ -51,7 +51,7 @@
 .procurement-quotation-received-search {
   flex: 1;
   min-width: 250px;
-  padding: 8px 14px;
+  padding: 10px 14px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
@@ -66,7 +66,7 @@
 }
 
 .procurement-quotation-received-filter {
-  padding: 8px 14px;
+  padding: 10px 14px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   font-size: 14px;
@@ -108,7 +108,7 @@
 }
 
 .procurement-quotation-received-btn-primary {
-  padding: 8px 16px;
+  padding: 10px 16px;
   background-color: #3b82f6;
   color: white;
   border: none;
@@ -129,7 +129,7 @@
 }
 
 .procurement-quotation-received-btn-secondary {
-  padding: 8px 16px;
+  padding: 10px 16px;
   background-color: white;
   color: #475569;
   border: 1px solid #e2e8f0;
@@ -326,37 +326,49 @@
 .procurement-quotation-received-table-container {
   background: white;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+  max-height: 500px;
 }
 
+.procurement-table-scroll{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:auto;
+}
+.procurement-table-scroll::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.procurement-table-scroll::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.procurement-table-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.procurement-table-scroll::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 .procurement-table-wrapper {
-  overflow-x: auto;
+  width: 100%;
 }
 
-.procurement-quotation-received-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
+.procurement-quotation-received-table{
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .procurement-quotation-received-table thead {
   background-color: #f8fafc;
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
-.procurement-quotation-received-table th {
-  padding: 12px 14px;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 600;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid #e2e8f0;
-  white-space: nowrap;
+.procurement-quotation-received-table th{
+  position: sticky;
+  top: 0;
+  background: #f8fafc;
+  z-index: 20;
 }
 
 .procurement-quotation-received-table td {

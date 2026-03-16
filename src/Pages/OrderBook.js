@@ -1219,8 +1219,7 @@ function OrderBook() {
             ) : (
               <>No entries to display</>
             )}
-          </div>
-          <div className="orderbook-pagination-controls">
+
             <select
               value={rowsPerPage}
               onChange={(e) => {
@@ -1229,10 +1228,14 @@ function OrderBook() {
               }}
               className="orderbook-rows-select"
             >
-              <option value={10}>10 rows</option>
-              <option value={25}>25 rows</option>
-              <option value={50}>50 rows</option>
+              <option value={10}>10 Rows</option>
+              <option value={20}>20 Rows</option>
+              <option value={50}>50 Rows</option>
+              <option value={100}>100 Rows</option>
             </select>
+          </div>
+          <div className="orderbook-pagination-controls">
+            
             <button
               onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
               disabled={currentPage === 1}

@@ -274,7 +274,7 @@ const PurchaseOrders = () => {
       if (subGroupName) url += `subGroupName=${encodeURIComponent(subGroupName)}&`;
       if (projectId) url += `projectId=${encodeURIComponent(projectId)}`;
 
-      console.log('📡 Fetching approved quotations:', url);
+      // console.log('📡 Fetching approved quotations:', url);
 
       const response = await fetch(url, {
         credentials: "include",
@@ -284,7 +284,7 @@ const PurchaseOrders = () => {
       if (response.ok) {
         const data = await response.json();
         setQuotations(data || []);
-        console.log('✅ Loaded quotations:', data.length);
+        // console.log('✅ Loaded quotations:', data.length);
       }
     } catch (error) {
       console.error('Failed to fetch quotations:', error);
@@ -302,7 +302,7 @@ const PurchaseOrders = () => {
       if (!response.ok) throw new Error('Failed to fetch PO details');
 
       const poData = await response.json();
-      console.log('📝 Editing PO:', poData);
+      // console.log('📝 Editing PO:', poData);
 
       // Set edit mode
       setIsEditMode(true);
@@ -427,7 +427,7 @@ const PurchaseOrders = () => {
     setLoadingOrderItems(true);
     try {
       const url = `${API_BASE_URL}/api/quotations/orderbook-items/${projectId}`;
-      console.log('📡 Fetching order book items for project:', projectId);
+      // console.log('📡 Fetching order book items for project:', projectId);
 
       const response = await fetch(url, {
         credentials: "include",
@@ -439,7 +439,7 @@ const PurchaseOrders = () => {
       const data = await response.json();
       if (data.success) {
         setOrderBookItems(data.data || []);
-        console.log('✅ Loaded order book items:', data.data.length);
+        // console.log('✅ Loaded order book items:', data.data.length);
       }
     } catch (error) {
       console.error('❌ Error fetching order book items:', error);
@@ -1149,7 +1149,7 @@ const PurchaseOrders = () => {
       if (response.ok) {
         const data = await response.json();
         setVendors(data.vendors || []);
-        console.log(`✅ Loaded ${data.vendors?.length || 0} vendors for group: ${groupName}, subgroup: ${subGroupName}`);
+        // console.log(`✅ Loaded ${data.vendors?.length || 0} vendors for group: ${groupName}, subgroup: ${subGroupName}`);
       }
     } catch (error) {
       console.error('Failed to fetch vendors:', error);
@@ -1324,7 +1324,7 @@ const PurchaseOrders = () => {
       if (!response.ok) throw new Error('Failed to fetch vendor POs');
 
       const data = await response.json();
-      console.log('Vendor POs:', data);
+      // console.log('Vendor POs:', data);
       showSuccess(`Found ${data.length} purchase orders for this vendor`);
 
     } catch (error) {
@@ -1532,36 +1532,43 @@ const PurchaseOrders = () => {
 
       {/* Purchase Orders Table */}
       <div className="purchase-orders-table-container">
-        <table className="purchase-orders-table">
-          <thead>
-            <tr>
-              {visibleColumns.poNumber && <th>PO Number</th>}
-              {visibleColumns.vendorId && <th>Vendor ID</th>}
-              {visibleColumns.vendorName && <th>Vendor Name</th>}
-              {visibleColumns.orderDate && <th>Order Date</th>}
-              {visibleColumns.totalValue && <th>Total Value</th>}
-              {visibleColumns.deliveryProgress && <th>Delivery Progress</th>}
-              {visibleColumns.paymentStatus && <th>Payment Status</th>}
-              {visibleColumns.status && <th>Status</th>}
-              {visibleColumns.actions && <th>Actions</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {purchaseOrders.length === 0 ? (
+
+        {/* Scrollable Table */}
+        <div className="purchase-orders-table-scroll">
+          <table className="purchase-orders-table">
+
+            <thead>
               <tr>
-                <td colSpan="8" className="empty-state">
-                  No purchase orders found
-                </td>
+                {visibleColumns.poNumber && <th>PO Number</th>}
+                {visibleColumns.vendorId && <th>Vendor ID</th>}
+                {visibleColumns.vendorName && <th>Vendor Name</th>}
+                {visibleColumns.orderDate && <th>Order Date</th>}
+                {visibleColumns.totalValue && <th>Total Value</th>}
+                {visibleColumns.deliveryProgress && <th>Delivery Progress</th>}
+                {visibleColumns.paymentStatus && <th>Payment Status</th>}
+                {visibleColumns.status && <th>Status</th>}
+                {visibleColumns.actions && <th>Actions</th>}
               </tr>
-            ) : (
-              
+            </thead>
+
+            <tbody>
+              {purchaseOrders.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="empty-state">
+                    No purchase orders found
+                  </td>
+                </tr>
+              ) : (
                 purchaseOrders.map((po) => {
                   const progress = calculateDeliveryProgress(po);
+
                   return (
                     <tr key={po.id} className="purchase-orders-table-row">
+
                       {visibleColumns.poNumber && (
                         <td className="purchase-orders-table-id">{po.poNo}</td>
                       )}
+
                       {visibleColumns.vendorId && (
                         <td>
                           <button
@@ -1572,26 +1579,40 @@ const PurchaseOrders = () => {
                           </button>
                         </td>
                       )}
-                      {visibleColumns.vendorName && <td>{po.vendorName}</td>}
-                      {visibleColumns.orderDate && <td>{formatDate(po.orderDate)}</td>}
-                      {visibleColumns.totalValue && (
-                        <td className="purchase-orders-table-value">{formatCurrency(po.totalValue)}</td>
+
+                      {visibleColumns.vendorName && (
+                        <td>{po.vendorName}</td>
                       )}
+
+                      {visibleColumns.orderDate && (
+                        <td>{formatDate(po.orderDate)}</td>
+                      )}
+
+                      {visibleColumns.totalValue && (
+                        <td className="purchase-orders-table-value">
+                          {formatCurrency(po.totalValue)}
+                        </td>
+                      )}
+
                       {visibleColumns.deliveryProgress && (
                         <td>
                           <div className="delivery-progress">
+
                             <div className="progress-bar">
                               <div
                                 className="progress-fill"
                                 style={{ width: `${progress}%` }}
                               />
                             </div>
+
                             <span className="progress-text">
                               {po.totalItemsDelivered}/{po.totalItemsOrdered} items ({progress}%)
                             </span>
+
                           </div>
                         </td>
                       )}
+
                       {visibleColumns.paymentStatus && (
                         <td>
                           <span className={`purchase-orders-badge ${getPaymentBadgeClass(po.paymentStatus)}`}>
@@ -1599,6 +1620,7 @@ const PurchaseOrders = () => {
                           </span>
                         </td>
                       )}
+
                       {visibleColumns.status && (
                         <td>
                           <span className={`purchase-orders-badge ${getStatusBadgeClass(po.status)}`}>
@@ -1606,9 +1628,12 @@ const PurchaseOrders = () => {
                           </span>
                         </td>
                       )}
+
                       {visibleColumns.actions && (
                         <td>
+
                           <div className="purchase-orders-actions-cell">
+
                             <button
                               className="purchase-orders-action-btn"
                               onClick={() => handleViewPO(po)}
@@ -1616,6 +1641,7 @@ const PurchaseOrders = () => {
                             >
                               <Eye size={14} />
                             </button>
+
                             <button
                               className="purchase-orders-action-btn"
                               onClick={() => handleEditPO(po.id)}
@@ -1624,8 +1650,10 @@ const PurchaseOrders = () => {
                             >
                               <Edit2 size={14} />
                             </button>
+
                             {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
                               <>
+
                                 <button
                                   className="purchase-orders-action-btn"
                                   onClick={() => handleUpdateStatus(po.id, 'Delivered')}
@@ -1633,6 +1661,7 @@ const PurchaseOrders = () => {
                                 >
                                   <CheckCircle size={14} />
                                 </button>
+
                                 <button
                                   className="purchase-orders-action-btn"
                                   onClick={() => handleDeletePO(po.id)}
@@ -1641,26 +1670,34 @@ const PurchaseOrders = () => {
                                 >
                                   <Trash2 size={14} />
                                 </button>
+
                               </>
                             )}
+
                           </div>
+
                         </td>
                       )}
+
                     </tr>
                   );
                 })
-              
-            )}
-          </tbody>
-        </table>
+              )}
+            </tbody>
 
-        {/* Pagination */}
+          </table>
+        </div>
+
+        {/* Fixed Footer Pagination */}
         <div className="table-footer">
+
           <span>
-            Showing {currentPage * pageSize + 1}-
+            Showing {currentPage * pageSize + 1} -
             {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} purchase orders
           </span>
+
           <div className="pagination">
+
             <button
               className="page-btn"
               onClick={() => setCurrentPage(p => p - 1)}
@@ -1670,7 +1707,11 @@ const PurchaseOrders = () => {
             </button>
 
             {[...Array(Math.min(5, totalPages))].map((_, index) => {
-              const pageNum = currentPage < 3 ? index : currentPage + index - 2;
+
+              const pageNum = currentPage < 3
+                ? index
+                : currentPage + index - 2;
+
               if (pageNum >= 0 && pageNum < totalPages) {
                 return (
                   <button
@@ -1682,7 +1723,9 @@ const PurchaseOrders = () => {
                   </button>
                 );
               }
+
               return null;
+
             })}
 
             <button
@@ -1692,8 +1735,11 @@ const PurchaseOrders = () => {
             >
               Next
             </button>
+
           </div>
+
         </div>
+
       </div>
 
       {/* Detail Drawer */}

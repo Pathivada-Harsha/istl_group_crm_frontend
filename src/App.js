@@ -41,14 +41,27 @@ import Projectdashboard from "./Pages/ProjectDashboard.js";
 import OrderBook from "./Pages/OrderBook.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import './App.css';
-
+import NotFound from "./Pages/NotFound";
 /* ---------------- APP WRAPPER ---------------- */
 
 function AppWrapper() {
   const location = useLocation();
+
   const hideShell =
-    location.pathname === "/login" ||
-    location.pathname === "/";
+    location.pathname === '/login' ||
+    location.pathname === '/';
+
+  // Render NotFound completely standalone — no Navbar/Sidebar/main wrapper
+  if (!hideShell) {
+    const knownPaths = [
+      '/dashboard', '/sales', '/procurement', '/documents',
+      '/analytics', '/profile', '/reports', '/solarprofile','/follow-ups',
+      '/users', '/officeuse', '/project-over-view', '/order-book',
+      '/project-cost-expense',
+    ];
+    const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
+    if (!isKnown) return <NotFound />;   // ← fullscreen, no shell at all
+  }
 
   return <AppShell hideShell={hideShell} />;
 }
@@ -107,9 +120,24 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><Dashboardtabs /></ProtectedRoute>
           } />
 
+          <Route path="/project-over-view" element={
+            <ProtectedRoute><Projectdashboard /></ProtectedRoute>
+          } />
+
+          <Route path="/follow-ups" element={
+            <ProtectedRoute><Follow_up /></ProtectedRoute>
+          } />
+
+          <Route path="/reports" element={
+            <ProtectedRoute><Reports /></ProtectedRoute>
+          } />
+
+          <Route path="/project-cost-expense" element={
+            <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
+          } />
+
           {/* Leads — telecallers see their own stripped view */}
-          <Route
-            path="/sales/leads"
+          <Route path="/sales/leads"
             element={
               <ProtectedRoute>
                 {userRole === "TELECALLER"
@@ -119,50 +147,54 @@ function AppShell({ hideShell }) {
             }
           />
 
-          <Route path="/sales/proposals" element={
-            <ProtectedRoute><Proposals /></ProtectedRoute>
+          <Route path="/sales/clients" element={
+            <ProtectedRoute><Customer_dashboard /></ProtectedRoute>
           } />
 
-          <Route path="/procurement/quotations" element={
-            <ProtectedRoute><Quatations /></ProtectedRoute>
-          } />
-
-          <Route path="/procurement/procurementquatations" element={
-            <ProtectedRoute><ProcurementQuatations /></ProtectedRoute>
+          <Route path="/order-book" element={
+            <ProtectedRoute><OrderBook /></ProtectedRoute>
           } />
 
           <Route path="/sales/invoices" element={
             <ProtectedRoute><Invoices /></ProtectedRoute>
           } />
 
-          <Route path="/sales/clients" element={
-            <ProtectedRoute><Customer_dashboard /></ProtectedRoute>
-          } />
-
-          <Route path="/sales/SalesOrder" element={
-            <ProtectedRoute><SalesOrder /></ProtectedRoute>
-          } />
-
-          <Route path="/projectCostExpenseManagement" element={
-            <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
-          } />
-
-          <Route path="/sales/followups" element={
-            <ProtectedRoute><Follow_up /></ProtectedRoute>
+          <Route path="/sales/proposals" element={
+            <ProtectedRoute><Proposals /></ProtectedRoute>
           } />
 
           <Route path="/procurement/vendors" element={
             <ProtectedRoute><Procurement /></ProtectedRoute>
           } />
 
-          <Route path="/procurement/purchaseorders" element={
+          {/* <Route path="/procurement/quotations" element={
+            <ProtectedRoute><Quatations /></ProtectedRoute>
+          } /> */}
+
+          <Route path="/procurement/quotations" element={
+            <ProtectedRoute><ProcurementQuatations /></ProtectedRoute>
+          } />
+
+          <Route path="/procurement/purchase-orders" element={
             <ProtectedRoute><PurchaseOrders /></ProtectedRoute>
           } />
 
-          <Route path="/procurement/billsrecieved" element={
+          <Route path="/procurement/bills-recieved" element={
             <ProtectedRoute><BillsRecieved /></ProtectedRoute>
           } />
 
+          <Route path="/officeuse/add-group-project" element={
+            <ProtectedRoute><Addropdownitems /></ProtectedRoute>
+          } />
+
+          <Route path="/officeuse/roles-permissions" element={
+            <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
+          } />
+
+          <Route path="/sales/SalesOrder" element={
+            <ProtectedRoute><SalesOrder /></ProtectedRoute>
+          } />
+           
           <Route path="/documents" element={
             <ProtectedRoute><Documents /></ProtectedRoute>
           } />
@@ -175,10 +207,6 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><Profile /></ProtectedRoute>
           } />
 
-          <Route path="/reports" element={
-            <ProtectedRoute><Reports /></ProtectedRoute>
-          } />
-
           <Route path="/solarprofile" element={
             <ProtectedRoute><SolarProfile /></ProtectedRoute>
           } />
@@ -187,22 +215,7 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><Users /></ProtectedRoute>
           } />
 
-          <Route path="/officeuse/addgroupproject" element={
-            <ProtectedRoute><Addropdownitems /></ProtectedRoute>
-          } />
-
-          <Route path="/officeuse/roles-permissions" element={
-            <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
-          } />
-
-          <Route path="/Projectdashboard" element={
-            <ProtectedRoute><Projectdashboard /></ProtectedRoute>
-          } />
-
-          <Route path="/OrderBook" element={
-            <ProtectedRoute><OrderBook /></ProtectedRoute>
-          } />
-
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
     </div>

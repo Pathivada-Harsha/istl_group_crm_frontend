@@ -1,8 +1,8 @@
 // Sidebar.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { BsArrowReturnRight } from "react-icons/bs";
-import { IoChevronDown } from "react-icons/io5"; // Add this import
+import { IoChevronDown } from "react-icons/io5";
 import '../components_css/sidebar.css';
 import { useAuth } from '../hooks/useAuth';
 
@@ -53,8 +53,8 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'
         },
         {
-          name: 'ProjectDashboard',
-          path: '/Projectdashboard',
+          name: 'Project Dashboard',
+          path: '/project-over-view',
           permission: 'DASHBOARD',
           icon: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm3 4v8m4-5v5m4-3v3'
         },
@@ -79,7 +79,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         // },
         {
           name: 'Follow-Ups',
-          path: '/sales/followups',
+          path: '/follow-ups',
           permission: 'FOLLOW_UPS',
           icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
         },
@@ -90,10 +90,10 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
         },
         {
-          name: 'ProjectCostExpenseManagement',
-          path: '/ProjectCostExpenseManagement',
+          name: 'Project Cost & Expenses',
+          path: '/project-cost-expense',
           permission: 'SALES_CLIENTS',
-          icon: 'M12 1v22M17 5H9a4 4 0 000 8h6a4 4 0 010 8H6'
+          icon: 'M7 4h10M7 8h10M10 8c3 0 5 2 5 4s-2 4-5 4H7m4 0l5 5'
         },
 
       ]
@@ -121,7 +121,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       },
       {
         name: 'OrderBook',
-        path: '/OrderBook',
+        path: '/order-book',
         permission: 'SALES_CLIENTS',
         icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z'
       },
@@ -149,19 +149,19 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         },
         {
           name: 'Quotations Recieved',
-          path: '/procurement/procurementquatations',
+          path: '/procurement/quotations',
           permission: 'PROCUREMENT_QUOTATIONS',
           icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
         },
         {
           name: 'Purchase Orders',
-          path: '/procurement/purchaseorders',
+          path: '/procurement/purchase-orders',
           permission: 'PROCUREMENT_PURCHASE_ORDERS',
           icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z'
         },
         {
           name: 'Bills Received',
-          path: '/procurement/billsrecieved',
+          path: '/procurement/bills-recieved',
           permission: 'PROCUREMENT_BILLS',
           icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z'
         },
@@ -174,7 +174,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       items: [
         {
           name: 'Add New Group / Project',
-          path: '/officeuse/addgroupproject',
+          path: '/officeuse/add-group-project',
           permission: 'OFFICE_USE',
           icon: 'M12 4v16m8-8H4'
         },

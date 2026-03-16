@@ -1,9 +1,9 @@
 /* Follow-ups Page - Complete Stylesheet */
 
 .followups-page-root {
-  padding: 24px;
-  background: #f8fafc;
-  min-height: 100vh;
+  padding: 24px 24px 0px 24px;
+  /* background: #f8fafc; */
+  /* min-height: 100vh; */
 }
 
 /* Breadcrumb */
@@ -332,16 +332,45 @@
   border-top: 1px solid #eef2f7;
 }
 
-/* Table Card */
+
+/* ── Table Card ─────────────────────────────────────────────────────────── */
+/* ── Table Card ─────────────────────────────────────────────────────────── */
 .followups-table-card {
   background: white;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
+  overflow: hidden;           /* ← changed from just border */
+  display: flex;              /* ← add this */
+  flex-direction: column;     /* ← add this */
+  border: 1px solid #e2e8f0;
 }
 
-.followups-table-wrapper {
+/* Scroll wrapper — fixed height + both axes scroll */
+.followups-table-scroll-wrapper {
   overflow-x: auto;
+  overflow-y: auto;                    /* ← add vertical scroll */
+  max-height: 480px;                   /* ← fixed height, ~6 rows */
+  position: relative;                  /* ← needed for sticky header */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar styling — both axes */
+.followups-table-scroll-wrapper::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;                         /* ← horizontal bar thickness */
+}
+
+.followups-table-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.followups-table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.followups-table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .followups-table {
@@ -362,6 +391,12 @@
   color: #475569;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  white-space: nowrap;
+  position: sticky;          
+  top: 0;                    
+  z-index: 10;              
+  background: #f8fafc;       
+  border-bottom: 2px solid #e2e8f0;  
 }
 
 .followups-table td {
@@ -388,6 +423,154 @@
   background: #fee2e2;
 }
 
+/* ── Medium screens: sticky first + last columns ─────────────────────────── */
+@media (max-width: 1200px) {
+  .followups-table {
+    min-width: 850px;
+  }
+
+  /* Sticky Lead column */
+  .followups-table thead th:first-child,
+  .followups-table tbody td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: 2px 0 6px -2px rgba(0, 0, 0, 0.08);
+  }
+  .followups-table tbody td:first-child { background: #fff; }
+  .followups-table tbody tr:hover td:first-child { background: #f8fafc; }
+  .followups-table tbody tr.followup-overdue td:first-child { background: #fef2f2; }
+
+  /* Sticky Actions column */
+  .followups-table thead th:last-child,
+  .followups-table tbody td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+    background: #f8fafc;
+    box-shadow: -2px 0 6px -2px rgba(0, 0, 0, 0.08);
+  }
+  .followups-table tbody td:last-child { background: #fff; }
+  .followups-table tbody tr:hover td:last-child { background: #f8fafc; }
+  .followups-table tbody tr.followup-overdue td:last-child { background: #fef2f2; }
+}
+
+/* ── Mobile card layout < 768px ──────────────────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Disable horizontal scroll — switch to card layout */
+  .followups-table-scroll-wrapper {
+    overflow-x: visible;
+  }
+
+  .followups-table,
+  .followups-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  /* Hide header row */
+  .followups-table thead {
+    display: none;
+  }
+
+  /* Each row becomes a card */
+  .followups-table tbody tr,
+  .followups-table tbody tr.followup-overdue {
+    display: block;
+    margin-bottom: 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+    background: #fff;
+  }
+  .followups-table tbody tr.followup-overdue {
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
+  .followups-table tbody tr:hover,
+  .followups-table tbody tr.followup-overdue:hover {
+    background: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  }
+
+  /* Each cell = label + value row */
+  .followups-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 13px;
+    gap: 10px;
+    min-height: 42px;
+  }
+  .followups-table td:last-child { border-bottom: none; }
+
+  /* data-label via ::before */
+  .followups-table td::before {
+    content: attr(data-label);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #94a3b8;
+    flex-shrink: 0;
+    min-width: 95px;
+  }
+
+  /* Actions cell — right-aligned, light bg, no label */
+  .followups-table td.followup-actions-td {
+    justify-content: flex-end;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+  }
+  .followups-table td.followup-actions-td::before {
+    display: none;
+  }
+
+  /* Bigger touch targets */
+  .followup-action-btn {
+    padding: 10px;
+  }
+  .followup-action-btn svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  /* Pagination stacks */
+  .followups-pagination {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .followups-pagination-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .followups-pagination-buttons {
+    justify-content: space-between;
+  }
+}
+
+/* ── Extra small ─────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .followups-table td {
+    padding: 9px 12px;
+    font-size: 12px;
+  }
+  .followups-table td::before {
+    min-width: 80px;
+    font-size: 9px;
+  }
+  .kpi-value { font-size: 24px; }
+  .followup-actions { flex-direction: row; }
+  .followups-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
 /* Table Content Styles */
 .followup-lead-info {
   display: flex;
@@ -612,6 +795,7 @@
   font-size: 14px;
   background: white;
   cursor: pointer;
+  margin-left:8px;
 }
 
 .followups-pagination-buttons {
@@ -676,7 +860,7 @@
 
 @media (max-width: 768px) {
   .followups-page-root {
-    padding: 16px;
+    padding: 16px 16px 0px 16px;
   }
 
   .followups-header h1 {
