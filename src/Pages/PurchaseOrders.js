@@ -38,7 +38,7 @@ const PurchaseOrders = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
-  const pageSize = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedPO, setSelectedPO] = useState(null);
@@ -145,7 +145,7 @@ const PurchaseOrders = () => {
   // Fetch POs on mount and filter change
   useEffect(() => {
     fetchPurchaseOrders();
-  }, [groupName, subGroupName, projectId, currentPage, filters.status, filters.paymentStatus, filters.search]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search]);
 
 
   // Fetch stats on mount
@@ -157,6 +157,13 @@ const PurchaseOrders = () => {
   useEffect(() => {
     fetchVendors();
   }, []);
+
+
+  const handlePageSizeChange = (e) => {
+    setPageSize(Number(e.target.value));
+    setCurrentPage(0);
+  };
+
 
   /**
    * Get auth headers
@@ -1689,55 +1696,37 @@ const PurchaseOrders = () => {
         </div>
 
         {/* Fixed Footer Pagination */}
+        {/* Pagination */}
         <div className="table-footer">
-
-          <span>
-            Showing {currentPage * pageSize + 1} -
-            {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} purchase orders
-          </span>
-
-          <div className="pagination">
-
-            <button
-              className="page-btn"
-              onClick={() => setCurrentPage(p => p - 1)}
-              disabled={currentPage === 0}
+          <div className="pagination-info">
+            <span>
+              Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} purchase orders
+            </span>
+            <select
+              className="page-size-selector"
+              value={pageSize}
+              onChange={handlePageSizeChange}
             >
-              Previous
-            </button>
-
-            {[...Array(Math.min(5, totalPages))].map((_, index) => {
-
-              const pageNum = currentPage < 3
-                ? index
-                : currentPage + index - 2;
-
-              if (pageNum >= 0 && pageNum < totalPages) {
-                return (
-                  <button
-                    key={pageNum}
-                    className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
-                    onClick={() => setCurrentPage(pageNum)}
-                  >
-                    {pageNum + 1}
-                  </button>
-                );
-              }
-
-              return null;
-
-            })}
-
-            <button
-              className="page-btn"
-              onClick={() => setCurrentPage(p => p + 1)}
-              disabled={currentPage >= totalPages - 1}
-            >
-              Next
-            </button>
-
+              <option value={10}>10 Rows</option>
+              <option value={20}>20 Rows</option>
+              <option value={50}>50 Rows</option>
+              <option value={100}>100 Rows</option>
+            </select>
           </div>
-
+          <div className="pagination">
+            <button className="page-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>«</button>
+            <button className="page-btn" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0}>Previous</button>
+            {[...Array(Math.min(5, totalPages))].map((_, index) => {
+              const pageNum = currentPage < 3 ? index : currentPage + index - 2;
+              if (pageNum < 0 || pageNum >= totalPages) return null;
+              return (
+                <button key={pageNum} className={`page-btn ${pageNum === currentPage ? 'active' : ''}`}
+                  onClick={() => setCurrentPage(pageNum)}>{pageNum + 1}</button>
+              );
+            })}
+            <button className="page-btn" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages - 1}>Next</button>
+            <button className="page-btn" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>»</button>
+          </div>
         </div>
 
       </div>

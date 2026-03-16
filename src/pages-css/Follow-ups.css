@@ -456,6 +456,18 @@
   .followups-table tbody tr.followup-overdue td:last-child { background: #fef2f2; }
 }
 
+@media (max-width: 900px) {
+  .followups-table-scroll-wrapper {
+    max-height: 420px;
+  }
+}
+
+@media (max-width: 640px) {
+  .followups-table-scroll-wrapper {
+    max-height: 380px;
+    overflow-x: visible;     /* card layout kicks in — disable h-scroll */
+  }
+}
 /* ── Mobile card layout < 768px ──────────────────────────────────────────── */
 @media (max-width: 768px) {
 

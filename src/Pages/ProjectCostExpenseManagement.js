@@ -20,35 +20,35 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = ['Travel', 'Site Visit', 'Accommodation', 'Food', 'Commission', 'Miscellaneous'];
-const PAYMENT_MODES      = ['Cash', 'Bank Transfer', 'UPI', 'Card', 'Cheque'];
-const COMMISSION_TYPES   = ['Sales', 'Referral', 'Partner'];
-const STATUS_OPTIONS     = ['Pending', 'Approved', 'Rejected'];
+const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'UPI', 'Card', 'Cheque'];
+const COMMISSION_TYPES = ['Sales', 'Referral', 'Partner'];
+const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 const ADVANCE_STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Settled'];
-const VISIT_TYPES        = ['Site Visit', 'Client Meeting', 'Installation', 'Inspection', 'Training', 'Maintenance'];
+const VISIT_TYPES = ['Site Visit', 'Client Meeting', 'Installation', 'Inspection', 'Training', 'Maintenance'];
 
 const DEFAULT_COLUMNS = [
-  { key: 'expenseCode', label: 'Code',         sortable: true,  visible: true  },
-  { key: 'tripDate',    label: 'Date',          sortable: true,  visible: true  },
-  { key: 'groupInfo',   label: 'Group/Project', sortable: false, visible: true  },
-  { key: 'category',    label: 'Category',      sortable: true,  visible: true  },
-  { key: 'amount',      label: 'Amount',        sortable: true,  visible: true  },
-  { key: 'paidByName',  label: 'Paid By',       sortable: true,  visible: true  },
-  { key: 'approvedByName', label: 'Approved By',sortable: false, visible: true  },
-  { key: 'paymentMode', label: 'Mode',          sortable: true,  visible: true  },
-  { key: 'status',      label: 'Status',        sortable: true,  visible: true  },
-  { key: 'actions',     label: 'Actions',       sortable: false, visible: true  },
+  { key: 'expenseCode', label: 'Code', sortable: true, visible: true },
+  { key: 'tripDate', label: 'Date', sortable: true, visible: true },
+  { key: 'groupInfo', label: 'Group/Project', sortable: false, visible: true },
+  { key: 'category', label: 'Category', sortable: true, visible: true },
+  { key: 'amount', label: 'Amount', sortable: true, visible: true },
+  { key: 'paidByName', label: 'Paid By', sortable: true, visible: true },
+  { key: 'approvedByName', label: 'Approved By', sortable: false, visible: true },
+  { key: 'paymentMode', label: 'Mode', sortable: true, visible: true },
+  { key: 'status', label: 'Status', sortable: true, visible: true },
+  { key: 'actions', label: 'Actions', sortable: false, visible: true },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-const fmt     = v  => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-const fmtDate = d  => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+const fmt = v => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
 
 const CategoryIcon = ({ cat }) => ({
-  'Travel':        <Plane    size={14} />,
-  'Site Visit':    <MapPin   size={14} />,
-  'Accommodation': <Hotel    size={14} />,
-  'Food':          <Utensils size={14} />,
-  'Commission':    <Users    size={14} />,
+  'Travel': <Plane size={14} />,
+  'Site Visit': <MapPin size={14} />,
+  'Accommodation': <Hotel size={14} />,
+  'Food': <Utensils size={14} />,
+  'Commission': <Users size={14} />,
   'Miscellaneous': <Briefcase size={14} />,
 }[cat] || <FileText size={14} />);
 
@@ -63,53 +63,53 @@ const ProjectCostExpenseManagement = () => {
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
-  const [expenses,   setExpenses]   = useState([]);
-  const [advances,   setAdvances]   = useState([]);
-  const [stats,      setStats]      = useState(null);
-  const [history,    setHistory]    = useState([]);
-  const [loading,    setLoading]    = useState(false);
-  const [activeTab,  setActiveTab]  = useState('expenses');
+  const [expenses, setExpenses] = useState([]);
+  const [advances, setAdvances] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('expenses');
 
-  const [currentPage,    setCurrentPage]    = useState(0);
-  const [totalPages,     setTotalPages]     = useState(0);
-  const [totalElements,  setTotalElements]  = useState(0);
-  const pageSize = 10;
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
 
   const [filters, setFilters] = useState({
     search: '', category: 'all', status: 'all', paymentMode: 'all', dateFrom: '', dateTo: '',
   });
-  const [sortBy,  setSortBy]  = useState('tripDate');
+  const [sortBy, setSortBy] = useState('tripDate');
   const [sortDir, setSortDir] = useState('desc');
 
-  const [columns,      setColumns]      = useState(DEFAULT_COLUMNS);
+  const [columns, setColumns] = useState(DEFAULT_COLUMNS);
   const [showColPanel, setShowColPanel] = useState(false);
-  const dragCol  = useRef(null);
+  const dragCol = useRef(null);
   const dragOver = useRef(null);
 
-  const [showCreateModal,  setShowCreateModal]  = useState(false);
-  const [showEditModal,    setShowEditModal]    = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
-  const [selectedExpense,  setSelectedExpense]  = useState(null);
-  const [expenseFormData,  setExpenseFormData]  = useState(null);
-  const [advanceFormData,  setAdvanceFormData]  = useState(null);
+  const [selectedExpense, setSelectedExpense] = useState(null);
+  const [expenseFormData, setExpenseFormData] = useState(null);
+  const [advanceFormData, setAdvanceFormData] = useState(null);
 
-  const [modalGroups,    setModalGroups]    = useState([]);
+  const [modalGroups, setModalGroups] = useState([]);
   const [modalSubGroups, setModalSubGroups] = useState([]);
-  const [modalProjects,  setModalProjects]  = useState([]);
-  const [modalGroupName,    setModalGroupName]    = useState('');
+  const [modalProjects, setModalProjects] = useState([]);
+  const [modalGroupName, setModalGroupName] = useState('');
   const [modalSubGroupName, setModalSubGroupName] = useState('');
-  const [modalProjectId,    setModalProjectId]    = useState('');
+  const [modalProjectId, setModalProjectId] = useState('');
   const [modalDropdownLoading, setModalDropdownLoading] = useState({
     groups: false, subGroups: false, projects: false,
   });
 
-  const [advModalGroups,    setAdvModalGroups]    = useState([]);
+  const [advModalGroups, setAdvModalGroups] = useState([]);
   const [advModalSubGroups, setAdvModalSubGroups] = useState([]);
-  const [advModalProjects,  setAdvModalProjects]  = useState([]);
-  const [advModalGroupName,    setAdvModalGroupName]    = useState('');
+  const [advModalProjects, setAdvModalProjects] = useState([]);
+  const [advModalGroupName, setAdvModalGroupName] = useState('');
   const [advModalSubGroupName, setAdvModalSubGroupName] = useState('');
-  const [advModalProjectId,    setAdvModalProjectId]    = useState('');
+  const [advModalProjectId, setAdvModalProjectId] = useState('');
   const [advModalDropdownLoading, setAdvModalDropdownLoading] = useState({
     groups: false, subGroups: false, projects: false,
   });
@@ -119,10 +119,10 @@ const ProjectCostExpenseManagement = () => {
   // ── Auth Headers ─────────────────────────────────────────────────────────────
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'X-User-Id':     user?.id   || localStorage.getItem('userId'),
-    'X-User-Name':   user?.name || localStorage.getItem('userName') || 'User',
-    'X-User-Role':   user?.role || localStorage.getItem('userRole'),
-    'Content-Type':  'application/json',
+    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Name': user?.name || localStorage.getItem('userName') || 'User',
+    'X-User-Role': user?.role || localStorage.getItem('userRole'),
+    'Content-Type': 'application/json',
   });
 
   // ── Modal dropdown handlers — EXPENSE ────────────────────────────────────────
@@ -155,6 +155,10 @@ const ProjectCostExpenseManagement = () => {
     finally { setModalDropdownLoading(prev => ({ ...prev, projects: false })); }
   };
 
+  const handlePageSizeChange = (e) => {
+    setPageSize(Number(e.target.value));
+    setCurrentPage(0); // reset to first page on size change
+  };
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
     setModalGroupName(newGroupName);
@@ -224,7 +228,7 @@ const ProjectCostExpenseManagement = () => {
 
   // ── Fetch users ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    filterApi.getLeadsUsers().then(setAvailableUsers).catch(() => {});
+    filterApi.getLeadsUsers().then(setAvailableUsers).catch(() => { });
   }, []);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────────
@@ -233,22 +237,22 @@ const ProjectCostExpenseManagement = () => {
     fetchStats();
     fetchAdvances();
     fetchHistory();
-  }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status,
-      filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, sortBy, sortDir]);
+  }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, pageSize,
+    filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, sortBy, sortDir]);
 
   const fetchExpenses = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy, sortDir });
-      if (groupName)              params.append('groupName',    groupName);
-      if (subGroupName)           params.append('subGroupName', subGroupName);
-      if (projectId)              params.append('projectId',    projectId);
-      if (filters.search)         params.append('search',       filters.search);
-      if (filters.status    !== 'all') params.append('status',      filters.status);
-      if (filters.category  !== 'all') params.append('category',    filters.category);
+      if (groupName) params.append('groupName', groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      if (projectId) params.append('projectId', projectId);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.status !== 'all') params.append('status', filters.status);
+      if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.paymentMode !== 'all') params.append('paymentMode', filters.paymentMode);
-      if (filters.dateFrom)       params.append('dateFrom',     filters.dateFrom);
-      if (filters.dateTo)         params.append('dateTo',       filters.dateTo);
+      if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
+      if (filters.dateTo) params.append('dateTo', filters.dateTo);
 
       const response = await fetch(`${API_BASE_URL}/api/project-expenses?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
@@ -267,8 +271,8 @@ const ProjectCostExpenseManagement = () => {
   const fetchStats = async () => {
     try {
       const params = new URLSearchParams();
-      if (projectId)    params.append('projectId',    projectId);
-      if (groupName)    params.append('groupName',    groupName);
+      if (projectId) params.append('projectId', projectId);
+      if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       const response = await fetch(`${API_BASE_URL}/api/project-expenses/stats?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
@@ -280,9 +284,9 @@ const ProjectCostExpenseManagement = () => {
   const fetchAdvances = async () => {
     try {
       const params = new URLSearchParams({ page: 0, size: 50 });
-      if (groupName)    params.append('groupName',    groupName);
+      if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId)    params.append('projectId',    projectId);
+      if (projectId) params.append('projectId', projectId);
       const response = await fetch(`${API_BASE_URL}/api/project-expenses/advances?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
@@ -293,8 +297,8 @@ const ProjectCostExpenseManagement = () => {
   const fetchHistory = async () => {
     try {
       const params = new URLSearchParams({ page: 0, size: 50 });
-      if (projectId)    params.append('projectId',    projectId);
-      if (groupName)    params.append('groupName',    groupName);
+      if (projectId) params.append('projectId', projectId);
+      if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       const response = await fetch(`${API_BASE_URL}/api/project-expenses/history?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
@@ -336,7 +340,7 @@ const ProjectCostExpenseManagement = () => {
       showError('Trip Date and Trip Reason are required'); return;
     }
     if (!expenseFormData.expenseItems?.length ||
-        expenseFormData.expenseItems.some(i => !i.amount || parseFloat(i.amount) <= 0)) {
+      expenseFormData.expenseItems.some(i => !i.amount || parseFloat(i.amount) <= 0)) {
       showError('Add at least one expense item with a valid amount'); return;
     }
     setLoading(true);
@@ -470,9 +474,9 @@ const ProjectCostExpenseManagement = () => {
 
   // ── Advance ───────────────────────────────────────────────────────────────────
   const handleAddNewAdvance = (relatedExpense = null) => {
-    const grp = relatedExpense?.groupName    || groupName    || '';
+    const grp = relatedExpense?.groupName || groupName || '';
     const sub = relatedExpense?.subGroupName || subGroupName || '';
-    const pid = relatedExpense?.projectId    || projectId    || '';
+    const pid = relatedExpense?.projectId || projectId || '';
     setAdvanceFormData({
       groupName: grp, subGroupName: sub, projectId: pid,
       advanceDate: new Date().toISOString().split('T')[0],
@@ -481,8 +485,10 @@ const ProjectCostExpenseManagement = () => {
         ? `Advance for ${relatedExpense.category} – ${relatedExpense.tripReason || ''}`.trim() : '',
       requestedByUserId: '', requestedByName: '', approvedByUserId: '', approvedByName: '',
       status: 'Pending', relatedExpenseId: relatedExpense?.id || null,
-      advancePayments: [{ id: Date.now(), advanceNumber: 1, amount: '', paymentMode: 'Bank Transfer',
-        paymentDate: new Date().toISOString().split('T')[0], notes: '' }],
+      advancePayments: [{
+        id: Date.now(), advanceNumber: 1, amount: '', paymentMode: 'Bank Transfer',
+        paymentDate: new Date().toISOString().split('T')[0], notes: ''
+      }],
     });
     setAdvModalGroupName(grp); setAdvModalSubGroupName(sub); setAdvModalProjectId(pid);
     setAdvModalGroups([]); setAdvModalSubGroups([]); setAdvModalProjects([]);
@@ -519,8 +525,8 @@ const ProjectCostExpenseManagement = () => {
 
   // ── Column drag-and-drop ──────────────────────────────────────────────────────
   const onDragStart = (e, i) => { dragCol.current = i; e.dataTransfer.effectAllowed = 'move'; };
-  const onDragEnter = (i)    => { dragOver.current = i; };
-  const onDragEnd   = ()     => {
+  const onDragEnter = (i) => { dragOver.current = i; };
+  const onDragEnd = () => {
     const [from, to] = [dragCol.current, dragOver.current];
     if (from === null || to === null || from === to) return;
     setColumns(prev => { const a = [...prev]; a.splice(to, 0, ...a.splice(from, 1)); return a; });
@@ -546,34 +552,34 @@ const ProjectCostExpenseManagement = () => {
   const renderCell = (col, exp) => {
     switch (col.key) {
       case 'expenseCode': return <span className="exp-code">{exp.expenseCode}</span>;
-      case 'tripDate':    return fmtDate(exp.tripDate);
-      case 'groupInfo':   return (
+      case 'tripDate': return fmtDate(exp.tripDate);
+      case 'groupInfo': return (
         <div className="exp-group-cell">
-          {exp.groupName    && <span className="grp-name">{exp.groupName}</span>}
+          {exp.groupName && <span className="grp-name">{exp.groupName}</span>}
           {exp.subGroupName && <span className="sub-name">{exp.subGroupName}</span>}
-          {exp.projectId    && <span className="prj-name">{exp.projectId}</span>}
+          {exp.projectId && <span className="prj-name">{exp.projectId}</span>}
         </div>
       );
-      case 'category':    return (
+      case 'category': return (
         <div className="exp-cat-cell"><CategoryIcon cat={exp.category} /><span>{exp.category}</span></div>
       );
-      case 'amount':      return <strong className="exp-amount">{fmt(exp.amount)}</strong>;
-      case 'paidByName':  return exp.paidByName || '—';
+      case 'amount': return <strong className="exp-amount">{fmt(exp.amount)}</strong>;
+      case 'paidByName': return exp.paidByName || '—';
       case 'approvedByName': return exp.approvedByName || <span className="text-muted">Pending</span>;
       case 'paymentMode': return (
         <div className="exp-mode-cell"><CreditCard size={13} /><span>{exp.paymentMode}</span></div>
       );
-      case 'status':      return <StatusBadge s={exp.status} />;
-      case 'actions':     return (
+      case 'status': return <StatusBadge s={exp.status} />;
+      case 'actions': return (
         <div className="exp-actions-cell">
-          <button className="exp-act-btn view-btn" title="View"    onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
-          <button className="exp-act-btn edit-btn" title="Edit"    onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
+          <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
+          <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
           {exp.status === 'Pending' && <>
-            <button className="exp-act-btn ok-btn"  title="Approve" onClick={() => handleStatusChange(exp.id, 'Approved')}><CheckCircle size={14} /></button>
-            <button className="exp-act-btn rej-btn" title="Reject"  onClick={() => handleStatusChange(exp.id, 'Rejected')}><XCircle size={14} /></button>
+            <button className="exp-act-btn ok-btn" title="Approve" onClick={() => handleStatusChange(exp.id, 'Approved')}><CheckCircle size={14} /></button>
+            <button className="exp-act-btn rej-btn" title="Reject" onClick={() => handleStatusChange(exp.id, 'Rejected')}><XCircle size={14} /></button>
           </>}
           <button className="exp-act-btn adv-btn" title="Advance" onClick={() => handleAddNewAdvance(exp)}><DollarSign size={14} /></button>
-          <button className="exp-act-btn del-btn" title="Delete"  onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
+          <button className="exp-act-btn del-btn" title="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
         </div>
       );
       default: return exp[col.key] || '—';
@@ -582,12 +588,12 @@ const ProjectCostExpenseManagement = () => {
 
   // ── KPI cards ─────────────────────────────────────────────────────────────────
   const kpiData = stats ? [
-    { title: 'Total Expenses',      value: fmt(stats.totalExpenses),      icon: <IndianRupee size={32} />, color: '#ef4444' },
-    { title: 'Approved',            value: fmt(stats.approvedExpenses),   icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Pending Approval',    value: fmt(stats.pendingExpenses),    icon: <Clock size={32} />,       color: '#f59e0b' },
-    { title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,       color: '#3b82f6' },
-    { title: 'Total Commission',    value: fmt(stats.totalCommission),    icon: <Users size={32} />,       color: '#8b5cf6' },
-    { title: 'Total Advances',      value: fmt(stats.totalAdvances),      icon: <Wallet size={32} />,      color: '#06b6d4' },
+    { title: 'Total Expenses', value: fmt(stats.totalExpenses), icon: <IndianRupee size={32} />, color: '#ef4444' },
+    { title: 'Approved', value: fmt(stats.approvedExpenses), icon: <CheckCircle size={32} />, color: '#22c55e' },
+    { title: 'Pending Approval', value: fmt(stats.pendingExpenses), icon: <Clock size={32} />, color: '#f59e0b' },
+    { title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />, color: '#3b82f6' },
+    { title: 'Total Commission', value: fmt(stats.totalCommission), icon: <Users size={32} />, color: '#8b5cf6' },
+    { title: 'Total Advances', value: fmt(stats.totalAdvances), icon: <Wallet size={32} />, color: '#06b6d4' },
   ] : [];
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -730,7 +736,7 @@ const ProjectCostExpenseManagement = () => {
         {[
           ['expenses', `Expenses (${totalElements})`, <FileText size={14} />],
           ['advances', `Advances (${advances.length})`, <Wallet size={14} />],
-          ['history',  'History', <History size={14} />],
+          ['history', 'History', <History size={14} />],
         ].map(([tab, lbl, icon]) => (
           <button key={tab} className={`exp-tab${activeTab === tab ? ' active' : ''}`}
             onClick={() => setActiveTab(tab)}>
@@ -786,10 +792,23 @@ const ProjectCostExpenseManagement = () => {
           </div>{/* end exp-table-scroll-wrapper */}
 
           {/* Pagination */}
+          {/* Pagination */}
           <div className="table-footer">
-            <span>
-              Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} expenses
-            </span>
+            <div className="pagination-info">
+              <span>
+                Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} expenses
+              </span>
+              <select
+                className="page-size-selector"
+                value={pageSize}
+                onChange={handlePageSizeChange}
+              >
+                <option value={10}>10 Rows</option>
+                <option value={20}>20 Rows</option>
+                <option value={50}>50 Rows</option>
+                <option value={100}>100 Rows</option>
+              </select>
+            </div>
             <div className="pagination">
               <button className="page-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>«</button>
               <button className="page-btn" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0}>Previous</button>
@@ -831,9 +850,9 @@ const ProjectCostExpenseManagement = () => {
                     <td data-label="Date">{fmtDate(adv.advanceDate)}</td>
                     <td data-label="Group / Project">
                       <div className="exp-group-cell">
-                        {adv.groupName    && <span className="grp-name">{adv.groupName}</span>}
+                        {adv.groupName && <span className="grp-name">{adv.groupName}</span>}
                         {adv.subGroupName && <span className="sub-name">{adv.subGroupName}</span>}
-                        {adv.projectId    && <span className="prj-name">{adv.projectId}</span>}
+                        {adv.projectId && <span className="prj-name">{adv.projectId}</span>}
                       </div>
                     </td>
                     <td data-label="Purpose" className="exp-purpose-cell">
@@ -841,7 +860,7 @@ const ProjectCostExpenseManagement = () => {
                     </td>
                     <td data-label="Expected Trip">{fmtDate(adv.expectedTripDate)}</td>
                     <td data-label="Requested By">{adv.requestedByName || '—'}</td>
-                    <td data-label="Approved By">{adv.approvedByName  || '—'}</td>
+                    <td data-label="Approved By">{adv.approvedByName || '—'}</td>
                     <td data-label="Total"><strong className="exp-amount">{fmt(adv.totalAdvanceAmount)}</strong></td>
                     <td data-label="Payments">{adv.advancePayments?.length || 0} payment(s)</td>
                     <td data-label="Status"><StatusBadge s={adv.status} /></td>
@@ -851,8 +870,10 @@ const ProjectCostExpenseManagement = () => {
                           <button className="exp-act-btn ok-btn" title="Approve" onClick={async () => {
                             try {
                               const r = await fetch(`${API_BASE_URL}/api/project-expenses/advances/${adv.id}/status`,
-                                { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
-                                  body: JSON.stringify({ status: 'Approved' }) });
+                                {
+                                  method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
+                                  body: JSON.stringify({ status: 'Approved' })
+                                });
                               if (!r.ok) throw new Error();
                               showSuccess('Advance approved'); fetchAdvances();
                             } catch { showError('Failed to approve'); }
@@ -862,8 +883,10 @@ const ProjectCostExpenseManagement = () => {
                           <button className="exp-act-btn ok-btn settle-btn" onClick={async () => {
                             try {
                               const r = await fetch(`${API_BASE_URL}/api/project-expenses/advances/${adv.id}/status`,
-                                { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
-                                  body: JSON.stringify({ status: 'Settled' }) });
+                                {
+                                  method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
+                                  body: JSON.stringify({ status: 'Settled' })
+                                });
                               if (!r.ok) throw new Error();
                               showSuccess('Advance settled'); fetchAdvances(); fetchStats();
                             } catch { showError('Failed to settle'); }
@@ -1461,14 +1484,14 @@ const ProjectCostExpenseManagement = () => {
                 <h3>Expense Information</h3>
                 <div className="vendor-info-grid">
                   {[
-                    [<Calendar size={18} />, 'Trip Date',     fmtDate(selectedExpense.tripDate)],
-                    [<MapPin size={18} />,   'Visit Type',    selectedExpense.visitType],
-                    [<FileText size={18} />, 'Category',      selectedExpense.category],
-                    [<IndianRupee size={18}/>, 'Amount',      fmt(selectedExpense.amount)],
-                    [<CreditCard size={18}/>, 'Payment Mode', selectedExpense.paymentMode],
-                    [<Users size={18} />,    'Paid By',       selectedExpense.paidByName || 'N/A'],
-                    [<CheckCircle size={18}/>, 'Approved By', selectedExpense.approvedByName || 'Pending'],
-                    [<Clock size={18} />,    'Status',        null],
+                    [<Calendar size={18} />, 'Trip Date', fmtDate(selectedExpense.tripDate)],
+                    [<MapPin size={18} />, 'Visit Type', selectedExpense.visitType],
+                    [<FileText size={18} />, 'Category', selectedExpense.category],
+                    [<IndianRupee size={18} />, 'Amount', fmt(selectedExpense.amount)],
+                    [<CreditCard size={18} />, 'Payment Mode', selectedExpense.paymentMode],
+                    [<Users size={18} />, 'Paid By', selectedExpense.paidByName || 'N/A'],
+                    [<CheckCircle size={18} />, 'Approved By', selectedExpense.approvedByName || 'Pending'],
+                    [<Clock size={18} />, 'Status', null],
                   ].map(([icon, label, val], i) => (
                     <div key={i} className="vendor-info-item">
                       {icon}
@@ -1501,11 +1524,11 @@ const ProjectCostExpenseManagement = () => {
                   <h3>Commission Details</h3>
                   <div className="vendor-info-grid">
                     {[
-                      ['Type',         selectedExpense.commissionType],
-                      ['Given To',     selectedExpense.commissionGivenTo],
-                      ['Percentage',   selectedExpense.commissionPercentage ? `${selectedExpense.commissionPercentage}%` : 'N/A'],
+                      ['Type', selectedExpense.commissionType],
+                      ['Given To', selectedExpense.commissionGivenTo],
+                      ['Percentage', selectedExpense.commissionPercentage ? `${selectedExpense.commissionPercentage}%` : 'N/A'],
                       ['Fixed Amount', selectedExpense.commissionFixedAmount ? fmt(selectedExpense.commissionFixedAmount) : 'N/A'],
-                      ['Sales Order',  selectedExpense.salesOrderRef || 'N/A'],
+                      ['Sales Order', selectedExpense.salesOrderRef || 'N/A'],
                     ].map(([label, val], i) => (
                       <div key={i} className="vendor-info-item">
                         <FileText size={18} />
