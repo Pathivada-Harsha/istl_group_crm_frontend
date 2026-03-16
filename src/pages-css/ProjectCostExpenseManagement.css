@@ -365,14 +365,28 @@
 /* Scroll wrapper for horizontal scroll on medium screens */
 .exp-table-scroll-wrapper {
   overflow-x: auto;
+  overflow-y: auto;                    /* ← add vertical scroll */
+  max-height: 480px;                   /* ← fixed height like bills table */
+  position: relative;                  /* ← needed for sticky header */
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
 }
-.exp-table-scroll-wrapper::-webkit-scrollbar { height: 5px; }
-.exp-table-scroll-wrapper::-webkit-scrollbar-track { background: transparent; }
-.exp-table-scroll-wrapper::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
 
+.exp-table-scroll-wrapper::-webkit-scrollbar {
+  width: 5px;                          /* ← vertical scrollbar width */
+  height: 5px;                         /* ← horizontal scrollbar height */
+}
+.exp-table-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+.exp-table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+.exp-table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
 .expense-management-table {
   width: 100%;
   border-collapse: collapse;
@@ -1441,8 +1455,8 @@
 .exp-tabs {
   display: flex;
   gap: 0;
-  padding: 20px 28px 0;
-  margin: 16px 0 10px;
+  padding: 0px 28px 0;
+  margin: 10px 0 10px;
 }
 
 .exp-tab {
@@ -2131,19 +2145,70 @@
   .exp-mgmt-table-container { margin: 0 14px 20px; overflow: visible; border: none; box-shadow: none; background: transparent; }
 
   /* Pagination */
+ /* ─── Pagination Info Row ────────────────────────────────────────────────── */
+.table-footer {
+  display: flex;
+  justify-content: space-between;   /* ← override: space-between not center */
+  align-items: center;
+  padding: 16px 20px;               /* ← match bills padding */
+  border-top: 1px solid var(--exp-border);
+  background: white;                /* ← white like bills, not #f8fafc */
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-info span {
+  font-size: 13px;
+  color: var(--exp-muted);
+  font-weight: 500;
+}
+
+.page-size-selector {
+  padding: 6px 10px;
+  border: 1px solid var(--exp-border);
+  border-radius: 6px;
+  font-size: 13px;
+  background-color: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: var(--exp-font);
+}
+
+.page-size-selector:focus {
+  outline: none;
+  border-color: var(--exp-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* ─── Responsive overrides ───────────────────────────────────────────────── */
+@media (max-width: 768px) {
   .table-footer {
     flex-direction: column;
-    gap: 10px;
-    align-items: center;
-    text-align: center;
-    padding: 14px;
-    background: var(--exp-surface);
-    border-radius: 0 0 var(--exp-radius) var(--exp-radius);
-    border: 1px solid var(--exp-border);
-    margin-top: -12px;
+    align-items: stretch;
+    padding: 12px;
   }
-  .pagination { flex-wrap: wrap; justify-content: center; gap: 5px; }
-  .page-btn { padding: 7px 11px; min-width: 36px; }
+
+  .pagination-info {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .page-size-selector {
+    width: 100%;
+  }
+
+  .pagination {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
 
   /* Modal as bottom sheet */
   .exp-mgmt-modal-overlay { padding: 0; align-items: flex-end; }
