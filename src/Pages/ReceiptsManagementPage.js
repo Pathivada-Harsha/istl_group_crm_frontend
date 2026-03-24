@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, Edit2, Trash2, Download, DollarSign, Settings, GripVertical, RefreshCw, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Eye, Edit2, Trash2, Download, DollarSign, Settings, GripVertical, RefreshCw, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown, Link2 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
 import '../pages-css/ReceiptsManagementPage.css';
@@ -105,6 +105,13 @@ const ReceiptsManagementPage = () => {
   const [editingAllocation, setEditingAllocation] = useState(null);
   const [allocationDetails, setAllocationDetails] = useState([]);
   const [selectedAllocationToEdit, setSelectedAllocationToEdit] = useState(null);
+
+  // ✅ NEW: Allocation details for View modal
+  const [viewAllocationDetails, setViewAllocationDetails] = useState([]);
+  const [loadingViewAllocations, setLoadingViewAllocations] = useState(false);
+
+  // ✅ NEW: Invoice details for INVOICE_PAYMENT view modal
+  const [viewInvoiceDetails, setViewInvoiceDetails] = useState(null);
 
   // Excel import
   const [showImportModal, setShowImportModal] = useState(false);
@@ -599,7 +606,48 @@ Method: ${editReceiptFormData.paymentMethod}`,
     fetchModalGroups(); setShowCreateModal(true);
   };
 
-  const handleViewReceipt = (receipt) => { setSelectedReceipt(receipt); setShowReceiptModal(true); };
+  // ✅ UPDATED: handleViewReceipt fetches allocations for ADVANCE and invoice details for INVOICE_PAYMENT
+  const handleViewReceipt = async (receipt) => {
+    setSelectedReceipt(receipt);
+    setViewAllocationDetails([]);
+    setViewInvoiceDetails(null);
+    setShowReceiptModal(true);
+
+    // For ADVANCE type with applied amount > 0, fetch allocation details
+    if (receipt.receiptType === 'ADVANCE' && parseFloat(receipt.appliedAmount) > 0) {
+      setLoadingViewAllocations(true);
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/invoices/receipts/${receipt.id}/allocations`,
+          { credentials: "include", headers: getAuthHeaders() }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setViewAllocationDetails(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch view allocation details:', error);
+      } finally {
+        setLoadingViewAllocations(false);
+      }
+    }
+
+    // For INVOICE_PAYMENT type, fetch the linked invoice's details
+    if (receipt.receiptType === 'INVOICE_PAYMENT' && receipt.invoiceId) {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/invoices/${receipt.invoiceId}`,
+          { credentials: "include", headers: getAuthHeaders() }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setViewInvoiceDetails(data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch invoice details for receipt view:', error);
+      }
+    }
+  };
 
   const handleEditReceipt = async (receipt) => {
     setSelectedReceipt(receipt); setLoading(true);
@@ -675,6 +723,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
   const formatDate = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
+  const formatDateTime = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
   const getReceiptTypeBadgeClass = (type) => ({ 'Advance': 'receipt-type-advance', 'Invoice': 'receipt-type-invoice', 'Other': 'receipt-type-other' }[type] || '');
 
   const renderColumnValue = (column, receipt) => {
@@ -812,8 +861,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
 
       {/* Main Table with draggable headers */}
       <div className="receipts-page-table-container">
-
-        {/* Scrollable table */}
         <div className="receipts-page-table-scroll">
           <table className="receipts-page-table">
             <thead>
@@ -828,32 +875,21 @@ Method: ${editReceiptFormData.paymentMethod}`,
                     onDragEnd={handleColDragEnd}
                     onClick={() => handleSort(column.id)}
                   >
-                    {!column.fixed && (
-                      <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4 }} />
-                    )}
+                    {!column.fixed && <GripVertical size={12} style={{ opacity: 0.3, marginRight: 4 }} />}
                     {column.label}
-                    {SORTABLE_RECEIPT_COLUMNS.has(column.id) && (
-                      <SortIcon columnId={column.id} sortConfig={sortConfig} />
-                    )}
+                    {SORTABLE_RECEIPT_COLUMNS.has(column.id) && <SortIcon columnId={column.id} sortConfig={sortConfig} />}
                   </th>
                 ))}
               </tr>
             </thead>
-
             <tbody>
               {sortedReceipts.length === 0 ? (
-                <tr>
-                  <td colSpan={visibleColumns.length} className="empty-state">
-                    No receipts found
-                  </td>
-                </tr>
+                <tr><td colSpan={visibleColumns.length} className="empty-state">No receipts found</td></tr>
               ) : (
                 sortedReceipts.map((receipt) => (
                   <tr key={receipt.id}>
                     {visibleColumns.map(column => (
-                      <React.Fragment key={column.id}>
-                        {renderColumnValue(column, receipt)}
-                      </React.Fragment>
+                      <React.Fragment key={column.id}>{renderColumnValue(column, receipt)}</React.Fragment>
                     ))}
                   </tr>
                 ))
@@ -862,20 +898,14 @@ Method: ${editReceiptFormData.paymentMethod}`,
           </table>
         </div>
 
-        {/* Fixed footer */}
         <div className="receipts-page-pagination">
           <div className="receipts-page-pagination-info">
-            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}  
-
+            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}
             <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="receipts-page-pagination-size-select">
-                <option value="10">10 Rows</option><option value="20">20 Rows</option><option value="50">50 Rows</option><option value="100">100 Rows</option>
-              </select>
+              <option value="10">10 Rows</option><option value="20">20 Rows</option><option value="50">50 Rows</option><option value="100">100 Rows</option>
+            </select>
           </div>
           <div className="receipts-page-pagination-controls-wrapper">
-            <div className="receipts-page-pagination-size">
-
-              
-            </div>
             <div className="receipts-page-pagination-controls">
               <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0} className="receipts-page-pagination-btn">Previous</button>
               <span className="receipts-page-pagination-current">Page {currentPage + 1} of {totalPages}</span>
@@ -885,7 +915,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
         </div>
       </div>
 
-      {/* View Receipt Modal */}
+      {/* ✅ UPDATED: View Receipt Modal — now includes Advance Allocation Details */}
       {showReceiptModal && selectedReceipt && (
         <div className="receipts-page-modal-overlay">
           <div className="receipts-page-modal receipts-page-modal-large">
@@ -895,26 +925,232 @@ Method: ${editReceiptFormData.paymentMethod}`,
             </div>
             <div className="receipts-page-modal-body">
               <div className="receipt-view">
+
+                {/* Basic Meta */}
                 <div className="receipt-meta">
                   <div className="receipt-meta-item"><strong>Receipt Date:</strong> {formatDate(selectedReceipt.receiptDate)}</div>
                   <div className="receipt-meta-item"><strong>Customer:</strong> {selectedReceipt.customerName}</div>
-                  <div className="receipt-meta-item"><strong>Type:</strong><span className={`receipt-badge ${getReceiptTypeBadgeClass(selectedReceipt.receiptType)}`}>{selectedReceipt.receiptType}</span></div>
+                  <div className="receipt-meta-item">
+                    <strong>Type:</strong>
+                    <span className={`receipt-badge ${getReceiptTypeBadgeClass(selectedReceipt.receiptType)}`}>{selectedReceipt.receiptType}</span>
+                  </div>
                 </div>
+
+                {/* Payment Details */}
                 <div className="receipt-details">
                   <div className="receipt-detail-row"><span>Payment Method:</span><strong>{selectedReceipt.paymentMethod}</strong></div>
                   <div className="receipt-detail-row"><span>Transaction Reference:</span><strong>{selectedReceipt.transactionReference || '—'}</strong></div>
+                  {selectedReceipt.company && <div className="receipt-detail-row"><span>Company:</span><strong>{selectedReceipt.company}</strong></div>}
                   {selectedReceipt.notes && <div className="receipt-detail-row"><span>Notes:</span><strong>{selectedReceipt.notes}</strong></div>}
                 </div>
+
+                {/* Amount Summary */}
                 <div className="receipt-amounts">
                   <div className="receipt-amount-row"><span>Total Amount:</span><span className="amount-value">{formatCurrency(selectedReceipt.amount)}</span></div>
                   <div className="receipt-amount-row"><span>Applied Amount:</span><span className="amount-value text-success">{formatCurrency(selectedReceipt.appliedAmount)}</span></div>
                   <div className="receipt-amount-row"><span>Unapplied Amount:</span><span className="amount-value text-warning">{formatCurrency(selectedReceipt.unappliedAmount)}</span></div>
                 </div>
+
+                {/* ✅ NEW: Advance Allocation Details Block */}
+                {selectedReceipt.receiptType === 'ADVANCE' && (
+                  <div style={{ marginTop: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <Link2 size={16} color="#059669" />
+                      <strong style={{ fontSize: '14px', color: '#064e3b' }}>
+                        Advance Adjusted Against Invoices
+                      </strong>
+                      {parseFloat(selectedReceipt.appliedAmount) > 0 && (
+                        <span style={{
+                          background: '#d1fae5', color: '#065f46',
+                          fontSize: '11px', fontWeight: 700,
+                          padding: '2px 8px', borderRadius: '99px'
+                        }}>
+                          {loadingViewAllocations ? '...' : `${viewAllocationDetails.length} invoice${viewAllocationDetails.length !== 1 ? 's' : ''}`}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Loading state */}
+                    {loadingViewAllocations && (
+                      <div style={{
+                        background: '#f0fdf4', border: '1px solid #bbf7d0',
+                        borderRadius: '10px', padding: '20px', textAlign: 'center',
+                        color: '#059669', fontSize: '13px'
+                      }}>
+                        Loading allocation details...
+                      </div>
+                    )}
+
+                    {/* No allocations yet */}
+                    {!loadingViewAllocations && parseFloat(selectedReceipt.appliedAmount) === 0 && (
+                      <div style={{
+                        background: '#f8fafc', border: '1px dashed #cbd5e1',
+                        borderRadius: '10px', padding: '18px', textAlign: 'center',
+                        color: '#94a3b8', fontSize: '13px'
+                      }}>
+                        This advance has not been allocated to any invoice yet.
+                      </div>
+                    )}
+
+                    {/* Allocation blocks */}
+                    {!loadingViewAllocations && viewAllocationDetails.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {viewAllocationDetails.map((alloc, idx) => (
+                          <div key={alloc.allocationId || idx} style={{
+                            background: '#f0fdf4',
+                            border: '1px solid #bbf7d0',
+                            borderLeft: '4px solid #059669',
+                            borderRadius: '10px',
+                            padding: '14px 16px',
+                            display: 'grid',
+                            gridTemplateColumns: '1fr 1fr 1fr',
+                            gap: '10px 16px',
+                            alignItems: 'start'
+                          }}>
+                            {/* Invoice Number */}
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
+                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{alloc.invoiceNo}</div>
+                              <div style={{ marginTop: '4px' }}>
+                                <span style={{
+                                  fontSize: '10px', fontWeight: 700, padding: '2px 7px',
+                                  borderRadius: '99px', background: '#dcfce7', color: '#166534'
+                                }}>
+                                  {getStatusDisplayName(alloc.invoiceStatus)}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Allocated Amount */}
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Allocated</div>
+                              <div style={{ fontSize: '16px', fontWeight: 700, color: '#059669' }}>{formatCurrency(alloc.allocatedAmount)}</div>
+                            </div>
+
+                            {/* Invoice Totals */}
+                            <div>
+                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
+                              <div style={{ fontSize: '13px', color: '#374151' }}>{formatCurrency(alloc.invoiceTotal)}</div>
+                              <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
+                                Balance: {formatCurrency(alloc.invoiceBalance)}
+                              </div>
+                            </div>
+
+                            {/* Allocation Date — full width */}
+                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #d1fae5', paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '11px', color: '#6b7280' }}>Allocated on:</span>
+                              <span style={{ fontSize: '12px', color: '#374151', fontWeight: 500 }}>{formatDateTime(alloc.allocationDate)}</span>
+                            </div>
+                          </div>
+                        ))}
+
+                        {/* Total summary row */}
+                        <div style={{
+                          background: '#ecfdf5', border: '1px solid #6ee7b7',
+                          borderRadius: '8px', padding: '10px 16px',
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                        }}>
+                          <span style={{ fontSize: '13px', color: '#065f46', fontWeight: 600 }}>
+                            Total Allocated across {viewAllocationDetails.length} invoice{viewAllocationDetails.length !== 1 ? 's' : ''}
+                          </span>
+                          <span style={{ fontSize: '15px', fontWeight: 700, color: '#059669' }}>
+                            {formatCurrency(viewAllocationDetails.reduce((sum, a) => sum + parseFloat(a.allocatedAmount || 0), 0))}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* For INVOICE_PAYMENT type — show the linked invoice as a rich card */}
+                {selectedReceipt.receiptType === 'INVOICE_PAYMENT' && selectedReceipt.invoiceId && (
+                  <div style={{ marginTop: '20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                      <Link2 size={16} color="#3b82f6" />
+                      <strong style={{ fontSize: '14px', color: '#1e3a8a' }}>Applied to Invoice</strong>
+                      <span style={{
+                        background: '#dbeafe', color: '#1e40af',
+                        fontSize: '11px', fontWeight: 700,
+                        padding: '2px 8px', borderRadius: '99px'
+                      }}>1 invoice</span>
+                    </div>
+
+                    {/* Rich invoice card — same layout as advance allocation blocks */}
+                    <div style={{
+                      background: '#eff6ff',
+                      border: '1px solid #bfdbfe',
+                      borderLeft: '4px solid #3b82f6',
+                      borderRadius: '10px',
+                      padding: '14px 16px',
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr 1fr',
+                      gap: '10px 16px',
+                      alignItems: 'start'
+                    }}>
+                      {/* Invoice Number */}
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>
+                          {viewInvoiceDetails?.invoiceNo || selectedReceipt.invoiceNo || `INV-${selectedReceipt.invoiceId}`}
+                        </div>
+                        <div style={{ marginTop: '4px' }}>
+                          <span style={{
+                            fontSize: '10px', fontWeight: 700, padding: '2px 7px',
+                            borderRadius: '99px', background: '#dbeafe', color: '#1e40af'
+                          }}>
+                            {getStatusDisplayName(viewInvoiceDetails?.status || 'PAID')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Applied Amount */}
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Applied</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#3b82f6' }}>{formatCurrency(selectedReceipt.amount)}</div>
+                      </div>
+
+                      {/* Invoice Totals */}
+                      <div>
+                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
+                        <div style={{ fontSize: '13px', color: '#374151' }}>
+                          {viewInvoiceDetails ? formatCurrency(viewInvoiceDetails.totalAmount) : '—'}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
+                          Balance: {viewInvoiceDetails ? formatCurrency(viewInvoiceDetails.balanceAmount) : '—'}
+                        </div>
+                      </div>
+
+                      {/* Payment date — full width */}
+                      <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #bfdbfe', paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: '#6b7280' }}>Payment recorded on:</span>
+                        <span style={{ fontSize: '12px', color: '#374151', fontWeight: 500 }}>{formatDateTime(selectedReceipt.receiptDate)}</span>
+                      </div>
+                    </div>
+
+                    {/* Total summary row */}
+                    <div style={{
+                      background: '#eff6ff', border: '1px solid #93c5fd',
+                      borderRadius: '8px', padding: '10px 16px', marginTop: '10px',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                    }}>
+                      <span style={{ fontSize: '13px', color: '#1e3a8a', fontWeight: 600 }}>
+                        Total Applied to 1 invoice
+                      </span>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#3b82f6' }}>
+                        {formatCurrency(selectedReceipt.amount)}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="receipts-page-modal-actions">
               <button className="receipts-page-btn-secondary" onClick={() => console.log('Download receipt')}><Download size={16} style={{ marginRight: '8px' }} />Download Receipt</button>
-              {selectedReceipt.unappliedAmount > 0 && <button className="receipts-page-btn-primary" onClick={() => { setShowReceiptModal(false); handleEditReceipt(selectedReceipt); }}>Adjust Advance</button>}
+              {selectedReceipt.unappliedAmount > 0 && selectedReceipt.receiptType === 'ADVANCE' && (
+                <button className="receipts-page-btn-primary" onClick={() => { setShowReceiptModal(false); handleEditReceipt(selectedReceipt); }}>
+                  Adjust Advance
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1157,9 +1393,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                     <button onClick={() => fileInputRef.current?.click()} style={{ background: '#059669', color: 'white', border: 'none', borderRadius: '6px', padding: '9px 22px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       <Upload size={15} /> Browse File
                     </button>
-                    {importFileName && (
-                      <p style={{ marginTop: '10px', color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>📎 {importFileName}</p>
-                    )}
+                    {importFileName && <p style={{ marginTop: '10px', color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>📎 {importFileName}</p>}
                   </div>
 
                   {importErrors.length > 0 && (
@@ -1174,12 +1408,8 @@ Method: ${editReceiptFormData.paymentMethod}`,
                   {importPreview.length > 0 && importErrors.length === 0 && (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <strong style={{ color: '#166534', fontSize: '14px' }}>
-                          ✓ {importPreview.length} receipt{importPreview.length !== 1 ? 's' : ''} ready to import
-                        </strong>
-                        <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: '12px' }}>
-                          Total: {formatCurrency(importPreview.reduce((s, r) => s + (r.amount || 0), 0))}
-                        </span>
+                        <strong style={{ color: '#166534', fontSize: '14px' }}>✓ {importPreview.length} receipt{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
+                        <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: '12px' }}>Total: {formatCurrency(importPreview.reduce((s, r) => s + (r.amount || 0), 0))}</span>
                       </div>
                       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '280px', overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -1196,11 +1426,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                                 <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
                                 <td style={{ padding: '7px 11px', whiteSpace: 'nowrap' }}>{row.receiptDate}</td>
                                 <td style={{ padding: '7px 11px', fontWeight: 600, color: '#0f172a' }}>{formatCurrency(row.amount)}</td>
-                                <td style={{ padding: '7px 11px' }}>
-                                  <span style={{ background: row.receiptType === 'ADVANCE' ? '#dcfce7' : '#dbeafe', color: row.receiptType === 'ADVANCE' ? '#166534' : '#1e40af', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>
-                                    {row.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice'}
-                                  </span>
-                                </td>
+                                <td style={{ padding: '7px 11px' }}><span style={{ background: row.receiptType === 'ADVANCE' ? '#dcfce7' : '#dbeafe', color: row.receiptType === 'ADVANCE' ? '#166534' : '#1e40af', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>{row.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice'}</span></td>
                                 <td style={{ padding: '7px 11px', whiteSpace: 'nowrap' }}>{row.paymentMethod}</td>
                                 <td style={{ padding: '7px 11px', color: '#64748b' }}>{row.transactionReference || '—'}</td>
                                 <td style={{ padding: '7px 11px' }}>{row.company || 'ISTL'}</td>
@@ -1221,24 +1447,12 @@ Method: ${editReceiptFormData.paymentMethod}`,
                   <div style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                       <strong style={{ fontSize: '14px', color: bulkImportDone ? '#166534' : '#0f172a' }}>
-                        {bulkImportDone
-                          ? `Import complete — ${bulkImportProgress.results.filter(r => r.status === 'success').length} of ${bulkImportProgress.total} saved`
-                          : `Importing... ${bulkImportProgress.current} of ${bulkImportProgress.total}`}
+                        {bulkImportDone ? `Import complete — ${bulkImportProgress.results.filter(r => r.status === 'success').length} of ${bulkImportProgress.total} saved` : `Importing... ${bulkImportProgress.current} of ${bulkImportProgress.total}`}
                       </strong>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>
-                        {Math.round((bulkImportProgress.current / bulkImportProgress.total) * 100)}%
-                      </span>
+                      <span style={{ fontSize: '13px', color: '#64748b' }}>{Math.round((bulkImportProgress.current / bulkImportProgress.total) * 100)}%</span>
                     </div>
                     <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%',
-                        width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%`,
-                        background: bulkImportDone
-                          ? (bulkImportProgress.results.every(r => r.status === 'success') ? '#16a34a' : '#f59e0b')
-                          : '#059669',
-                        borderRadius: '99px',
-                        transition: 'width 0.3s ease'
-                      }} />
+                      <div style={{ height: '100%', width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%`, background: bulkImportDone ? (bulkImportProgress.results.every(r => r.status === 'success') ? '#16a34a' : '#f59e0b') : '#059669', borderRadius: '99px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
 
@@ -1274,11 +1488,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                             <td style={{ padding: '7px 12px', color: '#64748b', fontWeight: 600 }}>#{result.row}</td>
                             <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>{result.date}</td>
                             <td style={{ padding: '7px 12px', fontWeight: 600 }}>{formatCurrency(result.amount)}</td>
-                            <td style={{ padding: '7px 12px' }}>
-                              <span style={{ background: result.status === 'success' ? '#dcfce7' : '#fee2e2', color: result.status === 'success' ? '#166534' : '#dc2626', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>
-                                {result.status === 'success' ? '✓ Saved' : '✗ Failed'}
-                              </span>
-                            </td>
+                            <td style={{ padding: '7px 12px' }}><span style={{ background: result.status === 'success' ? '#dcfce7' : '#fee2e2', color: result.status === 'success' ? '#166534' : '#dc2626', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>{result.status === 'success' ? '✓ Saved' : '✗ Failed'}</span></td>
                             <td style={{ padding: '7px 12px', color: result.status === 'error' ? '#b91c1c' : '#64748b' }}>{result.message}</td>
                           </tr>
                         ))}
@@ -1302,12 +1512,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
               {!bulkImportProgress ? (
                 <>
                   <button className="receipts-page-btn-secondary" onClick={handleCloseImportModal}>Cancel</button>
-                  <button
-                    className="receipts-page-btn-primary"
-                    onClick={handleConfirmImport}
-                    disabled={importPreview.length === 0 || importErrors.length > 0 || !receiptFormData.customerId}
-                    style={{ opacity: (importPreview.length === 0 || importErrors.length > 0 || !receiptFormData.customerId) ? 0.5 : 1 }}
-                  >
+                  <button className="receipts-page-btn-primary" onClick={handleConfirmImport} disabled={importPreview.length === 0 || importErrors.length > 0 || !receiptFormData.customerId} style={{ opacity: (importPreview.length === 0 || importErrors.length > 0 || !receiptFormData.customerId) ? 0.5 : 1 }}>
                     Import All {importPreview.length > 0 ? `${importPreview.length} Receipt${importPreview.length !== 1 ? 's' : ''}` : ''}
                   </button>
                 </>
@@ -1447,8 +1652,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
           </div>
         </div>
       )}
-
-      {/* Delete Confirmation Modal — handled by ConfirmationModal component */}
 
       {/* Edit Allocation Modal */}
       {showEditAllocationModal && editingAllocation && (

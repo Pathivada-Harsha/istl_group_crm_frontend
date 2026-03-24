@@ -1,9 +1,9 @@
 /* Bills Received Page Styles */
 
 .procurement-bills-received-container {
-  padding: 24px;
-  background-color: #f5f7fa;
-  min-height: 100vh;
+  padding: 24px 24px 0px 24px;
+  /* background-color: #f5f7fa; */
+  /* min-height: 100vh; */
 }
 
 /* Header */

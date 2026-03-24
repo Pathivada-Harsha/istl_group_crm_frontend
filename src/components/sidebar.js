@@ -55,7 +55,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         {
           name: 'Project Dashboard',
           path: '/project-over-view',
-          permission: 'DASHBOARD',
+          permission: 'PROJECT_DASHBOARD',
           icon: 'M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm3 4v8m4-5v5m4-3v3'
         },
 
@@ -94,6 +94,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           path: '/project-cost-expense',
           permission: 'SALES_CLIENTS',
           icon: 'M7 4h10M7 8h10M10 8c3 0 5 2 5 4s-2 4-5 4H7m4 0l5 5'
+        },
+        {
+          name: 'Task Management',
+          path: '/taskmanagement',
+          permission: 'TASK_MANAGEMENT',
+          icon: 'M9 5l2 2 4-4M7 13h10M7 17h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z'
         },
 
       ]

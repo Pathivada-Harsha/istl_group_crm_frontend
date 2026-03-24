@@ -5,7 +5,15 @@ import ReceiptsManagementPage from './ReceiptsManagementPage';
 import '../pages-css/InvoicesReceiptsPage.css';
 
 const InvoicesReceiptsPage = () => {
-  const [activeTab, setActiveTab] = useState('invoices'); // 'invoices' or 'receipts'
+  // ✅ Persist active tab across browser refreshes
+  const [activeTab, setActiveTab] = useState(
+    () => localStorage.getItem('invoicesReceiptsActiveTab') || 'invoices'
+  );
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('invoicesReceiptsActiveTab', tab);
+  };
 
   return (
     <div className="invoices-receipts-container">
@@ -13,14 +21,14 @@ const InvoicesReceiptsPage = () => {
       <div className="tab-navigation">
         <button
           className={`tab-button ${activeTab === 'invoices' ? 'active' : ''}`}
-          onClick={() => setActiveTab('invoices')}
+          onClick={() => handleTabChange('invoices')}
         >
           <FileText size={20} />
           <span>Invoices</span>
         </button>
         <button
           className={`tab-button ${activeTab === 'receipts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('receipts')}
+          onClick={() => handleTabChange('receipts')}
         >
           <Receipt size={20} />
           <span>Receipts</span>

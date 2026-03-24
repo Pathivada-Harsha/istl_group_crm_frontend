@@ -100,7 +100,7 @@ function Navbar({ onMenuClick }) {
         <div className="navbar-right">
 
           {/* Notifications */}
-          <div ref={notifRef} style={{ position: "relative" }}>
+          {/* <div ref={notifRef} style={{ position: "relative" }}>
             <button className="icon-button" onClick={() => {
               setShowNotifications(!showNotifications);
               setShowMessages(false);
@@ -133,10 +133,10 @@ function Navbar({ onMenuClick }) {
                 </div>
               </div>
             )}
-          </div>
+          </div> */}
 
           {/* Messages */}
-          <div ref={msgRef} style={{ position: "relative" }}>
+          {/* <div ref={msgRef} style={{ position: "relative" }}>
             <button className="icon-button" onClick={() => {
               setShowMessages(!showMessages);
               setShowNotifications(false);
@@ -170,7 +170,7 @@ function Navbar({ onMenuClick }) {
                 </div>
               </div>
             )}
-          </div>
+          </div> */}
 
           {/* Profile Dropdown */}
           <div className="profile-dropdown" ref={profileRef}>

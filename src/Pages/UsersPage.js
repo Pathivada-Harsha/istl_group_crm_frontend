@@ -188,7 +188,9 @@ const UsersPage = () => {
     { id: 'procurement_quotations_recived', name: 'Procurement - Quotations', dbField: 'procurement_quotations_recived', backendKey: 'PROCUREMENT_QUOTATIONS' },
     { id: 'procurement_purchase_orders', name: 'Procurement - Purchase Orders', dbField: 'procurement_purchase_orders', backendKey: 'PROCUREMENT_PURCHASE_ORDERS' },
     { id: 'procurement_bills_received', name: 'Procurement - Bills', dbField: 'procurement_bills_received', backendKey: 'PROCUREMENT_BILLS' },
-    { id: 'office_use', name: 'Office Use', dbField: 'office_use', backendKey: 'OFFICE_USE' }
+    { id: 'office_use', name: 'Office Use', dbField: 'office_use', backendKey: 'OFFICE_USE' },
+    { id: 'task_management', name: 'Task Management', dbField: 'task_management', backendKey: 'TASK_MANAGEMENT' },
+    { id: 'project_dashboard', name: 'Project Dashboard', dbField: 'project_dashboard', backendKey: 'PROJECT_DASHBOARD' }
   ];
 
   // Filter menu permissions based on logged-in user's access

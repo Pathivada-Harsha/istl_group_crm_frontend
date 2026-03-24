@@ -31,7 +31,9 @@ import Documents from "./Pages/Documents";
 import Profile from "./Pages/Profile";
 import SalesOrder from "./Pages/Sales-Order";
 import PurchaseOrders from './Pages/PurchaseOrders';
-import BillsRecieved from "./Pages/Bills-Recieved";
+// import BillsRecieved from "./Pages/Bills-Recieved";
+import BillsRecieved from "./Pages/BillsRecieptsPage.js";
+
 import Reports from "./Pages/Reports";
 import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
@@ -42,6 +44,7 @@ import OrderBook from "./Pages/OrderBook.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import './App.css';
 import NotFound from "./Pages/NotFound";
+import TaskManagement from './Pages/TaskManagement.js';
 /* ---------------- APP WRAPPER ---------------- */
 
 function AppWrapper() {
@@ -57,7 +60,7 @@ function AppWrapper() {
       '/dashboard', '/sales', '/procurement', '/documents',
       '/analytics', '/profile', '/reports', '/solarprofile','/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense',
+      '/project-cost-expense','/taskmanagement',
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;   // ← fullscreen, no shell at all
@@ -213,6 +216,9 @@ function AppShell({ hideShell }) {
 
           <Route path="/users" element={
             <ProtectedRoute><Users /></ProtectedRoute>
+          } />
+           <Route path="/taskmanagement" element={
+            <ProtectedRoute><TaskManagement /></ProtectedRoute>
           } />
 
           <Route path="*" element={<NotFound />} />
