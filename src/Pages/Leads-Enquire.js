@@ -254,7 +254,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
   const handleBomSearch = async (idx, term) => {
     if (!term || term.length < 2) { setFilteredBomItems(p => ({ ...p, [idx]: [] })); setShowBomDropdown(p => ({ ...p, [idx]: false })); return; }
     try {
-      const res = await fetch(`${apiBase}/api/bom-items-master/search?searchTerm=${encodeURIComponent(term)}`, { credentials: 'include', headers });
+      const res = await fetch(`${apiBase}/bom-items-master/search?searchTerm=${encodeURIComponent(term)}`, { credentials: 'include', headers });
       const data = await res.json();
       setFilteredBomItems(p => ({ ...p, [idx]: data.data || [] }));
       setShowBomDropdown(p => ({ ...p, [idx]: (data.data || []).length > 0 }));
@@ -1080,14 +1080,14 @@ const isFirstFilterRender = useRef(true);
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-users`, { credentials: 'include', headers: buildHeaders() });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
     } catch { setUsers([]); }
   };
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, { credentials: 'include', headers: buildHeaders() });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-groups`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setGroups(data);
     } catch { setGroups([]); }
   };
@@ -1095,7 +1095,7 @@ const isFirstFilterRender = useRef(true);
   const fetchSubGroupsForForm = async g => {
     if (!g) { setSubGroups([]); return; }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(g)}`, { credentials: 'include', headers: buildHeaders() });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(g)}`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setSubGroups(data);
     } catch { setSubGroups([]); }
   };

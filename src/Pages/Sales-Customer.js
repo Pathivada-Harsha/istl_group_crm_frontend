@@ -1004,14 +1004,14 @@ const CustomerDatabase = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-users`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
     } catch { setUsers([]); }
   };
 
   const fetchGroups = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-groups`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
       const data = await res.json(); if (Array.isArray(data)) setGroups(data);
     } catch { setGroups([]); }
   };
@@ -1019,7 +1019,7 @@ const CustomerDatabase = () => {
   const fetchSubGroupsForForm = async (group) => {
     if (!group) { setSubGroups([]); return; }
     try {
-      const res = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
+      const res = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
       const data = await res.json(); if (Array.isArray(data)) setSubGroups(data);
     } catch { setSubGroups([]); }
   };

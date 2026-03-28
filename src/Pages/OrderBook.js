@@ -323,7 +323,7 @@ function OrderBook() {
 
   const fetchGroups = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-groups`, {
         credentials: "include",
         headers: {
           'User-Id': user.id,
@@ -350,7 +350,7 @@ function OrderBook() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
         credentials: "include",
         headers: {
           'User-Id': user.id,

@@ -63,7 +63,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
 
   useEffect(() => {
     fetch$();
-    api.get("/api/filters/leads-users")
+    api.get("/filters/leads-users")
       .then(data => setUsers(Array.isArray(data) ? data : []))
       .catch(() => {});
   }, [fetch$]);

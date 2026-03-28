@@ -20,10 +20,7 @@ export default function Login() {
   // Redirect if already authenticated
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      // Get the page user was trying to access, or default to dashboard
-      // const from = location.state?.from?.pathname || '/dashboard';
       navigate('/dashboard', { replace: true });
-      // navigate('/Projectdashboard', { replace: true });
     }
   }, [isAuthenticated, loading, navigate, location]);
 
@@ -46,35 +43,53 @@ export default function Login() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          username: username.trim(),   
+          username: username.trim(),
           password: password.trim(),
         }),
       });
 
-      const data = await response.json();
-      if (response.ok) {
-        // Store user data with context
-        login(data);
+      // ✅ Try to parse JSON — catch parse errors separately
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (parseErr) {
+        // Backend returned non-JSON (plain text like SESSION_EXPIRED)
+        console.error("Non-JSON response from server:", parseErr);
+        setError("Server error. Please try again or contact support.");
+        return;
+      }
 
-        // Get the page user was trying to access, or default to dashboard
-        // const from = location.state?.from?.pathname || '/dashboard';
-        
-        // Navigate to the intended page
+      if (response.ok) {
+        // ✅ Validate the response has required user data
+        if (!data || !data.user || !data.menuPermissions) {
+          setError("Login response is invalid. Please contact support.");
+          return;
+        }
+        // ✅ Store user and navigate
+        login(data);
         navigate('/dashboard', { replace: true });
-              // navigate('/Projectdashboard', { replace: true });
 
       } else {
-        setError(data.message || "Login failed. Please try again.");
+        // ✅ Show EXACT backend error message
+        // Backend sends: { "error": "LOGIN_FAILED", "message": "Invalid Credentials" }
+        // Or:            { "error": "LOGIN_FAILED", "message": "No menu permissions assigned..." }
+        const errorMessage = data?.message || data?.error || "Login failed. Please try again.";
+        setError(errorMessage);
       }
+
     } catch (err) {
+      // ✅ Only reaches here if network is completely unreachable
       console.error("Login error:", err);
-      setError("Unable to connect to server. Please try again.");
+      if (!navigator.onLine) {
+        setError("No internet connection. Please check your network.");
+      } else {
+        setError("Unable to connect to server. Please try again.");
+      }
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Show loading state while checking authentication
   if (loading) {
     return (
       <div style={{
@@ -90,8 +105,6 @@ export default function Login() {
     );
   }
 
-  // Don't render login form if already authenticated
-  // (the useEffect will handle the redirect)
   if (isAuthenticated) {
     return null;
   }
@@ -168,7 +181,7 @@ export default function Login() {
                     console.log("Forgot password clicked");
                   }}
                 >
-                  Forgot Password ? 
+                  Forgot Password ?
                 </button>
               </div>
 

@@ -802,6 +802,8 @@ const UsersPage = () => {
 
       const backendToFrontendMap = {
         'DASHBOARD': 'dashboard',
+        'TASK_MANAGEMENT': 'task_management',
+        'PROJECT_DASHBOARD': 'project_dashboard',
         'ANALYTICS': 'analytics',
         'DOCUMENTS': 'documents',
         'SETTINGS': 'settings',

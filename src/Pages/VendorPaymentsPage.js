@@ -191,7 +191,7 @@ export default function VendorPaymentsPage() {
       if(projectId)   p.append('projectId', projectId);
       if(filters.paymentType!=='all') p.append('paymentType',filters.paymentType);
       if(filters.search) p.append('searchTerm',filters.search);
-      const res = await fetch(`${API_BASE_URL}/api/vendor-advances?${p}`,{credentials:'include',headers:getAuthHeaders()});
+      const res = await fetch(`${API_BASE_URL}/vendor-advances?${p}`,{credentials:'include',headers:getAuthHeaders()});
       if(!res.ok) throw new Error();
       const d = await res.json();
       setAdvances(d.advances||[]); setTotalPages(d.totalPages||0); setTotalElements(d.totalElements||0);
@@ -205,7 +205,7 @@ export default function VendorPaymentsPage() {
       if(groupName)   p.append('groupId',   groupName);
       if(subGroupName)p.append('subGroupId',subGroupName);
       if(projectId)   p.append('projectId', projectId);
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/summary?${p}`,{credentials:'include',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/summary?${p}`,{credentials:'include',headers:getAuthHeaders()});
       if(res.ok) setStats(await res.json());
     } catch {}
   };
@@ -216,7 +216,7 @@ export default function VendorPaymentsPage() {
       if (projId)   p.append('projectId',  projId);
       if (grpId)    p.append('groupName',   grpId);
       if (subGrpId) p.append('subGroupName',subGrpId);
-      const res = await fetch(`${API_BASE_URL}/api/vendors/for-bills?${p}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/vendors/for-bills?${p}`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) { const d = await res.json(); setVendors(d || []); }
       else setVendors([]);
     } catch { setVendors([]); }
@@ -226,11 +226,11 @@ export default function VendorPaymentsPage() {
     if(!vendorId){setUnpaidBills([]);return;}
     setLoadingBills(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/bills?vendorId=${vendorId}&status=Pending&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Pending&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
       if(!res.ok) throw new Error();
       const d=await res.json();
       // include partially paid too
-      const res2=await fetch(`${API_BASE_URL}/api/bills?vendorId=${vendorId}&status=Partially%20Paid&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
+      const res2=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Partially%20Paid&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
       const d2=res2.ok?await res2.json():{bills:[]};
       setUnpaidBills([...(d.bills||[]),...(d2.bills||[])]);
     } catch { setUnpaidBills([]); }
@@ -265,14 +265,14 @@ export default function VendorPaymentsPage() {
     if(adv.paymentType==='ADVANCE' && parseFloat(adv.appliedAmount)>0){
       setLoadingViewAllocations(true);
       try{
-        const res=await fetch(`${API_BASE_URL}/api/vendor-advances/${adv.id}/allocations`,{credentials:'include',headers:getAuthHeaders()});
+        const res=await fetch(`${API_BASE_URL}/vendor-advances/${adv.id}/allocations`,{credentials:'include',headers:getAuthHeaders()});
         if(res.ok) setViewAllocationDetails(await res.json());
       } catch {}
       finally{setLoadingViewAllocations(false);}
     }
     if(adv.paymentType==='BILL_PAYMENT' && adv.billId){
       try{
-        const res=await fetch(`${API_BASE_URL}/api/bills/${adv.billId}`,{credentials:'include',headers:getAuthHeaders()});
+        const res=await fetch(`${API_BASE_URL}/bills/${adv.billId}`,{credentials:'include',headers:getAuthHeaders()});
         if(res.ok) setViewBillDetails(await res.json());
       } catch {}
     }
@@ -303,7 +303,7 @@ export default function VendorPaymentsPage() {
     if(formData.paymentType==='BILL_PAYMENT'&&!formData.billId){showError('Please select a bill');return;}
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances`,{
+      const res=await fetch(`${API_BASE_URL}/vendor-advances`,{
         credentials:'include',method:'POST',
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
         body:JSON.stringify({...formData,amount:parseFloat(formData.amount),billId:formData.paymentType==='BILL_PAYMENT'?formData.billId:null})
@@ -343,7 +343,7 @@ export default function VendorPaymentsPage() {
     if(!allocations.length){showError('Please allocate to at least one bill');return;}
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/${adjustData.advanceId}/allocate`,{
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/${adjustData.advanceId}/allocate`,{
         credentials:'include',method:'POST',
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
         body:JSON.stringify({allocations:allocations.map(a=>({billId:a.billId,amount:parseFloat(a.amount)}))})
@@ -365,7 +365,7 @@ export default function VendorPaymentsPage() {
     if(!confirmed) return;
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/${adv.id}`,{credentials:'include',method:'DELETE',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/${adv.id}`,{credentials:'include',method:'DELETE',headers:getAuthHeaders()});
       if(!res.ok){const e=await res.json();throw new Error(e.message);}
       showSuccess('Payment deleted!'); fetchAdvances(); fetchStats();
     } catch(err){showError(err.message);}
@@ -385,7 +385,7 @@ export default function VendorPaymentsPage() {
     if(!confirmed) return;
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/${editingAdvance.id}`,{
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/${editingAdvance.id}`,{
         credentials:'include',method:'PUT',
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
         body:JSON.stringify({...editFormData,vendorId:editingAdvance.vendorId,paymentType:editingAdvance.paymentType,billId:editingAdvance.billId,projectId:editingAdvance.projectId,groupId:editingAdvance.groupId,subGroupId:editingAdvance.subGroupId,amount:parseFloat(editFormData.amount)})
@@ -400,7 +400,7 @@ export default function VendorPaymentsPage() {
   const fetchDeletedList = async () => {
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/deleted`,{credentials:'include',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/deleted`,{credentials:'include',headers:getAuthHeaders()});
       if(res.ok) setDeletedList(await res.json());
     } catch{}
     finally{setLoading(false);}
@@ -411,7 +411,7 @@ export default function VendorPaymentsPage() {
     if(!confirmed) return;
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/api/vendor-advances/${id}/restore`,{credentials:'include',method:'POST',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/${id}/restore`,{credentials:'include',method:'POST',headers:getAuthHeaders()});
       if(!res.ok) throw new Error('Failed');
       showSuccess('Restored!'); fetchDeletedList(); fetchAdvances(); fetchStats();
     } catch{showError('Failed to restore');}

@@ -117,7 +117,7 @@ const BillsReceived = () => {
       if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
       if (filters.search) params.append('search', filters.search);
 
-      const response = await fetch(`${API_BASE_URL}/api/bills?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/bills?${params}`, {
         headers: getAuthHeaders(),
         credentials: "include"
       });
@@ -149,7 +149,7 @@ const BillsReceived = () => {
       if (groupName) params.append('groupId', groupName);
       if (subGroupName) params.append('subGroupId', subGroupName);
 
-      const response = await fetch(`${API_BASE_URL}/api/bills/stats?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/bills/stats?${params}`, {
         headers: getAuthHeaders(),
         credentials: "include"
       });
@@ -178,7 +178,7 @@ const BillsReceived = () => {
       if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
       if (modalProjectId) params.append('projectId', modalProjectId);
 
-      const response = await fetch(`${API_BASE_URL}/api/vendors/for-bills?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/vendors/for-bills?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -209,7 +209,7 @@ const BillsReceived = () => {
         }
       }
 
-      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/by-vendor?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/purchase-orders/by-vendor?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -231,7 +231,7 @@ const BillsReceived = () => {
       setLoading(true);
 
       const response = await fetch(
-        `${API_BASE_URL}/api/purchase-orders/${poId}/items-for-bill`,
+        `${API_BASE_URL}/purchase-orders/${poId}/items-for-bill`,
         {
           credentials: "include",
           headers: getAuthHeaders()
@@ -455,7 +455,7 @@ const BillsReceived = () => {
   const handleViewBill = async (billId) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
+      const response = await fetch(`${API_BASE_URL}/bills/${billId}`, {
         headers: getAuthHeaders(),
         credentials: "include"
       });
@@ -556,7 +556,7 @@ const BillsReceived = () => {
       if (bill.poId && bill.items && bill.items.length > 0) {
         try {
           const response = await fetch(
-            `${API_BASE_URL}/api/purchase-orders/${bill.poId}/items-for-bill`,
+            `${API_BASE_URL}/purchase-orders/${bill.poId}/items-for-bill`,
             {
               credentials: "include",
               headers: getAuthHeaders()
@@ -625,7 +625,7 @@ const BillsReceived = () => {
     setLoading(true);
     
     try {
-      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}`, {
+      const response = await fetch(`${API_BASE_URL}/bills/${billId}`, {
         method: 'DELETE',
         headers: getAuthHeaders(),
         credentials: "include"
@@ -694,8 +694,8 @@ const BillsReceived = () => {
     try {
       const method = editMode ? 'PUT' : 'POST';
       const url = editMode
-        ? `${API_BASE_URL}/api/bills/${formData.id}`
-        : `${API_BASE_URL}/api/bills`;
+        ? `${API_BASE_URL}/bills/${formData.id}`
+        : `${API_BASE_URL}/bills`;
 
       const response = await fetch(url, {
         method,
@@ -739,7 +739,7 @@ const BillsReceived = () => {
     };
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/bills/${billId}/upload`, {
+      const response = await fetch(`${API_BASE_URL}/bills/${billId}/upload`, {
         method: 'POST',
         headers,
         credentials: "include",
@@ -759,14 +759,14 @@ const BillsReceived = () => {
 
   // View bill file in modal
   const handleViewFile = (billId) => {
-    const url = `${API_BASE_URL}/api/bills/${billId}/view`;
+    const url = `${API_BASE_URL}/bills/${billId}/view`;
     setFileViewUrl(url);
     setShowFileViewModal(true);
   };
 
   // Download bill file
   const handleDownloadFile = (billId, fileName) => {
-    const url = `${API_BASE_URL}/api/bills/${billId}/download`;
+    const url = `${API_BASE_URL}/bills/${billId}/download`;
     const link = document.createElement('a');
     link.href = url;
     link.download = fileName;
@@ -804,7 +804,7 @@ const BillsReceived = () => {
     setLoading(true);
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/bills/${selectedBill.id}/payments`,
+        `${API_BASE_URL}/bills/${selectedBill.id}/payments`,
         {
           method: 'POST',
           headers: getAuthHeaders(),
@@ -851,7 +851,7 @@ const BillsReceived = () => {
     
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/bills/${billId}/mark-paid`,
+        `${API_BASE_URL}/bills/${billId}/mark-paid`,
         {
           method: 'POST',
           headers: getAuthHeaders(),

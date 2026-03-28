@@ -346,7 +346,7 @@ const QuotationsReceived = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const res = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setQuotations(data.quotations || []);
@@ -362,14 +362,14 @@ const QuotationsReceived = () => {
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       if (projectId) params.append('projectId', projectId);
-      const res = await fetch(`${API_BASE_URL}/api/quotations/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) setStats(await res.json());
     } catch { }
   };
 
   const fetchVendors = async (gn, sg) => {
     try {
-      let url = `${API_BASE_URL}/api/vendors/by-group-subgroup?`;
+      let url = `${API_BASE_URL}/vendors/by-group-subgroup?`;
       if (gn) url += `groupName=${encodeURIComponent(gn)}&`;
       if (sg) url += `subGroupName=${encodeURIComponent(sg)}`;
       const res = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
@@ -382,7 +382,7 @@ const QuotationsReceived = () => {
     if (!pid) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/orderbook-items/${pid}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/orderbook-items/${pid}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       if (data.success) {
@@ -471,7 +471,7 @@ const QuotationsReceived = () => {
   const handleOpenCreatePOModal = async (quotation) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const qd = await res.json();
       setPOFormData({
@@ -521,7 +521,7 @@ const QuotationsReceived = () => {
         })),
         status: 'Draft', paymentStatus: 'Pending',
       };
-      const res = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, { credentials: 'include', method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(poData) });
+      const res = await fetch(`${API_BASE_URL}/purchase-orders/from-quotation`, { credentials: 'include', method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(poData) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       const created = await res.json();
       showSuccess(`Purchase Order ${created.poNo} created!`);
@@ -536,7 +536,7 @@ const QuotationsReceived = () => {
   const handleViewQuotation = async (quotation) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       setSelectedQuotation(await res.json()); setShowDetailDrawer(true);
     } catch { showError('Failed to load quotation details'); }
@@ -546,7 +546,7 @@ const QuotationsReceived = () => {
   const handleEditQuotation = async (quotation) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setIsEditMode(true);
@@ -574,7 +574,7 @@ const QuotationsReceived = () => {
   const handleUpdateStatus = async (quotationId, newStatus) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, { credentials: 'include', method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ status: newStatus }) });
+      const res = await fetch(`${API_BASE_URL}/quotations/${quotationId}/status`, { credentials: 'include', method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ status: newStatus }) });
       if (!res.ok) throw new Error();
       showSuccess(`Quotation ${newStatus.toLowerCase()} successfully`);
       fetchQuotations(); fetchStats(); setShowDetailDrawer(false);
@@ -586,7 +586,7 @@ const QuotationsReceived = () => {
     if (!window.confirm('Delete this quotation? This cannot be undone.')) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, { credentials: 'include', method: 'DELETE', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, { credentials: 'include', method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) throw new Error();
       showSuccess('Quotation deleted'); fetchQuotations(); fetchStats(); setShowDetailDrawer(false);
     } catch { showError('Failed to delete quotation'); }
@@ -638,7 +638,7 @@ const QuotationsReceived = () => {
       };
       fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
       if (selectedFile) fd.append('file', selectedFile);
-      const url = isEditMode ? `${API_BASE_URL}/api/quotations/${quotationFormData.id}` : `${API_BASE_URL}/api/quotations/procurement`;
+      const url = isEditMode ? `${API_BASE_URL}/quotations/${quotationFormData.id}` : `${API_BASE_URL}/quotations/procurement`;
       const method = isEditMode ? 'PUT' : 'POST';
       const res = await fetch(url, { credentials: 'include', method, headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}`, 'X-User-Id': user?.id || localStorage.getItem('userId'), 'X-User-Role': user?.role || localStorage.getItem('userRole') }, body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
@@ -699,7 +699,7 @@ const QuotationsReceived = () => {
         </td>
       );
       case 'file': return (
-        <td>{q.fileName ? <a href={`${API_BASE_URL}/api/quotations/${q.id}/file`} target="_blank" rel="noopener noreferrer" className="file-link" title={`${q.fileName} (${formatFileSize(q.fileSize)})`}>📄 {q.fileName.substring(0, 15)}…</a> : '—'}</td>
+        <td>{q.fileName ? <a href={`${API_BASE_URL}/quotations/${q.id}/file`} target="_blank" rel="noopener noreferrer" className="file-link" title={`${q.fileName} (${formatFileSize(q.fileSize)})`}>📄 {q.fileName.substring(0, 15)}…</a> : '—'}</td>
       );
       case 'status': return (
         <td><span className={`procurement-quotation-received-badge ${getStatusBadgeClass(q.status)}`}>{q.status}</span></td>
@@ -1019,7 +1019,7 @@ const QuotationsReceived = () => {
                       <FileText size={24} color="#64748b" />
                       <div><div style={{ fontWeight: 500, color: '#1e293b' }}>{selectedQuotation.fileName}</div><div style={{ fontSize: 12, color: '#64748b' }}>{formatFileSize(selectedQuotation.fileSize)}</div></div>
                     </div>
-                    <a href={`${API_BASE_URL}/api/quotations/${selectedQuotation.id}/file`} target="_blank" rel="noopener noreferrer" className="procurement-quotation-received-btn-secondary" style={{ padding: '6px 12px', fontSize: 14 }}><Download size={16} /> View</a>
+                    <a href={`${API_BASE_URL}/quotations/${selectedQuotation.id}/file`} target="_blank" rel="noopener noreferrer" className="procurement-quotation-received-btn-secondary" style={{ padding: '6px 12px', fontSize: 14 }}><Download size={16} /> View</a>
                   </div>
                 ) : <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No file attached</p>}
               </div>

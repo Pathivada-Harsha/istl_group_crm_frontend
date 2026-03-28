@@ -34,7 +34,7 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
         credentials: "include",
         headers: {
           'User-Id': user.id,

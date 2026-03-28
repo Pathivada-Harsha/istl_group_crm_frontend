@@ -1,6 +1,6 @@
 // src/services/filterApi.js
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = process.env.REACT_APP_API_URL;
 const getAuthHeaders = () => ({
   'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
   'Content-Type': 'application/json'
@@ -9,7 +9,7 @@ const filterApi = {
   // Get all groups
    getLeadsUsers : async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/leads-users`, {credentials: "include",
+      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {credentials: "include",
         headers: getAuthHeaders()
       });
 

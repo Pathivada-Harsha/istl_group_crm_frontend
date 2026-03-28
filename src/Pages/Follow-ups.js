@@ -142,7 +142,7 @@ export default function ClientDashboardFollowUps() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
         credentials: "include",
         headers: {
           'User-Id': user.id,
@@ -180,7 +180,7 @@ export default function ClientDashboardFollowUps() {
 
   const fetchGroups = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-groups`, {
         credentials: "include",
         headers: {
           'User-Id': user.id,
@@ -207,7 +207,7 @@ export default function ClientDashboardFollowUps() {
 
     try {
       const response = await fetch(
-        `${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`,
+        `${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`,
         {
           credentials: "include",
           headers: {

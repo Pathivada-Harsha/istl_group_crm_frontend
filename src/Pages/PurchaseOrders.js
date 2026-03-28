@@ -243,7 +243,7 @@ const PurchaseOrders = () => {
   const fetchModalGroups = async () => {
     setModalDropdownLoading(prev => ({ ...prev, groups: true }));
     try {
-      const r = await fetch(`${API_BASE_URL}/api/filters/groups`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/filters/groups`, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) setModalGroups(await r.json() || []);
     } catch { setModalGroups([]); }
     finally { setModalDropdownLoading(prev => ({ ...prev, groups: false })); }
@@ -253,7 +253,7 @@ const PurchaseOrders = () => {
     if (!gName) { setModalSubGroups([]); setModalProjects([]); return; }
     setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
     try {
-      const r = await fetch(`${API_BASE_URL}/api/filters/subgroups?groupName=${encodeURIComponent(gName)}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/filters/subgroups?groupName=${encodeURIComponent(gName)}`, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) setModalSubGroups(await r.json() || []);
     } catch { setModalSubGroups([]); }
     finally { setModalDropdownLoading(prev => ({ ...prev, subGroups: false })); }
@@ -263,7 +263,7 @@ const PurchaseOrders = () => {
     if (!gName || !sgName) { setModalProjects([]); return; }
     setModalDropdownLoading(prev => ({ ...prev, projects: true }));
     try {
-      const r = await fetch(`${API_BASE_URL}/api/filters/projects?groupName=${encodeURIComponent(gName)}&subGroupName=${encodeURIComponent(sgName)}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/filters/projects?groupName=${encodeURIComponent(gName)}&subGroupName=${encodeURIComponent(sgName)}`, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) setModalProjects(await r.json() || []);
     } catch { setModalProjects([]); }
     finally { setModalDropdownLoading(prev => ({ ...prev, projects: false })); }
@@ -271,7 +271,7 @@ const PurchaseOrders = () => {
 
   const fetchFilteredQuotations = async (gName, sgName, pId) => {
     try {
-      let url = `${API_BASE_URL}/api/quotations/approved?`;
+      let url = `${API_BASE_URL}/quotations/approved?`;
       if (gName) url += `groupName=${encodeURIComponent(gName)}&`;
       if (sgName) url += `subGroupName=${encodeURIComponent(sgName)}&`;
       if (pId) url += `projectId=${encodeURIComponent(pId)}`;
@@ -284,7 +284,7 @@ const PurchaseOrders = () => {
     if (!pId) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/quotations/orderbook-items/${pId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/quotations/orderbook-items/${pId}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       const data = await r.json();
       if (data.success) setOrderBookItems(data.data || []);
@@ -351,7 +351,7 @@ const PurchaseOrders = () => {
     }
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       const qData = await r.json();
       const items = qData.items.map((item, i) => ({
@@ -455,7 +455,7 @@ const PurchaseOrders = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.paymentStatus !== 'all') params.append('paymentStatus', filters.paymentStatus);
       if (filters.search) params.append('searchTerm', filters.search);
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       const data = await r.json();
       setPurchaseOrders(data.purchaseOrders || []);
@@ -470,14 +470,14 @@ const PurchaseOrders = () => {
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       if (projectId) params.append('projectId', projectId);
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/stats?${params}`, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) setStats(await r.json());
     } catch { console.error('Failed to fetch stats'); }
   };
 
   const fetchVendors = async (gName = null, sgName = null) => {
     try {
-      let url = `${API_BASE_URL}/api/vendors?page=0&size=1000`;
+      let url = `${API_BASE_URL}/vendors?page=0&size=1000`;
       if (gName) url += `&groupName=${encodeURIComponent(gName)}`;
       if (sgName) url += `&subGroupName=${encodeURIComponent(sgName)}`;
       const r = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
@@ -488,7 +488,7 @@ const PurchaseOrders = () => {
   const handleViewPO = async (po) => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/${po.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${po.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       setSelectedPO(await r.json()); setShowDetailDrawer(true);
     } catch { showError('Failed to load PO details'); }
@@ -498,7 +498,7 @@ const PurchaseOrders = () => {
   const handleEditPO = async (poId) => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/${poId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${poId}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       const poData = await r.json();
       setIsEditMode(true); setEditingPOId(poId);
@@ -532,7 +532,7 @@ const PurchaseOrders = () => {
     if (!confirmed) return;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/${poId}`, { method: 'DELETE', credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${poId}`, { method: 'DELETE', credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       showSuccess('Purchase order deleted successfully'); fetchPurchaseOrders(); fetchStats();
     } catch { showError('Failed to delete purchase order'); }
@@ -544,7 +544,7 @@ const PurchaseOrders = () => {
     if (!confirmed) return;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/${poId}/status`, {
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${poId}/status`, {
         credentials: 'include', method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ status: newStatus })
@@ -567,7 +567,7 @@ const PurchaseOrders = () => {
     if (!confirmed) return;
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`, {
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${deliveryFormData.poId}/items/${deliveryFormData.itemId}/deliver`, {
         credentials: 'include', method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ deliveredQty: deliveryFormData.newDeliveryQty })
@@ -628,13 +628,13 @@ const PurchaseOrders = () => {
       };
       let response;
       if (isEditMode && editingPOId) {
-        response = await fetch(`${API_BASE_URL}/api/purchase-orders/${editingPOId}`, {
+        response = await fetch(`${API_BASE_URL}/purchase-orders/${editingPOId}`, {
           credentials: 'include', method: 'PUT',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify(poData)
         });
       } else {
-        const endpoint = createPOFormData.quotationId ? `${API_BASE_URL}/api/purchase-orders/from-quotation` : `${API_BASE_URL}/api/purchase-orders`;
+        const endpoint = createPOFormData.quotationId ? `${API_BASE_URL}/purchase-orders/from-quotation` : `${API_BASE_URL}/purchase-orders`;
         response = await fetch(endpoint, {
           credentials: 'include', method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -652,7 +652,7 @@ const PurchaseOrders = () => {
   const handleViewVendorPOs = async (vendorId) => {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendorId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/vendor/${vendorId}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!r.ok) throw new Error();
       const data = await r.json();
       showSuccess(`Found ${data.length} purchase orders for this vendor`);

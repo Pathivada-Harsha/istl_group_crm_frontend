@@ -114,7 +114,7 @@ const QuotationsReceived = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`${API_BASE_URL}/api/quotations/procurement?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/procurement?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -142,7 +142,7 @@ const QuotationsReceived = () => {
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/stats`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/stats`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -162,7 +162,7 @@ const QuotationsReceived = () => {
    */
   const fetchVendors = async (groupName = null, subGroupName = null) => {
     try {
-      let url = `${API_BASE_URL}/api/vendors/by-group-subgroup?`;
+      let url = `${API_BASE_URL}/vendors/by-group-subgroup?`;
       if (groupName) url += `groupName=${encodeURIComponent(groupName)}&`;
       if (subGroupName) url += `subGroupName=${encodeURIComponent(subGroupName)}`;
 
@@ -201,7 +201,7 @@ const QuotationsReceived = () => {
 
     setLoadingOrderItems(true);
     try {
-      const url = `${API_BASE_URL}/api/quotations/orderbook-items/${projectId}`;
+      const url = `${API_BASE_URL}/quotations/orderbook-items/${projectId}`;
       console.log('📡 Fetching order book items for project:', projectId);
 
       const response = await fetch(url, {
@@ -519,7 +519,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       // Fetch full quotation details with items
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -602,7 +602,7 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       // Fetch full quotation details with items
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -755,7 +755,7 @@ const QuotationsReceived = () => {
         paymentStatus: 'Pending'
       };
 
-      const response = await fetch(`${API_BASE_URL}/api/purchase-orders/from-quotation`, {
+      const response = await fetch(`${API_BASE_URL}/purchase-orders/from-quotation`, {
         credentials: "include",
         method: 'POST',
         headers: {
@@ -800,7 +800,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotation.id}`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -829,7 +829,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/status`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/status`, {
         credentials: "include",
         method: 'PUT',
         headers: {
@@ -869,7 +869,7 @@ const QuotationsReceived = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/quotations/${quotationId}/create-po`, {
+      const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/create-po`, {
         credentials: "include",
         method: 'POST',
         headers: getAuthHeaders()
@@ -1075,8 +1075,8 @@ const QuotationsReceived = () => {
       }
 
       const url = isEditMode
-        ? `${API_BASE_URL}/api/quotations/${editingQuotationId}`
-        : `${API_BASE_URL}/api/quotations/procurement`;
+        ? `${API_BASE_URL}/quotations/${editingQuotationId}`
+        : `${API_BASE_URL}/quotations/procurement`;
 
       const method = isEditMode ? 'PUT' : 'POST';
 
@@ -1349,7 +1349,7 @@ const QuotationsReceived = () => {
                   <td>
                     {quotation.fileName ? (
 
-                      <a href={`${API_BASE_URL}/api/quotations/${quotation.id}/file`}
+                      <a href={`${API_BASE_URL}/quotations/${quotation.id}/file`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="file-link"
@@ -1685,7 +1685,7 @@ const QuotationsReceived = () => {
                         </div>
                       </div>
 
-                      <a href={`${API_BASE_URL}/api/quotations/${selectedQuotation.id}/file`}
+                      <a href={`${API_BASE_URL}/quotations/${selectedQuotation.id}/file`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="procurement-quotation-received-btn-secondary"

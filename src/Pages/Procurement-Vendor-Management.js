@@ -350,7 +350,7 @@ const VendorManagement = () => {
       if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`${API_BASE_URL}/api/vendors?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/vendors?${params}`, {
         headers: getAuthHeaders(), credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to fetch vendors');
@@ -369,7 +369,7 @@ const VendorManagement = () => {
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       if (projectId) params.append('projectId', projectId);
-      const response = await fetch(`${API_BASE_URL}/api/vendors/stats?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/vendors/stats?${params}`, {
         credentials: 'include', headers: getAuthHeaders()
       });
       if (response.ok) { const data = await response.json(); setStats(data); }
@@ -379,11 +379,11 @@ const VendorManagement = () => {
   const handleViewVendor = async (vendor) => {
     setLoading(true);
     try {
-      const vendorResponse = await fetch(`${API_BASE_URL}/api/vendors/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const vendorResponse = await fetch(`${API_BASE_URL}/vendors/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!vendorResponse.ok) throw new Error('Failed to fetch vendor details');
       const vendorData = await vendorResponse.json();
       setSelectedVendor(vendorData);
-      const posResponse = await fetch(`${API_BASE_URL}/api/purchase-orders/vendor/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const posResponse = await fetch(`${API_BASE_URL}/purchase-orders/vendor/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
       setVendorPurchaseOrders(posResponse.ok ? await posResponse.json() : []);
       setShowDetailDrawer(true);
     } catch (error) { showError('Failed to load vendor details'); }
@@ -417,7 +417,7 @@ const VendorManagement = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vendors/${editFormData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/vendors/${editFormData.id}`, {
         credentials: 'include', method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(editFormData)
@@ -435,7 +435,7 @@ const VendorManagement = () => {
     if (!window.confirm('Are you sure you want to deactivate this vendor?')) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/vendors/${vendorId}`, {
+      const response = await fetch(`${API_BASE_URL}/vendors/${vendorId}`, {
         method: 'DELETE', headers: getAuthHeaders(), credentials: 'include'
       });
       if (!response.ok) throw new Error('Failed to deactivate vendor');

@@ -13,15 +13,17 @@ const STATUS_CONFIG = {
 
 const PRIORITY_COLOR = { High: "#ef4444", Medium: "#f59e0b", Low: "#10b981" };
 
-const SOLAR_SCHEMES = [
-  "PM_Surya_Ghar", "PM_Kusum", "State_Subsidy",
-  "Net_Metering_Only", "No_Scheme", "Others"
+const SOURCES = [
+  "Website", "Referral", "Walk-in", "Phone", "Email",
+  "Social Media", "Digital Marketing", "Campaign", "Others",
 ];
+
+const PRIORITIES = ["High", "Medium", "Low"];
 
 export default function TelecallerLeadsPage() {
   const [leads,      setLeads]      = useState([]);
   const [stats,      setStats]      = useState(null);
-  const [filter,     setFilter]     = useState("NEW");   // default: show NEW only
+  const [filter,     setFilter]     = useState("NEW");
   const [page,       setPage]       = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [total,      setTotal]      = useState(0);
@@ -31,15 +33,23 @@ export default function TelecallerLeadsPage() {
   const [selected,    setSelected]    = useState(null);
   const [modalOpen,   setModalOpen]   = useState(false);
   const [statusModal, setStatusModal] = useState(false);
+  const [editModal,   setEditModal]   = useState(false);
   const [newStatus,   setNewStatus]   = useState("");
   const [reason,      setReason]      = useState("");
   const [discussion,  setDiscussion]  = useState("");
   const [saving,      setSaving]      = useState(false);
   const [toast,       setToast]       = useState(null);
 
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    name: "", email: "", phone: "", source: "",
+    priority: "", enquiry: "", state: "", district: "", city: "", pincode: "",
+  });
+  const [editSaving, setEditSaving] = useState(false);
+
   // INTERESTED extra fields
   const [intLocation,     setIntLocation]     = useState("");
-  const [intSiteDate,     setIntSiteDate]      = useState("");
+  const [intSiteDate,     setIntSiteDate]     = useState("");
   const [intPropertyType, setIntPropertyType] = useState("");
   const [intQuotedPrice,  setIntQuotedPrice]  = useState("");
   const [intAddons,       setIntAddons]       = useState("");
@@ -139,6 +149,50 @@ export default function TelecallerLeadsPage() {
     }
   };
 
+  // ── Edit modal ────────────────────────────────────────────────────────────
+  const openEditModal = (lead) => {
+    if (lead.handedOffToBD) {
+      showToast("This lead has been handed off to BD and cannot be edited here.", "info");
+      return;
+    }
+    setSelected(lead);
+    setEditForm({
+      name:     lead.name     || "",
+      email:    lead.email    || "",
+      phone:    lead.phone    || "",
+      source:   lead.source   || "",
+      priority: lead.priority || "Medium",
+      enquiry:  lead.enquiry  || "",
+      state:    lead.state    || "",
+      district: lead.district || "",
+      city:     lead.city     || "",
+      pincode:  lead.pincode  || "",
+    });
+    setEditModal(true);
+  };
+
+  const submitEdit = async () => {
+    if (!editForm.phone.trim()) {
+      showToast("Phone number is required", "error");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const resp = await api.put(`/telecaller/lead/${selected.id}/details`, editForm);
+      if (resp.success) {
+        showToast("Lead updated successfully!", "success");
+        setEditModal(false);
+        // Update the selected lead if detail modal is also open
+        if (modalOpen) setSelected(resp.data);
+        fetchLeads(page);
+      }
+    } catch (e) {
+      if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Update failed", "error");
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   // ── Detail modal ──────────────────────────────────────────────────────────
   const openDetail = async (lead) => {
     try {
@@ -169,11 +223,11 @@ export default function TelecallerLeadsPage() {
       {/* Stats bar */}
       {stats && (
         <div className="tc-stats-bar">
-          <StatCard label="New"           value={stats.pending}       color="#6366f1" active={filter==="NEW"}           onClick={() => applyFilter("NEW")} />
-          <StatCard label="Interested"    value={stats.interested}    color="#059669" active={filter==="INTERESTED"}    onClick={() => applyFilter("INTERESTED")} />
-          <StatCard label="Not Interested"value={stats.notInterested} color="#dc2626" active={filter==="NOT_INTERESTED"}onClick={() => applyFilter("NOT_INTERESTED")} />
-          <StatCard label="Not Responded" value={stats.notResponded}  color="#d97706" active={filter==="NOT_RESPONDED"} onClick={() => applyFilter("NOT_RESPONDED")} />
-          <StatCard label="All"           value={stats.total}         color="#64748b" active={filter==="ALL"}           onClick={() => applyFilter("ALL")} />
+          <StatCard label="New"            value={stats.pending}       color="#6366f1" active={filter==="NEW"}            onClick={() => applyFilter("NEW")} />
+          <StatCard label="Interested"     value={stats.interested}    color="#059669" active={filter==="INTERESTED"}     onClick={() => applyFilter("INTERESTED")} />
+          <StatCard label="Not Interested" value={stats.notInterested} color="#dc2626" active={filter==="NOT_INTERESTED"} onClick={() => applyFilter("NOT_INTERESTED")} />
+          <StatCard label="Not Responded"  value={stats.notResponded}  color="#d97706" active={filter==="NOT_RESPONDED"}  onClick={() => applyFilter("NOT_RESPONDED")} />
+          <StatCard label="All"            value={stats.total}         color="#64748b" active={filter==="ALL"}            onClick={() => applyFilter("ALL")} />
           {stats.resurfacedToday > 0 && (
             <StatCard label="⚡ Re-surfaced" value={stats.resurfacedToday} color="#7c3aed" onClick={() => applyFilter("NOT_RESPONDED")} urgent />
           )}
@@ -220,7 +274,8 @@ export default function TelecallerLeadsPage() {
           {visible.map(lead => (
             <LeadCard key={lead.id} lead={lead}
               onDetail={() => openDetail(lead)}
-              onUpdateStatus={() => openStatusModal(lead)} />
+              onUpdateStatus={() => openStatusModal(lead)}
+              onEdit={() => openEditModal(lead)} />
           ))}
         </div>
       )}
@@ -297,7 +352,6 @@ export default function TelecallerLeadsPage() {
                 <p>{selected.enquiry}</p>
               </div>
 
-              {/* Discussion note */}
               {selected.tcDiscussionNote && (
                 <div className="tc-detail-enquiry tc-discussion-note">
                   <span className="tc-detail-label">Discussion Note</span>
@@ -305,7 +359,6 @@ export default function TelecallerLeadsPage() {
                 </div>
               )}
 
-              {/* Team panel */}
               <div className="tc-section-title">Team</div>
               <div className="tc-team-panel">
                 <TeamMember role="Telecaller" name={selected.telecallerName || "You"} icon="📞" />
@@ -318,12 +371,131 @@ export default function TelecallerLeadsPage() {
 
             <div className="tc-modal-footer">
               {!selected.handedOffToBD && (
-                <button className="tc-btn-primary"
-                  onClick={() => { setModalOpen(false); openStatusModal(selected); }}>
-                  Update Status
-                </button>
+                <>
+                  <button className="tc-btn-primary"
+                    onClick={() => { setModalOpen(false); openStatusModal(selected); }}>
+                    Update Status
+                  </button>
+                  <button className="tc-btn-edit"
+                    onClick={() => { setModalOpen(false); openEditModal(selected); }}>
+                    ✏️ Edit Details
+                  </button>
+                </>
               )}
               <button className="tc-btn-secondary" onClick={() => setModalOpen(false)}>Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Lead Modal ── */}
+      {editModal && selected && (
+        <div className="tc-modal-overlay" onClick={() => setEditModal(false)}>
+          <div className="tc-modal tc-modal--edit" onClick={e => e.stopPropagation()}>
+            <div className="tc-modal-header">
+              <h2>✏️ Edit Lead Details</h2>
+              <button className="tc-modal-close" onClick={() => setEditModal(false)}>✕</button>
+            </div>
+            <div className="tc-modal-body">
+              <p className="tc-lead-name-hint">{selected.leadCode}</p>
+
+              <div className="tc-edit-grid">
+
+                {/* Name */}
+                <div className="tc-edit-field">
+                  <label>Client Name</label>
+                  <input type="text" placeholder="Client name"
+                    value={editForm.name}
+                    onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+
+                {/* Phone */}
+                <div className="tc-edit-field">
+                  <label>Phone <span className="tc-req">*</span></label>
+                  <input type="text" placeholder="10-digit phone number"
+                    value={editForm.phone}
+                    onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} />
+                </div>
+
+                {/* Email */}
+                <div className="tc-edit-field">
+                  <label>Email</label>
+                  <input type="email" placeholder="Email address"
+                    value={editForm.email}
+                    onChange={e => setEditForm(f => ({ ...f, email: e.target.value }))} />
+                </div>
+
+                {/* Source */}
+                <div className="tc-edit-field">
+                  <label>Source</label>
+                  <select value={editForm.source}
+                    onChange={e => setEditForm(f => ({ ...f, source: e.target.value }))}>
+                    <option value="">Select source…</option>
+                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+
+                {/* Priority */}
+                <div className="tc-edit-field">
+                  <label>Priority</label>
+                  <select value={editForm.priority}
+                    onChange={e => setEditForm(f => ({ ...f, priority: e.target.value }))}>
+                    {PRIORITIES.map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+
+                {/* State */}
+                <div className="tc-edit-field">
+                  <label>State</label>
+                  <input type="text" placeholder="State"
+                    value={editForm.state}
+                    onChange={e => setEditForm(f => ({ ...f, state: e.target.value }))} />
+                </div>
+
+                {/* District */}
+                <div className="tc-edit-field">
+                  <label>District</label>
+                  <input type="text" placeholder="District"
+                    value={editForm.district}
+                    onChange={e => setEditForm(f => ({ ...f, district: e.target.value }))} />
+                </div>
+
+                {/* City */}
+                <div className="tc-edit-field">
+                  <label>City / Village</label>
+                  <input type="text" placeholder="City or village"
+                    value={editForm.city}
+                    onChange={e => setEditForm(f => ({ ...f, city: e.target.value }))} />
+                </div>
+
+                {/* Pincode */}
+                <div className="tc-edit-field">
+                  <label>Pincode</label>
+                  <input type="text" placeholder="6-digit pincode"
+                    value={editForm.pincode}
+                    onChange={e => setEditForm(f => ({ ...f, pincode: e.target.value }))} />
+                </div>
+              </div>
+
+              {/* Enquiry — full width */}
+              <div className="tc-edit-field tc-edit-field--full">
+                <label>Enquiry / Description</label>
+                <textarea rows={4} placeholder="Enquiry details…"
+                  value={editForm.enquiry}
+                  onChange={e => setEditForm(f => ({ ...f, enquiry: e.target.value }))} />
+              </div>
+
+              <div className="tc-edit-note">
+                ℹ️ Group, Category, and Solar Scheme are managed by the admin and cannot be edited here.
+              </div>
+            </div>
+
+            <div className="tc-modal-footer">
+              <button className="tc-btn-primary"
+                disabled={editSaving} onClick={submitEdit}>
+                {editSaving ? "Saving…" : "Save Changes"}
+              </button>
+              <button className="tc-btn-secondary" onClick={() => setEditModal(false)}>Cancel</button>
             </div>
           </div>
         </div>
@@ -364,7 +536,6 @@ export default function TelecallerLeadsPage() {
                 ))}
               </div>
 
-              {/* Reason — NOT_INTERESTED */}
               {newStatus === "NOT_INTERESTED" && (
                 <div className="tc-reason-field">
                   <label>Reason <span className="tc-req">*</span></label>
@@ -374,11 +545,8 @@ export default function TelecallerLeadsPage() {
                 </div>
               )}
 
-              {/* Discussion note — INTERESTED */}
               {newStatus === "INTERESTED" && (
                 <div className="tc-interested-fields">
-
-                  {/* Discussion Summary */}
                   <div className="tc-reason-field">
                     <label>Discussion Summary <span className="tc-req">*</span></label>
                     <textarea rows={3}
@@ -386,7 +554,6 @@ export default function TelecallerLeadsPage() {
                       value={discussion} onChange={e => setDiscussion(e.target.value)} />
                   </div>
 
-                  {/* Location */}
                   <div className="tc-reason-field">
                     <label>
                       Location / Address
@@ -404,7 +571,6 @@ export default function TelecallerLeadsPage() {
                       onChange={e => setIntLocation(e.target.value)} />
                   </div>
 
-                  {/* Site Visit Date */}
                   <div className="tc-reason-field">
                     <label>Site Visit Availability</label>
                     <input type="date"
@@ -414,7 +580,6 @@ export default function TelecallerLeadsPage() {
                     <span className="tc-field-hint">When is the customer available for a site visit?</span>
                   </div>
 
-                  {/* Commercial / Residential */}
                   <div className="tc-reason-field">
                     <label>Property Type <span className="tc-req">*</span></label>
                     <div className="tc-property-toggle">
@@ -428,7 +593,6 @@ export default function TelecallerLeadsPage() {
                     </div>
                   </div>
 
-                  {/* Pricing / Quoted Amount */}
                   <div className="tc-reason-field">
                     <label>Pricing Quoted (₹)</label>
                     <input type="text"
@@ -437,7 +601,6 @@ export default function TelecallerLeadsPage() {
                       onChange={e => setIntQuotedPrice(e.target.value)} />
                   </div>
 
-                  {/* Addons */}
                   <div className="tc-reason-field">
                     <label>Add-ons / Additional Requirements</label>
                     <input type="text"
@@ -446,7 +609,6 @@ export default function TelecallerLeadsPage() {
                       onChange={e => setIntAddons(e.target.value)} />
                   </div>
 
-                  {/* Other Comments */}
                   <div className="tc-reason-field">
                     <label>Any Other Comments</label>
                     <textarea rows={2}
@@ -478,7 +640,7 @@ export default function TelecallerLeadsPage() {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-function LeadCard({ lead, onDetail, onUpdateStatus }) {
+function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
   const sc = STATUS_CONFIG[lead.telecallerStatus] || STATUS_CONFIG.NEW;
   return (
     <div className={`tc-card ${lead.handedOffToBD ? "tc-card--handed-off" : ""} ${lead.telecallerStatus == null || lead.telecallerStatus === "NEW" ? "tc-card--new" : ""}`}>
@@ -492,7 +654,7 @@ function LeadCard({ lead, onDetail, onUpdateStatus }) {
         <span className="tc-card-code">{lead.leadCode}</span>
       </div>
       <div className="tc-card-contact">
-        <span>📧 {lead.email}</span>
+        <span>📧 {lead.email || "—"}</span>
         <span>📞 {lead.phone}</span>
       </div>
       {(lead.state || lead.city) && (
@@ -516,10 +678,17 @@ function LeadCard({ lead, onDetail, onUpdateStatus }) {
           ? <span className="tc-handed-off-label">
               🤝 BD: {lead.bdAssignedToName || "Assigned"}
             </span>
-          : <button className="tc-btn-status"
-              onClick={e => { e.stopPropagation(); onUpdateStatus(); }}>
-              Update Status
-            </button>
+          : <div className="tc-card-actions">
+              <button className="tc-btn-status"
+                onClick={e => { e.stopPropagation(); onUpdateStatus(); }}>
+                Update Status
+              </button>
+              <button className="tc-btn-edit-sm"
+                onClick={e => { e.stopPropagation(); onEdit(); }}
+                title="Edit lead details">
+                ✏️
+              </button>
+            </div>
         }
       </div>
       <div className="tc-card-viewlink" onClick={onDetail}>View Details →</div>

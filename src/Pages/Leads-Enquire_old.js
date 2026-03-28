@@ -266,7 +266,7 @@ function LeadsEnquiries() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
         credentials: "include",
         headers: {
           'User-Id': currentUser.id,
@@ -288,7 +288,7 @@ function LeadsEnquiries() {
 
   const fetchGroups = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-groups`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-groups`, {
         credentials: "include",
         headers: {
           'User-Id': currentUser.id,
@@ -315,7 +315,7 @@ function LeadsEnquiries() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
+      const response = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
         credentials: "include",
         headers: {
           'User-Id': currentUser.id,

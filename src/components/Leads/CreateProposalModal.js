@@ -106,9 +106,9 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
   // Fetch BOM items master
   const fetchBomItemsMaster = async (category = null) => {
     try {
-      let url = `${API_BASE_URL}/api/bom-items-master/all`;
+      let url = `${API_BASE_URL}/bom-items-master/all`;
       if (category) {
-        url = `${API_BASE_URL}/api/bom-items-master/by-category?category=${category}`;
+        url = `${API_BASE_URL}/bom-items-master/by-category?category=${category}`;
       }
 
       const response = await fetch(url, {
@@ -143,7 +143,7 @@ function CreateProposalModal({ lead, onClose, onProposalCreated, defaultTemplate
     }
 
     try {
-      const url = `${API_BASE_URL}/api/bom-items-master/search?searchTerm=${encodeURIComponent(searchTerm)}`;
+      const url = `${API_BASE_URL}/bom-items-master/search?searchTerm=${encodeURIComponent(searchTerm)}`;
 
       const response = await fetch(url, {
         credentials: "include",

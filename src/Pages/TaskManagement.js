@@ -1125,7 +1125,7 @@ export default function TaskManagement() {
   const loadUsers = async () => {
     if (!isSA || !user) return;
     try {
-      const r = await fetch(`${API}/api/filters/leads-users`, { credentials: 'include', headers: hdrs(user) });
+      const r = await fetch(`${API}/filters/leads-users`, { credentials: 'include', headers: hdrs(user) });
       const d = await r.json();
       if (Array.isArray(d)) setUsers(d);
     } catch {}
@@ -1134,7 +1134,7 @@ export default function TaskManagement() {
   const loadProjects = async () => {
     if (!user) return;
     try {
-      const r = await fetch(`${API}/api/projects`, { credentials: 'include', headers: hdrs(user) });
+      const r = await fetch(`${API}/projects`, { credentials: 'include', headers: hdrs(user) });
       const d = await r.json();
       if (Array.isArray(d)) setProjects(d);
       else if (d.success && Array.isArray(d.data)) setProjects(d.data);

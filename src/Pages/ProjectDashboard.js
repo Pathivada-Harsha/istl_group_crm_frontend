@@ -274,7 +274,7 @@ const ProjectDashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}/dashboard`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/dashboard`, {
         credentials: 'include', headers: getAuthHeaders(),
       });
       if (response.ok) {

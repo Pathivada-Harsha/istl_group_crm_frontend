@@ -62,7 +62,7 @@ const InvoicesManagementPage = () => {
 
     setLoadingOrderItems(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/order-book-items/${projectId}`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/order-book-items/${projectId}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -125,7 +125,7 @@ const InvoicesManagementPage = () => {
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/download-pdf`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-pdf`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -188,7 +188,7 @@ const InvoicesManagementPage = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
 
-      const response = await fetch(`${API_BASE_URL}/api/invoices?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/invoices?${params}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -214,7 +214,7 @@ const InvoicesManagementPage = () => {
    */
   const fetchStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/stats`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/stats`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -300,7 +300,7 @@ const InvoicesManagementPage = () => {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/customer-by-project/${projectId}`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/customer-by-project/${projectId}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -420,7 +420,7 @@ const InvoicesManagementPage = () => {
   const handleViewInvoice = async (invoice) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -431,7 +431,7 @@ const InvoicesManagementPage = () => {
       setSelectedInvoice(data);
 
       // Fetch payment history
-      const historyResponse = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/payment-history`, {
+      const historyResponse = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/payment-history`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -580,8 +580,8 @@ const InvoicesManagementPage = () => {
       };
 
       const url = editMode
-        ? `${API_BASE_URL}/api/invoices/${selectedInvoice.id}`
-        : `${API_BASE_URL}/api/invoices`;
+        ? `${API_BASE_URL}/invoices/${selectedInvoice.id}`
+        : `${API_BASE_URL}/invoices`;
 
       const response = await fetch(url, {
         credentials: "include",
@@ -635,7 +635,7 @@ const InvoicesManagementPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${selectedInvoice.id}/payment`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/${selectedInvoice.id}/payment`, {
         credentials: "include",
         method: 'POST',
         headers: {
@@ -673,7 +673,7 @@ const InvoicesManagementPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/${id}`, {
         credentials: "include",
         method: 'DELETE',
         headers: getAuthHeaders()

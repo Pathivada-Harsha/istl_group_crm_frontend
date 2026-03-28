@@ -268,7 +268,7 @@ const InvoicesManagementPage = () => {
   const fetchOrderBookItemsForCustomer = async (customerId) => {
     if (!customerId) { setOrderBookItems([]); return; }
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/order-book-items-by-customer/${customerId}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/order-book-items-by-customer/${customerId}`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch order book items');
       const data = await response.json();
       setOrderBookItems(data.data || []);
@@ -283,7 +283,7 @@ const InvoicesManagementPage = () => {
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/download-pdf`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-pdf`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to download PDF');
       const contentDisposition = response.headers.get('Content-Disposition');
       let filename = `Invoice-${invoice.invoiceNo}.pdf`;
@@ -317,7 +317,7 @@ const InvoicesManagementPage = () => {
       if (projectId) params.append('projectId', projectId);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.search) params.append('searchTerm', filters.search);
-      const response = await fetch(`${API_BASE_URL}/api/invoices?${params}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices?${params}`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json();
       setInvoices(data.invoices || []);
@@ -340,7 +340,7 @@ const InvoicesManagementPage = () => {
       if (subGroupName) params.append("subGroupId", subGroupName);
       if (projectId) params.append("projectId", projectId);
       if (user?.id) params.append("createdBy", user.id);
-      const response = await fetch(`${API_BASE_URL}/api/invoices/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
       if (response.ok) { const data = await response.json(); setStats(data); }
       else setStats({ totalCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0 });
     } catch (error) { console.error("Failed to fetch stats:", error); setStats({ totalCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0 }); }
@@ -372,7 +372,7 @@ const InvoicesManagementPage = () => {
   const fetchCustomerByProject = async (projectId) => {
     if (!projectId) { setCustomerData(null); setOrderBookItems([]); return; }
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/customer-by-project/${projectId}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/customer-by-project/${projectId}`, { credentials: "include", headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setCustomerData(data);
@@ -424,11 +424,11 @@ const InvoicesManagementPage = () => {
   const handleViewInvoice = async (invoice) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch invoice details');
       const data = await response.json();
       setSelectedInvoice(data);
-      const historyResponse = await fetch(`${API_BASE_URL}/api/invoices/${invoice.id}/payment-history`, { credentials: "include", headers: getAuthHeaders() });
+      const historyResponse = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/payment-history`, { credentials: "include", headers: getAuthHeaders() });
       if (historyResponse.ok) { const historyData = await historyResponse.json(); setPaymentHistory(historyData); }
       setShowInvoiceModal(true);
     } catch (error) { console.error('Failed to fetch invoice details:', error); showError('Failed to load invoice details'); }
@@ -463,7 +463,7 @@ const InvoicesManagementPage = () => {
     setLoading(true);
     try {
       const invoiceData = { ...formData, status, items: formData.items.map(item => ({ description: item.description, quantity: parseFloat(item.quantity), unitPrice: parseFloat(item.unitPrice), taxPercent: parseFloat(item.taxPercent), unitType: item.unitType })) };
-      const url = editMode ? `${API_BASE_URL}/api/invoices/${selectedInvoice.id}` : `${API_BASE_URL}/api/invoices`;
+      const url = editMode ? `${API_BASE_URL}/invoices/${selectedInvoice.id}` : `${API_BASE_URL}/invoices`;
       const response = await fetch(url, { credentials: "include", method: editMode ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(invoiceData) });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to save invoice'); }
       showSuccess(`Invoice ${editMode ? 'updated' : 'created'} successfully!`);
@@ -486,7 +486,7 @@ const InvoicesManagementPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/${id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/${id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to delete invoice');
       showSuccess('Invoice deleted successfully!'); fetchInvoices(); fetchStats();
     } catch (error) { console.error('Failed to delete invoice:', error); showError('Failed to delete invoice'); }

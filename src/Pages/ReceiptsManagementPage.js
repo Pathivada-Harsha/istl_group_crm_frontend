@@ -289,7 +289,7 @@ const ReceiptsManagementPage = () => {
           invoiceId: null,
           company: row.company || receiptFormData.company || 'ISTL'
         };
-        const response = await fetch(`${API_BASE_URL}/api/invoices/receipts`, {
+        const response = await fetch(`${API_BASE_URL}/invoices/receipts`, {
           credentials: 'include',
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
@@ -353,7 +353,7 @@ const ReceiptsManagementPage = () => {
 
   const fetchAllocationDetails = async (receiptId) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receiptId}/allocations`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${receiptId}/allocations`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch allocation details');
       return await response.json();
     } catch (error) { console.error('Failed to fetch allocation details:', error); showError('Failed to load allocation details'); return []; }
@@ -375,7 +375,7 @@ const ReceiptsManagementPage = () => {
     if (!selectedAllocationToEdit?.newAmount || selectedAllocationToEdit.newAmount <= 0) { showError('Please enter a valid amount'); return; }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${editingAllocation.id}/allocations/edit`, {
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${editingAllocation.id}/allocations/edit`, {
         credentials: "include", method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ oldInvoiceId: selectedAllocationToEdit.oldInvoiceId, newInvoiceId: selectedAllocationToEdit.newInvoiceId, newAmount: parseFloat(selectedAllocationToEdit.newAmount) })
@@ -401,7 +401,7 @@ const ReceiptsManagementPage = () => {
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${editingAllocation.id}/allocations/${invoiceId}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${editingAllocation.id}/allocations/${invoiceId}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to remove allocation'); }
       showSuccess('Allocation removed successfully!');
       const updatedAllocations = await fetchAllocationDetails(editingAllocation.id);
@@ -434,7 +434,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     setLoading(true);
     try {
       const receiptData = { ...editReceiptFormData, receiptType: editingReceipt.receiptType, invoiceId: editingReceipt.invoiceId, customerId: editingReceipt.customerId, projectId: editingReceipt.projectId, groupId: editingReceipt.groupId, subGroupId: editingReceipt.subGroupId };
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${editingReceipt.id}`, { credentials: "include", method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(receiptData) });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${editingReceipt.id}`, { credentials: "include", method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(receiptData) });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to update receipt'); }
       showSuccess('Receipt updated successfully!'); setShowEditReceiptModal(false); setEditingReceipt(null); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to update receipt'); }
@@ -456,7 +456,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (!confirmed) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receipt.id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${receipt.id}`, { credentials: "include", method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to delete receipt'); }
       showSuccess('Receipt deleted successfully!'); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to delete receipt'); }
@@ -466,7 +466,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
   const fetchDeletedReceipts = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/deleted`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/deleted`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch deleted receipts');
       setDeletedReceipts(await response.json());
     } catch (error) { showError('Failed to load deleted receipts'); setDeletedReceipts([]); }
@@ -486,7 +486,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${receiptId}/restore`, { credentials: "include", method: 'POST', headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${receiptId}/restore`, { credentials: "include", method: 'POST', headers: getAuthHeaders() });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to restore receipt'); }
       showSuccess('Receipt restored successfully!'); fetchDeletedReceipts(); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to restore receipt'); }
@@ -504,7 +504,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
       if (projectId) params.append('projectId', projectId);
       if (filters.receiptType !== 'all') params.append('receiptType', filters.receiptType);
       if (filters.search) params.append('searchTerm', filters.search);
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts?${params}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts?${params}`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch receipts');
       const data = await response.json();
       setReceipts(data.receipts || []); setTotalPages(data.totalPages || 0); setTotalElements(data.totalElements || 0);
@@ -519,7 +519,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
       if (subGroupName) params.append("subGroupId", subGroupName);
       if (projectId) params.append("projectId", projectId);
       if (user?.id) params.append("createdBy", user.id);
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
       if (response.ok) setStats(await response.json());
       else setStats({ totalReceipts: 0, totalAmount: 0, appliedAmount: 0, unappliedAmount: 0, advanceReceipts: 0, invoiceReceipts: 0 });
     } catch (error) { setStats({ totalReceipts: 0, totalAmount: 0, appliedAmount: 0, unappliedAmount: 0, advanceReceipts: 0, invoiceReceipts: 0 }); }
@@ -549,7 +549,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
   const fetchCustomerByProject = async (pid) => {
     if (!pid) { setCustomerData(null); setInvoicesForCustomer([]); setAvailableAdvances([]); return; }
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/customer-by-project/${pid}`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/customer-by-project/${pid}`, { credentials: "include", headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json(); setCustomerData(data);
         setReceiptFormData(prev => ({ ...prev, customerId: data.customerId }));
@@ -563,7 +563,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (!customerId && !projectId) { setInvoicesForCustomer([]); return; }
     setLoadingInvoices(true);
     try {
-      const endpoint = customerId ? `${API_BASE_URL}/api/invoices/customer/${customerId}/unpaid-invoices` : `${API_BASE_URL}/api/invoices/project/${projectId}/unpaid-invoices`;
+      const endpoint = customerId ? `${API_BASE_URL}/invoices/customer/${customerId}/unpaid-invoices` : `${API_BASE_URL}/invoices/project/${projectId}/unpaid-invoices`;
       const response = await fetch(endpoint, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json(); setInvoicesForCustomer(data);
@@ -576,7 +576,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (!customerId) { setAvailableAdvances([]); return; }
     setLoadingAdvances(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/customer/${customerId}/unapplied-advances-details`, { credentials: "include", headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/customer/${customerId}/unapplied-advances-details`, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch advances');
       setAvailableAdvances(await response.json());
     } catch { setAvailableAdvances([]); }
@@ -618,7 +618,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
       setLoadingViewAllocations(true);
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/invoices/receipts/${receipt.id}/allocations`,
+          `${API_BASE_URL}/invoices/receipts/${receipt.id}/allocations`,
           { credentials: "include", headers: getAuthHeaders() }
         );
         if (response.ok) {
@@ -636,7 +636,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (receipt.receiptType === 'INVOICE_PAYMENT' && receipt.invoiceId) {
       try {
         const response = await fetch(
-          `${API_BASE_URL}/api/invoices/${receipt.invoiceId}`,
+          `${API_BASE_URL}/invoices/${receipt.invoiceId}`,
           { credentials: "include", headers: getAuthHeaders() }
         );
         if (response.ok) {
@@ -652,7 +652,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
   const handleEditReceipt = async (receipt) => {
     setSelectedReceipt(receipt); setLoading(true);
     try {
-      const ep = receipt.customerId ? `${API_BASE_URL}/api/invoices/customer/${receipt.customerId}/unpaid-invoices` : `${API_BASE_URL}/api/invoices/project/${receipt.projectId}/unpaid-invoices`;
+      const ep = receipt.customerId ? `${API_BASE_URL}/invoices/customer/${receipt.customerId}/unpaid-invoices` : `${API_BASE_URL}/invoices/project/${receipt.projectId}/unpaid-invoices`;
       const res = await fetch(ep, { credentials: "include", headers: getAuthHeaders() });
       if (res.ok) { const d = await res.json(); setInvoicesForCustomer(d); if (d.length === 0) showError('No unpaid invoices found for this customer'); }
       else { setInvoicesForCustomer([]); showError('Failed to load invoices for this customer'); }
@@ -669,7 +669,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     setLoading(true);
     try {
       const receiptData = { ...receiptFormData, receiptType: receiptFormData.receiptType === 'advance' ? 'ADVANCE' : 'INVOICE_PAYMENT', amount: parseFloat(receiptFormData.amount), invoiceId: receiptFormData.receiptType === 'invoice' ? receiptFormData.invoiceId : null };
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts`, { credentials: "include", method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(receiptData) });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts`, { credentials: "include", method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(receiptData) });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to create receipt'); }
       showSuccess('Receipt recorded successfully!'); setShowCreateModal(false); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to create receipt'); }
@@ -683,7 +683,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (totalAllocation > (adjustmentData.availableAmount || selectedReceipt.unappliedAmount)) { showError('Total allocation exceeds available advance amount'); return; }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/invoices/receipts/${adjustmentData.receiptId}/allocate-advance`, { credentials: "include", method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ allocations }) });
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts/${adjustmentData.receiptId}/allocate-advance`, { credentials: "include", method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ allocations }) });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to allocate advance'); }
       showSuccess('Advance allocated successfully!'); setShowAdjustmentModal(false);
       setAdjustmentData({ receiptId: null, customerId: null, availableAmount: 0, invoiceAllocations: [] }); setInvoicesForCustomer([]); fetchReceipts(); fetchStats();

@@ -188,7 +188,7 @@ export default function BillsManagementPage() {
       if (projectId)    p.append('projectId',  projectId);
       if (filters.status !== 'all') p.append('status', filters.status);
       if (filters.search)           p.append('search', filters.search);
-      const res = await fetch(`${API_BASE_URL}/api/bills?${p}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/bills?${p}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!res.ok) throw new Error('Failed to fetch bills');
       const data = await res.json();
       setBills(data.bills || []); setTotalPages(data.totalPages || 0); setTotalElements(data.totalItems || 0);
@@ -202,14 +202,14 @@ export default function BillsManagementPage() {
       if (groupName)    p.append('groupId',    groupName);
       if (subGroupName) p.append('subGroupId', subGroupName);
       if (projectId)    p.append('projectId',  projectId);
-      const res = await fetch(`${API_BASE_URL}/api/bills/stats?${p}`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/bills/stats?${p}`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) setStats(await res.json());
     } catch {}
   };
 
   const fetchVendors = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/api/vendors?size=200`, { credentials: 'include', headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/vendors?size=200`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) { const d = await res.json(); setVendors(d.vendors || d.content || []); }
     } catch {}
   };
@@ -247,7 +247,7 @@ export default function BillsManagementPage() {
       try {
         // Single fetch — paymentHistory now contains all entries (advance allocs + direct payments)
         // because VendorAdvanceService.applyAmountToBill() writes a BillPaymentEntity for every payment
-        const res = await fetch(`${API_BASE_URL}/api/bills/${bill.id}`,
+        const res = await fetch(`${API_BASE_URL}/bills/${bill.id}`,
           { credentials: 'include', headers: getAuthHeaders() });
         const billDetail = res.ok ? await res.json() : null;
 
@@ -331,7 +331,7 @@ export default function BillsManagementPage() {
     if (!formData.dueDate)  { showError('Due date is required');   return; }
     setLoading(true);
     try {
-      const url    = editMode ? `${API_BASE_URL}/api/bills/${selectedBill.id}` : `${API_BASE_URL}/api/bills`;
+      const url    = editMode ? `${API_BASE_URL}/bills/${selectedBill.id}` : `${API_BASE_URL}/bills`;
       const method = editMode ? 'PUT' : 'POST';
       const res = await fetch(url, {
         credentials: 'include', method,
@@ -353,7 +353,7 @@ export default function BillsManagementPage() {
     if (!confirmed) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/bills/${bill.id}`,
+      const res = await fetch(`${API_BASE_URL}/bills/${bill.id}`,
         { credentials: 'include', method: 'DELETE', headers: getAuthHeaders() });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message); }
       showSuccess('Bill deleted successfully!'); fetchBills(); fetchStats();

@@ -88,7 +88,7 @@ const ProjectDashboard = () => {
    */
   const fetchProjectDetails = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/projects/${projectId}`, {
+      const response = await fetch(`${API_BASE_URL}/projects/${projectId}`, {
         credentials: "include",
         headers: getAuthHeaders()
       });
@@ -120,7 +120,7 @@ const ProjectDashboard = () => {
         size: 1000
       });
       const poResponse = await fetch(
-        `${API_BASE_URL}/api/purchase-orders?${poParams}`,
+        `${API_BASE_URL}/purchase-orders?${poParams}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
       
@@ -130,7 +130,7 @@ const ProjectDashboard = () => {
         size: 1000
       });
       const quotationResponse = await fetch(
-        `${API_BASE_URL}/api/quotations?${quotationParams}`,
+        `${API_BASE_URL}/quotations?${quotationParams}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
 
@@ -140,7 +140,7 @@ const ProjectDashboard = () => {
         size: 1000
       });
       const vendorResponse = await fetch(
-        `${API_BASE_URL}/api/vendors?${vendorParams}`,
+        `${API_BASE_URL}/vendors?${vendorParams}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
 
@@ -326,7 +326,7 @@ const ProjectDashboard = () => {
         sortDirection: 'DESC'
       });
       const poResponse = await fetch(
-        `${API_BASE_URL}/api/purchase-orders?${poParams}`,
+        `${API_BASE_URL}/purchase-orders?${poParams}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
       
@@ -353,7 +353,7 @@ const ProjectDashboard = () => {
         sortDirection: 'DESC'
       });
       const quotationResponse = await fetch(
-        `${API_BASE_URL}/api/quotations?${quotationParams}`,
+        `${API_BASE_URL}/quotations?${quotationParams}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
       
@@ -397,7 +397,7 @@ const ProjectDashboard = () => {
       });
       
       const response = await fetch(
-        `${API_BASE_URL}/api/vendors?${params}`,
+        `${API_BASE_URL}/vendors?${params}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
 
@@ -424,7 +424,7 @@ const ProjectDashboard = () => {
       });
       
       const response = await fetch(
-        `${API_BASE_URL}/api/purchase-orders?${params}`,
+        `${API_BASE_URL}/purchase-orders?${params}`,
         { credentials: "include",headers: getAuthHeaders() }
       );
 

@@ -254,7 +254,7 @@ const ProjectCostExpenseManagement = () => {
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.append('dateTo', filters.dateTo);
 
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to fetch expenses');
@@ -274,7 +274,7 @@ const ProjectCostExpenseManagement = () => {
       if (projectId) params.append('projectId', projectId);
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/stats?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/stats?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (response.ok) setStats(await response.json());
@@ -287,7 +287,7 @@ const ProjectCostExpenseManagement = () => {
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
       if (projectId) params.append('projectId', projectId);
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/advances?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/advances?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (response.ok) { const d = await response.json(); setAdvances(d.content || []); }
@@ -300,7 +300,7 @@ const ProjectCostExpenseManagement = () => {
       if (projectId) params.append('projectId', projectId);
       if (groupName) params.append('groupName', groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/history?${params}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/history?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (response.ok) { const d = await response.json(); setHistory(d.content || []); }
@@ -345,7 +345,7 @@ const ProjectCostExpenseManagement = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses`, {
         method: 'POST', headers: getAuthHeaders(), credentials: 'include',
         body: JSON.stringify({
           groupName: expenseFormData.groupName, subGroupName: expenseFormData.subGroupName,
@@ -378,7 +378,7 @@ const ProjectCostExpenseManagement = () => {
   const handleViewExpense = async (expense) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/${expense.id}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/${expense.id}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to fetch expense details');
@@ -422,7 +422,7 @@ const ProjectCostExpenseManagement = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/${expenseFormData.id}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/${expenseFormData.id}`, {
         method: 'PUT', headers: getAuthHeaders(), credentials: 'include',
         body: JSON.stringify({
           groupName: expenseFormData.groupName, subGroupName: expenseFormData.subGroupName,
@@ -446,7 +446,7 @@ const ProjectCostExpenseManagement = () => {
   const handleStatusChange = async (id, newStatus) => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/${id}/status`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/${id}/status`, {
         method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
         body: JSON.stringify({ status: newStatus }),
       });
@@ -461,7 +461,7 @@ const ProjectCostExpenseManagement = () => {
     if (!window.confirm('Are you sure you want to delete this expense?')) return;
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/${expenseId}`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/${expenseId}`, {
         method: 'DELETE', headers: getAuthHeaders(), credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to delete expense');
@@ -508,7 +508,7 @@ const ProjectCostExpenseManagement = () => {
     }
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/project-expenses/advances`, {
+      const response = await fetch(`${API_BASE_URL}/project-expenses/advances`, {
         method: 'POST', headers: getAuthHeaders(), credentials: 'include',
         body: JSON.stringify({
           ...advanceFormData,
@@ -869,7 +869,7 @@ const ProjectCostExpenseManagement = () => {
                         {adv.status === 'Pending' && (
                           <button className="exp-act-btn ok-btn" title="Approve" onClick={async () => {
                             try {
-                              const r = await fetch(`${API_BASE_URL}/api/project-expenses/advances/${adv.id}/status`,
+                              const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
                                 {
                                   method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
                                   body: JSON.stringify({ status: 'Approved' })
@@ -882,7 +882,7 @@ const ProjectCostExpenseManagement = () => {
                         {adv.status === 'Approved' && (
                           <button className="exp-act-btn ok-btn settle-btn" onClick={async () => {
                             try {
-                              const r = await fetch(`${API_BASE_URL}/api/project-expenses/advances/${adv.id}/status`,
+                              const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
                                 {
                                   method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
                                   body: JSON.stringify({ status: 'Settled' })
