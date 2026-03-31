@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import api from "./../services/leadsapi.js";
 import "../pages-css/TelecallerLeadsPage.css";
 
@@ -27,6 +27,11 @@ export default function TelecallerLeadsPage() {
   const [page,       setPage]       = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [total,      setTotal]      = useState(0);
+  const [pageSize,   setPageSize]   = useState(10);
+  // Refs so fetchLeads always reads current values — no stale closure bugs
+  const pageSizeRef = useRef(10);
+  const filterRef   = useRef("NEW");
+  const pageRef     = useRef(0);
   const [loading,    setLoading]    = useState(false);
   const [search,     setSearch]     = useState("");
 
@@ -44,6 +49,7 @@ export default function TelecallerLeadsPage() {
   const [editForm, setEditForm] = useState({
     name: "", email: "", phone: "", source: "",
     priority: "", enquiry: "", state: "", district: "", city: "", pincode: "",
+    subsidyRequired: "",
   });
   const [editSaving, setEditSaving] = useState(false);
 
@@ -55,24 +61,30 @@ export default function TelecallerLeadsPage() {
   const [intAddons,       setIntAddons]       = useState("");
   const [intOtherComment, setIntOtherComment] = useState("");
 
-  // ── Fetch ────────────────────────────────────────────────────────────────
-  const fetchLeads = useCallback(async (p = 0, statusFilter = filter) => {
+  // ── Fetch — always reads from refs so no stale closure ever ────────────
+  const fetchLeads = useCallback(async (p, statusFilter, size) => {
+    // Resolve arguments — fall back to current refs if not provided
+    const resolvedPage   = p            !== undefined ? p            : pageRef.current;
+    const resolvedFilter = statusFilter !== undefined ? statusFilter : filterRef.current;
+    const resolvedSize   = size         !== undefined ? size         : pageSizeRef.current;
+
     setLoading(true);
     try {
-      const params = { page: p, size: 20, telecallerStatus: statusFilter };
+      const params = { page: resolvedPage, size: resolvedSize, telecallerStatus: resolvedFilter };
       const data = await api.get("/telecaller/my-leads", { params });
       if (data.success) {
         setLeads(data.data);
         setTotalPages(data.totalPages);
         setTotal(data.count);
-        setPage(p);
+        setPage(resolvedPage);
+        pageRef.current = resolvedPage;
       }
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showToast("Failed to load leads", "error");
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, []); // no deps — reads from refs
 
   const fetchStats = useCallback(async () => {
     try {
@@ -81,9 +93,23 @@ export default function TelecallerLeadsPage() {
     } catch {}
   }, []);
 
-  useEffect(() => { fetchLeads(0, "NEW"); fetchStats(); }, []);
+  useEffect(() => { fetchLeads(0, "NEW", 10); fetchStats(); }, []);
 
-  const applyFilter = (f) => { setFilter(f); fetchLeads(0, f); };
+  const applyFilter = (f) => {
+    setFilter(f);
+    filterRef.current = f;
+    setPage(0);
+    pageRef.current = 0;
+    fetchLeads(0, f, pageSizeRef.current);
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    pageSizeRef.current = newSize;
+    setPage(0);
+    pageRef.current = 0;
+    fetchLeads(0, filterRef.current, newSize);
+  };
 
   const visible = leads.filter(l =>
     !search || [l.name, l.email, l.phone, l.leadCode]
@@ -140,7 +166,7 @@ export default function TelecallerLeadsPage() {
       });
       showToast("Status updated!", "success");
       setStatusModal(false);
-      fetchLeads(page);
+      fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current);
       fetchStats();
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Update failed", "error");
@@ -157,16 +183,17 @@ export default function TelecallerLeadsPage() {
     }
     setSelected(lead);
     setEditForm({
-      name:     lead.name     || "",
-      email:    lead.email    || "",
-      phone:    lead.phone    || "",
-      source:   lead.source   || "",
-      priority: lead.priority || "Medium",
-      enquiry:  lead.enquiry  || "",
-      state:    lead.state    || "",
-      district: lead.district || "",
-      city:     lead.city     || "",
-      pincode:  lead.pincode  || "",
+      name:            lead.name            || "",
+      email:           lead.email           || "",
+      phone:           lead.phone           || "",
+      source:          lead.source          || "",
+      priority:        lead.priority        || "Medium",
+      enquiry:         lead.enquiry         || "",
+      state:           lead.state           || "",
+      district:        lead.district        || "",
+      city:            lead.city            || "",
+      pincode:         lead.pincode         || "",
+      subsidyRequired: lead.subsidyRequired || "",
     });
     setEditModal(true);
   };
@@ -184,7 +211,7 @@ export default function TelecallerLeadsPage() {
         setEditModal(false);
         // Update the selected lead if detail modal is also open
         if (modalOpen) setSelected(resp.data);
-        fetchLeads(page);
+        fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current);
       }
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showToast(e.message || "Update failed", "error");
@@ -280,13 +307,61 @@ export default function TelecallerLeadsPage() {
         </div>
       )}
 
-      {totalPages > 1 && (
-        <div className="tc-pagination">
-          <button disabled={page === 0}             onClick={() => fetchLeads(page - 1)}>← Prev</button>
-          <span>Page {page + 1} of {totalPages}</span>
-          <button disabled={page >= totalPages - 1} onClick={() => fetchLeads(page + 1)}>Next →</button>
+      {/* ── Pagination ── */}
+      <div className="tc-pagination-bar">
+        {/* Rows per page */}
+        <div className="tc-pagination-size">
+          <span>Rows per page:</span>
+          <select value={pageSize} onChange={e => handlePageSizeChange(Number(e.target.value))}>
+            {[10, 20, 50, 100, 200].map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
         </div>
-      )}
+
+        {/* Record count */}
+        <div className="tc-pagination-info">
+          {total === 0 ? "No leads" : (
+            <>
+              Showing <strong>{page * pageSize + 1}–{Math.min((page + 1) * pageSize, total)}</strong> of <strong>{total}</strong> leads
+            </>
+          )}
+        </div>
+
+        {/* Page controls */}
+        <div className="tc-pagination-controls">
+          <button className="tc-page-btn" onClick={() => fetchLeads(0, filterRef.current, pageSizeRef.current)}
+            disabled={page === 0} title="First page">«</button>
+          <button className="tc-page-btn" onClick={() => fetchLeads(page - 1, filterRef.current, pageSizeRef.current)}
+            disabled={page === 0} title="Previous page">‹</button>
+
+          {/* Page number pills */}
+          {Array.from({ length: totalPages }, (_, i) => i)
+            .filter(i => i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 2)
+            .reduce((acc, i, idx, arr) => {
+              if (idx > 0 && i - arr[idx - 1] > 1) acc.push("...");
+              acc.push(i);
+              return acc;
+            }, [])
+            .map((item, idx) =>
+              item === "..." ? (
+                <span key={"ellipsis-" + idx} className="tc-page-ellipsis">…</span>
+              ) : (
+                <button key={item}
+                  className={`tc-page-btn tc-page-num ${item === page ? "tc-page-num--active" : ""}`}
+                  onClick={() => fetchLeads(item, filterRef.current, pageSizeRef.current)}>
+                  {item + 1}
+                </button>
+              )
+            )
+          }
+
+          <button className="tc-page-btn" onClick={() => fetchLeads(page + 1, filterRef.current, pageSizeRef.current)}
+            disabled={page >= totalPages - 1} title="Next page">›</button>
+          <button className="tc-page-btn" onClick={() => fetchLeads(totalPages - 1, filterRef.current, pageSizeRef.current)}
+            disabled={page >= totalPages - 1} title="Last page">»</button>
+        </div>
+      </div>
 
       {/* ── Detail Modal ── */}
       {modalOpen && selected && (
@@ -484,6 +559,32 @@ export default function TelecallerLeadsPage() {
                   value={editForm.enquiry}
                   onChange={e => setEditForm(f => ({ ...f, enquiry: e.target.value }))} />
               </div>
+
+              {/* Subsidy toggle — only shown when scheme is PM Surya Ghar */}
+              {selected?.solarScheme === "PM_Surya_Ghar" && (
+                <div className="tc-edit-field tc-edit-field--full tc-subsidy-field">
+                  <label>Subsidy Required?</label>
+                  <div className="tc-subsidy-toggle">
+                    {["Yes", "No"].map(opt => (
+                      <button key={opt} type="button"
+                        className={`tc-subsidy-btn ${editForm.subsidyRequired === opt ? "active active--" + opt.toLowerCase() : ""}`}
+                        onClick={() => setEditForm(f => ({
+                          ...f,
+                          subsidyRequired: f.subsidyRequired === opt ? "" : opt
+                        }))}>
+                        {opt === "Yes" ? "✅ Yes, wants subsidy" : "❌ No subsidy needed"}
+                      </button>
+                    ))}
+                  </div>
+                  {editForm.subsidyRequired && (
+                    <span className="tc-subsidy-hint">
+                      {editForm.subsidyRequired === "Yes"
+                        ? "Customer is eligible and wants the PM Surya Ghar subsidy."
+                        : "Customer does not require the subsidy."}
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="tc-edit-note">
                 ℹ️ Group, Category, and Solar Scheme are managed by the admin and cannot be edited here.

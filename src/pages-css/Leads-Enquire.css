@@ -265,7 +265,31 @@
 .leads-enquiries-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+  min-width: 900px;
 }
+
+/* ── Per-column fixed widths — header and data cells stay aligned ─────────── */
+.leads-enquiries-table th:nth-child(1),
+.leads-enquiries-table td:nth-child(1) { width: 18%; text-align: left; }    /* Client Name */
+
+.leads-enquiries-table th:nth-child(2),
+.leads-enquiries-table td:nth-child(2) { width: 18%; text-align: left; }    /* Email */
+
+.leads-enquiries-table th:nth-child(3),
+.leads-enquiries-table td:nth-child(3) { width: 12%; text-align: left; }    /* Phone */
+
+.leads-enquiries-table th:nth-child(4),
+.leads-enquiries-table td:nth-child(4) { width: 10%; text-align: left; }    /* Group */
+
+.leads-enquiries-table th:nth-child(5),
+.leads-enquiries-table td:nth-child(5) { width: 10%; text-align: center; }  /* Priority — badge, center */
+
+.leads-enquiries-table th:nth-child(6),
+.leads-enquiries-table td:nth-child(6) { width: 10%; text-align: center; }  /* Status — badge, center */
+
+.leads-enquiries-table th:nth-child(7),
+.leads-enquiries-table td:nth-child(7) { width: 22%; text-align: center; }  /* Actions */
 
 .leads-enquiries-table thead {
   background-color: #f9fafb;
@@ -275,7 +299,7 @@
 }
 
 .leads-enquiries-table th {
-  padding: 8px 12px;
+  padding: 8px 16px;
   text-align: left;
   font-size: 11px;
   font-weight: 600;
@@ -283,13 +307,32 @@
   text-transform: uppercase;
   letter-spacing: 0.03em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: pointer;
   user-select: none;
+  vertical-align: middle;
 }
 
 .leads-enquiries-table th.actions-column-header {
   text-align: center;
   cursor: default;
+}
+
+/* th-content flex — left aligned by default */
+.leads-enquiries-table th .th-content {
+  justify-content: flex-start;
+}
+
+/* Actions header — center the th-content too */
+.leads-enquiries-table th.actions-column-header .th-content {
+  justify-content: center;
+}
+
+/* Priority & Status header — center th-content */
+.leads-enquiries-table th:nth-child(5) .th-content,
+.leads-enquiries-table th:nth-child(6) .th-content {
+  justify-content: center;
 }
 
 .th-content {
@@ -331,10 +374,14 @@
 }
 
 .leads-enquiries-table td {
-  padding: 8px 12px;
+  padding: 8px 16px;
   font-size: 13px;
   color: #6b7280;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  text-align: left;
 }
 
 .leads-enquiries-font-medium {
@@ -2366,4 +2413,73 @@
   width: 100%;
   box-sizing: border-box;
   white-space: pre-wrap;
+}
+/* ── When optional columns (Source / Assigned To / Created At) are visible,
+   shrink fixed columns proportionally so they still fit ─────────────────── */
+.leads-enquiries-table.cols-8 th:nth-child(1),
+.leads-enquiries-table.cols-8 td:nth-child(1) { width: 14%; }
+.leads-enquiries-table.cols-8 th:nth-child(2),
+.leads-enquiries-table.cols-8 td:nth-child(2) { width: 14%; }
+.leads-enquiries-table.cols-8 th:nth-child(3),
+.leads-enquiries-table.cols-8 td:nth-child(3) { width: 10%; }
+.leads-enquiries-table.cols-8 th:nth-child(4),
+.leads-enquiries-table.cols-8 td:nth-child(4) { width: 8%;  }
+.leads-enquiries-table.cols-8 th:nth-child(5),
+.leads-enquiries-table.cols-8 td:nth-child(5) { width: 8%;  }
+.leads-enquiries-table.cols-8 th:nth-child(6),
+.leads-enquiries-table.cols-8 td:nth-child(6) { width: 9%;  }
+.leads-enquiries-table.cols-8 th:nth-child(7),
+.leads-enquiries-table.cols-8 td:nth-child(7) { width: 9%;  }
+.leads-enquiries-table.cols-8 th:nth-child(8),
+.leads-enquiries-table.cols-8 td:nth-child(8) { width: 10%; text-align: center; }
+
+/* Actions column always last — let it take remaining space */
+.leads-enquiries-table th:last-child,
+.leads-enquiries-table td:last-child {
+  text-align: center;
+  width: auto;
+  min-width: 180px;
+}
+
+/* ── Subsidy Required toggle (main leads edit form) ──────────────────────── */
+.le-subsidy-toggle {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.le-subsidy-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #374151;
+  transition: all .15s;
+  text-align: center;
+}
+.le-subsidy-btn:hover {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+.le-subsidy-btn--yes {
+  background: #ecfdf5;
+  border-color: #059669;
+  color: #065f46;
+}
+.le-subsidy-btn--no {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+.le-subsidy-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #64748b;
+  font-style: italic;
 }

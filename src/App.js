@@ -31,9 +31,7 @@ import Documents from "./Pages/Documents";
 import Profile from "./Pages/Profile";
 import SalesOrder from "./Pages/Sales-Order";
 import PurchaseOrders from './Pages/PurchaseOrders';
-// import BillsRecieved from "./Pages/Bills-Recieved";
 import BillsRecieved from "./Pages/BillsRecieptsPage.js";
-
 import Reports from "./Pages/Reports";
 import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
@@ -42,9 +40,11 @@ import NewRolePermissions from './Pages/NewRolePermissions';
 import Projectdashboard from "./Pages/ProjectDashboard.js";
 import OrderBook from "./Pages/OrderBook.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
-import './App.css';
 import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
+import RoleHierarchyPage from './Pages/RoleHierarchyPage.js';
+import './App.css';
+
 /* ---------------- APP WRAPPER ---------------- */
 
 function AppWrapper() {
@@ -54,16 +54,15 @@ function AppWrapper() {
     location.pathname === '/login' ||
     location.pathname === '/';
 
-  // Render NotFound completely standalone — no Navbar/Sidebar/main wrapper
   if (!hideShell) {
     const knownPaths = [
       '/dashboard', '/sales', '/procurement', '/documents',
-      '/analytics', '/profile', '/reports', '/solarprofile','/follow-ups',
+      '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense','/taskmanagement',
+      '/project-cost-expense', '/taskmanagement',
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
-    if (!isKnown) return <NotFound />;   // ← fullscreen, no shell at all
+    if (!isKnown) return <NotFound />;
   }
 
   return <AppShell hideShell={hideShell} />;
@@ -75,10 +74,8 @@ function AppShell({ hideShell }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [collapsed, setCollapsed]     = useState(true);
 
-  // ── FIX: user may be null before login ───────────────────────────────────
   const { user } = useAuth();
-  const userRole = user?.role || null;   // safely null when not logged in
-  // ─────────────────────────────────────────────────────────────────────────
+  const userRole = user?.role || null;
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebarCollapsed");
@@ -139,7 +136,6 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
           } />
 
-          {/* Leads — telecallers see their own stripped view */}
           <Route path="/sales/leads"
             element={
               <ProtectedRoute>
@@ -170,10 +166,6 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><Procurement /></ProtectedRoute>
           } />
 
-          {/* <Route path="/procurement/quotations" element={
-            <ProtectedRoute><Quatations /></ProtectedRoute>
-          } /> */}
-
           <Route path="/procurement/quotations" element={
             <ProtectedRoute><ProcurementQuatations /></ProtectedRoute>
           } />
@@ -194,10 +186,16 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
           } />
 
+          {/* ── NEW ──────────────────────────────────────────────────────── */}
+          <Route path="/officeuse/role-hierarchy" element={
+            <ProtectedRoute><RoleHierarchyPage /></ProtectedRoute>
+          } />
+          {/* ─────────────────────────────────────────────────────────────── */}
+
           <Route path="/sales/SalesOrder" element={
             <ProtectedRoute><SalesOrder /></ProtectedRoute>
           } />
-           
+
           <Route path="/documents" element={
             <ProtectedRoute><Documents /></ProtectedRoute>
           } />
@@ -217,7 +215,8 @@ function AppShell({ hideShell }) {
           <Route path="/users" element={
             <ProtectedRoute><Users /></ProtectedRoute>
           } />
-           <Route path="/taskmanagement" element={
+
+          <Route path="/taskmanagement" element={
             <ProtectedRoute><TaskManagement /></ProtectedRoute>
           } />
 

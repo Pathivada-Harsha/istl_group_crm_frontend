@@ -199,10 +199,10 @@ export default function Login() {
             </form>
           </div>
 
-          <div className="login-footer-note">
+          {/* <div className="login-footer-note">
             For demo: <strong>AdminSesola</strong> /{" "}
             <strong>Admin@123</strong>
-          </div>
+          </div> */}
         </div>
       </div>
     </div>

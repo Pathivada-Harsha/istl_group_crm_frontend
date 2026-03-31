@@ -1,178 +1,615 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FiEdit, FiTrash2, FiEye, FiEyeOff } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiSearch, FiRefreshCw, FiUsers, FiAlertCircle, FiGrid, FiUserPlus, FiCheckCircle, FiLoader } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/UsersPage.css';
-import CrmPreloader from '../components/preLoader'
+import CrmPreloader from '../components/preLoader';
 
-// Toast Component (embedded)
+const API = process.env.REACT_APP_API_URL;
+
+// ââ Toast âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
   useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, duration);
-
-    return () => clearTimeout(timer);
+    const t = setTimeout(onClose, duration);
+    return () => clearTimeout(t);
   }, [duration, onClose]);
-
-  const getIcon = () => {
-    switch (type) {
-      case 'success':
-        return '✓';
-      case 'error':
-        return '✕';
-      case 'notification':
-        return 'ℹ';
-      default:
-        return 'ℹ';
-    }
-  };
-
+  const icons = { success: '\u2713', error: '\u2713', notification: '\u2713' };
   return (
     <div className={`toast toast-${type}`}>
       <div className="toast-header">
-        <span className="toast-icon">{getIcon()}</span>
+        <span className="toast-icon">{icons[type] || '\u2713'}</span>
         <strong className="toast-title">{type.charAt(0).toUpperCase() + type.slice(1)}</strong>
-        <button className="toast-close" onClick={onClose}>×</button>
+        <button className="toast-close" onClick={onClose}><FiX size={14} /></button>
       </div>
       <div className="toast-body">{message}</div>
     </div>
   );
 };
 
-// ConfirmModal Component (embedded)
-const ConfirmModal = ({
-  isOpen,
-  onClose,
-  onConfirm,
-  title = "Confirm Action",
-  message = "Are you sure you want to proceed?",
-  confirmText = "Confirm",
-  cancelText = "Cancel",
-  type = "danger"
-}) => {
+// ââ Confirm Modal âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const ConfirmModal = ({ isOpen, onClose, onConfirm, title = "Confirm Action",
+  message = "Are you sure?", confirmText = "Confirm", cancelText = "Cancel", type = "danger" }) => {
   if (!isOpen) return null;
-
-  const getIcon = () => {
-    switch (type) {
-      case 'danger':
-        return '!';
-      case 'warning':
-        return '⚠';
-      case 'info':
-        return 'i';
-      default:
-        return '!';
-    }
-  };
-
+  const icons = { danger: '!', warning: '\u2713', info: 'i' };
   return (
     <div className="confirm-modal-overlay">
       <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
-        <div className={`confirm-modal-icon confirm-modal-icon-${type}`}>
-          <span>{getIcon()}</span>
-        </div>
-
+        <div className={`confirm-modal-icon confirm-modal-icon-${type}`}><span>{icons[type] || '!'}</span></div>
         <h2 className="confirm-modal-title">{title}</h2>
-
         <p className="confirm-modal-message">{message}</p>
         <p className="confirm-modal-warning">This action cannot be undone.</p>
-
         <div className="confirm-modal-actions">
-          <button
-            className="confirm-modal-btn confirm-modal-btn-cancel"
-            onClick={onClose}
-          >
-            {cancelText}
-          </button>
-          <button
-            className={`confirm-modal-btn confirm-modal-btn-confirm confirm-modal-btn-${type}`}
-            onClick={onConfirm}
-          >
-            {confirmText}
-          </button>
+          <button className="confirm-modal-btn confirm-modal-btn-cancel" onClick={onClose}>{cancelText}</button>
+          <button className={`confirm-modal-btn confirm-modal-btn-confirm confirm-modal-btn-${type}`} onClick={onConfirm}>{confirmText}</button>
         </div>
       </div>
     </div>
   );
 };
 
+// ââ Hierarchy Chart Component âââââââââââââââââââââââââââââââââââââââââââââââââ
+// ââ Role palette âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const ROLE_STYLE = {
+  SUPERADMIN:    { bg: '#f5f3ff', border: '#7c3aed', text: '#5b21b6', badge: '#7c3aed' },
+  ADMIN:         { bg: '#eff6ff', border: '#3b82f6', text: '#1e40af', badge: '#3b82f6' },
+  BD_MANAGER:    { bg: '#ecfdf5', border: '#10b981', text: '#065f46', badge: '#10b981' },
+  SALES_MANAGER: { bg: '#ecfdf5', border: '#10b981', text: '#065f46', badge: '#10b981' },
+  BD_EXECUTIVE:  { bg: '#fffbeb', border: '#f59e0b', text: '#92400e', badge: '#f59e0b' },
+  SALES_EXEC:    { bg: '#fffbeb', border: '#f59e0b', text: '#92400e', badge: '#f59e0b' },
+  TELECALLER:    { bg: '#f8fafc', border: '#94a3b8', text: '#334155', badge: '#94a3b8' },
+};
+const ROLE_ORDER = ['SUPERADMIN','ADMIN','BD_MANAGER','SALES_MANAGER','BD_EXECUTIVE','SALES_EXEC','TELECALLER'];
+
+function getRoleStyle(role) {
+  const key = (role || '').toUpperCase().replace(/\s+/g,'_');
+  return ROLE_STYLE[key] || { bg: '#f8fafc', border: '#94a3b8', text: '#334155', badge: '#94a3b8' };
+}
+
+// ââ Tree node card ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+function TreeNode({ node, isLast, isRoot }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const hasChildren = node.children && node.children.length > 0;
+  const s = getRoleStyle(node.role_name);
+  const name = node.full_name || node.username || '?';
+  const initial = name.charAt(0).toUpperCase();
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+
+      {/* ââ Card âââââââââââââââââââââââââââââââââââââââââââ */}
+      <div
+        onClick={() => hasChildren && setCollapsed(c => !c)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 10,
+          background: s.bg,
+          border: `2px solid ${s.border}`,
+          borderRadius: 12,
+          padding: '10px 16px',
+          minWidth: 180, maxWidth: 220,
+          cursor: hasChildren ? 'pointer' : 'default',
+          boxShadow: isRoot
+            ? `0 4px 14px ${s.border}30`
+            : '0 2px 8px rgba(0,0,0,0.08)',
+          transition: 'box-shadow 0.2s, transform 0.15s',
+          position: 'relative',
+          userSelect: 'none',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 18px ${s.border}35`; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = isRoot ? `0 4px 14px ${s.border}30` : '0 2px 8px rgba(0,0,0,0.08)'; }}
+      >
+        {/* Avatar */}
+        <div style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: s.badge, color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 14, fontWeight: 800, flexShrink: 0,
+          boxShadow: `0 2px 6px ${s.badge}55`,
+        }}>
+          {initial}
+        </div>
+
+        {/* Info */}
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {name}
+          </div>
+          {/* FIX #7: show designation if set, else fall back to role_name */}
+          <div style={{ fontSize: 10, fontWeight: 600, color: s.text, marginTop: 1, letterSpacing: '0.03em' }}>
+            {node.designation || node.role_name}
+          </div>
+          {node.designation && (
+            <div style={{ fontSize: 9, color: s.text, opacity: 0.7, marginTop: 1 }}>
+              {node.role_name}
+            </div>
+          )}
+          {node.team && (
+            <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span style={{fontSize:9,color:"#94a3b8"}}>&#9632;</span>{node.team}
+            </div>
+          )}
+        </div>
+
+        {/* Collapse toggle */}
+        {hasChildren && (
+          <div style={{
+            width: 18, height: 18, borderRadius: '50%',
+            background: s.border, color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 10, fontWeight: 700, flexShrink: 0,
+          }}>
+            {collapsed ? '+' : '\u2713'}
+          </div>
+        )}
+      </div>
+
+      {/* ââ Children âââââââââââââââââââââââââââââââââââââââ */}
+      {hasChildren && !collapsed && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          {/* stem down from parent */}
+          <div style={{ width: 2, height: 28, background: '#cbd5e1' }} />
+
+          {/* horizontal branch */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative' }}>
+            {node.children.map((child, idx) => {
+              const isFirst = idx === 0;
+              const isLastChild = idx === node.children.length - 1;
+              const single = node.children.length === 1;
+              return (
+                <div key={child.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+                  {/* horizontal arm */}
+                  {!single && (
+                    <div style={{
+                      position: 'absolute', top: 0,
+                      left: isFirst ? '50%' : 0,
+                      right: isLastChild ? '50%' : 0,
+                      height: 2, background: '#cbd5e1',
+                    }} />
+                  )}
+                  {/* vertical stem down to child */}
+                  <div style={{ width: 2, height: 24, background: '#cbd5e1' }} />
+                  <div style={{ paddingLeft: 12, paddingRight: 12 }}>
+                    <TreeNode node={child} isRoot={false} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ââ Main HierarchyChart âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// ── Teams View for Hierarchy ─────────────────────────────────────────────────
+function TeamsView({ teams }) {
+  if (!teams || teams.length === 0) {
+    return (
+      <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>
+        <FiUsers size={48} style={{margin:'0 auto 12px',display:'block',color:'#cbd5e1'}} />
+        <div style={{ fontWeight:600, color:'#374151' }}>No teams found</div>
+        <div style={{ fontSize:13, marginTop:4 }}>Go to Teams tab to create teams first</div>
+      </div>
+    );
+  }
+  const teamColors = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6'];
+  return (
+    <div style={{ padding:'32px 24px 40px', overflowX:'auto' }}>
+      <div style={{ display:'flex', gap:40, flexWrap:'wrap', justifyContent:'center', minWidth:'max-content' }}>
+        {teams.map((team, idx) => {
+          const color = teamColors[idx % teamColors.length];
+          const members = team.members || [];
+          return (
+            <div key={team.id} style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+              {/* Team bubble */}
+              <div style={{
+                background:`${color}15`, border:`2px solid ${color}`,
+                borderRadius:14, padding:'14px 20px', textAlign:'center',
+                boxShadow:`0 3px 12px ${color}25`, minWidth:160,
+              }}>
+                <div style={{ width:40, height:40, borderRadius:'50%', background:color, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 8px', fontWeight:800, fontSize:16 }}>
+                  {team.name.charAt(0).toUpperCase()}
+                </div>
+                <div style={{ fontWeight:700, fontSize:14, color:'#0f172a' }}>{team.name}</div>
+                <div style={{ fontSize:11, color:color, fontWeight:600, marginTop:3 }}>{members.length} member{members.length !== 1 ? 's' : ''}</div>
+                {team.description && <div style={{ fontSize:10, color:'#94a3b8', marginTop:4, maxWidth:140 }}>{team.description}</div>}
+              </div>
+              {/* Connector line */}
+              {members.length > 0 && <div style={{ width:2, height:20, background:'#cbd5e1' }} />}
+              {/* Members */}
+              {members.length > 0 && (
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'center', maxWidth:320 }}>
+                  {members.map(m => (
+                    <div key={m.id} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
+                      <div style={{ width:36, height:36, borderRadius:'50%', background:`hsl(${(m.id*47)%360},55%,62%)`, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, boxShadow:'0 2px 6px rgba(0,0,0,0.12)', border:'2px solid #fff' }}>
+                        {(m.name||'?').charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ fontSize:10, fontWeight:600, color:'#374151', textAlign:'center', maxWidth:64, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.name}</div>
+                      <div style={{ fontSize:9, color:color, fontWeight:500, textAlign:'center', maxWidth:64, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.role}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {/* Legend */}
+      <div style={{ marginTop:24, display:'flex', flexWrap:'wrap', gap:8, padding:'10px 14px', background:'#fff', border:'1px solid #e2e8f0', borderRadius:10 }}>
+        <span style={{ fontSize:11, color:'#94a3b8', fontWeight:600, marginRight:4, alignSelf:'center' }}>TEAMS</span>
+        {teams.map((team, idx) => {
+          const color = teamColors[idx % teamColors.length];
+          return (
+            <div key={team.id} style={{ display:'flex', alignItems:'center', gap:5, padding:'3px 10px', borderRadius:99, background:`${color}10`, border:`1.5px solid ${color}40` }}>
+              <div style={{ width:7, height:7, borderRadius:'50%', background:color }} />
+              <span style={{ fontSize:11, fontWeight:600, color:color }}>{team.name}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── HierarchySection (wraps Org Chart + Teams View with toggle) ───────────────
+function HierarchySection({ users, teams, loading, onRefresh }) {
+  const [viewMode, setViewMode] = React.useState('org');
+
+  React.useEffect(() => {
+    if (users.length === 0 && !loading) onRefresh();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div>
+      {/* Toggle + Refresh */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+        <div style={{ display:'flex', gap:2, background:'#f1f5f9', borderRadius:8, padding:3 }}>
+          {[
+            { key:'org', label:'Org Chart', icon:<FiGrid size={14} /> },
+            { key:'teams', label:'Teams View', icon:<FiUsers size={14} /> },
+          ].map(btn => (
+            <button key={btn.key} onClick={() => setViewMode(btn.key)}
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 16px', borderRadius:6, border:'none', cursor:'pointer', fontSize:13, fontWeight:600, transition:'all 0.15s',
+                background: viewMode === btn.key ? '#fff' : 'transparent',
+                color: viewMode === btn.key ? '#4f46e5' : '#6b7280',
+                boxShadow: viewMode === btn.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+              }}>
+              {btn.icon}
+              {btn.label}
+            </button>
+          ))}
+        </div>
+        <button onClick={onRefresh}
+          style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, padding:'6px 14px', borderRadius:8, border:'1px solid #e2e8f0', background:'#fff', cursor:'pointer', color:'#374151', fontWeight:500 }}>
+          <FiRefreshCw size={13} />
+          Refresh
+        </button>
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>
+          <div style={{ width:32, height:32, border:'3px solid #e2e8f0', borderTopColor:'#6366f1', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 12px' }} />
+          Loading...
+        </div>
+      ) : viewMode === 'org' ? (
+        <HierarchyChart users={users} />
+      ) : (
+        <div style={{ background:'linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)', borderRadius:16, border:'1px solid #e2e8f0', minHeight:200 }}>
+          <TeamsView teams={teams} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HierarchyChart({ users }) {
+
+  // ââ Build tree from managerId, fallback to role-level grouping ââââââââââââ
+  const buildTree = () => {
+    if (!users || users.length === 0) return [];
+    const map = {};
+    users.forEach(u => { map[u.id] = { ...u, children: [] }; });
+
+    // Check if any manager relationships exist
+    const hasManagerLinks = users.some(u => u.managerId && map[u.managerId]);
+
+    if (hasManagerLinks) {
+      // Real org-chart from managerId
+      const roots = [];
+      users.forEach(u => {
+        if (u.managerId && map[u.managerId]) {
+          map[u.managerId].children.push(map[u.id]);
+        } else {
+          roots.push(map[u.id]);
+        }
+      });
+      // Sort children by role order
+      const sortNode = n => {
+        n.children.sort((a, b) => {
+          const ai = ROLE_ORDER.indexOf((a.role_name||'').toUpperCase());
+          const bi = ROLE_ORDER.indexOf((b.role_name||'').toUpperCase());
+          return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+        });
+        n.children.forEach(sortNode);
+      };
+      roots.forEach(sortNode);
+      return roots;
+    }
+
+    // Fallback: build role-level tree (group by role order)
+    // Creates virtual group nodes for each role level
+    const roleGroups = {};
+    ROLE_ORDER.forEach(r => { roleGroups[r] = []; });
+    users.forEach(u => {
+      const key = (u.role_name || '').toUpperCase().replace(/\s+/g,'_');
+      if (roleGroups[key]) roleGroups[key].push(map[u.id]);
+      else {
+        if (!roleGroups['OTHER']) roleGroups['OTHER'] = [];
+        roleGroups['OTHER'].push(map[u.id]);
+      }
+    });
+
+    // Build virtual parent-child by role level
+    const nonEmpty = ROLE_ORDER.filter(r => roleGroups[r].length > 0);
+    if (nonEmpty.length === 0) return Object.values(map);
+
+    // Nest: each level's users become children of the previous level's users
+    // Simple approach: top level = first role group, etc.
+    const buildRoleTree = (levels, idx) => {
+      if (idx >= levels.length) return [];
+      const currentNodes = [...roleGroups[levels[idx]]];
+      const childNodes = buildRoleTree(levels, idx + 1);
+
+      if (childNodes.length === 0) return currentNodes;
+      if (currentNodes.length === 0) return childNodes;
+
+      // Distribute children evenly among parents at this level
+      if (currentNodes.length === 1) {
+        currentNodes[0].children = childNodes;
+      } else {
+        // Assign each child to the parent with matching managerId, else first parent
+        const unassigned = [];
+        childNodes.forEach(child => {
+          const parent = currentNodes.find(p => child.managerId && p.id === child.managerId);
+          if (parent) parent.children.push(child);
+          else unassigned.push(child);
+        });
+        // Spread unassigned evenly
+        unassigned.forEach((child, i) => {
+          currentNodes[i % currentNodes.length].children.push(child);
+        });
+      }
+      return currentNodes;
+    };
+
+    return buildRoleTree(nonEmpty, 0);
+  };
+
+  const tree = buildTree();
+  const hasManagerLinks = users.some(u => u.managerId);
+
+  if (users.length === 0) {
+    return (
+      <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>
+        <FiUsers size={48} style={{margin:'0 auto 12px',display:'block',color:'#cbd5e1'}} />
+        <div style={{ fontSize: 15, fontWeight: 600 }}>No users to display</div>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {/* Info banner when no manager links */}
+      {!hasManagerLinks && (
+        <div style={{
+          background: '#fef9c3', border: '1px solid #fde047', borderRadius: 8,
+          padding: '10px 16px', fontSize: 13, color: '#854d0e',
+          marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <FiAlertCircle size={16} style={{flexShrink:0,color:'#ca8a04'}} />
+          <span>No "Reports To" manager assignments found â showing role-level grouping. Set managers via Edit User to see the real org chart.</span>
+        </div>
+      )}
+
+      {/* Tree */}
+      <div style={{
+        overflowX: 'auto', overflowY: 'visible',
+        padding: '32px 24px 40px',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+        borderRadius: 16, border: '1px solid #e2e8f0',
+        minHeight: 200,
+      }}>
+        <div style={{ display: 'flex', gap: 40, justifyContent: 'center', flexWrap: 'nowrap', minWidth: 'max-content' }}>
+          {tree.map(root => (
+            <TreeNode key={root.id} node={root} isRoot={true} />
+          ))}
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8,
+        padding: '12px 16px', background: '#fff',
+        border: '1px solid #e2e8f0', borderRadius: 10,
+      }}>
+        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>ROLES</span>
+        {ROLE_ORDER.map(role => {
+          const s = ROLE_STYLE[role];
+          const hasUsers = users.some(u => (u.role_name || '').toUpperCase().replace(/\s+/g,'_') === role);
+          if (!hasUsers) return null;
+          return (
+            <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, background: s.bg, border: `1.5px solid ${s.border}` }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.badge }} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: s.text }}>{role}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ââ Main UsersPage âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+const pagePermissionsStructure = [
+  { id: 1, name: 'users.view', description: 'View users', module: 'User Management' },
+  { id: 2, name: 'users.create', description: 'Create new users', module: 'User Management' },
+  { id: 3, name: 'users.edit', description: 'Edit user details', module: 'User Management' },
+  { id: 4, name: 'users.delete', description: 'Delete users', module: 'User Management' },
+  { id: 5, name: 'roles.manage', description: 'Manage roles', module: 'User Management' },
+  { id: 6, name: 'customers.view', description: 'View customers', module: 'Customer Management' },
+  { id: 7, name: 'customers.create', description: 'Create customers', module: 'Customer Management' },
+  { id: 8, name: 'customers.edit', description: 'Edit customers', module: 'Customer Management' },
+  { id: 9, name: 'customers.delete', description: 'Delete customers', module: 'Customer Management' },
+  { id: 10, name: 'vendors.view', description: 'View vendors', module: 'Vendor Management' },
+  { id: 11, name: 'vendors.create', description: 'Create vendors', module: 'Vendor Management' },
+  { id: 12, name: 'vendors.edit', description: 'Edit vendors', module: 'Vendor Management' },
+  { id: 13, name: 'vendors.delete', description: 'Delete vendors', module: 'Vendor Management' },
+  { id: 14, name: 'leads.view', description: 'View leads', module: 'Lead Management' },
+  { id: 15, name: 'leads.create', description: 'Create leads', module: 'Lead Management' },
+  { id: 16, name: 'leads.edit', description: 'Edit leads', module: 'Lead Management' },
+  { id: 17, name: 'leads.delete', description: 'Delete leads', module: 'Lead Management' },
+  { id: 18, name: 'leads.assign', description: 'Assign leads', module: 'Lead Management' },
+  { id: 19, name: 'proposals.view', description: 'View proposals', module: 'Proposal Management' },
+  { id: 20, name: 'proposals.create', description: 'Create proposals', module: 'Proposal Management' },
+  { id: 21, name: 'proposals.edit', description: 'Edit proposals', module: 'Proposal Management' },
+  { id: 22, name: 'proposals.delete', description: 'Delete proposals', module: 'Proposal Management' },
+  { id: 23, name: 'proposals.approve', description: 'Approve proposals', module: 'Proposal Management' },
+  { id: 24, name: 'quotations.sales.view', description: 'View sales quotations', module: 'Sales Quotations' },
+  { id: 25, name: 'quotations.sales.create', description: 'Create sales quotations', module: 'Sales Quotations' },
+  { id: 26, name: 'quotations.sales.edit', description: 'Edit sales quotations', module: 'Sales Quotations' },
+  { id: 27, name: 'quotations.sales.delete', description: 'Delete sales quotations', module: 'Sales Quotations' },
+  { id: 28, name: 'quotations.sales.approve', description: 'Approve sales quotations', module: 'Sales Quotations' },
+  { id: 29, name: 'sales_orders.view', description: 'View sales orders', module: 'Sales Orders' },
+  { id: 30, name: 'sales_orders.create', description: 'Create sales orders', module: 'Sales Orders' },
+  { id: 31, name: 'sales_orders.edit', description: 'Edit sales orders', module: 'Sales Orders' },
+  { id: 32, name: 'sales_orders.delete', description: 'Delete sales orders', module: 'Sales Orders' },
+  { id: 33, name: 'sales_orders.approve', description: 'Approve sales orders', module: 'Sales Orders' },
+  { id: 34, name: 'invoices.view', description: 'View invoices', module: 'Invoices' },
+  { id: 35, name: 'invoices.create', description: 'Create invoices', module: 'Invoices' },
+  { id: 36, name: 'invoices.edit', description: 'Edit invoices', module: 'Invoices' },
+  { id: 37, name: 'invoices.delete', description: 'Delete invoices', module: 'Invoices' },
+  { id: 38, name: 'invoices.send', description: 'Send invoices', module: 'Invoices' },
+  { id: 39, name: 'quotations.procurement.view', description: 'View procurement quotations', module: 'Procurement Quotations' },
+  { id: 40, name: 'quotations.procurement.create', description: 'Create procurement quotations', module: 'Procurement Quotations' },
+  { id: 41, name: 'quotations.procurement.edit', description: 'Edit procurement quotations', module: 'Procurement Quotations' },
+  { id: 42, name: 'quotations.procurement.delete', description: 'Delete procurement quotations', module: 'Procurement Quotations' },
+  { id: 43, name: 'quotations.procurement.approve', description: 'Approve procurement quotations', module: 'Procurement Quotations' },
+  { id: 44, name: 'purchase_orders.view', description: 'View purchase orders', module: 'Purchase Orders' },
+  { id: 45, name: 'purchase_orders.create', description: 'Create purchase orders', module: 'Purchase Orders' },
+  { id: 46, name: 'purchase_orders.edit', description: 'Edit purchase orders', module: 'Purchase Orders' },
+  { id: 47, name: 'purchase_orders.delete', description: 'Delete purchase orders', module: 'Purchase Orders' },
+  { id: 48, name: 'purchase_orders.approve', description: 'Approve purchase orders', module: 'Purchase Orders' },
+  { id: 49, name: 'bills.view', description: 'View bills', module: 'Bills' },
+  { id: 50, name: 'bills.create', description: 'Create bills', module: 'Bills' },
+  { id: 51, name: 'bills.edit', description: 'Edit bills', module: 'Bills' },
+  { id: 52, name: 'bills.delete', description: 'Delete bills', module: 'Bills' },
+  { id: 53, name: 'bills.approve', description: 'Approve bills', module: 'Bills' },
+  { id: 54, name: 'payments.view', description: 'View payments', module: 'Payments' },
+  { id: 55, name: 'payments.record', description: 'Record payments', module: 'Payments' },
+  { id: 56, name: 'payments.approve', description: 'Approve payments', module: 'Payments' },
+  { id: 57, name: 'reports.sales', description: 'View sales reports', module: 'Reports' },
+  { id: 58, name: 'reports.procurement', description: 'View procurement reports', module: 'Reports' },
+  { id: 59, name: 'reports.financial', description: 'View financial reports', module: 'Reports' },
+  { id: 60, name: 'reports.analytics', description: 'View analytics', module: 'Reports' },
+  { id: 61, name: 'followups.view', description: 'View followups', module: 'Followups' },
+  { id: 62, name: 'followups.create', description: 'Create followups', module: 'Followups' },
+  { id: 63, name: 'followups.edit', description: 'Edit followups', module: 'Followups' },
+  { id: 64, name: 'followups.delete', description: 'Delete followups', module: 'Followups' },
+  { id: 65, name: 'settings.view', description: 'View settings', module: 'System' },
+  { id: 66, name: 'settings.edit', description: 'Edit settings', module: 'System' },
+  { id: 67, name: 'activity_logs.view', description: 'View activity logs', module: 'System' },
+  { id: 68, name: 'attachments.upload', description: 'Upload attachments', module: 'System' },
+  { id: 69, name: 'attachments.delete', description: 'Delete attachments', module: 'System' }
+];
+
+const formatDateTime = (dateString) => {
+  const d = new Date(dateString);
+  return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+};
+
+const transformUser = (apiUser) => ({
+  id: apiUser.id,
+  username: apiUser.user_id,
+  email: apiUser.email,
+  full_name: apiUser.name,
+  phone: apiUser.phone,
+  is_active: apiUser.is_active === 1,
+  role_id: apiUser.role,
+  role_name: apiUser.role,
+  // ââ FIX #1: hierarchy + designation fields from API âââââââââââââââââââ
+  managerId: apiUser.managerId || null,
+  managerName: apiUser.managerName || '',
+  team: apiUser.team || '',
+  designation: apiUser.designation || '',
+  // âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+  permission_count: apiUser.pagePermissionsCount || 0,
+  menu_permissions_count: apiUser.menuPermissionsCount || 0,
+  created_at: formatDateTime(apiUser.created_at)
+});
+
 const UsersPage = () => {
-  // State management
-  const [users, setUsers] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [permissions, setPermissions] = useState([]);
-  const [showAddUserModal, setShowAddUserModal] = useState(false);
-  const [showEditUserModal, setShowEditUserModal] = useState(false);
-  const [showMenuPermissionsModal, setShowMenuPermissionsModal] = useState(false);
+  const [activeTab, setActiveTab]           = useState('list');   // 'list' | 'hierarchy'
+  const [users, setUsers]                   = useState([]);
+  const [roles, setRoles]                   = useState([]);
+  const [showAddUserModal, setShowAddUserModal]                   = useState(false);
+  const [showEditUserModal, setShowEditUserModal]                 = useState(false);
+  const [showMenuPermissionsModal, setShowMenuPermissionsModal]   = useState(false);
   const [showEditMenuPermissionsModal, setShowEditMenuPermissionsModal] = useState(false);
-  const [showUserPermissionsModal, setShowUserPermissionsModal] = useState(false);
+  const [showUserPermissionsModal, setShowUserPermissionsModal]   = useState(false);
   const [showEditUserPermissionsModal, setShowEditUserPermissionsModal] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
+  const [selectedUser, setSelectedUser]     = useState(null);
   const [selectedUserMenuPermissions, setSelectedUserMenuPermissions] = useState({});
-  const [selectedUserPermissions, setSelectedUserPermissions] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingText, setLoadingText] = useState('Loading...');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState('all');
+  const [selectedUserPermissions, setSelectedUserPermissions]   = useState([]);
+  const [loading, setLoading]               = useState(false);
+  const [loadingText, setLoadingText]       = useState('Loading...');
+  const [searchTerm, setSearchTerm]         = useState('');
+  const [filterRole, setFilterRole]         = useState('all');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
+  const [userToDelete, setUserToDelete]     = useState(null);
   const { user, pagePermissions, menuPermissions } = useAuth();
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(5);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalElements, setTotalElements] = useState(0);
+  const [currentPage, setCurrentPage]       = useState(1);
+  const [pageSize, setPageSize]             = useState(10);
+  const [totalPages, setTotalPages]         = useState(1);
+  const [totalElements, setTotalElements]   = useState(0);
 
-  // const [view, setView] = useState(pagePermissions.USERS[0] === "VIEW" ? true : false);
-  const [create, setCreate] = useState(pagePermissions.USERS[1] === "CREATE" ? true : false);
-  const [edit, setEdit] = useState(pagePermissions.USERS[2] === "EDIT" ? true : false);
-  const [deletee, setDeletee] = useState(pagePermissions.USERS[3] === "DELETE" ? true : false);
+  const [create]  = useState(pagePermissions.USERS[1] === "CREATE");
+  const [edit]    = useState(pagePermissions.USERS[2] === "EDIT");
+  const [deletee] = useState(pagePermissions.USERS[3] === "DELETE");
 
-  // Debounce reference for search
   const searchDebounceTimer = useRef(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [isSearching, setIsSearching]       = useState(false);
 
-  // New User Form State
   const [newUser, setNewUser] = useState({
-    user_id: '',
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    phone: '',
-    role: '',
-    is_active: true
+    user_id: '', name: '', email: '', password: '', confirmPassword: '',
+    phone: '', role: '', managerId: '', team: '', designation: '', is_active: true
   });
-  const [userIdValidation, setUserIdValidation] = useState({
-    checking: false,
-    isValid: null,
-    message: ''
-  });
-  const [passwordMatch, setPasswordMatch] = useState({
-    isValid: null,
-    message: ''
-  });
-  const [phoneValidation, setPhoneValidation] = useState({
-    isValid: null,
-    message: ''
-  });
-  const [passwordStrength, setPasswordStrength] = useState({
-    isValid: null,
-    message: ''
-  });
-  const [showPassword, setShowPassword] = useState(false);
+  const [userIdValidation, setUserIdValidation] = useState({ checking: false, isValid: null, message: '' });
+  const [passwordMatch, setPasswordMatch]       = useState({ isValid: null, message: '' });
+  const [phoneValidation, setPhoneValidation]   = useState({ isValid: null, message: '' });
+  const [phoneTouched, setPhoneTouched]         = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState({ isValid: null, message: '' });
+  const [showPassword, setShowPassword]         = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Toast notifications
-  const [toasts, setToasts] = useState([]);
-
-  // Statistics from current users data
-  const [totalUsers, setTotalUsers] = useState(0);
+  const [toasts, setToasts]   = useState([]);
+  const [totalUsers, setTotalUsers]   = useState(0);
   const [activeUsers, setActiveUsers] = useState(0);
   const [inactiveUsers, setInactiveUsers] = useState(0);
+  // Full list for hierarchy chart (pagination-free)
+  const [allUsersForHierarchy, setAllUsersForHierarchy] = useState([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  // Full list for team member picker (pagination-free, all users regardless of role/page)
+  const [allUsersForTeams, setAllUsersForTeams] = useState([]);
+  const [allUsersForTeamsLoading, setAllUsersForTeamsLoading] = useState(false);
+  // FIX #6: teams state
+  const [teams, setTeams] = useState([]);
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [showEditTeamModal, setShowEditTeamModal] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState(null);
+  const [teamForm, setTeamForm] = useState({ name: '', description: '', memberIds: [] });
+  const [teamsLoading, setTeamsLoading] = useState(false);
 
-  // Menu permissions list structure - matches database columns (15 permissions)
+  // ââ Permissions lists (unchanged from original) âââââââââââââââââââââââââââ
   const menuPermissionsList = [
     { id: 'dashboard', name: 'Dashboard', dbField: 'dashboard', backendKey: 'DASHBOARD' },
     { id: 'analytics', name: 'Analytics', dbField: 'analytics', backendKey: 'ANALYTICS' },
@@ -193,971 +630,426 @@ const UsersPage = () => {
     { id: 'project_dashboard', name: 'Project Dashboard', dbField: 'project_dashboard', backendKey: 'PROJECT_DASHBOARD' }
   ];
 
-  // Filter menu permissions based on logged-in user's access
   const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions)
-    ? menuPermissionsList.filter(menu => menuPermissions.includes(menu.backendKey))
+    ? menuPermissionsList.filter(m => menuPermissions.includes(m.backendKey))
     : menuPermissionsList;
 
-  // Page permissions structure - matches your database exactly
-  const pagePermissionsStructure = [
-    { id: 1, name: 'users.view', description: 'View users', module: 'User Management' },
-    { id: 2, name: 'users.create', description: 'Create new users', module: 'User Management' },
-    { id: 3, name: 'users.edit', description: 'Edit user details', module: 'User Management' },
-    { id: 4, name: 'users.delete', description: 'Delete users', module: 'User Management' },
-    { id: 5, name: 'roles.manage', description: 'Manage roles and permissions', module: 'User Management' },
-    { id: 6, name: 'customers.view', description: 'View customers', module: 'Customer Management' },
-    { id: 7, name: 'customers.create', description: 'Create customers', module: 'Customer Management' },
-    { id: 8, name: 'customers.edit', description: 'Edit customer details', module: 'Customer Management' },
-    { id: 9, name: 'customers.delete', description: 'Delete customers', module: 'Customer Management' },
-    { id: 10, name: 'vendors.view', description: 'View vendors', module: 'Vendor Management' },
-    { id: 11, name: 'vendors.create', description: 'Create vendors', module: 'Vendor Management' },
-    { id: 12, name: 'vendors.edit', description: 'Edit vendor details', module: 'Vendor Management' },
-    { id: 13, name: 'vendors.delete', description: 'Delete vendors', module: 'Vendor Management' },
-    { id: 14, name: 'leads.view', description: 'View leads', module: 'Lead Management' },
-    { id: 15, name: 'leads.create', description: 'Create leads', module: 'Lead Management' },
-    { id: 16, name: 'leads.edit', description: 'Edit leads', module: 'Lead Management' },
-    { id: 17, name: 'leads.delete', description: 'Delete leads', module: 'Lead Management' },
-    { id: 18, name: 'leads.assign', description: 'Assign leads to team members', module: 'Lead Management' },
-    { id: 19, name: 'proposals.view', description: 'View proposals', module: 'Proposal Management' },
-    { id: 20, name: 'proposals.create', description: 'Create proposals', module: 'Proposal Management' },
-    { id: 21, name: 'proposals.edit', description: 'Edit proposals', module: 'Proposal Management' },
-    { id: 22, name: 'proposals.delete', description: 'Delete proposals', module: 'Proposal Management' },
-    { id: 23, name: 'proposals.approve', description: 'Approve proposals', module: 'Proposal Management' },
-    { id: 24, name: 'quotations.sales.view', description: 'View sales quotations', module: 'Sales Quotations' },
-    { id: 25, name: 'quotations.sales.create', description: 'Create sales quotations', module: 'Sales Quotations' },
-    { id: 26, name: 'quotations.sales.edit', description: 'Edit sales quotations', module: 'Sales Quotations' },
-    { id: 27, name: 'quotations.sales.delete', description: 'Delete sales quotations', module: 'Sales Quotations' },
-    { id: 28, name: 'quotations.sales.approve', description: 'Approve sales quotations', module: 'Sales Quotations' },
-    { id: 29, name: 'sales_orders.view', description: 'View sales orders', module: 'Sales Orders' },
-    { id: 30, name: 'sales_orders.create', description: 'Create sales orders', module: 'Sales Orders' },
-    { id: 31, name: 'sales_orders.edit', description: 'Edit sales orders', module: 'Sales Orders' },
-    { id: 32, name: 'sales_orders.delete', description: 'Delete sales orders', module: 'Sales Orders' },
-    { id: 33, name: 'sales_orders.approve', description: 'Approve sales orders', module: 'Sales Orders' },
-    { id: 34, name: 'invoices.view', description: 'View invoices', module: 'Invoices' },
-    { id: 35, name: 'invoices.create', description: 'Create invoices', module: 'Invoices' },
-    { id: 36, name: 'invoices.edit', description: 'Edit invoices', module: 'Invoices' },
-    { id: 37, name: 'invoices.delete', description: 'Delete invoices', module: 'Invoices' },
-    { id: 38, name: 'invoices.send', description: 'Send invoices to customers', module: 'Invoices' },
-    { id: 39, name: 'quotations.procurement.view', description: 'View procurement quotations', module: 'Procurement Quotations' },
-    { id: 40, name: 'quotations.procurement.create', description: 'Create procurement quotations', module: 'Procurement Quotations' },
-    { id: 41, name: 'quotations.procurement.edit', description: 'Edit procurement quotations', module: 'Procurement Quotations' },
-    { id: 42, name: 'quotations.procurement.delete', description: 'Delete procurement quotations', module: 'Procurement Quotations' },
-    { id: 43, name: 'quotations.procurement.approve', description: 'Approve procurement quotations', module: 'Procurement Quotations' },
-    { id: 44, name: 'purchase_orders.view', description: 'View purchase orders', module: 'Purchase Orders' },
-    { id: 45, name: 'purchase_orders.create', description: 'Create purchase orders', module: 'Purchase Orders' },
-    { id: 46, name: 'purchase_orders.edit', description: 'Edit purchase orders', module: 'Purchase Orders' },
-    { id: 47, name: 'purchase_orders.delete', description: 'Delete purchase orders', module: 'Purchase Orders' },
-    { id: 48, name: 'purchase_orders.approve', description: 'Approve purchase orders', module: 'Purchase Orders' },
-    { id: 49, name: 'bills.view', description: 'View bills', module: 'Bills' },
-    { id: 50, name: 'bills.create', description: 'Create/upload bills', module: 'Bills' },
-    { id: 51, name: 'bills.edit', description: 'Edit bills', module: 'Bills' },
-    { id: 52, name: 'bills.delete', description: 'Delete bills', module: 'Bills' },
-    { id: 53, name: 'bills.approve', description: 'Approve bills for payment', module: 'Bills' },
-    { id: 54, name: 'payments.view', description: 'View payments', module: 'Payments' },
-    { id: 55, name: 'payments.record', description: 'Record payments', module: 'Payments' },
-    { id: 56, name: 'payments.approve', description: 'Approve payments', module: 'Payments' },
-    { id: 57, name: 'reports.sales', description: 'View sales reports', module: 'Reports' },
-    { id: 58, name: 'reports.procurement', description: 'View procurement reports', module: 'Reports' },
-    { id: 59, name: 'reports.financial', description: 'View financial reports', module: 'Reports' },
-    { id: 60, name: 'reports.analytics', description: 'View analytics dashboard', module: 'Reports' },
-    { id: 61, name: 'followups.view', description: 'View followups', module: 'Followups' },
-    { id: 62, name: 'followups.create', description: 'Create followups', module: 'Followups' },
-    { id: 63, name: 'followups.edit', description: 'Edit followups', module: 'Followups' },
-    { id: 64, name: 'followups.delete', description: 'Delete followups', module: 'Followups' },
-    { id: 65, name: 'settings.view', description: 'View system settings', module: 'System' },
-    { id: 66, name: 'settings.edit', description: 'Edit system settings', module: 'System' },
-    { id: 67, name: 'activity_logs.view', description: 'View activity logs', module: 'System' },
-    { id: 68, name: 'attachments.upload', description: 'Upload attachments', module: 'System' },
-    { id: 69, name: 'attachments.delete', description: 'Delete attachments', module: 'System' }
-  ];
 
-  // Enhanced mapping function to convert backend module.action to frontend permission name
   const mapBackendPermissionToFrontend = (module, action) => {
     const moduleMap = {
-      'USERS': 'users',
-      'ROLES': 'roles',
-      'CUSTOMERS': 'customers',
-      'VENDORS': 'vendors',
-      'LEADS': 'leads',
-      'PROPOSALS': 'proposals',
-      'QUOTATIONS.SALES': 'quotations.sales',
-      'SALES.ORDERS': 'sales_orders',
-      'INVOICES': 'invoices',
-      'QUOTATIONS.PROCUREMENT': 'quotations.procurement',
-      'PURCHASE.ORDERS': 'purchase_orders',
-      'BILLS': 'bills',
-      'PAYMENTS': 'payments',
-      'REPORTS': 'reports',
-      'FOLLOWUPS': 'followups',
-      'SETTINGS': 'settings',
-      'ACTIVITY.LOGS': 'activity_logs',
-      'ATTACHMENTS': 'attachments'
+      'USERS': 'users', 'ROLES': 'roles', 'CUSTOMERS': 'customers', 'VENDORS': 'vendors',
+      'LEADS': 'leads', 'PROPOSALS': 'proposals', 'QUOTATIONS.SALES': 'quotations.sales',
+      'SALES.ORDERS': 'sales_orders', 'INVOICES': 'invoices',
+      'QUOTATIONS.PROCUREMENT': 'quotations.procurement', 'PURCHASE.ORDERS': 'purchase_orders',
+      'BILLS': 'bills', 'PAYMENTS': 'payments', 'REPORTS': 'reports', 'FOLLOWUPS': 'followups',
+      'SETTINGS': 'settings', 'ACTIVITY.LOGS': 'activity_logs', 'ATTACHMENTS': 'attachments'
     };
-
-    const frontendModule = moduleMap[module] || module.toLowerCase().replace(/\./g, '_');
-    const frontendAction = action.toLowerCase();
-
-    return `${frontendModule}.${frontendAction}`;
+    return `${moduleMap[module] || module.toLowerCase().replace(/\./g, '_')}.${action.toLowerCase()}`;
   };
 
-  // Filter page permissions based on logged-in user's access
   const availablePagePermissions = React.useMemo(() => {
-    if (!pagePermissions || typeof pagePermissions !== 'object') {
-      return pagePermissionsStructure;
-    }
-
-    const userPermissionNames = new Set();
-
-    Object.entries(pagePermissions).forEach(([module, actions]) => {
-      if (Array.isArray(actions)) {
-        actions.forEach(action => {
-          const permName = mapBackendPermissionToFrontend(module, action);
-          userPermissionNames.add(permName);
-        });
-      }
+    if (!pagePermissions || typeof pagePermissions !== 'object') return pagePermissionsStructure;
+    const names = new Set();
+    Object.entries(pagePermissions).forEach(([mod, actions]) => {
+      if (Array.isArray(actions)) actions.forEach(a => names.add(mapBackendPermissionToFrontend(mod, a)));
     });
+    return pagePermissionsStructure.filter(p => names.has(p.name));
+    // pagePermissionsStructure is module-level constant, safe to omit from deps
+  }, [pagePermissions]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const filtered = pagePermissionsStructure.filter(perm =>
-      userPermissionNames.has(perm.name)
-    );
-
-    return filtered;
-  }, [pagePermissions]);
-
-  // Filter roles - Hide SuperAdmin unless current user is SuperAdmin
   const filteredRoles = React.useMemo(() => {
     if (!user?.role) return roles;
-
-    if (user.role === 'SUPERADMIN' || user.role === 'SuperAdmin') {
-      return roles;
-    }
-
-    return roles.filter(role =>
-      role.name !== 'SUPERADMIN' &&
-      role.name !== 'SuperAdmin'
-    );
+    if (['SUPERADMIN', 'SuperAdmin'].includes(user.role)) return roles;
+    return roles.filter(r => !['SUPERADMIN', 'SuperAdmin'].includes(r.name));
   }, [roles, user?.role]);
 
-  // Toast functions
-  const showToast = (message, type = 'success') => {
-    const id = Date.now();
-    setToasts(prev => [...prev, { id, message, type }]);
-  };
+  const showToast = (message, type = 'success') =>
+    setToasts(prev => [...prev, { id: Date.now(), message, type }]);
+  const removeToast = (id) => setToasts(prev => prev.filter(t => t.id !== id));
 
-  const removeToast = (id) => {
-    setToasts(prev => prev.filter(toast => toast.id !== id));
-  };
 
-  // Format date to dd-mm-yyyy hh:mm:ss
-  const formatDateTime = (dateString) => {
-    const date = new Date(dateString);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    const seconds = String(date.getSeconds()).padStart(2, '0');
-    return `${day}-${month}-${year} ${hours}:${minutes}:${seconds}`;
-  };
 
-  // ============================================
-  // FETCH USERS FUNCTION
-  // ============================================
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchUsers = useCallback(async () => {
     if (!user?.id) return;
-
-    setLoading(true);
-    setLoadingText('Fetching users...');
+    setLoading(true); setLoadingText('Fetching users...');
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/login/users/${user.id}?page=${currentPage}&size=${pageSize}`,
-        {
-          credentials: "include",
-        }
-      );
-
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch users');
-      }
-
-      const data = await response.json();
-
-      const transformedUsers = data.userWrapper.map(apiUser => ({
-        id: apiUser.id,
-        username: apiUser.user_id,
-        email: apiUser.email,
-        full_name: apiUser.name,
-        phone: apiUser.phone,
-        is_active: apiUser.is_active === 1,
-        role_id: apiUser.role,
-        role_name: apiUser.role,
-        permission_count: apiUser.pagePermissionsCount || 0,
-        menu_permissions_count: apiUser.menuPermissionsCount || 0,
-        created_at: formatDateTime(apiUser.created_at)
-      }));
-
-      setUsers(transformedUsers);
+      const res = await fetch(`${API}/login/users/${user.id}?page=${currentPage}&size=${pageSize}`, { credentials: "include" });
+      if (!res.ok) throw new Error('Failed to fetch users');
+      const data = await res.json();
+      setUsers(data.userWrapper.map(transformUser));
       setTotalUsers(data.totalUsers || 0);
       setActiveUsers(data.activeUsers || 0);
       setInactiveUsers(data.inactiveUsers || 0);
       setTotalPages(data.totalPages || 1);
       setTotalElements(data.totalUsers || 0);
-
-      const uniqueRoles = data.roles.map((roleName) => ({
-        id: roleName, name: roleName, description: `${roleName} role`
-      }));
-      setRoles(uniqueRoles);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      showToast('Error fetching users', 'error');
-    } finally {
-      setLoading(false);
-    }
+      setRoles(data.roles.map(r => ({ id: r, name: r, description: `${r} role` })));
+    } catch { showToast('Error fetching users', 'error'); }
+    finally { setLoading(false); }
   }, [user?.id, currentPage, pageSize]);
 
-  // ============================================
-  // SEARCH USERS FUNCTION
-  // ============================================
+  // FIX #3: fetch ALL users (no pagination) for hierarchy chart
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchAllUsersForHierarchy = useCallback(async () => {
+    if (!user?.id) return;
+    setHierarchyLoading(true);
+    try {
+      const res = await fetch(`${API}/users/search/${user.id}?page=1&size=9999`, { credentials: "include" });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setAllUsersForHierarchy((data.userWrapper || []).map(transformUser));
+    } catch { /* silently fail for hierarchy */ }
+    finally { setHierarchyLoading(false); }
+  }, [user?.id]);
+
+  // Fetch ALL users for team member picker — ignores role/pagination, always gets everyone
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchAllUsersForTeams = useCallback(async () => {
+    if (!user?.id) return;
+    setAllUsersForTeamsLoading(true);
+    try {
+      const res = await fetch(`${API}/users/search/${user.id}?page=1&size=9999`, { credentials: "include" });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setAllUsersForTeams((data.userWrapper || []).map(transformUser));
+    } catch {}
+    finally { setAllUsersForTeamsLoading(false); }
+  }, [user?.id]);
+
+  // Fetch teams list
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchTeams = useCallback(async () => {
+    setTeamsLoading(true);
+    try {
+      const res = await fetch(`${API}/teams/all`, { credentials: "include" });
+      if (res.ok) setTeams(await res.json());
+    } catch {}
+    finally { setTeamsLoading(false); }
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const searchUsers = useCallback(async () => {
     if (!user?.id) return;
-
-    setLoading(true);
-    setLoadingText('Searching users...');
-    setIsSearching(true);
+    setLoading(true); setLoadingText('Searching...'); setIsSearching(true);
     try {
-      const params = new URLSearchParams({
-        searchTerm: searchTerm.trim(),
-        role: filterRole,
-        page: currentPage.toString(),
-        size: pageSize.toString()
-      });
-
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/users/search/${user.id}?${params.toString()}`,
-        {
-          credentials: "include",
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to search users');
-      }
-
-      const data = await response.json();
-
-      const transformedUsers = data.userWrapper.map(apiUser => ({
-        id: apiUser.id,
-        username: apiUser.user_id,
-        email: apiUser.email,
-        full_name: apiUser.name,
-        phone: apiUser.phone,
-        is_active: apiUser.is_active === 1,
-        role_id: apiUser.role,
-        role_name: apiUser.role,
-        permission_count: apiUser.pagePermissionsCount || 0,
-        menu_permissions_count: apiUser.menuPermissionsCount || 0,
-        created_at: formatDateTime(apiUser.created_at)
-      }));
-
-      setUsers(transformedUsers);
+      const params = new URLSearchParams({ searchTerm: searchTerm.trim(), role: filterRole, page: currentPage, size: pageSize });
+      const res = await fetch(`${API}/users/search/${user.id}?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error('Failed to search');
+      const data = await res.json();
+      setUsers(data.userWrapper.map(transformUser));
       setTotalPages(data.totalPages || 1);
       setTotalElements(data.totalUsers || 0);
-
-      const uniqueRoles = data.roles.map((roleName) => ({
-        id: roleName, name: roleName, description: `${roleName} role`
-      }));
-      setRoles(uniqueRoles);
-    } catch (error) {
-      console.error('Error searching users:', error);
-      showToast('Error searching users', 'error');
-    } finally {
-      setLoading(false);
-      setIsSearching(false);
-    }
+      setRoles(data.roles.map(r => ({ id: r, name: r, description: `${r} role` })));
+    } catch { showToast('Error searching users', 'error'); }
+    finally { setLoading(false); setIsSearching(false); }
   }, [user?.id, searchTerm, filterRole, currentPage, pageSize]);
 
-  // ============================================
-  // DEBOUNCED SEARCH EFFECT - 3 SECONDS DELAY
-  // ============================================
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user?.id) return;
-
-    // Clear any existing timer
-    if (searchDebounceTimer.current) {
-      clearTimeout(searchDebounceTimer.current);
-    }
-
-    // Determine if we should search or fetch
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
     const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+    if (shouldSearch) searchDebounceTimer.current = setTimeout(searchUsers, 1000);
+    else fetchUsers();
+    return () => { if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current); };
+  }, [searchTerm, filterRole, user?.id]); // intentional: fetchUsers/searchUsers are stable refs
 
-    if (shouldSearch) {
-      // Set debounce timer for 3 seconds
-      searchDebounceTimer.current = setTimeout(() => {
-        searchUsers();
-      }, 1000);
-    } else {
-      // If no search term and no filter, fetch immediately
-      fetchUsers();
-    }
-
-    // Cleanup function to clear timer on unmount or when dependencies change
-    return () => {
-      if (searchDebounceTimer.current) {
-        clearTimeout(searchDebounceTimer.current);
-      }
-    };
-  }, [searchTerm, filterRole, user?.id]);
-
-  // ============================================
-  // PAGINATION AND PAGE SIZE CHANGES - IMMEDIATE FETCH
-  // ============================================
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user?.id) return;
-
-    // For pagination changes, we want immediate response
-    // Clear any pending search timer
-    if (searchDebounceTimer.current) {
-      clearTimeout(searchDebounceTimer.current);
-    }
-
+    if (searchDebounceTimer.current) clearTimeout(searchDebounceTimer.current);
     const shouldSearch = searchTerm.trim() !== '' || filterRole !== 'all';
+    if (shouldSearch) searchUsers(); else fetchUsers();
+  }, [currentPage, pageSize]); // intentional: fetchUsers/searchUsers are stable refs
 
-    if (shouldSearch) {
-      searchUsers();
-    } else {
-      fetchUsers();
-    }
-  }, [currentPage, pageSize]);
-
-  // Check if User ID exists
   const checkUserIdExists = async (userId) => {
-    if (!userId || userId.trim() === '') {
-      setUserIdValidation({
-        checking: false,
-        isValid: null,
-        message: ''
-      });
-      return;
-    }
-
-    setUserIdValidation({
-      checking: true,
-      isValid: null,
-      message: 'Checking availability...'
-    });
-
+    if (!userId?.trim()) { setUserIdValidation({ checking: false, isValid: null, message: '' }); return; }
+    setUserIdValidation({ checking: true, isValid: null, message: 'Checking...' });
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/isUserIdExist/${userId}`,
-        {
-          credentials: "include",
-        });
-      const exists = await response.json();
-
-      if (exists) {
-        setUserIdValidation({
-          checking: false,
-          isValid: false,
-          message: 'User Name Already Exist Choose Another Name'
-        });
-      } else {
-        setUserIdValidation({
-          checking: false,
-          isValid: true,
-          message: 'Username is available'
-        });
-      }
-    } catch (error) {
-      console.error('Error checking user ID:', error);
-      setUserIdValidation({
-        checking: false,
-        isValid: null,
-        message: 'Error checking username'
-      });
-    }
+      const res = await fetch(`${API}/users/isUserIdExist/${userId}`, { credentials: "include" });
+      const exists = await res.json();
+      setUserIdValidation(exists
+        ? { checking: false, isValid: false, message: 'Username already exists' }
+        : { checking: false, isValid: true, message: 'Username available' });
+    } catch { setUserIdValidation({ checking: false, isValid: null, message: 'Error checking' }); }
   };
 
-  // Debounce user ID check
   useEffect(() => {
     if (showAddUserModal && newUser.user_id) {
-      const timer = setTimeout(() => {
-        checkUserIdExists(newUser.user_id);
-      }, 500);
-
-      return () => clearTimeout(timer);
+      const t = setTimeout(() => checkUserIdExists(newUser.user_id), 500);
+      return () => clearTimeout(t);
     }
   }, [newUser.user_id, showAddUserModal]);
 
-  // Password match validation
   useEffect(() => {
     if (showAddUserModal && newUser.password && newUser.confirmPassword) {
-      if (newUser.password === newUser.confirmPassword) {
-        setPasswordMatch({
-          isValid: true,
-          message: 'Passwords match'
-        });
-      } else {
-        setPasswordMatch({
-          isValid: false,
-          message: 'Passwords do not match'
-        });
-      }
-    } else if (showAddUserModal && newUser.confirmPassword) {
-      setPasswordMatch({
-        isValid: false,
-        message: 'Passwords do not match'
-      });
+      setPasswordMatch(newUser.password === newUser.confirmPassword
+        ? { isValid: true, message: 'Passwords match' }
+        : { isValid: false, message: 'Passwords do not match' });
     } else {
-      setPasswordMatch({
-        isValid: null,
-        message: ''
-      });
+      setPasswordMatch({ isValid: null, message: '' });
     }
   }, [newUser.password, newUser.confirmPassword, showAddUserModal]);
 
-  // Phone number validation
   useEffect(() => {
-    if (showAddUserModal && newUser.phone) {
-      const phoneRegex = /^\d{10}$/;
-      if (phoneRegex.test(newUser.phone)) {
-        setPhoneValidation({
-          isValid: true,
-          message: 'Valid phone number'
-        });
-      } else if (newUser.phone.length < 10) {
-        setPhoneValidation({
-          isValid: false,
-          message: `${newUser.phone.length}/10 digits`
-        });
+    if (showAddUserModal && phoneTouched) {
+      if (!newUser.phone) {
+        setPhoneValidation({ isValid: false, message: 'Phone number is required' });
       } else {
-        setPhoneValidation({
-          isValid: false,
-          message: 'Phone number must be exactly 10 digits'
-        });
+        const ok = /^\d{10}$/.test(newUser.phone);
+        setPhoneValidation(ok
+          ? { isValid: true, message: 'Valid phone number' }
+          : { isValid: false, message: `${newUser.phone.length}/10 digits required` });
       }
-    } else {
-      setPhoneValidation({
-        isValid: null,
-        message: ''
-      });
+    } else if (!showAddUserModal) {
+      setPhoneValidation({ isValid: null, message: '' });
+    setPhoneTouched(false);
     }
-  }, [newUser.phone, showAddUserModal]);
+  }, [newUser.phone, showAddUserModal, phoneTouched]);
 
-  // Password strength validation
   useEffect(() => {
     if (showAddUserModal && newUser.password) {
-      const hasUpperCase = /[A-Z]/.test(newUser.password);
-      const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(newUser.password);
-      const isLengthValid = newUser.password.length >= 6;
-
-      if (isLengthValid && hasUpperCase && hasSpecialChar) {
-        setPasswordStrength({
-          isValid: true,
-          message: 'Strong password'
-        });
-      } else {
-        const errors = [];
-        if (!isLengthValid) errors.push('at least 6 characters');
-        if (!hasUpperCase) errors.push('1 uppercase letter');
-        if (!hasSpecialChar) errors.push('1 special symbol');
-
-        setPasswordStrength({
-          isValid: false,
-          message: `Password must contain ${errors.join(', ')}`
-        });
-      }
+      const ok = newUser.password.length >= 6 && /[A-Z]/.test(newUser.password) && /[!@#$%^&*(),.?":{}|<>]/.test(newUser.password);
+      const errs = [];
+      if (newUser.password.length < 6) errs.push('6+ chars');
+      if (!/[A-Z]/.test(newUser.password)) errs.push('1 uppercase');
+      if (!/[!@#$%^&*(),.?":{}|<>]/.test(newUser.password)) errs.push('1 special char');
+      setPasswordStrength(ok ? { isValid: true, message: 'Strong password' } : { isValid: false, message: `Needs: ${errs.join(', ')}` });
     } else {
-      setPasswordStrength({
-        isValid: null,
-        message: ''
-      });
+      setPasswordStrength({ isValid: null, message: '' });
     }
   }, [newUser.password, showAddUserModal]);
 
-  // Handle Add User Modal Open
   const handleOpenAddUserModal = () => {
-    setNewUser({
-      user_id: '',
-      name: '',
-      email: '',
-      password: '',
-      confirmPassword: '',
-      phone: '',
-      role: '',
-      is_active: true
-    });
-    setUserIdValidation({
-      checking: false,
-      isValid: null,
-      message: ''
-    });
-    setPasswordMatch({
-      isValid: null,
-      message: ''
-    });
-    setPhoneValidation({
-      isValid: null,
-      message: ''
-    });
-    setPasswordStrength({
-      isValid: null,
-      message: ''
-    });
-    setShowPassword(false);
-    setShowConfirmPassword(false);
+    setNewUser({ user_id: '', name: '', email: '', password: '', confirmPassword: '', phone: '', role: '', managerId: '', team: '', designation: '', is_active: true });
+    setUserIdValidation({ checking: false, isValid: null, message: '' });
+    setPasswordMatch({ isValid: null, message: '' });
+    setPhoneValidation({ isValid: null, message: '' });
+    setPasswordStrength({ isValid: null, message: '' });
+    setShowPassword(false); setShowConfirmPassword(false);
     setShowAddUserModal(true);
   };
 
-  // Handle Add User Form Submit
   const handleAddUserSubmit = async (e) => {
     e.preventDefault();
-
-    if (!userIdValidation.isValid) {
-      showToast('Please choose a valid username', 'error');
-      return;
-    }
-
-    if (!passwordStrength.isValid) {
-      showToast('Password does not meet requirements', 'error');
-      return;
-    }
-
-    if (!passwordMatch.isValid) {
-      showToast('Passwords do not match', 'error');
-      return;
-    }
-
-    if (newUser.phone && !phoneValidation.isValid) {
-      showToast('Please enter a valid 10-digit phone number', 'error');
-      return;
-    }
-
-    const userData = {
-      user_id: newUser.user_id,
-      name: newUser.name,
-      email: newUser.email.toLowerCase(),
-      password: newUser.password,
-      phone: newUser.phone || '',
-      role: newUser.role.toUpperCase(),
-      is_active: newUser.is_active ? 1 : 0,
-      created_by: user.id
-    };
-
-    setLoading(true);
-    setLoadingText('Creating user...');
+    if (!userIdValidation.isValid) { showToast('Please choose a valid username', 'error'); return; }
+    if (!passwordStrength.isValid) { showToast('Password does not meet requirements', 'error'); return; }
+    if (!passwordMatch.isValid) { showToast('Passwords do not match', 'error'); return; }
+    // FIX #4: Phone is REQUIRED in the backend â validate always, not only when filled
+    if (!phoneValidation.isValid) { showToast('Phone number is required (10 digits)', 'error'); return; }
+    if (!newUser.role) { showToast('Please select a role', 'error'); return; }
+    setLoading(true); setLoadingText('Creating user...');
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/addNewUser`, {
-        method: 'POST',        
-        credentials: "include",
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(userData)
+      const res = await fetch(`${API}/users/addNewUser`, {
+        method: 'POST', credentials: "include",
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: newUser.user_id, name: newUser.name, email: newUser.email.toLowerCase(),
+          password: newUser.password, phone: newUser.phone,
+          role: newUser.role.toUpperCase(),
+          managerId: newUser.managerId ? Number(newUser.managerId) : null,
+          team: newUser.team || null,
+          designation: newUser.designation || null,
+          is_active: newUser.is_active ? 1 : 0, created_by: user.id
+        })
       });
-
-      if (response.ok) {
-        const result = await response.text();
-
-        // Refresh data based on current filter state
-        if (searchTerm.trim() || filterRole !== 'all') {
-          await searchUsers();
-        } else {
-          await fetchUsers();
-        }
-
+      // FIX #4: proper error handling â don't let backend errors cause logout
+      if (res.ok) {
+        const result = await res.text();
+        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
         setShowAddUserModal(false);
         showToast(result || 'User created successfully!', 'success');
       } else {
-        const errorText = await response.text();
-        console.error('Error creating user:', errorText);
-
-        try {
-          const errorJson = JSON.parse(errorText);
-          showToast(errorJson.message || 'Error creating user', 'error');
-        } catch {
-          showToast(errorText || 'Error creating user', 'error');
-        }
+        const errText = await res.text();
+        let msg = errText;
+        try { const j = JSON.parse(errText); msg = j.message || j.error || errText; } catch {}
+        showToast(msg || 'Error creating user', 'error');
       }
       setLoading(false);
-    } catch (error) {
-      console.error('Error creating user:', error);
-      setLoading(false);
-      showToast('Network error: Unable to create user', 'error');
-    }
+    } catch (err) { setLoading(false); showToast('Network error: ' + (err.message || ''), 'error'); }
   };
 
-  // Fetch menu permissions for a user
   const fetchUserMenuPermissions = async (userId) => {
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/login/menuPermissions/${userId}`,
-        {
-          credentials: "include",
-        });
-      const data = await response.json();
-
-      const permissionsObject = {};
-      menuPermissionsList.forEach(menu => {
-        permissionsObject[menu.dbField] = 0;
-      });
-
-      const backendToFrontendMap = {
-        'DASHBOARD': 'dashboard',
-        'TASK_MANAGEMENT': 'task_management',
-        'PROJECT_DASHBOARD': 'project_dashboard',
-        'ANALYTICS': 'analytics',
-        'DOCUMENTS': 'documents',
-        'SETTINGS': 'settings',
-        'FOLLOW_UPS': 'follow_ups',
-        'REPORTS': 'reports',
-        'INVOICES': 'invoices',
-        'SALES_CLIENTS': 'sales_clients',
-        'SALES_LEADS': 'sales_leads',
-        'SALES_ESTIMATION': 'sales_estimation',
-        'PROCUREMENT_VENDERS': 'procurement_venders',
-        'PROCUREMENT_QUOTATIONS': 'procurement_quotations_recived',
-        'PROCUREMENT_PURCHASE_ORDERS': 'procurement_purchase_orders',
-        'PROCUREMENT_BILLS': 'procurement_bills_received',
-        'OFFICE_USE': 'office_use'
-      };
-
-      if (Array.isArray(data)) {
-        data.forEach(backendKey => {
-          const frontendKey = backendToFrontendMap[backendKey];
-          if (frontendKey && permissionsObject.hasOwnProperty(frontendKey)) {
-            permissionsObject[frontendKey] = 1;
-          }
-        });
-      }
-
-      return permissionsObject;
-    } catch (error) {
-      console.error('Error fetching user menu permissions:', error);
-      const defaultPerms = {};
-      menuPermissionsList.forEach(menu => {
-        defaultPerms[menu.dbField] = 0;
-      });
-      return defaultPerms;
+      const res = await fetch(`${API}/login/menuPermissions/${userId}`, { credentials: "include" });
+      const data = await res.json();
+      const obj = {};
+      menuPermissionsList.forEach(m => { obj[m.dbField] = 0; });
+      const map = { 'DASHBOARD':'dashboard','TASK_MANAGEMENT':'task_management','PROJECT_DASHBOARD':'project_dashboard','ANALYTICS':'analytics','DOCUMENTS':'documents','SETTINGS':'settings','FOLLOW_UPS':'follow_ups','REPORTS':'reports','INVOICES':'invoices','SALES_CLIENTS':'sales_clients','SALES_LEADS':'sales_leads','SALES_ESTIMATION':'sales_estimation','PROCUREMENT_VENDERS':'procurement_venders','PROCUREMENT_QUOTATIONS':'procurement_quotations_recived','PROCUREMENT_PURCHASE_ORDERS':'procurement_purchase_orders','PROCUREMENT_BILLS':'procurement_bills_received','OFFICE_USE':'office_use' };
+      if (Array.isArray(data)) data.forEach(k => { const fk = map[k]; if (fk) obj[fk] = 1; });
+      return obj;
+    } catch {
+      const obj = {};
+      menuPermissionsList.forEach(m => { obj[m.dbField] = 0; });
+      return obj;
     }
   };
 
-  // Fetch page permissions for a user
   const fetchUserPagePermissions = async (userId) => {
     try {
-      const response = await fetch(
-        `${process.env.REACT_APP_API_URL}/login/pagePermissions/${userId}`,
-        {
-          credentials: "include",
-        }
-      );
-
-      const text = await response.text();
-
-      if (!response.ok || text === "No Permissions") {
-        return [];
-      }
-
+      const res = await fetch(`${API}/login/pagePermissions/${userId}`, { credentials: "include" });
+      const text = await res.text();
+      if (!res.ok || text === "No Permissions") return [];
       const data = JSON.parse(text);
-      const permissionIds = [];
-
-      Object.entries(data).forEach(([module, actions]) => {
-        actions.forEach((action) => {
-          const permName = mapBackendPermissionToFrontend(module, action);
-          const perm = pagePermissionsStructure.find(
-            (p) => p.name === permName
-          );
-
-          if (perm) {
-            permissionIds.push(perm.id);
-          }
+      const ids = [];
+      Object.entries(data).forEach(([mod, actions]) => {
+        actions.forEach(a => {
+          const name = mapBackendPermissionToFrontend(mod, a);
+          const p = pagePermissionsStructure.find(p => p.name === name);
+          if (p) ids.push(p.id);
         });
       });
-
-      return permissionIds;
-
-    } catch (error) {
-      console.error("Error fetching user page permissions:", error);
-      return [];
-    }
+      return ids;
+    } catch { return []; }
   };
 
-  // Handlers
-  const handleEditUser = async (user) => {
-    setSelectedUser({ ...user });
-    setShowEditUserModal(true);
-  };
+  const handleEditUser = (u) => { setSelectedUser({ ...u }); setShowEditUserModal(true); };
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setLoadingText('Updating user...');
-
+    setLoading(true); setLoadingText('Updating...');
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateUser/${selectedUser.id}`, {
-        method: 'POST',
-        credentials: "include",
+      const res = await fetch(`${API}/users/updateUser/${selectedUser.id}`, {
+        method: 'POST', credentials: "include",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: selectedUser.full_name,
-          email: selectedUser.email,
-          phone: selectedUser.phone,
-          role: selectedUser.role_id,
+          name: selectedUser.full_name, email: selectedUser.email,
+          phone: selectedUser.phone, role: selectedUser.role_id,
+          managerId: selectedUser.managerId ? Number(selectedUser.managerId) : null,
+          team: selectedUser.team || null,
+          designation: selectedUser.designation || null,
           is_active: selectedUser.is_active ? 1 : 0
         })
       });
-
-      if (response.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') {
-          await searchUsers();
-        } else {
-          await fetchUsers();
-        }
-        setShowEditUserModal(false);
-        setSelectedUser(null);
+      if (res.ok) {
+        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        setShowEditUserModal(false); setSelectedUser(null);
         showToast('User updated successfully!', 'success');
-      } else {
-        showToast('Error updating user', 'error');
-      }
+      } else { showToast('Error updating user', 'error'); }
       setLoading(false);
-    } catch (error) {
-      console.error('Error updating user:', error);
-      setLoading(false);
-      showToast('Error updating user', 'error');
-    }
+    } catch { setLoading(false); showToast('Error updating user', 'error'); }
   };
 
-  const handleDeleteUser = (user) => {
-    setUserToDelete(user);
-    setShowDeleteConfirm(true);
-  };
+  const handleDeleteUser = (u) => { setUserToDelete(u); setShowDeleteConfirm(true); };
 
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
-
-    setLoading(true);
-    setLoadingText('Deleting user...');
-    setShowDeleteConfirm(false);
-
+    setLoading(true); setLoadingText('Deleting...'); setShowDeleteConfirm(false);
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/deleteUser/${userToDelete.id}`, {
-        credentials: "include",
-        method: 'DELETE'
-      });
-
-      if (response.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') {
-          await searchUsers();
-        } else {
-          await fetchUsers();
-        }
+      const res = await fetch(`${API}/users/deleteUser/${userToDelete.id}`, { credentials: "include", method: 'DELETE' });
+      if (res.ok) {
+        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
         showToast('User deleted successfully!', 'success');
-      } else {
-        showToast('Error deleting user', 'error');
-      }
-      setLoading(false);
-      setUserToDelete(null);
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      setLoading(false);
-      showToast('Error deleting user', 'error');
-      setUserToDelete(null);
-    }
+      } else { showToast('Error deleting user', 'error'); }
+      setLoading(false); setUserToDelete(null);
+    } catch { setLoading(false); showToast('Error deleting user', 'error'); setUserToDelete(null); }
   };
 
-  // View Menu Permissions
-  const handleViewMenuPermissions = async (user) => {
-    setSelectedUser(user);
-    setLoading(true);
-    setLoadingText('Loading menu permissions...');
-    const menuPerms = await fetchUserMenuPermissions(user.id);
-    setSelectedUserMenuPermissions(menuPerms);
-    setShowMenuPermissionsModal(true);
-    setLoading(false);
+  const handleViewMenuPermissions = async (u) => {
+    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUserMenuPermissions(await fetchUserMenuPermissions(u.id));
+    setShowMenuPermissionsModal(true); setLoading(false);
   };
 
-  // Edit Menu Permissions
-  const handleEditMenuPermissions = async (user) => {
-    setSelectedUser(user);
-    setLoading(true);
-    setLoadingText('Loading menu permissions...');
-    const menuPerms = await fetchUserMenuPermissions(user.id);
-
-    const completeMenuPerms = {};
-    availableMenuPermissions.forEach(menu => {
-      completeMenuPerms[menu.dbField] = menuPerms[menu.dbField] || 0;
-    });
-
-    setSelectedUserMenuPermissions(completeMenuPerms);
-    setShowEditMenuPermissionsModal(true);
-    setLoading(false);
+  const handleEditMenuPermissions = async (u) => {
+    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    const perms = await fetchUserMenuPermissions(u.id);
+    const complete = {};
+    availableMenuPermissions.forEach(m => { complete[m.dbField] = perms[m.dbField] || 0; });
+    setSelectedUserMenuPermissions(complete);
+    setShowEditMenuPermissionsModal(true); setLoading(false);
   };
 
-  const handleToggleMenuPermission = (dbField) => {
-    setSelectedUserMenuPermissions(prev => ({
-      ...prev,
-      [dbField]: prev[dbField] === 1 ? 0 : 1
-    }));
-  };
+  const handleToggleMenuPermission = (dbField) =>
+    setSelectedUserMenuPermissions(prev => ({ ...prev, [dbField]: prev[dbField] === 1 ? 0 : 1 }));
 
   const handleSaveMenuPermissions = async () => {
-    setLoading(true);
-    setLoadingText('Saving menu permissions...');
+    setLoading(true); setLoadingText('Saving...');
     try {
-      const completePermissions = {};
-      menuPermissionsList.forEach(menu => {
-        completePermissions[menu.dbField] = selectedUserMenuPermissions[menu.dbField] || 0;
-      });
-
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updateMenuPermissions/${selectedUser.id}`, {
-        method: 'PUT',
-        credentials: "include",
+      const complete = {};
+      menuPermissionsList.forEach(m => { complete[m.dbField] = selectedUserMenuPermissions[m.dbField] || 0; });
+      const res = await fetch(`${API}/users/updateMenuPermissions/${selectedUser.id}`, {
+        method: 'PUT', credentials: "include",
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(completePermissions)
+        body: JSON.stringify(complete)
       });
-
-      if (response.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') {
-          await searchUsers();
-        } else {
-          await fetchUsers();
-        }
-        setShowEditMenuPermissionsModal(false);
-        setSelectedUser(null);
-        setSelectedUserMenuPermissions({});
-        showToast('Menu permissions updated successfully!', 'success');
-      } else {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        showToast('Error saving menu permissions', 'error');
-      }
+      if (res.ok) {
+        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        setShowEditMenuPermissionsModal(false); setSelectedUser(null); setSelectedUserMenuPermissions({});
+        showToast('Menu permissions updated!', 'success');
+      } else { showToast('Error saving menu permissions', 'error'); }
       setLoading(false);
-    } catch (error) {
-      console.error('Error saving menu permissions:', error);
-      setLoading(false);
-      showToast('Error saving menu permissions', 'error');
-    }
+    } catch { setLoading(false); showToast('Error saving menu permissions', 'error'); }
   };
 
-  // View Page Permissions
-  const handleViewUserPermissions = async (user) => {
-    setSelectedUser(user);
-    setLoading(true);
-    setLoadingText('Loading page permissions...');
-    const pagePerms = await fetchUserPagePermissions(user.id);
-    setPermissions(pagePermissionsStructure);
-    setSelectedUserPermissions(pagePerms);
-    setShowUserPermissionsModal(true);
-    setLoading(false);
+  const handleViewUserPermissions = async (u) => {
+    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUserPermissions(await fetchUserPagePermissions(u.id));
+    setShowUserPermissionsModal(true); setLoading(false);
   };
 
-  // Edit Page Permissions
-  const handleEditUserPermissions = async (user) => {
-    setSelectedUser(user);
-    setLoading(true);
-    setLoadingText('Loading page permissions...');
-    const pagePerms = await fetchUserPagePermissions(user.id);
-    setPermissions(pagePermissionsStructure);
-    setSelectedUserPermissions(pagePerms);
-    setShowEditUserPermissionsModal(true);
-    setLoading(false);
+  const handleEditUserPermissions = async (u) => {
+    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUserPermissions(await fetchUserPagePermissions(u.id));
+    setShowEditUserPermissionsModal(true); setLoading(false);
   };
 
-  const handleToggleUserPermission = (permissionId) => {
-    if (selectedUserPermissions.includes(permissionId)) {
-      setSelectedUserPermissions(selectedUserPermissions.filter(id => id !== permissionId));
-    } else {
-      setSelectedUserPermissions([...selectedUserPermissions, permissionId]);
-    }
-  };
+  const handleToggleUserPermission = (id) =>
+    setSelectedUserPermissions(prev =>
+      prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
 
   const handleSelectAllUserPermissionsInModule = (module) => {
-    const modulePermissions = availablePagePermissions.filter(p => p.module === module);
-    const modulePermissionIds = modulePermissions.map(p => p.id);
-    const allSelected = modulePermissionIds.every(id => selectedUserPermissions.includes(id));
-
-    if (allSelected) {
-      setSelectedUserPermissions(selectedUserPermissions.filter(id => !modulePermissionIds.includes(id)));
-    } else {
-      const newPermissions = [...new Set([...selectedUserPermissions, ...modulePermissionIds])];
-      setSelectedUserPermissions(newPermissions);
-    }
+    const ids = availablePagePermissions.filter(p => p.module === module).map(p => p.id);
+    const allSelected = ids.every(id => selectedUserPermissions.includes(id));
+    setSelectedUserPermissions(allSelected
+      ? selectedUserPermissions.filter(id => !ids.includes(id))
+      : [...new Set([...selectedUserPermissions, ...ids])]);
   };
 
   const handleSaveUserPermissions = async () => {
-    setLoading(true);
-    setLoadingText('Saving page permissions...');
+    setLoading(true); setLoadingText('Saving...');
     try {
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/users/updatePagePermissions/${selectedUser.id}`, {
-        method: 'PUT',
-        credentials: "include",
+      const res = await fetch(`${API}/users/updatePagePermissions/${selectedUser.id}`, {
+        method: 'PUT', credentials: "include",
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ permissionIds: selectedUserPermissions })
       });
-
-      if (response.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') {
-          await searchUsers();
-        } else {
-          await fetchUsers();
-        }
-        setShowEditUserPermissionsModal(false);
-        setSelectedUser(null);
-        setSelectedUserPermissions([]);
-        showToast('Page permissions updated successfully!', 'success');
-      } else {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        showToast('Error saving page permissions', 'error');
-      }
+      if (res.ok) {
+        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+        setShowEditUserPermissionsModal(false); setSelectedUser(null); setSelectedUserPermissions([]);
+        showToast('Page permissions updated!', 'success');
+      } else { showToast('Error saving page permissions', 'error'); }
       setLoading(false);
-    } catch (error) {
-      console.error('Error saving page permissions:', error);
-      setLoading(false);
-      showToast('Error saving page permissions', 'error');
-    }
+    } catch { setLoading(false); showToast('Error saving page permissions', 'error'); }
   };
 
-  // Group permissions by module
   const groupPermissionsByModule = (perms) => {
     const grouped = {};
-    perms.forEach(perm => {
-      if (!grouped[perm.module]) {
-        grouped[perm.module] = [];
-      }
-      grouped[perm.module].push(perm);
-    });
+    perms.forEach(p => { if (!grouped[p.module]) grouped[p.module] = []; grouped[p.module].push(p); });
     return grouped;
   };
 
   const groupedPermissions = groupPermissionsByModule(availablePagePermissions);
 
-  // Get role badge class
   const getRoleBadgeClass = (roleName) => {
-    const roleMap = {
-      'SuperAdmin': 'users-page-badge-role-1',
-      'Admin': 'users-page-badge-role-2',
-      'Sales Manager': 'users-page-badge-role-3',
-      'BD Executive': 'users-page-badge-role-4',
-      'Procurement Manager': 'users-page-badge-role-5',
-      'Procurement Executive': 'users-page-badge-role-6'
-    };
-    return roleMap[roleName] || 'users-page-badge-role-1';
+    const map = { 'SuperAdmin': 'users-page-badge-role-1', 'Admin': 'users-page-badge-role-2', 'Sales Manager': 'users-page-badge-role-3', 'BD Executive': 'users-page-badge-role-4', 'Procurement Manager': 'users-page-badge-role-5', 'Procurement Executive': 'users-page-badge-role-6' };
+    return map[roleName] || 'users-page-badge-role-1';
   };
 
+  // Manager options (exclude bottom-level roles)
+  const managerOptions = users.filter(u =>
+    !['TELECALLER', 'BD_EXECUTIVE', 'SALES_EXEC'].includes(u.role_name?.toUpperCase())
+  );
+
+  // ââ Render âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
   return (
     <div className="users-page-container">
-      {/* CRM Preloader */}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {loading && <CrmPreloader text={loadingText} />}
 
-      {/* Toast Container */}
       <div className="toast-container">
-        {toasts.map(toast => (
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            type={toast.type}
-            onClose={() => removeToast(toast.id)}
-          />
-        ))}
+        {toasts.map(t => <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />)}
       </div>
 
       {/* Header */}
@@ -1167,445 +1059,646 @@ const UsersPage = () => {
           <p className="users-page-subtitle">Manage users, roles, and permissions</p>
         </div>
         <div className="tooltip-wrapper">
-          <button
-            className="users-page-btn users-page-btn-primary"
-            onClick={handleOpenAddUserModal}
-            disabled={!create}
-          >
-            <span className="users-page-icon">+</span>
-            Add New User
+          <button className="users-page-btn users-page-btn-primary" onClick={handleOpenAddUserModal} disabled={!create}>
+            <span className="users-page-icon">+</span> Add New User
           </button>
-
-          {!create && (
-            <span className="tooltip">
-              No Permission
-            </span>
-          )}
+          {!create && <span className="tooltip">No Permission</span>}
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="users-page-filters">
-        <div className="users-page-search-box">
-          <input
-            type="text"
-            className="users-page-search-input"
-            placeholder="Search by name, email, or phone... "
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setCurrentPage(1); // Reset to first page on new search
+      {/* ââ TABS âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #e5e7eb', marginBottom: 20 }}>
+        {[{ key: 'list', label: 'Users List' }, { key: 'hierarchy', label: 'Hierarchy Chart' }, { key: 'teams', label: 'Teams' }].map(tab => (
+          <button key={tab.key} onClick={() => {
+              setActiveTab(tab.key);
+              if (tab.key === 'teams') fetchTeams();
+              if (tab.key === 'hierarchy') { fetchAllUsersForHierarchy(); fetchTeams(); }
             }}
-          />
-          <span className="users-page-search-icon">
-            {isSearching ? '⏳' : '🔍'}
-          </span>
-        </div>
-
-        <select
-          className="users-page-filter-select"
-          value={filterRole}
-          onChange={(e) => {
-            setFilterRole(e.target.value);
-            setCurrentPage(1);
-          }}
-        >
-          <option value="all">All Roles</option>
-          {filteredRoles.map(role => (
-            <option key={role.id} value={role.name}>{role.name}</option>
-          ))}
-        </select>
+            style={{
+              padding: '9px 20px', fontSize: 14, fontWeight: activeTab === tab.key ? 600 : 400,
+              color: activeTab === tab.key ? '#2563eb' : '#6b7280',
+              background: 'none', border: 'none',
+              borderBottom: activeTab === tab.key ? '2px solid #2563eb' : '2px solid transparent',
+              marginBottom: -2, cursor: 'pointer', borderRadius: '6px 6px 0 0',
+              transition: 'all 0.15s',
+            }}>
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Statistics */}
-      <div className="users-page-stats">
-        <div className="users-page-stat-card">
-          <div className="users-page-stat-number">{totalUsers}</div>
-          <div className="users-page-stat-label">Total Users</div>
-        </div>
-        <div className="users-page-stat-card">
-          <div className="users-page-stat-number">{activeUsers}</div>
-          <div className="users-page-stat-label">Active Users</div>
-        </div>
-        <div className="users-page-stat-card">
-          <div className="users-page-stat-number">{inactiveUsers}</div>
-          <div className="users-page-stat-label">Inactive Users</div>
-        </div>
-      </div>
-
-      {/* Users Table - WITH SCROLL */}
-      <div className="users-page-table-container">
-        {!loading && (
-          <>
-            <div className="users-page-table-wrapper">
-              <table className="users-page-table">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Contact</th>
-                    <th>Role</th>
-                    <th>Page Perms</th>
-                    <th>Menu Perms</th>
-                    <th>Status</th>
-                    <th>Created</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map(u => (
-                    <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
-                      <td><div className="users-page-user-name">{u.full_name}</div></td>
-                      <td><div>{u.phone}</div><div>{u.email}</div></td>
-                      <td><span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span></td>
-                      <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
-                      <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
-                      <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
-                      <td>{u.created_at}</td>
-                      <td>
-                        <div className="users-page-actions">
-                          <div className="tooltip-wrapper">
-                            <button
-                              className="users-page-btn-icon"
-                              onClick={() => handleEditUser(u)}
-                              disabled={!edit}
-                              style={{ color: edit ? "#5252ff" : "#9ca3af" }}
-                            >
-                              <FiEdit />
-                            </button>
-
-                            {!edit && (
-                              <span className="tooltip">
-                                No Permission
-                              </span>
-                            )}
-                          </div>
-                          <div className="tooltip-wrapper">
-                            <button
-                              className="users-page-btn-icon"
-                              onClick={() => handleDeleteUser(u)}
-                              disabled={!deletee}
-                              style={{ color: deletee ? "red" : "#9ca3af" }}
-                            >
-                              <FiTrash2 />
-                            </button>
-
-                            {!deletee && (
-                              <span className="tooltip error">
-                                No Permission
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* ── HIERARCHY CHART TAB ── */}
+      {activeTab === 'hierarchy' && (
+        <HierarchySection
+          users={allUsersForHierarchy}
+          teams={teams}
+          loading={hierarchyLoading}
+          onRefresh={() => { fetchAllUsersForHierarchy(); fetchTeams(); }}
+        />
+      )}
+      {/* ââ USERS LIST TAB ââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {activeTab === 'list' && (
+        <>
+          {/* Filters */}
+          <div className="users-page-filters">
+            <div className="users-page-search-box">
+              <input type="text" className="users-page-search-input"
+                placeholder="Search by name, email, or phone..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} />
+              <span className="users-page-search-icon">
+                {isSearching ? <FiLoader size={15} style={{animation:'spin 0.8s linear infinite'}} /> : <FiSearch size={15} />}
+              </span>
             </div>
-            {users.length > 0 && (
-              <div className="pagination-footer">
-                <div className="pagination-info">
-                  Showing {((currentPage - 1) * pageSize) + 1} to{" "}
-                  {Math.min(currentPage * pageSize, totalElements)} of {totalElements} entries
-                </div>
-
-                <div className="pagination-controls">
-                  <div className="pagination-row-selector">
-                    <select
-                      className="pagination-select"
-                      value={pageSize}
-                      onChange={(e) => {
-                        setPageSize(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                    >
-                      <option value={5}>5 rows</option>
-                      <option value={10}>10 rows</option>
-                      <option value={25}>25 rows</option>
-                      <option value={50}>50 rows</option>
-                    </select>
-                  </div>
-
-                  <div className="pagination-nav">
-                    <button
-                      className="pagination-btn"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage((prev) => prev - 1)}
-                    >
-                      Previous
-                    </button>
-
-                    <span className="pagination-current">
-                      Page <strong>{currentPage}</strong> of{" "}
-                      <strong>{totalPages}</strong>
-                    </span>
-
-                    <button
-                      className="pagination-btn"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage((prev) => prev + 1)}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {!loading && users.length === 0 && (
-          <div className="users-page-empty-state">
-            <p>No users found</p>
+            <select className="users-page-filter-select" value={filterRole}
+              onChange={(e) => { setFilterRole(e.target.value); setCurrentPage(1); }}>
+              <option value="all">All Roles</option>
+              {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+            </select>
           </div>
-        )}
-      </div>
 
-      {/* Add User Modal */}
-      {showAddUserModal && (
-        <div className="users-page-modal-overlay">
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
-            <div className="users-page-modal-header">
-              <h2>Add New User</h2>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowAddUserModal(false)}
-              >
-                ×
+          {/* Stats */}
+          <div className="users-page-stats">
+            <div className="users-page-stat-card">
+              <div className="users-page-stat-number">{totalUsers}</div>
+              <div className="users-page-stat-label">Total Users</div>
+            </div>
+            <div className="users-page-stat-card">
+              <div className="users-page-stat-number">{activeUsers}</div>
+              <div className="users-page-stat-label">Active Users</div>
+            </div>
+            <div className="users-page-stat-card">
+              <div className="users-page-stat-number">{inactiveUsers}</div>
+              <div className="users-page-stat-label">Inactive Users</div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="users-page-table-container">
+            {!loading && (
+              <>
+                <div className="users-page-table-wrapper">
+                  <table className="users-page-table">
+                    <thead>
+                      <tr>
+                        <th>Name</th>
+                        <th>Contact</th>
+                        <th>Role / Designation</th>
+                        <th>Reports To</th>
+                        <th>Team</th>
+                        <th>Page Perms</th>
+                        <th>Menu Perms</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
+                          <td><div className="users-page-user-name">{u.full_name}</div></td>
+                          <td><div>{u.phone}</div><div style={{ fontSize: 12, color: '#6b7280' }}>{u.email}</div></td>
+                          <td>
+                            <span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span>
+                            {u.designation && <div style={{fontSize:11,color:'#6b7280',marginTop:3}}>{u.designation}</div>}
+                          </td>
+
+                          {/* ââ Reports To column âââââââââââââââââââââââââââ */}
+                          <td>
+                            {u.managerName
+                              ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#dbeafe', color: '#1e40af', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                    {u.managerName.charAt(0).toUpperCase()}
+                                  </div>
+                                  <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{u.managerName}</span>
+                                </div>
+                              : <span style={{ color: '#d1d5db', fontSize: 12 }}>--</span>
+                            }
+                          </td>
+
+                          {/* ââ Team column âââââââââââââââââââââââââââââââââ */}
+                          <td>
+                            {u.team
+                              ? <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, background: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff', fontSize: 12, fontWeight: 500 }}>
+                                  {u.team}
+                                </span>
+                              : <span style={{ color: '#d1d5db', fontSize: 12 }}>â</span>
+                            }
+                          </td>
+
+                          <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
+                          <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
+                          <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                          <td style={{ fontSize: 12, color: '#6b7280' }}>{u.created_at}</td>
+                          <td>
+                            <div className="users-page-actions">
+                              <div className="tooltip-wrapper">
+                                <button className="users-page-btn-icon" onClick={() => handleEditUser(u)} disabled={!edit} style={{ color: edit ? "#5252ff" : "#9ca3af" }}><FiEdit /></button>
+                                {!edit && <span className="tooltip">No Permission</span>}
+                              </div>
+                              <div className="tooltip-wrapper">
+                                <button className="users-page-btn-icon" onClick={() => handleDeleteUser(u)} disabled={!deletee} style={{ color: deletee ? "red" : "#9ca3af" }}><FiTrash2 /></button>
+                                {!deletee && <span className="tooltip error">No Permission</span>}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {users.length > 0 && (
+                  <div className="pagination-footer">
+                    <div className="pagination-info">
+                      Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalElements)} of {totalElements} entries
+                    </div>
+                    <div className="pagination-controls">
+                      <div className="pagination-row-selector">
+                        <select className="pagination-select" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
+                          <option value={10}>10 Rows</option><option value={20}>20 Rows</option>
+                          <option value={50}>50 Rows</option><option value={100}>100 Rows</option>
+                        </select>
+                      </div>
+                      <div className="pagination-nav">
+                        <button className="pagination-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)}>Previous</button>
+                        <span className="pagination-current">Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong></span>
+                        <button className="pagination-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)}>Next</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+            {!loading && users.length === 0 && <div className="users-page-empty-state"><p>No users found</p></div>}
+          </div>
+        </>
+      )}
+
+      {/* TEAMS TAB - FIX #6 */}
+      {activeTab === 'teams' && (
+        <div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+            <div>
+              <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:'#0f172a' }}>Teams</h2>
+              <p style={{ margin:'4px 0 0', fontSize:13, color:'#6b7280' }}>Manage teams and their members</p>
+            </div>
+            <button className="users-page-btn users-page-btn-primary"
+              onClick={() => { setTeamForm({name:'',description:'',memberIds:[]}); setShowCreateTeamModal(true); fetchAllUsersForTeams(); }}>
+              + Create Team
+            </button>
+          </div>
+          {teamsLoading ? (
+            <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>
+              <div style={{ width:32, height:32, border:'3px solid #e2e8f0', borderTopColor:'#6366f1', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 12px' }} />
+              Loading teams...
+            </div>
+          ) : teams.length === 0 ? (
+            <div style={{ textAlign:'center', padding:60, color:'#94a3b8' }}>
+              <FiUsers size={52} style={{margin:'0 auto 16px',display:'block',color:'#cbd5e1'}} />
+              <div style={{ fontWeight:700, fontSize:16, color:'#374151', marginBottom:6 }}>No teams yet</div>
+              <div style={{ fontSize:13, color:'#9ca3af', marginBottom:20 }}>Create your first team to group users together</div>
+              <button className="users-page-btn users-page-btn-primary"
+                onClick={() => { setTeamForm({name:'',description:'',memberIds:[]}); setShowCreateTeamModal(true); fetchAllUsersForTeams(); }}>
+                + Create First Team
               </button>
             </div>
+          ) : (
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))', gap:16 }}>
+              {teams.map(team => {
+                const teamColors = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6'];
+                const colorIdx = team.id % teamColors.length;
+                const teamColor = teamColors[colorIdx];
+                const teamBg = teamColor + '12';
+                return (
+                  <div key={team.id} style={{
+                    background:'#fff', borderRadius:14, border:'1px solid #e5e7eb',
+                    overflow:'hidden', boxShadow:'0 1px 4px rgba(0,0,0,0.06)',
+                    transition:'box-shadow 0.2s, transform 0.15s',
+                  }}
+                    onMouseEnter={e=>{e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.1)';e.currentTarget.style.transform='translateY(-2px)';}}
+                    onMouseLeave={e=>{e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,0.06)';e.currentTarget.style.transform='';}}>
+                    {/* Card header stripe */}
+                    <div style={{ height:5, background:`linear-gradient(90deg,${teamColor},${teamColor}88)` }} />
+                    <div style={{ padding:'16px 20px 12px' }}>
+                      {/* Team name + actions */}
+                      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                          <div style={{ width:38, height:38, borderRadius:10, background:teamBg, border:`2px solid ${teamColor}30`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                            <FiUsers size={18} color={teamColor} />
+                          </div>
+                          <div>
+                            <div style={{ fontWeight:700, fontSize:15, color:'#0f172a', lineHeight:1.2 }}>{team.name}</div>
+                            <div style={{ fontSize:11, color:teamColor, fontWeight:600, marginTop:2 }}>
+                              {team.memberCount || 0} member{(team.memberCount||0) !== 1 ? 's' : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display:'flex', gap:6 }}>
+                          <button style={{ width:30, height:30, borderRadius:8, border:'1px solid #e5e7eb', background:'#f8fafc', color:'#6366f1', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+                            title="Edit team"
+                            onClick={() => { setSelectedTeam(team); setTeamForm({ name:team.name, description:team.description||'', memberIds:(team.memberIds||[]) }); setShowEditTeamModal(true); fetchAllUsersForTeams(); }}>
+                            <FiEdit size={13} />
+                          </button>
+                          <button style={{ width:30, height:30, borderRadius:8, border:'1px solid #fee2e2', background:'#fff5f5', color:'#ef4444', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+                            title="Delete team"
+                            onClick={async () => {
+                              if (!window.confirm('Delete team "' + team.name + '"?')) return;
+                              try {
+                                const r = await fetch(`${API}/teams/${team.id}`, { method:'DELETE', credentials:'include' });
+                                if (r.ok) { showToast('Team deleted','success'); fetchTeams(); }
+                                else showToast('Delete failed','error');
+                              } catch { showToast('Network error','error'); }
+                            }}>
+                            <FiTrash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                      {/* Description */}
+                      {team.description && (
+                        <p style={{ margin:'0 0 12px', fontSize:12, color:'#6b7280', lineHeight:1.5 }}>{team.description}</p>
+                      )}
+                      {/* Member avatars */}
+                      {(team.members||[]).length > 0 && (
+                        <div style={{ display:'flex', alignItems:'center', gap:0, marginTop:8 }}>
+                          {(team.members||[]).slice(0,5).map((m, idx) => (
+                            <div key={m.id} title={m.name} style={{
+                              width:28, height:28, borderRadius:'50%', border:'2px solid #fff',
+                              background:`hsl(${(m.id*47)%360},60%,65%)`, color:'#fff',
+                              display:'flex', alignItems:'center', justifyContent:'center',
+                              fontSize:10, fontWeight:700, marginLeft: idx===0 ? 0 : -8,
+                              boxShadow:'0 1px 3px rgba(0,0,0,0.15)',
+                            }}>
+                              {(m.name||'?').charAt(0).toUpperCase()}
+                            </div>
+                          ))}
+                          {(team.members||[]).length > 5 && (
+                            <div style={{ width:28, height:28, borderRadius:'50%', border:'2px solid #fff', background:'#e5e7eb', color:'#6b7280', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9, fontWeight:700, marginLeft:-8 }}>
+                              +{(team.members||[]).length - 5}
+                            </div>
+                          )}
+                          <span style={{ fontSize:11, color:'#9ca3af', marginLeft:10 }}>
+                            {(team.members||[]).map(m=>m.name).slice(0,2).join(', ')}{(team.members||[]).length>2?'...':''}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
+      {/* CREATE TEAM MODAL */}
+      {showCreateTeamModal && (
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:560, borderRadius:16, overflow:'hidden' }}>
+            {/* Header */}
+            <div className="users-page-modal-header" style={{ background:'linear-gradient(135deg,#6366f1,#4f46e5)', color:'#fff', padding:'20px 24px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <FiUsers size={20} color="#fff" />
+                </div>
+                <div>
+                  <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:'#fff' }}>Create New Team</h2>
+                  <p style={{ margin:0, fontSize:12, color:'rgba(255,255,255,0.75)', marginTop:2 }}>Group users into a team</p>
+                </div>
+              </div>
+              <button className="users-page-modal-close" onClick={()=>setShowCreateTeamModal(false)}
+                style={{ background:'rgba(255,255,255,0.15)', border:'none', borderRadius:8, color:'#fff', cursor:'pointer', padding:6, display:'flex', alignItems:'center' }}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="users-page-modal-body" style={{ padding:'20px 24px' }}>
+              {/* Team Name + Description side by side */}
+              <div className="users-page-form-row">
+                <div className="users-page-form-group">
+                  <label>Team Name <span style={{color:'#ef4444'}}>*</span></label>
+                  <input type="text" value={teamForm.name}
+                    onChange={e=>setTeamForm({...teamForm,name:e.target.value})}
+                    placeholder="e.g. Sales North Team"
+                    style={{ borderColor: teamForm.name ? '#6366f1' : '' }} />
+                </div>
+                <div className="users-page-form-group">
+                  <label>Description <span style={{color:'#9ca3af',fontWeight:400}}>(optional)</span></label>
+                  <input type="text" value={teamForm.description}
+                    onChange={e=>setTeamForm({...teamForm,description:e.target.value})}
+                    placeholder="Brief description of this team" />
+                </div>
+              </div>
+              {/* Members */}
+              <div className="users-page-form-group" style={{ marginTop:4 }}>
+                <label style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span>Members</span>
+                  {teamForm.memberIds.length > 0 && (
+                    <button type="button" style={{ fontSize:11, color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}
+                      onClick={() => setTeamForm(prev => ({...prev, memberIds:[]}))}>
+                      Clear all
+                    </button>
+                  )}
+                </label>
+                <div style={{ maxHeight:300, overflowY:'auto', borderRadius:10, border:'1px solid #e5e7eb' }}>
+                  <div style={{ padding:'10px 14px', background:'#f8fafc', borderBottom:'1px solid #e5e7eb', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0 }}>
+                    <span style={{ fontSize:12, fontWeight:600, color:'#6b7280', display:'flex', alignItems:'center', gap:6 }}><FiUsers size={13}/> USERS</span>
+                    <span style={{ fontSize:12, color:'#6366f1', fontWeight:700 }}>{teamForm.memberIds.length} / {allUsersForTeams.length} selected</span>
+                  </div>
+                  {allUsersForTeamsLoading ? (
+                    <div style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>
+                      <FiLoader size={18} style={{ animation:'spin 0.8s linear infinite', marginBottom:6, display:'block', margin:'0 auto 6px' }} />
+                      Loading users...
+                    </div>
+                  ) : (allUsersForTeams.length === 0 ? (
+                    <div style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>No users found</div>
+                  ) : (
+                  allUsersForTeams.map(u => {
+                    const isSelected = teamForm.memberIds.includes(u.id);
+                    return (
+                      <label key={u.id} style={{
+                        display:'flex', alignItems:'center', gap:12, padding:'10px 14px',
+                        cursor:'pointer', transition:'background 0.1s',
+                        background: isSelected ? '#f0f4ff' : '#fff',
+                        borderBottom:'1px solid #f1f5f9',
+                      }}>
+                        <input type="checkbox" checked={isSelected}
+                          onChange={e => setTeamForm(prev => ({
+                            ...prev,
+                            memberIds: e.target.checked
+                              ? [...prev.memberIds, u.id]
+                              : prev.memberIds.filter(id => id !== u.id)
+                          }))}
+                          style={{ width:15, height:15, accentColor:'#6366f1', cursor:'pointer', flexShrink:0, marginTop:1 }} />
+                        <div style={{
+                          width:34, height:34, borderRadius:'50%', flexShrink:0,
+                          background: isSelected ? '#6366f1' : `hsl(${(u.id*47)%360},55%,62%)`,
+                        }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e1b4b' : '#111827', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {u.full_name}
+                          </div>
+                          <div style={{ fontSize:11, color: isSelected ? '#6366f1' : '#9ca3af', marginTop:1 }}>
+                            {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })))}
+                </div>
+              </div>
+            </div>
+            <div className="users-page-modal-footer" style={{ padding:'16px 24px', borderTop:'1px solid #f1f5f9' }}>
+              <button className="users-page-btn users-page-btn-secondary" onClick={()=>setShowCreateTeamModal(false)}>Cancel</button>
+              <button className="users-page-btn users-page-btn-primary"
+                style={{ display:'flex', alignItems:'center', gap:8 }}
+                onClick={async()=>{
+                  if(!teamForm.name.trim()){showToast('Team name is required','error');return;}
+                  try{
+                    const r=await fetch(`${API}/teams/create`,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json','User-Id':String(user.id)},body:JSON.stringify({name:teamForm.name,description:teamForm.description,memberIds:teamForm.memberIds})});
+                    if(r.ok){showToast('Team created!','success');setShowCreateTeamModal(false);fetchTeams();}
+                    else{const t=await r.text();let m=t;try{m=JSON.parse(t).message||t;}catch{}showToast(m||'Error creating team','error');}
+                  }catch{showToast('Network error','error');}
+                }}>
+                <FiUserPlus size={15} /> Create Team
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT TEAM MODAL */}
+      {showEditTeamModal && selectedTeam && (
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e=>e.stopPropagation()}
+            style={{ maxWidth:560, borderRadius:16, overflow:'hidden' }}>
+            {/* Header */}
+            <div className="users-page-modal-header" style={{ background:'linear-gradient(135deg,#0ea5e9,#0284c7)', color:'#fff', padding:'20px 24px' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,0.2)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <FiEdit size={20} color="#fff" />
+                </div>
+                <div>
+                  <h2 style={{ margin:0, fontSize:18, fontWeight:700, color:'#fff' }}>Edit Team</h2>
+                  <p style={{ margin:0, fontSize:12, color:'rgba(255,255,255,0.75)', marginTop:2 }}>{selectedTeam.name}</p>
+                </div>
+              </div>
+              <button className="users-page-modal-close" onClick={()=>setShowEditTeamModal(false)}
+                style={{ background:'rgba(255,255,255,0.15)', border:'none', borderRadius:8, color:'#fff', cursor:'pointer', padding:6, display:'flex', alignItems:'center' }}>
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="users-page-modal-body" style={{ padding:'20px 24px' }}>
+              {/* Team Name + Description side by side */}
+              <div className="users-page-form-row">
+                <div className="users-page-form-group">
+                  <label>Team Name <span style={{color:'#ef4444'}}>*</span></label>
+                  <input type="text" value={teamForm.name}
+                    onChange={e=>setTeamForm({...teamForm,name:e.target.value})} />
+                </div>
+                <div className="users-page-form-group">
+                  <label>Description <span style={{color:'#9ca3af',fontWeight:400}}>(optional)</span></label>
+                  <input type="text" value={teamForm.description}
+                    onChange={e=>setTeamForm({...teamForm,description:e.target.value})}
+                    placeholder="Brief description" />
+                </div>
+              </div>
+              {/* Members */}
+              <div className="users-page-form-group" style={{ marginTop:4 }}>
+                <label style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                  <span>Members</span>
+                  {teamForm.memberIds.length > 0 && (
+                    <button type="button" style={{ fontSize:11, color:'#ef4444', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}
+                      onClick={() => setTeamForm(prev => ({...prev, memberIds:[]}))}>
+                      Clear all
+                    </button>
+                  )}
+                </label>
+                <div style={{ maxHeight:300, overflowY:'auto', borderRadius:10, border:'1px solid #e5e7eb' }}>
+                  <div style={{ padding:'10px 14px', background:'#f8fafc', borderBottom:'1px solid #e5e7eb', display:'flex', justifyContent:'space-between', alignItems:'center', position:'sticky', top:0 }}>
+                    <span style={{ fontSize:12, fontWeight:600, color:'#6b7280', display:'flex', alignItems:'center', gap:6 }}><FiUsers size={13}/> USERS</span>
+                    <span style={{ fontSize:12, color:'#0ea5e9', fontWeight:700 }}>{teamForm.memberIds.length} / {allUsersForTeams.length} selected</span>
+                  </div>
+                  {allUsersForTeamsLoading ? (
+                    <div style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>
+                      <FiLoader size={18} style={{ animation:'spin 0.8s linear infinite', marginBottom:6, display:'block', margin:'0 auto 6px' }} />
+                      Loading users...
+                    </div>
+                  ) : (allUsersForTeams.length === 0 ? (
+                    <div style={{ padding:'20px', textAlign:'center', color:'#9ca3af', fontSize:13 }}>No users found</div>
+                  ) : (
+                  allUsersForTeams.map(u => {
+                    const isSelected = teamForm.memberIds.includes(u.id);
+                    return (
+                      <label key={u.id} style={{
+                        display:'flex', alignItems:'center', gap:12, padding:'10px 14px',
+                        cursor:'pointer', transition:'background 0.1s',
+                        background: isSelected ? '#f0f9ff' : '#fff',
+                        borderBottom:'1px solid #f1f5f9',
+                      }}>
+                        <input type="checkbox" checked={isSelected}
+                          onChange={e => setTeamForm(prev => ({
+                            ...prev,
+                            memberIds: e.target.checked
+                              ? [...prev.memberIds, u.id]
+                              : prev.memberIds.filter(id => id !== u.id)
+                          }))}
+                          style={{ width:15, height:15, accentColor:'#0ea5e9', cursor:'pointer', flexShrink:0, marginTop:1 }} />
+                        <div style={{
+                          width:34, height:34, borderRadius:'50%', flexShrink:0,
+                          background: isSelected ? '#0ea5e9' : `hsl(${(u.id*47)%360},55%,62%)`,
+                        }} />
+                        <div style={{ flex:1, minWidth:0 }}>
+                          <div style={{ fontSize:13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#0c4a6e' : '#111827', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                            {u.full_name}
+                          </div>
+                          <div style={{ fontSize:11, color: isSelected ? '#0ea5e9' : '#9ca3af', marginTop:1 }}>
+                            {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
+                          </div>
+                        </div>
+                      </label>
+                    );
+                  })))}
+                </div>
+              </div>
+            </div>
+            <div className="users-page-modal-footer" style={{ padding:'16px 24px', borderTop:'1px solid #f1f5f9' }}>
+              <button className="users-page-btn users-page-btn-secondary" onClick={()=>setShowEditTeamModal(false)}>Cancel</button>
+              <button className="users-page-btn users-page-btn-primary"
+                style={{ display:'flex', alignItems:'center', gap:8 }}
+                onClick={async()=>{
+                  if(!teamForm.name.trim()){showToast('Team name is required','error');return;}
+                  try{
+                    const r=await fetch(`${API}/teams/${selectedTeam.id}`,{method:'PUT',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:teamForm.name,description:teamForm.description,memberIds:teamForm.memberIds})});
+                    if(r.ok){showToast('Team updated!','success');setShowEditTeamModal(false);setSelectedTeam(null);fetchTeams();}
+                    else{const t=await r.text();let m=t;try{m=JSON.parse(t).message||t;}catch{}showToast(m||'Error updating team','error');}
+                  }catch{showToast('Network error','error');}
+                }}>
+                <FiCheckCircle size={15} /> Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ââ ADD USER MODAL ââââââââââââââââââââââââââââââââââââââââââââââââââ */}
+      {showAddUserModal && (
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
+            <div className="users-page-modal-header">
+              <h2>Add New User</h2>
+              <button className="users-page-modal-close" onClick={() => setShowAddUserModal(false)}><FiX size={18} /></button>
+            </div>
             <form onSubmit={handleAddUserSubmit} autoComplete="off">
               <div className="users-page-modal-body">
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
-                    <label>Username (User ID) <span style={{ color: 'red' }}>*</span></label>
-                    <input
-                      type="text"
-                      required
-                      autoComplete="off"
-                      data-form-type="other"
-                      value={newUser.user_id}
-                      onChange={(e) => setNewUser({ ...newUser, user_id: e.target.value })}
-                      placeholder="Enter unique username"
-                    />
+                    <label>Username (User ID) <span style={{color:'red'}}>*</span></label>
+                    <input type="text" required autoComplete="off" value={newUser.user_id}
+                      onChange={e => setNewUser({...newUser, user_id: e.target.value})} placeholder="Enter unique username" />
                     {userIdValidation.message && (
-                      <div
-                        style={{
-                          marginTop: '4px',
-                          fontSize: '13px',
-                          color: userIdValidation.isValid ? '#22c55e' : userIdValidation.isValid === false ? '#ef4444' : '#6b7280'
-                        }}
-                      >
-                        {userIdValidation.checking ? '⏳ ' : userIdValidation.isValid ? '✓ ' : userIdValidation.isValid === false ? '✕ ' : ''}
+                      <div style={{marginTop:4,fontSize:13,color:userIdValidation.isValid?'#22c55e':userIdValidation.isValid===false?'#ef4444':'#6b7280',display:'flex',alignItems:'center',gap:4}}>
+                        {userIdValidation.checking ? <FiLoader size={13} style={{animation:'spin 0.8s linear infinite'}} /> : userIdValidation.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : userIdValidation.isValid===false ? <FiAlertCircle size={13} color="#ef4444" /> : null}
                         {userIdValidation.message}
                       </div>
                     )}
                   </div>
-
                   <div className="users-page-form-group">
-                    <label>Full Name <span style={{ color: 'red' }}>*</span></label>
-                    <input
-                      type="text"
-                      required
-                      autoComplete="off"
-                      data-form-type="other"
-                      value={newUser.name}
-                      onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                      placeholder="Enter full name"
-                    />
+                    <label>Full Name <span style={{color:'red'}}>*</span></label>
+                    <input type="text" required autoComplete="off" value={newUser.name}
+                      onChange={e => setNewUser({...newUser, name: e.target.value})} placeholder="Enter full name" />
                   </div>
                 </div>
-
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
-                    <label>Email <span style={{ color: 'red' }}>*</span></label>
-                    <input
-                      type="email"
-                      required
-                      autoComplete="new-email"
-                      data-form-type="other"
-                      value={newUser.email}
-                      onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                      placeholder="Enter email address"
-                    />
+                    <label>Email <span style={{color:'red'}}>*</span></label>
+                    <input type="email" required autoComplete="new-email" value={newUser.email}
+                      onChange={e => setNewUser({...newUser, email: e.target.value})} placeholder="Enter email address" />
                   </div>
-
                   <div className="users-page-form-group">
-                    <label>Phone</label>
-                    <input
-                      type="tel"
-                      autoComplete="off"
-                      data-form-type="other"
-                      value={newUser.phone}
-                      onChange={(e) => {
-                        const value = e.target.value.replace(/\D/g, '');
-                        if (value.length <= 10) {
-                          setNewUser({ ...newUser, phone: value });
-                        }
-                      }}
-                      placeholder="Enter 10-digit phone number"
-                      maxLength="10"
-                    />
+                    <label>Phone <span style={{color:'#ef4444'}}>*</span></label>
+                    <input type="tel" required autoComplete="off" value={newUser.phone}
+                      onChange={e => { const v=e.target.value.replace(/\D/g,''); if(v.length<=10) setNewUser({...newUser,phone:v}); setPhoneTouched(true); }}
+                      onBlur={() => setPhoneTouched(true)}
+                      placeholder="Enter 10-digit phone number" maxLength="10"
+                      style={{ borderColor: phoneTouched && phoneValidation.isValid ? '#22c55e' : phoneTouched && !phoneValidation.isValid ? '#ef4444' : '' }} />
                     {phoneValidation.message && (
-                      <div
-                        style={{
-                          marginTop: '4px',
-                          fontSize: '13px',
-                          color: phoneValidation.isValid ? '#22c55e' : '#ef4444'
-                        }}
-                      >
-                        {phoneValidation.isValid ? '✓ ' : ''}
+                      <div style={{marginTop:4,fontSize:13,color:phoneValidation.isValid?'#22c55e':'#ef4444',display:'flex',alignItems:'center',gap:4}}>
+                        {phoneValidation.isValid ? <FiCheckCircle size={13}/> : <FiAlertCircle size={13}/>}
                         {phoneValidation.message}
                       </div>
                     )}
                   </div>
                 </div>
-
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
-                    <label>Password <span style={{ color: 'red' }}>*</span></label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        required
-                        autoComplete="new-password"
-                        data-form-type="other"
-                        name="new-user-password"
-                        value={newUser.password}
-                        onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                        placeholder="Enter password"
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#718096',
-                          fontSize: '18px',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                      >
-                        {showPassword ? <FiEyeOff /> : <FiEye />}
+                    <label>Password <span style={{color:'red'}}>*</span></label>
+                    <div style={{position:'relative'}}>
+                      <input type={showPassword?"text":"password"} required autoComplete="new-password" value={newUser.password}
+                        onChange={e => setNewUser({...newUser,password:e.target.value})} placeholder="Enter password" style={{paddingRight:40}} />
+                      <button type="button" onClick={()=>setShowPassword(!showPassword)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#718096',fontSize:18,padding:4,display:'flex',alignItems:'center'}}>
+                        {showPassword?<FiEyeOff/>:<FiEye/>}
                       </button>
                     </div>
-                    {passwordStrength.message && (
-                      <div
-                        style={{
-                          marginTop: '4px',
-                          fontSize: '13px',
-                          color: passwordStrength.isValid ? '#22c55e' : '#ef4444'
-                        }}
-                      >
-                        {passwordStrength.isValid ? '✓ ' : '✕ '}
-                        {passwordStrength.message}
-                      </div>
-                    )}
+                    {passwordStrength.message && <div style={{marginTop:4,fontSize:13,color:passwordStrength.isValid?'#22c55e':'#ef4444',display:'flex',alignItems:'center',gap:4}}>{passwordStrength.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordStrength.message}</div>}
                   </div>
-
                   <div className="users-page-form-group">
-                    <label>Confirm Password <span style={{ color: 'red' }}>*</span></label>
-                    <div style={{ position: 'relative' }}>
-                      <input
-                        type={showConfirmPassword ? "text" : "password"}
-                        required
-                        autoComplete="new-password"
-                        data-form-type="other"
-                        name="confirm-user-password"
-                        value={newUser.confirmPassword}
-                        onChange={(e) => setNewUser({ ...newUser, confirmPassword: e.target.value })}
-                        placeholder="Re-enter password"
-                        style={{ paddingRight: '40px' }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        style={{
-                          position: 'absolute',
-                          right: '12px',
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: '#718096',
-                          fontSize: '18px',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                      >
-                        {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
+                    <label>Confirm Password <span style={{color:'red'}}>*</span></label>
+                    <div style={{position:'relative'}}>
+                      <input type={showConfirmPassword?"text":"password"} required autoComplete="new-password" value={newUser.confirmPassword}
+                        onChange={e => setNewUser({...newUser,confirmPassword:e.target.value})} placeholder="Re-enter password" style={{paddingRight:40}} />
+                      <button type="button" onClick={()=>setShowConfirmPassword(!showConfirmPassword)} style={{position:'absolute',right:12,top:'50%',transform:'translateY(-50%)',background:'none',border:'none',cursor:'pointer',color:'#718096',fontSize:18,padding:4,display:'flex',alignItems:'center'}}>
+                        {showConfirmPassword?<FiEyeOff/>:<FiEye/>}
                       </button>
                     </div>
-                    {passwordMatch.message && (
-                      <div
-                        style={{
-                          marginTop: '4px',
-                          fontSize: '13px',
-                          color: passwordMatch.isValid ? '#22c55e' : '#ef4444'
-                        }}
-                      >
-                        {passwordMatch.isValid ? '✓ ' : '✕ '}
-                        {passwordMatch.message}
-                      </div>
-                    )}
+                    {passwordMatch.message && <div style={{marginTop:4,fontSize:13,color:passwordMatch.isValid?'#22c55e':'#ef4444',display:'flex',alignItems:'center',gap:4}}>{passwordMatch.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordMatch.message}</div>}
                   </div>
                 </div>
-
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
-                    <label>Role <span style={{ color: 'red' }}>*</span></label>
-                    <select
-                      required
-                      autoComplete="off"
-                      value={newUser.role}
-                      onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                    >
+                    <label>Role <span style={{color:'red'}}>*</span></label>
+                    <select required autoComplete="off" value={newUser.role} onChange={e => setNewUser({...newUser,role:e.target.value})}>
                       <option value="">Select Role</option>
-                      {filteredRoles.map(role => (
-                        <option key={role.id} value={role.name}>
-                          {role.name}
-                        </option>
-                      ))}
+                      {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                     </select>
                   </div>
-
-                  <div className="users-page-form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: '40px' }}>
-                    <label className="users-page-checkbox-label" style={{ marginBottom: '0' }}>
-                      <span><input
-                        type="checkbox"
-                        checked={newUser.is_active}
-                        onChange={(e) => setNewUser({ ...newUser, is_active: e.target.checked })}
-                      /></span>
-                      <span style={{ paddingLeft: "5px", marginTop: "0px" }}>Active User</span>
+                  <div className="users-page-form-group" style={{display:'flex',alignItems:'center',paddingTop:40}}>
+                    <label className="users-page-checkbox-label" style={{marginBottom:0}}>
+                      <span><input type="checkbox" checked={newUser.is_active} onChange={e => setNewUser({...newUser,is_active:e.target.checked})}/></span>
+                      <span style={{paddingLeft:5}}>Active User</span>
                     </label>
                   </div>
                 </div>
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Reports To (Manager)</label>
+                    {/* FIX #2: String coercion for select value */}
+                    <select value={String(newUser.managerId || '')}
+                      onChange={e => setNewUser({...newUser, managerId: e.target.value ? Number(e.target.value) : ''})}>
+                      <option value="">-- None --</option>
+                      {managerOptions.map(u => <option key={u.id} value={String(u.id)}>{u.full_name} ({u.role_name})</option>)}
+                    </select>
+                    <span style={{fontSize:12,color:'#9ca3af',marginTop:4,display:'block'}}>Sets who this user reports to in the hierarchy</span>
+                  </div>
+                  <div className="users-page-form-group">
+                    <label>Team</label>
+                    <input type="text" value={newUser.team} onChange={e => setNewUser({...newUser,team:e.target.value})} placeholder="e.g. Sales Team A, BD North" />
+                    <span style={{fontSize:12,color:'#9ca3af',marginTop:4,display:'block'}}>Optional grouping label</span>
+                  </div>
+                </div>
+                {/* FIX #7: designation field */}
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Designation</label>
+                    <input type="text" value={newUser.designation} onChange={e => setNewUser({...newUser,designation:e.target.value})} placeholder="e.g. Senior Sales Executive" />
+                    <span style={{fontSize:12,color:'#9ca3af',marginTop:4,display:'block'}}>Job title shown in hierarchy chart</span>
+                  </div>
+                </div>
               </div>
-
               <div className="users-page-modal-footer">
-                <button
-                  type="button"
-                  className="users-page-btn users-page-btn-secondary"
-                  onClick={() => setShowAddUserModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="users-page-btn users-page-btn-primary"
-                  disabled={loading || !userIdValidation.isValid || !passwordStrength.isValid || !passwordMatch.isValid}
-                >
+                <button type="button" className="users-page-btn users-page-btn-secondary" onClick={() => setShowAddUserModal(false)}>Cancel</button>
+                <button type="submit" className="users-page-btn users-page-btn-primary"
+                  disabled={loading || !userIdValidation.isValid || !passwordStrength.isValid || !passwordMatch.isValid}>
                   {loading ? 'Creating...' : 'Create User'}
                 </button>
               </div>
@@ -1614,381 +1707,203 @@ const UsersPage = () => {
         </div>
       )}
 
-      {/* Edit User Modal */}
+      {/* ââ EDIT USER MODAL âââââââââââââââââââââââââââââââââââââââââââââââââ */}
       {showEditUserModal && selectedUser && (
-        <div className="users-page-modal-overlay" >
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="users-page-modal-header">
               <h2>Edit User</h2>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowEditUserModal(false)}
-              >
-                ×
-              </button>
+              <button className="users-page-modal-close" onClick={() => setShowEditUserModal(false)}><FiX size={18} /></button>
             </div>
-
             <form onSubmit={handleUpdateUser}>
               <div className="users-page-modal-body">
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
                     <label>Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      value={selectedUser.full_name}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, full_name: e.target.value })}
-                    />
+                    <input type="text" required value={selectedUser.full_name} onChange={e => setSelectedUser({...selectedUser,full_name:e.target.value})} />
                   </div>
-
                   <div className="users-page-form-group">
                     <label>Email</label>
-                    <input
-                      type="email"
-                      required
-                      value={selectedUser.email}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, email: e.target.value })}
-                    />
+                    <input type="email" required value={selectedUser.email} onChange={e => setSelectedUser({...selectedUser,email:e.target.value})} />
                   </div>
                 </div>
-
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
                     <label>Phone</label>
-                    <input
-                      type="tel"
-                      value={selectedUser.phone}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, phone: e.target.value })}
-                    />
+                    <input type="tel" value={selectedUser.phone} onChange={e => setSelectedUser({...selectedUser,phone:e.target.value})} />
                   </div>
-
                   <div className="users-page-form-group">
                     <label>Role</label>
-                    <select
-                      required
-                      value={selectedUser.role_id}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, role_id: e.target.value, role_name: e.target.value })}
-                    >
+                    <select required value={selectedUser.role_id} onChange={e => setSelectedUser({...selectedUser,role_id:e.target.value,role_name:e.target.value})}>
                       <option value="">Select Role</option>
-                      {filteredRoles.map(role => (
-                        <option key={role.id} value={role.name}>
-                          {role.name}
-                        </option>
-                      ))}
+                      {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
                     </select>
                   </div>
                 </div>
-
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Reports To (Manager)</label>
+                    {/* FIX #2: coerce to String for select comparison - managerId is Long from API */}
+                    <select value={String(selectedUser.managerId || '')}
+                      onChange={e => setSelectedUser({...selectedUser, managerId: e.target.value ? Number(e.target.value) : null})}>
+                      <option value="">-- None --</option>
+                      {users.filter(u => u.id !== selectedUser.id).map(u => (
+                        <option key={u.id} value={String(u.id)}>{u.full_name} ({u.role_name})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="users-page-form-group">
+                    <label>Team</label>
+                    <input type="text" value={selectedUser.team || ''} onChange={e => setSelectedUser({...selectedUser,team:e.target.value})} placeholder="e.g. Sales Team A" />
+                  </div>
+                </div>
+                {/* FIX #7: designation in edit modal */}
+                <div className="users-page-form-row">
+                  <div className="users-page-form-group">
+                    <label>Designation</label>
+                    <input type="text" value={selectedUser.designation || ''} onChange={e => setSelectedUser({...selectedUser,designation:e.target.value})} placeholder="e.g. Senior Sales Executive" />
+                    <span style={{fontSize:12,color:'#9ca3af',marginTop:4,display:'block'}}>Job title shown in hierarchy chart</span>
+                  </div>
+                </div>
                 <div className="users-page-form-group">
                   <label className="users-page-checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={selectedUser.is_active}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, is_active: e.target.checked })}
-                    />
+                    <input type="checkbox" checked={selectedUser.is_active} onChange={e => setSelectedUser({...selectedUser,is_active:e.target.checked})} />
                     <span>Active User</span>
                   </label>
                 </div>
-
-                <div style={{ marginTop: '20px', padding: '12px', background: '#f0f9ff', borderRadius: '8px', border: '1px solid #bae6fd' }}>
-                  <p style={{ margin: 0, fontSize: '14px', color: '#0369a1' }}>
-                    <strong>Note:</strong> To edit permissions, use the permission buttons from the table row for this user.
-                  </p>
+                <div style={{marginTop:20,padding:12,background:'#f0f9ff',borderRadius:8,border:'1px solid #bae6fd'}}>
+                  <p style={{margin:0,fontSize:14,color:'#0369a1'}}><strong>Note:</strong> To edit permissions, use the permission buttons from the table row for this user.</p>
                 </div>
               </div>
-
               <div className="users-page-modal-footer">
-                <button
-                  type="button"
-                  className="users-page-btn users-page-btn-secondary"
-                  onClick={() => setShowEditUserModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="users-page-btn users-page-btn-primary"
-                  disabled={loading}
-                >
-                  {loading ? 'Updating...' : 'Update User'}
-                </button>
+                <button type="button" className="users-page-btn users-page-btn-secondary" onClick={() => setShowEditUserModal(false)}>Cancel</button>
+                <button type="submit" className="users-page-btn users-page-btn-primary" disabled={loading}>{loading ? 'Updating...' : 'Update User'}</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* View Menu Permissions Modal */}
+      {/* ââ VIEW MENU PERMISSIONS âââââââââââââââââââââââââââââââââââââââââââ */}
       {showMenuPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" >
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="users-page-modal-header">
-              <div>
-                <h2>Menu Permissions - {selectedUser.full_name}</h2>
-                <p className="users-page-modal-subtitle">@{selectedUser.username}</p>
-              </div>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowMenuPermissionsModal(false)}
-              >
-                ×
-              </button>
+              <div><h2>Menu Permissions - {selectedUser.full_name}</h2><p className="users-page-modal-subtitle">@{selectedUser.username}</p></div>
+              <button className="users-page-modal-close" onClick={() => setShowMenuPermissionsModal(false)}><FiX size={18} /></button>
             </div>
-
             <div className="users-page-modal-body">
-              <div className="users-page-permissions-summary">
-                <strong>Total Assigned Menu Permissions:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length}
-              </div>
-
+              <div className="users-page-permissions-summary"><strong>Total Assigned:</strong> {Object.values(selectedUserMenuPermissions).filter(v=>v===1).length}</div>
               <div className="users-page-permission-list">
-                {menuPermissionsList.map(menu => (
-                  selectedUserMenuPermissions[menu.dbField] === 1 && (
-                    <div key={menu.id} className="users-page-permission-item">
-                      <span className="users-page-permission-check">✓</span>
-                      <div className="users-page-permission-details">
-                        <div className="users-page-permission-name">{menu.name}</div>
-                      </div>
-                    </div>
-                  )
+                {menuPermissionsList.map(m => selectedUserMenuPermissions[m.dbField]===1 && (
+                  <div key={m.id} className="users-page-permission-item"><span className="users-page-permission-check">â</span><div className="users-page-permission-details"><div className="users-page-permission-name">{m.name}</div></div></div>
                 ))}
               </div>
-
-              {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length === 0 && (
-                <div className="users-page-empty-state">
-                  <p>No menu permissions assigned</p>
-                </div>
-              )}
+              {Object.values(selectedUserMenuPermissions).filter(v=>v===1).length===0 && <div className="users-page-empty-state"><p>No menu permissions assigned</p></div>}
             </div>
-
             <div className="users-page-modal-footer">
-              <button
-                className="users-page-btn users-page-btn-secondary"
-                onClick={() => setShowMenuPermissionsModal(false)}
-              >
-                Close
-              </button>
-              <button
-                className="users-page-btn users-page-btn-primary"
-                onClick={() => {
-                  setShowMenuPermissionsModal(false);
-                  handleEditMenuPermissions(selectedUser);
-                }}
-              >
-                Edit Permissions
-              </button>
+              <button className="users-page-btn users-page-btn-secondary" onClick={() => setShowMenuPermissionsModal(false)}>Close</button>
+              <button className="users-page-btn users-page-btn-primary" onClick={() => { setShowMenuPermissionsModal(false); handleEditMenuPermissions(selectedUser); }}>Edit Permissions</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit Menu Permissions Modal */}
+      {/* ââ EDIT MENU PERMISSIONS âââââââââââââââââââââââââââââââââââââââââââ */}
       {showEditMenuPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" >
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="users-page-modal-header">
-              <div>
-                <h2>Edit Menu Permissions - {selectedUser.full_name}</h2>
-                <p className="users-page-modal-subtitle">
-                  Select menu access permissions (showing only permissions you have access to)
-                </p>
-              </div>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowEditMenuPermissionsModal(false)}
-              >
-                ×
-              </button>
+              <div><h2>Edit Menu Permissions - {selectedUser.full_name}</h2><p className="users-page-modal-subtitle">Select menu access permissions</p></div>
+              <button className="users-page-modal-close" onClick={() => setShowEditMenuPermissionsModal(false)}><FiX size={18} /></button>
             </div>
-
             <div className="users-page-modal-body">
               <div className="users-page-permissions-summary">
-                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v => v === 1).length} of {availableMenuPermissions.length}
-                <button
-                  type="button"
-                  className="users-page-btn-select-all"
-                  style={{ marginLeft: '16px' }}
-                  onClick={() => {
-                    const allSelected = Object.values(selectedUserMenuPermissions).every(v => v === 1);
-                    const newPerms = {};
-                    availableMenuPermissions.forEach(menu => {
-                      newPerms[menu.dbField] = allSelected ? 0 : 1;
-                    });
-                    setSelectedUserMenuPermissions(newPerms);
-                  }}
-                >
-                  {Object.values(selectedUserMenuPermissions).every(v => v === 1) ? 'Deselect All' : 'Select All'}
-                </button>
+                <strong>Selected:</strong> {Object.values(selectedUserMenuPermissions).filter(v=>v===1).length} of {availableMenuPermissions.length}
+                <button type="button" className="users-page-btn-select-all" style={{marginLeft:16}} onClick={() => {
+                  const allSel = Object.values(selectedUserMenuPermissions).every(v=>v===1);
+                  const newP = {}; availableMenuPermissions.forEach(m => { newP[m.dbField] = allSel?0:1; });
+                  setSelectedUserMenuPermissions(newP);
+                }}>{Object.values(selectedUserMenuPermissions).every(v=>v===1)?'Deselect All':'Select All'}</button>
               </div>
-
               <div className="users-page-menu-permissions-grid">
-                {availableMenuPermissions.map(menu => (
-                  <div key={menu.id} className="users-page-menu-permission-item">
+                {availableMenuPermissions.map(m => (
+                  <div key={m.id} className="users-page-menu-permission-item">
                     <label className="users-page-toggle-label">
-                      <span className="users-page-menu-permission-name">{menu.name}</span>
+                      <span className="users-page-menu-permission-name">{m.name}</span>
                       <label className="users-page-toggle users-page-toggle-small">
-                        <input
-                          type="checkbox"
-                          checked={selectedUserMenuPermissions[menu.dbField] === 1}
-                          onChange={() => handleToggleMenuPermission(menu.dbField)}
-                        />
+                        <input type="checkbox" checked={selectedUserMenuPermissions[m.dbField]===1} onChange={() => handleToggleMenuPermission(m.dbField)} />
                         <span className="users-page-toggle-slider"></span>
                       </label>
                     </label>
                   </div>
                 ))}
               </div>
-
-              {availableMenuPermissions.length === 0 && (
-                <div className="users-page-empty-state">
-                  <p>You don't have access to any menu permissions</p>
-                </div>
-              )}
             </div>
-
             <div className="users-page-modal-footer">
-              <button
-                type="button"
-                className="users-page-btn users-page-btn-secondary"
-                onClick={() => setShowEditMenuPermissionsModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="users-page-btn users-page-btn-primary"
-                onClick={handleSaveMenuPermissions}
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : 'Save Permissions'}
-              </button>
+              <button type="button" className="users-page-btn users-page-btn-secondary" onClick={() => setShowEditMenuPermissionsModal(false)}>Cancel</button>
+              <button type="button" className="users-page-btn users-page-btn-primary" onClick={handleSaveMenuPermissions} disabled={loading}>{loading?'Saving...':'Save Permissions'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* View User Permissions Modal */}
+      {/* ââ VIEW PAGE PERMISSIONS âââââââââââââââââââââââââââââââââââââââââââ */}
       {showUserPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" >
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="users-page-modal-header">
-              <div>
-                <h2>Page Permissions - {selectedUser.full_name}</h2>
-                <p className="users-page-modal-subtitle">@{selectedUser.username} • {selectedUser.role_name}</p>
-              </div>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowUserPermissionsModal(false)}
-              >
-                ×
-              </button>
+              <div><h2>Page Permissions - {selectedUser.full_name}</h2><p className="users-page-modal-subtitle">@{selectedUser.username} â {selectedUser.role_name}</p></div>
+              <button className="users-page-modal-close" onClick={() => setShowUserPermissionsModal(false)}><FiX size={18} /></button>
             </div>
-
             <div className="users-page-modal-body">
-              <div className="users-page-permissions-summary">
-                <strong>Total Assignend Page Permissions:</strong> {selectedUserPermissions.length}
-              </div>
-
-              {Object.entries(groupPermissionsByModule(
-                pagePermissionsStructure.filter(p => selectedUserPermissions.includes(p.id))
-              )).map(([module, perms]) => (
-                <div key={module} className="users-page-permission-group">
-                  <h3 className="users-page-permission-module">{module}</h3>
+              <div className="users-page-permissions-summary"><strong>Total Assigned:</strong> {selectedUserPermissions.length}</div>
+              {Object.entries(groupPermissionsByModule(pagePermissionsStructure.filter(p => selectedUserPermissions.includes(p.id)))).map(([mod, perms]) => (
+                <div key={mod} className="users-page-permission-group">
+                  <h3 className="users-page-permission-module">{mod}</h3>
                   <div className="users-page-permission-list">
-                    {perms.map(perm => (
-                      <div key={perm.id} className="users-page-permission-item">
-                        <span className="users-page-permission-check">✓</span>
-                        <div className="users-page-permission-details">
-                          <div className="users-page-permission-name">{perm.name}</div>
-                          <div className="users-page-permission-desc">{perm.description}</div>
-                        </div>
-                      </div>
+                    {perms.map(p => (
+                      <div key={p.id} className="users-page-permission-item"><span className="users-page-permission-check">â</span><div className="users-page-permission-details"><div className="users-page-permission-name">{p.name}</div><div className="users-page-permission-desc">{p.description}</div></div></div>
                     ))}
                   </div>
                 </div>
               ))}
-
-              {selectedUserPermissions.length === 0 && (
-                <div className="users-page-empty-state">
-                  <p>No page permissions assigned</p>
-                </div>
-              )}
+              {selectedUserPermissions.length===0 && <div className="users-page-empty-state"><p>No page permissions assigned</p></div>}
             </div>
-
             <div className="users-page-modal-footer">
-              <button
-                className="users-page-btn users-page-btn-secondary"
-                onClick={() => setShowUserPermissionsModal(false)}
-              >
-                Close
-              </button>
-              <button
-                className="users-page-btn users-page-btn-primary"
-                onClick={() => {
-                  setShowUserPermissionsModal(false);
-                  handleEditUserPermissions(selectedUser);
-                }}
-              >
-                Edit Permissions
-              </button>
+              <button className="users-page-btn users-page-btn-secondary" onClick={() => setShowUserPermissionsModal(false)}>Close</button>
+              <button className="users-page-btn users-page-btn-primary" onClick={() => { setShowUserPermissionsModal(false); handleEditUserPermissions(selectedUser); }}>Edit Permissions</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Edit User Permissions Modal */}
+      {/* ââ EDIT PAGE PERMISSIONS âââââââââââââââââââââââââââââââââââââââââââ */}
       {showEditUserPermissionsModal && selectedUser && (
-        <div className="users-page-modal-overlay" >
-          <div className="users-page-modal users-page-modal-large" onClick={(e) => e.stopPropagation()}>
+        <div className="users-page-modal-overlay">
+          <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="users-page-modal-header">
-              <div>
-                <h2>Edit Page Permissions - {selectedUser.full_name}</h2>
-                <p className="users-page-modal-subtitle">
-                  Select feature permissions (showing only permissions you have access to)
-                </p>
-              </div>
-              <button
-                className="users-page-modal-close"
-                onClick={() => setShowEditUserPermissionsModal(false)}
-              >
-                ×
-              </button>
+              <div><h2>Edit Page Permissions - {selectedUser.full_name}</h2><p className="users-page-modal-subtitle">Select feature permissions</p></div>
+              <button className="users-page-modal-close" onClick={() => setShowEditUserPermissionsModal(false)}><FiX size={18} /></button>
             </div>
-
             <div className="users-page-modal-body">
-              <div className="users-page-permissions-summary">
-                <strong>Selected:</strong> {selectedUserPermissions.length} of {availablePagePermissions.length} permissions
-              </div>
-
-              {Object.entries(groupedPermissions).map(([module, perms]) => {
-                const modulePermissionIds = perms.map(p => p.id);
-                const allSelected = modulePermissionIds.every(id => selectedUserPermissions.includes(id));
-
+              <div className="users-page-permissions-summary"><strong>Selected:</strong> {selectedUserPermissions.length} of {availablePagePermissions.length}</div>
+              {Object.entries(groupedPermissions).map(([mod, perms]) => {
+                const ids = perms.map(p=>p.id);
+                const allSel = ids.every(id => selectedUserPermissions.includes(id));
                 return (
-                  <div key={module} className="users-page-permission-group">
+                  <div key={mod} className="users-page-permission-group">
                     <div className="users-page-permission-module-header">
-                      <h3 className="users-page-permission-module">{module}</h3>
-                      <button
-                        type="button"
-                        className="users-page-btn-select-all"
-                        onClick={() => handleSelectAllUserPermissionsInModule(module)}
-                      >
-                        {allSelected ? 'Deselect All' : 'Select All'}
-                      </button>
+                      <h3 className="users-page-permission-module">{mod}</h3>
+                      <button type="button" className="users-page-btn-select-all" onClick={() => handleSelectAllUserPermissionsInModule(mod)}>{allSel?'Deselect All':'Select All'}</button>
                     </div>
                     <div className="users-page-permission-toggles">
-                      {perms.map(perm => (
-                        <div key={perm.id} className="users-page-permission-toggle-item">
+                      {perms.map(p => (
+                        <div key={p.id} className="users-page-permission-toggle-item">
                           <label className="users-page-toggle-label">
-                            <div className="users-page-permission-toggle-details">
-                              <div className="users-page-permission-name">{perm.name}</div>
-                              <div className="users-page-permission-desc">{perm.description}</div>
-                            </div>
+                            <div className="users-page-permission-toggle-details"><div className="users-page-permission-name">{p.name}</div><div className="users-page-permission-desc">{p.description}</div></div>
                             <label className="users-page-toggle users-page-toggle-small">
-                              <input
-                                type="checkbox"
-                                checked={selectedUserPermissions.includes(perm.id)}
-                                onChange={() => handleToggleUserPermission(perm.id)}
-                              />
+                              <input type="checkbox" checked={selectedUserPermissions.includes(p.id)} onChange={() => handleToggleUserPermission(p.id)} />
                               <span className="users-page-toggle-slider"></span>
                             </label>
                           </label>
@@ -1998,55 +1913,22 @@ const UsersPage = () => {
                   </div>
                 );
               })}
-
-              {availablePagePermissions.length === 0 && (
-                <div className="users-page-empty-state">
-                  <p>You don't have access to any page permissions</p>
-                </div>
-              )}
             </div>
-
             <div className="users-page-modal-footer">
-              <button
-                type="button"
-                className="users-page-btn users-page-btn-secondary"
-                onClick={() => setShowEditUserPermissionsModal(false)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="users-page-btn users-page-btn-primary"
-                onClick={handleSaveUserPermissions}
-                disabled={loading}
-              >
-                {loading ? 'Saving...' : 'Save Permissions'}
-              </button>
+              <button type="button" className="users-page-btn users-page-btn-secondary" onClick={() => setShowEditUserPermissionsModal(false)}>Cancel</button>
+              <button type="button" className="users-page-btn users-page-btn-primary" onClick={handleSaveUserPermissions} disabled={loading}>{loading?'Saving...':'Save Permissions'}</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={showDeleteConfirm}
-        onClose={() => {
-          setShowDeleteConfirm(false);
-          setUserToDelete(null);
-        }}
-        onConfirm={confirmDeleteUser}
-        title="Delete User"
+      {/* Delete Confirm */}
+      <ConfirmModal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setUserToDelete(null); }}
+        onConfirm={confirmDeleteUser} title="Delete User"
         message={`Are you sure you want to delete ${userToDelete?.full_name}?`}
-        confirmText="Delete"
-        cancelText="Cancel"
-        type="danger"
-      />
+        confirmText="Delete" cancelText="Cancel" type="danger" />
     </div>
   );
 };
 
 export default UsersPage;
-
-
-
-

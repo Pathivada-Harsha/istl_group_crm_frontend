@@ -145,14 +145,23 @@ export default function ClientDashboardFollowUps() {
       const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
         credentials: "include",
         headers: {
-          'User-Id': user.id,
+          'User-Id':   String(user.id),
           'User-Role': user.role
         }
       });
 
       if (!response.ok) throw new Error('Failed to fetch users');
       const data = await response.json();
-      setUsers(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setUsers(list);
+
+      // Default assignedTo to the current user if they are in the list,
+      // otherwise default to the first user in the list
+      if (list.length > 0) {
+        const selfInList = list.some(u => Number(u.id) === Number(user.id));
+        const defaultId = selfInList ? user.id : list[0].id;
+        setAddForm(prev => ({ ...prev, assignedTo: defaultId }));
+      }
     } catch (err) {
       console.error('Error fetching users:', err);
     }
@@ -1085,9 +1094,12 @@ export default function ClientDashboardFollowUps() {
                   <div className="followup-form-group">
                     <label>Assign To *</label>
                     <select name="assignedTo" value={addForm.assignedTo} onChange={handleAddFormChange} required>
+                      {users.length === 0 && (
+                        <option value={user.id}>{user.name || 'Me'} (Me)</option>
+                      )}
                       {users.map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.name} {u.id === user.id ? '(Me)' : ''}
+                          {u.name} {Number(u.id) === Number(user.id) ? '(Me)' : ''}
                         </option>
                       ))}
                     </select>
@@ -1215,9 +1227,12 @@ export default function ClientDashboardFollowUps() {
                   <div className="followup-form-group">
                     <label>Assign To *</label>
                     <select name="assignedTo" value={editForm.assignedTo} onChange={handleEditFormChange} required>
+                      {users.length === 0 && (
+                        <option value={user.id}>{user.name || 'Me'} (Me)</option>
+                      )}
                       {users.map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.name} {u.id === user.id ? '(Me)' : ''}
+                          {u.name} {Number(u.id) === Number(user.id) ? '(Me)' : ''}
                         </option>
                       ))}
                     </select>

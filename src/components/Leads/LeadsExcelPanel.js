@@ -6,7 +6,7 @@ import "./Leadsexcelpanel.css";
 
 // ── PM Surya Ghar auto-fill values ───────────────────────────────────────────
 const PM_SURYAGARH_DEFAULTS = {
-  groupName:    "Solar",
+  // groupName is read from the sheet (Solar or EPC) — not hardcoded
   subGroupName: "Solar_Rooftop",
   solarScheme:  "PM_Surya_Ghar",
 };
@@ -129,16 +129,13 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
     const errs = [];
 
     if (templateId === "pm_suryagarh") {
-      const phone = String(row[2] || "").trim().replace(/\s/g, "");
-      const enq   = String(row[5] || "").trim();
-      const state = String(row[6] || "").trim();
-      const email = String(row[1] || "").trim();
-      // name is OPTIONAL — no validation
+      // Col layout: [group, name, email, phone*, source, priority, enquiry, state, district, city, assignedEmail, notes]
+      const phone = String(row[3] || "").trim().replace(/\s/g, "");
+      const email = String(row[2] || "").trim();
+      // Phone is the ONLY mandatory field — everything else is optional
       if (!phone) errs.push("Phone required");
-      if (!enq)   errs.push("Enquiry required");
-      if (!state) errs.push("State required");
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.push("Email format invalid");
       if (phone && !/^\d{10}$/.test(phone)) errs.push("Phone must be exactly 10 digits");
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.push("Email format invalid");
     } else {
       const name  = String(row[0]  || "").trim();
       const phone = String(row[2]  || "").trim().replace(/\s/g, "");
@@ -160,29 +157,32 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
   // ── Build API payload ─────────────────────────────────────────────────────
   const rowToPayload = (row, templateId) => {
     if (templateId === "pm_suryagarh") {
-      const phone    = String(row[2]  || "").trim().replace(/\s/g, "");
-      const rawName  = String(row[0]  || "").trim();
+      // Col layout: [group, name, email, phone*, source, priority, enquiry, state, district, city, assignedEmail, notes]
+      const groupVal = String(row[0]  || "").trim() || "EPC";
+      const rawName  = String(row[1]  || "").trim();
+      const phone    = String(row[3]  || "").trim().replace(/\s/g, "");
       const name     = rawName || phone; // fallback: use phone as name
-      const notes    = String(row[10] || "").trim();
-      const enquiry  = String(row[5]  || "").trim();
-      const priority = String(row[4]  || "").trim() || "Medium";
+      const notes    = String(row[11] || "").trim();
+      const enquiry  = String(row[6]  || "").trim();
+      const priority = String(row[5]  || "").trim() || "Medium";
 
       return {
         name,
-        email:           String(row[1] || "").trim().toLowerCase() || null,
+        email:           String(row[2] || "").trim().toLowerCase() || null,
         phone,
-        source:          String(row[3] || "").trim() || "Others",
+        source:          String(row[4] || "").trim() || "Others",
         priority,
-        // Auto-filled — NOT from the spreadsheet
-        groupName:       PM_SURYAGARH_DEFAULTS.groupName,
+        // Group read from sheet — Solar or EPC both valid
+        groupName:       groupVal,
+        // Category and Scheme always auto-filled
         subGroupName:    PM_SURYAGARH_DEFAULTS.subGroupName,
         solarScheme:     PM_SURYAGARH_DEFAULTS.solarScheme,
         enquiry:         notes ? `${enquiry}\n\nNotes: ${notes}` : enquiry,
-        state:           String(row[6] || "").trim() || null,
-        district:        String(row[7] || "").trim() || null,
-        city:            String(row[8] || "").trim() || null,
+        state:           String(row[7] || "").trim() || null,
+        district:        String(row[8] || "").trim() || null,
+        city:            String(row[9] || "").trim() || null,
         pincode:         null,
-        assignedToEmail: String(row[9] || "").trim() || null,
+        assignedToEmail: String(row[10] || "").trim() || null,
         templateType:    "pm_suryagarh",
       };
     }

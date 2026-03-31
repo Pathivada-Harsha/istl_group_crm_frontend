@@ -1196,6 +1196,7 @@ useEffect(() => {
       city: lead.city || '',
       pincode: lead.pincode || '',
       solarScheme: lead.solarScheme || '',
+      subsidyRequired: lead.subsidyRequired || '',
     });
     setPhoneError(''); setShowAddModal(true);
   };
@@ -1263,7 +1264,7 @@ useEffect(() => {
       assignedTo: null, enquiry: '', groupName: '', subGroupName: '',
       closedLostReason: '',
       // NEW:
-      state: '', district: '', city: '', pincode: '', solarScheme: '',
+      state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
     });
     setPhoneError('');
   };
@@ -1719,7 +1720,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
     {formData.subGroupName === 'Solar_Rooftop' && (
       <div className="leads-enquiries-form-group">
         <label>Solar Scheme</label>
-        <select value={formData.solarScheme || ''} onChange={e => setFormData(p => ({ ...p, solarScheme: e.target.value }))}>
+        <select value={formData.solarScheme || ''} onChange={e => setFormData(p => ({ ...p, solarScheme: e.target.value, subsidyRequired: '' }))}>
           <option value="">Select Scheme</option>
           <option value="PM_Surya_Ghar">PM Surya Ghar</option>
           <option value="PM_Kusum">PM Kusum</option>
@@ -1728,6 +1729,27 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           <option value="No_Scheme">No Scheme</option>
           <option value="Others">Others</option>
         </select>
+      </div>
+    )}
+    {formData.solarScheme === 'PM_Surya_Ghar' && (
+      <div className="leads-enquiries-form-group">
+        <label>Subsidy Required?</label>
+        <div className="le-subsidy-toggle">
+          {['Yes', 'No'].map(opt => (
+            <button key={opt} type="button"
+              className={'le-subsidy-btn' + (formData.subsidyRequired === opt ? ' le-subsidy-btn--' + opt.toLowerCase() : '')}
+              onClick={() => setFormData(p => ({ ...p, subsidyRequired: p.subsidyRequired === opt ? '' : opt }))}>
+              {opt === 'Yes' ? '✅ Yes, wants subsidy' : '❌ No subsidy needed'}
+            </button>
+          ))}
+        </div>
+        {formData.subsidyRequired && (
+          <span className="le-subsidy-hint">
+            {formData.subsidyRequired === 'Yes'
+              ? 'Customer is eligible and wants the PM Surya Ghar subsidy.'
+              : 'Customer does not require the subsidy.'}
+          </span>
+        )}
       </div>
     )}
     <div className="leads-enquiries-form-group">
