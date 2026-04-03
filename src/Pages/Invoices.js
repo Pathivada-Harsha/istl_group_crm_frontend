@@ -70,8 +70,7 @@ const InvoicesManagementPage = () => {
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
-    status: 'DRAFT',
-    company: 'ISTL'
+    status: 'DRAFT'
   });
 
   const fetchOrderBookItemsForCustomer = async (customerId) => {
@@ -505,8 +504,7 @@ const fetchStats = async () => {
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
-      status: 'DRAFT',
-      company: 'ISTL'
+      status: 'DRAFT'
     });
     setCustomerData(null);
     setModalGroupName('');
@@ -530,8 +528,7 @@ const fetchStats = async () => {
       invoiceDate: invoice.invoiceDate.split('T')[0],
       dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
       items: invoice.items || [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
-      status: invoice.status,
-      company: invoice.company || 'ISTL'
+      status: invoice.status
     });
     setSelectedInvoice(invoice);
     setEditMode(true);
@@ -1184,16 +1181,6 @@ const fetchStats = async () => {
                       </select>
                     </div>
 
-                    <div className="Invoices-page-form-group">
-                      <label>Company *</label>
-                      <select
-                        value={formData.company || 'ISTL'}
-                        onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                      >
-                        <option value="ISTL">ISTL</option>
-                        <option value="SESOLA">SESOLA</option>
-                      </select>
-                    </div>
                   </div>
                 </div>
 

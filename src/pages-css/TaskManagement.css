@@ -643,3 +643,110 @@
   .tm-emp-cards-grid { grid-template-columns: 1fr; }
   .tm-wl-grid { grid-template-columns: 1fr; padding: 12px; }
 }
+/* ── v5 Work Entry improvements ─────────────────────────────────────────── */
+
+/* Larger, more readable textarea */
+.tm-ta {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  line-height: 1.6;
+  color: #0f172a;
+  background: #fff;
+  resize: vertical;
+  min-height: 80px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  box-sizing: border-box;
+}
+.tm-ta:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.08);
+}
+.tm-ta::placeholder { color: #94a3b8; }
+
+/* Work entry detail block inside history */
+.tm-hist-detail-block {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-left: 3px solid #e2e8f0;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #374151;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin: 4px 0;
+}
+
+/* Section divider inside modal body */
+.tm-section-divider {
+  height: 1px;
+  background: #f1f5f9;
+  margin: 16px 0;
+}
+
+/* Completion badge when 100% */
+.tm-complete-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #ecfdf5;
+  color: #059669;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid #6ee7b7;
+}
+
+/* Better form input focus */
+.tm-inp:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.08);
+  background: #fff;
+  outline: none;
+}
+
+/* Quick log entry card */
+.tm-quick-entry {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-radius: 10px;
+  padding: 14px;
+  transition: border-color .15s;
+}
+.tm-quick-entry:focus-within {
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(59,130,246,.06);
+}
+
+/* Entry counter badge */
+.tm-entry-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* Bulk log check animation */
+@keyframes tm-check-pop {
+  0%   { transform: scale(0.8); }
+  60%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+.tm-check-pop { animation: tm-check-pop 0.2s ease; }
+
+/* Notes field purple accent */
+.tm-ta-notes:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,.08); }

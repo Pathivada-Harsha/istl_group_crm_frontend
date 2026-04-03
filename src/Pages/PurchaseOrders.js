@@ -151,6 +151,8 @@ const PurchaseOrders = () => {
   const [modalProjects, setModalProjects] = useState([]);
   const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
 
+  const [orderBooks, setOrderBooks] = useState([]);          // list of order books for selected project
+  const [selectedOrderBookId, setSelectedOrderBookId] = useState(''); // which orderbook is selected
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
@@ -158,7 +160,7 @@ const PurchaseOrders = () => {
     quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '',
     groupName: '', subGroupName: '', projectId: '',
     orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '',
-    paymentTerms: '', shippingAddress: '', notes: '', items: []
+    paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft'
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
   const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
@@ -280,14 +282,39 @@ const PurchaseOrders = () => {
     } catch { setQuotations([]); }
   };
 
-  const fetchOrderBookItems = async (pId) => {
-    if (!pId) { setOrderBookItems([]); return; }
-    setLoadingOrderItems(true);
+  // Fetch all order books for a project (for the orderbook dropdown)
+  const fetchOrderBooks = async (pId) => {
+    if (!pId) { setOrderBooks([]); return; }
     try {
-      const r = await fetch(`${API_BASE_URL}/quotations/orderbook-items/${pId}`, { credentials: 'include', headers: getAuthHeaders() });
+      // Pass groupName + subGroupName to filter server-side
+      // projectId is not yet in OrderBookWrapper, so we filter by group/subgroup
+      // which already scopes to the right project context
+      const gName = encodeURIComponent(modalGroupName || '');
+      const sgName = encodeURIComponent(modalSubGroupName || '');
+      const r = await fetch(
+        `${API_BASE_URL}/order-book/getAll?page=0&size=200&groupName=${gName}&subGroupName=${sgName}`,
+        { credentials: 'include', headers: getAuthHeaders() }
+      );
       if (!r.ok) throw new Error();
       const data = await r.json();
-      if (data.success) setOrderBookItems(data.data || []);
+      // API returns { success, data: [...] }
+      // Filter by projectId if present in response (requires backend OrderBookWrapper.projectId)
+      const all = (data.data || data.content || []).filter(ob => !ob.deletedAt && (!ob.projectId || ob.projectId === pId));
+      setOrderBooks(all);
+    } catch (e) { console.error('fetchOrderBooks error', e); setOrderBooks([]); }
+  };
+
+  const fetchOrderBookItems = async (orderBookId) => {
+    if (!orderBookId) { setOrderBookItems([]); return; }
+    setLoadingOrderItems(true);
+    try {
+      const r = await fetch(`${API_BASE_URL}/order-book/${orderBookId}/items`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) throw new Error();
+      const data = await r.json();
+      // /order-book/{id}/items returns an array directly
+      setOrderBookItems(Array.isArray(data) ? data : (data.data || []));
     } catch { showError('Failed to load order book items'); setOrderBookItems([]); }
     finally { setLoadingOrderItems(false); }
   };
@@ -296,22 +323,33 @@ const PurchaseOrders = () => {
   const handleModalGroupChange = (e) => {
     const v = e.target.value;
     setModalGroupName(v); setModalSubGroupName(''); setModalProjectId('');
-    setModalSubGroups([]); setModalProjects([]); setQuotations([]); setOrderBookItems([]);
+    setModalSubGroups([]); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, groupName: v, subGroupName: '', projectId: '', items: [] }));
     if (v) { fetchModalSubGroups(v); fetchFilteredQuotations(v, null, null); fetchVendors(v, null); }
     else fetchVendors();
   };
   const handleModalSubGroupChange = (e) => {
     const v = e.target.value;
-    setModalSubGroupName(v); setModalProjectId(''); setModalProjects([]); setQuotations([]); setOrderBookItems([]);
+    setModalSubGroupName(v); setModalProjectId(''); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, subGroupName: v, projectId: '', items: [] }));
     if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); fetchFilteredQuotations(modalGroupName, v, null); fetchVendors(modalGroupName, v); }
   };
   const handleModalProjectChange = async (e) => {
     const v = e.target.value;
-    setModalProjectId(v); setQuotations([]); setOrderBookItems([]);
+    setModalProjectId(v); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, projectId: v, quotationId: '', quotation: null, items: [] }));
-    if (v) { await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v); await fetchOrderBookItems(v); }
+    if (v) {
+      await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
+      await fetchOrderBooks(v);
+    }
+  };
+
+  const handleOrderBookSelect = async (e) => {
+    const obId = e.target.value;
+    setSelectedOrderBookId(obId);
+    setOrderBookItems([]);
+    setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: [] }));
+    if (obId) await fetchOrderBookItems(obId);
   };
   const handleVendorTypeChange = (type) => {
     setShowNewVendorForm(type === 'new');
@@ -520,7 +558,7 @@ const PurchaseOrders = () => {
         orderDate: poData.orderDate ? new Date(poData.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         expectedDelivery: poData.expectedDelivery ? new Date(poData.expectedDelivery).toISOString().split('T')[0] : '',
         paymentTerms: poData.paymentTerms || '', shippingAddress: poData.deliveryAddress || '',
-        notes: poData.notes || '', items
+        notes: poData.notes || '', status: poData.status || 'Draft', items
       });
       setShowNewVendorForm(false); setShowCreatePOModal(true);
     } catch { showError('Failed to load purchase order details'); }
@@ -583,7 +621,8 @@ const PurchaseOrders = () => {
   const handleOpenCreatePO = () => {
     setIsEditMode(false); setEditingPOId(null);
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [] });
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
+    setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]); setOrderBookItems([]);
     fetchModalGroups(); fetchVendors(); setShowCreatePOModal(true);
   };
@@ -593,7 +632,8 @@ const PurchaseOrders = () => {
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     setQuotations([]); setOrderBookItems([]); setShowNewVendorForm(false); setShowManualItemForm(false);
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [] });
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
+    setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
   };
 
   const handleCreatePO = async () => {
@@ -624,7 +664,7 @@ const PurchaseOrders = () => {
         groupName: modalGroupName, subGroupName: modalSubGroupName || null, projectId: modalProjectId || null,
         orderDate: createPOFormData.orderDate, expectedDelivery: createPOFormData.expectedDelivery,
         paymentTerms: createPOFormData.paymentTerms, shippingAddress: createPOFormData.shippingAddress,
-        notes: createPOFormData.notes, items: poItems, status: 'Draft', paymentStatus: 'Pending'
+        notes: createPOFormData.notes, items: poItems, status: createPOFormData.status || 'Draft', paymentStatus: 'Pending'
       };
       let response;
       if (isEditMode && editingPOId) {
@@ -996,7 +1036,7 @@ const PurchaseOrders = () => {
                     </select>
                   </div>
                 </div>
-                {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>🔄 Loading quotations and order book items...</div>}
+                {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>🔄 Loading quotations and order books...</div>}
               </div>
 
               {/* Step 2: Quotation / Order Book */}
@@ -1025,12 +1065,25 @@ const PurchaseOrders = () => {
                           )}
                         </div>
                         <div style={{ padding: '20px', background: '#eff6ff', border: '2px solid #93c5fd', borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: '#1e40af', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>🆕</span> Option 2: New Vendor</h4>
-                          <p style={{ fontSize: '13px', color: '#1e40af', marginBottom: '12px' }}>Use {orderBookItems.length} order book items</p>
-                          {createPOFormData.items.length === 0 || createPOFormData.quotationId ? (
-                            <button className="purchase-orders-btn-primary" onClick={handleSkipQuotationLoadOrderBook} style={{ width: '100%', padding: '10px', fontSize: '14px', background: '#3b82f6' }}>📦 Load Items</button>
-                          ) : (
-                            <div style={{ padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+                          <h4 style={{ marginBottom: '8px', color: '#1e40af', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> Option 2: Load from Order Book</h4>
+                          <div className="po-form-group" style={{ marginTop: '8px' }}>
+                            <select value={selectedOrderBookId} onChange={handleOrderBookSelect} style={{ width: '100%', padding: '8px', fontSize: '13px', borderRadius: '6px', border: '1px solid #93c5fd' }}>
+                              <option value="">-- Select Order Book --</option>
+                              {orderBooks.map(ob => (
+                                <option key={ob.id} value={ob.id}>
+                                  {ob.poNumber || ob.orderBookNo} — {ob.orderTitle ? (ob.orderTitle.length > 30 ? ob.orderTitle.substring(0, 30) + '...' : ob.orderTitle) : 'No Title'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          {loadingOrderItems && <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '6px' }}>🔄 Loading...</div>}
+                          {selectedOrderBookId && orderBookItems.length > 0 && (createPOFormData.items.length === 0 || createPOFormData.quotationId) && (
+                            <button className="purchase-orders-btn-primary" onClick={handleSkipQuotationLoadOrderBook} style={{ width: '100%', padding: '10px', fontSize: '13px', background: '#3b82f6', marginTop: '8px' }}>
+                              📋 Load {orderBookItems.length} Items
+                            </button>
+                          )}
+                          {createPOFormData.items.length > 0 && !createPOFormData.quotationId && (
+                            <div style={{ padding: '10px', background: 'white', borderRadius: '6px', border: '1px solid #93c5fd', marginTop: '8px' }}>
                               <div style={{ fontSize: '13px', color: '#1e40af' }}>✓ {createPOFormData.items.length} items loaded</div>
                             </div>
                           )}
@@ -1070,11 +1123,29 @@ const PurchaseOrders = () => {
                       )}
                     </>
                   )}
-                  {!loadingOrderItems && quotations.length === 0 && orderBookItems.length > 0 && (
+                  {!loadingOrderItems && quotations.length === 0 && orderBooks.length > 0 && (
                     <div style={{ padding: '20px', background: '#fef3c7', border: '2px solid #fbbf24', borderRadius: '8px' }}>
-                      <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>⚠️</span> No Approved Quotations</h4>
-                      <p style={{ fontSize: '14px', color: '#92400e', marginBottom: '12px' }}>Found {orderBookItems.length} items from order books.</p>
-                      <button className="purchase-orders-btn-primary" onClick={handleLoadOrderBookItems} style={{ width: '100%', padding: '12px', fontSize: '15px' }}>📋 Load {orderBookItems.length} Order Book Items</button>
+                      <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> No Approved Quotations — Select Order Book</h4>
+                      <div className="po-form-group" style={{ marginTop: '12px' }}>
+                        <label style={{ fontSize: '13px', color: '#92400e', marginBottom: '6px', display: 'block' }}>Select Order Book</label>
+                        <select value={selectedOrderBookId} onChange={handleOrderBookSelect} style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '6px', border: '1px solid #fbbf24' }}>
+                          <option value="">-- Select an Order Book --</option>
+                          {orderBooks.map(ob => (
+                            <option key={ob.id} value={ob.id}>
+                              {ob.poNumber || ob.orderBookNo} — {ob.orderTitle ? (ob.orderTitle.length > 35 ? ob.orderTitle.substring(0, 35) + '...' : ob.orderTitle) : 'No Title'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {loadingOrderItems && <div style={{ marginTop: '10px', fontSize: '13px', color: '#92400e' }}>🔄 Loading items...</div>}
+                      {selectedOrderBookId && orderBookItems.length > 0 && (
+                        <button className="purchase-orders-btn-primary" onClick={handleLoadOrderBookItems} style={{ width: '100%', padding: '12px', fontSize: '15px', marginTop: '12px' }}>
+                          📋 Load {orderBookItems.length} Items from this Order Book
+                        </button>
+                      )}
+                      {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
+                        <div style={{ marginTop: '10px', fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                      )}
                     </div>
                   )}
                   {!loadingOrderItems && quotations.length === 0 && orderBookItems.length === 0 && (
@@ -1087,7 +1158,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 3: Vendor */}
-              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>🏢</span> Vendor Information</h3>
                   {createPOFormData.quotation ? (
@@ -1146,7 +1217,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 4: PO Details */}
-              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>📝</span> Purchase Order Details</h3>
                   <div className="po-form-row">
@@ -1161,12 +1232,25 @@ const PurchaseOrders = () => {
                   </div>
                   <div className="po-form-row">
                     <div className="po-form-group">
-                      <label>Payment Terms</label>
-                      <input type="text" value={createPOFormData.paymentTerms} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, paymentTerms: e.target.value }))} placeholder="e.g., Net 30, Advance Payment" style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
+                      <label>Status</label>
+                      <select value={createPOFormData.status || 'Draft'} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, status: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                        <option value="Draft">Draft</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Ordered">Ordered</option>
+                        <option value="In-Transit">In-Transit</option>
+                        <option value="Delivered">Delivered</option>
+                        <option value="Cancelled">Cancelled</option>
+                      </select>
                     </div>
                     <div className="po-form-group">
                       <label>Shipping Address</label>
                       <input type="text" value={createPOFormData.shippingAddress} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, shippingAddress: e.target.value }))} placeholder="Enter delivery address" style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
+                    </div>
+                  </div>
+                  <div className="po-form-row">
+                    <div className="po-form-group">
+                      <label>Payment Terms</label>
+                      <textarea rows={3} value={createPOFormData.paymentTerms} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, paymentTerms: e.target.value }))} placeholder="e.g., Net 30, Advance Payment, 50% advance + 50% on delivery..." style={{ width: '100%', padding: '10px', fontSize: '14px', resize: 'vertical' }} />
                     </div>
                   </div>
                   <div className="po-form-group">
@@ -1177,7 +1261,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 5: Items */}
-              {(createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
                 <div className="po-form-section">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div>

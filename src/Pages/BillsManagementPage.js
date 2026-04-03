@@ -105,6 +105,7 @@ export default function BillsManagementPage() {
 
   // create/edit modal
   const [showFormModal, setShowFormModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [vendors, setVendors] = useState([]);
 
@@ -112,7 +113,7 @@ export default function BillsManagementPage() {
   const [formData, setFormData] = useState({
     vendorId: '', billDate: new Date().toISOString().split('T')[0],
     dueDate: '', notes: '', groupId: '', subGroupId: '', projectId: '',
-    status: 'Pending', company: 'ISTL'
+    status: 'Pending'
   });
 
   // modal dropdowns
@@ -123,6 +124,11 @@ export default function BillsManagementPage() {
   const [modalSubGroupName, setModalSubGroupName] = useState('');
   const [modalProjectId, setModalProjectId] = useState('');
   const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
+
+  // PO & vendor (modal-scoped)
+  const [modalVendors, setModalVendors] = useState([]);
+  const [modalPurchaseOrders, setModalPurchaseOrders] = useState([]);
+  const [loadingPOItems, setLoadingPOItems] = useState(false);
 
   useEffect(() => { localStorage.setItem('billsColumns', JSON.stringify(columns)); }, [columns]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,11 +213,75 @@ export default function BillsManagementPage() {
     } catch {}
   };
 
+  // fetchVendors kept for fallback (edit mode without project)
   const fetchVendors = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/vendors?size=200`, { credentials: 'include', headers: getAuthHeaders() });
       if (res.ok) { const d = await res.json(); setVendors(d.vendors || d.content || []); }
     } catch {}
+  };
+
+  // Fetch vendors scoped to the selected project/group (uses for-bills endpoint like Bills-Recieved)
+  const fetchModalVendors = async (gn, sg, pid) => {
+    try {
+      const p = new URLSearchParams();
+      if (gn)  p.append('groupName',    gn);
+      if (sg)  p.append('subGroupName', sg);
+      if (pid) p.append('projectId',    pid);
+      const res = await fetch(`${API_BASE_URL}/vendors/for-bills?${p}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) { const d = await res.json(); setModalVendors(d || []); }
+      else setModalVendors([]);
+    } catch { setModalVendors([]); }
+  };
+
+  // Fetch POs for selected vendor
+  const fetchModalPOs = async (vendorIdOrName) => {
+    if (!vendorIdOrName) { setModalPurchaseOrders([]); return; }
+    try {
+      const p = new URLSearchParams();
+      if (modalGroupName)    p.append('groupName',    modalGroupName);
+      if (modalSubGroupName) p.append('subGroupName', modalSubGroupName);
+      if (modalProjectId)    p.append('projectId',    modalProjectId);
+      if (typeof vendorIdOrName === 'number') p.append('vendorId', vendorIdOrName);
+      else if (typeof vendorIdOrName === 'string' && vendorIdOrName.startsWith('PO_'))
+        p.append('vendorName', vendorIdOrName.replace('PO_', ''));
+      const res = await fetch(`${API_BASE_URL}/purchase-orders/by-vendor?${p}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) { const d = await res.json(); setModalPurchaseOrders(d || []); }
+      else setModalPurchaseOrders([]);
+    } catch { setModalPurchaseOrders([]); }
+  };
+
+  // Fetch PO items and load into bill items
+  const fetchPOItems = async (poId) => {
+    if (!poId) return;
+    setLoadingPOItems(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/purchase-orders/${poId}/items-for-bill`,
+        { credentials: 'include', headers: getAuthHeaders() });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.items && data.items.length > 0) {
+          const billItems = data.items.map(item => ({
+            poItemId:      item.id,
+            itemName:      item.itemName || '',
+            description:   item.description || '',
+            orderedQty:    item.orderedQty,
+            deliveredQty:  item.deliveredQty,
+            pendingQty:    item.pendingQty,
+            maxBillableQty: item.pendingQty,
+            quantity:      '',  // blank — user must enter bill qty explicitly
+            unitPrice:     item.unitPrice || 0,
+            taxPercent:    item.taxPercent || 18,
+          }));
+          setFormData(f => ({ ...f, items: billItems }));
+          showSuccess(`✅ Loaded ${billItems.length} items from PO`);
+        } else {
+          showError('All PO items already delivered. You can still add manual items.');
+          setFormData(f => ({ ...f, items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }] }));
+        }
+      }
+    } catch (err) { showError('Failed to load PO items'); }
+    finally { setLoadingPOItems(false); }
   };
 
   const fetchModalGroups = async () => {
@@ -305,30 +375,126 @@ export default function BillsManagementPage() {
     }
   };
 
+  // ── file upload handlers ──────────────────────────────────────────────────────
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        showError('File size exceeds 5MB limit');
+        e.target.value = null;
+        return;
+      }
+      const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
+      if (!validTypes.includes(file.type)) {
+        showError('Invalid file type. Only PDF, PNG, JPG allowed');
+        e.target.value = null;
+        return;
+      }
+      setSelectedFile(file);
+    }
+  };
+
+  const uploadBillFile = async (billId, file) => {
+    const formDataFile = new FormData();
+    formDataFile.append('file', file);
+    const headers = {
+      'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+      'X-User-Id': user?.id || localStorage.getItem('userId'),
+      'X-User-Role': user?.role || localStorage.getItem('userRole')
+    };
+    try {
+      const res = await fetch(`${API_BASE_URL}/bills/${billId}/upload`, {
+        method: 'POST', headers, credentials: 'include', body: formDataFile
+      });
+      if (res.ok) showSuccess('File uploaded successfully');
+      else showError('File upload failed');
+    } catch (err) {
+      console.error('Error uploading file:', err);
+      showError('Error uploading file');
+    }
+  };
+
+  // ── item handlers ────────────────────────────────────────────────────────────
+  const handleAddItem = () => setFormData(f => ({
+    ...f,
+    items: [...(f.items || []), { itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
+  }));
+
+  const handleRemoveItem = (idx) => setFormData(f => ({
+    ...f,
+    items: (f.items || []).filter((_, i) => i !== idx)
+  }));
+
+  const handleUpdateItem = (idx, field, value) => setFormData(f => {
+    const items = [...(f.items || [])];
+    items[idx] = { ...items[idx], [field]: value };
+    return { ...f, items };
+  });
+
+  const calcLineTotal = (item) => {
+    const sub = (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0);
+    return sub + (sub * (parseFloat(item.taxPercent) || 0) / 100);
+  };
+
+  const calcBillTotal = () => (formData.items || []).reduce((t, i) => t + calcLineTotal(i), 0);
+
+  const fmtCurrency = (v) => '₹' + (parseFloat(v) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
   // ── create / edit ─────────────────────────────────────────────────────────
   const handleCreateNew = () => {
-    setFormData({ vendorId: '', billDate: new Date().toISOString().split('T')[0], dueDate: '', notes: '', groupId: '', subGroupId: '', projectId: '', status: 'Pending', company: 'ISTL' });
+    setFormData({ vendorId: '', billDate: new Date().toISOString().split('T')[0], dueDate: '', notes: '', groupId: '', subGroupId: '', projectId: '', status: 'Pending', items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }] });
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
+    setModalVendors([]); setModalPurchaseOrders([]);
     setEditMode(false);
+    setSelectedFile(null);
     fetchVendors(); fetchModalGroups();
     setShowFormModal(true);
   };
 
   const handleEditBill = (bill) => {
     setFormData({
-      vendorId: bill.vendorId, billDate: bill.billDate, dueDate: bill.dueDate || '',
+      vendorId: bill.vendorId, poId: bill.poId || null, billDate: bill.billDate, dueDate: bill.dueDate || '',
       notes: bill.notes || '', groupId: bill.groupId || '', subGroupId: bill.subGroupId || '',
-      projectId: bill.projectId || '', status: bill.status, company: bill.company || 'ISTL'
+      projectId: bill.projectId || '', status: bill.status,
+      items: (bill.items && bill.items.length > 0) ? bill.items.map(i => ({ itemName: i.itemName || '', description: i.description || '', quantity: i.quantity || 1, unitPrice: i.unitPrice || 0, taxPercent: i.taxPercent || 18 })) : [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
     });
     setModalGroupName(bill.groupId || ''); setModalSubGroupName(bill.subGroupId || ''); setModalProjectId(bill.projectId || '');
+    setModalVendors([]); setModalPurchaseOrders([]);
     setSelectedBill(bill); setEditMode(true);
+    setSelectedFile(null);
     fetchVendors(); fetchModalGroups();
+    // Restore vendor/PO dropdowns for edit
+    if (bill.groupId) {
+      fetchModalSubGroups(bill.groupId);
+      if (bill.subGroupId) {
+        fetchModalProjects(bill.groupId, bill.subGroupId);
+        fetchModalVendors(bill.groupId, bill.subGroupId, bill.projectId || '');
+      }
+    }
+    if (bill.vendorId) fetchModalPOs(parseInt(bill.vendorId));
     setShowFormModal(true);
   };
 
   const handleSaveBill = async () => {
     if (!formData.vendorId) { showError('Please select a vendor'); return; }
-    if (!formData.dueDate)  { showError('Due date is required');   return; }
+    // Validate items with a name have a valid quantity
+    const namedItems = (formData.items || []).filter(i => i.itemName?.trim());
+    for (let i = 0; i < namedItems.length; i++) {
+      const item = namedItems[i];
+      const qty = parseFloat(item.quantity);
+      if (!qty || qty <= 0) {
+        showError(`Item ${i+1} (${item.itemName}): please enter a valid quantity`);
+        return;
+      }
+    }
+    // Validate PO item quantities don't exceed max billable
+    for (let i = 0; i < (formData.items || []).length; i++) {
+      const item = formData.items[i];
+      if (item.maxBillableQty && parseFloat(item.quantity) > item.maxBillableQty) {
+        showError(`Item ${i+1} (${item.itemName}): quantity ${item.quantity} exceeds max billable ${item.maxBillableQty}`);
+        return;
+      }
+    }
     setLoading(true);
     try {
       const url    = editMode ? `${API_BASE_URL}/bills/${selectedBill.id}` : `${API_BASE_URL}/bills`;
@@ -336,9 +502,13 @@ export default function BillsManagementPage() {
       const res = await fetch(url, {
         credentials: 'include', method,
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify({ ...formData, items: [] })
+        body: JSON.stringify({ ...formData, items: (formData.items || []).filter(i => i.itemName?.trim()) })
       });
       if (!res.ok) { const e = await res.json(); throw new Error(e.message || 'Failed to save'); }
+      const savedBill = await res.json();
+      if (selectedFile && savedBill.id) {
+        await uploadBillFile(savedBill.id, selectedFile);
+      }
       showSuccess(`Bill ${editMode ? 'updated' : 'created'} successfully!`);
       setShowFormModal(false); fetchBills(); fetchStats();
     } catch (err) { showError(err.message); }
@@ -697,51 +867,81 @@ export default function BillsManagementPage() {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Group</label>
-                      <select value={modalGroupName} onChange={e => { setModalGroupName(e.target.value); setFormData(f=>({...f,groupId:e.target.value,subGroupId:'',projectId:''})); fetchModalSubGroups(e.target.value); }} disabled={modalDropdownLoading.groups}>
+                      <select value={modalGroupName} onChange={e => { const v=e.target.value; setModalGroupName(v); setModalSubGroupName(''); setModalProjectId(''); setModalVendors([]); setModalPurchaseOrders([]); setFormData(f=>({...f,groupId:v,subGroupId:'',projectId:'',vendorId:'',poId:null,items:f.items.filter(i=>!i.poItemId)})); fetchModalSubGroups(v); }} disabled={modalDropdownLoading.groups}>
                         <option value="">{modalDropdownLoading.groups?'Loading...':'Select Group'}</option>
                         {modalGroups.map((g,i)=><option key={g.value||i} value={g.value}>{g.label}</option>)}
                       </select>
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Sub Group</label>
-                      <select value={modalSubGroupName} onChange={e => { setModalSubGroupName(e.target.value); setFormData(f=>({...f,subGroupId:e.target.value,projectId:''})); fetchModalProjects(modalGroupName, e.target.value); }} disabled={!modalGroupName||modalDropdownLoading.subGroups}>
+                      <select value={modalSubGroupName} onChange={e => { const v=e.target.value; setModalSubGroupName(v); setModalProjectId(''); setModalVendors([]); setModalPurchaseOrders([]); setFormData(f=>({...f,subGroupId:v,projectId:'',vendorId:'',poId:null,items:f.items.filter(i=>!i.poItemId)})); fetchModalProjects(modalGroupName, v); fetchModalVendors(modalGroupName, v, ''); }} disabled={!modalGroupName||modalDropdownLoading.subGroups}>
                         <option value="">{modalDropdownLoading.subGroups?'Loading...':'Select Sub Group'}</option>
                         {modalSubGroups.map((sg,i)=><option key={sg.value||i} value={sg.value}>{sg.label}</option>)}
                       </select>
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Project</label>
-                      <select value={modalProjectId} onChange={e => { setModalProjectId(e.target.value); setFormData(f=>({...f,projectId:e.target.value})); }} disabled={!modalSubGroupName||modalDropdownLoading.projects}>
+                      <select value={modalProjectId} onChange={e => { const v=e.target.value; setModalProjectId(v); setModalVendors([]); setModalPurchaseOrders([]); setFormData(f=>({...f,projectId:v,vendorId:'',poId:null,items:f.items.filter(i=>!i.poItemId)})); fetchModalVendors(modalGroupName, modalSubGroupName, v); }} disabled={!modalSubGroupName||modalDropdownLoading.projects}>
                         <option value="">{modalDropdownLoading.projects?'Loading...':'Select Project'}</option>
                         {modalProjects.map((p,i)=><option key={p.id||i} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="receipts-page-form-group">
-                      <label>Company *</label>
-                      <select value={formData.company} onChange={e=>setFormData(f=>({...f,company:e.target.value}))}>
-                        <option value="ISTL">ISTL</option><option value="SESOLA">SESOLA</option>
                       </select>
                     </div>
                   </div>
                 </div>
 
-                {/* Vendor & dates */}
+                {/* Vendor, PO & dates */}
                 <div className="receipts-page-form-section">
                   <h3>Bill Details</h3>
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Vendor *</label>
-                      <select value={formData.vendorId} onChange={e=>setFormData(f=>({...f,vendorId:e.target.value}))}>
+                      <select value={formData.vendorId || ''} onChange={e => {
+                        const v = e.target.value;
+                        setModalPurchaseOrders([]);
+                        setFormData(f => ({ ...f, vendorId: v, poId: null, items: f.items.filter(i => !i.poItemId) }));
+                        if (v) fetchModalPOs(typeof v === 'string' && !v.startsWith('PO_') ? parseInt(v) : v);
+                      }}>
                         <option value="">Select Vendor</option>
-                        {vendors.map(v=><option key={v.id} value={v.id}>{v.name}</option>)}
+                        {(modalVendors.length > 0 ? modalVendors : vendors).map((v, i) => (
+                          <option key={v.id || i} value={v.id}>
+                            {v.name}{v.contact ? ` - ${v.contact}` : ''}{v.source === 'po_vendor' ? ' (From PO)' : ''}
+                          </option>
+                        ))}
                       </select>
+                      {modalVendors.length === 0 && modalProjectId && (
+                        <small style={{ color:'#ef4444', fontSize:11, marginTop:4, display:'block' }}>
+                          No vendors for this project — select project or create a PO first.
+                        </small>
+                      )}
+                    </div>
+                    <div className="receipts-page-form-group">
+                      <label>Linked PO (Optional)</label>
+                      <select value={formData.poId || ''} onChange={e => {
+                        const v = e.target.value;
+                        setFormData(f => ({ ...f, poId: v ? parseInt(v) : null, items: f.items.filter(i => !i.poItemId) }));
+                        if (v) fetchPOItems(parseInt(v));
+                      }}>
+                        <option value="">No PO Link</option>
+                        {modalPurchaseOrders.map(po => (
+                          <option key={po.id} value={po.id}>{po.poNo} — {po.vendorName} — ₹{(parseFloat(po.totalValue)||0).toLocaleString('en-IN')}</option>
+                        ))}
+                      </select>
+                      {formData.vendorId && modalPurchaseOrders.length === 0 && (
+                        <small style={{ color:'#94a3b8', fontSize:11, marginTop:4, display:'block' }}>No POs found for selected vendor</small>
+                      )}
+                      {formData.poId && (
+                        <small style={{ color:'#16a34a', fontSize:11, marginTop:4, display:'block' }}>✓ PO items loaded below</small>
+                      )}
+                      {loadingPOItems && (
+                        <small style={{ color:'#3b82f6', fontSize:11, marginTop:4, display:'block' }}>🔄 Loading PO items...</small>
+                      )}
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Bill Date *</label>
                       <input type="date" value={formData.billDate} onChange={e=>setFormData(f=>({...f,billDate:e.target.value}))}/>
                     </div>
                     <div className="receipts-page-form-group">
-                      <label>Due Date *</label>
+                      <label>Due Date</label>
                       <input type="date" value={formData.dueDate} min={formData.billDate} onChange={e=>setFormData(f=>({...f,dueDate:e.target.value}))}/>
                     </div>
                     <div className="receipts-page-form-group receipts-page-form-group-full">
@@ -750,7 +950,121 @@ export default function BillsManagementPage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Bill Line Items */}
+                <div className="receipts-page-form-section">
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+                    <h3 style={{ margin:0 }}>Bill Line Items</h3>
+                    <button
+                      type="button"
+                      onClick={handleAddItem}
+                      style={{ padding:'6px 14px', background:'#3b82f6', color:'#fff', border:'none', borderRadius:6, cursor:'pointer', fontSize:13, fontWeight:500 }}
+                    >+ Add Item</button>
+                  </div>
+                  <div style={{ overflowX:'auto', border:'1px solid #e2e8f0', borderRadius:8 }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                      <thead>
+                        <tr style={{ background:'#f8fafc' }}>
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'18%' }}>Item Name</th>
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'20%' }}>Description</th>
+                          {formData.poId && <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'7%' }}>Ordered</th>}
+                          {formData.poId && <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'7%' }}>Delivered</th>}
+                          {formData.poId && <th style={{ padding:'10px 8px', textAlign:'center', fontWeight:600, color:'#22c55e', borderBottom:'2px solid #e2e8f0', width:'7%' }}>Pending</th>}
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'10%' }}>Bill Qty *</th>
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'12%' }}>Unit Price</th>
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'8%' }}>Tax %</th>
+                          <th style={{ padding:'10px 8px', textAlign:'left', fontWeight:600, color:'#475569', borderBottom:'2px solid #e2e8f0', width:'10%' }}>Line Total</th>
+                          <th style={{ padding:'10px 8px', width:'5%', borderBottom:'2px solid #e2e8f0' }}></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(formData.items || []).map((item, idx) => (
+                          <tr key={idx} style={{ borderBottom:'1px solid #f1f5f9' }}>
+                            <td style={{ padding:8 }}>
+                              <input type="text" placeholder="Item name"
+                                value={item.itemName || ''}
+                                readOnly={!!item.poItemId}
+                                onChange={e => handleUpdateItem(idx, 'itemName', e.target.value)}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13, boxSizing:'border-box', backgroundColor: item.poItemId ? '#f8fafc' : 'white', cursor: item.poItemId ? 'not-allowed' : 'text' }}
+                              />
+                            </td>
+                            <td style={{ padding:8 }}>
+                              <input type="text" placeholder="Description"
+                                value={item.description || ''}
+                                readOnly={!!item.poItemId}
+                                onChange={e => handleUpdateItem(idx, 'description', e.target.value)}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13, boxSizing:'border-box', backgroundColor: item.poItemId ? '#f8fafc' : 'white', cursor: item.poItemId ? 'not-allowed' : 'text' }}
+                              />
+                              {item.poItemId && <small style={{ fontSize:11, color:'#94a3b8', display:'block', marginTop:2 }}>PO Item #{item.poItemId}</small>}
+                            </td>
+                            {formData.poId && <td style={{ padding:8, textAlign:'center', fontSize:13, color:'#64748b' }}>{item.orderedQty || '-'}</td>}
+                            {formData.poId && <td style={{ padding:8, textAlign:'center', fontSize:13, color:'#64748b' }}>{item.deliveredQty || '-'}</td>}
+                            {formData.poId && <td style={{ padding:8, textAlign:'center', fontSize:13, fontWeight:600, color:'#22c55e' }}>{item.pendingQty || '-'}</td>}
+                            <td style={{ padding:8 }}>
+                              <input type="number" placeholder="Qty" min="0" step="0.01"
+                                value={item.quantity || ''}
+                                max={item.maxBillableQty || undefined}
+                                onChange={e => {
+                                  const v = parseFloat(e.target.value) || 0;
+                                  if (item.maxBillableQty && v > item.maxBillableQty) {
+                                    showError(`Max billable qty is ${item.maxBillableQty}`); return;
+                                  }
+                                  handleUpdateItem(idx, 'quantity', v);
+                                }}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13, boxSizing:'border-box' }}
+                              />
+                              {item.maxBillableQty && <small style={{ fontSize:11, color:'#f59e0b', display:'block', marginTop:2 }}>Max: {item.maxBillableQty}</small>}
+                            </td>
+                            <td style={{ padding:8 }}>
+                              <input type="number" placeholder="Price" min="0" step="0.01"
+                                value={item.unitPrice || ''}
+                                onChange={e => handleUpdateItem(idx, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13, boxSizing:'border-box' }}
+                              />
+                            </td>
+                            <td style={{ padding:8 }}>
+                              <input type="number" placeholder="18" min="0" max="100" step="0.01"
+                                value={item.taxPercent || ''}
+                                onChange={e => handleUpdateItem(idx, 'taxPercent', parseFloat(e.target.value) || 0)}
+                                style={{ width:'100%', padding:'6px 8px', border:'1px solid #cbd5e1', borderRadius:4, fontSize:13, boxSizing:'border-box' }}
+                              />
+                            </td>
+                            <td style={{ padding:8, fontWeight:600, color:'#1e293b', whiteSpace:'nowrap' }}>{fmtCurrency(calcLineTotal(item))}</td>
+                            <td style={{ padding:8, textAlign:'center' }}>
+                              {(formData.items || []).length > 1 && !item.poItemId && (
+                                <button type="button" onClick={() => handleRemoveItem(idx)}
+                                  style={{ background:'#fee2e2', border:'none', borderRadius:4, padding:'4px 8px', cursor:'pointer', color:'#dc2626', fontSize:14 }}>✕</button>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'flex-end', marginTop:12, fontWeight:600, fontSize:14, color:'#1e293b' }}>
+                    Total: {fmtCurrency(calcBillTotal())}
+                  </div>
+                </div>
               </div>
+
+                {/* File Upload */}
+                <div className="receipts-page-form-section">
+                  <h3>Attach Bill Document</h3>
+                  <div className="receipts-page-form-group">
+                    <label>Upload Bill (PDF, PNG, JPG — Max 5MB)</label>
+                    <input
+                      type="file"
+                      accept=".pdf,.png,.jpg,.jpeg"
+                      onChange={handleFileChange}
+                      style={{ marginTop: 6 }}
+                    />
+                    {selectedFile && (
+                      <p style={{ marginTop: 6, fontSize: 13, color: '#16a34a' }}>
+                        ✓ {selectedFile.name} selected
+                      </p>
+                    )}
+                  </div>
+                </div>
             </div>
             <div className="receipts-page-modal-actions">
               <button className="receipts-page-btn-secondary" onClick={() => setShowFormModal(false)}>Cancel</button>

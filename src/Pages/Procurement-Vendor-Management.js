@@ -18,6 +18,17 @@ import filterApi from '../services/filterApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
+  'Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka',
+  'Kerala','Madhya Pradesh','Maharashtra','Manipur','Meghalaya','Mizoram',
+  'Nagaland','Odisha','Punjab','Rajasthan','Sikkim','Tamil Nadu','Telangana',
+  'Tripura','Uttar Pradesh','Uttarakhand','West Bengal',
+  'Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry'
+];
+
+
 // ─── Column Definitions ───────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { id: 'name',               label: 'Vendor Name',          sortable: true,  visible: true  },
@@ -307,9 +318,11 @@ const VendorManagement = () => {
 
   const handleCreateVendor = async () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-    if (!editFormData.email?.trim()) { showError('Email is required'); return; }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(editFormData.email)) { showError('Please enter a valid email address'); return; }
+    // Email is optional — validate format only if provided
+    if (editFormData.email?.trim()) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(editFormData.email)) { showError('Please enter a valid email address'); return; }
+    }
     if (!editFormData.category) { showError('Category is required'); return; }
     if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
 
@@ -604,6 +617,7 @@ const VendorManagement = () => {
             <option value="Office Furniture">Office Furniture</option>
             <option value="Manufacturing">Manufacturing</option>
             <option value="Office Supplies">Office Supplies</option>
+            <option value="Services">Services</option>
           </select>
         </div>
         <div className="vendor-management-actions">
@@ -840,7 +854,7 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Contact Person</label><input type="text" value={editFormData.contactPerson} onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })} placeholder="Enter contact person" /></div>
                 </div>
                 <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Email *</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
+                  <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
                   <div className="vendor-form-group"><label>Phone</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone" /></div>
                 </div>
                 <div className="vendor-form-row">
@@ -851,6 +865,7 @@ const VendorManagement = () => {
                       <option value="Office Furniture">Office Furniture</option>
                       <option value="Manufacturing">Manufacturing</option>
                       <option value="Office Supplies">Office Supplies</option>
+                      <option value="Services">Services</option>
                     </select>
                   </div>
                   <div className="vendor-form-group"><label>Rating</label>
@@ -879,7 +894,12 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
-                  <div className="vendor-form-group"><label>State</label><input type="text" value={editFormData.state} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })} placeholder="Enter state" /></div>
+                  <div className="vendor-form-group"><label>State</label>
+                    <select value={editFormData.state || ''} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}>
+                      <option value="">Select State</option>
+                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                   <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
                 </div>
               </div>
@@ -935,7 +955,7 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Contact Person</label><input type="text" value={editFormData.contactPerson} onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })} placeholder="Enter contact person" /></div>
                 </div>
                 <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Email *</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
+                  <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
                   <div className="vendor-form-group"><label>Phone</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone" /></div>
                 </div>
                 <div className="vendor-form-row">
@@ -946,6 +966,7 @@ const VendorManagement = () => {
                       <option value="Office Furniture">Office Furniture</option>
                       <option value="Manufacturing">Manufacturing</option>
                       <option value="Office Supplies">Office Supplies</option>
+                      <option value="Services">Services</option>
                     </select>
                   </div>
                   <div className="vendor-form-group"><label>Vendor Type *</label>
@@ -964,7 +985,12 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
-                  <div className="vendor-form-group"><label>State</label><input type="text" value={editFormData.state} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })} placeholder="Enter state" /></div>
+                  <div className="vendor-form-group"><label>State</label>
+                    <select value={editFormData.state || ''} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}>
+                      <option value="">Select State</option>
+                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
                   <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
                 </div>
                 <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>

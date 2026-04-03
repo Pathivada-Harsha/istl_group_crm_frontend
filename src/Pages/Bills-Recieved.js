@@ -251,7 +251,7 @@ const BillsReceived = () => {
             deliveredQty: item.deliveredQty,
             pendingQty: item.pendingQty,
             maxBillableQty: item.pendingQty,
-            quantity: item.pendingQty,
+            quantity: '',  // blank — user must enter bill qty explicitly
             unitPrice: item.unitPrice || 0,
             taxPercent: item.taxPercent || 18,
             deliveryStatus: item.deliveryStatus
@@ -264,8 +264,11 @@ const BillsReceived = () => {
 
           showSuccess(`✅ Loaded ${billItems.length} items. Enter delivered quantities.`);
         } else {
-          showError('All items fully delivered');
-          setFormData(prev => ({ ...prev, items: [] }));
+          showError('All PO items already delivered. You can still add manual items.');
+          setFormData(prev => ({
+            ...prev,
+            items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
+          }));
         }
       }
     } catch (error) {
@@ -1479,15 +1482,13 @@ const BillsReceived = () => {
               <div className="bill-form-section">
                 <div className="bill-form-section-header">
                   <h3 className="bill-form-section-title">Bill Line Items</h3>
-                  {!editMode && (
-                    <button
-                      className="bill-form-add-item-btn"
-                      onClick={handleAddItem}
-                      type="button"
-                    >
-                      + Add Item
-                    </button>
-                  )}
+                  <button
+                    className="bill-form-add-item-btn"
+                    onClick={handleAddItem}
+                    type="button"
+                  >
+                    + Add Item
+                  </button>
                 </div>
 
                 <div className="bill-form-items-table-container">
@@ -1503,7 +1504,7 @@ const BillsReceived = () => {
                         <th style={{ width: editMode ? '10%' : '12%' }}>Price *</th>
                         <th style={{ width: '8%' }}>Tax %</th>
                         <th style={{ width: '13%' }}>Line Total</th>
-                        {!editMode && <th style={{ width: '10%' }}>Action</th>}
+                        <th style={{ width: '10%' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1565,7 +1566,7 @@ const BillsReceived = () => {
                               min="0"
                               max={item.maxBillableQty || undefined}
                               step="0.01"
-                              readOnly={editMode && !item.poItemId}
+                              readOnly={false}
                             />
                             {editMode && item.maxBillableQty && (
                               <small style={{ fontSize: '11px', color: '#f59e0b', display: 'block', marginTop: '2px' }}>
@@ -1582,8 +1583,8 @@ const BillsReceived = () => {
                               onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              readOnly={!!item.poItemId}
-                              style={{ backgroundColor: item.poItemId ? '#f8fafc' : 'white' }}
+                              readOnly={false}
+                              style={{ backgroundColor: 'white' }}
                             />
                           </td>
                           <td>
@@ -1603,19 +1604,17 @@ const BillsReceived = () => {
                               {formatCurrency(calculateLineTotal(item))}
                             </span>
                           </td>
-                          {!editMode && (
-                            <td>
-                              {formData.items.length > 1 && (
-                                <button
-                                  className="bill-form-remove-item-btn"
-                                  onClick={() => handleRemoveItem(index)}
-                                  type="button"
-                                >
-                                  <X size={16} />
-                                </button>
-                              )}
-                            </td>
-                          )}
+                          <td>
+                            {formData.items.length > 1 && !item.poItemId && (
+                              <button
+                                className="bill-form-remove-item-btn"
+                                onClick={() => handleRemoveItem(index)}
+                                type="button"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>

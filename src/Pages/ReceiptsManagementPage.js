@@ -127,7 +127,7 @@ const ReceiptsManagementPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize, setPageSize] = useState(10);
-  const [editReceiptFormData, setEditReceiptFormData] = useState({ receiptDate: '', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', company: 'ISTL' });
+  const [editReceiptFormData, setEditReceiptFormData] = useState({ receiptDate: '', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '' });
 
   // Modal states
   const [selectedReceipt, setSelectedReceipt] = useState(null);
@@ -162,7 +162,7 @@ const ReceiptsManagementPage = () => {
     customerId: null, projectId: '', groupId: '', subGroupId: '',
     receiptDate: new Date().toISOString().split('T')[0],
     receiptType: 'advance', amount: 0, paymentMethod: 'Bank Transfer',
-    transactionReference: '', notes: '', invoiceId: null, company: 'ISTL'
+    transactionReference: '', notes: '', invoiceId: null
   });
 
   const [adjustmentData, setAdjustmentData] = useState({ receiptId: null, customerId: null, availableAmount: 0, invoiceAllocations: [] });
@@ -245,13 +245,12 @@ const ReceiptsManagementPage = () => {
           const paymentMethod = String(row[3] || 'Bank Transfer').trim();
           const transactionReference = String(row[4] || '').trim();
           const invoiceNo = String(row[5] || '').trim();
-          const company = String(row[6] || 'ISTL').trim();
-          const notes = String(row[7] || '').trim();
+          const notes = String(row[6] || '').trim();
           if (!receiptDate) errors.push(`Row ${rowNum}: Receipt date is required`);
           if (isNaN(amount) || amount <= 0) errors.push(`Row ${rowNum}: Invalid amount "${row[1]}"`);
           if (!VALID_RECEIPT_TYPES.has(receiptType)) errors.push(`Row ${rowNum}: Invalid type "${row[2]}" (use ADVANCE or INVOICE_PAYMENT)`);
           if (!VALID_PAYMENT_METHODS.has(paymentMethod)) errors.push(`Row ${rowNum}: Invalid payment method "${row[3]}"`);
-          return { receiptDate, amount: isNaN(amount) ? 0 : amount, receiptType: VALID_RECEIPT_TYPES.has(receiptType) ? receiptType : 'ADVANCE', paymentMethod: VALID_PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : 'Bank Transfer', transactionReference, invoiceNo, company: company || 'ISTL', notes };
+          return { receiptDate, amount: isNaN(amount) ? 0 : amount, receiptType: VALID_RECEIPT_TYPES.has(receiptType) ? receiptType : 'ADVANCE', paymentMethod: VALID_PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : 'Bank Transfer', transactionReference, invoiceNo, notes };
         });
         setImportErrors(errors);
         setImportPreview(parsed);
@@ -286,8 +285,7 @@ const ReceiptsManagementPage = () => {
           paymentMethod: row.paymentMethod,
           transactionReference: row.transactionReference || '',
           notes: row.notes || '',
-          invoiceId: null,
-          company: row.company || receiptFormData.company || 'ISTL'
+          invoiceId: null
         };
         const response = await fetch(`${API_BASE_URL}/invoices/receipts`, {
           credentials: 'include',
@@ -412,7 +410,7 @@ const ReceiptsManagementPage = () => {
 
   const handleEditReceiptClick = async (receipt) => {
     setEditingReceipt(receipt);
-    setEditReceiptFormData({ receiptDate: receipt.receiptDate, amount: receipt.amount, paymentMethod: receipt.paymentMethod || 'Bank Transfer', transactionReference: receipt.transactionReference || '', notes: receipt.notes || '', company: receipt.company || 'ISTL' });
+    setEditReceiptFormData({ receiptDate: receipt.receiptDate, amount: receipt.amount, paymentMethod: receipt.paymentMethod || 'Bank Transfer', transactionReference: receipt.transactionReference || '', notes: receipt.notes || '' });
     if (receipt.receiptType === 'INVOICE_PAYMENT' && receipt.invoiceId) await fetchInvoicesForCustomer(receipt.customerId, receipt.projectId);
     setShowEditReceiptModal(true);
   };
@@ -601,7 +599,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
   };
 
   const handleCreateNew = () => {
-    setReceiptFormData({ customerId: null, projectId: '', groupId: '', subGroupId: '', receiptDate: new Date().toISOString().split('T')[0], receiptType: 'advance', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', invoiceId: null, company: 'ISTL' });
+    setReceiptFormData({ customerId: null, projectId: '', groupId: '', subGroupId: '', receiptDate: new Date().toISOString().split('T')[0], receiptType: 'advance', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', invoiceId: null });
     setCustomerData(null); setModalGroupName(''); setModalSubGroupName(''); setModalProjectId(''); setEditMode(false); setInvoicesForCustomer([]);
     fetchModalGroups(); setShowCreateModal(true);
   };
@@ -940,7 +938,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
                 <div className="receipt-details">
                   <div className="receipt-detail-row"><span>Payment Method:</span><strong>{selectedReceipt.paymentMethod}</strong></div>
                   <div className="receipt-detail-row"><span>Transaction Reference:</span><strong>{selectedReceipt.transactionReference || '—'}</strong></div>
-                  {selectedReceipt.company && <div className="receipt-detail-row"><span>Company:</span><strong>{selectedReceipt.company}</strong></div>}
                   {selectedReceipt.notes && <div className="receipt-detail-row"><span>Notes:</span><strong>{selectedReceipt.notes}</strong></div>}
                 </div>
 
@@ -1249,13 +1246,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
                         {modalProjects.map((project, index) => <option key={project.id || index} value={project.id}>{project.name}</option>)}
                       </select>
                     </div>
-                    <div className="receipts-page-form-group">
-                      <label>Company *</label>
-                      <select value={receiptFormData.company || 'ISTL'} onChange={(e) => setReceiptFormData({ ...receiptFormData, company: e.target.value })}>
-                        <option value="ISTL">ISTL</option>
-                        <option value="SESOLA">SESOLA</option>
-                      </select>
-                    </div>
                   </div>
                 </div>
 
@@ -1415,7 +1405,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                           <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                             <tr style={{ background: '#065f46' }}>
-                              {['#', 'Date', 'Amount', 'Type', 'Method', 'Reference', 'Company', 'Notes'].map(h => (
+                              {['#', 'Date', 'Amount', 'Type', 'Method', 'Reference', 'Notes'].map(h => (
                                 <th key={h} style={{ padding: '9px 11px', textAlign: 'left', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
@@ -1429,7 +1419,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
                                 <td style={{ padding: '7px 11px' }}><span style={{ background: row.receiptType === 'ADVANCE' ? '#dcfce7' : '#dbeafe', color: row.receiptType === 'ADVANCE' ? '#166534' : '#1e40af', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>{row.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice'}</span></td>
                                 <td style={{ padding: '7px 11px', whiteSpace: 'nowrap' }}>{row.paymentMethod}</td>
                                 <td style={{ padding: '7px 11px', color: '#64748b' }}>{row.transactionReference || '—'}</td>
-                                <td style={{ padding: '7px 11px' }}>{row.company || 'ISTL'}</td>
                                 <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
                               </tr>
                             ))}
@@ -1625,12 +1614,6 @@ Method: ${editReceiptFormData.paymentMethod}`,
                       <label>Payment Method *</label>
                       <select value={editReceiptFormData.paymentMethod} onChange={(e) => setEditReceiptFormData({ ...editReceiptFormData, paymentMethod: e.target.value })}>
                         <option value="Bank Transfer">Bank Transfer</option><option value="UPI">UPI</option><option value="Cash">Cash</option><option value="Cheque">Cheque</option><option value="Credit Card">Credit Card</option>
-                      </select>
-                    </div>
-                    <div className="receipts-page-form-group">
-                      <label>Company *</label>
-                      <select value={editReceiptFormData.company} onChange={(e) => setEditReceiptFormData({ ...editReceiptFormData, company: e.target.value })}>
-                        <option value="ISTL">ISTL</option><option value="SESOLA">SESOLA</option>
                       </select>
                     </div>
                     <div className="receipts-page-form-group">

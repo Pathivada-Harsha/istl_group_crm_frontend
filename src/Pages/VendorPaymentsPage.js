@@ -105,7 +105,7 @@ export default function VendorPaymentsPage() {
     vendorId:'', billId:null, paymentType:'ADVANCE',
     advanceDate: new Date().toISOString().split('T')[0],
     amount:0, paymentMode:'Bank Transfer', transactionReference:'', notes:'',
-    projectId:'', groupId:'', subGroupId:'', company:'ISTL'
+    projectId:'', groupId:'', subGroupId:''
   });
 
   // adjust advance (allocate to bills)
@@ -280,7 +280,7 @@ export default function VendorPaymentsPage() {
 
   // ── create ────────────────────────────────────────────────────────────────
   const handleCreateNew = () => {
-    setFormData({vendorId:'',billId:null,paymentType:'ADVANCE',advanceDate:new Date().toISOString().split('T')[0],amount:0,paymentMode:'Bank Transfer',transactionReference:'',notes:'',projectId:'',groupId:'',subGroupId:'',company:'ISTL'});
+    setFormData({vendorId:'',billId:null,paymentType:'ADVANCE',advanceDate:new Date().toISOString().split('T')[0],amount:0,paymentMode:'Bank Transfer',transactionReference:'',notes:'',projectId:'',groupId:'',subGroupId:''});
     setModalGroupName('');setModalSubGroupName('');setModalProjectId('');
     setVendors([]); setUnpaidBills([]);
     fetchModalGroups();
@@ -375,7 +375,7 @@ export default function VendorPaymentsPage() {
   // ── edit ──────────────────────────────────────────────────────────────────
   const handleEditClick = (adv) => {
     setEditingAdvance(adv);
-    setEditFormData({advanceDate:adv.advanceDate,amount:adv.amount,paymentMode:adv.paymentMode||'Bank Transfer',transactionReference:adv.transactionReference||'',notes:adv.notes||'',company:adv.company||'ISTL'});
+    setEditFormData({advanceDate:adv.advanceDate,amount:adv.amount,paymentMode:adv.paymentMode||'Bank Transfer',transactionReference:adv.transactionReference||'',notes:adv.notes||'',});
     setShowEditModal(true);
   };
 
@@ -641,7 +641,7 @@ export default function VendorPaymentsPage() {
                 <div className="receipt-details">
                   <div className="receipt-detail-row"><span>Payment Mode:</span><strong>{selectedAdvance.paymentMode||'—'}</strong></div>
                   <div className="receipt-detail-row"><span>Transaction Ref:</span><strong>{selectedAdvance.transactionReference||'—'}</strong></div>
-                  {selectedAdvance.company&&<div className="receipt-detail-row"><span>Company:</span><strong>{selectedAdvance.company}</strong></div>}
+
                   {selectedAdvance.notes&&<div className="receipt-detail-row"><span>Notes:</span><strong>{selectedAdvance.notes}</strong></div>}
                 </div>
                 <div className="receipt-amounts">
@@ -813,12 +813,6 @@ export default function VendorPaymentsPage() {
                       <select value={formData.vendorId} onChange={e=>handleVendorChange(e.target.value)} disabled={!modalProjectId}>
                         <option value="">{!modalProjectId ? 'Select a project first' : vendors.length === 0 ? 'No vendors found' : 'Select Vendor'}</option>
                         {vendors.map(v=><option key={v.id||v.vendorId} value={v.id||v.vendorId}>{v.name||v.vendorName}</option>)}
-                      </select>
-                    </div>
-                    <div className="receipts-page-form-group">
-                      <label>Company *</label>
-                      <select value={formData.company} onChange={e=>setFormData(f=>({...f,company:e.target.value}))}>
-                        <option value="ISTL">ISTL</option><option value="SESOLA">SESOLA</option>
                       </select>
                     </div>
                   </div>
@@ -1007,12 +1001,6 @@ export default function VendorPaymentsPage() {
                         <option value="UPI">UPI</option>
                         <option value="Cheque">Cheque</option>
                         <option value="Cash">Cash</option>
-                      </select>
-                    </div>
-                    <div className="receipts-page-form-group">
-                      <label>Company *</label>
-                      <select value={editFormData.company||'ISTL'} onChange={e=>setEditFormData(f=>({...f,company:e.target.value}))}>
-                        <option value="ISTL">ISTL</option><option value="SESOLA">SESOLA</option>
                       </select>
                     </div>
                     <div className="receipts-page-form-group">

@@ -133,7 +133,7 @@ const InvoicesManagementPage = () => {
     customerId: null, projectId: '', groupId: '', subGroupId: '',
     invoiceDate: new Date().toISOString().split('T')[0], dueDate: '',
     items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
-    status: 'DRAFT', company: 'ISTL'
+    status: 'DRAFT'
   });
 
   useEffect(() => { localStorage.setItem('invoiceColumns', JSON.stringify(columns)); }, [columns]);
@@ -436,13 +436,13 @@ const InvoicesManagementPage = () => {
   };
 
   const handleCreateNew = () => {
-    setFormData({ customerId: null, projectId: '', groupId: '', subGroupId: '', invoiceDate: new Date().toISOString().split('T')[0], dueDate: '', items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }], status: 'DRAFT', company: 'ISTL' });
+    setFormData({ customerId: null, projectId: '', groupId: '', subGroupId: '', invoiceDate: new Date().toISOString().split('T')[0], dueDate: '', items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }], status: 'DRAFT' });
     setCustomerData(null); setModalGroupName(''); setModalSubGroupName(''); setModalProjectId(''); setEditMode(false);
     fetchModalGroups(); setShowCreateModal(true);
   };
 
   const handleEditInvoice = (invoice) => {
-    setFormData({ customerId: invoice.customerId, projectId: invoice.projectId, groupId: invoice.groupId, subGroupId: invoice.subGroupId, invoiceDate: invoice.invoiceDate.split('T')[0], dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '', items: invoice.items || [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }], status: invoice.status, company: invoice.company || 'ISTL' });
+    setFormData({ customerId: invoice.customerId, projectId: invoice.projectId, groupId: invoice.groupId, subGroupId: invoice.subGroupId, invoiceDate: invoice.invoiceDate.split('T')[0], dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '', items: invoice.items || [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }], status: invoice.status });
     setSelectedInvoice(invoice); setEditMode(true); setShowCreateModal(true);
   };
 
@@ -823,13 +823,6 @@ const InvoicesManagementPage = () => {
                       <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
                         <option value="">{modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}</option>
                         {modalProjects.map((project, index) => <option key={project.id || index} value={project.id}>{project.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="Invoices-page-form-group">
-                      <label>Company *</label>
-                      <select value={formData.company || 'ISTL'} onChange={(e) => setFormData({ ...formData, company: e.target.value })}>
-                        <option value="ISTL">ISTL</option>
-                        <option value="SESOLA">SESOLA</option>
                       </select>
                     </div>
                   </div>
