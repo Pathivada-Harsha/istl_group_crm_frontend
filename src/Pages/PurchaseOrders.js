@@ -308,13 +308,13 @@ const PurchaseOrders = () => {
     if (!orderBookId) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/order-book/${orderBookId}/items`, {
+      const r = await fetch(`${API_BASE_URL}/order-book/${orderBookId}/items-with-tracking`, {
         credentials: 'include', headers: getAuthHeaders()
       });
       if (!r.ok) throw new Error();
       const data = await r.json();
-      // /order-book/{id}/items returns an array directly
-      setOrderBookItems(Array.isArray(data) ? data : (data.data || []));
+      // items-with-tracking returns { success, data: [...] } with allocatedQty per item
+      setOrderBookItems(data.success ? (data.data || []) : (Array.isArray(data) ? data : []));
     } catch { showError('Failed to load order book items'); setOrderBookItems([]); }
     finally { setLoadingOrderItems(false); }
   };
@@ -364,12 +364,22 @@ const PurchaseOrders = () => {
     setCreatePOFormData(prev => ({ ...prev, vendorId, vendorName: sel?.name || '', vendorContact: sel?.contactNumber || sel?.phone || '' }));
   };
 
-  const poItems = orderBookItems.map((item, index) => ({
-    id: `orderbook-${index}`, itemName: item.itemName,
-    itemDescription: item.specification || item.description || '',
-    quotedQuantity: item.quantity || 1, quantity: item.quantity || 1,
-    unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0, selected: true
-  }));
+  const poItems = orderBookItems.map((item, index) => {
+    const totalQty   = parseFloat(item.quantity) || 0;
+    const allocatedQty = parseFloat(item.allocatedQty) || 0;
+    const remainingQty = Math.max(0, totalQty - allocatedQty);
+    return {
+      id: `orderbook-${index}`,
+      orderBookItemId: item.id,           // link back to order_book_items.id
+      itemName: item.itemName,
+      itemDescription: item.specification || item.description || '',
+      quotedQuantity: totalQty,           // total from order book
+      allocatedQty,                       // already assigned to other POs
+      remainingQty,                       // available to assign
+      quantity: remainingQty,             // default to remaining
+      unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0, selected: remainingQty > 0
+    };
+  });
 
   const handleSkipQuotationLoadOrderBook = () => {
     if (orderBookItems.length === 0) { showError('No order book items available'); return; }
@@ -447,7 +457,12 @@ const PurchaseOrders = () => {
     const newItems = [...createPOFormData.items];
     const item = newItems[index];
     const qty = parseFloat(quantity) || 0;
-    if (item.quotedQuantity && qty > item.quotedQuantity) { showError(`Quantity cannot exceed ${item.quotedQuantity}`); return; }
+    // Enforce max from quotation OR from orderBook remaining qty
+    const maxQty = item.quotedQuantity || item.remainingQty;
+    if (maxQty && qty > maxQty) {
+      showError(`Quantity cannot exceed ${maxQty} (${item.remainingQty != null ? 'remaining from order book' : 'quoted quantity'})`);
+      return;
+    }
     item.quantity = qty;
     const base = qty * item.unitPrice; const disc = base * (item.discount / 100);
     const tax  = (base - disc) * (item.gst / 100);
@@ -1016,21 +1031,21 @@ const PurchaseOrders = () => {
                 <div className="po-form-row">
                   <div className="po-form-group">
                     <label>Group *</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups || isEditMode} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                       <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
                       {modalGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
                     </select>
                   </div>
                   <div className="po-form-group">
                     <label>Sub Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups || isEditMode} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                       <option value="">{modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}</option>
                       {modalSubGroups.map((s, i) => <option key={s.value || i} value={s.value}>{s.label}</option>)}
                     </select>
                   </div>
                   <div className="po-form-group">
                     <label>Project *</label>
-                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects || isEditMode} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                       <option value="">{modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}</option>
                       {modalProjects.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
                     </select>
@@ -1040,7 +1055,7 @@ const PurchaseOrders = () => {
               </div>
 
               {/* Step 2: Quotation / Order Book */}
-              {modalProjectId && !isEditMode && (
+              {modalProjectId && (
                 <div className="po-form-section">
                   {quotations.length > 0 && orderBookItems.length > 0 && (
                     <>
@@ -1318,10 +1333,10 @@ const PurchaseOrders = () => {
                             {createPOFormData.items.map((item, index) => (
                               <tr key={index} style={{ borderTop: '1px solid #e2e8f0', opacity: item.selected ? 1 : 0.5, background: item.selected ? 'white' : '#f9fafb' }}>
                                 <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={item.selected} onChange={() => handleToggleItemSelection(index)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /></td>
-                                <td style={{ padding: '12px', fontWeight: '500' }}>{item.itemName}{item.isManual && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}</td>
+                                <td style={{ padding: '12px', fontWeight: '500' }}>{item.itemName}{item.isManual && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}{item.remainingQty != null && <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? '#ef4444' : '#22c55e', marginTop: '2px' }}>OB: {item.quotedQuantity} total · {item.allocatedQty || 0} assigned · <strong>{item.remainingQty} remaining</strong></div>}</td>
                                 <td style={{ padding: '12px', fontSize: '13px', color: '#64748b' }}>{item.itemDescription || '—'}</td>
                                 {createPOFormData.quotationId && <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>{item.quotedQuantity}</td>}
-                                <td style={{ padding: '12px', textAlign: 'center' }}><input type="number" min="0" max={createPOFormData.quotationId ? item.quotedQuantity : undefined} value={item.quantity} onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)} disabled={!item.selected} style={{ width: '70px', padding: '8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px' }} /></td>
+                                <td style={{ padding: '12px', textAlign: 'center' }}><input type="number" min="0" max={createPOFormData.quotationId ? item.quotedQuantity : (item.remainingQty != null ? item.remainingQty : undefined)} value={item.quantity} onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)} disabled={!item.selected} style={{ width: '70px', padding: '8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px' }} /></td>
                                 <td style={{ padding: '12px', textAlign: 'right' }}><input type="number" min="0" step="0.01" value={item.unitPrice || ''} onChange={(e) => handleUpdatePOItemPrice(index, e.target.value)} disabled={createPOFormData.quotationId || !item.selected} placeholder="0.00" style={{ width: '110px', padding: '8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} /></td>
                                 <td style={{ padding: '12px', textAlign: 'center' }}><select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected} style={{ width: '90px', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>{GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}</select></td>
                                 <td style={{ padding: '12px', textAlign: 'center', fontSize: '14px' }}>{item.discount}%</td>

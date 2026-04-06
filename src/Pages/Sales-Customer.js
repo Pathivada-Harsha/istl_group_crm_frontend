@@ -499,7 +499,48 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
   const [poUploadData, setPoUploadData]     = useState({ file: null, poNumber: '', poDate: new Date().toISOString().split('T')[0] });
   const [orderItemsCache, setOrderItemsCache] = useState({});
 
+  // ── Financial Overview State ───────────────────────────────────────────────
+  const [overviewData, setOverviewData]       = useState(null);
+  const [loadingOverview, setLoadingOverview] = useState(false);
+
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
+
+  const fetchOverview = useCallback(async () => {
+    setLoadingOverview(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/customers/${customer.id}/overview`, {
+        credentials: 'include',
+        headers
+      });
+      const json = await res.json();
+      if (!json.success) return;
+      const { orders = [], invoices = [], receipts = [] } = json.data || {};
+
+      const totalOrderValue    = orders.reduce((s, o) => s + (parseFloat(o.totalAmount) || 0), 0);
+      const totalBalanceDue    = orders.reduce((s, o) => s + (parseFloat(o.balanceAmount) || 0), 0);
+      const totalAdvancePaid   = orders.reduce((s, o) => s + (parseFloat(o.advanceAmount) || 0), 0);
+      const totalInvoiced      = invoices.reduce((s, i) => s + (parseFloat(i.totalAmount || i.grandTotal) || 0), 0);
+      const totalReceived      = receipts.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+      const paidInvoices       = invoices.filter(i => i.status === 'Paid' || i.paymentStatus === 'Paid').length;
+      const pendingInvoices    = invoices.filter(i => i.status !== 'Paid' && i.status !== 'Cancelled' && i.paymentStatus !== 'Paid').length;
+      const completedOrders    = orders.filter(o => o.status === 'Completed').length;
+      const activeOrders       = orders.filter(o => o.status !== 'Cancelled' && o.status !== 'Completed').length;
+
+      setOverviewData({
+        orders, invoices, receipts,
+        stats: {
+          totalOrderValue, totalBalanceDue, totalAdvancePaid,
+          totalInvoiced, totalReceived,
+          paidInvoices, pendingInvoices,
+          completedOrders, activeOrders,
+          totalOrders: orders.length,
+          totalInvoicesCount: invoices.length,
+          totalReceiptsCount: receipts.length,
+        }
+      });
+    } catch (e) { console.error('Overview fetch failed', e); }
+    finally { setLoadingOverview(false); }
+  }, [customer.id]);
 
   const fetchOrderBooks = useCallback(async () => {
     setLoadingOrders(true);
@@ -525,18 +566,21 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
   }, [customer.id]);
 
   useEffect(() => {
+    if (activeTab === 'overview')  fetchOverview();
     if (activeTab === 'orderbooks') fetchOrderBooks();
     if (activeTab === 'followups')  fetchFollowups();
   }, [activeTab]);
 
   const handleViewOrder = async (order) => {
     try {
-      if (!orderItemsCache[order.id]) {
+      let items = orderItemsCache[order.id];
+      if (!items) {
         const res = await fetch(`${API_BASE_URL}/order-book/${order.id}/items`, { credentials: 'include', headers });
         const data = await res.json();
-        if (data.success) { setOrderItemsCache(prev => ({ ...prev, [order.id]: data.data || [] })); }
+        items = data.success ? (data.data || []) : [];
+        setOrderItemsCache(prev => ({ ...prev, [order.id]: items }));
       }
-      setSelectedOrder({ ...order, items: orderItemsCache[order.id] || [] });
+      setSelectedOrder({ ...order, items });
       setShowOrderView(true);
     } catch { showError('Failed to load order details'); }
   };
@@ -630,6 +674,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       {/* ── OVERVIEW ── */}
       {activeTab === 'overview' && (
         <div className="ld-tab-content">
+          {/* Contact + Business info cards - always visible */}
           <div className="ld-info-grid">
             <div className="ld-info-card">
               <h4 className="ld-card-title">Contact Information</h4>
@@ -668,11 +713,146 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
               </div>
             </div>
           </div>
-          <OrderBookSummary
-            customer={customer}
-            currentUser={currentUser}
-            onGoToOrderBooks={() => { setActiveTab('orderbooks'); setShowOrderForm(false); }}
-          />
+
+          {/* ── Financial Overview Dashboard ── */}
+          {loadingOverview ? (
+            <div style={{textAlign:'center',padding:'2rem',color:'#6b7280'}}>Loading financial summary…</div>
+          ) : overviewData ? (
+            <div style={{marginTop:'1.25rem'}}>
+
+              {/* KPI Row */}
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.75rem',marginBottom:'1.25rem'}}>
+                {[
+                  { label:'Total Order Value',  val:`₹${(overviewData.stats.totalOrderValue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, icon:'📦', color:'#eff6ff', accent:'#3b82f6' },
+                  { label:'Total Invoiced',      val:`₹${(overviewData.stats.totalInvoiced||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,   icon:'🧾', color:'#f0fdf4', accent:'#16a34a' },
+                  { label:'Total Received',      val:`₹${(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,    icon:'💰', color:'#fef3c7', accent:'#d97706' },
+                  { label:'Balance Due',         val:`₹${(overviewData.stats.totalBalanceDue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,  icon:'⚠️', color:'#fef2f2', accent:'#dc2626' },
+                  { label:'Active Orders',       val:overviewData.stats.activeOrders,    icon:'🔄', color:'#f5f3ff', accent:'#7c3aed' },
+                  { label:'Pending Invoices',    val:overviewData.stats.pendingInvoices, icon:'📋', color:'#fff7ed', accent:'#ea580c' },
+                ].map(({label,val,icon,color,accent}) => (
+                  <div key={label} style={{background:'#fff',border:`1px solid ${accent}22`,borderLeft:`3px solid ${accent}`,borderRadius:'8px',padding:'0.875rem',display:'flex',flexDirection:'column',gap:'4px'}}>
+                    <div style={{fontSize:'18px'}}>{icon}</div>
+                    <div style={{fontSize:'1.15rem',fontWeight:'700',color:'#111827',lineHeight:1.2}}>{val}</div>
+                    <div style={{fontSize:'11px',color:'#6b7280',fontWeight:'500'}}>{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Orders Summary */}
+              {overviewData.orders.length > 0 && (
+                <div className="orderbook-card" style={{marginBottom:'1rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
+                    <h4 className="ld-card-title" style={{margin:0}}>📦 Order Books ({overviewData.orders.length})</h4>
+                    <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => setActiveTab('orderbooks')}>View All →</button>
+                  </div>
+                  <div className="orderbook-table-wrapper">
+                    <table className="orderbook-table" style={{fontSize:'12px'}}>
+                      <thead>
+                        <tr><th>#</th><th>Order</th><th>PO No</th><th>Date</th><th>Total</th><th>Advance</th><th>Balance</th><th>Status</th></tr>
+                      </thead>
+                      <tbody>
+                        {overviewData.orders.slice(0,5).map((o,i) => (
+                          <tr key={o.id}>
+                            <td>{i+1}</td>
+                            <td><span style={{color:'#3b82f6',fontWeight:500}}>{o.orderBookNo}</span><br/><span style={{color:'#6b7280',fontSize:'11px'}}>{o.orderTitle}</span></td>
+                            <td>{o.poNumber||'-'}</td>
+                            <td>{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td>
+                            <td style={{fontWeight:600}}>₹{parseFloat(o.totalAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td>₹{parseFloat(o.advanceAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td style={{color:'#dc2626',fontWeight:600}}>₹{parseFloat(o.balanceAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td><span className={`orderbook-status ${getStatusClass(o.status)}`} style={{fontSize:'10px'}}>{o.status}</span></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {overviewData.orders.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.orders.length - 5} more orders</div>}
+                </div>
+              )}
+
+              {/* Invoices Summary */}
+              {overviewData.invoices.length > 0 && (
+                <div className="orderbook-card" style={{marginBottom:'1rem'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
+                    <h4 className="ld-card-title" style={{margin:0}}>🧾 Invoices ({overviewData.invoices.length})</h4>
+                    <div style={{display:'flex',gap:'8px',fontSize:'12px'}}>
+                      <span style={{background:'#d1fae5',color:'#065f46',padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.paidInvoices} Paid</span>
+                      <span style={{background:'#fee2e2',color:'#991b1b',padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.pendingInvoices} Pending</span>
+                    </div>
+                  </div>
+                  <div className="orderbook-table-wrapper">
+                    <table className="orderbook-table" style={{fontSize:'12px'}}>
+                      <thead>
+                        <tr><th>#</th><th>Invoice No</th><th>Date</th><th>Amount</th><th>Paid</th><th>Due</th><th>Status</th></tr>
+                      </thead>
+                      <tbody>
+                        {overviewData.invoices.slice(0,5).map((inv,i) => {
+                          const total = parseFloat(inv.totalAmount||inv.grandTotal||0);
+                          const paid  = parseFloat(inv.paidAmount||0);
+                          const due   = total - paid;
+                          const statusColor = inv.paymentStatus === 'Paid' || inv.status === 'Paid' ? '#065f46' : due > 0 ? '#991b1b' : '#374151';
+                          const statusBg    = inv.paymentStatus === 'Paid' || inv.status === 'Paid' ? '#d1fae5' : due > 0 ? '#fee2e2' : '#f3f4f6';
+                          const displayStatus = inv.paymentStatus || inv.status || '-';
+                          return (
+                            <tr key={inv.id}>
+                              <td>{i+1}</td>
+                              <td><span style={{color:'#3b82f6',fontWeight:500}}>{inv.invoiceNo||inv.id}</span></td>
+                              <td>{inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('en-IN') : '-'}</td>
+                              <td style={{fontWeight:600}}>₹{total.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                              <td style={{color:'#16a34a'}}>₹{paid.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                              <td style={{color: due > 0 ? '#dc2626' : '#16a34a',fontWeight:600}}>₹{due.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                              <td><span style={{background:statusBg,color:statusColor,padding:'2px 8px',borderRadius:'9999px',fontSize:'10px',fontWeight:600}}>{displayStatus}</span></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {overviewData.invoices.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.invoices.length - 5} more invoices</div>}
+                </div>
+              )}
+
+              {/* Receipts Summary */}
+              {overviewData.receipts.length > 0 && (
+                <div className="orderbook-card">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
+                    <h4 className="ld-card-title" style={{margin:0}}>💰 Receipts / Payments Received ({overviewData.receipts.length})</h4>
+                    <span style={{fontSize:'14px',fontWeight:'700',color:'#16a34a'}}>Total: ₹{(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+                  </div>
+                  <div className="orderbook-table-wrapper">
+                    <table className="orderbook-table" style={{fontSize:'12px'}}>
+                      <thead>
+                        <tr><th>#</th><th>Receipt No</th><th>Date</th><th>Amount</th><th>Mode</th><th>Type</th><th>Reference</th></tr>
+                      </thead>
+                      <tbody>
+                        {overviewData.receipts.slice(0,5).map((r,i) => (
+                          <tr key={r.id}>
+                            <td>{i+1}</td>
+                            <td><span style={{color:'#3b82f6',fontWeight:500}}>{r.receiptNo||r.id}</span></td>
+                            <td>{r.receiptDate ? new Date(r.receiptDate).toLocaleDateString('en-IN') : '-'}</td>
+                            <td style={{color:'#16a34a',fontWeight:700}}>₹{parseFloat(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td>{r.paymentMode||r.method||'-'}</td>
+                            <td>{r.receiptType||'-'}</td>
+                            <td style={{color:'#6b7280'}}>{r.transactionReference||r.referenceNo||'-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {overviewData.receipts.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.receipts.length - 5} more receipts</div>}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {overviewData.orders.length === 0 && overviewData.invoices.length === 0 && overviewData.receipts.length === 0 && (
+                <div className="ld-empty-state">
+                  <div className="ld-empty-icon">📊</div>
+                  <p>No financial activity recorded yet for this customer.</p>
+                  <button className="ld-btn ld-btn-pri" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); }}>Create First Order Book</button>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       )}
 
@@ -984,15 +1164,19 @@ const CustomerDatabase = () => {
   const fetchCustomers = async (overridePage) => {
     setLoading(true); setError(null);
     try {
-      const params = new URLSearchParams();
-      if (groupName)                         params.append('groupName',    groupName);
-      if (subGroupName)                      params.append('subGroupName', subGroupName);
-      if (searchTerm.trim())                 params.append('search',       searchTerm.trim());
-      if (selectedGroup  !== 'All')          params.append('group',        selectedGroup);
-      if (selectedStatus !== 'All')          params.append('status',       selectedStatus);
-      params.append('page', (overridePage !== undefined ? overridePage : currentPage) - 1);
-      params.append('size', rowsPerPage);
-      const data = await fetchWithHeaders(`${API_BASE_URL}/customers/getAll?${params}`);
+      const page = (overridePage !== undefined ? overridePage : currentPage) - 1;
+      const filterBody = {
+        searchTerm:   searchTerm.trim() || null,
+        groupName:    groupName         || (selectedGroup  !== 'All' ? selectedGroup  : null),
+        subGroupName: subGroupName      || null,
+        status:       selectedStatus !== 'All' ? selectedStatus : null,
+        page,
+        size: rowsPerPage,
+      };
+      const data = await fetchWithHeaders(
+        `${API_BASE_URL}/customers/filter?page=${page}&size=${rowsPerPage}`,
+        { method: 'POST', body: JSON.stringify(filterBody) }
+      );
       if (data.success) {
         const list = data.data.content || data.data;
         setCustomers(list);
@@ -1073,6 +1257,16 @@ useEffect(() => {
   if (formData.groupName) fetchSubGroupsForForm(formData.groupName);
   else setSubGroups([]);
 }, [formData.groupName]);
+// eslint-disable-line react-hooks/exhaustive-deps
+
+// Effect 4 — fetch groups once on mount for the Add/Edit form dropdown.
+// Previously groups were only fetched when hasFilters===false in Effect 1,
+// meaning any active page-level filter (group/subgroup from URL or context)
+// would skip the fetch and leave the "Group" select empty in the modal.
+useEffect(() => {
+  if (!canView) return;
+  fetchGroups();
+}, [canView]);
 // eslint-disable-line react-hooks/exhaustive-deps
   // ── Sort ──────────────────────────────────────────────────────────
   const handleSort = (colKey) => {

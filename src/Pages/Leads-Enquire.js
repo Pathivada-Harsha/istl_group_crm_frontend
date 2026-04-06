@@ -671,6 +671,10 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                   ['Email', lead.email || '-'],
                   ['Phone', lead.phone || '-'],
                   ['Source', lead.source || '-'],
+                  ...(lead.source === 'Referral' ? [
+                    ['Referred By', lead.referralName || '-'],
+                    ['Referrer Phone', lead.referralPhone || '-'],
+                  ] : []),
                   ['Group', lead.groupName || '-'],
                   ['Category', lead.subGroupName || '-'],
                 ].map(([l, v]) => (
@@ -1021,6 +1025,7 @@ const isFirstFilterRender = useRef(true);
     customerId: null, name: '', email: '', phone: '', source: 'Website',
     priority: 'Medium', status: 'New', assignedTo: null, enquiry: '',
     groupName: '', subGroupName: '', closedLostReason: '',
+    referralName: '', referralPhone: '',
   });
 
   // ── Derived columns ──────────────────────────────────────────────
@@ -1197,6 +1202,8 @@ useEffect(() => {
       pincode: lead.pincode || '',
       solarScheme: lead.solarScheme || '',
       subsidyRequired: lead.subsidyRequired || '',
+      referralName: lead.referralName || '',
+      referralPhone: lead.referralPhone || '',
     });
     setPhoneError(''); setShowAddModal(true);
   };
@@ -1265,6 +1272,7 @@ useEffect(() => {
       closedLostReason: '',
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
+      referralName: '', referralPhone: '',
     });
     setPhoneError('');
   };
@@ -1777,6 +1785,18 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             <option>Website</option><option>Referral</option><option>Cold Call</option><option>Email</option><option>Others</option>
           </select>
         </div>
+        {formData.source === 'Referral' && (
+          <>
+            <div className="leads-enquiries-form-group">
+              <label>Referred By — Name</label>
+              <input type="text" value={formData.referralName || ''} onChange={e => setFormData(p => ({ ...p, referralName: e.target.value }))} placeholder="Name of the person who referred" />
+            </div>
+            <div className="leads-enquiries-form-group">
+              <label>Referred By — Phone</label>
+              <input type="text" value={formData.referralPhone || ''} onChange={e => setFormData(p => ({ ...p, referralPhone: e.target.value.replace(/\D/g,'').slice(0,10) }))} placeholder="10-digit phone" maxLength="10" />
+            </div>
+          </>
+        )}
         <div className="leads-enquiries-form-group">
           <label>Priority *</label>
           <select required value={formData.priority} onChange={e => setFormData(p => ({ ...p, priority: e.target.value }))}>

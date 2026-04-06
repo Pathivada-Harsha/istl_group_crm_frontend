@@ -4,7 +4,7 @@ import {
   DollarSign, IndianRupee, Package, Calendar, Phone, Mail, MapPin,
   ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag,
   Briefcase, Truck, ChevronUp, ChevronDown, ChevronsUpDown, Columns,
-  GripVertical, Check
+  GripVertical, Check, Trash2
 } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -13,6 +13,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import ConfirmationModal from '../components/ConfirmationModal.js';
 import vendorApi from '../services/vendorApi';
 import filterApi from '../services/filterApi';
 
@@ -124,6 +125,7 @@ const VendorManagement = () => {
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
 
   // ── Column state ──
   const [columns, setColumns] = useState(DEFAULT_COLUMNS);
@@ -444,17 +446,22 @@ const VendorManagement = () => {
     finally { setLoading(false); }
   };
 
-  const handleDeleteVendor = async (vendorId) => {
-    if (!window.confirm('Are you sure you want to deactivate this vendor?')) return;
+  const handleDeleteVendor = (vendorId, vendorName) => {
+    setConfirmModal({ show: true, vendorId, vendorName: vendorName || 'this vendor' });
+  };
+
+  const confirmDeleteVendor = async () => {
+    const { vendorId } = confirmModal;
+    setConfirmModal({ show: false, vendorId: null, vendorName: '' });
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/vendors/${vendorId}`, {
         method: 'DELETE', headers: getAuthHeaders(), credentials: 'include'
       });
-      if (!response.ok) throw new Error('Failed to deactivate vendor');
-      showSuccess('Vendor deactivated successfully');
+      if (!response.ok) throw new Error('Failed to delete vendor');
+      showSuccess('Vendor deleted successfully');
       setShowDetailDrawer(false); fetchVendors(); fetchStats();
-    } catch (error) { showError('Failed to deactivate vendor'); }
+    } catch (error) { showError('Failed to delete vendor'); }
     finally { setLoading(false); }
   };
 
@@ -533,6 +540,7 @@ const VendorManagement = () => {
             <div className="vendor-management-actions-cell">
               <button className="vendor-management-action-btn" onClick={() => handleViewVendor(vendor)} title="View Details"><Eye size={16} /></button>
               <button className="vendor-management-action-btn" onClick={() => handleEditVendor(vendor)} title="Edit Vendor"><Edit2 size={16} /></button>
+              <button className="vendor-management-action-btn vendor-management-action-btn--danger" onClick={() => handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)} title="Delete Vendor"><Trash2 size={16} /></button>
             </div>
           </td>
         );
@@ -583,6 +591,16 @@ const VendorManagement = () => {
   return (
     <div className="vendor-management-container">
       {loading && <CrmPreloader text="Loading..." />}
+      <ConfirmationModal
+        show={confirmModal.show}
+        type="alert"
+        title="Delete Vendor"
+        message={`Are you sure you want to delete "${confirmModal.vendorName}"?\nThis action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onConfirm={confirmDeleteVendor}
+        onCancel={() => setConfirmModal({ show: false, vendorId: null, vendorName: '' })}
+      />
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Header */}
@@ -830,7 +848,7 @@ const VendorManagement = () => {
               <div className="vendor-management-drawer-actions">
                 <button className="vendor-management-btn-primary" onClick={() => handleEditVendor(selectedVendor)}>Edit Vendor</button>
                 {selectedVendor.status === 'Active' && (
-                  <button className="vendor-management-btn-danger" onClick={() => handleDeleteVendor(selectedVendor.id)}>Deactivate</button>
+                  <button className="vendor-management-btn-danger" onClick={() => handleDeleteVendor(selectedVendor.id, selectedVendor.vendorName || selectedVendor.name)}>Delete</button>
                 )}
               </div>
             </div>

@@ -938,12 +938,16 @@ const BillsReceived = () => {
     }
   };
 
-  // Remove item row
+  // Remove item row — allows removing PO-linked items the user doesn't want to bill
   const handleRemoveItem = (index) => {
-    if (formData && formData.items.length > 1) {
-      const newItems = formData.items.filter((_, i) => i !== index);
-      setFormData({ ...formData, items: newItems });
+    if (!formData) return;
+    if (formData.items.length <= 1) {
+      // Last item — clear it rather than blocking removal
+      setFormData({ ...formData, items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }] });
+      return;
     }
+    const newItems = formData.items.filter((_, i) => i !== index);
+    setFormData({ ...formData, items: newItems });
   };
 
   // Update item
@@ -1494,104 +1498,73 @@ const BillsReceived = () => {
                 <div className="bill-form-items-table-container">
                   <table className="bill-form-items-table">
                     <thead>
-                      <tr>
-                        <th style={{ width: '15%' }}>Item Name</th>
-                        <th style={{ width: '20%' }}>Description</th>
-                        {editMode && <th style={{ width: '8%' }}>Ordered</th>}
-                        {editMode && <th style={{ width: '8%' }}>Delivered</th>}
-                        {editMode && <th style={{ width: '8%' }}>Pending</th>}
-                        <th style={{ width: editMode ? '10%' : '12%' }}>Bill Qty *</th>
-                        <th style={{ width: editMode ? '10%' : '12%' }}>Price *</th>
-                        <th style={{ width: '8%' }}>Tax %</th>
-                        <th style={{ width: '13%' }}>Line Total</th>
-                        <th style={{ width: '10%' }}>Action</th>
+                      <tr style={{ backgroundColor: '#f8fafc', fontSize: '12px' }}>
+                        <th style={{ padding: '8px 6px', textAlign: 'left', minWidth: '140px' }}>Item Name</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '80px' }}>Ordered</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '80px', color: '#22c55e' }}>Pending</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '100px' }}>Bill Qty *</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '110px' }}>Unit Price *</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '70px' }}>Tax %</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'right', width: '110px' }}>Line Total</th>
+                        <th style={{ padding: '8px 6px', textAlign: 'center', width: '50px' }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {formData.items && formData.items.map((item, index) => (
-                        <tr key={index} className="bill-form-item-row">
-                          <td>
-                            <input
-                              className="bill-form-table-input"
-                              type="text"
-                              placeholder="Item name"
-                              value={item.itemName || ''}
-                              onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
-                              readOnly={!!item.poItemId}
-                              style={{
-                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
-                                cursor: item.poItemId ? 'not-allowed' : 'text'
-                              }}
-                            />
-                          </td>
-                          <td>
-                            <input
-                              className="bill-form-table-input"
-                              type="text"
-                              placeholder={item.poItemId ? "From PO" : "Description"}
-                              value={item.description || ''}
-                              onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
-                              readOnly={!!item.poItemId}
-                              style={{
-                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
-                                cursor: item.poItemId ? 'not-allowed' : 'text'
-                              }}
-                            />
-                            {item.poItemId && (
-                              <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '2px' }}>
-                                PO Item #{item.poItemId}
-                              </small>
+                        <tr key={index} style={{ borderBottom: '1px solid #f1f5f9', fontSize: '13px' }}>
+                          <td style={{ padding: '6px' }}>
+                            {item.poItemId ? (
+                              <div>
+                                <div style={{ fontWeight: 500, color: '#1e293b' }}>{item.itemName || item.description || '—'}</div>
+                                <div style={{ fontSize: '11px', color: '#94a3b8' }}>PO Item #{item.poItemId}</div>
+                              </div>
+                            ) : (
+                              <input
+                                style={{ width: '100%', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px' }}
+                                type="text"
+                                placeholder="Item name"
+                                value={item.itemName || ''}
+                                onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
+                              />
                             )}
                           </td>
-                          {editMode && (
-                            <>
-                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-                                {item.orderedQty || '-'}
-                              </td>
-                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-                                {item.deliveredQty || '-'}
-                              </td>
-                              <td style={{ color: '#22c55e', fontSize: '13px', textAlign: 'center', fontWeight: '600' }}>
-                                {item.pendingQty || '-'}
-                              </td>
-                            </>
-                          )}
-                          <td>
+                          <td style={{ padding: '6px', textAlign: 'center', color: '#64748b' }}>
+                            {item.orderedQty != null ? item.orderedQty : (item.quotedQuantity || '—')}
+                          </td>
+                          <td style={{ padding: '6px', textAlign: 'center', color: '#22c55e', fontWeight: 600 }}>
+                            {item.pendingQty != null ? item.pendingQty : (item.poItemId ? '—' : '—')}
+                          </td>
+                          <td style={{ padding: '6px' }}>
                             <input
-                              className="bill-form-table-input"
+                              style={{ width: '80px', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', textAlign: 'right' }}
                               type="number"
                               placeholder="Qty"
                               value={item.quantity || ''}
                               onChange={(e) => handleUpdateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
-                              min="0"
+                              min="0.01"
                               max={item.maxBillableQty || undefined}
                               step="0.01"
-                              readOnly={false}
                             />
-                            {editMode && item.maxBillableQty && (
-                              <small style={{ fontSize: '11px', color: '#f59e0b', display: 'block', marginTop: '2px' }}>
-                                Max: {item.maxBillableQty}
-                              </small>
+                            {item.maxBillableQty && (
+                              <div style={{ fontSize: '10px', color: '#f59e0b', marginTop: '2px' }}>max {item.maxBillableQty}</div>
                             )}
                           </td>
-                          <td>
+                          <td style={{ padding: '6px' }}>
                             <input
-                              className="bill-form-table-input"
+                              style={{ width: '100px', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', textAlign: 'right' }}
                               type="number"
                               placeholder="Price"
                               value={item.unitPrice || ''}
                               onChange={(e) => handleUpdateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
                               min="0"
                               step="0.01"
-                              readOnly={false}
-                              style={{ backgroundColor: 'white' }}
                             />
                           </td>
-                          <td>
+                          <td style={{ padding: '6px' }}>
                             <input
-                              className="bill-form-table-input"
+                              style={{ width: '60px', padding: '4px 6px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', textAlign: 'right' }}
                               type="number"
-                              placeholder="Tax %"
+                              placeholder="%"
                               value={item.taxPercent || ''}
                               onChange={(e) => handleUpdateItem(index, 'taxPercent', parseFloat(e.target.value) || 0)}
                               min="0"
@@ -1599,21 +1572,24 @@ const BillsReceived = () => {
                               step="0.01"
                             />
                           </td>
-                          <td>
-                            <span className="bill-form-line-total">
-                              {formatCurrency(calculateLineTotal(item))}
-                            </span>
+                          <td style={{ padding: '6px', textAlign: 'right', fontWeight: 600, color: '#1e293b' }}>
+                            {formatCurrency(calculateLineTotal(item))}
                           </td>
-                          <td>
-                            {formData.items.length > 1 && !item.poItemId && (
-                              <button
-                                className="bill-form-remove-item-btn"
-                                onClick={() => handleRemoveItem(index)}
-                                type="button"
-                              >
-                                <X size={16} />
-                              </button>
-                            )}
+                          <td style={{ padding: '6px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => handleRemoveItem(index)}
+                              type="button"
+                              title="Remove item"
+                              style={{
+                                background: '#fee2e2', border: '1px solid #fca5a5',
+                                borderRadius: '4px', cursor: 'pointer',
+                                color: '#ef4444', padding: '4px 8px',
+                                fontSize: '13px', fontWeight: 600,
+                                lineHeight: 1
+                              }}
+                            >
+                              ✕
+                            </button>
                           </td>
                         </tr>
                       ))}

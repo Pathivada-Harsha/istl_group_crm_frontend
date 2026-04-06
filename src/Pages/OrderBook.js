@@ -235,52 +235,29 @@ function OrderBook() {
   };
 
   // ============================================================
-  // ✅ ONLY THIS FUNCTION IS CHANGED — fetches template from backend
-  // ============================================================
-  const downloadExcelTemplate = async () => {
-    try {
-      setLoading(true);
-
-      const response = await fetch(`${API_BASE_URL}/order-book/download-template`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to download template');
-      }
-
-      // Get the file as a blob
-      const blob = await response.blob();
-
-      // Create a temporary download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-
-      // Generate a filename with today's date
-      const date = new Date().toISOString().split('T')[0];
-      link.download = `OrderBook_Template_${date}.xlsx`;
-
-      // Trigger download and clean up
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-
-      showSuccess('Template downloaded successfully! Check your Downloads folder.');
-    } catch (error) {
-      console.error('Error downloading template:', error);
-      showError('Failed to download template. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+  // Generate and download CSV template client-side (no backend endpoint needed)
+  const downloadExcelTemplate = () => {
+    const headers = [
+      'Line No', 'Item Name', 'Specification', 'Description',
+      'Quantity', 'Unit', 'Unit Price', 'Tax %', 'Discount %', 'Item Remarks'
+    ];
+    const sampleRow = ['1', 'Sample Item', 'Spec details', 'Item description',
+      '10', 'Nos', '1000', '18', '0', 'Optional remarks'];
+    const csvContent = [headers, sampleRow]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const date = new Date().toISOString().split('T')[0];
+    link.download = `OrderBook_Template_${date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    showSuccess('Template downloaded successfully!');
   };
-  // ============================================================
 
   const handleSearch = async () => {
     setLoading(true);
@@ -1015,7 +992,7 @@ function OrderBook() {
       sortKey: null,
       render: (o) => (
         <td key="actions">
-          <div className="orderbook-actions-inline">
+          <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
             <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View">   <FaEye /></button>
             <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit">   <FaEdit /></button>
             <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
@@ -1200,7 +1177,7 @@ function OrderBook() {
                 </tr>
               ) : (
                 sortedOrderBooks.map((order) => (
-                  <tr key={order.id}>
+                  <tr key={order.id} onClick={() => handleView(order)} style={{ cursor: 'pointer' }}>
                     {columnOrder
                       .filter(key => visibleColumns[key])
                       .map(key => columnMeta[key].render(order))}
@@ -1360,7 +1337,7 @@ function OrderBook() {
                             <td>₹{item.unitPrice ? parseFloat(item.unitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
                             <td>{formatDisplayValue(item.discountPercent)}%</td>
                             <td>{formatDisplayValue(item.taxPercent)}%</td>
-                            <td>₹{parseFloat(item.unitPrice * item.taxPercent).toFixed(2)}</td>
+                            <td>₹{item.lineTotal !== undefined && item.lineTotal !== null ? parseFloat(item.lineTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 }) : '-'}</td>
                           </tr>
                         ))}
                         <tr className="orderbook-total-row">

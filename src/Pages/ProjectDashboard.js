@@ -7,7 +7,7 @@ import {
   AlertTriangle, Download, RefreshCw, Receipt, CreditCard, Wallet,
   Plane, Utensils, MapPin as MapPinIcon, Hotel, Eye, ChevronDown, ChevronUp, X
 } from 'lucide-react';
-import '../pages-css/ProjectDashboard1.css';
+import '../pages-css/ProjectDashboard.css';
 import GroupProjectFilter from "../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
@@ -414,12 +414,13 @@ const ProjectDashboard = () => {
                       icon: <TrendingDown size={36} />, color: '#f59e0b', val: formatCurrency(dashboardData.financialData.totalSpent),
                       label: 'Amount Spent', sub: `Paid to vendors · ${dashboardData.financialData.budgetUtilizationPercent?.toFixed(1)}% of budget`
                     },
-                    {
-                      icon: <Target size={36} />, color: '#8b5cf6', val: formatCurrency(dashboardData.financialData.projectedProfit),
-                      label: dashboardData.financialData.isCompleted ? 'Actual Profit' : 'Projected Profit',
-                      sub: dashboardData.financialData.isCompleted ? `${dashboardData.financialData.profitMargin?.toFixed(1)}% margin · Final` :
-                        `Project still in progress · ${dashboardData.financialData.profitMargin?.toFixed(1)}% margin`
-                    },
+                    // Profit card — only shown when project is 100% COMPLETED
+                    ...(dashboardData.financialData.isCompleted ? [{
+                      icon: <Target size={36} />, color: '#22c55e',
+                      val: formatCurrency(dashboardData.financialData.projectedProfit),
+                      label: 'Actual Profit',
+                      sub: `${dashboardData.financialData.profitMargin?.toFixed(1)}% margin · Final`
+                    }] : []),
                   ].map((k, i) => (
                     <div key={i} className="kpi-card" style={{ borderTopColor: k.color }}>
                       <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
@@ -539,33 +540,20 @@ const ProjectDashboard = () => {
                 expenseData={dashboardData.expenseData}
                 projectId={projectId}
               />
-              {/* Profit info banners */}
-              {!dashboardData.financialData.isCompleted && (
-                <div className="dashboard-section" style={{ background: 'linear-gradient(135deg,#f59e0b,#d97706)', color: '#fff', padding: '20px 24px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                    <Clock size={24} /><h3 style={{ margin: 0, fontSize: 18 }}>Project In Progress</h3>
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,.1)', borderRadius: 8, padding: 16, fontSize: 14, lineHeight: 1.6 }}>
-                    <p style={{ margin: '0 0 8px' }}><strong>Projected Profit:</strong></p>
-                    <p style={{ fontFamily: 'monospace', margin: '0 0 8px' }}>
-                      {formatCurrency(dashboardData.financialData.totalProjectValue)} (Budget) - {formatCurrency(dashboardData.financialData.totalSpent)} (Spent) = {formatCurrency(dashboardData.financialData.projectedProfit)}
-                    </p>
-                    <p style={{ margin: 0, fontSize: 13, opacity: .9 }}>ℹ️ Projection — actual profit calculated on project completion.</p>
-                  </div>
-                </div>
-              )}
-
+              {/* Profit info banners — only shown on project completion */}
               {dashboardData.financialData.isCompleted && (
                 <div className="dashboard-section" style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#fff' }}>
                   <h3 className="section-title" style={{ color: '#fff' }}>
-                    <CheckCircle size={20} /> Project Completed — Final Summary
+                    <CheckCircle size={20} /> Project Completed — Final Profit Summary
                   </h3>
                   <div className="metrics-grid">
                     {[
-                      ['Total Revenue', formatCurrency(dashboardData.financialData.amountReceived), 'Received from client'],
-                      ['Total Cost', formatCurrency(dashboardData.financialData.totalSpent), 'Paid to vendors'],
-                      ['Actual Profit', formatCurrency(dashboardData.financialData.projectedProfit), 'Revenue - Cost'],
-                      ['Profit Margin', `${dashboardData.financialData.profitMargin?.toFixed(1)}%`, '(Profit / Revenue) × 100'],
+                      ['Total Project Value',   formatCurrency(dashboardData.financialData.totalProjectValue), 'Contract budget'],
+                      ['Procurement Cost',       formatCurrency(dashboardData.financialData.totalSpent),        'Paid to vendors'],
+                      ['Employee & Expense Cost',formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee expenses'],
+                      ['Total Cost',             formatCurrency((dashboardData.financialData.totalSpent ?? 0) + (dashboardData.financialData.totalEmployeeExpenses ?? 0)), 'Procurement + Employee'],
+                      ['Actual Profit',          formatCurrency(dashboardData.financialData.projectedProfit),   'Project Value − Total Cost'],
+                      ['Profit Margin',          `${dashboardData.financialData.profitMargin?.toFixed(1)}%`,    '(Profit / Project Value) × 100'],
                     ].map(([title, val, sub], i) => (
                       <div key={i} className="metric-card" style={{ background: 'rgba(255,255,255,.1)', border: 'none' }}>
                         <div className="metric-header"><span className="metric-title" style={{ color: '#fff' }}>{title}</span></div>
@@ -699,7 +687,7 @@ const ProjectDashboard = () => {
           {dashboardData.recentActivities?.length > 0 && (
             <div className="dashboard-section">
               <h3 className="section-title"><Activity size={20} />Recent Activities</h3>
-              <div className="activities-timeline">
+              <div className="activities-timeline scrollable-block">
                 {dashboardData.recentActivities.map((a, i) => (
                   <div key={i} className="activity-item">
                     <div className="activity-icon" style={{ backgroundColor: a.color }}>
@@ -723,7 +711,7 @@ const ProjectDashboard = () => {
           {dashboardData.projectTimeline?.length > 0 && (
             <div className="dashboard-section">
               <h3 className="section-title"><Clock size={20} />Project Timeline</h3>
-              <div className="project-timeline-container">
+              <div className="project-timeline-container scrollable-block">
                 {dashboardData.projectTimeline.map((m, i) => (
                   <div key={i} className={`timeline-milestone ${m.status}`}>
                     <div className="milestone-marker">

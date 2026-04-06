@@ -49,7 +49,7 @@ export default function TelecallerLeadsPage() {
   const [editForm, setEditForm] = useState({
     name: "", email: "", phone: "", source: "",
     priority: "", enquiry: "", state: "", district: "", city: "", pincode: "",
-    subsidyRequired: "",
+    subsidyRequired: "", referralName: "", referralPhone: "",
   });
   const [editSaving, setEditSaving] = useState(false);
 
@@ -194,6 +194,8 @@ export default function TelecallerLeadsPage() {
       city:            lead.city            || "",
       pincode:         lead.pincode         || "",
       subsidyRequired: lead.subsidyRequired || "",
+      referralName:    lead.referralName    || "",
+      referralPhone:   lead.referralPhone   || "",
     });
     setEditModal(true);
   };
@@ -389,6 +391,13 @@ export default function TelecallerLeadsPage() {
               <DetailRow label="Email"    value={selected.email} />
               <DetailRow label="Phone"    value={selected.phone} />
               <DetailRow label="Source"   value={selected.source} />
+              {selected.source === 'Referral' && (selected.referralName || selected.referralPhone) && (
+                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 12px', margin: '6px 0', fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, color: '#065f46', marginBottom: 4 }}>📋 Referral Details</div>
+                  {selected.referralName  && <div style={{ color: '#374151' }}>Name: <strong>{selected.referralName}</strong></div>}
+                  {selected.referralPhone && <div style={{ color: '#374151' }}>Phone: <strong>{selected.referralPhone}</strong></div>}
+                </div>
+              )}
               <DetailRow label="Priority" value={selected.priority}
                 style={{ color: PRIORITY_COLOR[selected.priority] || "#374151", fontWeight: 600 }} />
 
@@ -509,6 +518,25 @@ export default function TelecallerLeadsPage() {
                     {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
+
+                {/* Referral details — only when source is Referral */}
+                {editForm.source === "Referral" && (
+                  <>
+                    <div className="tc-edit-field">
+                      <label>Referred By — Name</label>
+                      <input type="text" placeholder="Name of referrer"
+                        value={editForm.referralName}
+                        onChange={e => setEditForm(f => ({ ...f, referralName: e.target.value }))} />
+                    </div>
+                    <div className="tc-edit-field">
+                      <label>Referred By — Phone</label>
+                      <input type="text" placeholder="10-digit phone"
+                        value={editForm.referralPhone}
+                        onChange={e => setEditForm(f => ({ ...f, referralPhone: e.target.value.replace(/\D/g,'').slice(0,10) }))}
+                        maxLength="10" />
+                    </div>
+                  </>
+                )}
 
                 {/* Priority */}
                 <div className="tc-edit-field">
