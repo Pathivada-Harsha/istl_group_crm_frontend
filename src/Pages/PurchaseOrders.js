@@ -341,6 +341,7 @@ const PurchaseOrders = () => {
     if (v) {
       await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
       await fetchOrderBooks(v);
+      fetchVendors(modalGroupName, modalSubGroupName, v); // ✅ refresh vendor dropdown for this project
     }
   };
 
@@ -528,11 +529,12 @@ const PurchaseOrders = () => {
     } catch { console.error('Failed to fetch stats'); }
   };
 
-  const fetchVendors = async (gName = null, sgName = null) => {
+  const fetchVendors = async (gName = null, sgName = null, pId = null) => {
     try {
       let url = `${API_BASE_URL}/vendors?page=0&size=1000`;
       if (gName) url += `&groupName=${encodeURIComponent(gName)}`;
       if (sgName) url += `&subGroupName=${encodeURIComponent(sgName)}`;
+      if (pId) url += `&projectId=${encodeURIComponent(pId)}`;
       const r = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) { const data = await r.json(); setVendors(data.vendors || []); }
     } catch { setVendors([]); }
@@ -559,7 +561,7 @@ const PurchaseOrders = () => {
       await fetchModalGroups();
       if (poData.groupName) await fetchModalSubGroups(poData.groupName);
       if (poData.groupName && poData.subGroupName) await fetchModalProjects(poData.groupName, poData.subGroupName);
-      await fetchVendors(poData.groupName, poData.subGroupName);
+      await fetchVendors(poData.groupName, poData.subGroupName, poData.projectId);
       const items = (poData.items || []).map((item, i) => ({
         id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
         quantity: item.quantity, unitPrice: item.unitPrice || '', gst: item.taxPercent || 18,
@@ -735,9 +737,9 @@ const PurchaseOrders = () => {
       case 'poNumber':
         return <td key={col.id} className="purchase-orders-table-id">{po.poNo}</td>;
       case 'vendorId':
-        return <td key={col.id}><button className="vendor-link" onClick={() => handleViewVendorPOs(po.vendorId)}>Vendor #{po.vendorId}</button></td>;
+        return <td key={col.id}><button className="vendor-link" onClick={() => handleViewVendorPOs(po.vendorId)}>{po.vendorName || `Vendor #${po.vendorId}`}</button></td>;
       case 'vendorName':
-        return <td key={col.id}>{po.vendorName}</td>;
+        return <td key={col.id}>{po.vendorName || (po.vendorId ? `Vendor #${po.vendorId}` : '—')}</td>;
       case 'orderDate':
         return <td key={col.id}>{formatDate(po.orderDate)}</td>;
       case 'totalValue':
@@ -777,9 +779,9 @@ const PurchaseOrders = () => {
 
   // ─── KPI ───────────────────────────────────────────────────────────────────
   const kpiData = stats ? [
-    { title: 'Total POs',   value: stats.totalPOs.toString(),      icon: <FileText size={32} />,    color: '#2563eb' },
-    { title: 'In Transit',  value: stats.inTransit.toString(),     icon: <Truck size={32} />,       color: '#f59e0b' },
-    { title: 'Delivered',   value: stats.delivered.toString(),     icon: <CheckCircle size={32} />, color: '#22c55e' },
+    { title: 'Total POs',   value: stats.totalPOs.toString(),        icon: <FileText size={32} />,    color: '#2563eb' },
+    { title: 'In Transit',  value: stats.inTransit.toString(),       icon: <Truck size={32} />,       color: '#f59e0b' },
+    { title: 'Delivered',   value: stats.delivered.toString(),       icon: <CheckCircle size={32} />, color: '#22c55e' },
     { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <IndianRupee size={32} />, color: '#8b5cf6' },
   ] : [];
 
@@ -931,43 +933,132 @@ const PurchaseOrders = () => {
             <div className="purchase-orders-drawer-header">
               <div>
                 <h2>{selectedPO.poNo}</h2>
-                <p className="purchase-orders-drawer-subtitle">Vendor ID: {selectedPO.vendorId}</p>
+                <p className="purchase-orders-drawer-subtitle">
+                  {selectedPO.vendorName || (selectedPO.vendorId ? `Vendor #${selectedPO.vendorId}` : 'No vendor')}
+                  {selectedPO.vendorContact ? ` · ${selectedPO.vendorContact}` : ''}
+                </p>
               </div>
               <button className="purchase-orders-drawer-close" onClick={() => setShowDetailDrawer(false)}>✕</button>
             </div>
             <div className="purchase-orders-drawer-content">
+
+              {/* ── Vendor Details ── */}
+              <div className="purchase-orders-drawer-section">
+                <h3>Vendor Details</h3>
+                <div className="po-details-grid">
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Vendor Name:</span>
+                    <span style={{fontWeight:600}}>
+                      {selectedPO.vendorName || (selectedPO.vendorId ? `Vendor #${selectedPO.vendorId}` : '—')}
+                    </span>
+                  </div>
+                  <div className="po-detail-item">
+                    <span className="po-detail-label">Contact:</span>
+                    <span>{selectedPO.vendorContact || '—'}</span>
+                  </div>
+                  {selectedPO.vendorId && (
+                    <div className="po-detail-item">
+                      <span className="po-detail-label">Vendor ID:</span>
+                      <span>
+                        <button className="vendor-link" style={{fontSize:12}} onClick={() => handleViewVendorPOs(selectedPO.vendorId)}>
+                          #{selectedPO.vendorId} — View all POs
+                        </button>
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── PO Details ── */}
               <div className="purchase-orders-drawer-section">
                 <h3>Purchase Order Details</h3>
                 <div className="po-details-grid">
                   <div className="po-detail-item"><span className="po-detail-label">Status:</span><span className={`purchase-orders-badge ${getStatusBadgeClass(selectedPO.status)}`}>{selectedPO.status}</span></div>
-                  <div className="po-detail-item"><span className="po-detail-label">Payment:</span><span className={`purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>{selectedPO.paymentStatus}</span></div>
+                  <div className="po-detail-item"><span className="po-detail-label">Payment Status:</span><span className={`purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>{selectedPO.paymentStatus}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Order Date:</span><span>{formatDate(selectedPO.orderDate)}</span></div>
-                  <div className="po-detail-item"><span className="po-detail-label">Expected Delivery:</span><span>{formatDate(selectedPO.expectedDelivery)}</span></div>
+                  <div className="po-detail-item"><span className="po-detail-label">Expected Delivery:</span><span>{formatDate(selectedPO.expectedDelivery) || '—'}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Total Value:</span><span className="po-value">{formatCurrency(selectedPO.totalValue)}</span></div>
+                  {selectedPO.groupName && (
+                    <div className="po-detail-item"><span className="po-detail-label">Group:</span><span>{selectedPO.groupName}{selectedPO.subGroupName ? ` / ${selectedPO.subGroupName}` : ''}</span></div>
+                  )}
+                  {selectedPO.projectId && (
+                    <div className="po-detail-item"><span className="po-detail-label">Project:</span><span>{selectedPO.projectId}</span></div>
+                  )}
+                  {selectedPO.quotationId && (
+                    <div className="po-detail-item"><span className="po-detail-label">Quotation Ref:</span><span>#{selectedPO.quotationId}</span></div>
+                  )}
+                  {selectedPO.paymentTerms && (
+                    <div className="po-detail-item"><span className="po-detail-label">Payment Terms:</span><span>{selectedPO.paymentTerms}</span></div>
+                  )}
+                  {selectedPO.deliveryAddress && (
+                    <div className="po-detail-item" style={{gridColumn:'1/-1'}}>
+                      <span className="po-detail-label">Delivery Address:</span>
+                      <span>{selectedPO.deliveryAddress}</span>
+                    </div>
+                  )}
+                  {selectedPO.notes && (
+                    <div className="po-detail-item" style={{gridColumn:'1/-1'}}>
+                      <span className="po-detail-label">Notes:</span>
+                      <span style={{color:'#6b7280'}}>{selectedPO.notes}</span>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* ── Delivery Summary ── */}
+              {(selectedPO.totalItemsOrdered != null) && (
+                <div className="purchase-orders-drawer-section">
+                  <h3>Delivery Summary</h3>
+                  <div className="po-details-grid">
+                    <div className="po-detail-item"><span className="po-detail-label">Items Ordered:</span><span>{selectedPO.totalItemsOrdered ?? '—'}</span></div>
+                    <div className="po-detail-item"><span className="po-detail-label">Items Delivered:</span><span style={{color:'#059669',fontWeight:600}}>{selectedPO.totalItemsDelivered ?? 0}</span></div>
+                    <div className="po-detail-item"><span className="po-detail-label">Items Pending:</span><span style={{color: (selectedPO.totalItemsPending ?? 0) > 0 ? '#dc2626' : '#059669', fontWeight:600}}>{selectedPO.totalItemsPending ?? 0}</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Order Items ── */}
               <div className="purchase-orders-drawer-section">
                 <h3>Order Items</h3>
                 <table className="po-items-table">
                   <thead>
-                    <tr><th>Item Name</th><th>Ordered</th><th>Delivered</th><th>Pending</th><th>Unit Price</th><th>Line Total</th><th>Action</th></tr>
+                    <tr><th>Item Name</th><th>Qty Ordered</th><th>Delivered</th><th>Pending</th><th>Unit Price</th><th>GST%</th><th>Line Total</th><th>Action</th></tr>
                   </thead>
                   <tbody>
-                    {selectedPO.items && selectedPO.items.map((item) => (
+                    {selectedPO.items && selectedPO.items.length > 0 ? selectedPO.items.map((item) => (
                       <tr key={item.id}>
-                        <td>{item.itemName}</td><td>{item.quantity}</td>
-                        <td className="delivered-qty">{item.deliveredQty}</td>
-                        <td className="pending-qty">{item.pendingQty}</td>
+                        <td>
+                          <div style={{fontWeight:500}}>{item.itemName}</div>
+                          {item.description && <div style={{fontSize:11,color:'#6b7280',marginTop:2}}>{item.description}</div>}
+                        </td>
+                        <td>{item.quantity}</td>
+                        <td className="delivered-qty">{item.deliveredQty ?? 0}</td>
+                        <td className="pending-qty" style={{color: (item.pendingQty ?? 0) > 0 ? '#dc2626' : '#374151'}}>
+                          {item.pendingQty ?? 0}
+                        </td>
                         <td>{formatCurrency(item.unitPrice)}</td>
+                        <td>{item.taxPercent != null ? `${item.taxPercent}%` : '—'}</td>
                         <td>{formatCurrency(item.lineTotal)}</td>
-                        <td>{item.pendingQty > 0 && selectedPO.status !== 'Cancelled' && (
+                        <td>{(item.pendingQty ?? 0) > 0 && selectedPO.status !== 'Cancelled' && (
                           <button className="purchase-orders-btn-small" onClick={() => handleOpenDeliveryModal(selectedPO, item)}>Mark Delivered</button>
                         )}</td>
                       </tr>
-                    ))}
+                    )) : (
+                      <tr><td colSpan={8} style={{textAlign:'center',padding:'1rem',color:'#9ca3af'}}>No items found</td></tr>
+                    )}
                   </tbody>
+                  {selectedPO.items && selectedPO.items.length > 0 && (
+                    <tfoot>
+                      <tr style={{borderTop:'2px solid #e5e7eb',fontWeight:600}}>
+                        <td colSpan={6} style={{textAlign:'right',padding:'8px 10px'}}>Grand Total:</td>
+                        <td style={{padding:'8px 10px'}}>{formatCurrency(selectedPO.totalValue)}</td>
+                        <td />
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
+
               <div className="purchase-orders-drawer-actions">
                 {selectedPO.status !== 'Delivered' && selectedPO.status !== 'Cancelled' && (
                   <>

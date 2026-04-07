@@ -811,8 +811,19 @@ export default function VendorPaymentsPage() {
                     <div className="receipts-page-form-group">
                       <label>Vendor *</label>
                       <select value={formData.vendorId} onChange={e=>handleVendorChange(e.target.value)} disabled={!modalProjectId}>
-                        <option value="">{!modalProjectId ? 'Select a project first' : vendors.length === 0 ? 'No vendors found' : 'Select Vendor'}</option>
-                        {vendors.map(v=><option key={v.id||v.vendorId} value={v.id||v.vendorId}>{v.name||v.vendorName}</option>)}
+                        <option value="">{!modalProjectId ? 'Select a project first' : vendors.length === 0 ? 'No vendors found for this project' : 'Select Vendor'}</option>
+                        {vendors
+                          .filter(v => {
+                            const id = String(v.id || v.vendorId || '');
+                            return id && !id.startsWith('PO_'); // only show vendors with real numeric IDs
+                          })
+                          .map(v => (
+                            <option key={v.id||v.vendorId} value={v.id||v.vendorId}>
+                              {v.name||v.vendorName}
+                              {v.contact ? ` — ${v.contact}` : ''}
+                            </option>
+                          ))
+                        }
                       </select>
                     </div>
                   </div>

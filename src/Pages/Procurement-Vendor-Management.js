@@ -466,7 +466,15 @@ const VendorManagement = () => {
   };
 
   // ─── Formatters ────────────────────────────────────────────────────────────
-  const formatCurrency = (amount) => !amount ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
+  const formatCurrency = (amount) => {
+    if (!amount && amount !== 0) return '₹0';
+    const n = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+    if (isNaN(n)) return '₹0';
+    if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
+    if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+    if (n >= 1_000)       return `₹${(n / 1_000).toFixed(1)}K`;
+    return `₹${n.toLocaleString('en-IN')}`;
+  };
   const formatDate = (dateStr) => {
     if (!dateStr) return 'N/A';
     return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
@@ -584,7 +592,6 @@ const VendorManagement = () => {
     { title: 'Average Rating',       value: stats.averageRating.toFixed(1) + '/5',      icon: <Star size={32} />,        color: '#f59e0b' },
     { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue),   icon: <IndianRupee size={32} />, color: '#8b5cf6' },
     { title: 'Pending Quotations',   value: stats.pendingQuotations.toString(),         icon: <FileText size={32} />,    color: '#06b6d4' },
-    { title: 'Last Updated',         value: formatTimeAgo(stats.lastUpdated),           icon: <Clock size={32} />,       color: '#64748b' },
   ] : [];
 
   // ─── Render ────────────────────────────────────────────────────────────────

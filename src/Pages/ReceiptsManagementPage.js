@@ -221,6 +221,70 @@ const ReceiptsManagementPage = () => {
   const VALID_RECEIPT_TYPES = new Set(['ADVANCE', 'INVOICE_PAYMENT']);
   const VALID_PAYMENT_METHODS = new Set(['Bank Transfer', 'UPI', 'Cash', 'Cheque', 'Credit Card']);
 
+  /**
+   * Parse any date value from Excel into YYYY-MM-DD for the API.
+   * Handles:
+   *   - Excel serial numbers (e.g. 46380)
+   *   - DD/MM/YYYY  or  DD-MM-YYYY  (preferred user format: day month year)
+   *   - DD/MM/YY   or  DD-MM-YY
+   *   - MM/DD/YYYY (US format fallback)
+   *   - YYYY-MM-DD (already correct)
+   *   - JS Date objects
+   */
+  const parseExcelDate = (raw) => {
+    if (!raw && raw !== 0) return null;
+
+    // Excel serial number (number type from XLSX lib when cell is a real date cell)
+    if (typeof raw === 'number') {
+      // XLSX serial: days since 1900-01-01 (with Lotus 1-2-3 leap year bug at 60)
+      const serial = raw > 60 ? raw - 1 : raw; // skip the phantom Feb 29 1900
+      const epoch = new Date(Date.UTC(1900, 0, 1));
+      epoch.setUTCDate(epoch.getUTCDate() + serial - 1);
+      return epoch.toISOString().split('T')[0]; // YYYY-MM-DD
+    }
+
+    // JS Date object
+    if (raw instanceof Date) {
+      const y = raw.getFullYear();
+      const m = String(raw.getMonth() + 1).padStart(2, '0');
+      const d = String(raw.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    const str = String(raw).trim();
+    if (!str) return null;
+
+    // Already ISO: YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+
+    // YYYY/MM/DD
+    if (/^\d{4}\/\d{2}\/\d{2}$/.test(str)) return str.replace(/\//g, '-');
+
+    // DD/MM/YYYY or DD-MM-YYYY (day first — user's preferred format)
+    const dmySlash = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmySlash) {
+      const [, d, m, y] = dmySlash;
+      // Treat as DD/MM/YYYY when day ≤ 12 we still prefer DD/MM; when day > 12 it must be DD/MM
+      return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+
+    // DD/MM/YY or DD-MM-YY (2-digit year)
+    const dmyShort = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2})$/);
+    if (dmyShort) {
+      const [, d, m, y] = dmyShort;
+      const fullYear = parseInt(y) >= 50 ? `19${y}` : `20${y}`;
+      return `${fullYear}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+
+    // Try native Date.parse as last resort
+    const parsed = new Date(str);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split('T')[0];
+    }
+
+    return null; // unparseable
+  };
+
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -228,29 +292,44 @@ const ReceiptsManagementPage = () => {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const wb = XLSX.read(evt.target.result, { type: 'binary' });
+        // Use raw:true so date cells come as Excel serial numbers (not pre-formatted strings)
+        const wb = XLSX.read(evt.target.result, { type: 'binary', cellDates: false });
         const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+        const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
         const headerRowIdx = data.findIndex(row =>
           row.some(cell => typeof cell === 'string' && (cell.toLowerCase().includes('receipt date') || cell.toLowerCase().includes('amount')))
         );
         if (headerRowIdx === -1) { showError('Invalid template format. Please use the provided template.'); return; }
-        const rows = data.slice(headerRowIdx + 1).filter(row => row[0] && String(row[0]).trim());
+        const rows = data.slice(headerRowIdx + 1).filter(row => row[0] !== '' && row[0] != null);
         const errors = [];
         const parsed = rows.map((row, i) => {
           const rowNum = headerRowIdx + 2 + i;
-          const receiptDate = String(row[0] || '').trim();
+
+          // Parse date — accepts serial numbers, DD/MM/YYYY, DD-MM-YYYY, YYYY-MM-DD, etc.
+          const rawDate = row[0];
+          const receiptDate = parseExcelDate(rawDate);
+          if (!receiptDate) {
+            errors.push(`Row ${rowNum}: Invalid date "${rawDate}" — use DD/MM/YYYY format (e.g. 06/04/2026)`);
+          }
+
           const amount = parseFloat(row[1]);
           const receiptType = String(row[2] || 'ADVANCE').trim().toUpperCase().replace(' ', '_');
           const paymentMethod = String(row[3] || 'Bank Transfer').trim();
           const transactionReference = String(row[4] || '').trim();
           const invoiceNo = String(row[5] || '').trim();
           const notes = String(row[6] || '').trim();
-          if (!receiptDate) errors.push(`Row ${rowNum}: Receipt date is required`);
+
           if (isNaN(amount) || amount <= 0) errors.push(`Row ${rowNum}: Invalid amount "${row[1]}"`);
           if (!VALID_RECEIPT_TYPES.has(receiptType)) errors.push(`Row ${rowNum}: Invalid type "${row[2]}" (use ADVANCE or INVOICE_PAYMENT)`);
           if (!VALID_PAYMENT_METHODS.has(paymentMethod)) errors.push(`Row ${rowNum}: Invalid payment method "${row[3]}"`);
-          return { receiptDate, amount: isNaN(amount) ? 0 : amount, receiptType: VALID_RECEIPT_TYPES.has(receiptType) ? receiptType : 'ADVANCE', paymentMethod: VALID_PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : 'Bank Transfer', transactionReference, invoiceNo, notes };
+
+          return {
+            receiptDate: receiptDate || '',
+            amount: isNaN(amount) ? 0 : amount,
+            receiptType: VALID_RECEIPT_TYPES.has(receiptType) ? receiptType : 'ADVANCE',
+            paymentMethod: VALID_PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : 'Bank Transfer',
+            transactionReference, invoiceNo, notes
+          };
         });
         setImportErrors(errors);
         setImportPreview(parsed);
