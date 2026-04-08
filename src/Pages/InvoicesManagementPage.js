@@ -617,11 +617,6 @@ const fetchStats = async () => {
       return;
     }
 
-    if (!formData.dueDate) {
-      showError('Due date is required');
-      return;
-    }
-
     if (formData.items.length === 0 || !formData.items[0].description) {
       showError('Please add at least one item');
       return;
@@ -1013,7 +1008,7 @@ const fetchStats = async () => {
 
       {/* View Invoice Modal */}
       {showInvoiceModal && selectedInvoice && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowInvoiceModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal Invoices-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>Invoice Details - {selectedInvoice.invoiceNo}</h2>
@@ -1138,7 +1133,7 @@ const fetchStats = async () => {
 
       {/* Create/Edit Invoice Modal */}
       {showCreateModal && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal Invoices-page-modal-xlarge" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>{editMode ? 'Edit Invoice' : 'Create New Invoice'}</h2>
@@ -1238,7 +1233,7 @@ const fetchStats = async () => {
                       />
                     </div>
                     <div className="Invoices-page-form-group">
-                      <label>Due Date *</label>
+                      <label>Due Date</label>
                       <input
                         type="date"
                         value={formData.dueDate}
@@ -1415,7 +1410,7 @@ const fetchStats = async () => {
 
       {/* Record Payment Modal */}
       {showPaymentModal && selectedInvoice && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>Record Payment</h2>

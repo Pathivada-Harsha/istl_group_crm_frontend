@@ -1701,8 +1701,8 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           <input type="text" required value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} />
         </div>
         <div className="leads-enquiries-form-group">
-          <label>Email *</label>
-          <input type="email" required value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
+          <label>Email</label>
+          <input type="email" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Phone *</label>
@@ -1839,8 +1839,8 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       )}
 
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
-        <label>Enquiry Description *</label>
-        <textarea required rows={4} value={formData.enquiry} onChange={e => setFormData(p => ({ ...p, enquiry: e.target.value }))} placeholder="Describe the client's requirements…" />
+        <label>Enquiry Description</label>
+        <textarea rows={4} value={formData.enquiry} onChange={e => setFormData(p => ({ ...p, enquiry: e.target.value }))} placeholder="Describe the client's requirements…" />
       </div>
     </div>
 

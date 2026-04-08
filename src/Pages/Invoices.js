@@ -594,11 +594,6 @@ const fetchStats = async () => {
       return;
     }
 
-    if (!formData.dueDate) {
-      showError('Due date is required');
-      return;
-    }
-
     if (formData.items.length === 0 || !formData.items[0].description) {
       showError('Please add at least one item');
       return;
@@ -1215,7 +1210,7 @@ const fetchStats = async () => {
                       />
                     </div>
                     <div className="Invoices-page-form-group">
-                      <label>Due Date *</label>
+                      <label>Due Date</label>
                       <input
                         type="date"
                         value={formData.dueDate}

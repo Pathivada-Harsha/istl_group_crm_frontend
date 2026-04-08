@@ -1337,7 +1337,7 @@ const BillsReceived = () => {
 
       {/* CREATE/EDIT MODAL */}
       {showCreateEditModal && formData && (
-        <div className="bill-form-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
+        <div className="bill-form-modal-overlay">
           <div className="bill-form-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="bill-form-modal-header">
               <h2>{editMode ? 'Edit Bill' : 'Create New Bill'}</h2>
@@ -1904,7 +1904,7 @@ const BillsReceived = () => {
 
       {/* Payment Modal */}
       {showPaymentModal && paymentData && selectedBill && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+        <div className="procurement-bills-received-modal-overlay">
           <div className="procurement-bills-received-payment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-modal-header">
               <h2>Add Payment</h2>
@@ -1998,7 +1998,7 @@ const BillsReceived = () => {
 
       {/* File View Modal */}
       {showFileViewModal && fileViewUrl && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowFileViewModal(false)}>
+        <div className="procurement-bills-received-modal-overlay">
           <div className="procurement-bills-received-file-view-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-modal-header">
               <h2>Bill Document</h2>
