@@ -122,7 +122,11 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const vendorPerms = pagePermissions?.VENDORS || [];
+  const canCreate   = vendorPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit     = vendorPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete   = vendorPerms.includes('DELETE') && !isAccountsExecutive;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
@@ -548,7 +552,7 @@ const VendorManagement = () => {
             <div className="vendor-management-actions-cell">
               <button className="vendor-management-action-btn" onClick={() => handleViewVendor(vendor)} title="View Details"><Eye size={16} /></button>
               <button className="vendor-management-action-btn" onClick={() => handleEditVendor(vendor)} title="Edit Vendor"><Edit2 size={16} /></button>
-              <button className="vendor-management-action-btn vendor-management-action-btn--danger" onClick={() => handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)} title="Delete Vendor"><Trash2 size={16} /></button>
+{canDelete && <button className="vendor-management-action-btn vendor-management-action-btn--danger" onClick={() => handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)} title="Delete Vendor"><Trash2 size={16} /></button>}
             </div>
           </td>
         );
@@ -854,7 +858,7 @@ const VendorManagement = () => {
 
               <div className="vendor-management-drawer-actions">
                 <button className="vendor-management-btn-primary" onClick={() => handleEditVendor(selectedVendor)}>Edit Vendor</button>
-                {selectedVendor.status === 'Active' && (
+                {selectedVendor.status === 'Active' && canDelete && (
                   <button className="vendor-management-btn-danger" onClick={() => handleDeleteVendor(selectedVendor.id, selectedVendor.vendorName || selectedVendor.name)}>Delete</button>
                 )}
               </div>

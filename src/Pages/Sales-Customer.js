@@ -17,7 +17,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
-import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaUpload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
 
@@ -116,6 +116,7 @@ const DraggableHeaderCell = ({ col, index, sortColumn, sortDirection, getSortIco
 );
 
 // ── OrderBook Overview Summary (shown in overview tab of Customer detail) ──────
+// eslint-disable-next-line no-unused-vars
 const OrderBookSummary = ({ customer, currentUser, onGoToOrderBooks }) => {
   const [orders, setOrders]   = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1062,16 +1063,17 @@ const getStatusColor = (status) => {
 // ═══════════════════════════════════════════════════════════════════
 const CustomerDatabase = () => {
   // const isFirstRender = useRef(true);
-  const { user, pagePermissions } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
   // ── Permissions ──────────────────────────────────────────────────
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
-  const canView   = customersPermissions.includes('VIEW');
-  const canCreate = customersPermissions.includes('CREATE');
-  const canEdit   = customersPermissions.includes('EDIT');
-  const canDelete = customersPermissions.includes('DELETE');
+  // ACCOUNTS_EXECUTIVE gets VIEW + CREATE + EDIT but NOT DELETE
+  const canView   = customersPermissions.includes('VIEW')   || isAccountsExecutive;
+  const canCreate = customersPermissions.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = customersPermissions.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = customersPermissions.includes('DELETE') && !isAccountsExecutive;
   const permissions = { canView, canCreate, canEdit, canDelete };
 
   const currentUser = { id: user.id || 1, role: user.role || 'USER', name: user.name || 'Current User' };

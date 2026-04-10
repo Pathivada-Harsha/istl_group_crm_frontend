@@ -74,7 +74,11 @@ const BillsReceived = () => {
   });
 
   const { toasts, removeToast, showSuccess, showError } = useToast();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const billsPerms = pagePermissions?.BILLS || [];
+  const canCreate = billsPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = billsPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = billsPerms.includes('DELETE') && !isAccountsExecutive;
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -1049,7 +1053,7 @@ const BillsReceived = () => {
         </div>
 
         <div className="procurement-bills-received-actions">
-          <button className="procurement-bills-received-btn-primary" onClick={handleCreateBill}>
+          <button className={`procurement-bills-received-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateBill()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Add New Bill"}>
             <Plus size={18} style={{ marginRight: '8px' }} />
             Add New Bill
           </button>

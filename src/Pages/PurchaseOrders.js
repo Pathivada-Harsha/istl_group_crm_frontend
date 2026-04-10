@@ -104,7 +104,11 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
 const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const poPerms   = pagePermissions?.PURCHASE_ORDERS || [];
+  const canCreate = poPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = poPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = poPerms.includes('DELETE') && !isAccountsExecutive;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -141,6 +145,8 @@ const PurchaseOrders = () => {
 
   const [showCreatePOModal, setShowCreatePOModal] = useState(false);
   const [vendors, setVendors] = useState([]);
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
   const [quotations, setQuotations] = useState([]);
 
   const [modalGroupName, setModalGroupName] = useState('');
@@ -325,14 +331,14 @@ const PurchaseOrders = () => {
     setModalGroupName(v); setModalSubGroupName(''); setModalProjectId('');
     setModalSubGroups([]); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, groupName: v, subGroupName: '', projectId: '', items: [] }));
-    if (v) { fetchModalSubGroups(v); fetchFilteredQuotations(v, null, null); fetchVendors(v, null); }
-    else fetchVendors();
+    if (v) { fetchModalSubGroups(v); fetchFilteredQuotations(v, null, null); }
+    fetchVendors();
   };
   const handleModalSubGroupChange = (e) => {
     const v = e.target.value;
     setModalSubGroupName(v); setModalProjectId(''); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, subGroupName: v, projectId: '', items: [] }));
-    if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); fetchFilteredQuotations(modalGroupName, v, null); fetchVendors(modalGroupName, v); }
+    if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); fetchFilteredQuotations(modalGroupName, v, null); }
   };
   const handleModalProjectChange = async (e) => {
     const v = e.target.value;
@@ -353,7 +359,7 @@ const PurchaseOrders = () => {
     if (obId) await fetchOrderBookItems(obId);
   };
   const handleVendorTypeChange = (type) => {
-    setShowNewVendorForm(type === 'new');
+    setShowNewVendorForm(type === 'new'); setVendorDropdownOpen(false); setVendorSearch('');
     setCreatePOFormData(prev => ({ ...prev, vendorId: null, vendorName: '', vendorContact: '' }));
   };
   const handleNewVendorContactChange = (value) => {
@@ -529,12 +535,9 @@ const PurchaseOrders = () => {
     } catch { console.error('Failed to fetch stats'); }
   };
 
-  const fetchVendors = async (gName = null, sgName = null, pId = null) => {
+  const fetchVendors = async () => {
     try {
-      let url = `${API_BASE_URL}/vendors?page=0&size=1000`;
-      if (gName) url += `&groupName=${encodeURIComponent(gName)}`;
-      if (sgName) url += `&subGroupName=${encodeURIComponent(sgName)}`;
-      if (pId) url += `&projectId=${encodeURIComponent(pId)}`;
+      const url = `${API_BASE_URL}/vendors?page=0&size=1000`;
       const r = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) { const data = await r.json(); setVendors(data.vendors || []); }
     } catch { setVendors([]); }
@@ -561,7 +564,7 @@ const PurchaseOrders = () => {
       await fetchModalGroups();
       if (poData.groupName) await fetchModalSubGroups(poData.groupName);
       if (poData.groupName && poData.subGroupName) await fetchModalProjects(poData.groupName, poData.subGroupName);
-      await fetchVendors(poData.groupName, poData.subGroupName, poData.projectId);
+      await fetchVendors();
       const items = (poData.items || []).map((item, i) => ({
         id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
         quantity: item.quantity, unitPrice: item.unitPrice || '', gst: item.taxPercent || 18,
@@ -762,11 +765,11 @@ const PurchaseOrders = () => {
           <td key={col.id}>
             <div className="purchase-orders-actions-cell">
               <button className="purchase-orders-action-btn" onClick={() => handleViewPO(po)} title="View Details"><Eye size={14} /></button>
-              <button className="purchase-orders-action-btn" onClick={() => handleEditPO(po.id)} title="Edit PO" style={{ color: '#3b82f6' }}><Edit2 size={14} /></button>
+              <button className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`} onClick={() => canEdit && handleEditPO(po.id)} title={canEdit ? "Edit PO" : "No edit permission"} style={{ color: '#3b82f6' }} disabled={!canEdit}><Edit2 size={14} /></button>
               {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
                 <>
                   <button className="purchase-orders-action-btn" onClick={() => handleUpdateStatus(po.id, 'Delivered')} title="Mark Delivered"><CheckCircle size={14} /></button>
-                  <button className="purchase-orders-action-btn" onClick={() => handleDeletePO(po.id)} title="Delete PO" style={{ color: '#ef4444' }}><Trash2 size={14} /></button>
+{canDelete && <button className="purchase-orders-action-btn" onClick={() => handleDeletePO(po.id)} title="Delete PO" style={{ color: '#ef4444' }}><Trash2 size={14} /></button>}
                 </>
               )}
             </div>
@@ -848,7 +851,7 @@ const PurchaseOrders = () => {
             )}
           </div>
 
-          <button className="purchase-orders-btn-primary" onClick={handleOpenCreatePO}>
+          <button className={`purchase-orders-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleOpenCreatePO()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create PO"}>
             <Plus size={16} /> Create PO
           </button>
           <button className="purchase-orders-btn-secondary"><Download size={16} /> Export</button>
@@ -1291,14 +1294,77 @@ const PurchaseOrders = () => {
                         </div>
                       )}
                       {!showNewVendorForm && (
-                        <div className="po-form-group">
+                        <div className="po-form-group" style={{ position: 'relative' }}>
                           <label style={{ fontSize: '14px', fontWeight: '600', marginBottom: '8px', display: 'block' }}>Select Vendor *</label>
-                          <select value={createPOFormData.vendorId || ''} onChange={handleVendorSelection} style={{ width: '100%', padding: '10px 12px', fontSize: '14px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>
-                            <option value="">-- Select Vendor --</option>
-                            {vendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.contactNumber && ` • ${v.contactNumber}`}{v.category && ` • ${v.category}`}</option>)}
-                          </select>
+                          {/* Custom searchable vendor dropdown */}
+                          <div style={{ position: 'relative' }}>
+                            <div
+                              onClick={() => { setVendorDropdownOpen(o => !o); setVendorSearch(''); }}
+                              style={{ width: '100%', padding: '10px 36px 10px 12px', fontSize: '14px', border: `1px solid ${vendorDropdownOpen ? '#3b82f6' : '#d1d5db'}`, borderRadius: '6px', background: 'white', cursor: 'pointer', boxSizing: 'border-box', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none', minHeight: '42px' }}
+                            >
+                              <span style={{ color: createPOFormData.vendorId ? '#111827' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                                {createPOFormData.vendorId
+                                  ? (() => { const sel = vendors.find(v => v.id === parseInt(createPOFormData.vendorId)); return sel ? `${sel.name}${sel.contactNumber ? ' • ' + sel.contactNumber : ''}` : 'Select Vendor'; })()
+                                  : '-- Select Vendor --'}
+                              </span>
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0, color: '#6b7280', transform: vendorDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                            </div>
+                            {vendorDropdownOpen && (
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid #3b82f6', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, marginTop: '4px', overflow: 'hidden' }}>
+                                {/* Search box */}
+                                <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                                  <input
+                                    autoFocus
+                                    type="text"
+                                    value={vendorSearch}
+                                    onChange={e => setVendorSearch(e.target.value)}
+                                    placeholder="Search vendor..."
+                                    onClick={e => e.stopPropagation()}
+                                    style={{ width: '100%', padding: '7px 10px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '5px', outline: 'none', boxSizing: 'border-box' }}
+                                  />
+                                </div>
+                                {/* Options list */}
+                                <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                                  <div
+                                    onClick={() => { handleVendorSelection({ target: { value: '' } }); setVendorDropdownOpen(false); }}
+                                    style={{ padding: '9px 12px', fontSize: '14px', color: '#9ca3af', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                                  >
+                                    -- Select Vendor --
+                                  </div>
+                                  {vendors
+                                    .filter(v => !vendorSearch || v.name?.toLowerCase().includes(vendorSearch.toLowerCase()) || v.contactNumber?.includes(vendorSearch) || v.category?.toLowerCase().includes(vendorSearch.toLowerCase()))
+                                    .map(v => (
+                                      <div
+                                        key={v.id}
+                                        onClick={() => { handleVendorSelection({ target: { value: String(v.id) } }); setVendorDropdownOpen(false); setVendorSearch(''); }}
+                                        style={{ padding: '9px 12px', fontSize: '14px', cursor: 'pointer', background: createPOFormData.vendorId === v.id ? '#eff6ff' : 'white', borderLeft: createPOFormData.vendorId === v.id ? '3px solid #3b82f6' : '3px solid transparent' }}
+                                        onMouseEnter={e => { if (createPOFormData.vendorId !== v.id) e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={e => { if (createPOFormData.vendorId !== v.id) e.currentTarget.style.background = 'white'; }}
+                                      >
+                                        <div style={{ fontWeight: 500, color: '#111827' }}>{v.name}</div>
+                                        {(v.contactNumber || v.category) && (
+                                          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                                            {v.contactNumber && <span>{v.contactNumber}</span>}
+                                            {v.contactNumber && v.category && <span> · </span>}
+                                            {v.category && <span>{v.category}</span>}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))
+                                  }
+                                  {vendors.filter(v => !vendorSearch || v.name?.toLowerCase().includes(vendorSearch.toLowerCase()) || v.contactNumber?.includes(vendorSearch) || v.category?.toLowerCase().includes(vendorSearch.toLowerCase())).length === 0 && (
+                                    <div style={{ padding: '12px', fontSize: '13px', color: '#9ca3af', textAlign: 'center' }}>No vendors found</div>
+                                  )}
+                                </div>
+                                <div style={{ padding: '6px 12px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#9ca3af' }}>{vendors.length} vendor(s) total</div>
+                              </div>
+                            )}
+                            {/* Click-outside overlay */}
+                            {vendorDropdownOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setVendorDropdownOpen(false)} />}
+                          </div>
                           {vendors.length === 0 && <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block' }}>No vendors available. Add a new vendor.</small>}
-                          {vendors.length > 0 && <small style={{ color: '#64748b', fontSize: '12px', marginTop: '6px', display: 'block' }}>Showing {vendors.length} vendor(s) for {modalSubGroupName || modalGroupName || 'all groups'}</small>}
                         </div>
                       )}
                       {showNewVendorForm && (

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, TrendingDown, DollarSign, IndianRupee, Package, FileText, Users,
   Calendar, Clock, AlertCircle, CheckCircle, XCircle, Activity,
   Briefcase, ShoppingCart, BarChart3, PieChart, Target, Zap,
   MapPin, Building2, Phone, Mail, User, Percent, ArrowUp, ArrowDown,
   AlertTriangle, Download, RefreshCw, Receipt, CreditCard, Wallet,
-  Plane, Utensils, MapPin as MapPinIcon, Hotel, Eye, ChevronDown, ChevronUp, X
+  Plane, Utensils, MapPin as MapPinIcon, Hotel, Eye, ChevronDown, ChevronUp, X,
+  Layers, Globe, Tag
 } from 'lucide-react';
 import '../pages-css/ProjectDashboard.css';
 import GroupProjectFilter from "../components/Dropdowns/GroupProjectFilter.js";
@@ -27,7 +28,7 @@ const formatCurrency = (amount) => {
   if (!amount && amount !== 0) return '₹0';
   const value = Number(amount);
   if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
-  if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+  if (value >= 100000)   return `₹${(value / 100000).toFixed(2)} L`;
   return `₹${value.toLocaleString('en-IN', { maximumFractionDigits: 0 })}`;
 };
 const formatDate = (d) => d
@@ -37,7 +38,7 @@ const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#0
 
 // ─── Expense Dashboard Block ──────────────────────────────────────────────────
 const ExpenseDashboardSection = ({ expenseData, projectId }) => {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded]   = useState(false);
   const [userModal, setUserModal] = useState(false);
 
   if (!expenseData) return null;
@@ -50,24 +51,20 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
   } = expenseData;
 
   const categoryIconMap = {
-    Travel: <Plane size={14} />,
-    'Site Visit': <MapPinIcon size={14} />,
-    Accommodation: <Hotel size={14} />,
-    Food: <Utensils size={14} />,
-    Commission: <Users size={14} />,
-    Miscellaneous: <Briefcase size={14} />,
+    Travel: <Plane size={14} />, 'Site Visit': <MapPinIcon size={14} />,
+    Accommodation: <Hotel size={14} />, Food: <Utensils size={14} />,
+    Commission: <Users size={14} />, Miscellaneous: <Briefcase size={14} />,
   };
 
   const expenseKpis = [
-    { label: 'Total Expenses', value: formatCurrency(totalExpenses), color: '#ef4444', icon: <IndianRupee size={20} /> },
-    { label: 'Approved', value: formatCurrency(approvedExpenses), color: '#22c55e', icon: <CheckCircle size={20} /> },
-    { label: 'Pending', value: formatCurrency(pendingExpenses), color: '#f59e0b', icon: <Clock size={20} /> },
-    { label: 'Travel & Site Visit', value: formatCurrency(travelAndSiteVisit), color: '#3b82f6', icon: <Plane size={20} /> },
-    { label: 'Commission', value: formatCurrency(totalCommission), color: '#8b5cf6', icon: <Users size={20} /> },
-    { label: 'Advances Given', value: formatCurrency(totalAdvances), color: '#06b6d4', icon: <Wallet size={20} /> },
+    { label: 'Total Expenses',       value: formatCurrency(totalExpenses),       color: '#ef4444', icon: <IndianRupee size={20} /> },
+    { label: 'Approved',             value: formatCurrency(approvedExpenses),     color: '#22c55e', icon: <CheckCircle size={20} /> },
+    { label: 'Pending',              value: formatCurrency(pendingExpenses),      color: '#f59e0b', icon: <Clock size={20} /> },
+    { label: 'Travel & Site Visit',  value: formatCurrency(travelAndSiteVisit),  color: '#3b82f6', icon: <Plane size={20} /> },
+    { label: 'Commission',           value: formatCurrency(totalCommission),      color: '#8b5cf6', icon: <Users size={20} /> },
+    { label: 'Advances Given',       value: formatCurrency(totalAdvances),        color: '#06b6d4', icon: <Wallet size={20} /> },
   ];
 
-  // Prepare category chart data
   const catChartData = categoryBreakdown.map(c => ({
     name: c.category?.replace('_', ' ') || 'Other',
     value: Number(c.totalAmount || 0),
@@ -76,32 +73,21 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
 
   return (
     <div className="db-expense-block">
-      {/* Section Header */}
       <div className="db-expense-header" onClick={() => setExpanded(v => !v)}>
         <div className="db-expense-title-row">
-          <h3 className="db-section-title">
-            <Receipt size={20} />
-            Employee Cost &amp; Expense Management
-          </h3>
+          <h3 className="db-section-title"><Receipt size={20} />Employee Cost &amp; Expense Management</h3>
           <div className="db-expense-header-pills">
             {pendingApprovals > 0 && (
-              <span className="db-pill db-pill-warning">
-                <Clock size={12} /> {pendingApprovals} pending approval{pendingApprovals !== 1 && 's'}
-              </span>
+              <span className="db-pill db-pill-warning"><Clock size={12} /> {pendingApprovals} pending approval{pendingApprovals !== 1 && 's'}</span>
             )}
             {unsettledAdvances > 0 && (
-              <span className="db-pill db-pill-info">
-                <Wallet size={12} /> {formatCurrency(unsettledAdvances)} unsettled advance
-              </span>
+              <span className="db-pill db-pill-info"><Wallet size={12} /> {formatCurrency(unsettledAdvances)} unsettled advance</span>
             )}
           </div>
         </div>
-        <button className="db-expand-btn">
-          {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-        </button>
+        <button className="db-expand-btn">{expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
       </div>
 
-      {/* Mini KPI Strip (always visible) */}
       <div className="db-expense-kpi-strip">
         {expenseKpis.map((k, i) => (
           <div key={i} className="db-expense-kpi-mini" style={{ borderLeftColor: k.color }}>
@@ -114,17 +100,13 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
         ))}
       </div>
 
-      {/* Expanded Content */}
       {expanded && (
         <div className="db-expense-expanded">
-          {/* Employee Breakdown */}
           {userBreakdown.length > 0 && (
             <div className="db-expense-sub-section">
               <div className="db-sub-header">
                 <h4><Users size={15} /> Employee Cost Breakdown</h4>
-                <button className="db-link-btn" onClick={(e) => { e.stopPropagation(); setUserModal(true); }}>
-                  View All <Eye size={13} />
-                </button>
+                <button className="db-link-btn" onClick={e => { e.stopPropagation(); setUserModal(true); }}>View All <Eye size={13} /></button>
               </div>
               <div className="db-employee-grid">
                 {userBreakdown.slice(0, 4).map((u, i) => (
@@ -147,9 +129,7 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
             </div>
           )}
 
-          {/* Category Chart + Recent Expenses (side by side) */}
           <div className="db-expense-bottom-row">
-            {/* Category Breakdown Chart */}
             {catChartData.length > 0 && (
               <div className="db-cat-chart-card">
                 <h4><BarChart3 size={15} /> Expense by Category</h4>
@@ -160,30 +140,22 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={v => formatCurrency(v)} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {catChartData.map((_, idx) => (
-                        <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />
-                      ))}
+                      {catChartData.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
-
-            {/* Recent Expenses List */}
             {recentExpenses.length > 0 && (
               <div className="db-recent-exp-card">
                 <h4><Clock size={15} /> Recent Expenses</h4>
                 <div className="db-recent-exp-list">
                   {recentExpenses.slice(0, 5).map((exp, i) => (
                     <div key={i} className="db-recent-exp-item">
-                      <div className="db-recent-cat-icon">
-                        {categoryIconMap[exp.category] || <FileText size={14} />}
-                      </div>
+                      <div className="db-recent-cat-icon">{categoryIconMap[exp.category] || <FileText size={14} />}</div>
                       <div className="db-recent-info">
                         <div className="db-recent-name">{exp.paidByName || 'Unknown'}</div>
-                        <div className="db-recent-meta">
-                          {exp.category} · {formatDate(exp.tripDate)}
-                        </div>
+                        <div className="db-recent-meta">{exp.category} · {formatDate(exp.tripDate)}</div>
                       </div>
                       <div className="db-recent-right">
                         <div className="db-recent-amount">{formatCurrency(exp.amount)}</div>
@@ -193,11 +165,7 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
                   ))}
                 </div>
                 {projectId && (
-                  <a
-                    href={`/finance/expenses?projectId=${projectId}`}
-                    className="db-view-all-link"
-                    onClick={e => e.stopPropagation()}
-                  >
+                  <a href={`/finance/expenses?projectId=${projectId}`} className="db-view-all-link" onClick={e => e.stopPropagation()}>
                     View all expenses →
                   </a>
                 )}
@@ -207,7 +175,6 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
         </div>
       )}
 
-      {/* ── Employee Detail Modal ── */}
       {userModal && (
         <div className="db-modal-overlay" onClick={() => setUserModal(false)}>
           <div className="db-modal" onClick={e => e.stopPropagation()}>
@@ -217,24 +184,11 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
             </div>
             <div className="db-modal-body">
               <table className="db-emp-table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Expenses</th>
-                    <th>Total</th>
-                    <th>Approved</th>
-                    <th>Pending</th>
-                  </tr>
-                </thead>
+                <thead><tr><th>Employee</th><th>Expenses</th><th>Total</th><th>Approved</th><th>Pending</th></tr></thead>
                 <tbody>
                   {userBreakdown.map((u, i) => (
                     <tr key={i}>
-                      <td>
-                        <div className="db-emp-table-user">
-                          <div className="db-emp-avatar sm">{(u.userName || 'U')[0].toUpperCase()}</div>
-                          {u.userName || 'Unknown'}
-                        </div>
-                      </td>
+                      <td><div className="db-emp-table-user"><div className="db-emp-avatar sm">{(u.userName || 'U')[0].toUpperCase()}</div>{u.userName || 'Unknown'}</div></td>
                       <td>{u.expenseCount}</td>
                       <td><strong>{formatCurrency(u.totalAmount)}</strong></td>
                       <td className="db-green">{formatCurrency(u.approvedAmount)}</td>
@@ -251,65 +205,389 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
   );
 };
 
+// ─── Aggregated (All / Group / SubGroup) Dashboard ───────────────────────────
+const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
+  const { financial = {}, procurement = {}, projects = [], statusDistribution = [] } = data;
+
+  const EmptyChart = ({ message = 'No data' }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#94a3b8' }}>
+      <div style={{ textAlign: 'center' }}><BarChart3 size={40} style={{ margin: '0 auto 8px', opacity: .3 }} /><p style={{ fontSize: 13 }}>{message}</p></div>
+    </div>
+  );
+
+  const statusColor = { Completed: '#22c55e', 'In Progress': '#3b82f6', Planning: '#f59e0b', 'On Hold': '#8b5cf6', Cancelled: '#ef4444' };
+
+  // Top projects by budget for chart
+  const topByBudget = [...projects]
+    .sort((a, b) => Number(b.budget || 0) - Number(a.budget || 0))
+    .slice(0, 6)
+    .map(p => ({ name: p.projectName?.slice(0, 18) + (p.projectName?.length > 18 ? '…' : ''), budget: Number(p.budget || 0), received: Number(p.received || 0), spent: Number(p.spent || 0) }));
+
+  return (
+    <div>
+      {/* Scope Banner */}
+      <div className="agg-scope-banner">
+        <div className="agg-scope-icon">
+          {data.scope === 'ALL' ? <Globe size={22} /> : data.scope === 'GROUP' ? <Layers size={22} /> : <Tag size={22} />}
+        </div>
+        <div>
+          <div className="agg-scope-title">{scopeLabel}</div>
+          <div className="agg-scope-sub">{data.totalProjects} project{data.totalProjects !== 1 ? 's' : ''} · Aggregated view</div>
+        </div>
+        <button className="dashboard-refresh-btn" onClick={onRefresh} disabled={loading} style={{ marginLeft: 'auto' }}>
+          <RefreshCw size={16} /> Refresh
+        </button>
+      </div>
+
+      {/* Project Count KPIs */}
+      <div className="dashboard-section">
+        <h3 className="section-title"><Briefcase size={20} />Projects Overview</h3>
+        <div className="kpi-grid">
+          {[
+            { label: 'Total Projects',      val: data.totalProjects,        color: '#3b82f6', icon: <Briefcase size={32} /> },
+            { label: 'Completed',           val: data.completedProjects,    color: '#22c55e', icon: <CheckCircle size={32} /> },
+            { label: 'In Progress',         val: data.inProgressProjects,   color: '#06b6d4', icon: <Activity size={32} /> },
+            { label: 'Planning',            val: data.planningProjects,     color: '#f59e0b', icon: <Target size={32} /> },
+            { label: 'On Hold',             val: data.onHoldProjects,       color: '#8b5cf6', icon: <Clock size={32} /> },
+            { label: 'Cancelled',           val: data.cancelledProjects,    color: '#ef4444', icon: <XCircle size={32} /> },
+          ].filter(k => k.val > 0 || k.label === 'Total Projects').map((k, i) => (
+            <div key={i} className="kpi-card" style={{ borderTopColor: k.color }}>
+              <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
+              <div className="kpi-content">
+                <div className="kpi-value">{k.val}</div>
+                <div className="kpi-label">{k.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Financial Overview */}
+      <div className="dashboard-section">
+        <h3 className="section-title"><IndianRupee size={20} />Consolidated Financial Overview</h3>
+        <div className="kpi-grid">
+          {[
+            { label: 'Total Project Value',   val: formatCurrency(financial.totalProjectValue),  color: '#3b82f6', icon: <Wallet size={32} />,      sub: 'Sum of all budgets' },
+            { label: 'Total Billed',          val: formatCurrency(financial.totalBilled),         color: '#8b5cf6', icon: <FileText size={32} />,    sub: 'All invoices raised' },
+            { label: 'Total Received',        val: formatCurrency(financial.totalReceived),       color: '#22c55e', icon: <TrendingUp size={32} />,  sub: `${financial.billingPercentage?.toFixed(1)}% collected` },
+            { label: 'Pending Receipts',      val: formatCurrency(financial.pendingReceipts),     color: '#f59e0b', icon: <Clock size={32} />,       sub: 'Yet to receive' },
+            { label: 'Total Procurement',     val: formatCurrency(financial.totalPayable),        color: '#ef4444', icon: <ShoppingCart size={32} />,sub: 'All vendor bills' },
+            { label: 'Total Paid (Vendors)',  val: formatCurrency(financial.totalPaid),           color: '#06b6d4', icon: <CreditCard size={32} />,  sub: `${financial.paymentPercentage?.toFixed(1)}% paid` },
+            { label: 'Pending Payments',      val: formatCurrency(financial.pendingPayments),     color: '#ef4444', icon: <AlertCircle size={32} />, sub: 'Due to vendors' },
+            {
+              label: financial.cashDeficit > 0 ? 'Cash Deficit' : 'Cash in Hand',
+              val: formatCurrency(financial.cashDeficit > 0 ? financial.cashDeficit : financial.cashInHand),
+              color: financial.cashDeficit > 0 ? '#ef4444' : '#22c55e',
+              icon: <Wallet size={32} />,
+              sub: financial.cashDeficit > 0 ? 'Paid more than received' : 'Received minus paid'
+            },
+          ].map((k, i) => (
+            <div key={i} className="kpi-card" style={{ borderTopColor: k.color }}>
+              <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
+              <div className="kpi-content">
+                <div className="kpi-value">{k.val}</div>
+                <div className="kpi-label">{k.label}</div>
+                <div className="kpi-subtitle">{k.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Client Billing */}
+      <div className="dashboard-section">
+        <h3 className="section-title"><Receipt size={20} />Client Billing &amp; Collection</h3>
+        <div className="metrics-grid">
+          {[
+            { icon: <IndianRupee size={24} />, title: 'Total Billed',        val: formatCurrency(financial.totalBilled),    sub: ['Total invoices raised'], cls: [] },
+            { icon: <CheckCircle size={24} />, title: 'Amount Received',     val: formatCurrency(financial.totalReceived),  sub: [`${financial.billingPercentage?.toFixed(1)}% Collected`, 'From clients'], cls: ['success', null] },
+            { icon: <Clock size={24} />,       title: 'Pending Receipts',    val: formatCurrency(financial.pendingReceipts),sub: [`${(100 - (financial.billingPercentage || 0)).toFixed(1)}% Pending`, 'Yet to collect'], cls: ['warning', null] },
+            { icon: <TrendingUp size={24} />,  title: 'Collection Progress', val: `${financial.billingPercentage?.toFixed(1)}%`, sub: null, progress: financial.billingPercentage, progressClass: 'success' },
+          ].map((m, i) => (
+            <div key={i} className="metric-card">
+              <div className="metric-header">{m.icon}<span className="metric-title">{m.title}</span></div>
+              <div className="metric-value">{m.val}</div>
+              {m.sub && <div className="metric-breakdown">{m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}</div>}
+              {m.progress !== undefined && (
+                <div className="metric-breakdown">
+                  <div className="progress-bar-container"><div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} /></div>
+                  <span className="metric-item">Collection progress</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Vendor Payments */}
+      <div className="dashboard-section">
+        <h3 className="section-title"><CreditCard size={20} />Vendor Payments (Procurement)</h3>
+        <div className="metrics-grid">
+          {[
+            { icon: <IndianRupee size={24} />, title: 'Total Procurement',  val: formatCurrency(financial.totalPayable),   sub: ['All vendor bills'], cls: [] },
+            { icon: <CheckCircle size={24} />, title: 'Amount Paid',        val: formatCurrency(financial.totalPaid),      sub: [`${financial.paymentPercentage?.toFixed(1)}% Paid`, 'To vendors'], cls: ['success', null] },
+            { icon: <AlertCircle size={24} />, title: 'Pending Payments',   val: formatCurrency(financial.pendingPayments),sub: [`${(100 - (financial.paymentPercentage || 0)).toFixed(1)}% Pending`, 'Due to vendors'], cls: ['danger', null] },
+            { icon: <Activity size={24} />,    title: 'Payment Progress',   val: `${financial.paymentPercentage?.toFixed(1)}%`, sub: null, progress: financial.paymentPercentage, progressClass: 'warning' },
+          ].map((m, i) => (
+            <div key={i} className="metric-card">
+              <div className="metric-header">{m.icon}<span className="metric-title">{m.title}</span></div>
+              <div className="metric-value">{m.val}</div>
+              {m.sub && <div className="metric-breakdown">{m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}</div>}
+              {m.progress !== undefined && (
+                <div className="metric-breakdown">
+                  <div className="progress-bar-container"><div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} /></div>
+                  <span className="metric-item">Vendor payment completion</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Procurement Summary */}
+      <div className="dashboard-section">
+        <h3 className="section-title"><ShoppingCart size={20} />Procurement Summary</h3>
+        <div className="metrics-grid">
+          <div className="metric-card">
+            <div className="metric-header"><FileText size={24} /><span className="metric-title">Purchase Orders</span></div>
+            <div className="metric-value">{procurement.totalPOs || 0}</div>
+            <div className="metric-breakdown">
+              <span className="metric-item success"><CheckCircle size={14} />{procurement.deliveredPOs || 0} Delivered</span>
+              <span className="metric-item">Value: {formatCurrency(procurement.totalPOValue)}</span>
+            </div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header"><Package size={24} /><span className="metric-title">Delivery Rate</span></div>
+            <div className="metric-value">{procurement.deliveryRate?.toFixed(1) || 0}%</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header"><FileText size={24} /><span className="metric-title">Quotations</span></div>
+            <div className="metric-value">{procurement.totalQuotations || 0}</div>
+          </div>
+          <div className="metric-card">
+            <div className="metric-header"><Users size={24} /><span className="metric-title">Active Vendors</span></div>
+            <div className="metric-value">{procurement.totalVendors || 0}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Row */}
+      <div className="dashboard-charts-grid">
+        {/* Status Pie */}
+        {statusDistribution.length > 0 ? (
+          <div className="chart-card">
+            <div className="chart-header"><h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4></div>
+            <ResponsiveContainer width="100%" height={280}>
+              <RechartsPieChart>
+                <Pie data={statusDistribution} cx="50%" cy="50%" labelLine={false}
+                  label={e => `${e.name} (${e.value})`} outerRadius={90} dataKey="value">
+                  {statusDistribution.map((entry, i) => (
+                    <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </RechartsPieChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Status Distribution</h4></div><EmptyChart /></div>
+        )}
+
+        {/* Top Projects by Budget bar chart */}
+        {topByBudget.length > 0 ? (
+          <div className="chart-card">
+            <div className="chart-header"><h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4></div>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={topByBudget} margin={{ left: 10, right: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
+                <Tooltip formatter={v => formatCurrency(v)} />
+                <Legend />
+                <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
+                <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
+                <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Budget vs Received</h4></div><EmptyChart /></div>
+        )}
+      </div>
+
+      {/* Projects Breakdown Table */}
+      {projects.length > 0 && (
+        <div className="dashboard-section">
+          <h3 className="section-title"><Briefcase size={20} />Projects Breakdown
+            <span style={{ marginLeft: 10, fontSize: 12, fontWeight: 400, color: '#6b7280' }}>({projects.length} projects)</span>
+          </h3>
+          <div className="agg-table-wrapper">
+            {/* Sticky header sits outside the scroll area */}
+            <div className="agg-table-scroll">
+              <table className="agg-projects-table">
+                <colgroup>
+                  <col style={{ minWidth: 200 }} />  {/* Project */}
+                  <col style={{ minWidth: 140 }} />  {/* Group/Category */}
+                  <col style={{ minWidth: 110 }} />  {/* Status */}
+                  <col style={{ minWidth: 120 }} />  {/* Budget */}
+                  <col style={{ minWidth: 110 }} />  {/* Billed */}
+                  <col style={{ minWidth: 120 }} />  {/* Received */}
+                  <col style={{ minWidth: 130 }} />  {/* Spent */}
+                  <col style={{ minWidth: 120 }} />  {/* Pending Pay */}
+                  <col style={{ minWidth: 70 }} />   {/* POs */}
+                  <col style={{ minWidth: 90 }} />   {/* Delivered */}
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th className="agg-th-left">Project</th>
+                    <th className="agg-th-left">Group / Category</th>
+                    <th className="agg-th-left">Status</th>
+                    <th className="agg-th-right">Budget</th>
+                    <th className="agg-th-right">Billed</th>
+                    <th className="agg-th-right">Received</th>
+                    <th className="agg-th-right">Spent (Vendor)</th>
+                    <th className="agg-th-right">Pending Pay</th>
+                    <th className="agg-th-center">POs</th>
+                    <th className="agg-th-center">Delivered</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projects.map((p, i) => {
+                    const statusColors = { COMPLETED: '#22c55e', IN_PROGRESS: '#3b82f6', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
+                    return (
+                      <tr key={i} className={i % 2 === 0 ? 'agg-tr-even' : 'agg-tr-odd'}>
+                        <td className="agg-td-left">
+                          <div className="agg-proj-name">{p.projectName}</div>
+                          <div className="agg-proj-id">{p.projectId}</div>
+                        </td>
+                        <td className="agg-td-left">
+                          <div className="agg-group-name">{p.groupId || '-'}</div>
+                          <div className="agg-subgroup-name">{p.subGroupName || ''}</div>
+                        </td>
+                        <td className="agg-td-left">
+                          <span className="agg-status-badge" style={{
+                            background: (statusColors[p.status] || '#94a3b8') + '22',
+                            color: statusColors[p.status] || '#94a3b8',
+                          }}>{p.status?.replace(/_/g, ' ')}</span>
+                        </td>
+                        <td className="agg-td-right agg-val-default">{formatCurrency(p.budget)}</td>
+                        <td className="agg-td-right agg-val-default">{formatCurrency(p.billed)}</td>
+                        <td className="agg-td-right agg-val-green">{formatCurrency(p.received)}</td>
+                        <td className="agg-td-right agg-val-red">{formatCurrency(p.spent)}</td>
+                        <td className="agg-td-right agg-val-amber">{formatCurrency(p.pendingPay)}</td>
+                        <td className="agg-td-center">{p.totalPOs}</td>
+                        <td className="agg-td-center agg-val-green">{p.deliveredPOs}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="agg-tfoot-row">
+                    <td colSpan={3} className="agg-td-left agg-tfoot-label">TOTAL — {projects.length} projects</td>
+                    <td className="agg-td-right">{formatCurrency(financial.totalProjectValue)}</td>
+                    <td className="agg-td-right">{formatCurrency(financial.totalBilled)}</td>
+                    <td className="agg-td-right agg-val-green">{formatCurrency(financial.totalReceived)}</td>
+                    <td className="agg-td-right agg-val-red">{formatCurrency(financial.totalPaid)}</td>
+                    <td className="agg-td-right agg-val-amber">{formatCurrency(financial.pendingPayments)}</td>
+                    <td className="agg-td-center">{procurement.totalPOs}</td>
+                    <td className="agg-td-center agg-val-green">{procurement.deliveredPOs}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Single-project dashboard helpers ────────────────────────────────────────
+const calculateProgress = (dashboardData) => {
+  if (!dashboardData?.startDate || !dashboardData?.endDate) return 0;
+  const start = new Date(dashboardData.startDate);
+  const end   = new Date(dashboardData.endDate);
+  const now   = new Date();
+  return Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100).toFixed(1);
+};
+const getStatusColor = (s) => ({
+  PLANNING: '#3b82f6', IN_PROGRESS: '#22c55e', COMPLETED: '#8b5cf6',
+  ON_HOLD: '#f59e0b', CANCELLED: '#ef4444',
+}[s] || '#94a3b8');
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 const ProjectDashboard = () => {
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [dashboardData, setDashboardData] = useState(null);
+  const [loading, setLoading]           = useState(false);
+  const [dashboardData, setDashboardData] = useState(null);   // single-project data
+  const [aggData, setAggData]           = useState(null);      // aggregated data
 
-  useEffect(() => {
-    if (projectId) fetchDashboardData();
-    else setDashboardData(null);
-  }, [projectId]);
+  // Determine which mode we are in
+  const mode = projectId ? 'PROJECT' : groupName ? (subGroupName ? 'SUBGROUP' : 'GROUP') : 'ALL';
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'X-User-Id': user?.id || localStorage.getItem('userId'),
+    'X-User-Id':   user?.id   || localStorage.getItem('userId'),
     'X-User-Role': user?.role || localStorage.getItem('userRole'),
     'Content-Type': 'application/json',
   });
 
-  const fetchDashboardData = async () => {
+  // ── Fetch single-project dashboard ────────────────────────────────────────
+  const fetchProjectDashboard = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/projects/${projectId}/dashboard`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectId}/dashboard`, {
         credentials: 'include', headers: getAuthHeaders(),
       });
-      if (response.ok) {
-        const data = await response.json();
-        setDashboardData(data);
-      } else if (response.status === 404) {
-        showError('Project not found'); setDashboardData(null);
-      } else {
-        showError('Failed to load dashboard'); setDashboardData(null);
-      }
-    } catch (err) {
-      showError('Network error. Please check connection.'); setDashboardData(null);
-    } finally {
-      setLoading(false);
-    }
+      if (res.ok) { setDashboardData(await res.json()); setAggData(null); }
+      else if (res.status === 404) { showError('Project not found'); setDashboardData(null); }
+      else { showError('Failed to load dashboard'); setDashboardData(null); }
+    } catch { showError('Network error.'); setDashboardData(null); }
+    finally { setLoading(false); }
+  }, [projectId]);
+
+  // ── Fetch aggregated dashboard ─────────────────────────────────────────────
+  const fetchAggregated = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (groupName)    params.append('groupName',    groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      const res = await fetch(`${API_BASE_URL}/projects/dashboard/aggregate?${params}`, {
+        credentials: 'include', headers: getAuthHeaders(),
+      });
+      if (res.ok) { setAggData(await res.json()); setDashboardData(null); }
+      else { showError('Failed to load aggregated dashboard'); setAggData(null); }
+    } catch { showError('Network error.'); setAggData(null); }
+    finally { setLoading(false); }
+  }, [groupName, subGroupName]);
+
+  // ── React to filter changes ────────────────────────────────────────────────
+  useEffect(() => {
+    if (mode === 'PROJECT') fetchProjectDashboard();
+    else fetchAggregated();
+  }, [mode, projectId, groupName, subGroupName]);
+
+  const handleRefresh = () => {
+    if (mode === 'PROJECT') fetchProjectDashboard();
+    else fetchAggregated();
   };
 
-  const calculateProgress = () => {
-    if (!dashboardData?.startDate || !dashboardData?.endDate) return 0;
-    const start = new Date(dashboardData.startDate);
-    const end = new Date(dashboardData.endDate);
-    const now = new Date();
-    return Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100).toFixed(1);
+  // ── Scope label for aggregated view ────────────────────────────────────────
+  const getScopeLabel = () => {
+    if (mode === 'ALL')      return 'All Projects — Company-wide Overview';
+    if (mode === 'GROUP')    return `${groupName} — Group Overview`;
+    if (mode === 'SUBGROUP') return `${groupName} › ${subGroupName} — Category Overview`;
+    return '';
   };
-
-  const getStatusColor = (s) => ({
-    PLANNING: '#3b82f6', IN_PROGRESS: '#22c55e', COMPLETED: '#8b5cf6',
-    ON_HOLD: '#f59e0b', CANCELLED: '#ef4444',
-  }[s] || '#94a3b8');
 
   const EmptyChart = ({ message = 'No data available' }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#94a3b8' }}>
       <div style={{ textAlign: 'center' }}>
-        <BarChart3 size={48} style={{ margin: '0 auto 10px', opacity: .3 }} />
-        <p>{message}</p>
+        <BarChart3 size={48} style={{ margin: '0 auto 10px', opacity: .3 }} /><p>{message}</p>
       </div>
     </div>
   );
@@ -325,33 +603,47 @@ const ProjectDashboard = () => {
         <div className="page-header-with-filter">
           <h1 className="project-dashboard-title"><BarChart3 size={28} /> Project Dashboard</h1>
           <div className="header-actions">
-            <GroupProjectFilter groupValue={groupName} subGroupValue={subGroupName}
-              projectValue={projectId} onChange={updateFilters} />
-            {projectId && (
-              <button className="dashboard-refresh-btn" onClick={fetchDashboardData} disabled={loading}>
-                <RefreshCw size={18} /> Refresh
-              </button>
-            )}
+            <GroupProjectFilter
+              groupValue={groupName} subGroupValue={subGroupName}
+              projectValue={projectId} onChange={updateFilters}
+            />
+            <button className="dashboard-refresh-btn" onClick={handleRefresh} disabled={loading}>
+              <RefreshCw size={18} /> Refresh
+            </button>
           </div>
         </div>
       </div>
 
-      {!projectId ? (
-        <div className="project-dashboard-empty-state">
-          <Target size={80} className="empty-state-icon" />
-          <h2>Select a Project to View Dashboard</h2>
-          <p>Choose a project from the dropdown above to see comprehensive analytics</p>
-        </div>
-      ) : !dashboardData && !loading ? (
+      {/* ── AGGREGATED VIEW (All / Group / SubGroup) ───────────────────────── */}
+      {mode !== 'PROJECT' && (
+        aggData ? (
+          <AggregatedDashboard
+            data={aggData}
+            scopeLabel={getScopeLabel()}
+            onRefresh={handleRefresh}
+            loading={loading}
+          />
+        ) : !loading ? (
+          <div className="project-dashboard-empty-state">
+            <AlertCircle size={80} className="empty-state-icon" />
+            <h2>No Data Available</h2>
+            <p>Unable to load dashboard data. Please try again.</p>
+            <button onClick={handleRefresh} className="dashboard-refresh-btn"><RefreshCw size={18} /> Retry</button>
+          </div>
+        ) : null
+      )}
+
+      {/* ── SINGLE PROJECT VIEW ────────────────────────────────────────────── */}
+      {mode === 'PROJECT' && !dashboardData && !loading && (
         <div className="project-dashboard-empty-state">
           <AlertCircle size={80} className="empty-state-icon" />
           <h2>No Data Available</h2>
-          <p>Unable to load dashboard data. Please try again.</p>
-          <button onClick={fetchDashboardData} className="dashboard-refresh-btn">
-            <RefreshCw size={18} /> Retry
-          </button>
+          <p>Unable to load project dashboard. Please try again.</p>
+          <button onClick={handleRefresh} className="dashboard-refresh-btn"><RefreshCw size={18} /> Retry</button>
         </div>
-      ) : dashboardData ? (
+      )}
+
+      {mode === 'PROJECT' && dashboardData && (
         <>
           {/* Project Overview Card */}
           <div className="project-overview-card">
@@ -374,9 +666,9 @@ const ProjectDashboard = () => {
                     <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="12" />
                     <circle cx="60" cy="60" r="54" fill="none"
                       stroke={getStatusColor(dashboardData.status)} strokeWidth="12"
-                      strokeDasharray={`${calculateProgress() * 3.39} 339`}
+                      strokeDasharray={`${calculateProgress(dashboardData) * 3.39} 339`}
                       strokeLinecap="round" transform="rotate(-90 60 60)" />
-                    <text x="60" y="55" textAnchor="middle" className="progress-value">{calculateProgress()}%</text>
+                    <text x="60" y="55" textAnchor="middle" className="progress-value">{calculateProgress(dashboardData)}%</text>
                     <text x="60" y="70" textAnchor="middle" className="progress-label">Complete</text>
                   </svg>
                 </div>
@@ -384,9 +676,9 @@ const ProjectDashboard = () => {
             </div>
             <div className="project-overview-details">
               {[
-                [<Calendar size={18} />, 'Start Date', formatDate(dashboardData.startDate)],
-                [<Calendar size={18} />, 'End Date', formatDate(dashboardData.endDate)],
-                [<User size={18} />, 'Project Manager', dashboardData.manager || 'Not Assigned'],
+                [<Calendar size={18} />, 'Start Date',            formatDate(dashboardData.startDate)],
+                [<Calendar size={18} />, 'End Date',              formatDate(dashboardData.endDate)],
+                [<User size={18} />,     'Project Manager',       dashboardData.manager || 'Not Assigned'],
                 [<IndianRupee size={18} />, 'Total Project Value', formatCurrency(dashboardData.budget)],
               ].map(([icon, label, val], i) => (
                 <div key={i} className="project-detail-item">
@@ -400,8 +692,6 @@ const ProjectDashboard = () => {
             </div>
           </div>
 
-
-
           {/* Financial Overview */}
           {dashboardData.financialData && (
             <>
@@ -414,7 +704,6 @@ const ProjectDashboard = () => {
                       icon: <TrendingDown size={36} />, color: '#f59e0b', val: formatCurrency(dashboardData.financialData.totalSpent),
                       label: 'Amount Spent', sub: `Paid to vendors · ${dashboardData.financialData.budgetUtilizationPercent?.toFixed(1)}% of budget`
                     },
-                    // Profit card — only shown when project is 100% COMPLETED
                     ...(dashboardData.financialData.isCompleted ? [{
                       icon: <Target size={36} />, color: '#22c55e',
                       val: formatCurrency(dashboardData.financialData.projectedProfit),
@@ -433,24 +722,16 @@ const ProjectDashboard = () => {
                   ))}
 
                   {/* Cash Flow Card */}
-                  <div className="kpi-card" style={{
-                    borderTopColor: (dashboardData.financialData.cashDeficit > 0) ? '#ef4444' : '#22c55e',
-                  }}>
-                    <div className="kpi-icon" style={{
-                      color: (dashboardData.financialData.cashDeficit > 0) ? '#ef4444' : '#22c55e',
-                    }}><Wallet size={36} /></div>
+                  <div className="kpi-card" style={{ borderTopColor: dashboardData.financialData.cashDeficit > 0 ? '#ef4444' : '#22c55e' }}>
+                    <div className="kpi-icon" style={{ color: dashboardData.financialData.cashDeficit > 0 ? '#ef4444' : '#22c55e' }}><Wallet size={36} /></div>
                     <div className="kpi-content">
                       <div className="kpi-value">
                         {formatCurrency(dashboardData.financialData.cashDeficit > 0
                           ? dashboardData.financialData.cashDeficit
                           : dashboardData.financialData.cashInHand || 0)}
                       </div>
-                      <div className="kpi-label">
-                        {dashboardData.financialData.cashDeficit > 0 ? 'Cash Deficit' : 'Cash in Hand'}
-                      </div>
-                      <div className="kpi-subtitle">
-                        {dashboardData.financialData.cashDeficit > 0 ? 'Paid more than received' : 'Received minus paid'}
-                      </div>
+                      <div className="kpi-label">{dashboardData.financialData.cashDeficit > 0 ? 'Cash Deficit' : 'Cash in Hand'}</div>
+                      <div className="kpi-subtitle">{dashboardData.financialData.cashDeficit > 0 ? 'Paid more than received' : 'Received minus paid'}</div>
                     </div>
                   </div>
                 </div>
@@ -461,33 +742,18 @@ const ProjectDashboard = () => {
                 <h3 className="section-title"><Receipt size={20} />Client Billing &amp; Receipts</h3>
                 <div className="metrics-grid">
                   {[
-                    { icon: <IndianRupee size={24} />, title: 'Billed Amount', val: formatCurrency(dashboardData.financialData.amountToBeReceived), sub: ['Total Invoice Raised'], cls: [] },
-                    {
-                      icon: <CheckCircle size={24} />, title: 'Amount Received', val: formatCurrency(dashboardData.financialData.amountReceived),
-                      sub: [`${dashboardData.financialData.billingPercentage?.toFixed(1)}% Received`, 'From client payments'], cls: ['success', null]
-                    },
-                    {
-                      icon: <Clock size={24} />, title: 'Pending Receipts', val: formatCurrency(dashboardData.financialData.pendingReceipts),
-                      sub: [`${(100 - (dashboardData.financialData.billingPercentage || 0)).toFixed(1)}% Pending`, 'Yet to collect'], cls: ['warning', null]
-                    },
-                    {
-                      icon: <TrendingUp size={24} />, title: 'Collection Progress', val: `${dashboardData.financialData.billingPercentage?.toFixed(1)}%`,
-                      sub: null, progress: dashboardData.financialData.billingPercentage, progressClass: 'success'
-                    },
+                    { icon: <IndianRupee size={24} />, title: 'Billed Amount',       val: formatCurrency(dashboardData.financialData.amountToBeReceived), sub: ['Total Invoice Raised'], cls: [] },
+                    { icon: <CheckCircle size={24} />, title: 'Amount Received',     val: formatCurrency(dashboardData.financialData.amountReceived),      sub: [`${dashboardData.financialData.billingPercentage?.toFixed(1)}% Received`, 'From client payments'], cls: ['success', null] },
+                    { icon: <Clock size={24} />,       title: 'Pending Receipts',    val: formatCurrency(dashboardData.financialData.pendingReceipts),     sub: [`${(100 - (dashboardData.financialData.billingPercentage || 0)).toFixed(1)}% Pending`, 'Yet to collect'], cls: ['warning', null] },
+                    { icon: <TrendingUp size={24} />,  title: 'Collection Progress', val: `${dashboardData.financialData.billingPercentage?.toFixed(1)}%`, sub: null, progress: dashboardData.financialData.billingPercentage, progressClass: 'success' },
                   ].map((m, i) => (
                     <div key={i} className="metric-card">
                       <div className="metric-header">{m.icon}<span className="metric-title">{m.title}</span></div>
                       <div className="metric-value">{m.val}</div>
-                      {m.sub && (
-                        <div className="metric-breakdown">
-                          {m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}
-                        </div>
-                      )}
+                      {m.sub && <div className="metric-breakdown">{m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}</div>}
                       {m.progress !== undefined && (
                         <div className="metric-breakdown">
-                          <div className="progress-bar-container">
-                            <div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} />
-                          </div>
+                          <div className="progress-bar-container"><div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} /></div>
                           <span className="metric-item">Client payment collection</span>
                         </div>
                       )}
@@ -501,33 +767,18 @@ const ProjectDashboard = () => {
                 <h3 className="section-title"><CreditCard size={20} />Vendor Payments (Procurement Spend)</h3>
                 <div className="metrics-grid">
                   {[
-                    { icon: <IndianRupee size={24} />, title: 'Total Procurement Cost', val: formatCurrency(dashboardData.financialData.totalPayable), sub: ['Total bills from vendors'], cls: [] },
-                    {
-                      icon: <CheckCircle size={24} />, title: 'Amount Paid', val: formatCurrency(dashboardData.financialData.amountPaid),
-                      sub: [`${dashboardData.financialData.paymentPercentage?.toFixed(1)}% Paid`, 'Same as Amount Spent above'], cls: ['success', null]
-                    },
-                    {
-                      icon: <AlertCircle size={24} />, title: 'Pending Payments', val: formatCurrency(dashboardData.financialData.pendingPayments),
-                      sub: [`${(100 - (dashboardData.financialData.paymentPercentage || 0)).toFixed(1)}% Pending`, 'Due to vendors'], cls: ['danger', null]
-                    },
-                    {
-                      icon: <Activity size={24} />, title: 'Payment Progress', val: `${dashboardData.financialData.paymentPercentage?.toFixed(1)}%`,
-                      sub: null, progress: dashboardData.financialData.paymentPercentage, progressClass: 'warning'
-                    },
+                    { icon: <IndianRupee size={24} />, title: 'Total Procurement Cost', val: formatCurrency(dashboardData.financialData.totalPayable),   sub: ['Total bills from vendors'], cls: [] },
+                    { icon: <CheckCircle size={24} />, title: 'Amount Paid',            val: formatCurrency(dashboardData.financialData.amountPaid),      sub: [`${dashboardData.financialData.paymentPercentage?.toFixed(1)}% Paid`, 'Same as Amount Spent above'], cls: ['success', null] },
+                    { icon: <AlertCircle size={24} />, title: 'Pending Payments',       val: formatCurrency(dashboardData.financialData.pendingPayments), sub: [`${(100 - (dashboardData.financialData.paymentPercentage || 0)).toFixed(1)}% Pending`, 'Due to vendors'], cls: ['danger', null] },
+                    { icon: <Activity size={24} />,    title: 'Payment Progress',       val: `${dashboardData.financialData.paymentPercentage?.toFixed(1)}%`, sub: null, progress: dashboardData.financialData.paymentPercentage, progressClass: 'warning' },
                   ].map((m, i) => (
                     <div key={i} className="metric-card">
                       <div className="metric-header">{m.icon}<span className="metric-title">{m.title}</span></div>
                       <div className="metric-value">{m.val}</div>
-                      {m.sub && (
-                        <div className="metric-breakdown">
-                          {m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}
-                        </div>
-                      )}
+                      {m.sub && <div className="metric-breakdown">{m.sub.map((s, j) => s && <span key={j} className={`metric-item ${m.cls?.[j] || ''}`}>{s}</span>)}</div>}
                       {m.progress !== undefined && (
                         <div className="metric-breakdown">
-                          <div className="progress-bar-container">
-                            <div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} />
-                          </div>
+                          <div className="progress-bar-container"><div className={`progress-bar-fill ${m.progressClass}`} style={{ width: `${m.progress || 0}%` }} /></div>
                           <span className="metric-item">Vendor payment completion</span>
                         </div>
                       )}
@@ -535,25 +786,20 @@ const ProjectDashboard = () => {
                   ))}
                 </div>
               </div>
-              {/* ── EXPENSE BLOCK (NEW) ───────────────────────────────────────── */}
-              <ExpenseDashboardSection
-                expenseData={dashboardData.expenseData}
-                projectId={projectId}
-              />
-              {/* Profit info banners — only shown on project completion */}
+
+              <ExpenseDashboardSection expenseData={dashboardData.expenseData} projectId={projectId} />
+
               {dashboardData.financialData.isCompleted && (
                 <div className="dashboard-section" style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#fff' }}>
-                  <h3 className="section-title" style={{ color: '#fff' }}>
-                    <CheckCircle size={20} /> Project Completed — Final Profit Summary
-                  </h3>
+                  <h3 className="section-title" style={{ color: '#fff' }}><CheckCircle size={20} /> Project Completed — Final Profit Summary</h3>
                   <div className="metrics-grid">
                     {[
-                      ['Total Project Value',   formatCurrency(dashboardData.financialData.totalProjectValue), 'Contract budget'],
-                      ['Procurement Cost',       formatCurrency(dashboardData.financialData.totalSpent),        'Paid to vendors'],
-                      ['Employee & Expense Cost',formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee expenses'],
-                      ['Total Cost',             formatCurrency((dashboardData.financialData.totalSpent ?? 0) + (dashboardData.financialData.totalEmployeeExpenses ?? 0)), 'Procurement + Employee'],
-                      ['Actual Profit',          formatCurrency(dashboardData.financialData.projectedProfit),   'Project Value − Total Cost'],
-                      ['Profit Margin',          `${dashboardData.financialData.profitMargin?.toFixed(1)}%`,    '(Profit / Project Value) × 100'],
+                      ['Total Project Value',    formatCurrency(dashboardData.financialData.totalProjectValue),  'Contract budget'],
+                      ['Procurement Cost',        formatCurrency(dashboardData.financialData.totalSpent),         'Paid to vendors'],
+                      ['Employee & Expense Cost', formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee expenses'],
+                      ['Total Cost',              formatCurrency((dashboardData.financialData.totalSpent ?? 0) + (dashboardData.financialData.totalEmployeeExpenses ?? 0)), 'Procurement + Employee'],
+                      ['Actual Profit',           formatCurrency(dashboardData.financialData.projectedProfit),   'Project Value − Total Cost'],
+                      ['Profit Margin',           `${dashboardData.financialData.profitMargin?.toFixed(1)}%`,    '(Profit / Project Value) × 100'],
                     ].map(([title, val, sub], i) => (
                       <div key={i} className="metric-card" style={{ background: 'rgba(255,255,255,.1)', border: 'none' }}>
                         <div className="metric-header"><span className="metric-title" style={{ color: '#fff' }}>{title}</span></div>
@@ -587,9 +833,7 @@ const ProjectDashboard = () => {
                 <div className="metric-card">
                   <div className="metric-header"><FileText size={24} /><span className="metric-title">Quotations</span></div>
                   <div className="metric-value">{dashboardData.procurementData.totalQuotations || 0}</div>
-                  <div className="metric-breakdown">
-                    <span className="metric-item success">{dashboardData.procurementData.approvedQuotations || 0} Approved</span>
-                  </div>
+                  <div className="metric-breakdown"><span className="metric-item success">{dashboardData.procurementData.approvedQuotations || 0} Approved</span></div>
                 </div>
                 <div className="metric-card">
                   <div className="metric-header"><Users size={24} /><span className="metric-title">Active Vendors</span></div>
@@ -607,20 +851,15 @@ const ProjectDashboard = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={dashboardData.spendingTrend}>
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip formatter={v => formatCurrency(v)} />
-                    <Legend />
+                    <XAxis dataKey="month" /><YAxis />
+                    <Tooltip formatter={v => formatCurrency(v)} /><Legend />
                     <Area dataKey="spending" fill="#3b82f6" stroke="#3b82f6" fillOpacity={.3} />
                     <Bar dataKey="orders" fill="#22c55e" />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
             ) : (
-              <div className="chart-card full-width">
-                <div className="chart-header"><h4 className="chart-title">Monthly Spending Trend</h4></div>
-                <EmptyChart message="No spending data available" />
-              </div>
+              <div className="chart-card full-width"><div className="chart-header"><h4 className="chart-title">Monthly Spending Trend</h4></div><EmptyChart message="No spending data available" /></div>
             )}
 
             {dashboardData.procurementData?.posByStatus?.length > 0 ? (
@@ -628,12 +867,9 @@ const ProjectDashboard = () => {
                 <div className="chart-header"><h4 className="chart-title">PO Status Distribution</h4></div>
                 <ResponsiveContainer width="100%" height={300}>
                   <RechartsPieChart>
-                    <Pie data={dashboardData.procurementData.posByStatus}
-                      cx="50%" cy="50%" labelLine={false}
+                    <Pie data={dashboardData.procurementData.posByStatus} cx="50%" cy="50%" labelLine={false}
                       label={e => `${e.name} (${e.value})`} outerRadius={80} dataKey="value">
-                      {dashboardData.procurementData.posByStatus.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
+                      {dashboardData.procurementData.posByStatus.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
                     </Pie>
                     <Tooltip />
                   </RechartsPieChart>
@@ -649,8 +885,7 @@ const ProjectDashboard = () => {
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={dashboardData.procurementData.categoryDistribution} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" />
-                    <YAxis dataKey="name" type="category" width={100} />
+                    <XAxis type="number" /><YAxis dataKey="name" type="category" width={100} />
                     <Tooltip formatter={v => formatCurrency(v)} />
                     <Bar dataKey="value" fill="#22c55e" />
                   </BarChart>
@@ -671,10 +906,7 @@ const ProjectDashboard = () => {
                     <div className="vendor-rank">#{i + 1}</div>
                     <div className="vendor-info">
                       <div className="vendor-name">{v.name}</div>
-                      <div className="vendor-meta">
-                        <span>{v.totalOrders} orders</span>
-                        {v.rating > 0 && <span>⭐ {v.rating}</span>}
-                      </div>
+                      <div className="vendor-meta"><span>{v.totalOrders} orders</span>{v.rating > 0 && <span>⭐ {v.rating}</span>}</div>
                     </div>
                     <div className="vendor-amount">{formatCurrency(v.totalPurchaseValue)}</div>
                   </div>
@@ -728,7 +960,7 @@ const ProjectDashboard = () => {
             </div>
           )}
         </>
-      ) : null}
+      )}
     </div>
   );
 };

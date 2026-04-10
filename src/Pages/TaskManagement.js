@@ -23,6 +23,9 @@ const fmtDT      = d => d ? new Date(d).toLocaleString('en-IN', { day:'numeric',
 const fmtTime    = t => t ? String(t).slice(0, 5) : '—';
 const diffHrs    = (s, e) => { if (!s || !e) return null; const diff = (new Date(e) - new Date(s)) / 3600000; return diff > 0 ? diff.toFixed(1) : null; };
 
+/* FIX #4: Always compute hours from updates array — never trust totalHoursSpent field */
+const computeHours = (task) => (task?.updates || []).reduce((s, u) => s + (parseFloat(u.hoursSpent) || 0), 0);
+
 const PRIORITIES    = ['Low', 'Medium', 'High', 'Critical'];
 const STATUSES      = ['Pending', 'In Progress', 'Completed', 'Cancelled'];
 const CATEGORIES    = ['Follow-up', 'Meeting', 'Call', 'Site Visit', 'Documentation', 'Proposal', 'Review', 'Discussion', 'Client Visit', 'Internal Work', 'Other'];
@@ -87,6 +90,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
     workDone: '', description: '', updateType: 'Progress Update', hoursSpent: '',
     startTime: nowTime(), endTime: '', newStatus: task.status,
     completionPercent: task.completionPercent || 0, blockedReason: '', notes: '',
+    logDate: todayStr(),  // user-selectable date for the log entry
   });
   const [saving, setSaving] = useState(false);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
@@ -139,6 +143,19 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
         </div>
 
         <div className="tm-mbody">
+          {/* ── Log Date ── */}
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'10px 14px',background:'#f0f7ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
+            <label style={{fontSize:12,fontWeight:700,color:'#1e40af',whiteSpace:'nowrap'}}>📅 Log Date</label>
+            <input type="date" className="tm-inp" style={{maxWidth:180,fontSize:13}}
+              value={form.logDate}
+              max={todayStr()}
+              onChange={e => set('logDate', e.target.value)}
+            />
+            <span style={{fontSize:11,color:'#64748b'}}>
+              {form.logDate === todayStr() ? 'Today' : form.logDate < todayStr() ? 'Past entry' : ''}
+            </span>
+          </div>
+
           {/* ── Section 1: What you did ── */}
           <div style={{background:'#f8fafc',borderRadius:10,padding:'14px 16px',marginBottom:16,border:'1px solid #f1f5f9'}}>
             <div className="tm-fg" style={{margin:'0 0 12px'}}>
@@ -185,7 +202,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
               <label>Update Status To</label>
               <select className="tm-sel" value={form.newStatus}
                 style={{borderColor: isComplete ? '#059669' : undefined, background: isComplete ? '#f0fdf4' : undefined}}
-                onChange={e => { set('newStatus', e.target.value); if (e.target.value === 'Completed') set('completionPercent', 100); }}>
+                onChange={e => { const v = e.target.value; set('newStatus', v); if (v === 'Completed') set('completionPercent', 100); }}>
                 {STATUSES.map(s => <option key={s}>{s}</option>)}
               </select>
             </div>
@@ -439,11 +456,11 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
 ══════════════════════════════════════════════════════════════════════════ */
 const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
   const [entries, setEntries] = useState([
-    { id: Date.now(), title: '', description: '', category: 'Internal Work', hours: '', projectId: '' }
+    { id: Date.now(), title: '', description: '', category: 'Internal Work', hours: '', projectId: '', otherProject: '', logDate: todayStr(), startTime: '', endTime: '' }
   ]);
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setEntries(p => [...p, { id: Date.now()+p.length, title: '', description: '', category: 'Internal Work', hours: '', projectId: '' }]);
+  const addRow = () => setEntries(p => [...p, { id: Date.now()+p.length, title: '', description: '', category: 'Internal Work', hours: '', projectId: '', otherProject: '', logDate: todayStr(), startTime: '', endTime: '' }]);
   const removeRow = (id) => setEntries(p => p.filter(e => e.id !== id));
   const setField = (id, k, v) => setEntries(p => p.map(e => e.id === id ? { ...e, [k]: v } : e));
 
@@ -455,22 +472,42 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
     setSaving(true);
     // Each entry becomes a task assigned to self, already in "Completed" for today
     for (const e of valid) {
-      const proj = projects.find(p => (p.projectUniqueId || p.id) === e.projectId);
+      const isOther = e.projectId === 'OTHER';
+      const proj = !isOther ? projects.find(p => (p.projectUniqueId || p.id) === e.projectId) : null;
+      const hrs = parseFloat(e.hours) || 0;
+      const entryDate = e.logDate || todayStr();
+      // Build precise start/end datetime from logDate + times
+      const startDT = entryDate + 'T' + (e.startTime || '00:00') + ':00';
+      const endDT   = entryDate + 'T' + (e.endTime   || e.startTime || '23:59') + ':00';
       await onSave({
         title: e.title.trim(),
         description: e.description.trim(),
         category: e.category,
         priority: 'Medium',
         status: 'Completed',
-        dueDate: todayStr(),
+        dueDate: todayStr(),          // due date = today (task deadline)
+        startDate: startDT,           // actual work start = logDate + startTime
+        endDate: endDT,               // actual work end   = logDate + endTime
         assignedTo: user?.id,
         assignedToName: user?.name,
-        projectId: e.projectId || null,
-        projectName: proj?.projectName || null,
-        estimatedHours: e.hours || null,
+        projectId: isOther ? null : (e.projectId || null),
+        projectName: isOther ? null : (proj?.projectName || null),
+        otherContext: isOther ? (e.otherProject || 'Other work') : null,
+        estimatedHours: hrs || null,
         relatedTo: '',
         completionPercent: 100,
         isSelfLog: true,
+        workLog: {
+          workDone: e.title.trim(),
+          description: e.description.trim(),
+          hoursSpent: hrs,
+          startTime: e.startTime || null,
+          endTime: e.endTime || null,
+          logDate: entryDate,           // so TaskUpdateEntity.updatedAt = logDate
+          updateType: 'Task Completed',
+          newStatus: 'Completed',
+          completionPercent: 100,
+        },
       });
     }
     setSaving(false);
@@ -479,7 +516,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
 
   return (
     <div className="tm-overlay" onClick={onClose}>
-      <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()} style={{width:'min(780px,97vw)',maxHeight:'92vh'}}>
         <div className="tm-mhdr">
           <div>
             <h2>⚡ Quick Work Log</h2>
@@ -487,7 +524,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
           </div>
           <button className="tm-xbtn" onClick={onClose}>✕</button>
         </div>
-        <div className="tm-mbody">
+        <div className="tm-mbody" style={{padding:'20px 24px',overflowY:'auto'}}>
           <div style={{background:'#f0f7ff',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:12,color:'#2563eb',display:'flex',alignItems:'center',gap:8}}>
             <span>💡</span>
             <span>Use this to quickly record all work done today without setting up full tasks. Each row = one activity.</span>
@@ -502,7 +539,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
                       placeholder={`Activity ${i+1} — e.g. Client call with Raju Solar, drafted proposal...`}
                       value={e.title} onChange={ev => setField(e.id,'title',ev.target.value)}
                     />
-                    <textarea className="tm-ta" rows={2} style={{fontSize:12,lineHeight:1.6}}
+                    <textarea className="tm-ta" rows={3} style={{fontSize:12,lineHeight:1.6,minHeight:65}}
                       placeholder="Describe what you did, what was the outcome, any decisions made..."
                       value={e.description} onChange={ev => setField(e.id,'description',ev.target.value)}
                     />
@@ -511,14 +548,27 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
                     style={{border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',fontSize:16,padding:'8px 4px',lineHeight:1,flexShrink:0}}
                     disabled={entries.length === 1}>✕</button>
                 </div>
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 80px',gap:8}}>
+                {/* FIX #2: Date + time fields */}
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 80px',gap:8,marginBottom:8}}>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>📅 Date</label><input type="date" className="tm-inp" value={e.logDate||todayStr()} onChange={ev => setField(e.id,'logDate',ev.target.value)} /></div>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 Start</label><input type="time" className="tm-inp" value={e.startTime||''} onChange={ev => setField(e.id,'startTime',ev.target.value)} /></div>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 End</label><input type="time" className="tm-inp" value={e.endTime||''} onChange={ev => setField(e.id,'endTime',ev.target.value)} /></div>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>⏱ Hrs</label><input type="number" className="tm-inp" min="0" step="0.5" placeholder="hrs" value={e.hours} onChange={ev => setField(e.id,'hours',ev.target.value)} /></div>
+                </div>
+
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,alignItems:'start'}}>
                   <select className="tm-sel" value={e.category} onChange={ev => setField(e.id,'category',ev.target.value)}>
                     {CATEGORIES.map(c => <option key={c}>{c}</option>)}
                   </select>
-                  <select className="tm-sel" value={e.projectId} onChange={ev => setField(e.id,'projectId',ev.target.value)}>
+                  <select className="tm-sel" style={{width:'100%',maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis'}} value={e.projectId} onChange={ev => setField(e.id,'projectId',ev.target.value)}>
                     <option value="">— No project —</option>
                     {projects.map(p => <option key={p.projectUniqueId||p.id} value={p.projectUniqueId||p.id}>{p.projectName}</option>)}
+                    <option value="OTHER">📌 Other / Ad-hoc</option>
                   </select>
+                  {e.projectId === 'OTHER' && (
+                    <input className="tm-inp" style={{marginTop:6}} placeholder="Describe context — e.g. Admin, Training, Internal..."
+                      value={e.otherProject||''} onChange={ev => setField(e.id,'otherProject',ev.target.value)} />
+                  )}
                   <input type="number" className="tm-inp" min="0" step="0.5" placeholder="hrs"
                     value={e.hours} onChange={ev => setField(e.id,'hours',ev.target.value)} />
                 </div>
@@ -896,7 +946,17 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
   const [selectedEmp,  setSelectedEmp]  = useState(null);
   const [dateFrom,     setDateFrom]     = useState('');
   const [dateTo,       setDateTo]       = useState('');
+  const [taskSearchInput, setTaskSearchInput] = useState('');
   const [taskSearch,   setTaskSearch]   = useState('');
+  const teamSearchDebounce = useRef(null);
+  const handleTeamSearchChange = (val) => {
+    // No setTaskSearchInput here — avoids re-render and cursor loss
+    if (teamSearchDebounce.current) clearTimeout(teamSearchDebounce.current);
+    teamSearchDebounce.current = setTimeout(() => {
+      setTaskSearchInput(val);
+      setTaskSearch(val);
+    }, 500);
+  };
   const [logView,      setLogView]      = useState('table');   // 'table' | 'logs' | 'grid'
   const [showSug,      setShowSug]      = useState(false);
   const [teamTasks,    setTeamTasks]    = useState([]);
@@ -1000,7 +1060,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
       status:        task.status      || '—',
       dueDate:       task.dueDate     || '—',
       estHours:      task.estimatedHours ? String(task.estimatedHours) : '—',
-      totalHours:    parseFloat(task.totalHoursSpent) || 0,
+      totalHours:    computeHours(task),  // FIX #4: computed from updates
       pct:           task.completionPercent || 0,
       updateCount:   updates.length,
       updates:       updates,
@@ -1086,6 +1146,10 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                   <button onClick={doClear} style={{border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',padding:'0 10px',fontSize:13}}>✕</button>
                 )}
               </div>
+              {/* FIX #5: warn user to click suggestion */}
+              {empSearch && !selectedEmp && (
+                <div style={{fontSize:10,color:'#f59e0b',marginTop:2}}>⚠ Click a name below to filter</div>
+              )}
               {showSug && suggestions.length > 0 && (
                 <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.12)',zIndex:300,overflow:'hidden',maxHeight:280,overflowY:'auto'}}>
                   {suggestions.map(u => (
@@ -1118,8 +1182,8 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
             <div style={{position:'relative',display:'flex',alignItems:'center',flex:1,minWidth:160}}>
               <span style={{position:'absolute',left:10,fontSize:13,color:'#94a3b8',pointerEvents:'none'}}>🔍</span>
               <input style={{width:'100%',padding:'8px 30px 8px 32px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#fff',color:'#0f172a',boxSizing:'border-box'}}
-                placeholder="Search tasks, work done…" value={taskSearch} onChange={e => setTaskSearch(e.target.value)} />
-              {taskSearch && <button onClick={() => setTaskSearch('')} style={{position:'absolute',right:8,border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',fontSize:12}}>✕</button>}
+                placeholder="Search tasks, work done…" onChange={e => handleTeamSearchChange(e.target.value)} />
+              {taskSearch && <button onClick={() => { setTaskSearchInput(''); setTaskSearch(''); }} style={{position:'absolute',right:8,border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',fontSize:12}}>✕</button>}
             </div>
           </div>
 
@@ -1239,7 +1303,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           </div>
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          {r.totalHours > 0 ? <span className="tm-hours-pill">⏱ {r.totalHours}h</span> : <span style={{color:'#94a3b8'}}>—</span>}
+                          {r.totalHours > 0 ? <span className="tm-hours-pill">⏱ {r.totalHours.toFixed(1)}h</span> : <span style={{color:'#94a3b8'}}>—</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:12,color:'#475569',whiteSpace:'nowrap'}}>
                           {r.dueDate !== '—' ? fmtDate(r.dueDate) : '—'}
@@ -1301,7 +1365,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                                 🕐 {fmtTime(u.startTime)}{u.endTime?` → ${fmtTime(u.endTime)}`:''}
                                               </span>
                                             )}
-                                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {u.hoursSpent}h</span>}
+                                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {parseFloat(u.hoursSpent).toFixed(1)}h</span>}
                                             {u.statusChanged && (
                                               <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'1px 8px',borderRadius:5,fontWeight:600}}>
                                                 → {u.newStatus}
@@ -1418,7 +1482,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                 {fmtTime(u.startTime)}{u.endTime?` – ${fmtTime(u.endTime)}`:''}
                               </span>
                             )}
-                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {u.hoursSpent}h</span>}
+                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {parseFloat(u.hoursSpent).toFixed(1)}h</span>} {/* FIX #4 */}
                             {u.statusChanged && (
                               <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'2px 8px',borderRadius:5,fontWeight:700,border:'1px solid #6ee7b7'}}>
                                 ✓ → {u.newStatus}
@@ -1658,10 +1722,12 @@ export default function TaskManagement() {
   const [tasks, setTasks]       = useState([]);
   const [users, setUsers]       = useState([]);
   const [projects, setProjects] = useState([]);
-  const [loading, setLoading]   = useState(false);
+  const [loading, setLoading]         = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true); // only true on very first load
 
-  const [view, setView] = useState(() => localStorage.getItem('tm_view') || 'table');
-  const setViewAndStore = (v) => { setView(v); localStorage.setItem('tm_view', v); };
+  // View persists within the browser session (sessionStorage resets when tab closes)
+  const [view, setView] = useState(() => sessionStorage.getItem('tm_view') || 'table');
+  const setViewAndStore = (v) => { setView(v); sessionStorage.setItem('tm_view', v); };
   const [activeKpi, setActiveKpi] = useState('All');
   const [showAdd, setShowAdd]     = useState(false);
   const [editTask, setEditTask]   = useState(null);
@@ -1670,7 +1736,20 @@ export default function TaskManagement() {
   const [showBulkLog, setShowBulkLog]   = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
 
-  const [search, setSearch]       = useState('');
+  // FIX #3: debounced search — keeps cursor in place, avoids refetch on every keystroke
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch]           = useState('');
+  const searchDebounceRef = useRef(null);
+  const searchInputRef = useRef(null); // keeps cursor in place
+  const handleSearchChange = (val) => {
+    // Do NOT call setSearchInput here — that would re-render the input and lose cursor
+    // Only update the committed search state after debounce
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      setSearchInput(val); // track for clear button
+      setSearch(val);
+    }, 500);
+  };
   const [stFilter, setStFilter]   = useState('All');
   const [priFilter, setPriFilter] = useState('All');
   const [catFilter, setCatFilter] = useState('All');
@@ -1711,7 +1790,7 @@ export default function TaskManagement() {
         setTotalPages(d.totalPages || 1);
       } else { setTasks(mockTasks(user)); }
     } catch { setTasks(mockTasks(user)); }
-    finally { setLoading(false); }
+    finally { setLoading(false); setInitialLoading(false); }
   };
 
   // Fetch the current user's level from role_hierarchy (runs once on mount)
@@ -1776,41 +1855,39 @@ export default function TaskManagement() {
     overdue:   tasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled' && t.dueDate && t.dueDate < todayStr()).length,
     completed: tasks.filter(t => t.status === 'Completed').length,
     critical:  tasks.filter(t => t.priority === 'Critical' || t.priority === 'High').length,
-    hours:     tasks.flatMap(t => t.updates || []).reduce((s, u) => s + (parseFloat(u.hoursSpent) || 0), 0).toFixed(1),
+    hours:     tasks.reduce((s, t) => s + computeHours(t), 0).toFixed(1),  // FIX #4
   };
 
   /* ── CRUD ──────────────────────────────────────────────────────────── */
   const saveTask = async (form) => {
     const isNew = !form.id;
-    const assignedUser = users.find(u => String(u.id) === String(form.assignedTo));
-    const optimistic = {
-      ...form,
-      id: form.id || Date.now(),
-      taskCode: isNew ? `TSK-${String(tasks.length + 1).padStart(4, '0')}` : tasks.find(t => t.id === form.id)?.taskCode,
-      assignedToName: assignedUser?.name || (String(form.assignedTo) === String(user?.id) ? user?.name : '') || user?.name,
-      createdByName: user?.name, createdBy: user?.id,
-      completionPercent: form.completionPercent || 0, totalHoursSpent: 0, updates: [],
-      startedAt: null, closedAt: null, createdAt: new Date().toISOString(),
-    };
     try {
       const url = isNew ? `${API}/tasks` : `${API}/tasks/${form.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const r = await fetch(url, { method, credentials: 'include', headers: hdrs(user), body: JSON.stringify({ ...form, createdByName: user?.name }) });
-      if (r.ok) { showSuccess(isNew ? 'Task created!' : 'Task updated!'); loadTasks(); }
-      else throw new Error();
+      if (r.ok) {
+        const d = await r.json();
+        showSuccess(isNew ? 'Task created!' : 'Task updated!');
+        // Use server response directly so completionPercent/hours are accurate
+        if (d.success && d.data) {
+          if (isNew) setTasks(p => [d.data, ...p]);
+          else setTasks(p => p.map(t => t.id === form.id ? d.data : t));
+        }
+        loadTasks();
+      } else throw new Error();
     } catch {
-      if (isNew) setTasks(p => [optimistic, ...p]);
-      else setTasks(p => p.map(t => t.id === form.id ? { ...t, ...optimistic } : t));
-      showSuccess(isNew ? 'Task created!' : 'Task updated!');
+      showSuccess(isNew ? 'Task created (offline)!' : 'Task updated (offline)!');
+      loadTasks();
     }
     setShowAdd(false); setEditTask(null);
   };
 
-  const saveLog = async ({ taskId, workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes }) => {
+  const saveLog = async ({ taskId, workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, logDate }) => {
+    const entryDate = logDate ? new Date(logDate + 'T' + (startTime || '00:00') + ':00').toISOString() : new Date().toISOString();
     const now = new Date().toISOString();
-    const update = { id: Date.now(), updatedByName: user?.name, updatedAt: now, workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, statusChanged: tasks.find(t => t.id === taskId)?.status !== newStatus };
+    const update = { id: Date.now(), updatedByName: user?.name, updatedAt: entryDate, workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, statusChanged: tasks.find(t => t.id === taskId)?.status !== newStatus };
     try {
-      const r = await fetch(`${API}/tasks/${taskId}/update`, { method: 'POST', credentials: 'include', headers: hdrs(user), body: JSON.stringify({ workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, updatedByName: user?.name }) });
+      const r = await fetch(`${API}/tasks/${taskId}/update`, { method: 'POST', credentials: 'include', headers: hdrs(user), body: JSON.stringify({ workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, updatedByName: user?.name, logDate: logDate || todayStr() }) });
       if (r.ok) { showSuccess('Update logged! ✅'); loadTasks(); setLogTask(null); return; }
     } catch {}
     // Optimistic fallback
@@ -1906,7 +1983,11 @@ export default function TaskManagement() {
     loadTasks(1, sz);
   };
 
-  if (loading) return <CrmPreloader />;
+  // FIX: Never unmount the page for search/filter refreshes — only initial load uses preloader
+  // (removed full-page `if (loading) return <CrmPreloader />` — it destroyed uncontrolled inputs)
+
+  // Show full-page preloader ONLY on first load (not on filter/search refreshes)
+  if (initialLoading && tasks.length === 0) return <CrmPreloader />;
 
   return (
     <div className="tm-root">
@@ -1960,7 +2041,7 @@ export default function TaskManagement() {
       {view === 'board' && (
         <>
           <div className="tm-filters-bar">
-            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />{search && <button className="tm-clr" onClick={() => setSearch('')}>✕</button>}</div>
+            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
             {/* Date range for board view — calls backend */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>From</span>
@@ -1983,7 +2064,7 @@ export default function TaskManagement() {
       {view === 'table' && (
         <>
           <div className="tm-filters-bar">
-            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks, projects, code…" value={search} onChange={e => setSearch(e.target.value)} />{search && <button className="tm-clr" onClick={() => setSearch('')}>✕</button>}</div>
+            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks, projects, code…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
             {/* Date range — available to ALL users, triggers backend call */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>From</span>
@@ -2004,7 +2085,12 @@ export default function TaskManagement() {
           </div>
 
           <div className="tm-card">
-            {filtered.length === 0 ? (
+            {loading ? (
+              <div style={{padding:'40px 24px',textAlign:'center',color:'#94a3b8'}}>
+                <div style={{fontSize:22,marginBottom:8}}>⏳</div>
+                <p style={{fontSize:13,margin:0}}>Loading…</p>
+              </div>
+            ) : filtered.length === 0 ? (
               <div className="tm-empty"><div style={{ fontSize: 36 }}>📋</div><p>No tasks match your filters.</p></div>
             ) : (
               <>
@@ -2020,7 +2106,8 @@ export default function TaskManagement() {
                     <tbody>
                       {paged.map(task => {
                         const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
-                        const totalH = (task.updates || []).reduce((s, u) => s + (parseFloat(u.hoursSpent) || 0), 0);
+                        // Use updates-based sum; fall back to DB field for legacy tasks
+                        const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
                         return (
                           <tr key={task.id} className={`tm-tr ${isOD ? 'tm-tr-od' : ''} ${task.status === 'Completed' ? 'tm-tr-done' : ''}`} onClick={() => setDetail(task)}>
                             <td>

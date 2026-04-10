@@ -265,31 +265,46 @@
 .leads-enquiries-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   min-width: 900px;
 }
 
-/* ── Per-column fixed widths — header and data cells stay aligned ─────────── */
-.leads-enquiries-table th:nth-child(1),
-.leads-enquiries-table td:nth-child(1) { width: 18%; text-align: left; }    /* Client Name */
+/* ── Per-column alignment via data-col attribute (works regardless of visible column order/count) ── */
+.leads-enquiries-table th[data-col="name"],
+.leads-enquiries-table td[data-col="name"] { width: 16%; text-align: left; }
 
-.leads-enquiries-table th:nth-child(2),
-.leads-enquiries-table td:nth-child(2) { width: 18%; text-align: left; }    /* Email */
+.leads-enquiries-table th[data-col="email"],
+.leads-enquiries-table td[data-col="email"] { width: 16%; text-align: left; }
 
-.leads-enquiries-table th:nth-child(3),
-.leads-enquiries-table td:nth-child(3) { width: 12%; text-align: left; }    /* Phone */
+.leads-enquiries-table th[data-col="phone"],
+.leads-enquiries-table td[data-col="phone"] { width: 11%; text-align: left; }
 
-.leads-enquiries-table th:nth-child(4),
-.leads-enquiries-table td:nth-child(4) { width: 10%; text-align: left; }    /* Group */
+.leads-enquiries-table th[data-col="groupName"],
+.leads-enquiries-table td[data-col="groupName"] { width: 9%; text-align: left; }
 
-.leads-enquiries-table th:nth-child(5),
-.leads-enquiries-table td:nth-child(5) { width: 10%; text-align: center; }  /* Priority — badge, center */
+.leads-enquiries-table th[data-col="subGroupName"],
+.leads-enquiries-table td[data-col="subGroupName"] { width: 10%; text-align: left; }
 
-.leads-enquiries-table th:nth-child(6),
-.leads-enquiries-table td:nth-child(6) { width: 10%; text-align: center; }  /* Status — badge, center */
+.leads-enquiries-table th[data-col="capacity"],
+.leads-enquiries-table td[data-col="capacity"] { width: 8%; text-align: center; }
 
-.leads-enquiries-table th:nth-child(7),
-.leads-enquiries-table td:nth-child(7) { width: 22%; text-align: center; }  /* Actions */
+.leads-enquiries-table th[data-col="priority"],
+.leads-enquiries-table td[data-col="priority"] { width: 8%; text-align: center; }
+
+.leads-enquiries-table th[data-col="status"],
+.leads-enquiries-table td[data-col="status"] { width: 9%; text-align: center; }
+
+.leads-enquiries-table th[data-col="source"],
+.leads-enquiries-table td[data-col="source"] { width: 8%; text-align: left; }
+
+.leads-enquiries-table th[data-col="assignedToName"],
+.leads-enquiries-table td[data-col="assignedToName"] { width: 9%; text-align: left; }
+
+.leads-enquiries-table th[data-col="createdAt"],
+.leads-enquiries-table td[data-col="createdAt"] { width: 9%; text-align: left; }
+
+.leads-enquiries-table th[data-col="actions"],
+.leads-enquiries-table td[data-col="actions"] { width: 14%; text-align: center; }
 
 .leads-enquiries-table thead {
   background-color: #f9fafb;
@@ -329,9 +344,11 @@
   justify-content: center;
 }
 
-/* Priority & Status header — center th-content */
-.leads-enquiries-table th:nth-child(5) .th-content,
-.leads-enquiries-table th:nth-child(6) .th-content {
+/* Priority, Status, Capacity & Actions header — center th-content */
+.leads-enquiries-table th[data-col="capacity"] .th-content,
+.leads-enquiries-table th[data-col="priority"] .th-content,
+.leads-enquiries-table th[data-col="status"] .th-content,
+.leads-enquiries-table th[data-col="actions"] .th-content {
   justify-content: center;
 }
 
@@ -1979,6 +1996,8 @@
 }
 .ld-pact-btn:hover { border-color: #2563eb; color: #2563eb; background: #eff6ff; }
 .ld-pact-edit:hover { border-color: #059669; color: #059669; background: #ecfdf5; }
+.ld-pact-delete { border-color: #fca5a5 !important; color: #dc2626 !important; background: #fff5f5; }
+.ld-pact-delete:hover { border-color: #dc2626 !important; background: #fee2e2; }
 
 /* ── History tab ── */
 .ld-history-list { display: flex; flex-direction: column; gap: 0; }
@@ -2482,4 +2501,110 @@
   font-size: 12px;
   color: #64748b;
   font-style: italic;
+}
+/* ── Offline proposal PDF buttons ─────────────────────────────────────────── */
+.ld-pact-offline-view {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+.ld-pact-offline-view:hover { background: #dbeafe; }
+
+.ld-pact-offline-dl {
+  background: #f0fdf4;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+.ld-pact-offline-dl:hover { background: #dcfce7; }
+
+.ld-pact-upload {
+  background: #faf5ff;
+  color: #7c3aed;
+  border-color: #e9d5ff;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 10px;
+  border: 1px solid;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .15s;
+}
+.ld-pact-upload:hover { background: #ede9fe; }
+
+/* Offline PDF badge on proposal card */
+.ld-offline-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── PDF Viewer Modal ─────────────────────────────────────────────────────── */
+.ld-pdf-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.ld-pdf-modal {
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 96vw);
+  height: min(88vh, 860px);
+  box-shadow: 0 24px 60px rgba(0,0,0,.35);
+}
+
+.ld-pdf-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #1e3a5f;
+  flex-shrink: 0;
+}
+
+.ld-pdf-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #f1f5f9;
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ld-pdf-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.ld-pdf-modal-body {
+  flex: 1;
+  overflow: hidden;
+  background: #e5e7eb;
+}
+
+.ld-pdf-modal-body iframe {
+  display: block;
 }

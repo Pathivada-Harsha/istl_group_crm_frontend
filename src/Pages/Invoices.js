@@ -5,6 +5,7 @@ import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
+import ConfirmationModal from '../components/ConfirmationModal';
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
@@ -18,8 +19,13 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const InvoicesManagementPage = () => {
   const [invoices, setInvoices] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const invoicesPerms = pagePermissions?.INVOICES || [];
+  const canCreate = invoicesPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = invoicesPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = invoicesPerms.includes('DELETE') && !isAccountsExecutive;
   const { toasts, removeToast, showSuccess, showError } = useToast();
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
   const [loading, setLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
   const [filters, setFilters] = useState({
@@ -54,9 +60,12 @@ const InvoicesManagementPage = () => {
     subGroups: false,
     projects: false
   });
+  const [orderBooks, setOrderBooks] = useState([]);
+  const [selectedOrderBookId, setSelectedOrderBookId] = useState('');
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [filteredItems, setFilteredItems] = useState({});
   const [showDropdown, setShowDropdown] = useState({});
+  const [loadingOrderBookItems, setLoadingOrderBookItems] = useState(false);
   
   // Customer data
   const [customerData, setCustomerData] = useState(null);
@@ -95,6 +104,83 @@ const InvoicesManagementPage = () => {
       console.error('Failed to fetch order book items:', error);
       setOrderBookItems([]);
     }
+  };
+
+  // Step 1: Fetch all order books for this project and populate the dropdown
+  const fetchProjectOrderBookItems = async (pId, gName, sgName) => {
+    if (!pId) { setOrderBooks([]); setOrderBookItems([]); setSelectedOrderBookId(''); return; }
+    setLoadingOrderBookItems(true);
+    try {
+      // Send groupName + subGroupName + projectId so it works whether or not
+      // the backend supports the projectId param (old or new backend).
+      // Client-side filter by projectId guarantees correctness either way.
+      const group = encodeURIComponent(gName || modalGroupName || '');
+      const subGroup = encodeURIComponent(sgName || modalSubGroupName || '');
+      const obRes = await fetch(
+        `${API_BASE_URL}/order-book/getAll?page=0&size=200&groupName=${group}&subGroupName=${subGroup}&projectId=${encodeURIComponent(pId)}`,
+        { credentials: 'include', headers: getAuthHeaders() }
+      );
+      if (!obRes.ok) throw new Error();
+      const obData = await obRes.json();
+      // Filter client-side by projectId to handle old backend that ignores the param
+      const all = (obData.data || obData.content || []).filter(ob => ob.projectId === pId);
+      setOrderBooks(all);
+      setSelectedOrderBookId('');
+      setOrderBookItems([]);
+      // If exactly one order book, auto-select and load items
+      if (all.length === 1) {
+        setSelectedOrderBookId(String(all[0].id));
+        await fetchOrderBookItemsById(all[0].id);
+      }
+    } catch { setOrderBooks([]); setOrderBookItems([]); }
+    finally { setLoadingOrderBookItems(false); }
+  };
+
+  // Step 2: Fetch items for a specific order book (called when user selects from dropdown)
+  const fetchOrderBookItemsById = async (orderBookId) => {
+    if (!orderBookId) { setOrderBookItems([]); return; }
+    setLoadingOrderBookItems(true);
+    try {
+      const itemsRes = await fetch(
+        `${API_BASE_URL}/order-book/${orderBookId}/items-with-tracking`,
+        { credentials: 'include', headers: getAuthHeaders() }
+      );
+      if (!itemsRes.ok) throw new Error();
+      const itemsData = await itemsRes.json();
+      setOrderBookItems(itemsData.success ? (itemsData.data || []) : (Array.isArray(itemsData) ? itemsData : []));
+    } catch { setOrderBookItems([]); }
+    finally { setLoadingOrderBookItems(false); }
+  };
+
+  // Handle order book selection from dropdown
+  const handleOrderBookSelect = async (e) => {
+    const obId = e.target.value;
+    setSelectedOrderBookId(obId);
+    setOrderBookItems([]);
+    if (obId) await fetchOrderBookItemsById(obId);
+  };
+
+  const handleLoadOrderBookItems = () => {
+    if (orderBookItems.length === 0) { showError('No order book items available'); return; }
+    const loaded = orderBookItems.map(item => {
+      const totalQty = parseFloat(item.quantity) || 0;
+      const allocatedQty = parseFloat(item.invoicedQty) || 0;  // qty already invoiced
+      const remainingQty = Math.max(0, totalQty - allocatedQty);
+      return {
+        description: item.itemName || '',
+        quantity: remainingQty,
+        unitPrice: parseFloat(item.unitPrice) || 0,
+        taxPercent: parseFloat(item.taxPercent) || 18,
+        unitType: normalizeUnit(item.unit),
+        orderBookItemId: item.id,
+        maxQty: remainingQty,
+        totalQty,
+        allocatedQty
+      };
+    }).filter(it => it.maxQty > 0);
+    if (loaded.length === 0) { showError('All order book items are fully invoiced already'); return; }
+    setFormData(prev => ({ ...prev, items: loaded }));
+    showSuccess(`Loaded ${loaded.length} item${loaded.length !== 1 ? 's' : ''} from order book`);
   };
 
   // Update payment form data
@@ -238,13 +324,15 @@ const fetchStats = async () => {
   try {
     const params = new URLSearchParams();
 
-    // Existing filters
+    // Scope filters
     if (groupName) params.append("groupId", groupName);
     if (subGroupName) params.append("subGroupId", subGroupName);
     if (projectId) params.append("projectId", projectId);
 
-    // ✅ NEW: createdBy (same as user.id)
-    if (user?.id) params.append("createdBy", user.id);
+    // Only apply createdBy filter for non-admin users.
+    // Admins should see company-wide KPI numbers, not just their own invoices.
+    const isAdmin = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
+    if (user?.id && !isAdmin) params.append("createdBy", user.id);
 
     const response = await fetch(
       `${API_BASE_URL}/invoices/summary?${params.toString()}`,
@@ -280,16 +368,21 @@ const fetchStats = async () => {
 
 
   /**
-   * Fetch modal groups
+   * Fetch modal groups — uses direct fetch with session credentials
+   * (filterApi uses localStorage Bearer token which is empty in session-based auth)
    */
   const fetchModalGroups = async () => {
     setModalDropdownLoading(prev => ({ ...prev, groups: true }));
     try {
-      const groups = await filterApi.getAllGroups();
-      setModalGroups(groups || []);
+      const response = await fetch(`${API_BASE_URL}/filters/groups`, {
+        credentials: 'include',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) throw new Error('Failed to fetch groups');
+      const groups = await response.json();
+      setModalGroups(Array.isArray(groups) ? groups : []);
     } catch (error) {
       console.error('Failed to fetch groups:', error);
-      showError('Failed to load groups');
       setModalGroups([]);
     } finally {
       setModalDropdownLoading(prev => ({ ...prev, groups: false }));
@@ -297,22 +390,24 @@ const fetchStats = async () => {
   };
 
   /**
-   * Fetch modal subgroups
+   * Fetch modal subgroups — uses direct fetch with session credentials
    */
   const fetchModalSubGroups = async (groupName) => {
     if (!groupName) {
       setModalSubGroups([]);
-      setModalProjects([]);
       return;
     }
-
     setModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
     try {
-      const subGroups = await filterApi.getSubGroups(groupName);
-      setModalSubGroups(subGroups || []);
+      const response = await fetch(
+        `${API_BASE_URL}/filters/subgroups?groupName=${encodeURIComponent(groupName)}`,
+        { credentials: 'include', headers: getAuthHeaders() }
+      );
+      if (!response.ok) throw new Error('Failed to fetch subgroups');
+      const subGroups = await response.json();
+      setModalSubGroups(Array.isArray(subGroups) ? subGroups : []);
     } catch (error) {
       console.error('Failed to fetch subgroups:', error);
-      showError('Failed to load categories');
       setModalSubGroups([]);
     } finally {
       setModalDropdownLoading(prev => ({ ...prev, subGroups: false }));
@@ -347,7 +442,7 @@ const fetchStats = async () => {
   const fetchCustomerByProject = async (projectId) => {
     if (!projectId) {
       setCustomerData(null);
-      setOrderBookItems([]);
+      setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
       return;
     }
 
@@ -361,16 +456,16 @@ const fetchStats = async () => {
         const data = await response.json();
         setCustomerData(data);
         setFormData(prev => ({ ...prev, customerId: data.customerId }));
-        fetchOrderBookItemsForCustomer(data.customerId);
+        // Order book items are fetched by project scope via fetchProjectOrderBookItems — not by customer
       } else {
         setCustomerData(null);
-        setOrderBookItems([]);
+        setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
         showError('Customer not found for this project');
       }
     } catch (error) {
       console.error('Failed to fetch customer:', error);
       setCustomerData(null);
-      setOrderBookItems([]);
+      setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     }
   };
 
@@ -405,17 +500,9 @@ const fetchStats = async () => {
     setModalProjects([]);
     setCustomerData(null);
 
-    setFormData({
-      ...formData,
-      groupId: newGroupName,
-      subGroupId: '',
-      projectId: '',
-      customerId: null
-    });
-
-    if (newGroupName) {
-      fetchModalSubGroups(newGroupName);
-    }
+    setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
+    setFormData({ ...formData, groupId: newGroupName, subGroupId: '', projectId: '', customerId: null, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
+    if (newGroupName) { fetchModalSubGroups(newGroupName); }
   };
 
   /**
@@ -428,16 +515,9 @@ const fetchStats = async () => {
     setModalProjects([]);
     setCustomerData(null);
 
-    setFormData({
-      ...formData,
-      subGroupId: newSubGroupName,
-      projectId: '',
-      customerId: null
-    });
-
-    if (modalGroupName && newSubGroupName) {
-      fetchModalProjects(modalGroupName, newSubGroupName);
-    }
+    setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
+    setFormData({ ...formData, subGroupId: newSubGroupName, projectId: '', customerId: null, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
+    if (modalGroupName && newSubGroupName) { fetchModalProjects(modalGroupName, newSubGroupName); }
   };
 
   /**
@@ -446,14 +526,12 @@ const fetchStats = async () => {
   const handleModalProjectChange = (e) => {
     const newProjectId = e.target.value;
     setModalProjectId(newProjectId);
-
-    setFormData({
-      ...formData,
-      projectId: newProjectId
-    });
-
+    setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
+    setFormData({ ...formData, projectId: newProjectId, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
     if (newProjectId) {
       fetchCustomerByProject(newProjectId);
+      // Pass group/subgroup explicitly to avoid stale closure issues
+      fetchProjectOrderBookItems(newProjectId, modalGroupName, modalSubGroupName);
     }
   };
 
@@ -507,9 +585,8 @@ const fetchStats = async () => {
       status: 'DRAFT'
     });
     setCustomerData(null);
-    setModalGroupName('');
-    setModalSubGroupName('');
-    setModalProjectId('');
+    setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
+    setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setEditMode(false);
 
     fetchModalGroups();
@@ -519,7 +596,7 @@ const fetchStats = async () => {
   /**
    * Edit invoice
    */
-  const handleEditInvoice = (invoice) => {
+  const handleEditInvoice = async (invoice) => {
     setFormData({
       customerId: invoice.customerId,
       projectId: invoice.projectId,
@@ -532,6 +609,20 @@ const fetchStats = async () => {
     });
     setSelectedInvoice(invoice);
     setEditMode(true);
+
+    // Await groups BEFORE opening the modal so the select is never empty
+    await fetchModalGroups();
+
+    // Set the selected group after groups are confirmed loaded
+    if (invoice.groupId) {
+      setModalGroupName(invoice.groupId);
+      // Also pre-load subgroups for the saved group
+      await fetchModalSubGroups(invoice.groupId);
+      if (invoice.subGroupId) {
+        setModalSubGroupName(invoice.subGroupId);
+      }
+    }
+
     setShowCreateModal(true);
   };
 
@@ -609,7 +700,8 @@ const fetchStats = async () => {
           quantity: parseFloat(item.quantity),
           unitPrice: parseFloat(item.unitPrice),
           taxPercent: parseFloat(item.taxPercent),
-          unitType: item.unitType
+          unitType: item.unitType,
+          orderBookItemId: item.orderBookItemId || null
         }))
       };
 
@@ -700,10 +792,17 @@ const fetchStats = async () => {
   /**
    * Delete invoice
    */
-  const handleDeleteInvoice = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this invoice?')) {
-      return;
-    }
+  const handleDeleteInvoice = (id) => {
+    if (!canDelete) { showError('No permission to delete invoices'); return; }
+    setConfirmModal({
+      show: true, title: 'Delete Invoice',
+      message: 'Are you sure you want to delete this invoice? This action cannot be undone.',
+      type: 'error',
+      onConfirm: () => performDeleteInvoice(id)
+    });
+  };
+  const performDeleteInvoice = async (id) => {
+    setConfirmModal({ show: false });
 
     setLoading(true);
     try {
@@ -766,6 +865,14 @@ const fetchStats = async () => {
     <div className="Invoices-page-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
 
       {/* Breadcrumb */}
       <div className="Invoices-page-breadcrumb">
@@ -816,7 +923,7 @@ const fetchStats = async () => {
         </div>
 
         <div className="Invoices-page-actions">
-          <button className="Invoices-page-btn-primary" onClick={handleCreateNew}>
+          <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create New Invoice"}>
             + Create New Invoice
           </button>
         </div>
@@ -900,9 +1007,10 @@ const fetchStats = async () => {
                         <Eye size={16} />
                       </button>
                       <button
-                        className="Invoices-page-action-btn Invoices-page-btn-edit"
-                        onClick={() => handleEditInvoice(invoice)}
-                        title="Edit"
+                        className={`Invoices-page-action-btn Invoices-page-btn-edit${!canEdit ? ' action-btn-disabled' : ''}`}
+                        onClick={() => canEdit && handleEditInvoice(invoice)}
+                        title={canEdit ? "Edit" : "No edit permission"}
+                        disabled={!canEdit}
                       >
                         <Edit2 size={16} />
                       </button>
@@ -914,12 +1022,14 @@ const fetchStats = async () => {
                         <Download size={16} />
                       </button>
                       <button
-                        className="Invoices-page-action-btn Invoices-page-btn-payment"
-                        onClick={() => handleRecordPayment(invoice)}
-                        title="Record Payment"
+                        className={`Invoices-page-action-btn Invoices-page-btn-payment${!canEdit ? ' action-btn-disabled' : ''}`}
+                        onClick={() => canEdit && handleRecordPayment(invoice)}
+                        title={canEdit ? "Record Payment" : "No permission"}
+                        disabled={!canEdit}
                       >
                         <FaIndianRupeeSign size={16} />
                       </button>
+                      {canDelete && (
                       <button
                         className="Invoices-page-action-btn Invoices-page-btn-delete"
                         onClick={() => handleDeleteInvoice(invoice.id)}
@@ -927,6 +1037,7 @@ const fetchStats = async () => {
                       >
                         <Trash2 size={16} />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -985,7 +1096,7 @@ const fetchStats = async () => {
 
       {/* View Invoice Modal */}
       {showInvoiceModal && selectedInvoice && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowInvoiceModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal Invoices-page-modal-large" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>Invoice Details - {selectedInvoice.invoiceNo}</h2>
@@ -1110,7 +1221,7 @@ const fetchStats = async () => {
 
       {/* Create/Edit Invoice Modal */}
       {showCreateModal && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal Invoices-page-modal-xlarge" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>{editMode ? 'Edit Invoice' : 'Create New Invoice'}</h2>
@@ -1176,7 +1287,108 @@ const fetchStats = async () => {
                       </select>
                     </div>
 
+
                   </div>
+
+                  {/* Order Book Section — shown once a project is selected */}
+                  {modalProjectId && (
+                    <div style={{ marginTop: '14px' }}>
+                      {loadingOrderBookItems ? (
+                        <div style={{ padding: '12px 16px', background: '#dbeafe', borderRadius: '8px', fontSize: '13px', color: '#1e40af' }}>
+                          🔄 Loading order books…
+                        </div>
+                      ) : orderBooks.length === 0 ? (
+                        /* No order books at all for this project */
+                        <div style={{ padding: '16px', background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>❌ No Order Book Found</div>
+                          <div style={{ fontSize: '13px', color: '#991b1b' }}>No order book is linked to this project yet.</div>
+                        </div>
+                      ) : (
+                        /* One or more order books — show dropdown + items */
+                        <div style={{ padding: '16px', background: '#fef3c7', border: '2px solid #fbbf24', borderRadius: '8px' }}>
+                          <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            📦 Select Order Book
+                          </h4>
+
+                          {/* Order book dropdown */}
+                          <div style={{ marginBottom: '12px' }}>
+                            <select
+                              value={selectedOrderBookId}
+                              onChange={handleOrderBookSelect}
+                              style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '6px', border: '1px solid #fbbf24', background: 'white' }}
+                            >
+                              <option value="">-- Select an Order Book --</option>
+                              {orderBooks.map(ob => (
+                                <option key={ob.id} value={ob.id}>
+                                  {ob.poNumber || ob.orderBookNo} — {ob.orderTitle ? (ob.orderTitle.length > 40 ? ob.orderTitle.substring(0, 40) + '...' : ob.orderTitle) : 'No Title'}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Items preview + load button */}
+                          {selectedOrderBookId && (
+                            loadingOrderBookItems ? (
+                              <div style={{ fontSize: '13px', color: '#92400e' }}>🔄 Loading items…</div>
+                            ) : orderBookItems.length === 0 ? (
+                              <div style={{ fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                            ) : (
+                              <>
+                                {/* Summary + Load button */}
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: 8 }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e' }}>
+                                    📋 {orderBookItems.length} item{orderBookItems.length !== 1 ? 's' : ''} in order book
+                                    <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 8 }}>
+                                      ({orderBookItems.filter(it => Math.max(0, (parseFloat(it.quantity)||0) - (parseFloat(it.invoicedQty)||0)) > 0).length} with remaining qty)
+                                    </span>
+                                  </div>
+                                  <button
+                                    className="Invoices-page-btn-primary"
+                                    onClick={handleLoadOrderBookItems}
+                                    style={{ fontSize: '13px', padding: '6px 14px' }}
+                                  >
+                                    📥 Load Items into Invoice
+                                  </button>
+                                </div>
+
+                                {/* Items table */}
+                                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #fde68a', borderRadius: '6px', background: 'white' }}>
+                                  <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                                    <thead>
+                                      <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
+                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Item</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Total Qty</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Invoiced</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Remaining</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {orderBookItems.map((item, idx) => {
+                                        const total = parseFloat(item.quantity) || 0;
+                                        const done  = parseFloat(item.invoicedQty) || 0;
+                                        const remaining = Math.max(0, total - done);
+                                        return (
+                                          <tr key={idx} style={{ borderBottom: '1px solid #fef9c3', background: remaining === 0 ? '#fef9f9' : 'white' }}>
+                                            <td style={{ padding: '7px 10px', color: remaining === 0 ? '#9ca3af' : '#111827' }}>
+                                              {item.itemName}
+                                              {remaining === 0 && <span style={{ marginLeft: 6, fontSize: '10px', color: '#ef4444', fontWeight: 600 }}>FULLY INVOICED</span>}
+                                            </td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: '#374151' }}>{total} {item.unit || ''}</td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: '#f59e0b' }}>{done}</td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: remaining > 0 ? '#059669' : '#ef4444' }}>{remaining}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </>
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {customerData && (
@@ -1224,134 +1436,122 @@ const fetchStats = async () => {
                 <div className="Invoices-page-form-section">
                   <div className="Invoices-page-section-header">
                     <h3>Invoice Items *</h3>
-                    <button className="Invoices-page-btn-add" onClick={addItem}>+ Add Item</button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {formData.items.some(it => it.orderBookItemId) && (
+                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 500 }}>📦 Loaded from order book</span>
+                      )}
+                      <button className="Invoices-page-btn-add" onClick={addItem}>+ Add Item</button>
+                    </div>
+                  </div>
+
+                  {/* ── Column header row ─────────────────────────── */}
+                  <div className="Invoices-page-item-header-row">
+                    <span>Description *</span>
+                    <span>Unit Type</span>
+                    <span>Qty</span>
+                    <span>Unit Price *</span>
+                    <span>Tax %</span>
+                    <span>Line Total</span>
+                    <span></span>
                   </div>
 
                   {formData.items.map((item, index) => (
                     <div key={index} className="Invoices-page-item-row">
-                      <div className="Invoices-page-item-fields">
-                        <div className="Invoices-page-form-group" style={{ flex: '2', position: 'relative' }}>
-                          <label>Description *</label>
-                          <input
-                            type="text"
-                            value={item.description}
-                            onChange={(e) => handleDescriptionChange(index, e.target.value)}
-                            onFocus={() => {
-                              if (item.description && item.description.length >= 2) {
-                                handleDescriptionChange(index, item.description);
-                              }
-                            }}
-                            placeholder="Start typing item name..."
-                          />
 
-                          {showDropdown[index] && filteredItems[index]?.length > 0 && (
-                            <div
-                              className="invoice-item-dropdown"
-                              style={{
-                                position: 'absolute',
-                                top: '100%',
-                                left: 0,
-                                right: 0,
-                                background: 'white',
-                                border: '1px solid #e2e8f0',
-                                borderRadius: '4px',
-                                boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                                maxHeight: '250px',
-                                overflowY: 'auto',
-                                zIndex: 1000,
-                                marginTop: '2px'
-                              }}
-                            >
-                              {filteredItems[index].map((obItem) => (
-                                <div
-                                  key={obItem.id}
-                                  onClick={() => selectOrderBookItem(index, obItem)}
-                                  style={{
-                                    padding: '10px 12px',
-                                    cursor: 'pointer',
-                                    borderBottom: '1px solid #f1f5f9',
-                                    transition: 'background-color 0.2s'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
-                                  onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
-                                >
-                                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
-                                    {obItem.itemName}
-                                  </div>
-                                  {obItem.specification && (
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginBottom: '2px' }}>
-                                      {obItem.specification}
-                                    </div>
-                                  )}
-                                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>
-                                    Order: {obItem.orderBookNo} | Qty: {obItem.quantity} {obItem.unit} |
-                                    Price: ₹{parseFloat(obItem.unitPrice).toFixed(2)}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="Invoices-page-form-group Invoices-page-form-group-small">
-                          <label>Unit Type</label>
-                          <UnitTypeDropdown
-                            value={item.unitType}
-                            onChange={(e) => updateItem(index, 'unitType', e.target.value)}
-                          />
-                        </div>
-
-                        <div className="Invoices-page-form-group Invoices-page-form-group-small">
-                          <label>Qty *</label>
-                          <input
-                            type="number"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value))}
-                       
-                          />
-                        </div>
-
-                        <div className="Invoices-page-form-group">
-                          <label>Unit Price *</label>
-                          <input
-                            type="number"
-                            value={item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
-                           
-                          />
-                        </div>
-
-                        <div className="Invoices-page-form-group Invoices-page-form-group-small">
-                          <label>Tax %</label>
-                          <select
-                            value={item.taxPercent}
-                            onChange={(e) => updateItem(index, 'taxPercent', parseFloat(e.target.value))}
-                          >
-                            <option value="0">0%</option>
-                            <option value="5">5%</option>
-                            <option value="12">12%</option>
-                            <option value="18">18%</option>
-                            <option value="28">28%</option>
-                          </select>
-                        </div>
-
-                        <div className="Invoices-page-form-group">
-                          <label>Line Total</label>
-                          <div className="Invoices-page-item-total">
-                            {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxPercent / 100))}
+                      {/* Col 1 — Description with autocomplete dropdown */}
+                      <div className="Invoices-page-ifield" style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          value={item.description}
+                          onChange={(e) => handleDescriptionChange(index, e.target.value)}
+                          onFocus={() => { if (item.description && item.description.length >= 2) handleDescriptionChange(index, item.description); }}
+                          placeholder="Item description…"
+                          className="Invoices-page-iinput"
+                        />
+                        {showDropdown[index] && filteredItems[index]?.length > 0 && (
+                          <div className="invoice-item-dropdown">
+                            {filteredItems[index].map((obItem) => (
+                              <div key={obItem.id} onClick={() => selectOrderBookItem(index, obItem)}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
+                              >
+                                <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 2 }}>{obItem.itemName}</div>
+                                {obItem.specification && <div style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>{obItem.specification}</div>}
+                                <div style={{ fontSize: 11, color: '#94a3b8' }}>Order: {obItem.orderBookNo} | Qty: {obItem.quantity} {obItem.unit} | ₹{parseFloat(obItem.unitPrice).toFixed(2)}</div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
+                        )}
                       </div>
 
-                      {formData.items.length > 1 && (
-                        <button
-                          className="Invoices-page-btn-remove"
-                          onClick={() => removeItem(index)}
-                          title="Remove item"
+                      {/* Col 2 — Unit Type */}
+                      <div className="Invoices-page-ifield">
+                        <UnitTypeDropdown
+                          value={item.unitType}
+                          onChange={(e) => updateItem(index, 'unitType', e.target.value)}
+                          className="Invoices-page-iinput"
+                        />
+                      </div>
+
+                      {/* Col 3 — Qty with max cap */}
+                      <div className="Invoices-page-ifield">
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          min={0}
+                          max={item.maxQty != null ? item.maxQty : undefined}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            const clamped = item.maxQty != null ? Math.min(val, item.maxQty) : val;
+                            updateItem(index, 'quantity', clamped);
+                          }}
+                          className={`Invoices-page-iinput${item.maxQty != null && item.quantity > item.maxQty ? ' Invoices-page-iinput-error' : ''}`}
+                          title={item.maxQty != null ? `Max: ${item.maxQty}` : ''}
+                        />
+                        {item.maxQty != null && (
+                          <span className="Invoices-page-qty-cap">max {item.maxQty}</span>
+                        )}
+                      </div>
+
+                      {/* Col 4 — Unit Price */}
+                      <div className="Invoices-page-ifield">
+                        <input
+                          type="number"
+                          value={item.unitPrice}
+                          onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value))}
+                          className="Invoices-page-iinput"
+                          placeholder="0.00"
+                        />
+                      </div>
+
+                      {/* Col 5 — Tax % */}
+                      <div className="Invoices-page-ifield">
+                        <select
+                          value={item.taxPercent}
+                          onChange={(e) => updateItem(index, 'taxPercent', parseFloat(e.target.value))}
+                          className="Invoices-page-iinput"
                         >
-                          ×
-                        </button>
-                      )}
+                          <option value="0">0%</option>
+                          <option value="5">5%</option>
+                          <option value="12">12%</option>
+                          <option value="18">18%</option>
+                          <option value="28">28%</option>
+                        </select>
+                      </div>
+
+                      {/* Col 6 — Line Total (read-only) */}
+                      <div className="Invoices-page-ifield Invoices-page-ifield-total">
+                        {formatCurrency(item.quantity * item.unitPrice * (1 + item.taxPercent / 100))}
+                      </div>
+
+                      {/* Col 7 — Remove */}
+                      <button
+                        className="Invoices-page-btn-remove"
+                        onClick={() => removeItem(index)}
+                        title="Remove item"
+                        style={{ visibility: formData.items.length > 1 ? 'visible' : 'hidden' }}
+                      >×</button>
+
                     </div>
                   ))}
 
@@ -1387,7 +1587,7 @@ const fetchStats = async () => {
 
       {/* Record Payment Modal */}
       {showPaymentModal && selectedInvoice && (
-        <div className="Invoices-page-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+        <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal" onClick={e => e.stopPropagation()}>
             <div className="Invoices-page-modal-header">
               <h2>Record Payment</h2>

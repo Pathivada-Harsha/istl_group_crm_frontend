@@ -159,24 +159,24 @@
 }
 
 .Invoices-page-btn-remove {
-  width: 24px;
-  height: 24px;
-  background-color: #fee2e2;
+  width: 26px;
+  height: 26px;
+  background: #fee2e2;
   color: #991b1b;
   border: none;
-  border-radius: 4px;
-  font-size: 16px;
+  border-radius: 5px;
+  font-size: 15px;
+  line-height: 1;
   cursor: pointer;
-  transition: all 0.2s;
-  flex-shrink: 0;
+  transition: background .15s;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0;
+  align-self: center;
 }
+.Invoices-page-btn-remove:hover { background: #fca5a5; }
 
-.Invoices-page-btn-remove:hover {
-  background-color: #fecaca;
-}
 
 /* Compact Stats Cards */
 .Invoices-page-stats {
@@ -874,23 +874,108 @@
   box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
 }
 
-/* Compact Item Rows */
+/* ═══════════════════════════════════════════════════════════════
+   Invoice Items — structured grid layout
+   Columns: Description | Unit Type | Qty | Unit Price | Tax | Total | ×
+══════════════════════════════════════════════════════════════════ */
+
+/* Column definition shared by header row and every item row */
+.Invoices-page-item-header-row,
 .Invoices-page-item-row {
-  display: flex;
-  gap: 8px;
-  padding: 12px;
-  background-color: #f8fafc;
+  display: grid;
+  grid-template-columns: minmax(160px, 2.6fr) 100px 90px 110px 72px 120px 28px;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Header row */
+.Invoices-page-item-header-row {
+  padding: 4px 10px 6px;
+  margin-bottom: 2px;
+}
+.Invoices-page-item-header-row span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Item row card */
+.Invoices-page-item-row {
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+  position: relative;
+  transition: border-color .15s;
+}
+.Invoices-page-item-row:hover { border-color: #cbd5e1; }
+
+/* Individual cell wrapper */
+.Invoices-page-ifield {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;          /* allow text truncation inside grid */
   position: relative;
 }
 
-.Invoices-page-item-fields {
-  display: flex;
-  gap: 8px;
-  flex: 1;
-  flex-wrap: wrap;
+/* Shared input / select style inside item rows */
+.Invoices-page-iinput {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: inherit;
+  background: #fff;
+  transition: border-color .15s, box-shadow .15s;
+  box-sizing: border-box;
 }
+.Invoices-page-iinput:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,.1);
+}
+.Invoices-page-iinput-error {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239,68,68,.1) !important;
+}
+
+/* "max N" cap label under qty */
+.Invoices-page-qty-cap {
+  font-size: 10px;
+  color: #6b7280;
+  line-height: 1;
+  padding-left: 2px;
+}
+
+/* Line total cell — right-aligned, read-only style */
+.Invoices-page-ifield-total {
+  padding: 5px 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f172a;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Legacy wrapper — kept for compatibility, renders transparently */
+.Invoices-page-item-fields { display: contents; }
+.Invoices-page-item-row .Invoices-page-form-group-small { flex: unset; }
 
 .Invoices-page-item-total {
   padding: 6px 10px;
