@@ -729,7 +729,7 @@
 /* ── Menu grid ── */
 .rp-menu-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 8px;
 }
 
@@ -788,12 +788,14 @@
   font-size: 13px;
   font-weight: 500;
   color: var(--rp-text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;       /* ← allow wrapping */
+  overflow: visible;         /* ← don't clip */
+  text-overflow: unset;      /* ← remove ellipsis */
+  word-break: break-word;    /* ← break long words if needed */
   min-width: 0;
   text-transform: capitalize;
   transition: color 0.15s;
+  line-height: 1.35;
 }
 
 .rp-menu-card--on .rp-menu-card__name { color: var(--rp-text-1); }
