@@ -7,13 +7,87 @@ import React, {
 
 const USER_KEY = 'bd_portal_user';
 
+// ─── ACCOUNTS_EXECUTIVE permission override ───────────────────────────────────
+// Pages the accounts executive can fully use (VIEW + CREATE + EDIT).
+// DELETE and ASSIGN are intentionally excluded — the backend enforces this too.
+const ACCOUNTS_EXECUTIVE_ROLE = 'ACCOUNTS_EXECUTIVE';
+const SUPERADMIN_ROLES = ['SUPERADMIN', 'ADMIN'];
+
+// Full permissions granted to SUPERADMIN and ADMIN on all pages
+const SUPERADMIN_PERMISSIONS = {
+  LEADS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'ASSIGN', 'APPROVE', 'DOWNLOAD'],
+  CUSTOMERS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  VENDORS:                 ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  PROPOSALS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'DOWNLOAD'],
+  PURCHASE_ORDERS:         ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
+  ORDER_BOOK:              ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
+  PROCUREMENT_QUOTATIONS:  ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
+  SALES_QUOTATIONS:        ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
+  INVOICES:                ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'SEND', 'DOWNLOAD'],
+  BILLS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'DOWNLOAD'],
+  PAYMENTS:                ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
+  REPORTS:                 ['VIEW'],
+  SETTINGS:                ['VIEW', 'EDIT'],
+  USERS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  ROLES:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  FOLLOWUPS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
+  ATTACHMENTS:             ['VIEW', 'UPLOAD', 'DELETE'],
+};
+
+const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
+  // Finance — core responsibility
+  INVOICES:              ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
+  BILLS:                 ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
+  PAYMENTS:              ['VIEW', 'CREATE', 'EDIT'],
+  // Procurement visibility
+  PURCHASE_ORDERS:       ['VIEW', 'CREATE', 'EDIT'],
+  ORDER_BOOK:            ['VIEW', 'CREATE', 'EDIT'],
+  PROCUREMENT_QUOTATIONS:['VIEW', 'CREATE', 'EDIT', 'APPROVE'],
+  VENDORS:               ['VIEW', 'CREATE', 'EDIT'],
+  // Clients / Customers read + edit (no delete)
+  CUSTOMERS:             ['VIEW', 'CREATE', 'EDIT'],
+  // Leads — read only for accounts context
+  LEADS:                 ['VIEW'],
+  // Reports
+  REPORTS:               ['VIEW'],
+};
+
+/**
+ * If the logged-in user is ACCOUNTS_EXECUTIVE and their pagePermissions
+ * from the server are missing or incomplete for any of the above pages,
+ * we merge in the override so the UI unlocks those pages.
+ */
+const applyAccountsExecutiveOverride = (role, serverPagePermissions) => {
+  const merged = { ...(serverPagePermissions || {}) };
+
+  // SUPERADMIN / ADMIN always get full permissions regardless of server config
+  if (SUPERADMIN_ROLES.includes(role)) {
+    Object.entries(SUPERADMIN_PERMISSIONS).forEach(([page, perms]) => {
+      const existing = merged[page] || [];
+      merged[page] = Array.from(new Set([...existing, ...perms]));
+    });
+    return merged;
+  }
+
+  if (role !== ACCOUNTS_EXECUTIVE_ROLE) return merged;
+
+  Object.entries(ACCOUNTS_EXECUTIVE_PERMISSIONS).forEach(([page, perms]) => {
+    const existing = merged[page] || [];
+    // Union: keep anything the server already gave + our override list
+    const combined = Array.from(new Set([...existing, ...perms]));
+    merged[page] = combined;
+  });
+  return merged;
+};
+
 export const AuthContext = createContext({
   isAuthenticated: false,
   user: null,
   menuPermissions: [],
   pagePermissions: {},
-  sessionTimeout: null, // seconds
-  warningTime: null,    // seconds
+  isAccountsExecutive: false,
+  sessionTimeout: null,
+  warningTime: null,
   loading: true,
   login: () => {},
   logout: () => {},
@@ -25,8 +99,9 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [menuPermissions, setMenuPermissions] = useState([]);
   const [pagePermissions, setPagePermissions] = useState({});
-  const [sessionTimeout, setSessionTimeout] = useState(null); // seconds
-  const [warningTime, setWarningTime] = useState(null);       // seconds
+  const [isAccountsExecutive, setIsAccountsExecutive] = useState(false);
+  const [sessionTimeout, setSessionTimeout] = useState(null);
+  const [warningTime, setWarningTime] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Initialize auth state from localStorage
@@ -38,9 +113,16 @@ export const AuthProvider = ({ children }) => {
           const userData = JSON.parse(userStr);
 
           if (userData && userData.user && userData.menuPermissions) {
+            const role = userData.user?.role || '';
+            const effectivePagePermissions = applyAccountsExecutiveOverride(
+              role,
+              userData.pagePermissions || {}
+            );
+
             setUser(userData.user);
             setMenuPermissions(userData.menuPermissions);
-            setPagePermissions(userData.pagePermissions || {});
+            setPagePermissions(effectivePagePermissions);
+            setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
 
             setSessionTimeout(userData.sessionTimeout || null);
             setWarningTime(userData.warningTime || null);
@@ -70,9 +152,16 @@ export const AuthProvider = ({ children }) => {
 
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
 
+      const role = userData.user?.role || '';
+      const effectivePagePermissions = applyAccountsExecutiveOverride(
+        role,
+        userData.pagePermissions || {}
+      );
+
       setUser(userData.user);
       setMenuPermissions(userData.menuPermissions);
-      setPagePermissions(userData.pagePermissions || {});
+      setPagePermissions(effectivePagePermissions);
+      setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
 
       setSessionTimeout(userData.sessionTimeout || null);
       setWarningTime(userData.warningTime || null);
@@ -90,6 +179,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setMenuPermissions([]);
     setPagePermissions({});
+    setIsAccountsExecutive(false);
     setSessionTimeout(null);
     setWarningTime(null);
     setIsAuthenticated(false);
@@ -111,6 +201,7 @@ export const AuthProvider = ({ children }) => {
     user,
     menuPermissions,
     pagePermissions,
+    isAccountsExecutive,
     sessionTimeout,
     warningTime,
     loading,

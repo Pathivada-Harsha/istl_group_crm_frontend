@@ -13,7 +13,11 @@ import * as XLSX from 'xlsx';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 function OrderBook() {
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const obPerms   = pagePermissions?.ORDER_BOOK || [];
+  const canCreate = obPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = obPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = obPerms.includes('DELETE') && !isAccountsExecutive;
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
@@ -996,7 +1000,7 @@ function OrderBook() {
             <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View">   <FaEye /></button>
             <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit">   <FaEdit /></button>
             <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
-            <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>
+{canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>}
           </div>
         </td>
       )

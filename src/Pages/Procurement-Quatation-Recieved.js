@@ -12,6 +12,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import ConfirmationModal from '../components/ConfirmationModal';
 import filterApi from '../services/filterApi';
 import * as XLSX from 'xlsx';
 
@@ -52,7 +53,7 @@ const CATEGORIES = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
@@ -116,11 +117,18 @@ const QuotationsReceived = () => {
   const [vendors, setVendors] = useState([]);
   const [selectedVendorDetails, setSelectedVendorDetails] = useState(null);
 
-  const canView = 'VIEW';
-  const canCreate = 'CREATE';
-  const canEdit = 'EDIT';
-  const canApprove = 'APPROVE';
-  const canDelete = 'DELETE';
+  // Real permission checks from pagePermissions
+  const quotPerms  = pagePermissions?.PROCUREMENT_QUOTATIONS || [];
+  // Fallback: if no perms configured yet, allow access (existing behaviour)
+  const hasPerms   = quotPerms.length > 0;
+  const canView    = !hasPerms || quotPerms.includes('VIEW')    || isAccountsExecutive;
+  const canCreate  = !hasPerms || quotPerms.includes('CREATE')  || isAccountsExecutive;
+  const canEdit    = !hasPerms || quotPerms.includes('EDIT')    || isAccountsExecutive;
+  const canApprove = !hasPerms || quotPerms.includes('APPROVE') || isAccountsExecutive;
+  const canDelete  = (!hasPerms || quotPerms.includes('DELETE')) && !isAccountsExecutive;
+
+  // ── Confirm modal state ──────────────────────────────────────────────────
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
 
   // ── Persist column config ────────────────────────────────────────────────
   useEffect(() => {
@@ -507,7 +515,7 @@ const QuotationsReceived = () => {
   const handleCreatePOFromQuotation = async () => {
     if (!poFormData.expectedDelivery) { showError('Expected delivery date is required'); return; }
     if (!poFormData.items.some(i => i.selectedQuantity > 0)) { showError('Select quantity for at least one item'); return; }
-    if (!window.confirm('Create Purchase Order from this quotation?')) return;
+    // Permission check handled by canCreate guard on the button
     setLoading(true);
     try {
       const poData = {
@@ -582,8 +590,17 @@ const QuotationsReceived = () => {
     finally { setLoading(false); }
   };
 
-  const handleDeleteQuotation = async (quotationId) => {
-    if (!window.confirm('Delete this quotation? This cannot be undone.')) return;
+  const handleDeleteQuotation = (quotationId) => {
+    if (!canDelete) { showError('No permission to delete quotations'); return; }
+    setConfirmModal({
+      show: true, title: 'Delete Quotation',
+      message: 'Are you sure you want to delete this quotation? This action cannot be undone.',
+      type: 'error',
+      onConfirm: () => performDeleteQuotation(quotationId)
+    });
+  };
+  const performDeleteQuotation = async (quotationId) => {
+    setConfirmModal({ show: false });
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, { credentials: 'include', method: 'DELETE', headers: getAuthHeaders() });
@@ -713,7 +730,7 @@ const QuotationsReceived = () => {
             {q.status === 'New' && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Shortlisted')} title="Shortlist"><Star size={14} /></button>}
             {(q.status === 'Shortlisted' || q.status === 'New') && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Approved')} title="Approve"><Check size={14} /></button>}
             {q.status === 'Approved' && <button className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn" onClick={() => handleOpenCreatePOModal(q)} title="Create PO"><ShoppingCart size={14} /></button>}
-            <button className="procurement-quotation-received-action-btn" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4, color: '#ef4444' }}><Trash2 size={14} /></button>
+{canDelete && <button className="procurement-quotation-received-action-btn" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4, color: '#ef4444' }}><Trash2 size={14} /></button>}
           </div>
         </td>
       );
@@ -726,6 +743,14 @@ const QuotationsReceived = () => {
     <div className="procurement-quotation-received-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
 
       {/* Header */}
       <div className="procurement-quotation-received-header">

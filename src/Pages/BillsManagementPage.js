@@ -74,7 +74,11 @@ const BillsManagementPage = () => {
   });
 
   const { toasts, removeToast, showSuccess, showError } = useToast();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const billsPerms = pagePermissions?.BILLS || [];
+  const canCreate = billsPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit   = billsPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete = billsPerms.includes('DELETE') && !isAccountsExecutive;
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -660,10 +664,6 @@ const BillsManagementPage = () => {
       showError('Please select bill date');
       return;
     }
-    if (!formData.dueDate) {
-      showError('Please select due date');
-      return;
-    }
     if (formData.items.length === 0) {
       showError('Please add at least one item');
       return;
@@ -672,6 +672,12 @@ const BillsManagementPage = () => {
     for (let i = 0; i < formData.items.length; i++) {
       const item = formData.items[i];
       
+      // Manual items (no PO linked) require an item name
+      if (!item.poItemId && (!item.itemName || item.itemName.trim() === '')) {
+        showError(`Item ${i + 1}: Please enter an item name`);
+        return;
+      }
+
       if (!item.quantity || item.quantity <= 0) {
         showError(`Item ${i + 1}: Please enter valid quantity`);
         return;
@@ -1047,7 +1053,7 @@ const BillsManagementPage = () => {
         </div>
 
         <div className="procurement-bills-received-actions">
-          <button className="procurement-bills-received-btn-primary" onClick={handleCreateBill}>
+          <button className={`procurement-bills-received-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateBill()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Add New Bill"}>
             <Plus size={18} style={{ marginRight: '8px' }} />
             Add New Bill
           </button>
@@ -1468,13 +1474,12 @@ const BillsManagementPage = () => {
                     />
                   </div>
                   <div className="bill-form-field">
-                    <label className="bill-form-label">Due Date *</label>
+                    <label className="bill-form-label">Due Date</label>
                     <input
                       className="bill-form-input"
                       type="date"
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
-                      required
                     />
                   </div>
                 </div>
@@ -1588,6 +1593,11 @@ const BillsManagementPage = () => {
                               readOnly={false}
                               style={{ backgroundColor: 'white' }}
                             />
+                            {item.poItemId && (
+                              <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                                From PO
+                              </small>
+                            )}
                           </td>
                           <td>
                             <input

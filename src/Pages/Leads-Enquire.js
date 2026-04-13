@@ -19,6 +19,7 @@ import AddFollowupModal from '../components/Leads/AddFollowupModal.js';
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
+import ConfirmationModal from '../components/ConfirmationModal.js';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Default Proposal Template ───────────────────────────────────────────────
@@ -108,6 +109,8 @@ const ALL_COLUMNS = [
   { key: 'email', label: 'Email', sortable: true, required: false },
   { key: 'phone', label: 'Phone', sortable: true, required: false },
   { key: 'groupName', label: 'Group', sortable: true, required: false },
+  { key: 'subGroupName', label: 'Category', sortable: true, required: false },
+  { key: 'capacity', label: 'Capacity', sortable: true, required: false },
   { key: 'priority', label: 'Priority', sortable: true, required: false },
   { key: 'status', label: 'Status', sortable: true, required: false },
   { key: 'source', label: 'Source', sortable: true, required: false },
@@ -118,7 +121,7 @@ const ALL_COLUMNS = [
 
 const DEFAULT_ORDER = ALL_COLUMNS.map(c => c.key);
 const DEFAULT_VISIBLE = ALL_COLUMNS
-  .filter(c => !['source', 'assignedToName', 'createdAt'].includes(c.key))
+  .filter(c => !['source', 'assignedToName', 'createdAt', 'groupName'].includes(c.key))
   .map(c => c.key);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -204,7 +207,8 @@ const DraggableHeaderCell = ({ col, index, sortColumn, sortDirection, getSortIco
     onDragOver={e => onDragOver(e, index)}
     onDrop={e => onDrop(e, index)}
     onDragEnd={onDragEnd}
-    className={`col-draggable${isDragOver ? ' col-drag-over' : ''}`}
+    data-col={col.key}
+    className={`col-draggable${isDragOver ? ' col-drag-over' : ''}${col.key === 'actions' ? ' actions-column-header' : ''}`}
     onClick={() => col.sortable && handleSort(col.key)}
     style={{ cursor: col.sortable ? 'pointer' : 'grab' }}
   >
@@ -532,7 +536,7 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
 
 // ─── Lead Detail Page (full-page view inside leads container) ─────────────────
 const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSuccess, showError }) => {
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem('leads_detail_tab') || 'overview');
   const [proposals, setProposals] = useState([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
   const [showProposalForm, setShowProposalForm] = useState(false);
@@ -541,6 +545,13 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [followupModal, setFollowupModal] = useState(false);
   const [timelineModal, setTimelineModal] = useState(false);
+  const [pdfModal, setPdfModal] = useState({ open: false, url: null, name: null });
+  const [deleteProposalConfirm, setDeleteProposalConfirm] = useState(null); // { id, proposalNo }
+  const [uploadingId, setUploadingId] = useState(null);
+  const [showOfflinePanel, setShowOfflinePanel] = useState(false);
+  const [offlineTitle, setOfflineTitle] = useState('');
+  const [offlineFile, setOfflineFile] = useState(null);
+  const [offlineUploading, setOfflineUploading] = useState(false);
 
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
 
@@ -580,6 +591,112 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a'); a.href = url; a.download = `proposal-${id}.pdf`; a.click(); window.URL.revokeObjectURL(url);
     } catch { showError('Failed to download PDF'); }
+  };
+
+  const handleUploadOffline = async (proposalId, file) => {
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files are allowed'); return; }
+    if (file.size > 5 * 1024 * 1024) { showError('File too large. Maximum allowed size is 5 MB.'); return; }
+    setUploadingId(proposalId);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/upload-offline`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+        body: form,
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('Offline proposal uploaded!'); fetchProposals(); }
+      else showError(data.error || 'Upload failed');
+    } catch { showError('Upload failed'); }
+    finally { setUploadingId(null); }
+  };
+
+  const handleViewOffline = async (proposalId, proposalName) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/view-offline`, {
+        credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      if (!res.ok) throw new Error('PDF not found');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPdfModal({ open: true, url, name: proposalName || 'Offline Proposal' });
+    } catch (err) { showError('Failed to load PDF: ' + (err.message || 'Server error')); }
+  };
+
+  const handleDownloadOffline = async (proposalId, fileName) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/view-offline`, {
+        credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      if (!res.ok) throw new Error('PDF not found');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName || 'offline-proposal.pdf'; a.click();
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) { showError('Failed to download: ' + (err.message || 'Server error')); }
+  };
+
+  const handleDeleteProposal = (proposalId, proposalNo) => {
+    setDeleteProposalConfirm({ id: proposalId, proposalNo });
+  };
+
+  const confirmDeleteProposal = async () => {
+    if (!deleteProposalConfirm) return;
+    const { id } = deleteProposalConfirm;
+    setDeleteProposalConfirm(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/delete/${id}`, {
+        method: 'DELETE', credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('Proposal deleted.'); fetchProposals(); }
+      else showError(data.error || 'Delete failed');
+    } catch { showError('Delete failed'); }
+  };
+
+  // Create a minimal proposal record then upload the offline PDF to it
+  const handleUploadOfflineNew = async () => {
+    if (!offlineTitle.trim()) { showError('Please enter a proposal title'); return; }
+    if (!offlineFile) { showError('Please select a PDF file'); return; }
+    if (!offlineFile.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files are allowed'); return; }
+    if (offlineFile.size > 5 * 1024 * 1024) { showError('File too large. Maximum allowed size is 5 MB.'); return; }
+    setOfflineUploading(true);
+    try {
+      const body = JSON.stringify({
+        title: offlineTitle.trim(), leadId: lead.id, status: 'Draft',
+        groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
+        totalValue: 0, description: 'Offline proposal uploaded',
+      });
+      const createRes = await fetch(`${API_BASE_URL}/proposals/create`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+        body,
+      });
+      const createData = await createRes.json();
+      if (!createData.success) throw new Error(createData.error || 'Failed to create proposal');
+      const newId = createData.data?.id;
+      if (!newId) throw new Error('No proposal ID returned');
+      const form = new FormData();
+      form.append('file', offlineFile);
+      const upRes = await fetch(`${API_BASE_URL}/proposals/${newId}/upload-offline`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+        body: form,
+      });
+      const upData = await upRes.json();
+      if (!upData.success) throw new Error(upData.error || 'PDF upload failed');
+      showSuccess('Offline proposal uploaded successfully!');
+      setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null);
+      fetchProposals();
+    } catch (err) { showError(err.message || 'Upload failed'); }
+    finally { setOfflineUploading(false); }
   };
 
   const getStatusClass = s => ({
@@ -655,7 +772,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         ].map(t => (
           <button key={t.k}
             className={`ld-tab${activeTab === t.k ? ' active' : ''}`}
-            onClick={() => { setActiveTab(t.k); setShowProposalForm(false); }}>
+            onClick={() => { setActiveTab(t.k); setShowProposalForm(false); localStorage.setItem('leads_detail_tab', t.k); }}>
             {t.l}
           </button>
         ))}
@@ -677,6 +794,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                   ] : []),
                   ['Group', lead.groupName || '-'],
                   ['Category', lead.subGroupName || '-'],
+                  ...(lead.capacity ? [['Project Capacity', `${lead.capacity} ${lead.capacityUnit || 'kW'}`]] : []),
                 ].map(([l, v]) => (
                   <div className="ld-field-row" key={l}>
                     <span className="ld-field-label">{l}</span>
@@ -821,12 +939,63 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
             <div>
               <div className="ld-section-hdr">
                 <h4 className="ld-card-title" style={{ margin: 0 }}>{proposals.length} Proposal{proposals.length !== 1 ? 's' : ''}</h4>
-                {permissions.CREATE && (
-                  <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); }}>
-                    + New Proposal
-                  </button>
-                )}
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <label className="ld-pact-btn ld-pact-upload" title="Upload an offline proposal PDF given by client" style={{cursor:'pointer',padding:'7px 14px',fontSize:13}} onClick={() => { setShowOfflinePanel(v => !v); setShowProposalForm(false); }}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Upload Offline PDF
+                  </label>
+                  {permissions.CREATE && (
+                    <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
+                      + New Proposal
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {showOfflinePanel && (
+                <div style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff',borderRadius:10,padding:'18px 20px',marginBottom:16,display:'flex',flexDirection:'column',gap:12}}>
+                  <div style={{fontWeight:600,color:'#6d28d9',fontSize:14,marginBottom:2}}>📎 Upload Offline Proposal PDF</div>
+                  <div style={{fontSize:13,color:'#6b7280',marginTop:-8}}>Upload a proposal PDF received from the client. A new proposal record will be created automatically.</div>
+                  <div style={{display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
+                    <div style={{flex:'1 1 220px',minWidth:180}}>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Proposal Title *</label>
+                      <input
+                        type="text"
+                        value={offlineTitle}
+                        onChange={e => setOfflineTitle(e.target.value)}
+                        placeholder="e.g. Rooftop Solar Proposal – Client Name"
+                        style={{width:'100%',padding:'8px 12px',border:'1.5px solid #d1d5db',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
+                      />
+                    </div>
+                    <div style={{flex:'1 1 200px',minWidth:180}}>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>PDF File *</label>
+                      <label style={{
+                        display:'flex',alignItems:'center',gap:8,cursor:'pointer',
+                        border:'1.5px dashed ' + (offlineFile ? '#7c3aed' : '#c4b5fd'),
+                        borderRadius:8,padding:'8px 14px',background: offlineFile ? '#f5f3ff' : '#faf5ff',
+                        transition:'all .18s',fontSize:13,color: offlineFile ? '#6d28d9' : '#7c3aed',fontWeight:500,
+                        userSelect:'none'
+                      }}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18" style={{flexShrink:0}}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                        </svg>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                          {offlineFile ? offlineFile.name : 'Choose PDF file…'}
+                        </span>
+                        <input type="file" accept=".pdf,application/pdf" onChange={e => setOfflineFile(e.target.files[0] || null)} style={{display:'none'}} />
+                      </label>
+                      <div style={{fontSize:11,color:'#9ca3af',marginTop:4}}>PDF only · Max 5 MB</div>
+                      {offlineFile && <div style={{fontSize:11,color:'#059669',marginTop:2}}>✓ {offlineFile.name} — Ready to upload</div>}
+                    </div>
+                    <div style={{display:'flex',gap:8}}>
+                      <button className="ld-btn ld-btn-pri" onClick={handleUploadOfflineNew} disabled={offlineUploading || !offlineTitle.trim() || !offlineFile} style={{whiteSpace:'nowrap'}}>
+                        {offlineUploading ? 'Uploading…' : 'Save & Upload'}
+                      </button>
+                      <button className="ld-btn ld-btn-sec" onClick={() => { setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); }}>Cancel</button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {loadingProposals ? (
                 <div className="ld-loading-row"><div className="p-loading-spinner"></div> Loading proposals…</div>
@@ -834,14 +1003,28 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                 <div className="ld-empty-state">
                   <div className="ld-empty-icon">📝</div>
                   <p>No proposals yet for this lead.</p>
-                  {permissions.CREATE && <button className="ld-btn ld-btn-pri" onClick={() => setShowProposalForm(true)}>Create First Proposal</button>}
+                  <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
+                    {permissions.CREATE && <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>}
+                    <button className="ld-pact-btn ld-pact-upload" style={{padding:'8px 16px',fontSize:13,cursor:'pointer'}} onClick={() => setShowOfflinePanel(v => !v)}>
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                      Upload Offline PDF
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="ld-proposals-list">
                   {proposals.map(p => (
                     <div key={p.id} className="ld-proposal-card">
                       <div className="ld-proposal-card-left">
-                        <div className="ld-proposal-no">{p.proposalNo}</div>
+                        <div className="ld-proposal-no-row" style={{display:'flex',alignItems:'center',gap:6}}>
+                          <div className="ld-proposal-no">{p.proposalNo}</div>
+                          {p.offlinePdfPath && (
+                            <span className="ld-offline-badge" title={`Offline PDF: ${p.offlinePdfName}`}>
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="11" height="11"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
+                              Offline PDF
+                            </span>
+                          )}
+                        </div>
                         <div className="ld-proposal-title">{p.title}</div>
                         <div className="ld-proposal-meta">
                           <span>v{p.version}</span>
@@ -855,14 +1038,51 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
                         <div className="ld-proposal-actions">
-                          <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download PDF">
+                          {/* Generated PDF download */}
+                          <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                             PDF
                           </button>
+                          {/* Offline PDF actions */}
+                          {p.offlinePdfPath ? (
+                            <>
+                              <button className="ld-pact-btn ld-pact-offline-view" onClick={() => handleViewOffline(p.id, p.offlinePdfName)} title="View uploaded offline proposal">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                View
+                              </button>
+                              <button className="ld-pact-btn ld-pact-offline-dl" onClick={() => handleDownloadOffline(p.id, p.offlinePdfName)} title="Download offline proposal">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                Download
+                              </button>
+                              <label className="ld-pact-btn ld-pact-upload" title="Replace offline PDF" style={{cursor:'pointer'}}>
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                {uploadingId === p.id ? 'Uploading…' : 'Replace'}
+                                <input type="file" accept=".pdf,application/pdf" style={{display:'none'}}
+                                  onChange={e => { if(e.target.files[0]) handleUploadOffline(p.id, e.target.files[0]); e.target.value=''; }}
+                                  disabled={uploadingId === p.id}
+                                />
+                              </label>
+                            </>
+                          ) : (
+                            <label className="ld-pact-btn ld-pact-upload" title="Upload offline proposal PDF given by client" style={{cursor:'pointer'}}>
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                              {uploadingId === p.id ? 'Uploading…' : 'Upload Offline PDF'}
+                              <input type="file" accept=".pdf,application/pdf" style={{display:'none'}}
+                                onChange={e => { if(e.target.files[0]) handleUploadOffline(p.id, e.target.files[0]); e.target.value=''; }}
+                                disabled={uploadingId === p.id}
+                              />
+                            </label>
+                          )}
                           {permissions.EDIT && (
                             <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingProposal(p); setShowProposalForm(true); }} title="Edit">
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               Edit
+                            </button>
+                          )}
+                          {permissions.DELETE && (
+                            <button className="ld-pact-btn ld-pact-delete" onClick={() => handleDeleteProposal(p.id, p.proposalNo)} title="Delete proposal">
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                              Delete
                             </button>
                           )}
                         </div>
@@ -932,6 +1152,55 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         </div>
       )}
 
+      {/* ── PDF Viewer Modal ─────────────────────────────────────────── */}
+      {pdfModal.open && (
+        <div className="ld-pdf-modal-overlay" onClick={() => { setPdfModal({ open: false, url: null, name: null }); if(pdfModal.url) window.URL.revokeObjectURL(pdfModal.url); }}>
+          <div className="ld-pdf-modal" onClick={e => e.stopPropagation()}>
+            <div className="ld-pdf-modal-header">
+              <span className="ld-pdf-modal-title">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                {pdfModal.name}
+              </span>
+              <div className="ld-pdf-modal-actions">
+                <a href={pdfModal.url} download={pdfModal.name} className="ld-pact-btn ld-pact-offline-dl" style={{textDecoration:'none'}}>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </a>
+                <a href={pdfModal.url} target="_blank" rel="noopener noreferrer" className="ld-pact-btn" style={{textDecoration:'none'}}>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  New Tab
+                </a>
+                <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => { setPdfModal({ open: false, url: null, name: null }); if(pdfModal.url) window.URL.revokeObjectURL(pdfModal.url); }}>
+                  ✕ Close
+                </button>
+              </div>
+            </div>
+            <div className="ld-pdf-modal-body">
+              <iframe
+                src={pdfModal.url}
+                title={pdfModal.name}
+                width="100%"
+                height="100%"
+                style={{ border: 'none' }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteProposalConfirm && (
+        <ConfirmationModal
+          show={true}
+          type="alert"
+          title="Delete Proposal"
+          message={`Are you sure you want to delete proposal ${deleteProposalConfirm.proposalNo}?\nThis action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={confirmDeleteProposal}
+          onCancel={() => setDeleteProposalConfirm(null)}
+        />
+      )}
+
       {followupModal && (
         <AddFollowupModal
           lead={lead}
@@ -980,8 +1249,8 @@ const isFirstFilterRender = useRef(true);
   };
 
   // ── UI state ─────────────────────────────────────────────────────
-  const [viewMode, setViewMode] = useState('table');
-  const [detailLead, setDetailLead] = useState(null);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('leads_view_mode') || 'table');
+  const [detailLead, setDetailLead] = useState(() => { try { const s = localStorage.getItem('leads_detail_lead'); return s ? JSON.parse(s) : null; } catch { return null; } });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -1026,12 +1295,13 @@ const isFirstFilterRender = useRef(true);
     priority: 'Medium', status: 'New', assignedTo: null, enquiry: '',
     groupName: '', subGroupName: '', closedLostReason: '',
     referralName: '', referralPhone: '',
+    capacity: '', capacityUnit: 'kW',
   });
 
   // ── Derived columns ──────────────────────────────────────────────
   const orderedVisibleColumns = columnOrder
     .map(k => ALL_COLUMNS.find(c => c.key === k))
-    .filter(c => c && visibleColumns.includes(c.key));
+    .filter(c => c && (c.required || visibleColumns.includes(c.key)));
 
   // ── Fetch helpers ─────────────────────────────────────────────────
   const buildHeaders = () => ({
@@ -1184,7 +1454,11 @@ useEffect(() => {
     if (!canView) { showError('No permission'); return; }
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/${lead.id}`);
-      if (data.success) setDetailLead(data.data);
+      if (data.success) {
+        setDetailLead(data.data);
+        localStorage.setItem('leads_detail_lead', JSON.stringify(data.data));
+        localStorage.removeItem('leads_detail_tab');
+      }
     } catch (e) { showError(e.message || 'Error fetching lead'); }
   };
 
@@ -1204,6 +1478,8 @@ useEffect(() => {
       subsidyRequired: lead.subsidyRequired || '',
       referralName: lead.referralName || '',
       referralPhone: lead.referralPhone || '',
+      capacity: lead.capacity || '',
+      capacityUnit: lead.capacityUnit || 'kW',
     });
     setPhoneError(''); setShowAddModal(true);
   };
@@ -1253,7 +1529,10 @@ useEffect(() => {
       } else {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/create`, { method: 'POST', body: JSON.stringify(payload) });
         if (data.success) {
-          showSuccess('Lead created');
+          const wasClosedWon = data.data?.status === 'Closed Won';
+          showSuccess(wasClosedWon
+            ? 'Lead created & automatically converted to Customer! ✅'
+            : 'Lead created successfully');
           setShowAddModal(false); resetForm();
           // Go to page 1 to see the new record (sorted desc by createdAt)
           setCurrentPage(1);
@@ -1273,6 +1552,7 @@ useEffect(() => {
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
+      capacity: '', capacityUnit: 'kW',
     });
     setPhoneError('');
   };
@@ -1296,6 +1576,8 @@ useEffect(() => {
       case 'email': return lead.email;
       case 'phone': return lead.phone;
       case 'groupName': return lead.groupName || '-';
+      case 'subGroupName': return lead.subGroupName || '-';
+      case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : '-';
       case 'source': return lead.source;
       case 'assignedToName': return lead.assignedToName || '-';
       case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-';
@@ -1359,7 +1641,7 @@ useEffect(() => {
           lead={detailLead}
           currentUser={currentUser}
           permissions={permissions}
-          onBack={() => setDetailLead(null)}
+          onBack={() => { setDetailLead(null); localStorage.removeItem('leads_detail_lead'); localStorage.removeItem('leads_detail_tab'); }}
           onEdit={lead => { setDetailLead(null); handleEdit(lead); }}
           showSuccess={showSuccess}
           showError={showError}
@@ -1464,11 +1746,11 @@ useEffect(() => {
           <ColumnVisibilityDropdown columns={ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns} />
         )}
         <div className="leads-enquiries-view-toggle">
-          <button className={`leads-enquiries-view-btn${viewMode === 'table' ? ' active' : ''}`} onClick={() => setViewMode('table')} title="Table View">
+          <button className={`leads-enquiries-view-btn${viewMode === 'table' ? ' active' : ''}`} onClick={() => { setViewMode('table'); localStorage.setItem('leads_view_mode', 'table'); }} title="Table View">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
             Table
           </button>
-          <button className={`leads-enquiries-view-btn${viewMode === 'grid' ? ' active' : ''}`} onClick={() => setViewMode('grid')} title="Grid View">
+          <button className={`leads-enquiries-view-btn${viewMode === 'grid' ? ' active' : ''}`} onClick={() => { setViewMode('grid'); localStorage.setItem('leads_view_mode', 'grid'); }} title="Grid View">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
             Grid
           </button>
@@ -1494,7 +1776,7 @@ useEffect(() => {
                 ) : leads.map(lead => (
                   <tr key={lead.id} onClick={() => canView && handleView(lead)} style={{ cursor: canView ? 'pointer' : 'default' }} className="leads-enquiries-clickable-row">
                     {orderedVisibleColumns.map(col => (
-                      <td key={col.key} style={col.key === 'actions' ? { textAlign: 'center' } : {}} onClick={col.key === 'actions' ? e => e.stopPropagation() : undefined}>{renderCell(lead, col.key)}</td>
+                      <td key={col.key} data-col={col.key} onClick={col.key === 'actions' ? e => e.stopPropagation() : undefined}>{renderCell(lead, col.key)}</td>
                     ))}
                   </tr>
                 ))}
@@ -1532,6 +1814,8 @@ useEffect(() => {
                       <div className="leads-enquiries-card-info-item"><svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg><span>{lead.email}</span></div>
                       <div className="leads-enquiries-card-info-item"><svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg><span>{lead.phone}</span></div>
                       {lead.groupName && <div className="leads-enquiries-card-info-item"><svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg><span>{lead.groupName}</span></div>}
+                      {lead.subGroupName && <div className="leads-enquiries-card-info-item"><svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg><span>{lead.subGroupName}</span></div>}
+                      {lead.capacity && <div className="leads-enquiries-card-info-item"><svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg><span>{lead.capacity} {lead.capacityUnit || 'kW'}</span></div>}
                     </div>
                     {lead.enquiry && <div className="leads-enquiries-card-description">{lead.enquiry}</div>}
                   </div>
@@ -1739,6 +2023,16 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </select>
       </div>
     )}
+    {formData.subGroupName === 'Solar_ground_mounted' && (
+      <div className="leads-enquiries-form-group">
+        <label>Solar Scheme</label>
+        <select value={formData.solarScheme || ''} onChange={e => setFormData(p => ({ ...p, solarScheme: e.target.value, subsidyRequired: '' }))}>
+          <option value="">Select Scheme</option>
+          <option value="PM_Kusum">PM Kusum</option>
+          <option value="No_Scheme">No Scheme</option>
+        </select>
+      </div>
+    )}
     {formData.solarScheme === 'PM_Surya_Ghar' && (
       <div className="leads-enquiries-form-group">
         <label>Subsidy Required?</label>
@@ -1762,7 +2056,45 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
     )}
     <div className="leads-enquiries-form-group">
       <label>State</label>
-      <input type="text" value={formData.state || ''} onChange={e => setFormData(p => ({ ...p, state: e.target.value }))} placeholder="e.g. Telangana" />
+      <select value={formData.state || ''} onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}>
+        <option value="">Select State</option>
+        <option value="Andhra Pradesh">Andhra Pradesh</option>
+        <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+        <option value="Assam">Assam</option>
+        <option value="Bihar">Bihar</option>
+        <option value="Chhattisgarh">Chhattisgarh</option>
+        <option value="Goa">Goa</option>
+        <option value="Gujarat">Gujarat</option>
+        <option value="Haryana">Haryana</option>
+        <option value="Himachal Pradesh">Himachal Pradesh</option>
+        <option value="Jharkhand">Jharkhand</option>
+        <option value="Karnataka">Karnataka</option>
+        <option value="Kerala">Kerala</option>
+        <option value="Madhya Pradesh">Madhya Pradesh</option>
+        <option value="Maharashtra">Maharashtra</option>
+        <option value="Manipur">Manipur</option>
+        <option value="Meghalaya">Meghalaya</option>
+        <option value="Mizoram">Mizoram</option>
+        <option value="Nagaland">Nagaland</option>
+        <option value="Odisha">Odisha</option>
+        <option value="Punjab">Punjab</option>
+        <option value="Rajasthan">Rajasthan</option>
+        <option value="Sikkim">Sikkim</option>
+        <option value="Tamil Nadu">Tamil Nadu</option>
+        <option value="Telangana">Telangana</option>
+        <option value="Tripura">Tripura</option>
+        <option value="Uttar Pradesh">Uttar Pradesh</option>
+        <option value="Uttarakhand">Uttarakhand</option>
+        <option value="West Bengal">West Bengal</option>
+        <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+        <option value="Chandigarh">Chandigarh</option>
+        <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+        <option value="Delhi">Delhi</option>
+        <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+        <option value="Ladakh">Ladakh</option>
+        <option value="Lakshadweep">Lakshadweep</option>
+        <option value="Puducherry">Puducherry</option>
+      </select>
     </div>
     <div className="leads-enquiries-form-group">
       <label>District</label>
@@ -1841,6 +2173,34 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
         <label>Enquiry Description</label>
         <textarea rows={4} value={formData.enquiry} onChange={e => setFormData(p => ({ ...p, enquiry: e.target.value }))} placeholder="Describe the client's requirements…" />
+      </div>
+
+      <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
+        <label>Project Capacity</label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input
+            type="number"
+            min="0"
+            step="any"
+            value={formData.capacity || ''}
+            onChange={e => setFormData(p => ({ ...p, capacity: e.target.value }))}
+            placeholder="e.g. 10"
+            style={{ flex: 1 }}
+          />
+          <select
+            value={formData.capacityUnit || 'kW'}
+            onChange={e => setFormData(p => ({ ...p, capacityUnit: e.target.value }))}
+            style={{ width: 90 }}
+          >
+            <option value="kW">kW</option>
+            <option value="kWp">kWp</option>
+            <option value="MW">MW</option>
+            <option value="HP">HP</option>
+            <option value="kVA">kVA</option>
+            <option value="Units">Units</option>
+          </select>
+        </div>
+        <small style={{ color: '#6b7280', fontSize: 11 }}>Optional — enter the project capacity if known.</small>
       </div>
     </div>
 
