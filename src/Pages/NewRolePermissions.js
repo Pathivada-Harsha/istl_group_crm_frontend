@@ -119,6 +119,12 @@ export default function NewRolePermissions() {
   const [editingMenuName, setEditingMenuName] = useState('');
   const [menuItemLoading, setMenuItemLoading] = useState(false);
 
+  // Permission CRUD state
+  const [editingPermId, setEditingPermId]     = useState(null);
+  const [editingPermName, setEditingPermName] = useState('');
+  const [permLoading, setPermLoading]         = useState(false);
+  const [permDeleteModal, setPermDeleteModal] = useState({ open: false, permId: null, permName: '' });
+
   // Delete confirm modal state
   const [deleteModal, setDeleteModal] = useState({ open: false, menuId: null, menuName: '' });
 
@@ -196,6 +202,8 @@ export default function NewRolePermissions() {
     setSelectedRoleId(roleId);
     setSelectedPermIds([]);
     setMenuPerms([]);
+    setCreateTab("role");
+    setActiveTab("page");
     if (!roleId) return;
     setLoadingPage(true); setLoadingMenu(true);
     fetch(`${API}/role-permission/getPermissionsByRole/${roleId}`, { credentials: "include" })
@@ -375,6 +383,53 @@ export default function NewRolePermissions() {
     finally { setMenuItemLoading(false); }
   };
 
+  // ── Permission Edit / Delete ──────────────────────────────────────────────
+
+  const handleStartEditPerm = (p) => {
+    setEditingPermId(p.id);
+    setEditingPermName(p.name);
+  };
+
+  const handleSaveEditPerm = async (permId) => {
+    if (!editingPermName.trim()) { addToast('Permission name required', 'error'); return; }
+    setPermLoading(true);
+    try {
+      const res = await fetch(`${API}/permissions/updatePermission/${permId}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: editingPermName.trim() }),
+      });
+      const ct = res.headers.get('content-type');
+      const msg = ct?.includes('json') ? (await res.json()).message : await res.text();
+      if (!res.ok) { addToast(msg || 'Failed to update', 'error'); setPermLoading(false); return; }
+      addToast(msg || 'Permission updated', 'success');
+      setEditingPermId(null); setEditingPermName('');
+      loadData();
+    } catch { addToast('Network error', 'error'); }
+    setPermLoading(false);
+    
+  };
+
+  const handleDeletePerm = (permId, permName) =>
+    setPermDeleteModal({ open: true, permId, permName });
+
+  const confirmDeletePerm = async () => {
+    const { permId } = permDeleteModal;
+    setPermDeleteModal({ open: false, permId: null, permName: '' });
+    setPermLoading(true);
+    try {
+      const res = await fetch(`${API}/permissions/deletePermission/${permId}`, {
+        method: 'DELETE', credentials: 'include',
+      });
+      const ct = res.headers.get('content-type');
+      const msg = ct?.includes('json') ? (await res.json()).message : await res.text();
+      if (!res.ok) { addToast(msg || 'Failed to delete', 'error'); setPermLoading(false); return; }
+      addToast(msg || 'Permission deleted', 'success');
+      loadData();
+    } catch { addToast('Network error', 'error'); }
+    setPermLoading(false);
+  };
+
   return (
     <div className="rp-shell">
       {/* ── Keyframe for modal ── */}
@@ -383,13 +438,13 @@ export default function NewRolePermissions() {
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* ── Custom Delete Confirm Modal ── */}
-      <ConfirmModal
-        isOpen={deleteModal.open}
-        title="Delete Menu Item"
-        message={`Delete "${deleteModal.menuName}"?`}
-        subMessage="This will also remove all permissions for all users and roles."
-        onConfirm={confirmDeleteMenuItem}
-        onCancel={() => setDeleteModal({ open: false, menuId: null, menuName: '' })}
+        <ConfirmModal
+        isOpen={permDeleteModal.open}
+        title="Delete Permission"
+        message={`Delete permission "${permDeleteModal.permName}"?`}
+        subMessage="This will also remove it from all roles that have this permission assigned."
+        onConfirm={confirmDeletePerm}
+        onCancel={() => setPermDeleteModal({ open: false, permId: null, permName: '' })}
       />
 
       {/* ── Sidebar ── */}
@@ -471,6 +526,10 @@ export default function NewRolePermissions() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><circle cx="19" cy="18" r="3" stroke="currentColor" strokeWidth="2"/><path d="M19 16v2l1 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
               New Menu Item
             </button>
+            <button className={`rp-ctab ${createTab === "hierarchy" ? "rp-ctab--active" : ""}`} onClick={() => { setCreateTab("hierarchy"); loadHierarchy(); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 9l9-6 9 6M5 14h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              Role Hierarchy
+            </button>
           </div>
 
           {/* ── New Role form ── */}
@@ -496,6 +555,7 @@ export default function NewRolePermissions() {
           )}
 
           {/* ── New Page Permission form ── */}
+         {/* ── New Page Permission form ── */}
           {createTab === "perm" && (
             <div className="rp-create-form rp-create-form--enter">
               <div className="rp-field">
@@ -517,6 +577,121 @@ export default function NewRolePermissions() {
             </div>
           )}
 
+          {/* ── All Permissions table (shown when perm tab is active) ── */}
+          {createTab === "perm" && (
+            <div className="rp-panels" style={{ marginTop: 16 }}>
+              {/* Table header */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '12px 20px', background: '#f8fafc',
+                borderBottom: '2px solid #e2e8f0', borderRadius: '10px 10px 0 0',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <rect x="3" y="11" width="18" height="11" rx="2" stroke="#6366f1" strokeWidth="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#6366f1" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>All Page Permissions</span>
+                  <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                    {permissions.length}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>Edit to rename · Delete removes from all roles</span>
+              </div>
+
+              {/* Table */}
+              <div className="rp-panel" style={{ borderRadius: '0 0 10px 10px', padding: 0, overflow: 'hidden' }}>
+                <div style={{ overflowY: 'auto', maxHeight: 550 }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 2 }}>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 50 }}>#</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Permission Name</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 80 }}>Module</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 160 }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {permissions.length === 0 && (
+                        <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No permissions found</td></tr>
+                      )}
+                      {permissions.map((perm, idx) => {
+                        const module = perm.name.includes('.') ? perm.name.split('.')[0] : 'general';
+                        const action = perm.name.includes('.') ? perm.name.split('.').pop() : perm.name;
+                        const isEditing = editingPermId === perm.id;
+                        return (
+                          <tr key={perm.id}
+                            style={{ borderBottom: '1px solid #f1f5f9' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                            onMouseLeave={e => e.currentTarget.style.background = ''}>
+                            <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{idx + 1}</td>
+
+                            {/* Permission name — editable inline */}
+                            <td style={{ padding: '12px 16px' }}>
+                              {isEditing ? (
+                                <input
+                                  style={{ padding: '6px 10px', border: '1.5px solid #6366f1', borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 300 }}
+                                  value={editingPermName}
+                                  onChange={e => setEditingPermName(e.target.value)}
+                                  onKeyDown={e => {
+                                    if (e.key === 'Enter') handleSaveEditPerm(perm.id);
+                                    if (e.key === 'Escape') { setEditingPermId(null); setEditingPermName(''); }
+                                  }}
+                                  autoFocus
+                                />
+                              ) : (
+                                <span style={{ fontSize: 13, fontFamily: 'monospace', background: '#f1f5f9', padding: '3px 9px', borderRadius: 5, color: '#334155' }}>
+                                  {perm.name}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Module badge */}
+                            <td style={{ padding: '12px 16px' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, textTransform: 'capitalize' }}>
+                                {module}
+                              </span>
+                            </td>
+
+                            {/* Actions */}
+                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                                {isEditing ? (
+                                  <>
+                                    <button
+                                      style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }}
+                                      onClick={() => handleSaveEditPerm(perm.id)}
+                                      disabled={permLoading}
+                                    >Save</button>
+                                    <button
+                                      style={{ padding: '5px 10px', fontSize: 12, background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer' }}
+                                      onClick={() => { setEditingPermId(null); setEditingPermName(''); }}
+                                    >Cancel</button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button
+                                      style={{ padding: '5px 12px', fontSize: 12, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
+                                      onClick={() => handleStartEditPerm(perm)}
+                                    >Edit</button>
+                                    <button
+                                      style={{ padding: '5px 12px', fontSize: 12, background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }}
+                                      onClick={() => handleDeletePerm(perm.id, perm.name)}
+                                      disabled={permLoading}
+                                    >Delete</button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
           {/* ── New Menu Item form — simple, like the other two ── */}
           {createTab === "menuitem" && (
             <div className="rp-create-form" style={{ alignItems: 'flex-start' }}>
@@ -546,6 +721,153 @@ export default function NewRolePermissions() {
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"/></svg>
                   {menuItemLoading ? 'Adding...' : 'Add Menu Item'}
                 </button>
+              </div>
+            </div>
+          )}
+          {/* ── Role Hierarchy top-level tab ── */}
+          {createTab === "hierarchy" && (
+            <div className="rp-panels" style={{ marginTop: 16 }}>
+              <div className="rp-panel">
+                <div style={{ background:'linear-gradient(135deg,#eff6ff,#f0fdf4)', border:'1px solid #bfdbfe', borderRadius:10, padding:'14px 18px', marginBottom:20, display:'flex', gap:12, alignItems:'flex-start' }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{flexShrink:0,marginTop:1}}>
+                    <circle cx="12" cy="12" r="10" stroke="#2563eb" strokeWidth="1.8"/>
+                    <path d="M12 8v4m0 4h.01" stroke="#2563eb" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:13, color:'#1e40af', marginBottom:3 }}>What is Role Hierarchy?</div>
+                    <div style={{ fontSize:12, color:'#374151', lineHeight:1.6 }}>
+                      Role Hierarchy defines <strong>who can manage whom</strong>. Set <strong>Level Order</strong> (1 = top), choose which roles this role <strong>can assign</strong> and <strong>can see</strong>.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display:'grid', gridTemplateColumns:'340px 1fr', gap:20, marginBottom:24 }}>
+                  <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:20, height:'fit-content' }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+                      <h3 style={{ margin:0, fontSize:14, fontWeight:700, color:'#0f172a' }}>
+                        {editingHier
+                          ? <span style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:8, height:8, borderRadius:'50%', background:'#f59e0b', display:'inline-block' }} />Editing: {editingHier}</span>
+                          : <span style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:8, height:8, borderRadius:'50%', background:'#10b981', display:'inline-block' }} />Add New Entry</span>
+                        }
+                      </h3>
+                      {editingHier && (
+                        <button style={{ fontSize:11, color:'#6b7280', background:'#f3f4f6', border:'1px solid #e5e7eb', borderRadius:6, padding:'3px 8px', cursor:'pointer' }}
+                          onClick={() => { setEditingHier(null); setHierForm({ roleName:'', levelOrder:4, description:'', canAssignRoles:[], canSeenRoles:[] }); }}>
+                          Cancel
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                      <div className="rp-field">
+                        <label className="rp-field__label">Role Name *</label>
+                        <select className="rp-field__input" value={hierForm.roleName}
+                          onChange={e => setHierForm({...hierForm, roleName: e.target.value})} disabled={!!editingHier}>
+                          <option value="">-- Select a role --</option>
+                          {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="rp-field">
+                        <label className="rp-field__label">Level Order <span style={{ fontSize:10, color:'#94a3b8', fontWeight:400, marginLeft:5 }}>1=top (SUPERADMIN)...</span></label>
+                        <input className="rp-field__input" type="number" min="1" max="20"
+                          value={hierForm.levelOrder} onChange={e => setHierForm({...hierForm, levelOrder: Number(e.target.value) || 1})} />
+                      </div>
+                      <div className="rp-field">
+                        <label className="rp-field__label">Description <span style={{ fontWeight:400, color:'#9ca3af' }}>(optional)</span></label>
+                        <input className="rp-field__input" placeholder="e.g. Regional sales manager"
+                          value={hierForm.description} onChange={e => setHierForm({...hierForm, description: e.target.value})} />
+                      </div>
+                      <div>
+                        <label className="rp-field__label" style={{ display:'block', marginBottom:6 }}>Can Create Users With Role</label>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                          {roles.map(r => {
+                            const on = hierForm.canAssignRoles.includes(r.name.toUpperCase());
+                            return (
+                              <button key={r.id} type="button"
+                                style={{ padding:'4px 11px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer', border: on ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0', background: on ? '#dbeafe' : '#f9fafb', color: on ? '#1d4ed8' : '#6b7280' }}
+                                onClick={() => { const nm = r.name.toUpperCase(); setHierForm(prev => ({ ...prev, canAssignRoles: prev.canAssignRoles.includes(nm) ? prev.canAssignRoles.filter(x => x !== nm) : [...prev.canAssignRoles, nm] })); }}>
+                                {on && <span style={{ marginRight:3 }}>✓</span>}{r.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <div>
+                        <label className="rp-field__label" style={{ display:'block', marginBottom:6 }}>Can View Users With Role</label>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                          {roles.map(r => {
+                            const on = (hierForm.canSeenRoles || []).includes(r.name.toUpperCase());
+                            return (
+                              <button key={r.id} type="button"
+                                style={{ padding:'4px 11px', borderRadius:6, fontSize:11, fontWeight:600, cursor:'pointer', border: on ? '1.5px solid #059669' : '1.5px solid #e2e8f0', background: on ? '#d1fae5' : '#f9fafb', color: on ? '#065f46' : '#6b7280' }}
+                                onClick={() => { const nm = r.name.toUpperCase(); setHierForm(prev => ({ ...prev, canSeenRoles: (prev.canSeenRoles || []).includes(nm) ? (prev.canSeenRoles || []).filter(x => x !== nm) : [...(prev.canSeenRoles || []), nm] })); }}>
+                                {on && <span style={{ marginRight:3 }}>✓</span>}{r.name}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <button className="rp-btn-save" style={{ width:'100%', justifyContent:'center', marginTop:4 }} onClick={saveHierarchyEntry}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                        {editingHier ? 'Update Entry' : 'Save Entry'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {hierarchyLoading ? (
+                    <div className="rp-loader-wrap" style={{ alignSelf:'center' }}><div className="rp-loader" /><span>Loading...</span></div>
+                  ) : hierarchyData.length === 0 ? (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:40, background:'#f8fafc', borderRadius:12, border:'1px dashed #e2e8f0', color:'#9ca3af', textAlign:'center' }}>
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ marginBottom:12 }}>
+                        <rect x="9" y="2" width="6" height="5" rx="1.5" stroke="#cbd5e1" strokeWidth="1.5"/>
+                        <rect x="2" y="17" width="6" height="5" rx="1.5" stroke="#e2e8f0" strokeWidth="1.5"/>
+                        <rect x="16" y="17" width="6" height="5" rx="1.5" stroke="#e2e8f0" strokeWidth="1.5"/>
+                        <path d="M12 7v4M5 17v-3h14v3" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round"/>
+                      </svg>
+                      <div style={{ fontWeight:600, fontSize:13, color:'#6b7280' }}>No hierarchy defined yet</div>
+                      <div style={{ fontSize:12, marginTop:4 }}>Add entries using the form on the left</div>
+                    </div>
+                  ) : (
+                    <div style={{ background:'linear-gradient(135deg,#f8fafc,#f1f5f9)', borderRadius:12, border:'1px solid #e2e8f0', overflowX:'auto', padding:'24px 20px' }}>
+                      <div style={{ display:'flex', flexDirection:'column', gap:0, alignItems:'center' }}>
+                        {[...hierarchyData].sort((a,b) => (a.levelOrder||99) - (b.levelOrder||99)).map((entry, idx, arr) => {
+                          const parseList = (s) => { try { return JSON.parse(s||'[]'); } catch { return []; } };
+                          const levelColors = ['#7c3aed','#2563eb','#059669','#d97706','#dc2626','#0891b2','#be185d'];
+                          const c = levelColors[idx % levelColors.length];
+                          const isLast = idx === arr.length - 1;
+                          const manages = parseList(entry.canAssignRoles);
+                          return (
+                            <div key={entry.roleName} style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
+                              <div style={{ background:'#fff', border:`2px solid ${c}`, borderRadius:12, padding:'12px 20px', minWidth:200, textAlign:'center', boxShadow:`0 3px 12px ${c}20`, position:'relative' }}>
+                                <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:4 }}>
+                                  <span style={{ fontSize:10, fontWeight:800, color:'#fff', background:c, padding:'1px 7px', borderRadius:99 }}>Level {entry.levelOrder}</span>
+                                </div>
+                                <div style={{ fontSize:14, fontWeight:700, color:'#0f172a' }}>{entry.roleName}</div>
+                                {entry.description && <div style={{ fontSize:11, color:'#6b7280', marginTop:3 }}>{entry.description}</div>}
+                                {manages.length > 0 && <div style={{ marginTop:8, fontSize:10, color:c, fontWeight:600 }}>Creates: {manages.join(' - ')}</div>}
+                                <div style={{ position:'absolute', top:8, right:8, display:'flex', gap:4 }}>
+                                  <button title="Edit" style={{ width:22, height:22, borderRadius:5, border:'1px solid #e2e8f0', background:'#f8fafc', color:'#6366f1', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+                                    onClick={() => startEditHierarchy(entry)}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  </button>
+                                  <button title="Delete" style={{ width:22, height:22, borderRadius:5, border:'1px solid #fee2e2', background:'#fff5f5', color:'#ef4444', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}
+                                    onClick={() => deleteHierarchyEntry(entry.roleName)}>
+                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/><path d="M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  </button>
+                                </div>
+                              </div>
+                              {!isLast && (
+                                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', color:'#cbd5e1' }}>
+                                  <div style={{ width:2, height:16, background:'#cbd5e1' }} />
+                                  <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0 L5 6 L10 0" fill="#cbd5e1"/></svg>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -680,7 +1002,7 @@ export default function NewRolePermissions() {
         )}
 
         {/* When role tab or perm tab is active → show role-based panels */}
-        {createTab !== "menuitem" && (
+        {createTab !== "menuitem" && createTab !== "hierarchy" && (
           !selectedRoleId ? (
             <div className="rp-empty-state">
               <div className="rp-empty-state__graphic">
@@ -707,12 +1029,12 @@ export default function NewRolePermissions() {
                   Menu Access
                   <span className="rp-ptab__badge">{menuPerms.filter(m => m.hasPermission).length}</span>
                 </button>
-                <button className={`rp-ptab ${activeTab === "hierarchy" ? "rp-ptab--active" : ""}`}
+                {/* <button className={`rp-ptab ${activeTab === "hierarchy" ? "rp-ptab--active" : ""}`}
                   onClick={() => { setActiveTab("hierarchy"); loadHierarchy(); }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M12 3v18M3 9l9-6 9 6M5 14h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
                   Role Hierarchy
                   <span className="rp-ptab__badge">{hierarchyData.length}</span>
-                </button>
+                </button> */}
                 <div className="rp-panel-tabs__spacer" />
                 {activeTab === "page" && (
                   <button className="rp-btn-save" onClick={assignPermissions}>
@@ -726,12 +1048,12 @@ export default function NewRolePermissions() {
                     Save Changes
                   </button>
                 )}
-                {activeTab === "hierarchy" && (
+                {/* {activeTab === "hierarchy" && (
                   <button className="rp-btn-save" onClick={saveHierarchyEntry}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                     {editingHier ? 'Update Entry' : 'Save Entry'}
                   </button>
-                )}
+                )} */}
               </div>
 
               {/* ── Page Permissions Panel → module-grouped layout ── */}
