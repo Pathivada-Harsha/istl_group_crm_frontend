@@ -991,20 +991,29 @@ useEffect(() => {
     } catch { setLoading(false); showToast('Error deleting user', 'error'); setUserToDelete(null); }
   };
 
-  const handleViewMenuPermissions = async (u) => {
+  const refreshMenuItems = async () => {
+    try {
+        const data = await fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" }).then(r => r.json());
+        setDynamicMenuItems(Array.isArray(data) ? data : []);
+    } catch { }
+};
+
+const handleViewMenuPermissions = async (u) => {
     setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    await refreshMenuItems();
     setSelectedUserMenuPermissions(await fetchUserMenuPermissions(u.id));
     setShowMenuPermissionsModal(true); setLoading(false);
-  };
+};
 
-  const handleEditMenuPermissions = async (u) => {
+const handleEditMenuPermissions = async (u) => {
     setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    await refreshMenuItems();
     const perms = await fetchUserMenuPermissions(u.id);
     const complete = {};
     menuPermissionsList.forEach(m => { complete[m.dbField] = perms[m.dbField] || 0; });
     setSelectedUserMenuPermissions(complete);
     setShowEditMenuPermissionsModal(true); setLoading(false);
-  };
+};
 
   const handleToggleMenuPermission = (dbField) =>
     setSelectedUserMenuPermissions(prev => ({ ...prev, [dbField]: prev[dbField] === 1 ? 0 : 1 }));
