@@ -6,12 +6,12 @@ import '../pages-css/InvoicesReceiptsPage.css'; // reuse same tab CSS
 
 const BillsReceiptsPage = () => {
   const [activeTab, setActiveTab] = useState(
-    () => localStorage.getItem('billsPaymentsActiveTab') || 'bills'
+    () => sessionStorage.getItem('billsPaymentsActiveTab') || 'bills'
   );
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    localStorage.setItem('billsPaymentsActiveTab', tab);
+    sessionStorage.setItem('billsPaymentsActiveTab', tab);
   };
 
   return (

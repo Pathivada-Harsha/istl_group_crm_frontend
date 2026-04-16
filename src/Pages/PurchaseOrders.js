@@ -13,6 +13,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
+import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -161,6 +162,9 @@ const PurchaseOrders = () => {
   const [selectedOrderBookId, setSelectedOrderBookId] = useState(''); // which orderbook is selected
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
+  // Once items are loaded (from order book OR manually), keep the form sections
+  // visible even if the user removes all items — prevents collapsing back to step 1.
+  const [itemsStepUnlocked, setItemsStepUnlocked] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   const [createPOFormData, setCreatePOFormData] = useState({
     quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '',
@@ -391,11 +395,13 @@ const PurchaseOrders = () => {
   const handleSkipQuotationLoadOrderBook = () => {
     if (orderBookItems.length === 0) { showError('No order book items available'); return; }
     setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: poItems }));
+    setItemsStepUnlocked(true);
     showSuccess(`Loaded ${poItems.length} items from order book`);
   };
   const handleLoadOrderBookItems = () => {
     if (orderBookItems.length === 0) { showError('No order book items available'); return; }
     setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: poItems }));
+    setItemsStepUnlocked(true);
     showSuccess(`Loaded ${poItems.length} items from order book for new vendor`);
   };
 
@@ -426,6 +432,7 @@ const PurchaseOrders = () => {
         paymentTerms: qData.paymentTerms || '', notes: qData.notes || '', items,
         vendorId: qData.vendorId || null, vendorName: qData.vendorName || qData.vendorContact || '', vendorContact: qData.vendorContact || ''
       }));
+      setItemsStepUnlocked(true);
       setShowNewVendorForm(false);
     } catch { showError('Failed to load quotation details'); }
     finally { setLoading(false); }
@@ -456,6 +463,7 @@ const PurchaseOrders = () => {
       lineTotal: (base - disc) + tax, selected: true, isManual: true
     };
     setCreatePOFormData(prev => ({ ...prev, items: [...prev.items, item] }));
+    setItemsStepUnlocked(true);
     setNewItem({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
     setShowManualItemForm(false);
     showSuccess('Manual item added');
@@ -644,6 +652,7 @@ const PurchaseOrders = () => {
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]); setOrderBookItems([]);
+    setItemsStepUnlocked(false);
     fetchModalGroups(); fetchVendors(); setShowCreatePOModal(true);
   };
 
@@ -654,6 +663,7 @@ const PurchaseOrders = () => {
     setQuotations([]); setOrderBookItems([]); setShowNewVendorForm(false); setShowManualItemForm(false);
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
+    setItemsStepUnlocked(false);
   };
 
   const handleCreatePO = async () => {
@@ -1267,7 +1277,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 3: Vendor */}
-              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>🏢</span> Vendor Information</h3>
                   {createPOFormData.quotation ? (
@@ -1389,7 +1399,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 4: PO Details */}
-              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
                 <div className="po-form-section">
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>📝</span> Purchase Order Details</h3>
                   <div className="po-form-row">
@@ -1433,7 +1443,7 @@ const PurchaseOrders = () => {
               )}
 
               {/* Step 5: Items */}
-              {(isEditMode || createPOFormData.quotationId || createPOFormData.items.length > 0) && (
+              {(isEditMode || createPOFormData.quotationId || itemsStepUnlocked) && (
                 <div className="po-form-section">
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div>
@@ -1451,7 +1461,7 @@ const PurchaseOrders = () => {
                     <div style={{ padding: '16px', background: '#f0fdf4', border: '2px solid #86efac', borderRadius: '8px', marginBottom: '16px' }}>
                       <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: '#166534' }}>Add Manual Item</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><input type="text" value={newItem.itemName} onChange={(e) => setNewItem(prev => ({ ...prev, itemName: e.target.value }))} placeholder="Enter item name" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="number" value={newItem.quantity} onChange={(e) => setNewItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="0" min="0" step="0.01" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="number" value={newItem.unitPrice} onChange={(e) => setNewItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || '' }))} placeholder=" " min="0" step="0.01" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                       </div>

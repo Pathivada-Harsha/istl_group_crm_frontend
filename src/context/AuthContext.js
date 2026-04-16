@@ -173,8 +173,27 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
+  // Tab/view navigation state keys to clear on logout or session expiry.
+  // Only these specific UI-state keys are removed — auth, columns, page-size
+  // preferences and all other localStorage entries are left untouched.
+  const NAV_STATE_KEYS = [
+    'leads_detail_lead',
+    'leads_detail_tab',
+    'leads_view_mode',
+    'invoicesReceiptsActiveTab',
+    'billsPaymentsActiveTab',
+  ];
+
+  const clearNavState = () => {
+    NAV_STATE_KEYS.forEach(key => {
+      localStorage.removeItem(key);
+      sessionStorage.removeItem(key);
+    });
+  };
+
   // Logout
   const logout = useCallback(() => {
+    clearNavState();
     localStorage.removeItem(USER_KEY);
     setUser(null);
     setMenuPermissions([]);

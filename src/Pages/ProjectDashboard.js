@@ -208,6 +208,8 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
 // ─── Aggregated (All / Group / SubGroup) Dashboard ───────────────────────────
 const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
   const { financial = {}, procurement = {}, projects = [], statusDistribution = [] } = data;
+  const breakdownRef = React.useRef(null);
+  const scrollToBreakdown = () => breakdownRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   const EmptyChart = ({ message = 'No data' }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#94a3b8' }}>
@@ -234,9 +236,17 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
           <div className="agg-scope-title">{scopeLabel}</div>
           <div className="agg-scope-sub">{data.totalProjects} project{data.totalProjects !== 1 ? 's' : ''} · Aggregated view</div>
         </div>
-        <button className="dashboard-refresh-btn" onClick={onRefresh} disabled={loading} style={{ marginLeft: 'auto' }}>
-          <RefreshCw size={16} /> Refresh
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          {projects.length > 0 && (
+            <button className="dashboard-refresh-btn" onClick={scrollToBreakdown}
+              style={{ background: '#3b82f6', color: '#fff', border: 'none' }}>
+              <Briefcase size={16} /> All Projects ↓
+            </button>
+          )}
+          <button className="dashboard-refresh-btn" onClick={onRefresh} disabled={loading}>
+            <RefreshCw size={16} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* Project Count KPIs */}
@@ -251,11 +261,14 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
             { label: 'On Hold',             val: data.onHoldProjects,       color: '#8b5cf6', icon: <Clock size={32} /> },
             { label: 'Cancelled',           val: data.cancelledProjects,    color: '#ef4444', icon: <XCircle size={32} /> },
           ].filter(k => k.val > 0 || k.label === 'Total Projects').map((k, i) => (
-            <div key={i} className="kpi-card" style={{ borderTopColor: k.color }}>
+            <div key={i} className="kpi-card" style={{ borderTopColor: k.color, cursor: projects.length > 0 ? 'pointer' : 'default' }}
+              onClick={projects.length > 0 ? scrollToBreakdown : undefined}
+              title={projects.length > 0 ? 'Click to view Projects Breakdown' : undefined}>
               <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
               <div className="kpi-content">
                 <div className="kpi-value">{k.val}</div>
                 <div className="kpi-label">{k.label}</div>
+                {projects.length > 0 && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>↓ View breakdown</div>}
               </div>
             </div>
           ))}
@@ -418,7 +431,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
 
       {/* Projects Breakdown Table */}
       {projects.length > 0 && (
-        <div className="dashboard-section">
+        <div className="dashboard-section" ref={breakdownRef}>
           <h3 className="section-title"><Briefcase size={20} />Projects Breakdown
             <span style={{ marginLeft: 10, fontSize: 12, fontWeight: 400, color: '#6b7280' }}>({projects.length} projects)</span>
           </h3>
@@ -443,13 +456,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                     <th className="agg-th-left">Project</th>
                     <th className="agg-th-left">Group / Category</th>
                     <th className="agg-th-left">Status</th>
-                    <th className="agg-th-right">Budget</th>
-                    <th className="agg-th-right">Billed</th>
-                    <th className="agg-th-right">Received</th>
-                    <th className="agg-th-right">Spent (Vendor)</th>
-                    <th className="agg-th-right">Pending Pay</th>
-                    <th className="agg-th-center">POs</th>
-                    <th className="agg-th-center">Delivered</th>
+                    <th className="agg-th-right">Order Value</th>
+                    <th className="agg-th-right">Invoice Raised</th>
+                    <th className="agg-th-right">Amount Received</th>
+                    <th className="agg-th-right">Vendor Payments</th>
+                    <th className="agg-th-right">Pending Payable</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -476,8 +487,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                         <td className="agg-td-right agg-val-green">{formatCurrency(p.received)}</td>
                         <td className="agg-td-right agg-val-red">{formatCurrency(p.spent)}</td>
                         <td className="agg-td-right agg-val-amber">{formatCurrency(p.pendingPay)}</td>
-                        <td className="agg-td-center">{p.totalPOs}</td>
-                        <td className="agg-td-center agg-val-green">{p.deliveredPOs}</td>
                       </tr>
                     );
                   })}
@@ -490,8 +499,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                     <td className="agg-td-right agg-val-green">{formatCurrency(financial.totalReceived)}</td>
                     <td className="agg-td-right agg-val-red">{formatCurrency(financial.totalPaid)}</td>
                     <td className="agg-td-right agg-val-amber">{formatCurrency(financial.pendingPayments)}</td>
-                    <td className="agg-td-center">{procurement.totalPOs}</td>
-                    <td className="agg-td-center agg-val-green">{procurement.deliveredPOs}</td>
                   </tr>
                 </tfoot>
               </table>

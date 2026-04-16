@@ -596,7 +596,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const handleUploadOffline = async (proposalId, file) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files are allowed'); return; }
-    if (file.size > 5 * 1024 * 1024) { showError('File too large. Maximum allowed size is 5 MB.'); return; }
+    if (file.size > 50 * 1024 * 1024) { showError('File too large. Maximum allowed size is 50 MB.'); return; }
     setUploadingId(proposalId);
     try {
       const form = new FormData();
@@ -666,8 +666,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
     if (!offlineTitle.trim()) { showError('Please enter a proposal title'); return; }
     if (!offlineFile) { showError('Please select a PDF file'); return; }
     if (!offlineFile.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files are allowed'); return; }
-    if (offlineFile.size > 5 * 1024 * 1024) { showError('File too large. Maximum allowed size is 5 MB.'); return; }
+    if (offlineFile.size > 50 * 1024 * 1024) { showError('File too large. Maximum allowed size is 50 MB.'); return; }
     setOfflineUploading(true);
+    let newId = null;
     try {
       const body = JSON.stringify({
         title: offlineTitle.trim(), leadId: lead.id, status: 'Draft',
@@ -681,7 +682,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
       });
       const createData = await createRes.json();
       if (!createData.success) throw new Error(createData.error || 'Failed to create proposal');
-      const newId = createData.data?.id;
+      newId = createData.data?.id;
       if (!newId) throw new Error('No proposal ID returned');
       const form = new FormData();
       form.append('file', offlineFile);
@@ -695,7 +696,18 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
       showSuccess('Offline proposal uploaded successfully!');
       setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null);
       fetchProposals();
-    } catch (err) { showError(err.message || 'Upload failed'); }
+    } catch (err) {
+      // If upload failed after proposal was created, delete the orphan proposal record
+      if (newId) {
+        try {
+          await fetch(`${API_BASE_URL}/proposals/${newId}`, {
+            method: 'DELETE', credentials: 'include',
+            headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+          });
+        } catch { /* silent — cleanup best-effort */ }
+      }
+      showError(err.message || 'Upload failed');
+    }
     finally { setOfflineUploading(false); }
   };
 
@@ -708,9 +720,35 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
 
   const getPropStatusClass = s => ({ Draft: 'ld-ps-draft', Sent: 'ld-ps-sent', Approved: 'ld-ps-approved', Rejected: 'ld-ps-rejected', 'On Hold': 'ld-ps-hold' }[s] || 'ld-ps-draft');
 
-  const getHistoryIcon = type => {
-    const icons = { STATUS_CHANGE: '🔄', FOLLOW_UP: '📅', PROPOSAL_CREATED: '📝', CREATED: '✅', UPDATED: '✏️', CLOSED_LOST_REASON: '❌', CONVERTED: '🎉' };
-    return icons[type] || '📌';
+  const HISTORY_CONFIG = {
+    STATUS_CHANGE:      { icon: '🔄', label: 'Status Changed',        color: '#6366f1', bg: '#eef2ff' },
+    LEAD_UPDATED:       { icon: '✏️',  label: 'Lead Updated',          color: '#0284c7', bg: '#e0f2fe' },
+    FOLLOW_UP:          { icon: '📅', label: 'Follow-up Added',        color: '#059669', bg: '#ecfdf5' },
+    FOLLOWUP_ADDED:     { icon: '📅', label: 'Follow-up Added',        color: '#059669', bg: '#ecfdf5' },
+    PROPOSAL_CREATED:   { icon: '📝', label: 'Proposal Created',       color: '#7c3aed', bg: '#f5f3ff' },
+    PROPOSAL_SENT:      { icon: '📤', label: 'Proposal Sent',          color: '#7c3aed', bg: '#f5f3ff' },
+    CREATED:            { icon: '✅', label: 'Lead Created',           color: '#16a34a', bg: '#f0fdf4' },
+    UPDATED:            { icon: '✏️',  label: 'Updated',               color: '#0284c7', bg: '#e0f2fe' },
+    CLOSED_LOST_REASON: { icon: '❌', label: 'Closed — Lost',          color: '#dc2626', bg: '#fef2f2' },
+    CLOSED_WON:         { icon: '🏆', label: 'Closed — Won',           color: '#ca8a04', bg: '#fefce8' },
+    CONVERTED:          { icon: '🎉', label: 'Converted to Customer',  color: '#ca8a04', bg: '#fefce8' },
+    ASSIGNED:           { icon: '👤', label: 'Assigned',               color: '#0284c7', bg: '#e0f2fe' },
+    NOTE_ADDED:         { icon: '💬', label: 'Note Added',             color: '#64748b', bg: '#f8fafc' },
+    TELECALLER_UPDATE:  { icon: '📞', label: 'Telecaller Update',      color: '#db2777', bg: '#fdf2f8' },
+  };
+  const getHistoryIcon = type => (HISTORY_CONFIG[type] || { icon: '📋' }).icon;
+
+  // Build a compact human-readable summary for each history entry
+  const getHistorySummary = h => {
+    if (h.description && h.description.trim()) return h.description.trim();
+    if (h.fieldChanged && (h.oldValue || h.newValue)) {
+      const field = h.fieldChanged.replace(/_/g, ' ');
+      if (h.oldValue && h.newValue) return `${field}: "${h.oldValue}" → "${h.newValue}"`;
+      if (h.newValue) return `${field} set to "${h.newValue}"`;
+      if (h.oldValue) return `${field} cleared (was "${h.oldValue}")`;
+    }
+    const cfg = HISTORY_CONFIG[h.actionType];
+    return cfg ? cfg.label : (h.actionType?.replace(/_/g, ' ') || 'Activity recorded');
   };
 
   return (
@@ -811,6 +849,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                   ['Created By', lead.createdByName || '-'],
                   ['Created At', lead.createdAt ? fmtDate(lead.createdAt) : '-'],
                   ['Updated At', lead.updatedAt ? fmtDate(lead.updatedAt) : '-'],
+                  ...(lead.status === 'Closed Won' ? [['Closed By', lead.closedByName || '-']] : []),
                 ].map(([l, v]) => (
                   <div className="ld-field-row" key={l}>
                     <span className="ld-field-label">{l}</span>
@@ -1126,27 +1165,51 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
           ) : history.length === 0 ? (
             <div className="ld-empty-state"><div className="ld-empty-icon">📋</div><p>No history found.</p></div>
           ) : (
-            <div className="ld-history-list">
-              {history.map(h => (
-                <div key={h.id} className="ld-history-item">
-                  <div className="ld-history-icon">{getHistoryIcon(h.actionType)}</div>
-                  <div className="ld-history-body">
-                    <div className="ld-history-hdr">
-                      <span className="ld-history-type">{h.actionType?.replace(/_/g, ' ')}</span>
-                      <span className="ld-history-date">{fmtDT(h.createdAt)}</span>
-                      {h.createdByName && <span className="ld-history-by">by {h.createdByName}</span>}
-                    </div>
-                    {h.description && <div className="ld-history-desc">{h.description}</div>}
-                    {h.fieldChanged && (
-                      <div className="ld-history-change">
-                        <span className="ld-chg-field">{h.fieldChanged}</span>:
-                        {h.oldValue && <><span className="ld-chg-old">{h.oldValue}</span><span style={{ margin: '0 4px', color: '#9ca3af' }}>→</span></>}
-                        {h.newValue && <span className="ld-chg-new">{h.newValue}</span>}
+            <div className="ld-history-scroll">
+              <div className="ld-history-timeline">
+                {history.map((h, idx) => {
+                  const cfg = HISTORY_CONFIG[h.actionType] || { icon: '📋', label: h.actionType?.replace(/_/g, ' ') || 'Activity', color: '#64748b', bg: '#f8fafc' };
+                  const summary = getHistorySummary(h);
+                  const hasChange = h.fieldChanged && (h.oldValue || h.newValue);
+                  // newValue is used to store notes for followup entries
+                  const notes = h.actionType?.startsWith('FOLLOWUP') && h.newValue ? h.newValue : null;
+                  return (
+                    <div key={h.id} className="ld-history-entry">
+                      {idx < history.length - 1 && <div className="ld-history-line" />}
+                      <div className="ld-history-bubble" style={{ background: cfg.bg, border: `1.5px solid ${cfg.color}22` }}>
+                        <span>{cfg.icon}</span>
                       </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                      <div className="ld-history-card">
+                        <div className="ld-history-card-hdr">
+                          <span className="ld-history-tag" style={{ color: cfg.color, background: cfg.bg }}>
+                            {cfg.label}
+                          </span>
+                          <span className="ld-history-meta">
+                            {h.createdByName && <span className="ld-history-who">👤 {h.createdByName}</span>}
+                            <span className="ld-history-when">🕐 {fmtDT(h.createdAt)}</span>
+                          </span>
+                        </div>
+                        <div className="ld-history-summary">{summary}</div>
+                        {notes && (
+                          <div className="ld-history-notes">
+                            <span className="ld-history-notes-label">Notes</span>
+                            <span className="ld-history-notes-text">{notes}</span>
+                          </div>
+                        )}
+                        {hasChange && h.description && (
+                          <div className="ld-history-change-row">
+                            <span className="ld-chg-field">{h.fieldChanged.replace(/_/g, ' ')}</span>
+                            {h.oldValue && !notes && (
+                              <><span className="ld-chg-old">{h.oldValue}</span><span className="ld-chg-arrow">→</span></>
+                            )}
+                            {h.newValue && !notes && <span className="ld-chg-new">{h.newValue}</span>}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1294,6 +1357,7 @@ const isFirstFilterRender = useRef(true);
     customerId: null, name: '', email: '', phone: '', source: 'Website',
     priority: 'Medium', status: 'New', assignedTo: null, enquiry: '',
     groupName: '', subGroupName: '', closedLostReason: '',
+    closedByUserId: null, closedByName: '',
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
   });
@@ -1469,6 +1533,8 @@ useEffect(() => {
       assignedTo: lead.assignedTo, enquiry: lead.enquiry,
       groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
       closedLostReason: '',
+      closedByUserId: lead.closedByUserId || null,
+      closedByName: lead.closedByName || '',
       // NEW fields:
       state: lead.state || '',
       district: lead.district || '',
@@ -1548,7 +1614,7 @@ useEffect(() => {
       customerId: null, name: '', email: '', phone: '',
       source: 'Website', priority: 'Medium', status: 'New',
       assignedTo: null, enquiry: '', groupName: '', subGroupName: '',
-      closedLostReason: '',
+      closedLostReason: '', closedByUserId: null, closedByName: '',
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
@@ -1660,7 +1726,7 @@ useEffect(() => {
                 formData={formData} setFormData={setFormData}
                 phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
                 groups={groups} subGroups={subGroups} users={users}
-                canAssign={canAssign} loading={loading}
+                canAssign={canAssign} loading={loading} currentUser={user}
                 onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
               />
             </div>
@@ -1864,7 +1930,7 @@ useEffect(() => {
               formData={formData} setFormData={setFormData}
               phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
               groups={groups} subGroups={subGroups} users={users}
-              canAssign={canAssign} loading={loading}
+              canAssign={canAssign} loading={loading} currentUser={user}
               onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
             />
           </div>
@@ -1975,7 +2041,7 @@ const ServerPagination = ({
 };
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit }) => (
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser }) => (
   <form onSubmit={onSubmit} className="leads-enquiries-form">
     <div className="leads-enquiries-form-section">
       <h3 className="leads-enquiries-form-section-title">Client Information</h3>
@@ -2137,7 +2203,18 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
         <div className="leads-enquiries-form-group">
           <label>Status *</label>
-          <select required value={formData.status} onChange={e => setFormData(p => ({ ...p, status: e.target.value }))}>
+          <select required value={formData.status} onChange={e => {
+            const newStatus = e.target.value;
+            setFormData(p => ({
+              ...p,
+              status: newStatus,
+              // Auto-fill closedBy with current user when switching to Closed Won
+              ...(newStatus === 'Closed Won' && !p.closedByUserId ? {
+                closedByUserId: currentUser?.id || null,
+                closedByName: currentUser?.name || '',
+              } : {}),
+            }));
+          }}>
             <option>New</option><option>Contacted</option><option>In Discussion</option>
             <option>Proposal Sent</option><option>Closed Won</option><option>Closed Lost</option>
           </select>
@@ -2151,6 +2228,26 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           {!canAssign && <small style={{ color: '#6b7280', fontSize: 12 }}>No assign permission</small>}
         </div>
       </div>
+
+      {formData.status === 'Closed Won' && (
+        <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>CLOSED WON</span>
+            Closed By *
+          </label>
+          <select
+            value={formData.closedByUserId || ''}
+            onChange={e => {
+              const u = users.find(u => String(u.id) === e.target.value);
+              setFormData(p => ({ ...p, closedByUserId: e.target.value ? Number(e.target.value) : null, closedByName: u?.name || '' }));
+            }}
+          >
+            <option value="">Select who closed this lead</option>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+          <small style={{ color: '#6b7280', fontSize: 11 }}>Select the person who closed this deal.</small>
+        </div>
+      )}
 
       {formData.status === 'Closed Lost' && (
         <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
@@ -2169,6 +2266,8 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           <small style={{ color: '#6b7280', fontSize: 11 }}>This reason will be recorded in the lead history.</small>
         </div>
       )}
+
+
 
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
         <label>Enquiry Description</label>

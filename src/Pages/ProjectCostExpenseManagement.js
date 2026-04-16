@@ -14,28 +14,26 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../components/preLoader.js';
 import filterApi from '../services/filterApi';
+import ConfirmationModal from '../components/ConfirmationModal';
 import '../pages-css/ProjectCostExpenseManagement.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const EXPENSE_CATEGORIES = ['Travel', 'Site Visit', 'Accommodation', 'Food', 'Commission', 'Miscellaneous'];
-const PAYMENT_MODES = ['Cash', 'Bank Transfer', 'UPI', 'Card', 'Cheque'];
+const PAYMENT_MODES = ['Cash', 'Bank_Transfer', 'UPI', 'Card', 'Cheque'];
+const formatPaymentMode = (mode) => mode === 'Bank_Transfer' ? 'Bank Transfer' : (mode || '');
 const COMMISSION_TYPES = ['Sales', 'Referral', 'Partner'];
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 const ADVANCE_STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Settled'];
-const VISIT_TYPES = ['Site Visit', 'Client Meeting', 'Installation', 'Inspection', 'Training', 'Maintenance'];
 
 const DEFAULT_COLUMNS = [
   { key: 'expenseCode', label: 'Code', sortable: true, visible: true },
   { key: 'tripDate', label: 'Date', sortable: true, visible: true },
   { key: 'groupInfo', label: 'Group/Project', sortable: false, visible: true },
-  { key: 'category', label: 'Category', sortable: true, visible: true },
-  { key: 'amount', label: 'Amount', sortable: true, visible: true },
+  { key: 'expenseItems', label: 'Expense Items', sortable: false, visible: true },
+  { key: 'amount', label: 'Total', sortable: true, visible: true },
   { key: 'paidByName', label: 'Paid By', sortable: true, visible: true },
-  { key: 'approvedByName', label: 'Approved By', sortable: false, visible: true },
-  { key: 'paymentMode', label: 'Mode', sortable: true, visible: true },
-  { key: 'status', label: 'Status', sortable: true, visible: true },
   { key: 'actions', label: 'Actions', sortable: false, visible: true },
 ];
 
@@ -87,9 +85,12 @@ const ProjectCostExpenseManagement = () => {
   const dragOver = useRef(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'alert', onConfirm: null });
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [showAdvanceModal, setShowAdvanceModal] = useState(false);
+  const [showItemsModal, setShowItemsModal] = useState(false);
+  const [itemsModalExpense, setItemsModalExpense] = useState(null);
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [expenseFormData, setExpenseFormData] = useState(null);
   const [advanceFormData, setAdvanceFormData] = useState(null);
@@ -312,9 +313,8 @@ const ProjectCostExpenseManagement = () => {
     setExpenseFormData({
       groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '',
       tripDate: new Date().toISOString().split('T')[0],
-      visitType: 'Site Visit', tripReason: '', tripOutcome: '',
-      paidByUserId: '', paidByName: '', approvedByUserId: '', approvedByName: '',
-      status: 'Pending',
+      tripReason: '',
+      paidByUserId: '', paidByName: '',
       commissionType: '', commissionGivenTo: '',
       commissionPercentage: '', commissionFixedAmount: '', salesOrderRef: '',
       expenseItems: [{ id: Date.now(), category: 'Travel', amount: '', paymentMode: 'UPI', description: '' }],
@@ -335,13 +335,11 @@ const ProjectCostExpenseManagement = () => {
     if (!expenseFormData.groupName || !expenseFormData.subGroupName) {
       showError('Group and Sub-Group are required'); return;
     }
-    if (!expenseFormData.projectId) { showError('Project is required'); return; }
-    if (!expenseFormData.tripDate || !expenseFormData.tripReason?.trim()) {
-      showError('Trip Date and Trip Reason are required'); return;
+    if (!expenseFormData.tripDate) {
+      showError('Date is required'); return;
     }
-    if (!expenseFormData.expenseItems?.length ||
-      expenseFormData.expenseItems.some(i => !i.amount || parseFloat(i.amount) <= 0)) {
-      showError('Add at least one expense item with a valid amount'); return;
+    if (!expenseFormData.expenseItems?.length) {
+      showError('Add at least one expense item'); return;
     }
     setLoading(true);
     try {
@@ -349,20 +347,17 @@ const ProjectCostExpenseManagement = () => {
         method: 'POST', headers: getAuthHeaders(), credentials: 'include',
         body: JSON.stringify({
           groupName: expenseFormData.groupName, subGroupName: expenseFormData.subGroupName,
-          projectId: expenseFormData.projectId, tripDate: expenseFormData.tripDate,
-          visitType: expenseFormData.visitType, tripReason: expenseFormData.tripReason,
-          tripOutcome: expenseFormData.tripOutcome,
+          projectId: expenseFormData.projectId || null, tripDate: expenseFormData.tripDate,
+          tripReason: expenseFormData.tripReason || null,
           paidByUserId: expenseFormData.paidByUserId || null, paidByName: expenseFormData.paidByName || '',
-          approvedByUserId: expenseFormData.approvedByUserId || null, approvedByName: expenseFormData.approvedByName || '',
-          status: expenseFormData.status,
           commissionType: expenseFormData.commissionType || null,
           commissionGivenTo: expenseFormData.commissionGivenTo || null,
           commissionPercentage: expenseFormData.commissionPercentage ? parseFloat(expenseFormData.commissionPercentage) : null,
           commissionFixedAmount: expenseFormData.commissionFixedAmount ? parseFloat(expenseFormData.commissionFixedAmount) : null,
           salesOrderRef: expenseFormData.salesOrderRef || null,
           expenseItems: expenseFormData.expenseItems.map(i => ({
-            category: i.category, amount: parseFloat(i.amount),
-            paymentMode: i.paymentMode, description: i.description,
+            category: i.category, amount: parseFloat(i.amount) || 0,
+            paymentMode: i.paymentMode, description: i.description || '',
           })),
         }),
       });
@@ -443,7 +438,21 @@ const ProjectCostExpenseManagement = () => {
     finally { setLoading(false); }
   };
 
-  const handleStatusChange = async (id, newStatus) => {
+  const handleStatusChange = (id, newStatus) => {
+    const isReject = newStatus === 'Rejected';
+    setConfirmModal({
+      show: true,
+      title: isReject ? 'Reject Expense' : `${newStatus} Expense`,
+      message: isReject
+        ? 'Are you sure you want to reject this expense?'
+        : `Are you sure you want to mark this expense as ${newStatus}?`,
+      type: isReject ? 'alert' : 'confirm',
+      onConfirm: () => performStatusChange(id, newStatus),
+    });
+  };
+
+  const performStatusChange = async (id, newStatus) => {
+    setConfirmModal({ show: false });
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/project-expenses/${id}/status`, {
@@ -457,8 +466,18 @@ const ProjectCostExpenseManagement = () => {
     finally { setLoading(false); }
   };
 
-  const handleDeleteExpense = async (expenseId) => {
-    if (!window.confirm('Are you sure you want to delete this expense?')) return;
+  const handleDeleteExpense = (expenseId) => {
+    setConfirmModal({
+      show: true,
+      title: 'Delete Expense',
+      message: 'Are you sure you want to delete this expense? This action cannot be undone.',
+      type: 'alert',
+      onConfirm: () => performDeleteExpense(expenseId),
+    });
+  };
+
+  const performDeleteExpense = async (expenseId) => {
+    setConfirmModal({ show: false });
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/project-expenses/${expenseId}`, {
@@ -486,7 +505,7 @@ const ProjectCostExpenseManagement = () => {
       requestedByUserId: '', requestedByName: '', approvedByUserId: '', approvedByName: '',
       status: 'Pending', relatedExpenseId: relatedExpense?.id || null,
       advancePayments: [{
-        id: Date.now(), advanceNumber: 1, amount: '', paymentMode: 'Bank Transfer',
+        id: Date.now(), advanceNumber: 1, amount: '', paymentMode: 'Bank_Transfer',
         paymentDate: new Date().toISOString().split('T')[0], notes: ''
       }],
     });
@@ -560,24 +579,28 @@ const ProjectCostExpenseManagement = () => {
           {exp.projectId && <span className="prj-name">{exp.projectId}</span>}
         </div>
       );
-      case 'category': return (
-        <div className="exp-cat-cell"><CategoryIcon cat={exp.category} /><span>{exp.category}</span></div>
+      case 'expenseItems': return (
+        <div className="exp-items-chips-cell" style={{ cursor: 'pointer' }}
+          onClick={(e) => { e.stopPropagation(); setItemsModalExpense(exp); setShowItemsModal(true); }}>
+          {(exp.expenseItems || []).slice(0, 2).map((item, i) => (
+            <span key={i} className="exp-item-chip">
+              <CategoryIcon cat={item.category} />
+              <span className="chip-cat">{item.category}</span>
+              <span className="chip-amt">{fmt(item.amount)}</span>
+            </span>
+          ))}
+          {(exp.expenseItems || []).length > 2 && (
+            <span className="exp-item-chip chip-more">+{(exp.expenseItems || []).length - 2} more</span>
+          )}
+          {(exp.expenseItems || []).length === 0 && <span className="text-muted">—</span>}
+        </div>
       );
-      case 'amount': return <strong className="exp-amount">{fmt(exp.amount)}</strong>;
+      case 'amount': return <strong className="exp-amount">{fmt(exp.totalAmount)}</strong>;
       case 'paidByName': return exp.paidByName || '—';
-      case 'approvedByName': return exp.approvedByName || <span className="text-muted">Pending</span>;
-      case 'paymentMode': return (
-        <div className="exp-mode-cell"><CreditCard size={13} /><span>{exp.paymentMode}</span></div>
-      );
-      case 'status': return <StatusBadge s={exp.status} />;
       case 'actions': return (
         <div className="exp-actions-cell">
           <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
           <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
-          {exp.status === 'Pending' && <>
-            <button className="exp-act-btn ok-btn" title="Approve" onClick={() => handleStatusChange(exp.id, 'Approved')}><CheckCircle size={14} /></button>
-            <button className="exp-act-btn rej-btn" title="Reject" onClick={() => handleStatusChange(exp.id, 'Rejected')}><XCircle size={14} /></button>
-          </>}
           <button className="exp-act-btn adv-btn" title="Advance" onClick={() => handleAddNewAdvance(exp)}><DollarSign size={14} /></button>
           <button className="exp-act-btn del-btn" title="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
         </div>
@@ -601,6 +624,14 @@ const ProjectCostExpenseManagement = () => {
     <div className="exp-mgmt-container">
       {loading && <CrmPreloader text="Loading..." />}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ show: false })}
+      />
 
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div className="exp-mgmt-header">
@@ -644,7 +675,7 @@ const ProjectCostExpenseManagement = () => {
           <select className="exp-mgmt-filter" value={filters.paymentMode}
             onChange={(e) => { setFilters({ ...filters, paymentMode: e.target.value }); setCurrentPage(0); }}>
             <option value="all">All Modes</option>
-            {PAYMENT_MODES.map(m => <option key={m}>{m}</option>)}
+            {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
           </select>
           <input type="date" className="exp-mgmt-filter" value={filters.dateFrom}
             onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} />
@@ -775,12 +806,15 @@ const ProjectCostExpenseManagement = () => {
                     No expenses found. Adjust your filters or add a new expense.
                   </td></tr>
                 ) : expenses.map(exp => (
-                  <tr key={exp.id} className="exp-mgmt-table-row">
+                  <tr key={exp.id} className="exp-mgmt-table-row"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => handleViewExpense(exp)}>
                     {columns.filter(c => c.visible).map(col => (
                       <td
                         key={col.key}
                         data-label={col.label}
                         className={col.key === 'actions' ? 'actions-td' : ''}
+                        onClick={col.key === 'actions' ? (e) => e.stopPropagation() : undefined}
                       >
                         {renderCell(col, exp)}
                       </td>
@@ -867,30 +901,40 @@ const ProjectCostExpenseManagement = () => {
                     <td data-label="Actions" className="actions-td">
                       <div className="exp-actions-cell">
                         {adv.status === 'Pending' && (
-                          <button className="exp-act-btn ok-btn" title="Approve" onClick={async () => {
-                            try {
-                              const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
-                                {
-                                  method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
-                                  body: JSON.stringify({ status: 'Approved' })
-                                });
-                              if (!r.ok) throw new Error();
-                              showSuccess('Advance approved'); fetchAdvances();
-                            } catch { showError('Failed to approve'); }
-                          }}><CheckCircle size={14} /></button>
+                          <button className="exp-act-btn ok-btn" title="Approve"
+                            onClick={() => setConfirmModal({
+                              show: true,
+                              title: 'Approve Advance',
+                              message: `Approve advance ${adv.advanceCode}?`,
+                              type: 'confirm',
+                              onConfirm: async () => {
+                                setConfirmModal({ show: false });
+                                try {
+                                  const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
+                                    { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include', body: JSON.stringify({ status: 'Approved' }) });
+                                  if (!r.ok) throw new Error();
+                                  showSuccess('Advance approved'); fetchAdvances();
+                                } catch { showError('Failed to approve'); }
+                              },
+                            })}><CheckCircle size={14} /></button>
                         )}
                         {adv.status === 'Approved' && (
-                          <button className="exp-act-btn ok-btn settle-btn" onClick={async () => {
-                            try {
-                              const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
-                                {
-                                  method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
-                                  body: JSON.stringify({ status: 'Settled' })
-                                });
-                              if (!r.ok) throw new Error();
-                              showSuccess('Advance settled'); fetchAdvances(); fetchStats();
-                            } catch { showError('Failed to settle'); }
-                          }}>Settle</button>
+                          <button className="exp-act-btn ok-btn settle-btn"
+                            onClick={() => setConfirmModal({
+                              show: true,
+                              title: 'Settle Advance',
+                              message: `Mark advance ${adv.advanceCode} as settled?`,
+                              type: 'confirm',
+                              onConfirm: async () => {
+                                setConfirmModal({ show: false });
+                                try {
+                                  const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
+                                    { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include', body: JSON.stringify({ status: 'Settled' }) });
+                                  if (!r.ok) throw new Error();
+                                  showSuccess('Advance settled'); fetchAdvances(); fetchStats();
+                                } catch { showError('Failed to settle'); }
+                              },
+                            })}>Settle</button>
                         )}
                       </div>
                     </td>
@@ -985,38 +1029,15 @@ const ProjectCostExpenseManagement = () => {
                 </div>
               </div>
 
-              {/* Trip Information */}
+              {/* Expense Information */}
               <div className="exp-form-section">
-                <h3>Trip Information</h3>
+                <h3>Expense Information</h3>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group">
-                    <label>Trip Date *</label>
+                    <label>Date *</label>
                     <input type="date" value={expenseFormData.tripDate}
                       onChange={(e) => setExpenseFormData({ ...expenseFormData, tripDate: e.target.value })} />
                   </div>
-                  <div className="vendor-form-group">
-                    <label>Visit Type</label>
-                    <select value={expenseFormData.visitType}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, visitType: e.target.value })}>
-                      {VISIT_TYPES.map(v => <option key={v}>{v}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Trip Reason / Purpose *</label>
-                    <textarea rows={2} value={expenseFormData.tripReason}
-                      placeholder="E.g. Client meeting for solar panel inspection…"
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, tripReason: e.target.value })} />
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Trip Outcome / Result</label>
-                    <textarea rows={2} value={expenseFormData.tripOutcome}
-                      placeholder="E.g. Client approved the plan…"
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, tripOutcome: e.target.value })} />
-                  </div>
-                </div>
-                <div className="vendor-form-row">
                   <div className="vendor-form-group">
                     <label>Paid By</label>
                     <select value={expenseFormData.paidByUserId}
@@ -1028,26 +1049,12 @@ const ProjectCostExpenseManagement = () => {
                       {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <div className="vendor-form-group">
-                    <label>Approved By</label>
-                    <select value={expenseFormData.approvedByUserId}
-                      onChange={(e) => {
-                        const u = availableUsers.find(u => String(u.id) === e.target.value);
-                        setExpenseFormData({ ...expenseFormData, approvedByUserId: e.target.value, approvedByName: u?.name || '' });
-                      }}>
-                      <option value="">Select Manager</option>
-                      {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
                 </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Status</label>
-                    <select value={expenseFormData.status}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, status: e.target.value })}>
-                      {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </div>
+                <div className="vendor-form-group">
+                  <label>Purpose / Description</label>
+                  <textarea rows={2} value={expenseFormData.tripReason}
+                    placeholder="E.g. Material transport to site, employee travel to client…"
+                    onChange={(e) => setExpenseFormData({ ...expenseFormData, tripReason: e.target.value })} />
                 </div>
               </div>
 
@@ -1104,7 +1111,7 @@ const ProjectCostExpenseManagement = () => {
                             ...prev, expenseItems: prev.expenseItems.map(i =>
                               i.id === item.id ? { ...i, paymentMode: e.target.value } : i),
                           }))}>
-                          {PAYMENT_MODES.map(m => <option key={m}>{m}</option>)}
+                          {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1124,44 +1131,6 @@ const ProjectCostExpenseManagement = () => {
                 </div>
               </div>
 
-              {/* Commission Details (conditional) */}
-              {expenseFormData.expenseItems.some(i => i.category === 'Commission') && (
-                <div className="exp-form-section commission-section">
-                  <h3>Commission Details</h3>
-                  <div className="vendor-form-row">
-                    <div className="vendor-form-group">
-                      <label>Commission Type</label>
-                      <select value={expenseFormData.commissionType}
-                        onChange={(e) => setExpenseFormData({ ...expenseFormData, commissionType: e.target.value })}>
-                        <option value="">Select Type</option>
-                        {COMMISSION_TYPES.map(t => <option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    <div className="vendor-form-group">
-                      <label>Given To</label>
-                      <input type="text" value={expenseFormData.commissionGivenTo} placeholder="Name / Vendor"
-                        onChange={(e) => setExpenseFormData({ ...expenseFormData, commissionGivenTo: e.target.value })} />
-                    </div>
-                  </div>
-                  <div className="vendor-form-row">
-                    <div className="vendor-form-group">
-                      <label>Percentage (%)</label>
-                      <input type="number" step="0.01" value={expenseFormData.commissionPercentage}
-                        onChange={(e) => setExpenseFormData({ ...expenseFormData, commissionPercentage: e.target.value })} />
-                    </div>
-                    <div className="vendor-form-group">
-                      <label>Fixed Amount (₹)</label>
-                      <input type="number" step="0.01" value={expenseFormData.commissionFixedAmount}
-                        onChange={(e) => setExpenseFormData({ ...expenseFormData, commissionFixedAmount: e.target.value })} />
-                    </div>
-                    <div className="vendor-form-group">
-                      <label>Sales Order Ref</label>
-                      <input type="text" value={expenseFormData.salesOrderRef} placeholder="SO-2024-001"
-                        onChange={(e) => setExpenseFormData({ ...expenseFormData, salesOrderRef: e.target.value })} />
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
             <div className="exp-mgmt-modal-actions">
               <button className="exp-mgmt-btn-primary" onClick={handleCreateExpense}>
@@ -1240,7 +1209,7 @@ const ProjectCostExpenseManagement = () => {
                     <label>Payment Mode</label>
                     <select value={expenseFormData.paymentMode}
                       onChange={(e) => setExpenseFormData({ ...expenseFormData, paymentMode: e.target.value })}>
-                      {PAYMENT_MODES.map(m => <option key={m}>{m}</option>)}
+                      {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
                     </select>
                   </div>
                   <div className="vendor-form-group">
@@ -1387,7 +1356,7 @@ const ProjectCostExpenseManagement = () => {
                       ...prev,
                       advancePayments: [...prev.advancePayments, {
                         id: Date.now(), advanceNumber: prev.advancePayments.length + 1,
-                        amount: '', paymentMode: 'Bank Transfer',
+                        amount: '', paymentMode: 'Bank_Transfer',
                         paymentDate: new Date().toISOString().split('T')[0], notes: '',
                       }],
                     }))}>
@@ -1427,7 +1396,7 @@ const ProjectCostExpenseManagement = () => {
                             ...prev, advancePayments: prev.advancePayments.map(p =>
                               p.id === pmt.id ? { ...p, paymentMode: e.target.value } : p),
                           }))}>
-                          {PAYMENT_MODES.map(m => <option key={m}>{m}</option>)}
+                          {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
                         </select>
                       </div>
                       <div className="vendor-form-group">
@@ -1484,13 +1453,9 @@ const ProjectCostExpenseManagement = () => {
                 <h3>Expense Information</h3>
                 <div className="vendor-info-grid">
                   {[
-                    [<Calendar size={18} />, 'Trip Date', fmtDate(selectedExpense.tripDate)],
-                    [<MapPin size={18} />, 'Visit Type', selectedExpense.visitType],
-                    [<FileText size={18} />, 'Category', selectedExpense.category],
-                    [<IndianRupee size={18} />, 'Amount', fmt(selectedExpense.amount)],
-                    [<CreditCard size={18} />, 'Payment Mode', selectedExpense.paymentMode],
+                    [<Calendar size={18} />, 'Date', fmtDate(selectedExpense.tripDate)],
+                    [<IndianRupee size={18} />, 'Total Amount', fmt(selectedExpense.totalAmount)],
                     [<Users size={18} />, 'Paid By', selectedExpense.paidByName || 'N/A'],
-                    [<CheckCircle size={18} />, 'Approved By', selectedExpense.approvedByName || 'Pending'],
                     [<Clock size={18} />, 'Status', null],
                   ].map(([icon, label, val], i) => (
                     <div key={i} className="vendor-info-item">
@@ -1504,40 +1469,58 @@ const ProjectCostExpenseManagement = () => {
                     </div>
                   ))}
                 </div>
-              </div>
-              {(selectedExpense.tripReason || selectedExpense.tripOutcome) && (
-                <div className="exp-mgmt-drawer-section">
-                  <h3>Trip Details</h3>
-                  {selectedExpense.tripReason && (
-                    <div className="exp-info-box"><h4>Reason / Purpose</h4><p>{selectedExpense.tripReason}</p></div>
-                  )}
-                  {selectedExpense.tripOutcome && (
-                    <div className="exp-info-box"><h4>Outcome / Result</h4><p>{selectedExpense.tripOutcome}</p></div>
-                  )}
-                  {selectedExpense.description && (
-                    <div className="exp-info-box"><h4>Description</h4><p>{selectedExpense.description}</p></div>
-                  )}
-                </div>
-              )}
-              {selectedExpense.category === 'Commission' && selectedExpense.commissionType && (
-                <div className="exp-mgmt-drawer-section">
-                  <h3>Commission Details</h3>
-                  <div className="vendor-info-grid">
-                    {[
-                      ['Type', selectedExpense.commissionType],
-                      ['Given To', selectedExpense.commissionGivenTo],
-                      ['Percentage', selectedExpense.commissionPercentage ? `${selectedExpense.commissionPercentage}%` : 'N/A'],
-                      ['Fixed Amount', selectedExpense.commissionFixedAmount ? fmt(selectedExpense.commissionFixedAmount) : 'N/A'],
-                      ['Sales Order', selectedExpense.salesOrderRef || 'N/A'],
-                    ].map(([label, val], i) => (
-                      <div key={i} className="vendor-info-item">
-                        <FileText size={18} />
-                        <div><span className="info-label">{label}</span><span className="info-value">{val || 'N/A'}</span></div>
-                      </div>
-                    ))}
+                {selectedExpense.tripReason && (
+                  <div className="exp-info-box" style={{ marginTop: 14 }}>
+                    <h4>Purpose / Description</h4>
+                    <p>{selectedExpense.tripReason}</p>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+
+              {/* Expense Items Table */}
+              <div className="exp-mgmt-drawer-section">
+                <h3>Expense Items ({(selectedExpense.expenseItems || []).length})</h3>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>#</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Category</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Description</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Mode</th>
+                      <th style={{ padding: '8px 10px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(selectedExpense.expenseItems || []).map((item, i) => (
+                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '10px', color: '#94a3b8' }}>{i + 1}</td>
+                        <td style={{ padding: '10px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <CategoryIcon cat={item.category} />
+                            <span style={{ fontWeight: 500 }}>{item.category}</span>
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px', color: '#64748b' }}>{item.description || '—'}</td>
+                        <td style={{ padding: '10px', color: '#64748b' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <CreditCard size={12} />{formatPaymentMode(item.paymentMode)}
+                          </div>
+                        </td>
+                        <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600 }}>{fmt(item.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
+                      <td colSpan={4} style={{ padding: '10px', fontWeight: 600 }}>Total</td>
+                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 14 }}>
+                        {fmt(selectedExpense.totalAmount)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
               {selectedExpense.receiptUrl && (
                 <div className="exp-mgmt-drawer-section">
                   <h3>Receipt</h3>
@@ -1567,6 +1550,68 @@ const ProjectCostExpenseManagement = () => {
                   Delete
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          EXPENSE ITEMS DETAIL MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showItemsModal && itemsModalExpense && (
+        <div className="exp-mgmt-modal-overlay" onClick={() => setShowItemsModal(false)}>
+          <div className="exp-items-detail-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="exp-mgmt-modal-header">
+              <div>
+                <h2>Expense Items — {itemsModalExpense.expenseCode}</h2>
+                <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
+                  {fmtDate(itemsModalExpense.tripDate)}
+                  {itemsModalExpense.paidByName ? ` · Paid by ${itemsModalExpense.paidByName}` : ''}
+                  {itemsModalExpense.tripReason ? ` · ${itemsModalExpense.tripReason}` : ''}
+                </p>
+              </div>
+              <button className="exp-mgmt-modal-close" onClick={() => setShowItemsModal(false)}>✕</button>
+            </div>
+            <div style={{ padding: '0 24px 24px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>#</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Category</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Description</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Mode</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(itemsModalExpense.expenseItems || []).map((item, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                      <td style={{ padding: '12px', color: '#94a3b8', fontSize: 13 }}>{i + 1}</td>
+                      <td style={{ padding: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <CategoryIcon cat={item.category} />
+                          <span style={{ fontWeight: 500 }}>{item.category}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px', color: '#64748b' }}>{item.description || '—'}</td>
+                      <td style={{ padding: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b' }}>
+                          <CreditCard size={13} />{formatPaymentMode(item.paymentMode)}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: '#111827' }}>{fmt(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
+                    <td colSpan={4} style={{ padding: '12px', fontWeight: 600, color: '#374151' }}>Total</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#111827', fontSize: 15 }}>
+                      {fmt((itemsModalExpense.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 // Old Invoices page
-import React, { useState, useEffect } from 'react';
-import { Eye, Edit2, Trash2, DollarSign, Download, Send } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check } from 'lucide-react';
 import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -39,6 +39,26 @@ const InvoicesManagementPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+
+  // Column sorting
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // Column visibility & order
+  const INVOICE_COLUMNS = [
+    { key: 'customerId',    label: 'Customer' },
+    { key: 'totalAmount',   label: 'Total Amount' },
+    { key: 'paidAmount',    label: 'Paid Amount' },
+    { key: 'balanceAmount', label: 'Balance' },
+    { key: 'status',        label: 'Status' },
+    { key: 'invoiceDate',   label: 'Invoice Date' },
+    { key: 'dueDate',       label: 'Due Date' },
+  ];
+  const [columnOrder, setColumnOrder] = useState(INVOICE_COLUMNS.map(c => c.key));
+  const [visibleColumns, setVisibleColumns] = useState(INVOICE_COLUMNS.map(c => c.key));
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false);
+  const columnsPanelRef = useRef(null);
+  const dragColRef = useRef(null);
+  const dragOverColRef = useRef(null);
 
   // Modal states
   const [selectedInvoice, setSelectedInvoice] = useState(null);
@@ -863,6 +883,76 @@ const fetchStats = async () => {
     return statusMap[status] || status;
   };
 
+  // Close columns panel when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnsPanelRef.current && !columnsPanelRef.current.contains(e.target)) {
+        setShowColumnsPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Sorting
+  const handleSort = (key) => {
+    setSortConfig(prev =>
+      prev.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    );
+  };
+
+  const getSortedInvoices = () => {
+    if (!sortConfig.key) return invoices;
+    return [...invoices].sort((a, b) => {
+      let aVal = a[sortConfig.key] ?? '';
+      let bVal = b[sortConfig.key] ?? '';
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (sortConfig.key !== colKey) return <ChevronUp size={13} style={{ opacity: 0.3, marginLeft: 3 }} />;
+    return sortConfig.direction === 'asc'
+      ? <ChevronUp size={13} style={{ marginLeft: 3, color: '#6366f1' }} />
+      : <ChevronDown size={13} style={{ marginLeft: 3, color: '#6366f1' }} />;
+  };
+
+  // Drag-and-drop column reorder
+  const handleColDragStart = (key) => { dragColRef.current = key; };
+  const handleColDragOver = (e, key) => { e.preventDefault(); dragOverColRef.current = key; };
+  const handleColDrop = () => {
+    const from = dragColRef.current;
+    const to   = dragOverColRef.current;
+    if (!from || !to || from === to) return;
+    setColumnOrder(prev => {
+      const arr = [...prev];
+      const fi = arr.indexOf(from);
+      const ti = arr.indexOf(to);
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, from);
+      return arr;
+    });
+    dragColRef.current = null;
+    dragOverColRef.current = null;
+  };
+
+  // Toggle column visibility
+  const toggleColumn = (key) => {
+    setVisibleColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  // Ordered, visible columns
+  const orderedVisibleCols = columnOrder.filter(k => visibleColumns.includes(k));
+  const colMeta = Object.fromEntries(INVOICE_COLUMNS.map(c => [c.key, c]));
+
   return (
     <div className="Invoices-page-container">
       {loading && <CrmPreloader text="Loading..." />}
@@ -925,6 +1015,56 @@ const fetchStats = async () => {
         </div>
 
         <div className="Invoices-page-actions">
+          <div className="col-toggle-wrapper" ref={columnsPanelRef} style={{ position: 'relative', display: 'inline-block' }}>
+            <button
+              className="Invoices-page-btn-columns"
+              onClick={() => setShowColumnsPanel(p => !p)}
+              title="Toggle Columns"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px',
+                background: '#fff', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                fontWeight: 500
+              }}
+            >
+              <Columns size={16} />
+              Columns
+            </button>
+            {showColumnsPanel && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 999,
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '10px 0', minWidth: '200px'
+              }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f1f5f9' }}>
+                  Show / Hide Columns
+                </div>
+                {INVOICE_COLUMNS.map(col => (
+                  <div
+                    key={col.key}
+                    onClick={() => toggleColumn(col.key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 17, height: 17, borderRadius: 4, border: '1.5px solid',
+                      borderColor: visibleColumns.includes(col.key) ? '#6366f1' : '#d1d5db',
+                      background: visibleColumns.includes(col.key) ? '#6366f1' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                      {visibleColumns.includes(col.key) && <Check size={11} color="#fff" strokeWidth={3} />}
+                    </div>
+                    {col.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create New Invoice"}>
             + Create New Invoice
           </button>
@@ -964,41 +1104,52 @@ const fetchStats = async () => {
         <table className="Invoices-page-table">
           <thead>
             <tr>
-              {/* <th>Invoice ID</th> */}
-              <th>Customer</th>
-              {/* <th>Project</th> */}
-              <th>Total Amount</th>
-              <th>Paid Amount</th>
-              <th>Balance</th>
-              <th>Status</th>
-              <th>Invoice Date</th>
-              <th>Due Date</th>
+              {orderedVisibleCols.map(key => (
+                <th
+                  key={key}
+                  draggable
+                  onDragStart={() => handleColDragStart(key)}
+                  onDragOver={(e) => handleColDragOver(e, key)}
+                  onDrop={handleColDrop}
+                  onClick={() => handleSort(key)}
+                  style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                >
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <GripVertical size={13} style={{ opacity: 0.35, cursor: 'grab', flexShrink: 0 }} />
+                    {colMeta[key].label}
+                    <SortIcon colKey={key} />
+                  </span>
+                </th>
+              ))}
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {invoices.length === 0 ? (
               <tr>
-                <td colSpan="10" className="empty-state">
+                <td colSpan={orderedVisibleCols.length + 1} className="empty-state">
                   No invoices found
                 </td>
               </tr>
             ) : (
-              invoices.map((invoice) => (
+              getSortedInvoices().map((invoice) => (
                 <tr key={invoice.id}>
-                  {/* <td className="Invoices-page-invoice-id">{invoice.invoiceNo}</td> */}
-                  <td>{invoice.customerId}</td>
-                  {/* <td>{invoice.projectId || '—'}</td> */}
-                  <td className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>
-                  <td>{formatCurrency(invoice.paidAmount)}</td>
-                  <td className="Invoices-page-total">{formatCurrency(invoice.balanceAmount)}</td>
-                  <td>
-                    <span className={`Invoices-page-badge ${getStatusClass(invoice.status)}`}>
-                      {getStatusDisplayName(invoice.status)}
-                    </span>
-                  </td>
-                  <td>{formatDate(invoice.invoiceDate)}</td>
-                  <td>{formatDate(invoice.dueDate)}</td>
+                  {orderedVisibleCols.map(key => {
+                    if (key === 'customerId')    return <td key={key}>{invoice.customerId}</td>;
+                    if (key === 'totalAmount')   return <td key={key} className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>;
+                    if (key === 'paidAmount')    return <td key={key}>{formatCurrency(invoice.paidAmount)}</td>;
+                    if (key === 'balanceAmount') return <td key={key} className="Invoices-page-total">{formatCurrency(invoice.balanceAmount)}</td>;
+                    if (key === 'status')        return (
+                      <td key={key}>
+                        <span className={`Invoices-page-badge ${getStatusClass(invoice.status)}`}>
+                          {getStatusDisplayName(invoice.status)}
+                        </span>
+                      </td>
+                    );
+                    if (key === 'invoiceDate')   return <td key={key}>{formatDate(invoice.invoiceDate)}</td>;
+                    if (key === 'dueDate')       return <td key={key}>{formatDate(invoice.dueDate)}</td>;
+                    return <td key={key}>—</td>;
+                  })}
                   <td>
                     <div className="Invoices-page-action-buttons">
                       <button

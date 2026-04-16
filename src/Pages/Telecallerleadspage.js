@@ -50,6 +50,7 @@ export default function TelecallerLeadsPage() {
     name: "", email: "", phone: "", source: "",
     priority: "", enquiry: "", state: "", district: "", city: "", pincode: "",
     subsidyRequired: "", referralName: "", referralPhone: "",
+    capacity: "", capacityUnit: "kW",
   });
   const [editSaving, setEditSaving] = useState(false);
 
@@ -60,6 +61,8 @@ export default function TelecallerLeadsPage() {
   const [intQuotedPrice,  setIntQuotedPrice]  = useState("");
   const [intAddons,       setIntAddons]       = useState("");
   const [intOtherComment, setIntOtherComment] = useState("");
+  const [intCapacity,     setIntCapacity]     = useState("");
+  const [intCapacityUnit, setIntCapacityUnit] = useState("kW");
 
   // ── Fetch — always reads from refs so no stale closure ever ────────────
   const fetchLeads = useCallback(async (p, statusFilter, size) => {
@@ -132,6 +135,8 @@ export default function TelecallerLeadsPage() {
     setIntQuotedPrice("");
     setIntAddons("");
     setIntOtherComment("");
+    setIntCapacity(lead.capacity     || "");
+    setIntCapacityUnit(lead.capacityUnit || "kW");
     setStatusModal(true);
   };
 
@@ -162,10 +167,19 @@ export default function TelecallerLeadsPage() {
           tcQuotedPrice:   intQuotedPrice.trim() || null,
           tcAddons:        intAddons.trim() || null,
           tcOtherComments: intOtherComment.trim() || null,
+          capacity:        intCapacity.trim() || null,
+          capacityUnit:    intCapacityUnit || "kW",
         }),
       });
       showToast("Status updated!", "success");
       setStatusModal(false);
+      // Refresh selected so the detail modal shows the updated status immediately
+      if (modalOpen) {
+        try {
+          const fresh = await api.get(`/telecaller/lead/${selected.id}`);
+          if (fresh.success) setSelected(fresh.data);
+        } catch (_) {}
+      }
       fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current);
       fetchStats();
     } catch (e) {
@@ -196,6 +210,8 @@ export default function TelecallerLeadsPage() {
       subsidyRequired: lead.subsidyRequired || "",
       referralName:    lead.referralName    || "",
       referralPhone:   lead.referralPhone   || "",
+      capacity:        lead.capacity        || "",
+      capacityUnit:    lead.capacityUnit    || "kW",
     });
     setEditModal(true);
   };
@@ -425,6 +441,13 @@ export default function TelecallerLeadsPage() {
               <DetailRow label="Group"    value={selected.groupName} />
               <DetailRow label="Category" value={selected.subGroupName} />
               <DetailRow label="Status"   value={<StatusBadge status={selected.telecallerStatus} />} />
+              {selected.capacity && (
+                <DetailRow label="Capacity" value={
+                  <span className="tc-capacity-chip">
+                    ⚡ {selected.capacity} {selected.capacityUnit || 'kW'}
+                  </span>
+                } />
+              )}
               {selected.telecallerReason && (
                 <DetailRow label="Reason" value={selected.telecallerReason} />
               )}
@@ -578,6 +601,32 @@ export default function TelecallerLeadsPage() {
                     value={editForm.pincode}
                     onChange={e => setEditForm(f => ({ ...f, pincode: e.target.value }))} />
                 </div>
+
+                {/* Project Capacity */}
+                <div className="tc-edit-field">
+                  <label>Project Capacity</label>
+                  <div style={{ display: 'flex', gap: '6px' }}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      placeholder="e.g. 10"
+                      value={editForm.capacity}
+                      onChange={e => setEditForm(f => ({ ...f, capacity: e.target.value }))}
+                      style={{ flex: 1 }}
+                    />
+                    <select
+                      value={editForm.capacityUnit}
+                      onChange={e => setEditForm(f => ({ ...f, capacityUnit: e.target.value }))}
+                      style={{ width: '72px' }}
+                    >
+                      <option value="kW">kW</option>
+                      <option value="MW">MW</option>
+                      <option value="kVA">kVA</option>
+                      <option value="HP">HP</option>
+                    </select>
+                  </div>
+                </div>
               </div>
 
               {/* Enquiry — full width */}
@@ -728,6 +777,31 @@ export default function TelecallerLeadsPage() {
                       placeholder="e.g. 1,20,000 or 1.2L — amount discussed with customer"
                       value={intQuotedPrice}
                       onChange={e => setIntQuotedPrice(e.target.value)} />
+                  </div>
+
+                  <div className="tc-reason-field">
+                    <label>Project Capacity</label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        placeholder="e.g. 5"
+                        value={intCapacity}
+                        onChange={e => setIntCapacity(e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <select
+                        value={intCapacityUnit}
+                        onChange={e => setIntCapacityUnit(e.target.value)}
+                        style={{ width: '72px' }}
+                      >
+                        <option value="kW">kW</option>
+                        <option value="MW">MW</option>
+                        <option value="kVA">kVA</option>
+                        <option value="HP">HP</option>
+                      </select>
+                    </div>
                   </div>
 
                   <div className="tc-reason-field">
