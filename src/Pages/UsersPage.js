@@ -611,7 +611,9 @@ const UsersPage = () => {
   const [teamsLoading, setTeamsLoading] = useState(false);
   // 1. Fetch menu items from backend (add this state)
   const [dynamicMenuItems, setDynamicMenuItems] = useState([]);
-
+  const [initialUserPermIds, setInitialUserPermIds] = useState([]);
+  const [loggedInActualPermIds, setLoggedInActualPermIds] = useState([]);
+  const [pagePermissionsStructure, setPagePermissionsStructure] = useState([]);
   useEffect(() => {
     fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" })
       .then(r => r.json())
@@ -619,7 +621,12 @@ const UsersPage = () => {
       .catch(() => { });
   }, []);
 
-  const [pagePermissionsStructure, setPagePermissionsStructure] = useState([]);
+  // Fetch logged-in user's ACTUAL DB permissions — bypasses AuthContext overrides
+useEffect(() => {
+  if (!user?.id || pagePermissionsStructure.length === 0) return;
+  fetchUserPagePermissions(user.id).then(ids => setLoggedInActualPermIds(ids));
+}, [user?.id, pagePermissionsStructure.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  
   useEffect(() => {
     fetch(`${API}/permissions/getAllPermissions`, { credentials: "include" })
       .then(r => r.json())
@@ -689,7 +696,7 @@ const UsersPage = () => {
     });
     return pagePermissionsStructure.filter(p => names.has(p.name));
     // pagePermissionsStructure is module-level constant, safe to omit from deps
-  }, [pagePermissions, , pagePermissionsStructure]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pagePermissions, pagePermissionsStructure]);
 
   const filteredRoles = React.useMemo(() => {
     if (!user?.role) return roles;
@@ -984,20 +991,29 @@ const UsersPage = () => {
     } catch { setLoading(false); showToast('Error deleting user', 'error'); setUserToDelete(null); }
   };
 
-  const handleViewMenuPermissions = async (u) => {
+  const refreshMenuItems = async () => {
+    try {
+        const data = await fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" }).then(r => r.json());
+        setDynamicMenuItems(Array.isArray(data) ? data : []);
+    } catch { }
+};
+
+const handleViewMenuPermissions = async (u) => {
     setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    await refreshMenuItems();
     setSelectedUserMenuPermissions(await fetchUserMenuPermissions(u.id));
     setShowMenuPermissionsModal(true); setLoading(false);
-  };
+};
 
-  const handleEditMenuPermissions = async (u) => {
+const handleEditMenuPermissions = async (u) => {
     setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    await refreshMenuItems();
     const perms = await fetchUserMenuPermissions(u.id);
     const complete = {};
     menuPermissionsList.forEach(m => { complete[m.dbField] = perms[m.dbField] || 0; });
     setSelectedUserMenuPermissions(complete);
     setShowEditMenuPermissionsModal(true); setLoading(false);
-  };
+};
 
   const handleToggleMenuPermission = (dbField) =>
     setSelectedUserMenuPermissions(prev => ({ ...prev, [dbField]: prev[dbField] === 1 ? 0 : 1 }));
@@ -1029,16 +1045,19 @@ const UsersPage = () => {
 
   const handleEditUserPermissions = async (u) => {
     setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
-    setSelectedUserPermissions(await fetchUserPagePermissions(u.id));
+    const perms = await fetchUserPagePermissions(u.id);
+    setSelectedUserPermissions(perms);
+    setInitialUserPermIds(perms);   // ← store the user's original permission set
     setShowEditUserPermissionsModal(true); setLoading(false);
   };
-
   const handleToggleUserPermission = (id) =>
     setSelectedUserPermissions(prev =>
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
 
   const handleSelectAllUserPermissionsInModule = (module) => {
-    const ids = availablePagePermissions.filter(p => p.module === module).map(p => p.id);
+    const ids = loggedInActualPerms
+      .filter(p => p.module === module)
+      .map(p => p.id);
     const allSelected = ids.every(id => selectedUserPermissions.includes(id));
     setSelectedUserPermissions(allSelected
       ? selectedUserPermissions.filter(id => !ids.includes(id))
@@ -1068,6 +1087,26 @@ const UsersPage = () => {
     return grouped;
   };
 
+  // Permissions the selected user currently has — used in Edit modal
+  const userEditPerms = React.useMemo(() => {
+    if (!initialUserPermIds.length) return [];
+    return pagePermissionsStructure.filter(p => initialUserPermIds.includes(p.id));
+  }, [initialUserPermIds, pagePermissionsStructure]);
+
+  const userEditPermsGrouped = React.useMemo(
+    () => groupPermissionsByModule(userEditPerms),
+    [userEditPerms]  // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  // Logged-in user's actual permissions — used as boundary for what they can assign
+const loggedInActualPerms = React.useMemo(() => {
+  return pagePermissionsStructure.filter(p => loggedInActualPermIds.includes(p.id));
+}, [loggedInActualPermIds, pagePermissionsStructure]);
+
+const loggedInActualPermsGrouped = React.useMemo(
+  () => groupPermissionsByModule(loggedInActualPerms),
+  [loggedInActualPerms] // eslint-disable-line react-hooks/exhaustive-deps
+);
   // Action label from permission name — e.g. "users.view" → "view"
   const labelFromName = (name) => name.includes('.') ? name.split('.').pop() : name;
 
@@ -1914,7 +1953,7 @@ const UsersPage = () => {
         </div>
       )}
 
-      
+
       {/*  VIEW PAGE PERMISSIONS  */}
       {showUserPermissionsModal && selectedUser && (
         <div className="users-page-modal-overlay">
@@ -1931,7 +1970,7 @@ const UsersPage = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Total Assigned</span>
                 <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 700 }}>
-                  {selectedUserPermissions.length} / {pagePermissionsStructure.length} permissions
+                  {selectedUserPermissions.length} permissions assigned
                 </span>
               </div>
 
@@ -2001,31 +2040,31 @@ const UsersPage = () => {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
                   <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1' }}
-                    checked={availablePagePermissions.length > 0 && availablePagePermissions.every(p => selectedUserPermissions.includes(p.id))}
+                    checked={loggedInActualPerms.length > 0 && loggedInActualPerms.every(p => selectedUserPermissions.includes(p.id))}
                     ref={el => {
                       if (el) el.indeterminate =
-                        availablePagePermissions.some(p => selectedUserPermissions.includes(p.id)) &&
-                        !availablePagePermissions.every(p => selectedUserPermissions.includes(p.id));
+                        loggedInActualPerms.some(p => selectedUserPermissions.includes(p.id)) &&
+                        !loggedInActualPerms.every(p => selectedUserPermissions.includes(p.id));
                     }}
                     onChange={e => {
-                      if (e.target.checked) setSelectedUserPermissions(availablePagePermissions.map(p => p.id));
+                      if (e.target.checked) setSelectedUserPermissions(loggedInActualPerms.map(p => p.id));
                       else setSelectedUserPermissions([]);
                     }}
                   />
                   Select All Permissions
                 </label>
                 <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>
-                  {selectedUserPermissions.length} / {availablePagePermissions.length} selected
+                  {selectedUserPermissions.length} / {loggedInActualPerms.length} selected
                 </span>
               </div>
 
               {/* ── Module rows with inline action chips ── */}
               <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
-                {Object.entries(groupedPermissions).map(([mod, perms], groupIdx) => {
+                {Object.entries(loggedInActualPermsGrouped).map(([mod, perms], groupIdx) => {
                   const allGroupOn = perms.every(p => selectedUserPermissions.includes(p.id));
                   const someGroupOn = perms.some(p => selectedUserPermissions.includes(p.id));
                   const groupCount = perms.filter(p => selectedUserPermissions.includes(p.id)).length;
-                  const isLast = groupIdx === Object.entries(groupedPermissions).length - 1;
+                  const isLast = groupIdx === Object.entries(loggedInActualPermsGrouped).length - 1;
 
                   return (
                     <div key={mod} style={{ borderBottom: isLast ? 'none' : '1px solid #e2e8f0' }}>

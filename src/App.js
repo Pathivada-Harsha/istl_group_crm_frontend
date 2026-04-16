@@ -44,9 +44,9 @@ import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
 import RoleHierarchyPage from './Pages/RoleHierarchyPage.js';
 import './App.css';
-
+import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 /* ---------------- APP WRAPPER ---------------- */
-
+setupFetchInterceptor();
 function AppWrapper() {
   const location = useLocation();
 
@@ -69,6 +69,7 @@ function AppWrapper() {
 }
 
 /* ---------------- APP SHELL ---------------- */
+
 
 function AppShell({ hideShell }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);

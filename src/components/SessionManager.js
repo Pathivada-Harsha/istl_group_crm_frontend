@@ -111,18 +111,26 @@ export default function SessionManager() {
   }, []);
 
   // ── Show warning popup + auto-logout at 0 ────────────────────────────────
+ // ── Show warning popup + auto-logout at 0 ────────────────────────────────
   useEffect(() => {
     if (secondsLeft === WARNING_AT && !showPopup) {
       setShowPopup(true);
       showPopupRef.current = true;
     }
 
-    // Guard: don't auto-logout if "Stay" ping is already in-flight
     if (secondsLeft <= 0 && !isPingingRef.current) {
+      if (showPopupRef.current) {
+       
+        const tid = setTimeout(() => {
+          if (!isPingingRef.current && !hasLoggedOutRef.current) {
+            handleLogout();
+          }
+        }, 1500);
+        return () => clearTimeout(tid);
+      }
       handleLogout();
     }
   }, [secondsLeft, showPopup, WARNING_AT, handleLogout]);
-
   // ── Listen for backend session-expired event ──────────────────────────────
   useEffect(() => {
     const handler = () => handleLogout();
