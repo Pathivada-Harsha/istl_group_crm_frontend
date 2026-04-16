@@ -449,78 +449,6 @@ function HierarchyChart({ users }) {
   );
 }
 
-//  Main UsersPage 
-// const pagePermissionsStructure = [
-//   { id: 1, name: 'users.view', description: 'View users', module: 'User Management' },
-//   { id: 2, name: 'users.create', description: 'Create new users', module: 'User Management' },
-//   { id: 3, name: 'users.edit', description: 'Edit user details', module: 'User Management' },
-//   { id: 4, name: 'users.delete', description: 'Delete users', module: 'User Management' },
-//   { id: 5, name: 'roles.manage', description: 'Manage roles', module: 'User Management' },
-//   { id: 6, name: 'customers.view', description: 'View customers', module: 'Customer Management' },
-//   { id: 7, name: 'customers.create', description: 'Create customers', module: 'Customer Management' },
-//   { id: 8, name: 'customers.edit', description: 'Edit customers', module: 'Customer Management' },
-//   { id: 9, name: 'customers.delete', description: 'Delete customers', module: 'Customer Management' },
-//   { id: 10, name: 'vendors.view', description: 'View vendors', module: 'Vendor Management' },
-//   { id: 11, name: 'vendors.create', description: 'Create vendors', module: 'Vendor Management' },
-//   { id: 12, name: 'vendors.edit', description: 'Edit vendors', module: 'Vendor Management' },
-//   { id: 13, name: 'vendors.delete', description: 'Delete vendors', module: 'Vendor Management' },
-//   { id: 14, name: 'leads.view', description: 'View leads', module: 'Lead Management' },
-//   { id: 15, name: 'leads.create', description: 'Create leads', module: 'Lead Management' },
-//   { id: 16, name: 'leads.edit', description: 'Edit leads', module: 'Lead Management' },
-//   { id: 17, name: 'leads.delete', description: 'Delete leads', module: 'Lead Management' },
-//   { id: 18, name: 'leads.assign', description: 'Assign leads', module: 'Lead Management' },
-//   { id: 19, name: 'proposals.view', description: 'View proposals', module: 'Proposal Management' },
-//   { id: 20, name: 'proposals.create', description: 'Create proposals', module: 'Proposal Management' },
-//   { id: 21, name: 'proposals.edit', description: 'Edit proposals', module: 'Proposal Management' },
-//   { id: 22, name: 'proposals.delete', description: 'Delete proposals', module: 'Proposal Management' },
-//   { id: 23, name: 'proposals.approve', description: 'Approve proposals', module: 'Proposal Management' },
-//   { id: 24, name: 'quotations.sales.view', description: 'View sales quotations', module: 'Sales Quotations' },
-//   { id: 25, name: 'quotations.sales.create', description: 'Create sales quotations', module: 'Sales Quotations' },
-//   { id: 26, name: 'quotations.sales.edit', description: 'Edit sales quotations', module: 'Sales Quotations' },
-//   { id: 27, name: 'quotations.sales.delete', description: 'Delete sales quotations', module: 'Sales Quotations' },
-//   { id: 28, name: 'quotations.sales.approve', description: 'Approve sales quotations', module: 'Sales Quotations' },
-//   { id: 29, name: 'sales_orders.view', description: 'View sales orders', module: 'Sales Orders' },
-//   { id: 30, name: 'sales_orders.create', description: 'Create sales orders', module: 'Sales Orders' },
-//   { id: 31, name: 'sales_orders.edit', description: 'Edit sales orders', module: 'Sales Orders' },
-//   { id: 32, name: 'sales_orders.delete', description: 'Delete sales orders', module: 'Sales Orders' },
-//   { id: 33, name: 'sales_orders.approve', description: 'Approve sales orders', module: 'Sales Orders' },
-//   { id: 34, name: 'invoices.view', description: 'View invoices', module: 'Invoices' },
-//   { id: 35, name: 'invoices.create', description: 'Create invoices', module: 'Invoices' },
-//   { id: 36, name: 'invoices.edit', description: 'Edit invoices', module: 'Invoices' },
-//   { id: 37, name: 'invoices.delete', description: 'Delete invoices', module: 'Invoices' },
-//   { id: 38, name: 'invoices.send', description: 'Send invoices', module: 'Invoices' },
-//   { id: 39, name: 'quotations.procurement.view', description: 'View procurement quotations', module: 'Procurement Quotations' },
-//   { id: 40, name: 'quotations.procurement.create', description: 'Create procurement quotations', module: 'Procurement Quotations' },
-//   { id: 41, name: 'quotations.procurement.edit', description: 'Edit procurement quotations', module: 'Procurement Quotations' },
-//   { id: 42, name: 'quotations.procurement.delete', description: 'Delete procurement quotations', module: 'Procurement Quotations' },
-//   { id: 43, name: 'quotations.procurement.approve', description: 'Approve procurement quotations', module: 'Procurement Quotations' },
-//   { id: 44, name: 'purchase_orders.view', description: 'View purchase orders', module: 'Purchase Orders' },
-//   { id: 45, name: 'purchase_orders.create', description: 'Create purchase orders', module: 'Purchase Orders' },
-//   { id: 46, name: 'purchase_orders.edit', description: 'Edit purchase orders', module: 'Purchase Orders' },
-//   { id: 47, name: 'purchase_orders.delete', description: 'Delete purchase orders', module: 'Purchase Orders' },
-//   { id: 48, name: 'purchase_orders.approve', description: 'Approve purchase orders', module: 'Purchase Orders' },
-//   { id: 49, name: 'bills.view', description: 'View bills', module: 'Bills' },
-//   { id: 50, name: 'bills.create', description: 'Create bills', module: 'Bills' },
-//   { id: 51, name: 'bills.edit', description: 'Edit bills', module: 'Bills' },
-//   { id: 52, name: 'bills.delete', description: 'Delete bills', module: 'Bills' },
-//   { id: 53, name: 'bills.approve', description: 'Approve bills', module: 'Bills' },
-//   { id: 54, name: 'payments.view', description: 'View payments', module: 'Payments' },
-//   { id: 55, name: 'payments.record', description: 'Record payments', module: 'Payments' },
-//   { id: 56, name: 'payments.approve', description: 'Approve payments', module: 'Payments' },
-//   { id: 57, name: 'reports.sales', description: 'View sales reports', module: 'Reports' },
-//   { id: 58, name: 'reports.procurement', description: 'View procurement reports', module: 'Reports' },
-//   { id: 59, name: 'reports.financial', description: 'View financial reports', module: 'Reports' },
-//   { id: 60, name: 'reports.analytics', description: 'View analytics', module: 'Reports' },
-//   { id: 61, name: 'followups.view', description: 'View followups', module: 'Followups' },
-//   { id: 62, name: 'followups.create', description: 'Create followups', module: 'Followups' },
-//   { id: 63, name: 'followups.edit', description: 'Edit followups', module: 'Followups' },
-//   { id: 64, name: 'followups.delete', description: 'Delete followups', module: 'Followups' },
-//   { id: 65, name: 'settings.view', description: 'View settings', module: 'System' },
-//   { id: 66, name: 'settings.edit', description: 'Edit settings', module: 'System' },
-//   { id: 67, name: 'activity_logs.view', description: 'View activity logs', module: 'System' },
-//   { id: 68, name: 'attachments.upload', description: 'Upload attachments', module: 'System' },
-//   { id: 69, name: 'attachments.delete', description: 'Delete attachments', module: 'System' }
-// ];
 
 const formatDateTime = (dateString) => {
   const d = new Date(dateString);
@@ -572,10 +500,6 @@ const UsersPage = () => {
   const [pageSize, setPageSize] = useState(10);
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
-
-  const [create] = useState(pagePermissions.USERS[1] === "CREATE");
-  const [edit] = useState(pagePermissions.USERS[2] === "EDIT");
-  const [deletee] = useState(pagePermissions.USERS[3] === "DELETE");
 
   const searchDebounceTimer = useRef(null);
   const [isSearching, setIsSearching] = useState(false);
@@ -649,28 +573,6 @@ useEffect(() => {
     dbField: item.name,
     backendKey: item.name.toUpperCase(),
   }));
-  //  Permissions lists (unchanged from original) 
-  // const menuPermissionsList = [
-  //   { id: 'dashboard', name: 'Dashboard', dbField: 'dashboard', backendKey: 'DASHBOARD' },
-  //   { id: 'analytics', name: 'Analytics', dbField: 'analytics', backendKey: 'ANALYTICS' },
-  //   { id: 'documents', name: 'Documents', dbField: 'documents', backendKey: 'DOCUMENTS' },
-  //   { id: 'settings', name: 'Settings', dbField: 'settings', backendKey: 'SETTINGS' },
-  //   { id: 'follow_ups', name: 'Follow Ups', dbField: 'follow_ups', backendKey: 'FOLLOW_UPS' },
-  //   { id: 'project_cost_and_expenses', name: 'Project Cost & Expenses', dbField: 'project_cost_and_expenses', backendKey: 'PROJECT_COST_AND_EXPENSES' },
-  //   { id: 'reports', name: 'Reports', dbField: 'reports', backendKey: 'REPORTS' },
-  //   { id: 'invoices', name: 'Invoices', dbField: 'invoices', backendKey: 'INVOICES' },
-  //   { id: 'sales_clients', name: 'Sales - Clients', dbField: 'sales_clients', backendKey: 'SALES_CLIENTS' },
-  //   { id: 'sales_leads', name: 'Sales - Leads', dbField: 'sales_leads', backendKey: 'SALES_LEADS' },
-  //   { id: 'sales_estimation', name: 'Sales - Estimation', dbField: 'sales_estimation', backendKey: 'SALES_ESTIMATION' },
-  //   { id: 'procurement_venders', name: 'Procurement - Vendors', dbField: 'procurement_venders', backendKey: 'PROCUREMENT_VENDERS' },
-  //   { id: 'procurement_quotations_received', name: 'Procurement - Quotations', dbField: 'procurement_quotations_received', backendKey: 'PROCUREMENT_QUOTATIONS_RECEIVED' },
-  //   { id: 'procurement_purchase_orders', name: 'Procurement - Purchase Orders', dbField: 'procurement_purchase_orders', backendKey: 'PROCUREMENT_PURCHASE_ORDERS' },
-  //   { id: 'procurement_bills_received', name: 'Procurement - Bills', dbField: 'procurement_bills_received', backendKey: 'PROCUREMENT_BILLS_RECEIVED' },
-  //   { id: 'office_use', name: 'Office Use', dbField: 'office_use', backendKey: 'OFFICE_USE' },
-  //   { id: 'task_management', name: 'Task Management', dbField: 'task_management', backendKey: 'TASK_MANAGEMENT' },
-  //   { id: 'project_dashboard', name: 'Project Dashboard', dbField: 'project_dashboard', backendKey: 'PROJECT_DASHBOARD' }
-  // ];
-
   const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions)
     ? menuPermissionsList.filter(m => menuPermissions.includes(m.backendKey))
     : menuPermissionsList;
@@ -1107,6 +1009,12 @@ const loggedInActualPermsGrouped = React.useMemo(
   () => groupPermissionsByModule(loggedInActualPerms),
   [loggedInActualPerms] // eslint-disable-line react-hooks/exhaustive-deps
 );
+
+// ── ADD THESE 4 LINES HERE ─────────────────────────────────────────────────
+const view    = loggedInActualPerms.some(p => p.name === 'users.view');
+const create  = loggedInActualPerms.some(p => p.name === 'users.create');
+const edit    = loggedInActualPerms.some(p => p.name === 'users.edit');
+const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
   // Action label from permission name — e.g. "users.view" → "view"
   const labelFromName = (name) => name.includes('.') ? name.split('.').pop() : name;
 
@@ -1202,8 +1110,28 @@ const loggedInActualPermsGrouped = React.useMemo(
       {/*  USERS LIST TAB  */}
       {activeTab === 'list' && (
         <>
-          {/* Filters */}
-          <div className="users-page-filters">
+         {!view && (
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', padding: '80px 20px', textAlign: 'center',
+      }}>
+        <div style={{
+          width: 72, height: 72, borderRadius: '50%', background: '#fef2f2',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+        }}>
+          <FiAlertCircle size={36} color="#ef4444" />
+        </div>
+        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#111827' }}>
+          Access Denied
+        </h3>
+        <p style={{ margin: 0, fontSize: 14, color: '#6b7280', maxWidth: 360 }}>
+          You don't have permission to view the data. Please contact your administrator.
+        </p>
+      </div>
+    )}
+          {view && <>
+    {/* Filters */}
+    <div className="users-page-filters">
             <div className="users-page-search-box">
               <input type="text" className="users-page-search-input"
                 placeholder="Search by name, email, or phone..."
@@ -1335,9 +1263,10 @@ const loggedInActualPermsGrouped = React.useMemo(
               </>
             )}
             {!loading && users.length === 0 && <div className="users-page-empty-state"><p>No users found</p></div>}
-          </div>
-        </>
-      )}
+        </div>
+    </>}
+  </>
+)}
 
       {/* TEAMS TAB - FIX #6 */}
       {activeTab === 'teams' && (
