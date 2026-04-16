@@ -1368,10 +1368,10 @@
   overflow-y: auto;
 }
 
-/* The actual table — layout:fixed keeps all columns at their declared widths */
+/* The actual table — auto layout lets columns size to their content */
 .agg-projects-table {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
   border-collapse: collapse;
   font-size: 13px;
   background: #fff;
@@ -1402,12 +1402,10 @@
   padding: 12px 14px;
   border-bottom: 2px solid #2d5282;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.agg-th-left   { text-align: left;   }
-.agg-th-right  { text-align: right;  }
-.agg-th-center { text-align: center; }
+.agg-th-left   { text-align: left; min-width: 130px; }
+.agg-th-right  { text-align: right;  min-width: 120px; }
+.agg-th-center { text-align: center; min-width: 80px;  }
 
 /* ── Body cells ── */
 .agg-projects-table td {

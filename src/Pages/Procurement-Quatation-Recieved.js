@@ -15,6 +15,7 @@ import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
 import filterApi from '../services/filterApi';
 import * as XLSX from 'xlsx';
+import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -48,7 +49,17 @@ const SortIcon = ({ columnId, sortConfig }) => {
 
 // ── Validation sets for import ───────────────────────────────────────────────
 const VALID_GST = new Set([0, 5, 12, 18, 28]);
-const CATEGORIES = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies'];
+const CATEGORIES = [
+  'Manufacturer',
+  'Supplier',
+  'Distributor',
+  'Trader',
+  'Dealer',
+  'Sub-Contractor',
+  'Service Provider',
+  'Consultant',
+  'Other',
+];
 
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
@@ -116,6 +127,8 @@ const QuotationsReceived = () => {
   // Vendor state
   const [vendors, setVendors] = useState([]);
   const [selectedVendorDetails, setSelectedVendorDetails] = useState(null);
+  const [vendorSearch, setVendorSearch] = useState('');
+  const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
 
   // Real permission checks from pagePermissions
   const quotPerms  = pagePermissions?.PROCUREMENT_QUOTATIONS || [];
@@ -220,12 +233,13 @@ const QuotationsReceived = () => {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-        // Find header row by looking for a cell that contains "item name" (case-insensitive)
+        // Find header row by looking for a cell that contains "description" or "item name"
         const headerRowIdx = data.findIndex(row =>
-          row.some(cell => typeof cell === 'string' && cell.toLowerCase().includes('item name'))
+          row.some(cell => typeof cell === 'string' &&
+            (cell.toLowerCase().includes('description') || cell.toLowerCase().includes('item name')))
         );
         if (headerRowIdx === -1) {
-          showError('Invalid template. Please use the provided quotation items template.');
+          showError('Invalid template. Please use the provided BOQ quotation template.');
           return;
         }
 
@@ -235,10 +249,16 @@ const QuotationsReceived = () => {
           return (
             s === '' ||
             s.includes('item name') ||
-            s.includes('unit price') ||
-            s.includes('quantity') ||
-            s.includes('gst') ||
             s.includes('description') ||
+            s.includes('unit price') ||
+            s.includes('rate') ||
+            s.includes('quantity') ||
+            s.includes('qty') ||
+            s.includes('make') ||
+            s.includes('unit') ||
+            s.includes('s.no') ||
+            s.includes('sr no') ||
+            s.includes('amount') ||
             s.includes('delivery') ||
             s.includes('warranty') ||
             s.includes('notes') ||
@@ -246,44 +266,56 @@ const QuotationsReceived = () => {
           );
         };
 
-        // Slice everything after the header row, then filter:
-        //  - skip blank rows (col[0] empty)
-        //  - skip any row whose first cell still looks like a header/label
+        // Slice everything after the header row, skip blanks and header-like rows
         const rows = data
           .slice(headerRowIdx + 1)
           .filter(row => {
-            const firstCell = String(row[0] || '').trim();
+            // first non-empty cell after skipping S.No column
+            const firstCell = String(row[1] || row[0] || '').trim();
             return firstCell !== '' && !isHeaderLike(firstCell);
           });
 
         const errors = [];
         const parsed = rows.map((row, i) => {
           const rowNum = headerRowIdx + 2 + i;
-          const itemName = String(row[0] || '').trim();
-          const description = String(row[1] || '').trim();
-          const quantity = parseFloat(row[2]);
-          const unitPrice = parseFloat(row[3]);
-          const gst = parseFloat(row[4]);
-          const obItemId = String(row[5] || '').trim();
-          const notes = String(row[6] || '').trim();
-          const deliveryTime = String(row[7] || '').trim();
-          const warranty = String(row[8] || '').trim();
+          // New BOQ format: S.No | Description | Unit | Qty | Make | Rate | GST% | Amount
+          // Also support old format: Item Name | Description | Qty | Unit Price | GST
+          let itemName, description, unit, quantity, make, unitPrice, gst;
+          const firstCell = String(row[0] || '').trim();
+          const isNewFormat = !isNaN(parseFloat(firstCell)) && parseFloat(firstCell) > 0;
 
-          if (!itemName) errors.push(`Row ${rowNum}: Item Name is required`);
-          if (isNaN(quantity) || quantity <= 0) errors.push(`Row ${rowNum}: Invalid quantity "${row[2]}"`);
-          if (isNaN(unitPrice) || unitPrice < 0) errors.push(`Row ${rowNum}: Invalid unit price "${row[3]}"`);
-          if (!VALID_GST.has(isNaN(gst) ? -1 : gst)) errors.push(`Row ${rowNum}: GST must be 0, 5, 12, 18, or 28 (got "${row[4]}")`);
+          if (isNewFormat) {
+            // New BOQ: S.No, Description, Unit, Qty, Make, Rate, Amount
+            itemName = String(row[1] || '').trim();
+            description = String(row[1] || '').trim();
+            unit = String(row[2] || '').trim();
+            quantity = parseFloat(row[3]);
+            make = String(row[4] || '').trim();
+            unitPrice = parseFloat(row[5]);
+            gst = 0; // no per-item GST in new format
+          } else {
+            // Legacy: Item Name, Description, Qty, Unit Price, GST
+            itemName = String(row[0] || '').trim();
+            description = String(row[1] || '').trim();
+            unit = '';
+            quantity = parseFloat(row[2]);
+            make = '';
+            unitPrice = parseFloat(row[3]);
+            gst = parseFloat(row[4]);
+          }
+
+          if (!itemName) errors.push(`Row ${rowNum}: Description is required`);
+          if (isNaN(quantity) || quantity <= 0) errors.push(`Row ${rowNum}: Invalid quantity "${isNewFormat ? row[3] : row[2]}"`);
+          if (isNaN(unitPrice) || unitPrice < 0) errors.push(`Row ${rowNum}: Invalid rate "${isNewFormat ? row[5] : row[3]}"`);
 
           return {
             itemName,
             description,
+            unit,
             quantity: isNaN(quantity) ? 1 : quantity,
+            make,
             unitPrice: isNaN(unitPrice) ? '' : unitPrice,
             taxPercent: VALID_GST.has(gst) ? gst : 18,
-            orderBookItemId: obItemId,
-            notes,
-            deliveryTime,
-            warranty,
             included: true,
           };
         });
@@ -307,14 +339,15 @@ const QuotationsReceived = () => {
       items: importPreview.map(row => ({
         itemName: row.itemName,
         description: row.description,
+        unit: row.unit || '',
         quantity: row.quantity,
+        make: row.make || '',
         unitPrice: row.unitPrice,
         taxPercent: row.taxPercent,
         included: true,
       })),
-      // Carry across delivery time / warranty from first row if not set
-      deliveryTime: prev.deliveryTime || importPreview[0].deliveryTime || '',
-      warranty: prev.warranty || importPreview[0].warranty || '',
+      deliveryTime: prev.deliveryTime || importPreview[0]?.deliveryTime || '',
+      warranty: prev.warranty || importPreview[0]?.warranty || '',
     }));
 
     handleCloseImportModal();
@@ -329,12 +362,7 @@ const QuotationsReceived = () => {
     if (xlsxFileRef.current) xlsxFileRef.current.value = '';
   };
 
-  const handleDownloadTemplate = () => {
-    const link = document.createElement('a');
-    link.href = '/templates/quotation_items_template.xlsx';
-    link.download = 'quotation_items_template.xlsx';
-    document.body.appendChild(link); link.click(); document.body.removeChild(link);
-  };
+
 
   // ── Auth helper ──────────────────────────────────────────────────────────
   const getAuthHeaders = () => ({
@@ -386,6 +414,21 @@ const QuotationsReceived = () => {
     } catch { setVendors([]); }
   };
 
+  const fetchAllVendors = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/vendors/by-group-subgroup`, {
+        credentials: 'include',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+          'X-User-Id': user?.id || localStorage.getItem('userId') || '1',
+          'X-User-Role': user?.role || localStorage.getItem('userRole') || 'USER',
+        }
+      });
+      const data = await res.json();
+      if (data.success) setVendors(data.data || []);
+    } catch { setVendors([]); }
+  };
+
   const fetchOrderBookItems = async (pid) => {
     if (!pid) { setOrderBookItems([]); return; }
     setLoadingOrderItems(true);
@@ -396,14 +439,19 @@ const QuotationsReceived = () => {
       if (data.success) {
         setOrderBookItems(data.data || []);
         if (quotationFormData && !isEditMode && data.data?.length > 0) {
-          setQuotationFormData(prev => ({
-            ...prev,
-            items: data.data.map(item => ({
-              itemName: item.itemName, description: item.specification || item.description || '',
-              quantity: item.quantity || 1, unitPrice: '', taxPercent: item.taxPercent || 18,
-              orderBookItemId: item.id, included: true,
-            })),
-          }));
+          setQuotationFormData(prev => {
+            // If user already imported items, do NOT overwrite them with order book items
+            const hasImportedItems = prev.items && prev.items.length > 0;
+            if (hasImportedItems) return prev;
+            return {
+              ...prev,
+              items: data.data.map(item => ({
+                itemName: item.itemName, description: item.specification || item.description || '',
+                quantity: item.quantity || 1, unitPrice: '', taxPercent: item.taxPercent || 18,
+                orderBookItemId: item.id, included: true,
+              })),
+            };
+          });
         }
       }
     } catch { showError('Failed to load order book items'); setOrderBookItems([]); }
@@ -419,14 +467,14 @@ const QuotationsReceived = () => {
     const g = e.target.value;
     setModalGroupName(g); setModalSubGroupName(''); setModalProjectId('');
     setModalSubGroups([]); setModalProjects([]); setOrderBookItems([]);
-    if (quotationFormData) setQuotationFormData({ ...quotationFormData, groupName: g, subGroupName: '', projectId: '', items: isEditMode ? quotationFormData.items : [] });
+    if (quotationFormData) setQuotationFormData({ ...quotationFormData, groupName: g, subGroupName: '', projectId: '', items: quotationFormData.items });
     if (g) { fetchModalSubGroups(g); fetchVendors(g, null); } else setVendors([]);
   };
 
   const handleModalSubGroupChange = (e) => {
     const sg = e.target.value;
     setModalSubGroupName(sg); setModalProjectId(''); setModalProjects([]); setOrderBookItems([]);
-    if (quotationFormData) setQuotationFormData({ ...quotationFormData, subGroupName: sg, projectId: '', items: isEditMode ? quotationFormData.items : [] });
+    if (quotationFormData) setQuotationFormData({ ...quotationFormData, subGroupName: sg, projectId: '', items: quotationFormData.items });
     if (modalGroupName && sg) { fetchModalProjects(modalGroupName, sg); fetchVendors(modalGroupName, sg); }
   };
 
@@ -440,6 +488,8 @@ const QuotationsReceived = () => {
   // ── Vendor handlers ──────────────────────────────────────────────────────
   const handleVendorTypeChange = (type) => {
     setShowNewVendorForm(type === 'new');
+    setVendorDropdownOpen(false);
+    setVendorSearch('');
     if (type === 'new') { setQuotationFormData({ ...quotationFormData, vendorId: null, vendorName: '', vendorContact: '' }); setSelectedVendorDetails(null); }
     else setQuotationFormData({ ...quotationFormData, vendorName: '', vendorContact: '' });
   };
@@ -452,7 +502,7 @@ const QuotationsReceived = () => {
     const vid = e.target.value ? parseInt(e.target.value) : null;
     if (vid) {
       const v = vendors.find(x => x.id === vid);
-      if (v) { setSelectedVendorDetails({ id: v.id, name: v.name, phone: v.phone }); setQuotationFormData({ ...quotationFormData, vendorId: vid, vendorContact: v.phone || '' }); }
+      if (v) { setSelectedVendorDetails({ id: v.id, name: v.name, phone: v.phone || v.contact }); setQuotationFormData({ ...quotationFormData, vendorId: vid, vendorContact: v.phone || v.contact || '' }); }
     } else { setSelectedVendorDetails(null); setQuotationFormData({ ...quotationFormData, vendorId: null, vendorContact: '' }); }
   };
 
@@ -561,18 +611,20 @@ const QuotationsReceived = () => {
       setQuotationFormData({
         id: data.id, rfqId: data.rfqId || '', validTill: data.validTill || '',
         groupName: data.groupName || '', subGroupName: data.subGroupName || '', projectId: data.projectId || '',
-        category: data.category || 'IT Equipment', vendorId: data.vendorId || null,
+        category: data.category || 'Manufacturer', vendorId: data.vendorId || null,
         vendorName: data.vendorName || '', vendorContact: data.vendorContact || '',
         vendorRating: data.vendorRating || 0, deliveryTime: data.deliveryTime || '',
         paymentTerms: data.paymentTerms || '', warranty: data.warranty || '',
         notes: data.notes || '', status: data.status || 'New',
-        items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', quantity: item.quantity || 1, unitPrice: item.unitPrice || '', taxPercent: item.taxPercent || 18, included: true })),
+        items: (data.items || []).map(item => ({ id: item.id, itemName: item.itemName || '', description: item.description || '', unit: item.unit || '', quantity: item.quantity || 1, make: item.make || '', unitPrice: item.unitPrice || '', taxPercent: item.taxPercent || 18, included: true })),
       });
       if (data.vendorId) { setShowNewVendorForm(false); setSelectedVendorDetails({ id: data.vendorId, name: data.vendorName, phone: data.vendorContact }); }
       else if (data.vendorName) setShowNewVendorForm(true);
+      setVendorSearch(''); setVendorDropdownOpen(false);
       setModalGroupName(data.groupName || ''); setModalSubGroupName(data.subGroupName || ''); setModalProjectId(data.projectId || '');
       setSelectedFile(null); setFilePreview(null);
       fetchModalGroups();
+      fetchAllVendors();
       if (data.groupName) { fetchModalSubGroups(data.groupName); fetchVendors(data.groupName, null); if (data.subGroupName) { fetchModalProjects(data.groupName, data.subGroupName); fetchVendors(data.groupName, data.subGroupName); } }
       setShowUploadQuotationModal(true);
     } catch { showError('Failed to load quotation details'); }
@@ -612,11 +664,13 @@ const QuotationsReceived = () => {
 
   const handleUploadQuotation = () => {
     setIsEditMode(false);
-    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'IT Equipment', vendorId: null, vendorName: '', vendorContact: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', items: [] });
+    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
     setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
+    setVendorSearch(''); setVendorDropdownOpen(false);
     setModalGroupName(groupName || ''); setModalSubGroupName(subGroupName || ''); setModalProjectId(projectId || '');
     setSelectedFile(null); setFilePreview(null);
     fetchModalGroups();
+    fetchAllVendors();
     if (groupName) { fetchModalSubGroups(groupName); fetchVendors(groupName, null); if (subGroupName) { fetchModalProjects(groupName, subGroupName); fetchVendors(groupName, subGroupName); } }
     if (projectId) fetchOrderBookItems(projectId);
     setShowUploadQuotationModal(true);
@@ -651,7 +705,7 @@ const QuotationsReceived = () => {
         category: quotationFormData.category, deliveryTime: quotationFormData.deliveryTime?.trim() || null,
         paymentTerms: quotationFormData.paymentTerms?.trim() || null, warranty: quotationFormData.warranty?.trim() || null,
         notes: quotationFormData.notes?.trim() || null, status: quotationFormData.status, type: 'Procurement',
-        items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent })),
+        items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', unit: item.unit?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent, make: item.make?.trim() || '' })),
       };
       fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
       if (selectedFile) fd.append('file', selectedFile);
@@ -667,16 +721,17 @@ const QuotationsReceived = () => {
     finally { setLoading(false); }
   };
 
-  const handleAddQuotationItem = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', quantity: 1, unitPrice: '', taxPercent: 18 }] }); };
+  const handleAddQuotationItem = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', unit: '', quantity: 1, make: '', unitPrice: '', taxPercent: 18, included: true }] }); };
   const handleRemoveQuotationItem = (idx) => { if (quotationFormData?.items.length > 1) setQuotationFormData({ ...quotationFormData, items: quotationFormData.items.filter((_, i) => i !== idx) }); };
   const handleUpdateQuotationItem = (idx, field, val) => { if (quotationFormData) { const items = [...quotationFormData.items]; items[idx] = { ...items[idx], [field]: val }; setQuotationFormData({ ...quotationFormData, items }); } };
 
   const calculateQuotationTotal = () => {
-    if (!quotationFormData) return { subtotal: 0, taxAmount: 0, total: 0 };
+    if (!quotationFormData) return { subtotal: 0, gstAmount: 0, total: 0 };
     const inc = quotationFormData.items.filter(i => i.included !== false);
     const subtotal = inc.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0);
-    const taxAmount = inc.reduce((s, i) => { const sub = (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0); return s + sub * (parseFloat(i.taxPercent) || 0) / 100; }, 0);
-    return { subtotal, taxAmount, total: subtotal + taxAmount };
+    const gstPct = parseFloat(quotationFormData.gstOnTotal) || 0;
+    const gstAmount = subtotal * gstPct / 100;
+    return { subtotal, gstAmount, total: subtotal + gstAmount };
   };
 
   // ── Utility formatters ───────────────────────────────────────────────────
@@ -1091,7 +1146,7 @@ const QuotationsReceived = () => {
                     <FileSpreadsheet size={15} /> Import Items from Excel
                   </button>
                 )}
-                <button className="procurement-quotation-received-modal-close" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); }}>✕</button>
+                <button className="procurement-quotation-received-modal-close" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); setVendorDropdownOpen(false); setVendorSearch(''); }}>✕</button>
               </div>
             </div>
 
@@ -1135,12 +1190,90 @@ const QuotationsReceived = () => {
                 </div>
                 {!showNewVendorForm && (
                   <div className="procurement-quotation-received-form-row">
-                    <div className="procurement-quotation-received-form-group">
+                    <div className="procurement-quotation-received-form-group" style={{ position: 'relative' }}>
                       <label>Select Vendor *</label>
-                      <select value={quotationFormData.vendorId || ''} onChange={handleVendorSelection} disabled={vendors.length === 0}>
-                        <option value="">{vendors.length === 0 ? 'No vendors for selected group' : 'Select Vendor'}</option>
-                        {vendors.map(v => <option key={v.id} value={v.id}>{v.name}{v.phone ? ` – ${v.phone}` : ''}</option>)}
-                      </select>
+                      {/* Searchable vendor dropdown — matches Create PO modal */}
+                      <div style={{ position: 'relative' }}>
+                        <div
+                          onClick={() => { setVendorDropdownOpen(o => !o); setVendorSearch(''); }}
+                          style={{
+                            width: '100%', padding: '10px 36px 10px 12px', fontSize: '14px',
+                            border: `1px solid ${vendorDropdownOpen ? '#3b82f6' : '#d1d5db'}`,
+                            borderRadius: '6px', background: 'white', cursor: 'pointer',
+                            boxSizing: 'border-box', position: 'relative', display: 'flex',
+                            alignItems: 'center', justifyContent: 'space-between',
+                            userSelect: 'none', minHeight: '42px'
+                          }}
+                        >
+                          <span style={{ color: quotationFormData.vendorId ? '#111827' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                            {quotationFormData.vendorId
+                              ? (() => { const sel = vendors.find(v => v.id === quotationFormData.vendorId); return sel ? `${sel.name}${(sel.phone || sel.contact) ? ' • ' + (sel.phone || sel.contact) : ''}` : 'Select Vendor'; })()
+                              : '-- Select Vendor --'}
+                          </span>
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0, color: '#6b7280', transform: vendorDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
+                        {vendorDropdownOpen && (
+                          <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid #3b82f6', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, marginTop: '4px', overflow: 'hidden' }}>
+                            {/* Search box */}
+                            <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                              <input
+                                autoFocus
+                                type="text"
+                                value={vendorSearch}
+                                onChange={e => setVendorSearch(e.target.value)}
+                                placeholder="Search vendor by name, phone..."
+                                onClick={e => e.stopPropagation()}
+                                style={{ width: '100%', padding: '7px 10px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '5px', outline: 'none', boxSizing: 'border-box' }}
+                              />
+                            </div>
+                            {/* Options list */}
+                            <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
+                              <div
+                                onClick={() => { handleVendorSelection({ target: { value: '' } }); setVendorDropdownOpen(false); }}
+                                style={{ padding: '9px 12px', fontSize: '14px', color: '#9ca3af', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                                onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                              >
+                                -- Select Vendor --
+                              </div>
+                              {vendors
+                                .filter(v => !vendorSearch || v.name?.toLowerCase().includes(vendorSearch.toLowerCase()) || (v.phone || v.contact)?.includes(vendorSearch) || v.category?.toLowerCase().includes(vendorSearch.toLowerCase()))
+                                .map(v => (
+                                  <div
+                                    key={v.id}
+                                    onClick={() => { handleVendorSelection({ target: { value: String(v.id) } }); setVendorDropdownOpen(false); setVendorSearch(''); }}
+                                    style={{
+                                      padding: '9px 12px', fontSize: '14px', cursor: 'pointer',
+                                      background: quotationFormData.vendorId === v.id ? '#eff6ff' : 'white',
+                                      borderLeft: quotationFormData.vendorId === v.id ? '3px solid #3b82f6' : '3px solid transparent'
+                                    }}
+                                    onMouseEnter={e => { if (quotationFormData.vendorId !== v.id) e.currentTarget.style.background = '#f8fafc'; }}
+                                    onMouseLeave={e => { if (quotationFormData.vendorId !== v.id) e.currentTarget.style.background = 'white'; }}
+                                  >
+                                    <div style={{ fontWeight: 500, color: '#111827' }}>{v.name}</div>
+                                    {((v.phone || v.contact) || v.category) && (
+                                      <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                                        {(v.phone || v.contact) && <span>{v.phone || v.contact}</span>}
+                                        {(v.phone || v.contact) && v.category && <span> · </span>}
+                                        {v.category && <span>{v.category}</span>}
+                                      </div>
+                                    )}
+                                  </div>
+                                ))
+                              }
+                              {vendors.filter(v => !vendorSearch || v.name?.toLowerCase().includes(vendorSearch.toLowerCase()) || (v.phone || v.contact)?.includes(vendorSearch) || v.category?.toLowerCase().includes(vendorSearch.toLowerCase())).length === 0 && (
+                                <div style={{ padding: '12px', fontSize: '13px', color: '#9ca3af', textAlign: 'center' }}>No vendors found</div>
+                              )}
+                            </div>
+                            <div style={{ padding: '6px 12px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#9ca3af' }}>{vendors.length} vendor(s) total</div>
+                          </div>
+                        )}
+                        {/* Click-outside overlay */}
+                        {vendorDropdownOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setVendorDropdownOpen(false)} />}
+                      </div>
+                      {vendors.length === 0 && <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block' }}>No vendors available. Select a group or add a new vendor.</small>}
                     </div>
                     {quotationFormData.vendorId && selectedVendorDetails && (
                       <div className="procurement-quotation-received-form-group">
@@ -1275,14 +1408,15 @@ const QuotationsReceived = () => {
                       <table className="procurement-quotation-received-items-table">
                         <thead>
                           <tr>
-                            <th style={{ width: 50 }}>Include</th>
-                            <th style={{ minWidth: 200 }}>Item Name *</th>
-                            <th style={{ minWidth: 200 }}>Description</th>
-                            <th style={{ width: 100 }}>Qty *</th>
-                            <th style={{ width: 130 }}>Unit Price (₹) *</th>
-                            <th style={{ width: 100 }}>GST %</th>
-                            <th style={{ width: 130 }}>Line Total</th>
-                            <th style={{ width: 60 }}>Del</th>
+                            <th style={{ width: 40 }}>Inc</th>
+                            <th style={{ width: 40 }}>S.No</th>
+                            <th style={{ minWidth: 200 }}>Description *</th>
+                            <th style={{ width: 90 }}>Unit</th>
+                            <th style={{ width: 80 }}>Qty *</th>
+                            <th style={{ minWidth: 150 }}>Make</th>
+                            <th style={{ width: 120 }}>Rate (₹) *</th>
+                            <th style={{ width: 120 }}>Amount</th>
+                            <th style={{ width: 50 }}>Del</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1290,21 +1424,41 @@ const QuotationsReceived = () => {
                             const inc = item.included !== false;
                             const qty = parseFloat(item.quantity) || 0;
                             const price = parseFloat(item.unitPrice) || 0;
-                            const tax = parseFloat(item.taxPercent) || 0;
-                            const total = qty * price * (1 + tax / 100);
+                            const amount = qty * price;
                             return (
                               <tr key={idx} style={{ background: inc ? 'white' : '#f8fafc', opacity: inc ? 1 : 0.5 }}>
                                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={inc} onChange={() => toggleItemInclusion(idx)} style={{ width: 18, height: 18, cursor: 'pointer' }} /></td>
-                                <td><input type="text" placeholder="Item name" value={item.itemName} onChange={(e) => handleUpdateQuotationItem(idx, 'itemName', e.target.value)} className="table-input" disabled={!inc} /></td>
-                                <td><input type="text" placeholder="Description" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} /></td>
-                                <td><input type="number" min="1" placeholder="Qty" value={item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', parseFloat(e.target.value) || 1)} className="table-input text-center" disabled={!inc} /></td>
-                                <td><input type="number" min="0" step="0.01" placeholder="Price" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
+                                <td style={{ textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>{idx + 1}</td>
                                 <td>
-                                  <select value={item.taxPercent} onChange={(e) => handleUpdateQuotationItem(idx, 'taxPercent', parseFloat(e.target.value) || 0)} className="table-input" disabled={!inc}>
-                                    {[0, 5, 12, 18, 28].map(t => <option key={t} value={t}>{t}%</option>)}
-                                  </select>
+                                  {inc ? (
+                                    <ItemNameAutocomplete
+                                      value={item.itemName}
+                                      onChange={(val) => handleUpdateQuotationItem(idx, 'itemName', val)}
+                                      onSelect={(cat) => {
+                                        const items = [...quotationFormData.items];
+                                        items[idx] = {
+                                          ...items[idx],
+                                          itemName:    cat.itemName,
+                                          description: cat.specification || cat.description || items[idx].description,
+                                          unit:        cat.unit           || items[idx].unit,
+                                          unitPrice:   cat.unitPrice  > 0 ? cat.unitPrice  : items[idx].unitPrice,
+                                        };
+                                        setQuotationFormData({ ...quotationFormData, items });
+                                      }}
+                                      user={user}
+                                      placeholder="Item name / description"
+                                      className="table-input"
+                                    />
+                                  ) : (
+                                    <input type="text" placeholder="Item name / description" value={item.itemName} className="table-input" disabled />
+                                  )}
+                                  <input type="text" placeholder="Specification (optional)" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} style={{ marginTop: 3, fontSize: 11, color: '#64748b' }} />
                                 </td>
-                                <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(total) : '-'}</td>
+                                <td><input type="text" placeholder="e.g. Nos, Mtrs, Kgs" value={item.unit || ''} onChange={(e) => handleUpdateQuotationItem(idx, 'unit', e.target.value)} className="table-input text-center" disabled={!inc} /></td>
+                                <td><input type="number" min="1" placeholder="Qty" value={item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', parseFloat(e.target.value) || 1)} className="table-input text-center" disabled={!inc} /></td>
+                                <td><input type="text" placeholder="Brand / Make" value={item.make || ''} onChange={(e) => handleUpdateQuotationItem(idx, 'make', e.target.value)} className="table-input" disabled={!inc} /></td>
+                                <td><input type="number" min="0" step="0.01" placeholder="Rate" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
+                                <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(amount) : '-'}</td>
                                 <td className="text-center">{quotationFormData.items.length > 1 && <button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button>}</td>
                               </tr>
                             );
@@ -1312,9 +1466,23 @@ const QuotationsReceived = () => {
                         </tbody>
                       </table>
                     </div>
+                    {/* Overall GST on Total */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '14px 0 6px', justifyContent: 'flex-end' }}>
+                      <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>GST on Total (%)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        placeholder="e.g. 8.9"
+                        value={quotationFormData.gstOnTotal || ''}
+                        onChange={(e) => setQuotationFormData({ ...quotationFormData, gstOnTotal: e.target.value })}
+                        style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: 100, textAlign: 'right' }}
+                      />
+                    </div>
                     <div className="procurement-quotation-received-quote-summary">
                       <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(calculateQuotationTotal().subtotal)}</span></div>
-                      <div className="procurement-quotation-received-summary-row"><span>Tax Amount:</span><span>{formatCurrency(calculateQuotationTotal().taxAmount)}</span></div>
+                      {(parseFloat(quotationFormData.gstOnTotal) > 0) && <div className="procurement-quotation-received-summary-row"><span>GST ({parseFloat(quotationFormData.gstOnTotal)}%):</span><span>{formatCurrency(calculateQuotationTotal().gstAmount)}</span></div>}
                       <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total Value:</strong></span><span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span></div>
                     </div>
                   </>
@@ -1326,7 +1494,7 @@ const QuotationsReceived = () => {
               <button className="procurement-quotation-received-btn-primary" onClick={handleSaveQuotation} disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}>
                 {isEditMode ? 'Update Quotation' : 'Upload Quotation'}
               </button>
-              <button className="procurement-quotation-received-btn-secondary" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); }}>Cancel</button>
+              <button className="procurement-quotation-received-btn-secondary" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); setVendorDropdownOpen(false); setVendorSearch(''); }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -1352,12 +1520,16 @@ const QuotationsReceived = () => {
                     <div style={{ background: '#2563eb', color: '#fff', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>1</div>
                     <div>
                       <strong style={{ fontSize: 14, color: '#1e40af', display: 'block' }}>Download Quotation Items Template</strong>
-                      <span style={{ fontSize: 12, color: '#3b82f6' }}>Row 4 = headers, data from Row 5. Do not modify headers. Example rows in green.</span>
+                      <span style={{ fontSize: 12, color: '#3b82f6' }}>Fill from Row 2 onwards. Do not modify the header row.</span>
                     </div>
                   </div>
-                  <button onClick={handleDownloadTemplate} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap' }}>
+                  <a
+                    href="/templates/BOQ_Quotation_Template.xlsx"
+                    download="BOQ_Quotation_Template.xlsx"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', textDecoration: 'none' }}
+                  >
                     <Download size={14} /> Download Template
-                  </button>
+                  </a>
                 </div>
               </div>
 
@@ -1392,29 +1564,29 @@ const QuotationsReceived = () => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                     <strong style={{ color: '#1e40af', fontSize: 14 }}>✓ {importPreview.length} item{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
                     <span style={{ fontSize: 12, color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: 12 }}>
-                      Est. total: {formatCurrency(importPreview.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unitPrice) || 0) * (1 + (r.taxPercent || 18) / 100), 0))}
+                      Est. total: {formatCurrency(importPreview.reduce((s, r) => s + (parseFloat(r.quantity) || 0) * (parseFloat(r.unitPrice) || 0), 0))}
                     </span>
                   </div>
                   <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, maxHeight: 280, overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
                         <tr style={{ background: '#1e3a5f' }}>
-                          {['#', 'Item Name', 'Description', 'Qty', 'Unit Price', 'GST %', 'Line Total'].map(h => (
+                          {['#', 'Description', 'Unit', 'Qty', 'Make', 'Rate (₹)', 'Amount'].map(h => (
                             <th key={h} style={{ padding: '9px 11px', textAlign: 'left', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {importPreview.map((row, i) => {
-                          const lt = (parseFloat(row.quantity) || 0) * (parseFloat(row.unitPrice) || 0) * (1 + (row.taxPercent || 18) / 100);
+                          const lt = (parseFloat(row.quantity) || 0) * (parseFloat(row.unitPrice) || 0);
                           return (
                             <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
                               <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
-                              <td style={{ padding: '7px 11px', fontWeight: 600 }}>{row.itemName}</td>
-                              <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.description || '—'}</td>
+                              <td style={{ padding: '7px 11px', fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.itemName}</td>
+                              <td style={{ padding: '7px 11px', textAlign: 'center', color: '#64748b' }}>{row.unit || '—'}</td>
                               <td style={{ padding: '7px 11px', textAlign: 'center' }}>{row.quantity}</td>
+                              <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.make || '—'}</td>
                               <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(row.unitPrice)}</td>
-                              <td style={{ padding: '7px 11px', textAlign: 'center' }}><span style={{ background: '#dbeafe', color: '#1e40af', padding: '1px 7px', borderRadius: 8, fontSize: 11, fontWeight: 600 }}>{row.taxPercent}%</span></td>
                               <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(lt)}</td>
                             </tr>
                           );

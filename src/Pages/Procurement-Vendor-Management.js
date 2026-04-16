@@ -143,11 +143,9 @@ const VendorManagement = () => {
   const [sortConfig, setSortConfig] = useState({ key: 'lastPurchaseDate', direction: 'desc' });
 
   const [filters, setFilters] = useState({
-    search: '',
-    category: 'all',
-    vendorType: 'all',
-    rating: 'all',
-    status: 'all'
+    search: '', category: 'all', vendorType: 'all',
+    rating: 'all', status: 'all',
+    groupName: '', subGroupName: '',
   });
 
   // Pagination
@@ -173,14 +171,20 @@ const VendorManagement = () => {
   const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
   const [availableUsers, setAvailableUsers] = useState([]);
 
+  // ─── Filter-bar group/subgroup data ────────────────────────────────────────
+  const [filterGroups, setFilterGroups] = useState([]);
+  const [filterSubGroups, setFilterSubGroups] = useState([]);
+
   // ─── Fetch on filter / sort / page change ──────────────────────────────────
   useEffect(() => {
-    fetchVendors();
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.search, filters.status, filters.category, sortConfig]);
+    // Load groups for the filter bar on mount, and fetch global stats once
+    filterApi.getAllGroups().then(setFilterGroups).catch(() => {});
+    fetchStats();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    fetchStats();
-  }, [groupName, subGroupName, projectId]);
+    fetchVendors();
+  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig]);
 
   // ─── Column helpers ────────────────────────────────────────────────────────
   const visibleColumns = columns.filter((c) => c.visible);
@@ -346,29 +350,21 @@ const VendorManagement = () => {
     setLoading(true);
     try {
       const sortKeyMap = {
-        name: 'name',
-        category: 'category',
-        rating: 'rating',
-        totalOrders: 'totalOrders',
-        totalPurchaseValue: 'totalPurchaseValue',
-        lastPurchaseDate: 'lastPurchaseDate',
-        status: 'status',
+        name: 'name', category: 'category', rating: 'rating',
+        totalOrders: 'totalOrders', totalPurchaseValue: 'totalPurchaseValue',
+        lastPurchaseDate: 'lastPurchaseDate', status: 'status',
       };
-
       const params = new URLSearchParams({
-        page: currentPage,
-        size: pageSize,
+        page: currentPage, size: pageSize,
         sortBy: sortKeyMap[sortConfig.key] || 'lastPurchaseDate',
         sortDirection: sortConfig.direction.toUpperCase()
       });
-
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId) params.append('projectId', projectId);
+      // Only filter by group when user explicitly selected one via the filter bar
+      if (filters.groupName) params.append('groupName', filters.groupName);
+      if (filters.subGroupName) params.append('subGroupName', filters.subGroupName);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.search) params.append('searchTerm', filters.search);
-
       const response = await fetch(`${API_BASE_URL}/vendors?${params}`, {
         headers: getAuthHeaders(), credentials: 'include'
       });
@@ -384,11 +380,8 @@ const VendorManagement = () => {
 
   const fetchStats = async () => {
     try {
-      const params = new URLSearchParams();
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId) params.append('projectId', projectId);
-      const response = await fetch(`${API_BASE_URL}/vendors/stats?${params}`, {
+      // Stats are always global — not filtered by group so KPIs reflect all accessible vendors
+      const response = await fetch(`${API_BASE_URL}/vendors/stats`, {
         credentials: 'include', headers: getAuthHeaders()
       });
       if (response.ok) { const data = await response.json(); setStats(data); }
@@ -633,6 +626,23 @@ const VendorManagement = () => {
             className="vendor-management-search" value={filters.search}
             onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }}
           />
+          <select className="vendor-management-filter" value={filters.groupName}
+            onChange={(e) => {
+              const g = e.target.value;
+              setFilters({ ...filters, groupName: g, subGroupName: '' });
+              setFilterSubGroups([]);
+              setCurrentPage(0);
+              if (g) filterApi.getSubGroups(g).then(setFilterSubGroups).catch(() => {});
+            }}>
+            <option value="">All Groups</option>
+            {filterGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+          </select>
+          <select className="vendor-management-filter" value={filters.subGroupName}
+            disabled={!filters.groupName}
+            onChange={(e) => { setFilters({ ...filters, subGroupName: e.target.value }); setCurrentPage(0); }}>
+            <option value="">All Sub Groups</option>
+            {filterSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
+          </select>
           <select className="vendor-management-filter" value={filters.status}
             onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
             <option value="all">All Status</option>

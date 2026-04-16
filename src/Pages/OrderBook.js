@@ -7,6 +7,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
@@ -1663,11 +1664,29 @@ function OrderBook() {
                                 {item.lineNo}
                               </td>
                               <td>
-                                <input
-                                  type="text"
-                                  className="orderbook-table-input"
+                                <ItemNameAutocomplete
                                   value={item.itemName}
-                                  onChange={(e) => updateItem(index, 'itemName', e.target.value)}
+                                  onChange={(val) => updateItem(index, 'itemName', val)}
+                                  onSelect={(catalogueItem) => {
+                                    // Auto-fill all fields from catalogue selection
+                                    setFormData(prev => {
+                                      const items = [...prev.items];
+                                      items[index] = {
+                                        ...items[index],
+                                        itemName:        catalogueItem.itemName,
+                                        specification:   catalogueItem.specification  || items[index].specification,
+                                        description:     catalogueItem.description    || items[index].description,
+                                        unit:            catalogueItem.unit           || items[index].unit,
+                                        unitPrice:       catalogueItem.unitPrice      != null ? catalogueItem.unitPrice      : items[index].unitPrice,
+                                        taxPercent:      catalogueItem.taxPercent     != null ? catalogueItem.taxPercent     : items[index].taxPercent,
+                                        discountPercent: catalogueItem.discountPercent!= null ? catalogueItem.discountPercent: items[index].discountPercent,
+                                        isCustomUnit: false,
+                                        customUnit: '',
+                                      };
+                                      return { ...prev, items };
+                                    });
+                                  }}
+                                  user={user}
                                   placeholder="Item name"
                                   required
                                 />

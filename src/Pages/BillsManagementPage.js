@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
-  Calendar, DollarSign, IndianRupee,CheckCircle, CreditCard,
-  Link as LinkIcon, Trash2, Download
+  Calendar, DollarSign, IndianRupee, CheckCircle, CreditCard,
+  Link as LinkIcon, Trash2, Download, ChevronUp, ChevronDown, Columns, GripVertical
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -47,6 +47,29 @@ const BillsManagementPage = () => {
     totalItems: 0,
     pageSize: 10
   });
+
+  // Column sorting
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+
+  // Column visibility & order (checkbox column and actions are always shown separately)
+  const BILLS_COLUMNS = [
+    { key: 'billNo',        label: 'Bill ID' },
+    { key: 'vendorName',    label: 'Vendor Name' },
+    { key: 'poNumber',      label: 'Linked PO' },
+    { key: 'billDate',      label: 'Bill Date' },
+    { key: 'dueDate',       label: 'Due Date' },
+    { key: 'totalAmount',   label: 'Amount' },
+    { key: 'paidAmount',    label: 'Paid Amount' },
+    { key: 'balanceAmount', label: 'Balance' },
+    { key: 'status',        label: 'Payment Status' },
+    { key: 'uploadedByName',label: 'Uploaded By' },
+  ];
+  const [columnOrder, setColumnOrder] = useState(BILLS_COLUMNS.map(c => c.key));
+  const [visibleColumns, setVisibleColumns] = useState(BILLS_COLUMNS.map(c => c.key));
+  const [showColumnsPanel, setShowColumnsPanel] = useState(false);
+  const columnsPanelRef = useRef(null);
+  const dragColRef = useRef(null);
+  const dragOverColRef = useRef(null);
 
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
@@ -997,6 +1020,76 @@ const BillsManagementPage = () => {
     return formData.items.reduce((total, item) => total + calculateLineTotal(item), 0);
   };
 
+  // Close columns panel when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (columnsPanelRef.current && !columnsPanelRef.current.contains(e.target)) {
+        setShowColumnsPanel(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Sorting
+  const handleSort = (key) => {
+    setSortConfig(prev =>
+      prev.key === key
+        ? { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' }
+        : { key, direction: 'asc' }
+    );
+  };
+
+  const getSortedBills = () => {
+    if (!sortConfig.key) return bills;
+    return [...bills].sort((a, b) => {
+      let aVal = a[sortConfig.key] ?? '';
+      let bVal = b[sortConfig.key] ?? '';
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (sortConfig.key !== colKey) return <ChevronUp size={13} style={{ opacity: 0.3, marginLeft: 3 }} />;
+    return sortConfig.direction === 'asc'
+      ? <ChevronUp size={13} style={{ marginLeft: 3, color: '#6366f1' }} />
+      : <ChevronDown size={13} style={{ marginLeft: 3, color: '#6366f1' }} />;
+  };
+
+  // Drag-and-drop column reorder
+  const handleColDragStart = (key) => { dragColRef.current = key; };
+  const handleColDragOver = (e, key) => { e.preventDefault(); dragOverColRef.current = key; };
+  const handleColDrop = () => {
+    const from = dragColRef.current;
+    const to   = dragOverColRef.current;
+    if (!from || !to || from === to) return;
+    setColumnOrder(prev => {
+      const arr = [...prev];
+      const fi = arr.indexOf(from);
+      const ti = arr.indexOf(to);
+      arr.splice(fi, 1);
+      arr.splice(ti, 0, from);
+      return arr;
+    });
+    dragColRef.current = null;
+    dragOverColRef.current = null;
+  };
+
+  // Toggle column visibility
+  const toggleColumn = (key) => {
+    setVisibleColumns(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  // Ordered, visible columns
+  const orderedVisibleCols = columnOrder.filter(k => visibleColumns.includes(k));
+  const colMeta = Object.fromEntries(BILLS_COLUMNS.map(c => [c.key, c]));
+
   return (
     <div className="procurement-bills-received-container">
       {loading && <CrmPreloader text="Loading..." />}
@@ -1053,6 +1146,55 @@ const BillsManagementPage = () => {
         </div>
 
         <div className="procurement-bills-received-actions">
+          <div className="col-toggle-wrapper" ref={columnsPanelRef} style={{ position: 'relative', display: 'inline-block' }}>
+            <button
+              onClick={() => setShowColumnsPanel(p => !p)}
+              title="Toggle Columns"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '6px',
+                padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px',
+                background: '#fff', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                fontWeight: 500
+              }}
+            >
+              <Columns size={16} />
+              Columns
+            </button>
+            {showColumnsPanel && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 999,
+                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '10px 0', minWidth: '200px'
+              }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f1f5f9' }}>
+                  Show / Hide Columns
+                </div>
+                {BILLS_COLUMNS.map(col => (
+                  <div
+                    key={col.key}
+                    onClick={() => toggleColumn(col.key)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
+                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                      transition: 'background 0.15s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <div style={{
+                      width: 17, height: 17, borderRadius: 4, border: '1.5px solid',
+                      borderColor: visibleColumns.includes(col.key) ? '#6366f1' : '#d1d5db',
+                      background: visibleColumns.includes(col.key) ? '#6366f1' : '#fff',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+                    }}>
+                      {visibleColumns.includes(col.key) && <Check size={11} color="#fff" strokeWidth={3} />}
+                    </div>
+                    {col.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <button className={`procurement-bills-received-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateBill()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Add New Bill"}>
             <Plus size={18} style={{ marginRight: '8px' }} />
             Add New Bill
@@ -1133,23 +1275,30 @@ const BillsManagementPage = () => {
                     checked={selectedBills.length === bills.length && bills.length > 0}
                   />
                 </th>
-                <th>Bill ID</th>
-                <th>Vendor Name</th>
-                <th>Linked PO</th>
-                <th>Bill Date</th>
-                <th>Due Date</th>
-                <th>Amount</th>
-                <th>Paid Amount</th>
-                <th>Balance</th>
-                <th>Payment Status</th>
-                <th>Uploaded By</th>
+                {orderedVisibleCols.map(key => (
+                  <th
+                    key={key}
+                    draggable
+                    onDragStart={() => handleColDragStart(key)}
+                    onDragOver={(e) => handleColDragOver(e, key)}
+                    onDrop={handleColDrop}
+                    onClick={() => handleSort(key)}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                  >
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <GripVertical size={13} style={{ opacity: 0.35, cursor: 'grab', flexShrink: 0 }} />
+                      {colMeta[key].label}
+                      <SortIcon colKey={key} />
+                    </span>
+                  </th>
+                ))}
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {bills.length === 0 ? (
                 <tr>
-                  <td colSpan="12" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <td colSpan={orderedVisibleCols.length + 2} style={{ textAlign: 'center', padding: '60px 20px' }}>
                     <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
                     <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>
                       No bills found. Click "Add New Bill" to create one.
@@ -1157,7 +1306,7 @@ const BillsManagementPage = () => {
                   </td>
                 </tr>
               ) : (
-                bills.map(bill => (
+                getSortedBills().map(bill => (
                   <tr key={bill.id} className="procurement-bills-received-table-row">
                     <td>
                       <input
@@ -1166,28 +1315,31 @@ const BillsManagementPage = () => {
                         onChange={() => handleSelectBill(bill.id)}
                       />
                     </td>
-                    <td className="procurement-bills-received-table-id">{bill.billNo}</td>
-                    <td className="procurement-bills-received-table-vendor">{bill.vendorName}</td>
-                    <td>
-                      {bill.poNumber ? (
-                        <span className="procurement-bills-received-link">{bill.poNumber}</span>
-                      ) : (
-                        <span className="procurement-bills-received-no-link">—</span>
-                      )}
-                    </td>
-                    <td>{formatDate(bill.billDate)}</td>
-                    <td>{formatDate(bill.dueDate)}</td>
-                    <td className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>
-                    <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
-                    <td className="procurement-bills-received-table-balance">
-                      {formatCurrency(bill.balanceAmount)}
-                    </td>
-                    <td>
-                      <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
-                        {bill.status}
-                      </span>
-                    </td>
-                    <td>{bill.uploadedByName}</td>
+                    {orderedVisibleCols.map(key => {
+                      if (key === 'billNo')         return <td key={key} className="procurement-bills-received-table-id">{bill.billNo}</td>;
+                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName}</td>;
+                      if (key === 'poNumber')       return (
+                        <td key={key}>
+                          {bill.poNumber
+                            ? <span className="procurement-bills-received-link">{bill.poNumber}</span>
+                            : <span className="procurement-bills-received-no-link">—</span>}
+                        </td>
+                      );
+                      if (key === 'billDate')       return <td key={key}>{formatDate(bill.billDate)}</td>;
+                      if (key === 'dueDate')        return <td key={key}>{formatDate(bill.dueDate)}</td>;
+                      if (key === 'totalAmount')    return <td key={key} className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>;
+                      if (key === 'paidAmount')     return <td key={key} className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>;
+                      if (key === 'balanceAmount')  return <td key={key} className="procurement-bills-received-table-balance">{formatCurrency(bill.balanceAmount)}</td>;
+                      if (key === 'status')         return (
+                        <td key={key}>
+                          <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
+                            {bill.status}
+                          </span>
+                        </td>
+                      );
+                      if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName}</td>;
+                      return <td key={key}>—</td>;
+                    })}
                     <td>
                       <div className="procurement-bills-received-actions-cell">
                         <button
@@ -1503,15 +1655,15 @@ const BillsManagementPage = () => {
                     <thead>
                       <tr>
                         <th style={{ width: '15%' }}>Item Name</th>
-                        <th style={{ width: '20%' }}>Description</th>
-                        {editMode && <th style={{ width: '8%' }}>Ordered</th>}
-                        {editMode && <th style={{ width: '8%' }}>Delivered</th>}
-                        {editMode && <th style={{ width: '8%' }}>Pending</th>}
-                        <th style={{ width: editMode ? '10%' : '12%' }}>Bill Qty *</th>
-                        <th style={{ width: editMode ? '10%' : '12%' }}>Price *</th>
-                        <th style={{ width: '8%' }}>Tax %</th>
-                        <th style={{ width: '13%' }}>Line Total</th>
-                        <th style={{ width: '10%' }}>Action</th>
+                        <th style={{ width: '18%' }}>Description</th>
+                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Ordered</th>}
+                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Billed</th>}
+                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Pending</th>}
+                        <th style={{ width: formData.items && formData.items.some(i => i.poItemId) ? '10%' : '12%' }}>Bill Qty *</th>
+                        <th style={{ width: formData.items && formData.items.some(i => i.poItemId) ? '10%' : '12%' }}>Price *</th>
+                        <th style={{ width: '7%' }}>Tax %</th>
+                        <th style={{ width: '12%' }}>Line Total</th>
+                        <th style={{ width: '7%' }}>Action</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1550,18 +1702,35 @@ const BillsManagementPage = () => {
                               </small>
                             )}
                           </td>
-                          {editMode && (
+                          {item.poItemId && (
                             <>
                               <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-                                {item.orderedQty || '-'}
+                                {item.orderedQty ?? '-'}
                               </td>
-                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
-                                {item.deliveredQty || '-'}
+                              <td style={{ color: '#f59e0b', fontSize: '13px', textAlign: 'center', fontWeight: 600 }}>
+                                {item.deliveredQty ?? '-'}
                               </td>
-                              <td style={{ color: '#22c55e', fontSize: '13px', textAlign: 'center', fontWeight: '600' }}>
-                                {item.pendingQty || '-'}
+                              <td style={{ textAlign: 'center' }}>
+                                {item.pendingQty != null ? (
+                                  <span style={{
+                                    display: 'inline-block',
+                                    background: item.pendingQty > 0 ? '#dcfce7' : '#fee2e2',
+                                    color: item.pendingQty > 0 ? '#15803d' : '#dc2626',
+                                    fontWeight: 700,
+                                    fontSize: '13px',
+                                    borderRadius: '5px',
+                                    padding: '2px 8px',
+                                    minWidth: 28,
+                                    textAlign: 'center'
+                                  }}>
+                                    {item.pendingQty}
+                                  </span>
+                                ) : '-'}
                               </td>
                             </>
+                          )}
+                          {!item.poItemId && formData.items && formData.items.some(i => i.poItemId) && (
+                            <><td /><td /><td /></>
                           )}
                           <td>
                             <input
@@ -1573,13 +1742,35 @@ const BillsManagementPage = () => {
                               min="0"
                               max={item.maxBillableQty || undefined}
                               step="0.01"
-                              readOnly={false}
+                              style={{
+                                borderColor: item.maxBillableQty && item.quantity > item.maxBillableQty ? '#ef4444' : undefined
+                              }}
                             />
-                            {editMode && item.maxBillableQty && (
-                              <small style={{ fontSize: '11px', color: '#f59e0b', display: 'block', marginTop: '2px' }}>
-                                Max: {item.maxBillableQty}
-                              </small>
-                            )}
+                            {item.poItemId && item.maxBillableQty != null && (() => {
+                              const max = item.maxBillableQty;
+                              const entered = parseFloat(item.quantity) || 0;
+                              const pct = max > 0 ? Math.min(100, (entered / max) * 100) : 0;
+                              const over = entered > max;
+                              return (
+                                <div style={{ marginTop: 4 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: over ? '#dc2626' : '#64748b', marginBottom: 2 }}>
+                                    <span>{entered} / {max}</span>
+                                    <span style={{ color: over ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                                      {over ? `⚠ exceeds by ${entered - max}` : `${max - entered} left`}
+                                    </span>
+                                  </div>
+                                  <div style={{ height: 4, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
+                                    <div style={{
+                                      height: '100%',
+                                      width: `${pct}%`,
+                                      background: over ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e',
+                                      borderRadius: 999,
+                                      transition: 'width 0.2s'
+                                    }} />
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td>
                             <input

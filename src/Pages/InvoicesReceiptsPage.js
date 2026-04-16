@@ -7,12 +7,12 @@ import '../pages-css/InvoicesReceiptsPage.css';
 const InvoicesReceiptsPage = () => {
   // ✅ Persist active tab across browser refreshes
   const [activeTab, setActiveTab] = useState(
-    () => localStorage.getItem('invoicesReceiptsActiveTab') || 'invoices'
+    () => sessionStorage.getItem('invoicesReceiptsActiveTab') || 'invoices'
   );
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
-    localStorage.setItem('invoicesReceiptsActiveTab', tab);
+    sessionStorage.setItem('invoicesReceiptsActiveTab', tab);
   };
 
   return (
