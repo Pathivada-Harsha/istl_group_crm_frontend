@@ -1739,3 +1739,246 @@
     display: none;
   }
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   PO SOFT-COPY FILE UPLOAD — create / edit modal
+   ══════════════════════════════════════════════════════════════════════════ */
+.po-file-upload-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 8px;
+}
+
+.po-file-upload-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin-bottom: 10px;
+}
+
+.po-file-upload-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Hide the native input */
+.po-file-input {
+  display: none;
+}
+
+.po-file-choose-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.po-file-choose-btn:hover { background: #2563eb; }
+
+.po-file-chosen-name {
+  font-size: 13px;
+  color: #059669;
+  font-weight: 500;
+  word-break: break-all;
+}
+
+.po-file-existing-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PO DOCUMENT SECTION — detail drawer (view mode)
+   ══════════════════════════════════════════════════════════════════════════ */
+.po-doc-section {
+  margin-top: 14px;
+  padding: 14px 16px;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.po-doc-section.po-doc-empty {
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+}
+
+.po-doc-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #0369a1;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.po-doc-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.po-doc-filename {
+  font-size: 13px;
+  color: #1e40af;
+  word-break: break-all;
+}
+
+.po-doc-size {
+  font-size: 11px;
+  color: #64748b;
+  font-weight: 400;
+}
+
+.po-doc-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+/* shared doc action button */
+.po-doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s, filter 0.15s;
+}
+.po-doc-btn:hover { filter: brightness(0.9); }
+
+.po-doc-btn-view     { background: #dbeafe; color: #1d4ed8; }
+.po-doc-btn-open     { background: #d1fae5; color: #065f46; }
+.po-doc-btn-download { background: #ede9fe; color: #5b21b6; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PO FILE PREVIEW MODAL (inline iframe)
+   ══════════════════════════════════════════════════════════════════════════ */
+.po-file-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.po-file-preview-container {
+  background: #fff;
+  border-radius: 12px;
+  width: 96vw;
+  max-width: 1300px;
+  height: 95vh;           /* tall — fills almost full screen */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+
+.po-file-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.po-file-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.po-file-preview-iframe {
+  flex: 1;
+  border: none;
+  min-height: 0;          /* lets flex shrink correctly */
+  display: block;
+  width: 100%;
+}
+
+/* ── Tablet ───────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .po-file-preview-container {
+    width: 98vw;
+    height: 94vh;
+  }
+  .po-file-preview-header {
+    padding: 10px 16px;
+  }
+}
+
+/* ── Mobile landscape / small tablet ─────────────────────────────────────── */
+@media (max-width: 768px) {
+  .po-file-preview-overlay {
+    padding: 8px;
+  }
+  .po-file-preview-container {
+    width: 100vw;
+    height: 100vh;        /* full-screen on mobile */
+    border-radius: 0;
+  }
+  .po-file-preview-header {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .po-file-preview-title {
+    font-size: 13px;
+  }
+  /* stack action buttons if they wrap */
+  .po-file-preview-header > div {
+    flex-wrap: wrap;
+    gap: 6px !important;
+  }
+}
+
+/* ── Mobile portrait ──────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .po-file-preview-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 12px;
+  }
+  .po-file-preview-header > div {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .po-doc-btn {
+    font-size: 11px;
+    padding: 5px 10px;
+  }
+}

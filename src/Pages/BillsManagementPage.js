@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
-  Calendar, DollarSign, IndianRupee, CheckCircle, CreditCard,
-  Link as LinkIcon, Trash2, Download, ChevronUp, ChevronDown, Columns, GripVertical
+  Calendar, DollarSign, IndianRupee, CheckCircle, AlertCircle, CreditCard,
+  Link as LinkIcon, Trash2, Download, ChevronUp, ChevronDown, Columns, GripVertical,
+  ExternalLink
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -22,10 +23,9 @@ const BillsManagementPage = () => {
   const [loading, setLoading] = useState(false);
   const [kpis, setKpis] = useState({
     totalBills: 0,
-    outstandingAmount: 0,
-    billsThisMonth: 0,
-    paidBills: 0,
-    linkedToPOPercentage: 0
+    totalAmount: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
   });
 
   // MODAL-SPECIFIC dropdown data (completely independent from main filters)
@@ -184,11 +184,10 @@ const BillsManagementPage = () => {
       if (response.ok) {
         const stats = await response.json();
         setKpis({
-          totalBills: stats.totalBills || 0,
-          outstandingAmount: stats.outstandingAmount || 0,
-          billsThisMonth: stats.billsThisMonth || 0,
-          paidBills: stats.paidBills || 0,
-          linkedToPOPercentage: stats.linkedToPOPercentage || 0
+          totalBills:    stats.totalBills    || 0,
+          totalAmount:   stats.totalAmount   || 0,
+          paidAmount:    stats.paidAmount    || 0,
+          pendingAmount: stats.pendingAmount || 0,
         });
       }
     } catch (error) {
@@ -789,22 +788,50 @@ const BillsManagementPage = () => {
     }
   };
 
-  // View bill file in modal
-  const handleViewFile = (billId) => {
-    const url = `${API_BASE_URL}/bills/${billId}/view`;
-    setFileViewUrl(url);
-    setShowFileViewModal(true);
+  // View bill file in modal — blob approach (bypasses X-Frame-Options)
+  const handleViewFile = async (billId) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/bills/${billId}/view`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found or could not be loaded'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      setFileViewUrl(blobUrl);
+      setShowFileViewModal(true);
+    } catch { showError('Failed to load bill document'); }
   };
 
-  // Download bill file
-  const handleDownloadFile = (billId, fileName) => {
-    const url = `${API_BASE_URL}/bills/${billId}/download`;
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // Open bill file in a new browser tab — blob approach
+  const handleOpenFileInTab = async (billId) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/bills/${billId}/view`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    } catch { showError('Failed to open bill document'); }
+  };
+
+  // Download bill file — blob approach
+  const handleDownloadFile = async (billId, fileName) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/bills/${billId}/download`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName || 'bill-document';
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(link);
+    } catch { showError('Failed to download bill document'); }
   };
 
   // Add payment
@@ -820,47 +847,57 @@ const BillsManagementPage = () => {
     setShowPaymentModal(true);
   };
 
-  // Save payment
+  // Save payment — creates a VendorAdvance (BILL_PAYMENT type), same as Vendor Payments tab
   const handleSavePayment = async () => {
-    if (!paymentData.amount || !paymentData.referenceNumber) {
-      showError('Please fill in all payment details');
+    if (!paymentData.amount) {
+      showError('Please enter a payment amount');
       return;
     }
-
     const paymentAmount = parseFloat(paymentData.amount);
-    if (paymentAmount <= 0 || paymentAmount > selectedBill.balanceAmount) {
-      showError('Invalid payment amount');
+    if (paymentAmount <= 0 || paymentAmount > parseFloat(selectedBill.balanceAmount || 0)) {
+      showError(`Invalid payment amount. Max: ₹${formatCurrency(selectedBill.balanceAmount)}`);
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/bills/${selectedBill.id}/payments`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          credentials: "include",
-          body: JSON.stringify({
-            ...paymentData,
-            paymentDate: new Date(paymentData.paymentDate).toISOString()
-          })
-        }
-      );
+      // Create a proper VendorAdvance record (BILL_PAYMENT type) — same as recording via Vendor Payments tab.
+      // This ensures the payment appears in Vendor Payments, is linked to the correct project/vendor,
+      // and updates the bill balance through the same VendorAdvanceService code path.
+      const vendorPaymentData = {
+        paymentType:          'BILL_PAYMENT',
+        billId:               selectedBill.id,
+        vendorId:             selectedBill.vendorId,
+        projectId:            selectedBill.projectId,
+        groupId:              selectedBill.groupId,
+        subGroupId:           selectedBill.subGroupId,
+        advanceDate:          paymentData.paymentDate,
+        amount:               paymentAmount,
+        paymentMode:          paymentData.paymentMode,
+        transactionReference: paymentData.referenceNumber || '',
+        notes:                paymentData.notes || '',
+      };
+
+      const response = await fetch(`${API_BASE_URL}/vendor-advances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        credentials: 'include',
+        body: JSON.stringify(vendorPaymentData),
+      });
 
       if (response.ok) {
-        showSuccess('Payment added successfully');
+        showSuccess('Payment recorded successfully! It appears in the Vendor Payments tab.');
         setShowPaymentModal(false);
         setShowDetailDrawer(false);
         fetchBills();
         fetchKPIs();
       } else {
         const errorData = await response.json();
-        showError(errorData.error || 'Failed to add payment');
+        showError(errorData.message || errorData.error || 'Failed to record payment');
       }
     } catch (error) {
-      console.error('Error adding payment:', error);
-      showError('Error adding payment');
+      console.error('Error recording payment:', error);
+      showError('Error recording payment');
     } finally {
       setLoading(false);
     }
@@ -990,8 +1027,8 @@ const BillsManagementPage = () => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        showError('File size exceeds 5MB limit');
+      if (file.size > 10 * 1024 * 1024) {
+        showError('File size exceeds 10MB limit');
         e.target.value = null;
         return;
       }
@@ -1219,24 +1256,13 @@ const BillsManagementPage = () => {
             <IndianRupee size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            {/* ✅ INDIAN SHORT FORMAT for KPI: shows 1L, 1Cr etc. */}
             <div
               className="procurement-bills-received-kpi-value"
-              title={`₹${formatCurrency(kpis.outstandingAmount)}`}
+              title={`₹${formatCurrency(kpis.totalAmount)}`}
             >
-              {formatIndianShort(kpis.outstandingAmount)}
+              {formatIndianShort(kpis.totalAmount)}
             </div>
-            <div className="procurement-bills-received-kpi-label">Outstanding Amount</div>
-          </div>
-        </div>
-
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <Calendar size={28} />
-          </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.billsThisMonth}</div>
-            <div className="procurement-bills-received-kpi-label">Bills This Month</div>
+            <div className="procurement-bills-received-kpi-label">Total Billed Amount</div>
           </div>
         </div>
 
@@ -1245,18 +1271,28 @@ const BillsManagementPage = () => {
             <CheckCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.paidBills}</div>
-            <div className="procurement-bills-received-kpi-label">Fully Paid Bills</div>
+            <div
+              className="procurement-bills-received-kpi-value"
+              title={`₹${formatCurrency(kpis.paidAmount)}`}
+            >
+              {formatIndianShort(kpis.paidAmount)}
+            </div>
+            <div className="procurement-bills-received-kpi-label">Paid Amount</div>
           </div>
         </div>
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <LinkIcon size={28} />
+            <AlertCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.linkedToPOPercentage}%</div>
-            <div className="procurement-bills-received-kpi-label">Bills Linked to POs</div>
+            <div
+              className="procurement-bills-received-kpi-value"
+              title={`₹${formatCurrency(kpis.pendingAmount)}`}
+            >
+              {formatIndianShort(kpis.pendingAmount)}
+            </div>
+            <div className="procurement-bills-received-kpi-label">Pending Amount</div>
           </div>
         </div>
       </div>
@@ -1843,7 +1879,7 @@ const BillsManagementPage = () => {
               <div className="bill-form-section">
                 <h3 className="bill-form-section-title">Attach Bill Document</h3>
                 <div className="bill-form-field">
-                  <label className="bill-form-label">Upload Bill (PDF, PNG, JPG - Max 5MB)</label>
+                  <label className="bill-form-label">Upload Bill (PDF, PNG, JPG - Max 10MB)</label>
                   <input
                     className="bill-form-file-input"
                     type="file"
@@ -2054,8 +2090,13 @@ const BillsManagementPage = () => {
                     <div className="procurement-bills-received-attachment-item">
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileText size={16} /> {selectedBill.billFileName}
+                        {selectedBill.billFileSize && (
+                          <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                            ({(selectedBill.billFileSize / 1024).toFixed(1)} KB)
+                          </span>
+                        )}
                       </span>
-                      <div style={{ display: 'flex', gap: '8px' }}>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                         <button
                           className="procurement-bills-received-btn-link"
                           onClick={() => handleViewFile(selectedBill.id)}
@@ -2063,7 +2104,13 @@ const BillsManagementPage = () => {
                           <Eye size={14} /> View
                         </button>
                         <button
-                          className="procurement-bills-received-btn-link"
+                          className="procurement-bills-received-btn-link bill-btn-link-green"
+                          onClick={() => handleOpenFileInTab(selectedBill.id)}
+                        >
+                          <ExternalLink size={14} /> Open in Tab
+                        </button>
+                        <button
+                          className="procurement-bills-received-btn-link bill-btn-link-purple"
                           onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
                         >
                           <Download size={14} /> Download
@@ -2122,7 +2169,7 @@ const BillsManagementPage = () => {
                     onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
                   >
                     <Download size={18} style={{ marginRight: '8px' }} />
-                    Download PDF
+                    Download Bill
                   </button>
                 )}
               </div>
@@ -2136,24 +2183,48 @@ const BillsManagementPage = () => {
         <div className="procurement-bills-received-modal-overlay" onClick={() => setShowPaymentModal(false)}>
           <div className="procurement-bills-received-payment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-modal-header">
-              <h2>Add Payment</h2>
+              <h2>Record Payment</h2>
               <button className="procurement-bills-received-modal-close" onClick={() => setShowPaymentModal(false)}>
                 <X size={24} />
               </button>
             </div>
 
             <div className="procurement-bills-received-form">
+              {/* Bill summary */}
               <div className="procurement-bills-received-payment-info">
                 <div className="procurement-bills-received-info-item">
-                  <label>Bill ID:</label>
-                  <span>{selectedBill.billNo}</span>
+                  <label>Bill:</label>
+                  <span><strong>{selectedBill.billNo}</strong></span>
+                </div>
+                {selectedBill.vendorName && (
+                  <div className="procurement-bills-received-info-item">
+                    <label>Vendor:</label>
+                    <span>{selectedBill.vendorName}</span>
+                  </div>
+                )}
+                {selectedBill.projectId && (
+                  <div className="procurement-bills-received-info-item">
+                    <label>Project:</label>
+                    <span>{selectedBill.projectId}</span>
+                  </div>
+                )}
+                <div className="procurement-bills-received-info-item">
+                  <label>Total Amount:</label>
+                  <span>₹{formatCurrency(selectedBill.totalAmount)}</span>
                 </div>
                 <div className="procurement-bills-received-info-item">
-                  <label>Total Balance Due:</label>
-                  <span className="procurement-bills-received-balance-highlight">
-                    ₹{formatCurrency(selectedBill.balanceAmount)}
-                  </span>
+                  <label>Already Paid:</label>
+                  <span style={{color:'#059669',fontWeight:600}}>₹{formatCurrency(selectedBill.paidAmount)}</span>
                 </div>
+                <div className="procurement-bills-received-info-item">
+                  <label>Balance Due:</label>
+                  <span className="procurement-bills-received-balance-highlight">₹{formatCurrency(selectedBill.balanceAmount)}</span>
+                </div>
+              </div>
+
+              {/* Info banner */}
+              <div style={{padding:'10px 14px',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:'6px',fontSize:'13px',color:'#6d28d9',marginBottom:'16px'}}>
+                💡 This payment will be recorded as a Vendor Payment (Bill Payment) and will appear in the Vendor Payments tab.
               </div>
 
               <div className="procurement-bills-received-form-group">
@@ -2162,9 +2233,12 @@ const BillsManagementPage = () => {
                   type="number"
                   value={paymentData.amount}
                   onChange={(e) => setPaymentData({ ...paymentData, amount: e.target.value })}
-                  placeholder={`Max: ${selectedBill.balanceAmount}`}
+                  placeholder={`Max: ₹${formatCurrency(selectedBill.balanceAmount)}`}
                   max={selectedBill.balanceAmount}
+                  step="0.01"
+                  min="0"
                 />
+                <small style={{color:'#64748b'}}>Max: ₹{formatCurrency(selectedBill.balanceAmount)}</small>
               </div>
 
               <div className="procurement-bills-received-form-row">
@@ -2193,12 +2267,12 @@ const BillsManagementPage = () => {
               </div>
 
               <div className="procurement-bills-received-form-group">
-                <label>Reference Number *</label>
+                <label>Transaction Reference</label>
                 <input
                   type="text"
                   value={paymentData.referenceNumber}
                   onChange={(e) => setPaymentData({ ...paymentData, referenceNumber: e.target.value })}
-                  placeholder="Transaction/Cheque/Reference Number"
+                  placeholder="UTR / Cheque No / Reference Number"
                 />
               </div>
 
@@ -2227,21 +2301,62 @@ const BillsManagementPage = () => {
 
       {/* File View Modal */}
       {showFileViewModal && fileViewUrl && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowFileViewModal(false)}>
-          <div className="procurement-bills-received-file-view-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="procurement-bills-received-modal-header">
-              <h2>Bill Document</h2>
-              <button className="procurement-bills-received-modal-close" onClick={() => setShowFileViewModal(false)}>
-                <X size={24} />
-              </button>
+        <div
+          className="procurement-bills-received-modal-overlay"
+          onClick={() => {
+            window.URL.revokeObjectURL(fileViewUrl);
+            setFileViewUrl(null);
+            setShowFileViewModal(false);
+          }}
+        >
+          <div
+            className="procurement-bills-received-file-view-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bill-file-preview-header">
+              <span className="bill-file-preview-title">
+                <FileText size={16} /> Bill Document Preview
+              </span>
+              <div className="bill-file-preview-actions">
+                <button
+                  className="bill-file-preview-btn bill-file-preview-btn-open"
+                  onClick={() => window.open(fileViewUrl, '_blank')}
+                >
+                  <ExternalLink size={13} /> Open in Tab
+                </button>
+                <button
+                  className="bill-file-preview-btn bill-file-preview-btn-download"
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = fileViewUrl;
+                    a.download = selectedBill?.billFileName || 'bill-document';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                >
+                  <Download size={13} /> Download
+                </button>
+                <button
+                  className="procurement-bills-received-modal-close"
+                  onClick={() => {
+                    window.URL.revokeObjectURL(fileViewUrl);
+                    setFileViewUrl(null);
+                    setShowFileViewModal(false);
+                  }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-            <div style={{ width: '100%', height: 'calc(100% - 73px)', overflow: 'auto' }}>
-              <iframe
-                src={fileViewUrl}
-                style={{ width: '100%', height: '100%', border: 'none' }}
-                title="Bill Document"
-              />
-            </div>
+
+            {/* Iframe */}
+            <iframe
+              src={fileViewUrl}
+              className="bill-file-preview-iframe"
+              title="Bill Document"
+            />
           </div>
         </div>
       )}

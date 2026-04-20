@@ -553,6 +553,15 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const [offlineFile, setOfflineFile] = useState(null);
   const [offlineUploading, setOfflineUploading] = useState(false);
 
+  // ── Lead access: user has direct access if they are the assignee, creator,
+  //    BD executive on this lead, or have admin/manager level permissions
+  const hasLeadAccess = !!(
+    permissions.EDIT ||                                         // admins / managers
+    (lead.assignedTo   && Number(lead.assignedTo)   === Number(currentUser.id)) ||
+    (lead.createdBy    && Number(lead.createdBy)    === Number(currentUser.id)) ||
+    (lead.bdAssignedTo && Number(lead.bdAssignedTo) === Number(currentUser.id))
+  );
+
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
 
   const fetchProposals = useCallback(async () => {
@@ -1077,13 +1086,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
                         <div className="ld-proposal-actions">
-                          {/* Generated PDF download */}
-                          <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
-                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                            PDF
-                          </button>
-                          {/* Offline PDF actions */}
                           {p.offlinePdfPath ? (
+                            /* ── Offline PDF uploaded — show View / Download / Replace only ── */
                             <>
                               <button className="ld-pact-btn ld-pact-offline-view" onClick={() => handleViewOffline(p.id, p.offlinePdfName)} title="View uploaded offline proposal">
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
@@ -1103,14 +1107,21 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                               </label>
                             </>
                           ) : (
-                            <label className="ld-pact-btn ld-pact-upload" title="Upload offline proposal PDF given by client" style={{cursor:'pointer'}}>
-                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                              {uploadingId === p.id ? 'Uploading…' : 'Upload Offline PDF'}
-                              <input type="file" accept=".pdf,application/pdf" style={{display:'none'}}
-                                onChange={e => { if(e.target.files[0]) handleUploadOffline(p.id, e.target.files[0]); e.target.value=''; }}
-                                disabled={uploadingId === p.id}
-                              />
-                            </label>
+                            /* ── No offline PDF — show generated PDF download + upload option ── */
+                            <>
+                              <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                PDF
+                              </button>
+                              <label className="ld-pact-btn ld-pact-upload" title="Upload offline proposal PDF given by client" style={{cursor:'pointer'}}>
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                                {uploadingId === p.id ? 'Uploading…' : 'Upload Offline PDF'}
+                                <input type="file" accept=".pdf,application/pdf" style={{display:'none'}}
+                                  onChange={e => { if(e.target.files[0]) handleUploadOffline(p.id, e.target.files[0]); e.target.value=''; }}
+                                  disabled={uploadingId === p.id}
+                                />
+                              </label>
+                            </>
                           )}
                           {permissions.EDIT && (
                             <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingProposal(p); setShowProposalForm(true); }} title="Edit">

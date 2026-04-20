@@ -32,7 +32,7 @@ import Profile from "./Pages/Profile";
 import SalesOrder from "./Pages/Sales-Order";
 import PurchaseOrders from './Pages/PurchaseOrders';
 import BillsRecieved from "./Pages/BillsRecieptsPage.js";
-import Reports from "./Pages/Reports";
+import Reports from "./Pages/ProjectReports.js";
 import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";

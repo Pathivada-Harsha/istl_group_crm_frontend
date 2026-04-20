@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck,
   CheckCircle, IndianRupee, Clock, Columns, FileText, TrendingUp,
-  DollarSign, AlertCircle, Trash2,
+  DollarSign, AlertCircle, Trash2, Upload, ExternalLink, File,
   ChevronUp, ChevronDown, ChevronsUpDown, GripVertical, Check
 } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
@@ -145,6 +145,12 @@ const PurchaseOrders = () => {
   const [stats, setStats] = useState(null);
 
   const [showCreatePOModal, setShowCreatePOModal] = useState(false);
+  // PO soft-copy file upload state
+  const [poFileUpload, setPoFileUpload] = useState(null);
+  const [poFileUploading, setPoFileUploading] = useState(false);
+  const [showPOFileModal, setShowPOFileModal] = useState(false);
+  const [poFileModalUrl, setPoFileModalUrl] = useState('');
+  const poFileInputRef = useRef(null);
   const [vendors, setVendors] = useState([]);
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
@@ -174,6 +180,10 @@ const PurchaseOrders = () => {
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
   const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+
+  // ── Edit-mode project change state ──
+  const [pendingProjectChange, setPendingProjectChange] = useState(null); // { groupName, subGroupName, projectId }
+  const [showProjectChangeWarning, setShowProjectChangeWarning] = useState(false);
 
   // ─── Column helpers ────────────────────────────────────────────────────────
   const visibleColumns = columns.filter((c) => c.visible);
@@ -332,6 +342,22 @@ const PurchaseOrders = () => {
   // ─── Modal change handlers ────────────────────────────────────────────────
   const handleModalGroupChange = (e) => {
     const v = e.target.value;
+    if (isEditMode && createPOFormData.items.length > 0) {
+      // In edit mode: immediately update the UI dropdowns so cascading works,
+      // but capture the pending change and show a warning before applying to form data.
+      setModalGroupName(v);
+      setModalSubGroupName('');
+      setModalProjectId('');
+      setModalSubGroups([]);
+      setModalProjects([]);
+      setQuotations([]);
+      setOrderBooks([]);
+      setSelectedOrderBookId('');
+      setPendingProjectChange({ groupName: v, subGroupName: '', projectId: '' });
+      setShowProjectChangeWarning(true);
+      if (v) { fetchModalSubGroups(v); fetchFilteredQuotations(v, null, null); }
+      return;
+    }
     setModalGroupName(v); setModalSubGroupName(''); setModalProjectId('');
     setModalSubGroups([]); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, groupName: v, subGroupName: '', projectId: '', items: [] }));
@@ -340,19 +366,76 @@ const PurchaseOrders = () => {
   };
   const handleModalSubGroupChange = (e) => {
     const v = e.target.value;
+    if (isEditMode && createPOFormData.items.length > 0) {
+      setModalSubGroupName(v);
+      setModalProjectId('');
+      setModalProjects([]);
+      setQuotations([]);
+      setOrderBooks([]);
+      setSelectedOrderBookId('');
+      setPendingProjectChange(prev => ({ ...(prev || { groupName: modalGroupName }), subGroupName: v, projectId: '' }));
+      setShowProjectChangeWarning(true);
+      if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); }
+      return;
+    }
     setModalSubGroupName(v); setModalProjectId(''); setModalProjects([]); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, subGroupName: v, projectId: '', items: [] }));
     if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); fetchFilteredQuotations(modalGroupName, v, null); }
   };
   const handleModalProjectChange = async (e) => {
     const v = e.target.value;
+    if (isEditMode && createPOFormData.items.length > 0) {
+      setModalProjectId(v);
+      setQuotations([]);
+      setOrderBookItems([]);
+      setOrderBooks([]);
+      setSelectedOrderBookId('');
+      setPendingProjectChange(prev => ({ ...(prev || { groupName: modalGroupName, subGroupName: modalSubGroupName }), projectId: v }));
+      setShowProjectChangeWarning(true);
+      if (v) {
+        await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
+        await fetchOrderBooks(v);
+      }
+      return;
+    }
     setModalProjectId(v); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, projectId: v, quotationId: '', quotation: null, items: [] }));
     if (v) {
       await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
       await fetchOrderBooks(v);
-      fetchVendors(modalGroupName, modalSubGroupName, v); // ✅ refresh vendor dropdown for this project
+      fetchVendors(modalGroupName, modalSubGroupName, v);
     }
+  };
+
+  // ── Confirm project change in edit mode: keep items, just update project fields ──
+  const handleConfirmProjectChange = async () => {
+    // The modal dropdowns (modalGroupName, modalSubGroupName, modalProjectId) are already
+    // updated live — we just need to sync them into createPOFormData WITHOUT clearing items.
+    setCreatePOFormData(prev => ({
+      ...prev,
+      groupName: modalGroupName,
+      subGroupName: modalSubGroupName,
+      projectId: modalProjectId,
+      // items intentionally preserved
+    }));
+    if (modalProjectId) {
+      fetchVendors(modalGroupName, modalSubGroupName, modalProjectId);
+    }
+    setPendingProjectChange(null);
+    setShowProjectChangeWarning(false);
+    showSuccess('Project updated. All existing items have been kept.');
+  };
+
+  const handleCancelProjectChange = () => {
+    // Revert the live dropdowns back to the values stored in createPOFormData (the original PO project)
+    setModalGroupName(createPOFormData.groupName || '');
+    setModalSubGroupName(createPOFormData.subGroupName || '');
+    setModalProjectId(createPOFormData.projectId || '');
+    // Re-load the subgroup/project lists for the original selection so dropdowns are correct
+    if (createPOFormData.groupName) fetchModalSubGroups(createPOFormData.groupName);
+    if (createPOFormData.groupName && createPOFormData.subGroupName) fetchModalProjects(createPOFormData.groupName, createPOFormData.subGroupName);
+    setPendingProjectChange(null);
+    setShowProjectChangeWarning(false);
   };
 
   const handleOrderBookSelect = async (e) => {
@@ -505,7 +588,15 @@ const PurchaseOrders = () => {
     }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
-  const calculatePOTotal = () => createPOFormData.items.filter(i => i.selected).reduce((s, i) => s + i.lineTotal, 0);
+  const calculatePOTotal = () => createPOFormData.items.filter(i => i.selected).reduce((sum, i) => {
+    const qty      = parseFloat(i.quantity)  || 0;
+    const price    = parseFloat(i.unitPrice) || 0;
+    const gst      = parseFloat(i.gst)       || 0;
+    const discount = parseFloat(i.discount)  || 0;
+    const base     = qty * price;
+    const disc     = base * (discount / 100);
+    return sum + (base - disc) * (1 + gst / 100);
+  }, 0);
 
   // ─── API calls ─────────────────────────────────────────────────────────────
   const fetchPurchaseOrders = async () => {
@@ -573,12 +664,21 @@ const PurchaseOrders = () => {
       if (poData.groupName) await fetchModalSubGroups(poData.groupName);
       if (poData.groupName && poData.subGroupName) await fetchModalProjects(poData.groupName, poData.subGroupName);
       await fetchVendors();
-      const items = (poData.items || []).map((item, i) => ({
-        id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
-        quantity: item.quantity, unitPrice: item.unitPrice || '', gst: item.taxPercent || 18,
-        discount: item.discount || '', lineTotal: item.lineTotal || 0, selected: true,
-        quotedQuantity: item.quotedQuantity || null
-      }));
+      const items = (poData.items || []).map((item, i) => {
+        const qty      = parseFloat(item.quantity)   || 0;
+        const price    = parseFloat(item.unitPrice)  || 0;
+        const gst      = parseFloat(item.taxPercent) || 0;
+        const discount = parseFloat(item.discount)   || 0;
+        const base     = qty * price;
+        const disc     = base * (discount / 100);
+        const lineTotal = (base - disc) * (1 + gst / 100);
+        return {
+          id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
+          quantity: qty, unitPrice: price || '', gst,
+          discount: discount || '', lineTotal, selected: true,
+          quotedQuantity: item.quotedQuantity || null
+        };
+      });
       setCreatePOFormData({
         quotationId: poData.quotationId || '', quotation: null,
         vendorId: poData.vendorId || null, vendorName: poData.vendorName || '', vendorContact: poData.vendorContact || '',
@@ -664,6 +764,83 @@ const PurchaseOrders = () => {
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setItemsStepUnlocked(false);
+    setPoFileUpload(null);
+    if (poFileInputRef.current) poFileInputRef.current.value = '';
+    setPendingProjectChange(null);
+    setShowProjectChangeWarning(false);
+  };
+
+  // ─── PO File Upload Helpers ────────────────────────────────────────────────
+  const handlePOFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const MAX = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+    const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
+    if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+    setPoFileUpload(file);
+  };
+
+  const handleUploadPOFile = async (poId) => {
+    if (!poFileUpload) return;
+    setPoFileUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', poFileUpload);
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${poId}/upload-file`, {
+        method: 'POST', credentials: 'include',
+        headers: getAuthHeaders(),
+        body: fd
+      });
+      if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Upload failed'); }
+      showSuccess('PO document uploaded successfully!');
+      setPoFileUpload(null);
+      if (poFileInputRef.current) poFileInputRef.current.value = '';
+    } catch (err) { showError(err.message || 'Failed to upload PO file'); }
+    finally { setPoFileUploading(false); }
+  };
+
+  const handleViewPOFile = async (po) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${po.id}/view-file`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found or could not be loaded'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      setPoFileModalUrl(blobUrl);
+      setShowPOFileModal(true);
+    } catch { showError('Failed to load PO document'); }
+  };
+
+  const handleOpenPOFileInTab = async (po) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${po.id}/view-file`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      window.open(blobUrl, '_blank');
+    } catch { showError('Failed to open PO document'); }
+  };
+
+  const handleDownloadPOFile = async (po) => {
+    try {
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${po.id}/download-file`, {
+        credentials: 'include', headers: getAuthHeaders()
+      });
+      if (!r.ok) { showError('File not found'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = po.poFileName || 'po-document';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(blobUrl);
+      document.body.removeChild(a);
+    } catch { showError('Failed to download PO document'); }
   };
 
   const handleCreatePO = async () => {
@@ -713,6 +890,11 @@ const PurchaseOrders = () => {
       }
       if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'Failed'); }
       const result = await response.json();
+      const savedId = result.id || result.data?.id;
+      // Upload soft-copy file if one was selected
+      if (poFileUpload && savedId) {
+        await handleUploadPOFile(savedId);
+      }
       showSuccess(`PO ${result.poNo || result.data?.poNo} ${isEditMode ? 'updated' : 'created'} successfully!`);
       handleCloseCreatePOModal(); fetchPurchaseOrders(); fetchStats();
     } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
@@ -941,7 +1123,7 @@ const PurchaseOrders = () => {
 
       {/* ─── Detail Drawer ────────────────────────────────────────────────────── */}
       {showDetailDrawer && selectedPO && (
-        <div className="purchase-orders-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+        <div className="purchase-orders-drawer-overlay">
           <div className="purchase-orders-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="purchase-orders-drawer-header">
               <div>
@@ -1016,6 +1198,38 @@ const PurchaseOrders = () => {
                     </div>
                   )}
                 </div>
+
+                {/* PO Soft Copy Document */}
+                {selectedPO.poFileName ? (
+                  <div className="po-doc-section">
+                    <div className="po-doc-header">
+                      <File size={16} />
+                      <span className="po-doc-title">PO Document</span>
+                    </div>
+                    <div className="po-doc-filename">
+                      {selectedPO.poFileName}
+                      {selectedPO.poFileSize && (
+                        <span className="po-doc-size"> ({(selectedPO.poFileSize / 1024).toFixed(1)} KB)</span>
+                      )}
+                    </div>
+                    <div className="po-doc-actions">
+                      <button className="po-doc-btn po-doc-btn-view" onClick={() => handleViewPOFile(selectedPO)}>
+                        <Eye size={14} /> View
+                      </button>
+                      <button className="po-doc-btn po-doc-btn-open" onClick={() => handleOpenPOFileInTab(selectedPO)}>
+                        <ExternalLink size={14} /> Open in Tab
+                      </button>
+                      <button className="po-doc-btn po-doc-btn-download" onClick={() => handleDownloadPOFile(selectedPO)}>
+                        <Download size={14} /> Download
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="po-doc-section po-doc-empty">
+                    <File size={15} style={{ color: '#9ca3af' }} />
+                    <span style={{ color: '#9ca3af', fontSize: 13 }}>No PO document attached</span>
+                  </div>
+                )}
               </div>
 
               {/* ── Delivery Summary ── */}
@@ -1038,7 +1252,15 @@ const PurchaseOrders = () => {
                     <tr><th>Item Name</th><th>Qty Ordered</th><th>Delivered</th><th>Pending</th><th>Unit Price</th><th>GST%</th><th>Line Total</th><th>Action</th></tr>
                   </thead>
                   <tbody>
-                    {selectedPO.items && selectedPO.items.length > 0 ? selectedPO.items.map((item) => (
+                    {selectedPO.items && selectedPO.items.length > 0 ? selectedPO.items.map((item) => {
+                      const qty      = parseFloat(item.quantity)   || 0;
+                      const price    = parseFloat(item.unitPrice)  || 0;
+                      const gst      = parseFloat(item.taxPercent) || 0;
+                      const discount = parseFloat(item.discount)   || 0;
+                      const base     = qty * price;
+                      const disc     = base * (discount / 100);
+                      const computedLineTotal = (base - disc) * (1 + gst / 100);
+                      return (
                       <tr key={item.id}>
                         <td>
                           <div style={{fontWeight:500}}>{item.itemName}</div>
@@ -1051,12 +1273,13 @@ const PurchaseOrders = () => {
                         </td>
                         <td>{formatCurrency(item.unitPrice)}</td>
                         <td>{item.taxPercent != null ? `${item.taxPercent}%` : '—'}</td>
-                        <td>{formatCurrency(item.lineTotal)}</td>
+                        <td>{formatCurrency(computedLineTotal)}</td>
                         <td>{(item.pendingQty ?? 0) > 0 && selectedPO.status !== 'Cancelled' && (
                           <button className="purchase-orders-btn-small" onClick={() => handleOpenDeliveryModal(selectedPO, item)}>Mark Delivered</button>
                         )}</td>
                       </tr>
-                    )) : (
+                      );
+                    }) : (
                       <tr><td colSpan={8} style={{textAlign:'center',padding:'1rem',color:'#9ca3af'}}>No items found</td></tr>
                     )}
                   </tbody>
@@ -1064,7 +1287,19 @@ const PurchaseOrders = () => {
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e5e7eb',fontWeight:600}}>
                         <td colSpan={6} style={{textAlign:'right',padding:'8px 10px'}}>Grand Total:</td>
-                        <td style={{padding:'8px 10px'}}>{formatCurrency(selectedPO.totalValue)}</td>
+                        <td style={{padding:'8px 10px'}}>
+                          {formatCurrency(
+                            (selectedPO.items || []).reduce((sum, item) => {
+                              const qty      = parseFloat(item.quantity)   || 0;
+                              const price    = parseFloat(item.unitPrice)  || 0;
+                              const gst      = parseFloat(item.taxPercent) || 0;
+                              const discount = parseFloat(item.discount)   || 0;
+                              const base     = qty * price;
+                              const disc     = base * (discount / 100);
+                              return sum + (base - disc) * (1 + gst / 100);
+                            }, 0)
+                          )}
+                        </td>
                         <td />
                       </tr>
                     </tfoot>
@@ -1085,9 +1320,46 @@ const PurchaseOrders = () => {
         </div>
       )}
 
+      {/* ─── PO File Preview Modal ─────────────────────────────────────────────── */}
+      {showPOFileModal && (
+        <div className="po-file-preview-overlay">
+          <div className="po-file-preview-container" onClick={(e) => e.stopPropagation()}>
+            <div className="po-file-preview-header">
+              <span className="po-file-preview-title"><File size={16} /> PO Document Preview</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button className="po-doc-btn po-doc-btn-open" onClick={() => window.open(poFileModalUrl, '_blank')}>
+                  <ExternalLink size={13} /> Open in Tab
+                </button>
+                <button className="po-doc-btn po-doc-btn-download" onClick={() => {
+                  const a = document.createElement('a');
+                  a.href = poFileModalUrl;
+                  a.download = selectedPO?.poFileName || 'po-document';
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                }}>
+                  <Download size={13} /> Download
+                </button>
+                <button className="purchase-orders-modal-close" style={{ marginLeft: 4 }} onClick={() => {
+                  window.URL.revokeObjectURL(poFileModalUrl);
+                  setPoFileModalUrl('');
+                  setShowPOFileModal(false);
+                }}>✕</button>
+              </div>
+            </div>
+            <iframe
+              src={poFileModalUrl}
+              title="PO Document"
+              className="po-file-preview-iframe"
+              style={{ width: '100%', border: 'none' }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* ─── Delivery Modal ───────────────────────────────────────────────────── */}
       {showDeliveryModal && deliveryFormData && (
-        <div className="purchase-orders-modal-overlay" onClick={() => setShowDeliveryModal(false)}>
+        <div className="purchase-orders-modal-overlay">
           <div className="purchase-orders-delivery-modal" onClick={(e) => e.stopPropagation()}>
             <div className="purchase-orders-modal-header">
               <h2>Mark Item Delivered</h2>
@@ -1120,7 +1392,7 @@ const PurchaseOrders = () => {
 
       {/* ─── Create / Edit PO Modal (unchanged logic) ─────────────────────────── */}
       {showCreatePOModal && (
-        <div className="purchase-orders-modal-overlay" onClick={handleCloseCreatePOModal}>
+        <div className="purchase-orders-modal-overlay">
           <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px', maxHeight: '90vh', overflow: 'auto' }}>
             <div className="purchase-orders-modal-header">
               <h2>{isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'}</h2>
@@ -1131,7 +1403,11 @@ const PurchaseOrders = () => {
               {/* Step 1: Project Selection */}
               <div className="po-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '2px solid #e2e8f0' }}>
                 <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📂</span> Step 1: Select Project</h3>
-                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>Choose a project to load approved quotations or order book items</p>
+                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                  {isEditMode
+                    ? 'Change the project assignment for this PO. Existing items will be preserved.'
+                    : 'Choose a project to load approved quotations or order book items'}
+                </p>
                 <div className="po-form-row">
                   <div className="po-form-group">
                     <label>Group *</label>
@@ -1157,6 +1433,37 @@ const PurchaseOrders = () => {
                 </div>
                 {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>🔄 Loading quotations and order books...</div>}
               </div>
+
+              {/* ─── Edit-mode Project Change Warning Banner ──────────────────── */}
+              {showProjectChangeWarning && isEditMode && (
+                <div style={{ padding: '18px 20px', background: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '10px', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                  <span style={{ fontSize: '24px', flexShrink: 0 }}>⚠️</span>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: '700', fontSize: '15px', color: '#92400e', marginBottom: '6px' }}>
+                      Change Project for This Purchase Order?
+                    </div>
+                    <div style={{ fontSize: '13px', color: '#78350f', marginBottom: '14px' }}>
+                      You are changing the project while there are <strong>{createPOFormData.items.length} item(s)</strong> in this PO.
+                      Click <em>"Keep Items &amp; Change Project"</em> to update only the project assignment without touching the items.
+                      Or click <em>"Cancel"</em> to revert.
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <button
+                        onClick={handleConfirmProjectChange}
+                        style={{ padding: '9px 18px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
+                      >
+                        ✅ Keep Items &amp; Change Project
+                      </button>
+                      <button
+                        onClick={handleCancelProjectChange}
+                        style={{ padding: '9px 18px', background: 'white', color: '#92400e', border: '1.5px solid #f59e0b', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
+                      >
+                        ✕ Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Step 2: Quotation / Order Book */}
               {modalProjectId && (
@@ -1439,6 +1746,37 @@ const PurchaseOrders = () => {
                     <label>Notes / Special Instructions</label>
                     <textarea rows={3} value={createPOFormData.notes} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, notes: e.target.value }))} placeholder="Additional notes, special requirements, etc." style={{ width: '100%', padding: '10px', fontSize: '14px', resize: 'vertical' }} />
                   </div>
+
+                  {/* PO Soft-Copy Upload */}
+                  <div className="po-file-upload-section">
+                    <label className="po-file-upload-label">
+                      <File size={15} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                      PO Soft Copy (PDF / PNG / JPG — max 10 MB)
+                    </label>
+                    <div className="po-file-upload-row">
+                      <input
+                        ref={poFileInputRef}
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        onChange={handlePOFileSelect}
+                        className="po-file-input"
+                        id="po-file-input"
+                      />
+                      <label htmlFor="po-file-input" className="po-file-choose-btn">
+                        <Upload size={14} /> Choose File
+                      </label>
+                      {poFileUpload && (
+                        <span className="po-file-chosen-name">
+                          {poFileUpload.name} ({(poFileUpload.size / 1024).toFixed(1)} KB)
+                        </span>
+                      )}
+                      {!poFileUpload && isEditMode && editingPOId && (
+                        <span className="po-file-existing-hint">
+                          A file may already be attached. Selecting a new one will replace it.
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -1497,7 +1835,15 @@ const PurchaseOrders = () => {
                             </tr>
                           </thead>
                           <tbody>
-                            {createPOFormData.items.map((item, index) => (
+                            {createPOFormData.items.map((item, index) => {
+                              const qty      = parseFloat(item.quantity)  || 0;
+                              const price    = parseFloat(item.unitPrice) || 0;
+                              const gst      = parseFloat(item.gst)       || 0;
+                              const discount = parseFloat(item.discount)  || 0;
+                              const base     = qty * price;
+                              const disc     = base * (discount / 100);
+                              const computedLineTotal = (base - disc) * (1 + gst / 100);
+                              return (
                               <tr key={index} style={{ borderTop: '1px solid #e2e8f0', opacity: item.selected ? 1 : 0.5, background: item.selected ? 'white' : '#f9fafb' }}>
                                 <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={item.selected} onChange={() => handleToggleItemSelection(index)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /></td>
                                 <td style={{ padding: '12px', fontWeight: '500' }}>{item.itemName}{item.isManual && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}{item.remainingQty != null && <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? '#ef4444' : '#22c55e', marginTop: '2px' }}>OB: {item.quotedQuantity} total · {item.allocatedQty || 0} assigned · <strong>{item.remainingQty} remaining</strong></div>}</td>
@@ -1507,10 +1853,11 @@ const PurchaseOrders = () => {
                                 <td style={{ padding: '12px', textAlign: 'right' }}><input type="number" min="0" step="0.01" value={item.unitPrice || ''} onChange={(e) => handleUpdatePOItemPrice(index, e.target.value)} disabled={createPOFormData.quotationId || !item.selected} placeholder="0.00" style={{ width: '110px', padding: '8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} /></td>
                                 <td style={{ padding: '12px', textAlign: 'center' }}><select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected} style={{ width: '90px', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>{GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}</select></td>
                                 <td style={{ padding: '12px', textAlign: 'center', fontSize: '14px' }}>{item.discount}%</td>
-                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: item.selected ? '#059669' : '#94a3b8', fontSize: '14px' }}>{formatCurrency(item.lineTotal)}</td>
+                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: item.selected ? '#059669' : '#94a3b8', fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
                                 <td style={{ padding: '12px', textAlign: 'center' }}><button className="remove-item-btn" onClick={() => handleRemoveItem(index)} title="Remove item"><Trash2 size={16} /></button></td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                           <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
                             <tr>

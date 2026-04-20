@@ -45,7 +45,7 @@ const InvoicesManagementPage = () => {
 
   // Column visibility & order
   const INVOICE_COLUMNS = [
-    { key: 'customerId',    label: 'Customer' },
+    { key: 'customerId',    label: 'Customer Name' },
     { key: 'totalAmount',   label: 'Total Amount' },
     { key: 'paidAmount',    label: 'Paid Amount' },
     { key: 'balanceAmount', label: 'Balance' },
@@ -66,6 +66,9 @@ const InvoicesManagementPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // ── Edit-mode invoice project change state ──
+  const [invoicePendingProject, setInvoicePendingProject] = useState(null);
+  const [showInvoiceProjectWarning, setShowInvoiceProjectWarning] = useState(false);
   const [stats, setStats] = useState(null);
 
   // Dropdown states
@@ -515,13 +518,18 @@ const fetchStats = async () => {
    */
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
+    if (editMode && formData.items && formData.items.some(i => i.description)) {
+      setModalGroupName(newGroupName); setModalSubGroupName(''); setModalProjectId('');
+      setModalSubGroups([]); setModalProjects([]);
+      setInvoicePendingProject({ groupId: newGroupName, subGroupId: '', projectId: '' });
+      setShowInvoiceProjectWarning(true);
+      if (newGroupName) fetchModalSubGroups(newGroupName);
+      return;
+    }
     setModalGroupName(newGroupName);
-    setModalSubGroupName('');
-    setModalProjectId('');
-    setModalSubGroups([]);
-    setModalProjects([]);
+    setModalSubGroupName(''); setModalProjectId('');
+    setModalSubGroups([]); setModalProjects([]);
     setCustomerData(null);
-
     setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setFormData({ ...formData, groupId: newGroupName, subGroupId: '', projectId: '', customerId: null, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
     if (newGroupName) { fetchModalSubGroups(newGroupName); }
@@ -532,11 +540,16 @@ const fetchStats = async () => {
    */
   const handleModalSubGroupChange = (e) => {
     const newSubGroupName = e.target.value;
+    if (editMode && formData.items && formData.items.some(i => i.description)) {
+      setModalSubGroupName(newSubGroupName); setModalProjectId(''); setModalProjects([]);
+      setInvoicePendingProject(prev => ({ ...(prev || { groupId: modalGroupName }), subGroupId: newSubGroupName, projectId: '' }));
+      setShowInvoiceProjectWarning(true);
+      if (modalGroupName && newSubGroupName) fetchModalProjects(modalGroupName, newSubGroupName);
+      return;
+    }
     setModalSubGroupName(newSubGroupName);
-    setModalProjectId('');
-    setModalProjects([]);
+    setModalProjectId(''); setModalProjects([]);
     setCustomerData(null);
-
     setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setFormData({ ...formData, subGroupId: newSubGroupName, projectId: '', customerId: null, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
     if (modalGroupName && newSubGroupName) { fetchModalProjects(modalGroupName, newSubGroupName); }
@@ -547,14 +560,39 @@ const fetchStats = async () => {
    */
   const handleModalProjectChange = (e) => {
     const newProjectId = e.target.value;
+    if (editMode && formData.items && formData.items.some(i => i.description)) {
+      setModalProjectId(newProjectId);
+      setInvoicePendingProject(prev => ({ ...(prev || { groupId: modalGroupName, subGroupId: modalSubGroupName }), projectId: newProjectId }));
+      setShowInvoiceProjectWarning(true);
+      return;
+    }
     setModalProjectId(newProjectId);
     setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setFormData({ ...formData, projectId: newProjectId, items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }] });
     if (newProjectId) {
       fetchCustomerByProject(newProjectId);
-      // Pass group/subgroup explicitly to avoid stale closure issues
       fetchProjectOrderBookItems(newProjectId, modalGroupName, modalSubGroupName);
     }
+  };
+
+  const handleConfirmInvoiceProjectChange = () => {
+    const g   = invoicePendingProject?.groupId   ?? modalGroupName;
+    const sg  = invoicePendingProject?.subGroupId ?? modalSubGroupName;
+    const pid = invoicePendingProject?.projectId  ?? modalProjectId;
+    setFormData(prev => ({ ...prev, groupId: g, subGroupId: sg, projectId: pid }));
+    if (pid) { fetchCustomerByProject(pid); fetchProjectOrderBookItems(pid, g, sg); }
+    setInvoicePendingProject(null);
+    setShowInvoiceProjectWarning(false);
+  };
+
+  const handleCancelInvoiceProjectChange = () => {
+    setModalGroupName(formData.groupId || '');
+    setModalSubGroupName(formData.subGroupId || '');
+    setModalProjectId(formData.projectId || '');
+    if (formData.groupId) fetchModalSubGroups(formData.groupId);
+    if (formData.groupId && formData.subGroupId) fetchModalProjects(formData.groupId, formData.subGroupId);
+    setInvoicePendingProject(null);
+    setShowInvoiceProjectWarning(false);
   };
 
   /**
@@ -631,17 +669,18 @@ const fetchStats = async () => {
     });
     setSelectedInvoice(invoice);
     setEditMode(true);
+    setInvoicePendingProject(null);
+    setShowInvoiceProjectWarning(false);
 
-    // Await groups BEFORE opening the modal so the select is never empty
+    // Pre-load all three dropdown levels for instant pre-population
     await fetchModalGroups();
-
-    // Set the selected group after groups are confirmed loaded
     if (invoice.groupId) {
       setModalGroupName(invoice.groupId);
-      // Also pre-load subgroups for the saved group
       await fetchModalSubGroups(invoice.groupId);
       if (invoice.subGroupId) {
         setModalSubGroupName(invoice.subGroupId);
+        await fetchModalProjects(invoice.groupId, invoice.subGroupId);
+        setModalProjectId(invoice.projectId || '');
       }
     }
 
@@ -748,6 +787,8 @@ const fetchStats = async () => {
 
       showSuccess(`Invoice ${editMode ? 'updated' : 'created'} successfully!`);
       setShowCreateModal(false);
+    setInvoicePendingProject(null);
+    setShowInvoiceProjectWarning(false);
       fetchInvoices();
       fetchStats();
 
@@ -767,7 +808,9 @@ const fetchStats = async () => {
     setPaymentData({
       amount: parseFloat(invoice.balanceAmount || invoice.totalAmount),
       method: 'Bank Transfer',
-      notes: ''
+      transactionReference: '',
+      notes: '',
+      receiptDate: new Date().toISOString().split('T')[0],
     });
     setShowPaymentModal(true);
   };
@@ -776,21 +819,39 @@ const fetchStats = async () => {
    * Save payment
    */
   const handleSavePayment = async () => {
-    if (paymentData.amount <= 0) {
+    if (!paymentData.amount || paymentData.amount <= 0) {
       showError('Payment amount must be greater than zero');
+      return;
+    }
+    if (paymentData.amount > parseFloat(selectedInvoice.balanceAmount || 0)) {
+      showError(`Payment cannot exceed balance due of ${formatCurrency(selectedInvoice.balanceAmount)}`);
       return;
     }
 
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/invoices/${selectedInvoice.id}/payment`, {
-        credentials: "include",
+      // Create a proper Receipt record (INVOICE_PAYMENT type) — same as recording via Receipts tab.
+      // This ensures the payment appears in Receipts, is linked to the correct project/customer,
+      // and updates the invoice balance through the same code path.
+      const receiptData = {
+        receiptType: 'INVOICE_PAYMENT',
+        invoiceId:   selectedInvoice.id,
+        customerId:  selectedInvoice.customerId,
+        projectId:   selectedInvoice.projectId,
+        groupId:     selectedInvoice.groupId,
+        subGroupId:  selectedInvoice.subGroupId,
+        receiptDate: paymentData.receiptDate,
+        amount:      parseFloat(paymentData.amount),
+        paymentMethod:        paymentData.method,
+        transactionReference: paymentData.transactionReference || '',
+        notes:        paymentData.notes || '',
+      };
+
+      const response = await fetch(`${API_BASE_URL}/invoices/receipts`, {
+        credentials: 'include',
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify({ amount: paymentData.amount })
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        body: JSON.stringify(receiptData),
       });
 
       if (!response.ok) {
@@ -798,7 +859,7 @@ const fetchStats = async () => {
         throw new Error(error.message || 'Failed to record payment');
       }
 
-      showSuccess('Payment recorded successfully!');
+      showSuccess('Payment recorded successfully! Receipt created in the Receipts tab.');
       setShowPaymentModal(false);
       fetchInvoices();
       fetchStats();
@@ -1135,7 +1196,7 @@ const fetchStats = async () => {
               getSortedInvoices().map((invoice) => (
                 <tr key={invoice.id}>
                   {orderedVisibleCols.map(key => {
-                    if (key === 'customerId')    return <td key={key}>{invoice.customerId}</td>;
+                    if (key === 'customerId')    return <td key={key}>{invoice.customerCompanyName || invoice.customerName || `#${invoice.customerId}`}</td>;
                     if (key === 'totalAmount')   return <td key={key} className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>;
                     if (key === 'paidAmount')    return <td key={key}>{formatCurrency(invoice.paidAmount)}</td>;
                     if (key === 'balanceAmount') return <td key={key} className="Invoices-page-total">{formatCurrency(invoice.balanceAmount)}</td>;
@@ -1443,6 +1504,27 @@ const fetchStats = async () => {
 
                   </div>
 
+                  {/* ── Edit-mode: show pending change badge + action buttons ── */}
+                  {showInvoiceProjectWarning && editMode && (
+                    <div style={{ marginTop: '12px', padding: '12px 14px', background: '#fffbeb', border: '1.5px solid #f59e0b', borderRadius: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+                        <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 500 }}>
+                          ⚠️ Project changed — items will be preserved. Confirm to apply.
+                        </div>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button onClick={handleConfirmInvoiceProjectChange}
+                            style={{ padding: '7px 14px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                            ✅ Apply
+                          </button>
+                          <button onClick={handleCancelInvoiceProjectChange}
+                            style={{ padding: '7px 14px', background: 'white', color: '#92400e', border: '1.5px solid #f59e0b', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                            ✕ Revert
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Order Book Section — shown once a project is selected */}
                   {modalProjectId && (
                     <div style={{ marginTop: '14px' }}>
@@ -1738,7 +1820,7 @@ const fetchStats = async () => {
         </div>
       )}
 
-      {/* Record Payment Modal */}
+      {/* Record Payment Modal — creates a Receipt (INVOICE_PAYMENT) same as Receipts tab */}
       {showPaymentModal && selectedInvoice && (
         <div className="Invoices-page-modal-overlay">
           <div className="Invoices-page-modal" onClick={e => e.stopPropagation()}>
@@ -1748,57 +1830,85 @@ const fetchStats = async () => {
             </div>
 
             <div className="Invoices-page-modal-body">
-              <div style={{
-                padding: '16px',
-                backgroundColor: '#f8fafc',
-                borderRadius: '8px',
-                marginBottom: '20px'
-              }}>
+              {/* Invoice summary */}
+              <div style={{ padding: '14px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                 <div className="Invoices-page-payment-row">
-                  <span>Invoice ID:</span>
+                  <span>Invoice:</span>
                   <strong>{selectedInvoice.invoiceNo}</strong>
                 </div>
+                <div className="Invoices-page-payment-row">
+                  <span>Customer:</span>
+                  <strong>{selectedInvoice.customerCompanyName || selectedInvoice.customerName || `#${selectedInvoice.customerId}`}</strong>
+                </div>
+                {selectedInvoice.projectId && (
+                  <div className="Invoices-page-payment-row">
+                    <span>Project:</span>
+                    <strong>{selectedInvoice.projectId}</strong>
+                  </div>
+                )}
                 <div className="Invoices-page-payment-row">
                   <span>Total Amount:</span>
                   <strong>{formatCurrency(selectedInvoice.totalAmount)}</strong>
                 </div>
                 <div className="Invoices-page-payment-row">
                   <span>Already Paid:</span>
-                  <strong className="Invoices-page-text-success">
-                    {formatCurrency(selectedInvoice.paidAmount)}
-                  </strong>
+                  <strong className="Invoices-page-text-success">{formatCurrency(selectedInvoice.paidAmount)}</strong>
                 </div>
                 <div className="Invoices-page-payment-row">
                   <span>Balance Due:</span>
-                  <strong className="Invoices-page-text-danger">
-                    {formatCurrency(selectedInvoice.balanceAmount)}
-                  </strong>
+                  <strong className="Invoices-page-text-danger">{formatCurrency(selectedInvoice.balanceAmount)}</strong>
                 </div>
               </div>
 
+              {/* Info banner */}
+              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', fontSize: '13px', color: '#1e40af', marginBottom: '16px' }}>
+                💡 This payment will be recorded as a Receipt (Invoice Payment) and will appear in the Receipts tab.
+              </div>
+
               <div className="Invoices-page-form">
-                <div className="Invoices-page-form-group">
-                  <label>Amount Paid *</label>
-                  <input
-                    type="number"
-                    value={paymentData.amount}
-                    onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) })}                  
-                    max={selectedInvoice.balanceAmount}
-                  />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="Invoices-page-form-group">
+                    <label>Receipt Date *</label>
+                    <input
+                      type="date"
+                      value={paymentData.receiptDate || ''}
+                      onChange={(e) => setPaymentData({ ...paymentData, receiptDate: e.target.value })}
+                    />
+                  </div>
+                  <div className="Invoices-page-form-group">
+                    <label>Amount Paid *</label>
+                    <input
+                      type="number"
+                      value={paymentData.amount}
+                      onChange={(e) => setPaymentData({ ...paymentData, amount: parseFloat(e.target.value) || 0 })}
+                      max={selectedInvoice.balanceAmount}
+                      step="0.01"
+                      min="0"
+                    />
+                    <small style={{ color: '#64748b' }}>Max: {formatCurrency(selectedInvoice.balanceAmount)}</small>
+                  </div>
                 </div>
 
-                <div className="Invoices-page-form-group">
-                  <label>Payment Method *</label>
-                  <select
-                    value={paymentData.method}
-                    onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}
-                  >
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="UPI">UPI</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Credit Card">Credit Card</option>
-                  </select>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div className="Invoices-page-form-group">
+                    <label>Payment Method *</label>
+                    <select value={paymentData.method} onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Cheque">Cheque</option>
+                      <option value="Credit Card">Credit Card</option>
+                    </select>
+                  </div>
+                  <div className="Invoices-page-form-group">
+                    <label>Transaction Reference</label>
+                    <input
+                      type="text"
+                      value={paymentData.transactionReference || ''}
+                      onChange={(e) => setPaymentData({ ...paymentData, transactionReference: e.target.value })}
+                      placeholder="UTR / Cheque No / etc."
+                    />
+                  </div>
                 </div>
 
                 <div className="Invoices-page-form-group">
@@ -1806,30 +1916,16 @@ const fetchStats = async () => {
                   <textarea
                     value={paymentData.notes}
                     onChange={(e) => setPaymentData({ ...paymentData, notes: e.target.value })}
-                    placeholder="Transaction reference, notes, etc."
-                    rows="3"
-                  />
-                </div>
-
-                <div className="Invoices-page-form-group">
-                  <label>Transaction Reference</label>
-                  <input
-                    type="text"
-                    value={paymentData.transactionReference}
-                    onChange={(e) => setPaymentData({ ...paymentData, transactionReference: e.target.value })}
-                    placeholder="Transaction ID, cheque number, etc."
+                    placeholder="Additional notes..."
+                    rows="2"
                   />
                 </div>
               </div>
             </div>
 
             <div className="Invoices-page-modal-actions">
-              <button className="Invoices-page-btn-secondary" onClick={() => setShowPaymentModal(false)}>
-                Cancel
-              </button>
-              <button className="Invoices-page-btn-primary" onClick={handleSavePayment}>
-                Record Payment
-              </button>
+              <button className="Invoices-page-btn-secondary" onClick={() => setShowPaymentModal(false)}>Cancel</button>
+              <button className="Invoices-page-btn-primary" onClick={handleSavePayment}>Record Payment</button>
             </div>
           </div>
         </div>

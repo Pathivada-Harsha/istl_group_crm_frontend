@@ -117,6 +117,16 @@ export default function VendorPaymentsPage() {
   const [editingAdvance, setEditingAdvance] = useState(null);
   const [editFormData, setEditFormData]     = useState({});
 
+  // edit project change
+  const [showEditProjectPanel, setShowEditProjectPanel]       = useState(false);
+  const [editProjectGroups, setEditProjectGroups]             = useState([]);
+  const [editProjectSubs, setEditProjectSubs]                 = useState([]);
+  const [editProjectList, setEditProjectList]                 = useState([]);
+  const [editProjectGroupName, setEditProjectGroupName]       = useState('');
+  const [editProjectSubGroupName, setEditProjectSubGroupName] = useState('');
+  const [editProjectId, setEditProjectId]                     = useState('');
+  const [editProjectLoading, setEditProjectLoading]           = useState({ groups:false, subs:false, projects:false });
+
   // deleted view
   const [showDeleted, setShowDeleted]   = useState(false);
   const [deletedList, setDeletedList]   = useState([]);
@@ -222,15 +232,17 @@ export default function VendorPaymentsPage() {
     } catch { setVendors([]); }
   };
 
-  const fetchUnpaidBillsForVendor = async (vendorId) => {
+  const fetchUnpaidBillsForVendor = async (vendorId, projectId) => {
     if(!vendorId){setUnpaidBills([]);return;}
     setLoadingBills(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Pending&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
+      // Always scope to the advance's project so only that project's bills are shown
+      const projectFilter = projectId ? `&projectId=${encodeURIComponent(projectId)}` : '';
+      const res=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Pending&size=100&sortBy=billDate&sortDirection=DESC${projectFilter}`,{credentials:'include',headers:getAuthHeaders()});
       if(!res.ok) throw new Error();
       const d=await res.json();
       // include partially paid too
-      const res2=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Partially%20Paid&size=100&sortBy=billDate&sortDirection=DESC`,{credentials:'include',headers:getAuthHeaders()});
+      const res2=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Partially%20Paid&size=100&sortBy=billDate&sortDirection=DESC${projectFilter}`,{credentials:'include',headers:getAuthHeaders()});
       const d2=res2.ok?await res2.json():{bills:[]};
       setUnpaidBills([...(d.bills||[]),...(d2.bills||[])]);
     } catch { setUnpaidBills([]); }
@@ -253,6 +265,25 @@ export default function VendorPaymentsPage() {
     setMdlLoading(p=>({...p,projects:true}));
     try{setModalProjects(await filterApi.getProjects(gn,sg)||[]);}catch{setModalProjects([]);}
     finally{setMdlLoading(p=>({...p,projects:false}));}
+  };
+
+  // ── edit project helpers ──────────────────────────────────────────────────
+  const fetchEditProjectGroups = async () => {
+    setEditProjectLoading(p=>({...p,groups:true}));
+    try { setEditProjectGroups(await filterApi.getAllGroups()||[]); } catch { setEditProjectGroups([]); }
+    finally { setEditProjectLoading(p=>({...p,groups:false})); }
+  };
+  const fetchEditProjectSubs = async (g) => {
+    if(!g){setEditProjectSubs([]);setEditProjectList([]);return;}
+    setEditProjectLoading(p=>({...p,subs:true}));
+    try { setEditProjectSubs(await filterApi.getSubGroups(g)||[]); } catch { setEditProjectSubs([]); }
+    finally { setEditProjectLoading(p=>({...p,subs:false})); }
+  };
+  const fetchEditProjectList = async (g,sg) => {
+    if(!g||!sg){setEditProjectList([]);return;}
+    setEditProjectLoading(p=>({...p,projects:true}));
+    try { setEditProjectList(await filterApi.getProjects(g,sg)||[]); } catch { setEditProjectList([]); }
+    finally { setEditProjectLoading(p=>({...p,projects:false})); }
   };
 
   // ── view ─────────────────────────────────────────────────────────────────
@@ -319,7 +350,8 @@ export default function VendorPaymentsPage() {
   const handleAdjustAdvance = async (adv) => {
     setSelectedAdvance(adv);
     setAdjustData({advanceId:adv.id,vendorId:adv.vendorId,availableAmount:parseFloat(adv.unappliedAmount||0),billAllocations:[]});
-    await fetchUnpaidBillsForVendor(adv.vendorId);
+    // Scope bills to the same vendor AND same project as the advance
+    await fetchUnpaidBillsForVendor(adv.vendorId, adv.projectId);
     setShowAdjustModal(true);
   };
 
@@ -373,25 +405,100 @@ export default function VendorPaymentsPage() {
   };
 
   // ── edit ──────────────────────────────────────────────────────────────────
-  const handleEditClick = (adv) => {
+  const handleEditClick = async (adv) => {
     setEditingAdvance(adv);
     setEditFormData({advanceDate:adv.advanceDate,amount:adv.amount,paymentMode:adv.paymentMode||'Bank Transfer',transactionReference:adv.transactionReference||'',notes:adv.notes||'',});
+    setEditProjectGroupName(adv.groupId||'');
+    setEditProjectSubGroupName(adv.subGroupId||'');
+    setEditProjectId(adv.projectId||'');
+    setEditProjectGroups([]); setEditProjectSubs([]); setEditProjectList([]);
     setShowEditModal(true);
+    // Only load project dropdowns for ADVANCE type — BILL_PAYMENT project is locked
+    if(adv.paymentType==='ADVANCE'){
+      const groups = await filterApi.getAllGroups();
+      setEditProjectGroups(groups||[]);
+      if(adv.groupId){
+        const subs = await filterApi.getSubGroups(adv.groupId);
+        setEditProjectSubs(subs||[]);
+        if(adv.subGroupId){
+          const projects = await filterApi.getProjects(adv.groupId, adv.subGroupId);
+          setEditProjectList(projects||[]);
+        }
+      }
+    }
   };
 
   const handleSaveEdit = async () => {
     if(editFormData.amount<=0){showError('Amount must be greater than zero');return;}
-    const confirmed=await showConfirmation({title:'Update Payment',type:'confirm',confirmText:'Save Changes',message:`Save changes to ${editingAdvance.advanceNo}?`});
+
+    const originalAdv = editingAdvance;
+    const isBillPayment = originalAdv.paymentType === 'BILL_PAYMENT';
+
+    // Project change only applies to ADVANCE type
+    if(!isBillPayment){
+      if(!editProjectGroupName){showError('Please select a group');return;}
+      if(!editProjectId){showError('Please select a project');return;}
+    }
+
+    const projectChanged = !isBillPayment && (
+      editProjectGroupName !== (originalAdv.groupId||'')
+      || editProjectSubGroupName !== (originalAdv.subGroupId||'')
+      || editProjectId !== (originalAdv.projectId||'')
+    );
+
+    // Build confirmation message
+    let confirmMsg = `Save changes to ${originalAdv.advanceNo}?`;
+    if(projectChanged){
+      const hasAllocs = parseFloat(originalAdv.appliedAmount) > 0;
+      confirmMsg = `This advance will be reassigned to a different project.
+
+`
+        + `From: ${originalAdv.groupId||'—'} › ${originalAdv.subGroupId||'—'} › ${originalAdv.projectId||'—'}
+`
+        + `To:   ${editProjectGroupName} › ${editProjectSubGroupName||'—'} › ${editProjectId}
+
+`
+        + (hasAllocs
+            ? `⚠ This advance has ${fmt(originalAdv.appliedAmount)} already allocated to bills.
+`
+            + `Those allocations will be automatically REVERSED (subtracted from the bills) and the advance will start with zero allocations under the new project.
+
+`
+            : '')
+        + `Confirm project change and save?`;
+    }
+
+    const confirmed = await showConfirmation({
+      title: projectChanged ? 'Confirm Project Change & Save' : 'Update Payment',
+      type: 'confirm',
+      confirmText: projectChanged ? 'Yes, Reverse & Reassign' : 'Save Changes',
+      message: confirmMsg
+    });
     if(!confirmed) return;
+
     setLoading(true);
     try{
-      const res=await fetch(`${API_BASE_URL}/vendor-advances/${editingAdvance.id}`,{
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/${originalAdv.id}`,{
         credentials:'include',method:'PUT',
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
-        body:JSON.stringify({...editFormData,vendorId:editingAdvance.vendorId,paymentType:editingAdvance.paymentType,billId:editingAdvance.billId,projectId:editingAdvance.projectId,groupId:editingAdvance.groupId,subGroupId:editingAdvance.subGroupId,amount:parseFloat(editFormData.amount)})
+        body:JSON.stringify({
+          ...editFormData,
+          vendorId:originalAdv.vendorId,
+          paymentType:originalAdv.paymentType,
+          billId:originalAdv.billId,
+          // Send new project for ADVANCE, keep original for BILL_PAYMENT
+          projectId: isBillPayment ? originalAdv.projectId : editProjectId,
+          groupId:   isBillPayment ? originalAdv.groupId   : editProjectGroupName,
+          subGroupId:isBillPayment ? originalAdv.subGroupId: editProjectSubGroupName,
+          amount:parseFloat(editFormData.amount)
+        })
       });
       if(!res.ok){const e=await res.json();throw new Error(e.message);}
-      showSuccess('Payment updated!'); setShowEditModal(false); fetchAdvances(); fetchStats();
+      showSuccess(projectChanged
+        ? 'Advance reassigned. Existing bill allocations have been reversed.'
+        : 'Payment updated!');
+      setShowEditModal(false); setShowEditProjectPanel(false);
+      fetchAdvances(); fetchStats();
     } catch(err){showError(err.message);}
     finally{setLoading(false);}
   };
@@ -925,7 +1032,10 @@ export default function VendorPaymentsPage() {
                 </div>
                 <div className="adjustment-section">
                   <h3>Apply to Bills</h3>
-                  <p className="adjustment-hint">Enter amounts to allocate this advance against outstanding bills</p>
+                  <p className="adjustment-hint">
+                    Showing unpaid bills for <strong>{selectedAdvance.vendorName}</strong>
+                    {selectedAdvance.projectId && <> under project <strong>{selectedAdvance.projectId}</strong></>}
+                  </p>
                   {unpaidBills.length>0?(
                     <div className="invoice-adjustment-list">
                       {unpaidBills.map(bill=>{
@@ -956,7 +1066,7 @@ export default function VendorPaymentsPage() {
                         );
                       })}
                     </div>
-                  ):<div className="empty-state-small">No outstanding bills found for this vendor</div>}
+                  ):<div className="empty-state-small">No outstanding bills found for this vendor{selectedAdvance.projectId ? ` under project ${selectedAdvance.projectId}` : ''}</div>}
                 </div>
               </div>
             </div>
@@ -974,21 +1084,98 @@ export default function VendorPaymentsPage() {
           <div className="receipts-page-modal receipts-page-modal-large">
             <div className="receipts-page-modal-header">
               <h2>Edit Payment — {editingAdvance.advanceNo}</h2>
-              <button className="receipts-page-modal-close" onClick={()=>setShowEditModal(false)}>×</button>
+              <button className="receipts-page-modal-close" onClick={()=>{setShowEditModal(false);setShowEditProjectPanel(false);}}>×</button>
             </div>
             <div className="receipts-page-modal-body">
               <div className="receipts-page-form">
-                <div className="receipts-page-form-section">
-                  <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:20}}>
-                    <h3 style={{margin:0}}>Payment Type:</h3>
-                    <span className={`vp-badge ${TYPE_BADGE[editingAdvance.paymentType]||''}`}>{editingAdvance.paymentType==='ADVANCE'?'Advance Payment':'Bill Payment'}</span>
+
+                {/* ── Project Assignment — ADVANCE only, locked for BILL_PAYMENT ── */}
+                {editingAdvance.paymentType==='ADVANCE' ? (
+                <div className="receipts-page-form-section" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'16px'}}>
+                  <div style={{fontSize:12,color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>
+                    Project Assignment
+                    {(editProjectGroupName!==(editingAdvance.groupId||'')||editProjectSubGroupName!==(editingAdvance.subGroupId||'')||editProjectId!==(editingAdvance.projectId||''))&&(
+                      <span style={{marginLeft:10,background:'#fef3c7',color:'#92400e',fontSize:11,padding:'2px 8px',borderRadius:99,fontWeight:700}}>⚠ Changed — will save on Update</span>
+                    )}
                   </div>
-                  {editingAdvance.paymentType==='ADVANCE'&&parseFloat(editingAdvance.appliedAmount)>0&&(
-                    <div style={{padding:12,background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:6,fontSize:13}}>
-                      <strong>Warning:</strong> {fmt(editingAdvance.appliedAmount)} already allocated to bills. Cannot reduce below this amount.
+                  <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
+                    <div>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Group *</label>
+                      <select value={editProjectGroupName}
+                        onChange={e=>{
+                          const v=e.target.value;
+                          setEditProjectGroupName(v);
+                          setEditProjectSubGroupName('');
+                          setEditProjectId('');
+                          setEditProjectSubs([]);
+                          setEditProjectList([]);
+                          if(v) fetchEditProjectSubs(v);
+                        }}
+                        disabled={editProjectLoading.groups}
+                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:'white'}}>
+                        <option value="">{editProjectLoading.groups?'Loading groups...':'Select Group'}</option>
+                        {editProjectGroups.map((g,i)=><option key={g.value||i} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Sub Group</label>
+                      <select value={editProjectSubGroupName}
+                        onChange={e=>{
+                          const v=e.target.value;
+                          setEditProjectSubGroupName(v);
+                          setEditProjectId('');
+                          setEditProjectList([]);
+                          if(editProjectGroupName&&v) fetchEditProjectList(editProjectGroupName,v);
+                        }}
+                        disabled={!editProjectGroupName||editProjectLoading.subs}
+                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:!editProjectGroupName?'#f9fafb':'white'}}>
+                        <option value="">{editProjectLoading.subs?'Loading...':!editProjectGroupName?'Select Group first':'Select Sub Group'}</option>
+                        {editProjectSubs.map((s,i)=><option key={s.value||i} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Project *</label>
+                      <select value={editProjectId}
+                        onChange={e=>setEditProjectId(e.target.value)}
+                        disabled={!editProjectSubGroupName||editProjectLoading.projects}
+                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:!editProjectSubGroupName?'#f9fafb':'white'}}>
+                        <option value="">{editProjectLoading.projects?'Loading...':!editProjectSubGroupName?'Select Sub Group first':'Select Project'}</option>
+                        {editProjectList.map((p,i)=><option key={p.id||i} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {(editProjectGroupName!==(editingAdvance.groupId||'')||editProjectSubGroupName!==(editingAdvance.subGroupId||'')||editProjectId!==(editingAdvance.projectId||''))&&parseFloat(editingAdvance.appliedAmount)>0&&(
+                    <div style={{marginTop:10,padding:'8px 12px',background:'#fef9c3',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                      ⚠ This advance has <strong>{fmt(editingAdvance.appliedAmount)}</strong> already allocated to bills.
+                      Changing the project will <strong>automatically reverse those allocations</strong> (subtract from bills) so the advance starts fresh under the new project.
+                    </div>
+                  )}
+                  {editingAdvance.paymentType==='ADVANCE'&&parseFloat(editingAdvance.appliedAmount)>0&&
+                   editProjectGroupName===(editingAdvance.groupId||'')&&editProjectId===(editingAdvance.projectId||'')&&(
+                    <div style={{marginTop:10,padding:'8px 12px',background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                      ⚠ {fmt(editingAdvance.appliedAmount)} already allocated to bills. Cannot reduce amount below this.
                     </div>
                   )}
                 </div>
+                ) : (
+                <div className="receipts-page-form-section" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'14px 16px'}}>
+                  <div style={{fontSize:12,color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Project Assignment</div>
+                  <div style={{fontSize:14,fontWeight:600,color:'#1e293b'}}>
+                    {editingAdvance.groupId||'—'}
+                    {editingAdvance.subGroupId?` › ${editingAdvance.subGroupId}`:''}
+                    {editingAdvance.projectId?` › ${editingAdvance.projectId}`:''}
+                  </div>
+                  <div style={{marginTop:8,fontSize:12,color:'#6b7280'}}>Project cannot be changed for Bill Payments.</div>
+                </div>
+                )}
+
+                <div className="receipts-page-form-section">
+                  <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:16}}>
+                    <h3 style={{margin:0}}>Payment Type:</h3>
+                    <span className={`vp-badge ${TYPE_BADGE[editingAdvance.paymentType]||''}`}>{editingAdvance.paymentType==='ADVANCE'?'Advance Payment':'Bill Payment'}</span>
+                  </div>
+                </div>
+
                 <div className="receipts-page-form-section">
                   <h3>Payment Details</h3>
                   <div className="receipts-page-form-grid">
@@ -1028,7 +1215,7 @@ export default function VendorPaymentsPage() {
               </div>
             </div>
             <div className="receipts-page-modal-actions">
-              <button className="receipts-page-btn-secondary" onClick={()=>setShowEditModal(false)}>Cancel</button>
+              <button className="receipts-page-btn-secondary" onClick={()=>{setShowEditModal(false);setShowEditProjectPanel(false);}}>Cancel</button>
               <button className="receipts-page-btn-primary" onClick={handleSaveEdit}>Update Payment</button>
             </div>
           </div>

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
-  Calendar, DollarSign, IndianRupee,CheckCircle, CreditCard,
-  Link as LinkIcon, Trash2, Download
+  DollarSign, IndianRupee, CheckCircle, AlertCircle, CreditCard,
+  Trash2, Download
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -22,10 +22,9 @@ const BillsReceived = () => {
   const [loading, setLoading] = useState(false);
   const [kpis, setKpis] = useState({
     totalBills: 0,
-    outstandingAmount: 0,
-    billsThisMonth: 0,
-    paidBills: 0,
-    linkedToPOPercentage: 0
+    totalAmount: 0,
+    paidAmount: 0,
+    pendingAmount: 0,
   });
 
   // MODAL-SPECIFIC dropdown data (completely independent from main filters)
@@ -161,11 +160,10 @@ const BillsReceived = () => {
       if (response.ok) {
         const stats = await response.json();
         setKpis({
-          totalBills: stats.totalBills || 0,
-          outstandingAmount: stats.outstandingAmount || 0,
-          billsThisMonth: stats.billsThisMonth || 0,
-          paidBills: stats.paidBills || 0,
-          linkedToPOPercentage: stats.linkedToPOPercentage || 0
+          totalBills:    stats.totalBills    || 0,
+          totalAmount:   stats.totalAmount   || 0,
+          paidAmount:    stats.paidAmount    || 0,
+          pendingAmount: stats.pendingAmount || 0,
         });
       }
     } catch (error) {
@@ -1077,24 +1075,13 @@ const BillsReceived = () => {
             <IndianRupee size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            {/* ✅ INDIAN SHORT FORMAT for KPI: shows 1L, 1Cr etc. */}
             <div
               className="procurement-bills-received-kpi-value"
-              title={`₹${formatCurrency(kpis.outstandingAmount)}`}
+              title={`₹${formatCurrency(kpis.totalAmount)}`}
             >
-              {formatIndianShort(kpis.outstandingAmount)}
+              {formatIndianShort(kpis.totalAmount)}
             </div>
-            <div className="procurement-bills-received-kpi-label">Outstanding Amount</div>
-          </div>
-        </div>
-
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <Calendar size={28} />
-          </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.billsThisMonth}</div>
-            <div className="procurement-bills-received-kpi-label">Bills This Month</div>
+            <div className="procurement-bills-received-kpi-label">Total Billed Amount</div>
           </div>
         </div>
 
@@ -1103,18 +1090,28 @@ const BillsReceived = () => {
             <CheckCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.paidBills}</div>
-            <div className="procurement-bills-received-kpi-label">Fully Paid Bills</div>
+            <div
+              className="procurement-bills-received-kpi-value"
+              title={`₹${formatCurrency(kpis.paidAmount)}`}
+            >
+              {formatIndianShort(kpis.paidAmount)}
+            </div>
+            <div className="procurement-bills-received-kpi-label">Paid Amount</div>
           </div>
         </div>
 
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
-            <LinkIcon size={28} />
+            <AlertCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.linkedToPOPercentage}%</div>
-            <div className="procurement-bills-received-kpi-label">Bills Linked to POs</div>
+            <div
+              className="procurement-bills-received-kpi-value"
+              title={`₹${formatCurrency(kpis.pendingAmount)}`}
+            >
+              {formatIndianShort(kpis.pendingAmount)}
+            </div>
+            <div className="procurement-bills-received-kpi-label">Pending Amount</div>
           </div>
         </div>
       </div>

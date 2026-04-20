@@ -531,6 +531,8 @@ const ProjectDashboard = () => {
   const [loading, setLoading]           = useState(false);
   const [dashboardData, setDashboardData] = useState(null);   // single-project data
   const [aggData, setAggData]           = useState(null);      // aggregated data
+  const [showSpentModal, setShowSpentModal] = useState(false); // Amount Spent breakdown modal
+  const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
 
   // Determine which mode we are in
   const mode = projectId ? 'PROJECT' : groupName ? (subGroupName ? 'SUBGROUP' : 'GROUP') : 'ALL';
@@ -708,8 +710,11 @@ const ProjectDashboard = () => {
                   {[
                     { icon: <Wallet size={36} />, color: '#3b82f6', val: formatCurrency(dashboardData.financialData.totalProjectValue), label: 'Total Project Value', sub: 'Contract budget' },
                     {
-                      icon: <TrendingDown size={36} />, color: '#f59e0b', val: formatCurrency(dashboardData.financialData.totalSpent),
-                      label: 'Amount Spent', sub: `Paid to vendors · ${dashboardData.financialData.budgetUtilizationPercent?.toFixed(1)}% of budget`
+                      icon: <TrendingDown size={36} />, color: '#f59e0b',
+                      val: formatCurrency((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.totalEmployeeExpenses || 0)),
+                      label: 'Amount Spent',
+                      sub: `Procurement + Expenses · ${dashboardData.financialData.budgetUtilizationPercent?.toFixed(1)}% of budget`,
+                      clickable: true,
                     },
                     ...(dashboardData.financialData.isCompleted ? [{
                       icon: <Target size={36} />, color: '#22c55e',
@@ -718,18 +723,29 @@ const ProjectDashboard = () => {
                       sub: `${dashboardData.financialData.profitMargin?.toFixed(1)}% margin · Final`
                     }] : []),
                   ].map((k, i) => (
-                    <div key={i} className="kpi-card" style={{ borderTopColor: k.color }}>
+                    <div
+                      key={i}
+                      className={`kpi-card${k.clickable ? ' kpi-card-clickable' : ''}`}
+                      style={{ borderTopColor: k.color }}
+                      onClick={k.clickable ? () => setShowSpentModal(true) : undefined}
+                      title={k.clickable ? 'Click to see spending breakdown' : undefined}
+                    >
                       <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
                       <div className="kpi-content">
                         <div className="kpi-value">{k.val}</div>
-                        <div className="kpi-label">{k.label}</div>
+                        <div className="kpi-label">{k.label}{k.clickable && <span className="kpi-click-hint"> 🔍</span>}</div>
                         <div className="kpi-subtitle">{k.sub}</div>
                       </div>
                     </div>
                   ))}
 
                   {/* Cash Flow Card */}
-                  <div className="kpi-card" style={{ borderTopColor: dashboardData.financialData.cashDeficit > 0 ? '#ef4444' : '#22c55e' }}>
+                  <div
+                    className="kpi-card kpi-card-clickable"
+                    style={{ borderTopColor: dashboardData.financialData.cashDeficit > 0 ? '#ef4444' : '#22c55e' }}
+                    onClick={() => setShowCashModal(true)}
+                    title="Click to see cash flow breakdown"
+                  >
                     <div className="kpi-icon" style={{ color: dashboardData.financialData.cashDeficit > 0 ? '#ef4444' : '#22c55e' }}><Wallet size={36} /></div>
                     <div className="kpi-content">
                       <div className="kpi-value">
@@ -737,7 +753,7 @@ const ProjectDashboard = () => {
                           ? dashboardData.financialData.cashDeficit
                           : dashboardData.financialData.cashInHand || 0)}
                       </div>
-                      <div className="kpi-label">{dashboardData.financialData.cashDeficit > 0 ? 'Cash Deficit' : 'Cash in Hand'}</div>
+                      <div className="kpi-label">{dashboardData.financialData.cashDeficit > 0 ? 'Cash Deficit' : 'Cash in Hand'}<span className="kpi-click-hint"> 🔍</span></div>
                       <div className="kpi-subtitle">{dashboardData.financialData.cashDeficit > 0 ? 'Paid more than received' : 'Received minus paid'}</div>
                     </div>
                   </div>
@@ -968,6 +984,222 @@ const ProjectDashboard = () => {
           )}
         </>
       )}
+
+      {/* ─── Amount Spent Breakdown Modal ──────────────────────────────────── */}
+      {showSpentModal && dashboardData?.financialData && (
+        <div className="spent-modal-overlay" onClick={() => setShowSpentModal(false)}>
+          <div className="spent-modal" onClick={e => e.stopPropagation()}>
+            <div className="spent-modal-header">
+              <div className="spent-modal-title-row">
+                <TrendingDown size={22} className="spent-modal-icon" />
+                <h2 className="spent-modal-title">Amount Spent — Breakdown</h2>
+              </div>
+              <button className="spent-modal-close" onClick={() => setShowSpentModal(false)}><X size={20} /></button>
+            </div>
+            <div className="spent-modal-body">
+              <div className="spent-block">
+                <div className="spent-block-header spent-block-header--procurement">
+                  <ShoppingCart size={16} />
+                  <span>Procurement (Vendor Bills)</span>
+                </div>
+                <div className="spent-row">
+                  <span className="spent-row-label">Total paid to vendors</span>
+                  <span className="spent-row-amount spent-amount--procurement">{formatCurrency(dashboardData.financialData.totalSpent || 0)}</span>
+                </div>
+                <div className="spent-row spent-row--sub">
+                  <span className="spent-row-label">Bills raised (total payable)</span>
+                  <span className="spent-row-amount">{formatCurrency(dashboardData.financialData.totalPayable || 0)}</span>
+                </div>
+                <div className="spent-row spent-row--sub">
+                  <span className="spent-row-label">Pending vendor payments</span>
+                  <span className="spent-row-amount spent-amount--pending">{formatCurrency(dashboardData.financialData.pendingPayments || 0)}</span>
+                </div>
+              </div>
+              <div className="spent-block">
+                <div className="spent-block-header spent-block-header--expense">
+                  <Users size={16} />
+                  <span>Employee &amp; Project Expenses</span>
+                  <span className="spent-block-total">{formatCurrency(dashboardData.financialData.totalEmployeeExpenses || 0)}</span>
+                </div>
+                {dashboardData.expenseData?.categoryBreakdown?.length > 0 ? (
+                  <div className="spent-category-list">
+                    {dashboardData.expenseData.categoryBreakdown.map((cat, i) => {
+                      const icons = { 'Travel': <Plane size={14} />, 'Site Visit': <MapPinIcon size={14} />, 'Accommodation': <Hotel size={14} />, 'Food': <Utensils size={14} />, 'Commission': <Users size={14} />, 'Miscellaneous': <Tag size={14} /> };
+                      const icon = icons[cat.category] || <Tag size={14} />;
+                      const total = Number(dashboardData.expenseData.approvedExpenses || 0);
+                      const pct = total > 0 ? ((Number(cat.totalAmount) / total) * 100).toFixed(1) : '0.0';
+                      return (
+                        <div key={i} className="spent-cat-row">
+                          <div className="spent-cat-left">
+                            <span className="spent-cat-icon">{icon}</span>
+                            <span className="spent-cat-name">{cat.category}</span>
+                            <span className="spent-cat-count">{cat.count} expense{cat.count !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div className="spent-cat-right">
+                            <div className="spent-cat-bar-wrap"><div className="spent-cat-bar" style={{ width: `${pct}%` }} /></div>
+                            <span className="spent-cat-pct">{pct}%</span>
+                            <span className="spent-cat-amount">{formatCurrency(cat.totalAmount)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="spent-empty-expenses">No approved employee expenses recorded</div>
+                )}
+                {dashboardData.expenseData && (
+                  <div className="spent-expense-summary-rows">
+                    {(dashboardData.expenseData.pendingExpenses > 0) && (
+                      <div className="spent-row spent-row--sub">
+                        <span className="spent-row-label">⏳ Pending approval</span>
+                        <span className="spent-row-amount spent-amount--pending">{formatCurrency(dashboardData.expenseData.pendingExpenses)}</span>
+                      </div>
+                    )}
+                    {(dashboardData.expenseData.unsettledAdvances > 0) && (
+                      <div className="spent-row spent-row--sub">
+                        <span className="spent-row-label">💳 Unsettled advances</span>
+                        <span className="spent-row-amount spent-amount--pending">{formatCurrency(dashboardData.expenseData.unsettledAdvances)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="spent-grand-total">
+                <span className="spent-grand-label">Grand Total Spent</span>
+                <span className="spent-grand-value">{formatCurrency((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.totalEmployeeExpenses || 0))}</span>
+              </div>
+              <div className="spent-util-row">
+                <span className="spent-util-label">Budget utilisation</span>
+                <div className="spent-util-bar-wrap">
+                  <div className="spent-util-bar" style={{ width: `${Math.min(dashboardData.financialData.budgetUtilizationPercent || 0, 100)}%`, background: (dashboardData.financialData.budgetUtilizationPercent || 0) > 90 ? '#ef4444' : (dashboardData.financialData.budgetUtilizationPercent || 0) > 70 ? '#f59e0b' : '#22c55e' }} />
+                </div>
+                <span className="spent-util-pct">{(dashboardData.financialData.budgetUtilizationPercent || 0).toFixed(1)}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Cash Deficit / Cash In Hand Breakdown Modal ──────────────────── */}
+      {showCashModal && dashboardData?.financialData && (() => {
+        const fd = dashboardData.financialData;
+        const isDeficit = fd.cashDeficit > 0;
+        const accentColor = isDeficit ? '#ef4444' : '#22c55e';
+        const accentLight = isDeficit ? '#fef2f2' : '#f0fdf4';
+        const accentBorder = isDeficit ? '#fecaca' : '#bbf7d0';
+        return (
+          <div className="spent-modal-overlay" onClick={() => setShowCashModal(false)}>
+            <div className="spent-modal" onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="spent-modal-header">
+                <div className="spent-modal-title-row">
+                  <Wallet size={22} style={{ color: accentColor }} />
+                  <h2 className="spent-modal-title">
+                    {isDeficit ? 'Cash Deficit — Breakdown' : 'Cash in Hand — Breakdown'}
+                  </h2>
+                </div>
+                <button className="spent-modal-close" onClick={() => setShowCashModal(false)}><X size={20} /></button>
+              </div>
+
+              <div className="spent-modal-body">
+
+                {/* Status banner */}
+                <div className="cash-status-banner" style={{ background: accentLight, border: `1px solid ${accentBorder}`, borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {isDeficit
+                    ? <AlertCircle size={28} style={{ color: '#ef4444', flexShrink: 0 }} />
+                    : <CheckCircle size={28} style={{ color: '#22c55e', flexShrink: 0 }} />}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: accentColor }}>
+                      {isDeficit ? `You have paid ₹ more than you have received` : `You have more cash received than paid out`}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                      {isDeficit
+                        ? 'Vendor payments exceed client receipts — cash gap needs funding'
+                        : 'Healthy cash position — receipts ahead of vendor payments'}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Receipts block */}
+                <div className="spent-block">
+                  <div className="spent-block-header" style={{ background: '#f0fdf4', color: '#15803d', borderBottom: '1px solid #bbf7d0' }}>
+                    <CheckCircle size={15} />
+                    <span>Money In (Client Receipts)</span>
+                    <span className="spent-block-total" style={{ color: '#15803d' }}>{formatCurrency(fd.amountReceived || 0)}</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">Total invoiced to client</span>
+                    <span className="spent-row-amount">{formatCurrency(fd.amountToBeReceived || 0)}</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">✅ Received from client</span>
+                    <span className="spent-row-amount" style={{ color: '#15803d' }}>{formatCurrency(fd.amountReceived || 0)}</span>
+                  </div>
+                  <div className="spent-row spent-row--sub">
+                    <span className="spent-row-label">⏳ Still pending from client</span>
+                    <span className="spent-row-amount spent-amount--pending">{formatCurrency(fd.pendingReceipts || 0)}</span>
+                  </div>
+                </div>
+
+                {/* Payments block */}
+                <div className="spent-block">
+                  <div className="spent-block-header" style={{ background: '#eff6ff', color: '#1d4ed8', borderBottom: '1px solid #bfdbfe' }}>
+                    <CreditCard size={15} />
+                    <span>Money Out (Vendor Payments)</span>
+                    <span className="spent-block-total" style={{ color: '#1d4ed8' }}>{formatCurrency(fd.amountPaid || 0)}</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">Total billed by vendors</span>
+                    <span className="spent-row-amount">{formatCurrency(fd.totalPayable || 0)}</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">✅ Paid to vendors</span>
+                    <span className="spent-row-amount spent-amount--procurement">{formatCurrency(fd.amountPaid || 0)}</span>
+                  </div>
+                  <div className="spent-row spent-row--sub">
+                    <span className="spent-row-label">⏳ Still pending to vendors</span>
+                    <span className="spent-row-amount spent-amount--pending">{formatCurrency(fd.pendingPayments || 0)}</span>
+                  </div>
+                </div>
+
+                {/* Net calculation */}
+                <div className="spent-block" style={{ border: `1.5px solid ${accentBorder}` }}>
+                  <div className="spent-block-header" style={{ background: accentLight, color: accentColor, borderBottom: `1px solid ${accentBorder}` }}>
+                    <Activity size={15} />
+                    <span>Net Cash Position</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">Received from client</span>
+                    <span className="spent-row-amount" style={{ color: '#15803d' }}>+ {formatCurrency(fd.amountReceived || 0)}</span>
+                  </div>
+                  <div className="spent-row">
+                    <span className="spent-row-label">Paid to vendors</span>
+                    <span className="spent-row-amount spent-amount--pending">− {formatCurrency(fd.amountPaid || 0)}</span>
+                  </div>
+                  <div className="spent-row" style={{ background: accentLight, borderTop: `2px solid ${accentBorder}` }}>
+                    <span className="spent-row-label" style={{ fontWeight: 700, color: accentColor }}>
+                      {isDeficit ? '🔴 Cash Deficit' : '🟢 Cash in Hand'}
+                    </span>
+                    <span className="spent-row-amount" style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>
+                      {isDeficit ? '− ' : '+ '}{formatCurrency(isDeficit ? fd.cashDeficit : fd.cashInHand || 0)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tip */}
+                {isDeficit && (
+                  <div style={{ fontSize: 12, color: '#6b7280', padding: '8px 4px', lineHeight: 1.6 }}>
+                    💡 <strong>Tip:</strong> To reduce the deficit, collect outstanding client payments ({formatCurrency(fd.pendingReceipts || 0)} pending) or defer vendor payments ({formatCurrency(fd.pendingPayments || 0)} outstanding).
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
     </div>
   );
 };

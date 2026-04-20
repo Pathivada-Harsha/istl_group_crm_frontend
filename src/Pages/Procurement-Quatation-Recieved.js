@@ -22,7 +22,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 // ── Column definitions ───────────────────────────────────────────────────────
 const ALL_QUOTATION_COLUMNS = [
   { id: 'quotationNo', label: 'Quotation No', visible: true },
-  { id: 'vendorId', label: 'Vendor ID', visible: true },
+  { id: 'vendorId', label: 'Vendor Name', visible: true },
   { id: 'rfqId', label: 'RFQ ID', visible: false },
   { id: 'category', label: 'Category', visible: true },
   { id: 'quotationValue', label: 'Quotation Value', visible: true },
@@ -159,7 +159,7 @@ const QuotationsReceived = () => {
       let aVal, bVal;
       switch (sortConfig.key) {
         case 'quotationNo': aVal = a.quoteNo || ''; bVal = b.quoteNo || ''; break;
-        case 'vendorId': aVal = a.vendorId || ''; bVal = b.vendorId || ''; break;
+        case 'vendorId': aVal = a.vendorName || a.vendorId?.toString() || ''; bVal = b.vendorName || b.vendorId?.toString() || ''; break;
         case 'rfqId': aVal = a.rfqId || ''; bVal = b.rfqId || ''; break;
         case 'category': aVal = a.category || ''; bVal = b.category || ''; break;
         case 'quotationValue': aVal = parseFloat(a.totalValue) || 0; bVal = parseFloat(b.totalValue) || 0; break;
@@ -760,7 +760,7 @@ const QuotationsReceived = () => {
   const renderCell = (col, q) => {
     switch (col.id) {
       case 'quotationNo': return <td className="procurement-quotation-received-table-id">{q.quoteNo}</td>;
-      case 'vendorId': return <td>{q.vendorId || '—'}</td>;
+      case 'vendorId': return <td>{q.vendorName || q.vendorId || '—'}</td>;
       case 'rfqId': return <td>{q.rfqId || '—'}</td>;
       case 'category': return <td>{q.category || 'N/A'}</td>;
       case 'quotationValue': return <td className="procurement-quotation-received-table-value">{formatCurrency(q.totalValue)}</td>;
@@ -1031,7 +1031,7 @@ const QuotationsReceived = () => {
             <div className="procurement-quotation-received-drawer-header">
               <div>
                 <h2>{selectedQuotation.quoteNo}</h2>
-                <p className="procurement-quotation-received-drawer-subtitle">Vendor ID: {selectedQuotation.vendorId || 'N/A'} | Category: {selectedQuotation.category || 'N/A'}</p>
+                <p className="procurement-quotation-received-drawer-subtitle">Vendor: {selectedQuotation.vendorName || selectedQuotation.vendorId || 'N/A'} | Category: {selectedQuotation.category || 'N/A'}</p>
               </div>
               <button className="procurement-quotation-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>✕</button>
             </div>

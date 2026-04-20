@@ -129,6 +129,16 @@ const ReceiptsManagementPage = () => {
   const [pageSize, setPageSize] = useState(10);
   const [editReceiptFormData, setEditReceiptFormData] = useState({ receiptDate: '', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '' });
 
+  // ── Edit-receipt project change state ──
+  const [editReceiptProjectGroups, setEditReceiptProjectGroups]   = useState([]);
+  const [editReceiptProjectSubs, setEditReceiptProjectSubs]       = useState([]);
+  const [editReceiptProjectList, setEditReceiptProjectList]       = useState([]);
+  const [editReceiptGroupName, setEditReceiptGroupName]           = useState('');
+  const [editReceiptSubGroupName, setEditReceiptSubGroupName]     = useState('');
+  const [editReceiptProjectId, setEditReceiptProjectId]           = useState('');
+  const [editReceiptProjectLoading, setEditReceiptProjectLoading] = useState({ groups: false, subs: false, projects: false });
+  const [showChangeProjectPanel, setShowChangeProjectPanel]       = useState(false);
+
   // Modal states
   const [selectedReceipt, setSelectedReceipt] = useState(null);
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -181,7 +191,7 @@ const ReceiptsManagementPage = () => {
       switch (sortConfig.key) {
         case 'receiptNo': aVal = a.receiptNo || ''; bVal = b.receiptNo || ''; break;
         case 'receiptDate': aVal = new Date(a.receiptDate || 0); bVal = new Date(b.receiptDate || 0); break;
-        case 'customer': aVal = a.customerName || ''; bVal = b.customerName || ''; break;
+        case 'customer': aVal = a.customerCompanyName || a.customerName || ''; bVal = b.customerCompanyName || b.customerName || ''; break;
         case 'receiptType': aVal = a.receiptType || ''; bVal = b.receiptType || ''; break;
         case 'amount': aVal = parseFloat(a.amount) || 0; bVal = parseFloat(b.amount) || 0; break;
         case 'appliedAmount': aVal = parseFloat(a.appliedAmount) || 0; bVal = parseFloat(b.appliedAmount) || 0; break;
@@ -490,30 +500,79 @@ const ReceiptsManagementPage = () => {
   const handleEditReceiptClick = async (receipt) => {
     setEditingReceipt(receipt);
     setEditReceiptFormData({ receiptDate: receipt.receiptDate, amount: receipt.amount, paymentMethod: receipt.paymentMethod || 'Bank Transfer', transactionReference: receipt.transactionReference || '', notes: receipt.notes || '' });
-    if (receipt.receiptType === 'INVOICE_PAYMENT' && receipt.invoiceId) await fetchInvoicesForCustomer(receipt.customerId, receipt.projectId);
+    setEditReceiptGroupName(receipt.groupId || '');
+    setEditReceiptSubGroupName(receipt.subGroupId || '');
+    setEditReceiptProjectId(receipt.projectId || '');
+    setEditReceiptProjectGroups([]); setEditReceiptProjectSubs([]); setEditReceiptProjectList([]);
     setShowEditReceiptModal(true);
+    // Only load project dropdowns for ADVANCE — INVOICE_PAYMENT project is locked
+    if (receipt.receiptType === 'ADVANCE') {
+      const groups = await filterApi.getAllGroups();
+      setEditReceiptProjectGroups(groups || []);
+      if (receipt.groupId) {
+        const subs = await filterApi.getSubGroups(receipt.groupId);
+        setEditReceiptProjectSubs(subs || []);
+        if (receipt.subGroupId) {
+          const projects = await filterApi.getProjects(receipt.groupId, receipt.subGroupId);
+          setEditReceiptProjectList(projects || []);
+        }
+      }
+    }
+    if (receipt.receiptType === 'INVOICE_PAYMENT' && receipt.invoiceId) await fetchInvoicesForCustomer(receipt.customerId, receipt.projectId);
   };
 
   const handleSaveEditedReceipt = async () => {
     if (editReceiptFormData.amount <= 0) { showError('Amount must be greater than zero'); return; }
-    const confirmed = await showConfirmation({
-      title: 'Update Receipt',
-      message: `Save changes to receipt ${editingReceipt.receiptNo}?
 
-Amount: ${formatCurrency(editReceiptFormData.amount)}
-Date: ${editReceiptFormData.receiptDate}
-Method: ${editReceiptFormData.paymentMethod}`,
+    const isInvoicePayment = editingReceipt.receiptType === 'INVOICE_PAYMENT';
+
+    if (!isInvoicePayment) {
+      if (!editReceiptGroupName) { showError('Please select a group'); return; }
+      if (!editReceiptProjectId) { showError('Please select a project'); return; }
+    }
+
+    const projectChanged = !isInvoicePayment && (
+      editReceiptGroupName !== (editingReceipt.groupId || '')
+      || editReceiptSubGroupName !== (editingReceipt.subGroupId || '')
+      || editReceiptProjectId !== (editingReceipt.projectId || '')
+    );
+
+    let confirmMsg = `Save changes to receipt ${editingReceipt.receiptNo}?\n\nAmount: ${formatCurrency(editReceiptFormData.amount)}\nDate: ${editReceiptFormData.receiptDate}\nMethod: ${editReceiptFormData.paymentMethod}`;
+    if (projectChanged) {
+      const hasAllocs = parseFloat(editingReceipt.appliedAmount) > 0;
+      confirmMsg = `This advance will be reassigned to a different project.\n\n`
+        + `From: ${editingReceipt.groupId || '—'} › ${editingReceipt.subGroupId || '—'} › ${editingReceipt.projectId || '—'}\n`
+        + `To:   ${editReceiptGroupName} › ${editReceiptSubGroupName || '—'} › ${editReceiptProjectId}\n\n`
+        + (hasAllocs
+            ? `⚠ This advance has ${formatCurrency(editingReceipt.appliedAmount)} already allocated to invoices.\n`
+            + `Those allocations will be automatically REVERSED so the advance starts fresh under the new project.\n\n`
+            : '')
+        + `Confirm project change and save?`;
+    }
+
+    const confirmed = await showConfirmation({
+      title: projectChanged ? 'Confirm Project Change & Save' : 'Update Receipt',
+      message: confirmMsg,
       type: 'confirm',
-      confirmText: 'Save Changes',
+      confirmText: projectChanged ? 'Yes, Reverse & Reassign' : 'Save Changes',
       cancelText: 'Cancel',
     });
     if (!confirmed) return;
     setLoading(true);
     try {
-      const receiptData = { ...editReceiptFormData, receiptType: editingReceipt.receiptType, invoiceId: editingReceipt.invoiceId, customerId: editingReceipt.customerId, projectId: editingReceipt.projectId, groupId: editingReceipt.groupId, subGroupId: editingReceipt.subGroupId };
+      const receiptData = {
+        ...editReceiptFormData,
+        receiptType: editingReceipt.receiptType,
+        invoiceId: editingReceipt.invoiceId,
+        customerId: editingReceipt.customerId,
+        projectId:  isInvoicePayment ? editingReceipt.projectId  : editReceiptProjectId,
+        groupId:    isInvoicePayment ? editingReceipt.groupId    : editReceiptGroupName,
+        subGroupId: isInvoicePayment ? editingReceipt.subGroupId : editReceiptSubGroupName,
+      };
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/${editingReceipt.id}`, { credentials: "include", method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(receiptData) });
       if (!response.ok) { const error = await response.json(); throw new Error(error.message || 'Failed to update receipt'); }
-      showSuccess('Receipt updated successfully!'); setShowEditReceiptModal(false); setEditingReceipt(null); fetchReceipts(); fetchStats();
+      showSuccess(projectChanged ? 'Advance reassigned. Existing invoice allocations have been reversed.' : 'Receipt updated successfully!');
+      setShowEditReceiptModal(false); setEditingReceipt(null); fetchReceipts(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to update receipt'); }
     finally { setLoading(false); }
   };
@@ -640,12 +699,16 @@ Method: ${editReceiptFormData.paymentMethod}`,
     if (!customerId && !projectId) { setInvoicesForCustomer([]); return; }
     setLoadingInvoices(true);
     try {
-      const endpoint = customerId ? `${API_BASE_URL}/invoices/customer/${customerId}/unpaid-invoices` : `${API_BASE_URL}/invoices/project/${projectId}/unpaid-invoices`;
+      // Always prefer project-scoped endpoint so only invoices for THIS project are shown.
+      // Fall back to customer endpoint only when no projectId is available.
+      const endpoint = projectId
+        ? `${API_BASE_URL}/invoices/project/${encodeURIComponent(projectId)}/unpaid-invoices`
+        : `${API_BASE_URL}/invoices/customer/${customerId}/unpaid-invoices`;
       const response = await fetch(endpoint, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json(); setInvoicesForCustomer(data);
-      if (data.length === 0) showError('No unpaid invoices found for this customer/project');
-    } catch { showError('Failed to load invoices for this customer'); setInvoicesForCustomer([]); }
+      if (data.length === 0) showError('No unpaid invoices found for this project');
+    } catch { showError('Failed to load invoices for this project'); setInvoicesForCustomer([]); }
     finally { setLoadingInvoices(false); }
   };
 
@@ -658,6 +721,55 @@ Method: ${editReceiptFormData.paymentMethod}`,
       setAvailableAdvances(await response.json());
     } catch { setAvailableAdvances([]); }
     finally { setLoadingAdvances(false); }
+  };
+
+  // ── Edit-receipt project helpers ──
+  const fetchEditReceiptGroups = async () => {
+    setEditReceiptProjectLoading(p => ({ ...p, groups: true }));
+    try { setEditReceiptProjectGroups(await filterApi.getAllGroups() || []); }
+    catch { showError('Failed to load groups'); }
+    finally { setEditReceiptProjectLoading(p => ({ ...p, groups: false })); }
+  };
+  const fetchEditReceiptSubs = async (g) => {
+    if (!g) { setEditReceiptProjectSubs([]); setEditReceiptProjectList([]); return; }
+    setEditReceiptProjectLoading(p => ({ ...p, subs: true }));
+    try { setEditReceiptProjectSubs(await filterApi.getSubGroups(g) || []); }
+    catch { showError('Failed to load sub-groups'); }
+    finally { setEditReceiptProjectLoading(p => ({ ...p, subs: false })); }
+  };
+  const fetchEditReceiptProjects = async (g, sg) => {
+    if (!g || !sg) { setEditReceiptProjectList([]); return; }
+    setEditReceiptProjectLoading(p => ({ ...p, projects: true }));
+    try { setEditReceiptProjectList(await filterApi.getProjects(g, sg) || []); }
+    catch { showError('Failed to load projects'); }
+    finally { setEditReceiptProjectLoading(p => ({ ...p, projects: false })); }
+  };
+  const handleEditReceiptGroupChange = (e) => {
+    const v = e.target.value;
+    setEditReceiptGroupName(v); setEditReceiptSubGroupName(''); setEditReceiptProjectId('');
+    setEditReceiptProjectSubs([]); setEditReceiptProjectList([]);
+    if (v) fetchEditReceiptSubs(v);
+  };
+  const handleEditReceiptSubGroupChange = (e) => {
+    const v = e.target.value;
+    setEditReceiptSubGroupName(v); setEditReceiptProjectId(''); setEditReceiptProjectList([]);
+    if (editReceiptGroupName && v) fetchEditReceiptProjects(editReceiptGroupName, v);
+  };
+  const handleEditReceiptProjectChange = (e) => {
+    setEditReceiptProjectId(e.target.value);
+  };
+  const handleApplyEditReceiptProject = () => {
+    if (!editReceiptGroupName) { showError('Please select a group'); return; }
+    if (!editReceiptProjectId) { showError('Please select a project'); return; }
+    // Apply new project to the receipt being edited (will be sent on save)
+    setEditingReceipt(prev => ({
+      ...prev,
+      groupId: editReceiptGroupName,
+      subGroupId: editReceiptSubGroupName,
+      projectId: editReceiptProjectId,
+    }));
+    setShowChangeProjectPanel(false);
+    showSuccess('Project updated. Save the receipt to confirm.');
   };
 
   const handleModalGroupChange = (e) => {
@@ -729,10 +841,14 @@ Method: ${editReceiptFormData.paymentMethod}`,
   const handleEditReceipt = async (receipt) => {
     setSelectedReceipt(receipt); setLoading(true);
     try {
-      const ep = receipt.customerId ? `${API_BASE_URL}/invoices/customer/${receipt.customerId}/unpaid-invoices` : `${API_BASE_URL}/invoices/project/${receipt.projectId}/unpaid-invoices`;
+      // Scope invoices to the same project as this receipt so only
+      // invoices under this project are available for allocation.
+      const ep = receipt.projectId
+        ? `${API_BASE_URL}/invoices/project/${encodeURIComponent(receipt.projectId)}/unpaid-invoices`
+        : `${API_BASE_URL}/invoices/customer/${receipt.customerId}/unpaid-invoices`;
       const res = await fetch(ep, { credentials: "include", headers: getAuthHeaders() });
-      if (res.ok) { const d = await res.json(); setInvoicesForCustomer(d); if (d.length === 0) showError('No unpaid invoices found for this customer'); }
-      else { setInvoicesForCustomer([]); showError('Failed to load invoices for this customer'); }
+      if (res.ok) { const d = await res.json(); setInvoicesForCustomer(d); if (d.length === 0) showError('No unpaid invoices found for this project'); }
+      else { setInvoicesForCustomer([]); showError('Failed to load invoices for this project'); }
       setAdjustmentData({ receiptId: receipt.id, customerId: receipt.customerId, availableAmount: receipt.unappliedAmount || receipt.amount, invoiceAllocations: [] });
       setShowAdjustmentModal(true);
     } catch { showError('Failed to load invoices'); setInvoicesForCustomer([]); }
@@ -807,7 +923,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
     switch (column.id) {
       case 'receiptNo': return <td className="receipt-no">{receipt.receiptNo}</td>;
       case 'receiptDate': return <td>{formatDate(receipt.receiptDate)}</td>;
-      case 'customer': return <td>{receipt.customerName}</td>;
+      case 'customer': return <td>{receipt.customerCompanyName || receipt.customerName || `#${receipt.customerId}`}</td>;
       case 'receiptType': return <td><span className={`receipt-badge ${getReceiptTypeBadgeClass(receipt.receiptType)}`}>{receipt.receiptType}</span></td>;
       case 'amount': return <td className="receipt-amount">{formatCurrency(receipt.amount)}</td>;
       case 'appliedAmount': return <td className="text-success">{formatCurrency(receipt.appliedAmount)}</td>;
@@ -1006,7 +1122,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                 {/* Basic Meta */}
                 <div className="receipt-meta">
                   <div className="receipt-meta-item"><strong>Receipt Date:</strong> {formatDate(selectedReceipt.receiptDate)}</div>
-                  <div className="receipt-meta-item"><strong>Customer:</strong> {selectedReceipt.customerName}</div>
+                  <div className="receipt-meta-item"><strong>Customer:</strong> {selectedReceipt.customerCompanyName || selectedReceipt.customerName || `#${selectedReceipt.customerId}`}</div>
                   <div className="receipt-meta-item">
                     <strong>Type:</strong>
                     <span className={`receipt-badge ${getReceiptTypeBadgeClass(selectedReceipt.receiptType)}`}>{selectedReceipt.receiptType}</span>
@@ -1247,7 +1363,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                     <tr key={receipt.id} className="deleted-row">
                       <td className="receipt-no">{receipt.receiptNo}</td>
                       <td>{formatDate(receipt.receiptDate)}</td>
-                      <td>{receipt.customerId}</td>
+                      <td>{receipt.customerCompanyName || receipt.customerName || `#${receipt.customerId}`}</td>
                       <td><span className={`receipt-badge ${receipt.receiptType === 'ADVANCE' ? 'receipt-type-advance' : 'receipt-type-invoice'}`}>{receipt.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice Payment'}</span></td>
                       <td className="receipt-amount">{formatCurrency(receipt.amount)}</td>
                       <td>{formatDate(receipt.deletedAt)}</td>
@@ -1611,7 +1727,10 @@ Method: ${editReceiptFormData.paymentMethod}`,
                 </div>
                 <div className="adjustment-section">
                   <h3>Apply to Invoices</h3>
-                  <p className="adjustment-hint">Select invoices and enter amounts to allocate this advance payment</p>
+                  <p className="adjustment-hint">
+                    Showing unpaid invoices for project <strong>{selectedReceipt.projectId || '—'}</strong>
+                    {selectedReceipt.customerCompanyName || selectedReceipt.customerName ? <> · customer <strong>{selectedReceipt.customerCompanyName || selectedReceipt.customerName}</strong></> : null}
+                  </p>
                   {loading ? <div className="loading-state">Loading invoices...</div> : invoicesForCustomer.length > 0 ? (
                     <div className="invoice-adjustment-list">
                       {invoicesForCustomer.map(invoice => {
@@ -1639,7 +1758,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
                         );
                       })}
                     </div>
-                  ) : <div className="empty-state-small">No outstanding invoices found for this customer</div>}
+                  ) : <div className="empty-state-small">No outstanding invoices found for project {selectedReceipt.projectId || '—'}</div>}
                 </div>
               </div>
             </div>
@@ -1657,12 +1776,78 @@ Method: ${editReceiptFormData.paymentMethod}`,
           <div className="receipts-page-modal receipts-page-modal-large">
             <div className="receipts-page-modal-header">
               <h2>Edit Receipt - {editingReceipt.receiptNo}</h2>
-              <button className="receipts-page-modal-close" onClick={() => setShowEditReceiptModal(false)}>×</button>
+              <button className="receipts-page-modal-close" onClick={() => { setShowEditReceiptModal(false); setShowChangeProjectPanel(false); }}>×</button>
             </div>
             <div className="receipts-page-modal-body">
               <div className="receipts-page-form">
+
+                {/* ── Project Assignment — ADVANCE only, locked for INVOICE_PAYMENT ── */}
+                {editingReceipt.receiptType === 'ADVANCE' ? (
+                <div className="receipts-page-form-section" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                    Project Assignment
+                    {(editReceiptGroupName !== (editingReceipt.groupId || '') || editReceiptSubGroupName !== (editingReceipt.subGroupId || '') || editReceiptProjectId !== (editingReceipt.projectId || '')) && (
+                      <span style={{ marginLeft: '10px', background: '#fef3c7', color: '#92400e', fontSize: '11px', padding: '2px 8px', borderRadius: '99px', fontWeight: 700 }}>⚠ Changed — will save on Update</span>
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Group *</label>
+                      <select value={editReceiptGroupName}
+                        onChange={e => { const v = e.target.value; setEditReceiptGroupName(v); setEditReceiptSubGroupName(''); setEditReceiptProjectId(''); setEditReceiptProjectSubs([]); setEditReceiptProjectList([]); if (v) fetchEditReceiptSubs(v); }}
+                        disabled={editReceiptProjectLoading.groups}
+                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white' }}>
+                        <option value="">{editReceiptProjectLoading.groups ? 'Loading groups...' : 'Select Group'}</option>
+                        {editReceiptProjectGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Sub Group</label>
+                      <select value={editReceiptSubGroupName}
+                        onChange={e => { const v = e.target.value; setEditReceiptSubGroupName(v); setEditReceiptProjectId(''); setEditReceiptProjectList([]); if (editReceiptGroupName && v) fetchEditReceiptProjects(editReceiptGroupName, v); }}
+                        disabled={!editReceiptGroupName || editReceiptProjectLoading.subs}
+                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptGroupName ? '#f9fafb' : 'white' }}>
+                        <option value="">{editReceiptProjectLoading.subs ? 'Loading...' : !editReceiptGroupName ? 'Select Group first' : 'Select Sub Group'}</option>
+                        {editReceiptProjectSubs.map((s, i) => <option key={s.value || i} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Project *</label>
+                      <select value={editReceiptProjectId}
+                        onChange={e => setEditReceiptProjectId(e.target.value)}
+                        disabled={!editReceiptSubGroupName || editReceiptProjectLoading.projects}
+                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptSubGroupName ? '#f9fafb' : 'white' }}>
+                        <option value="">{editReceiptProjectLoading.projects ? 'Loading...' : !editReceiptSubGroupName ? 'Select Sub Group first' : 'Select Project'}</option>
+                        {editReceiptProjectList.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  {(editReceiptGroupName !== (editingReceipt.groupId || '') || editReceiptSubGroupName !== (editingReceipt.subGroupId || '') || editReceiptProjectId !== (editingReceipt.projectId || '')) && parseFloat(editingReceipt.appliedAmount) > 0 && (
+                    <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef9c3', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
+                      ⚠ This advance has <strong>{formatCurrency(editingReceipt.appliedAmount)}</strong> already allocated to invoices.
+                      Changing the project will <strong>automatically reverse those allocations</strong> so the advance starts fresh under the new project.
+                    </div>
+                  )}
+                  {editReceiptGroupName === (editingReceipt.groupId || '') && editReceiptProjectId === (editingReceipt.projectId || '') && parseFloat(editingReceipt.appliedAmount) > 0 && (
+                    <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
+                      ⚠ {formatCurrency(editingReceipt.appliedAmount)} already allocated. Cannot reduce amount below this.
+                    </div>
+                  )}
+                </div>
+                ) : (
+                <div className="receipts-page-form-section" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 16px' }}>
+                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Project Assignment</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                    {editingReceipt.groupId || '—'}
+                    {editingReceipt.subGroupId ? ` › ${editingReceipt.subGroupId}` : ''}
+                    {editingReceipt.projectId ? ` › ${editingReceipt.projectId}` : ''}
+                  </div>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>Project cannot be changed for Invoice Payments.</div>
+                </div>
+                )}
+
                 <div className="receipts-page-form-section">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                     <h3 style={{ margin: 0 }}>Receipt Type:</h3>
                     <span className={`receipt-badge ${editingReceipt.receiptType === 'ADVANCE' ? 'receipt-type-advance' : 'receipt-type-invoice'}`}>{editingReceipt.receiptType === 'ADVANCE' ? 'Advance Payment' : 'Invoice Payment'}</span>
                   </div>
@@ -1671,12 +1856,9 @@ Method: ${editReceiptFormData.paymentMethod}`,
                       <strong>Applied to Invoice:</strong> {editingReceipt.invoiceNo}
                     </div>
                   )}
-                  {editingReceipt.receiptType === 'ADVANCE' && editingReceipt.appliedAmount > 0 && (
-                    <div style={{ padding: '12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '13px' }}>
-                      <strong>Warning:</strong> This advance has {formatCurrency(editingReceipt.appliedAmount)} already allocated. Reducing the amount below this will fail.
-                    </div>
-                  )}
+
                 </div>
+
                 <div className="receipts-page-form-section">
                   <h3>Payment Details</h3>
                   <div className="receipts-page-form-grid">
@@ -1708,7 +1890,7 @@ Method: ${editReceiptFormData.paymentMethod}`,
               </div>
             </div>
             <div className="receipts-page-modal-actions">
-              <button className="receipts-page-btn-secondary" onClick={() => setShowEditReceiptModal(false)}>Cancel</button>
+              <button className="receipts-page-btn-secondary" onClick={() => { setShowEditReceiptModal(false); setShowChangeProjectPanel(false); }}>Cancel</button>
               <button className="receipts-page-btn-primary" onClick={handleSaveEditedReceipt}>Update Receipt</button>
             </div>
           </div>
