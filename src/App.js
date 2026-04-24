@@ -16,7 +16,7 @@ import SessionManager from './components/SessionManager';
 
 // Pages
 import Login from './Pages/Login';
-import Dashboardtabs from "./Pages/RoleDashboard.js";
+import Dashboardtabs from "./Pages/Dashboard.js";
 import Leads from "./Pages/Leads-Enquire";
 import Proposals from "./Pages/Proposals";
 import Quatations from "./Pages/Quatations";
@@ -45,6 +45,7 @@ import TaskManagement from './Pages/TaskManagement.js';
 import RoleHierarchyPage from './Pages/RoleHierarchyPage.js';
 import './App.css';
 import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
+import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
 function AppWrapper() {
@@ -59,7 +60,7 @@ function AppWrapper() {
       '/dashboard', '/sales', '/procurement', '/documents',
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense', '/taskmanagement',
+      '/project-cost-expense', '/taskmanagement','/projectaccess'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -219,6 +220,9 @@ function AppShell({ hideShell }) {
 
           <Route path="/taskmanagement" element={
             <ProtectedRoute><TaskManagement /></ProtectedRoute>
+          } />
+          <Route path="/officeuse/projectaccess" element={
+            <ProtectedRoute><ProjectAccessManager /></ProtectedRoute>
           } />
 
           <Route path="*" element={<NotFound />} />

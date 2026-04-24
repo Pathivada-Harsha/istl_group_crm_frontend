@@ -1,106 +1,179 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import '../pages-css/Dashboard.css';
-import { useAuth } from '../hooks/useAuth.js';
+// RoleDashboard.js — Role-based CRM Dashboard
+// Fixed: role matching, fixed-height cards, generic dashboard for all roles
 
-const API_BASE_URL = process.env.REACT_APP_API_URL;
+import React, { useState, useEffect, useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
+import "../pages-css/Dashboard.css";
 
-function getDashboardEndpoint(role) {
-  if (!role) return 'generic';
-  const r = role.trim().toUpperCase();
-  if (r === 'SUPERADMIN' || r === 'ADMIN') return 'admin';
-  if (r === 'MANAGER' || r === 'BD_MANAGER' || r === 'SALES_MANAGER') return 'sales-manager';
-  if (r === 'TELECALLER') return 'telecaller';
-  if (r === 'BD_EXECUTIVE' || r === 'BDEXECUTIVE' || r === 'SALES_EXEC') return 'bd';
-  // Any other role (PROCUREMENT_MANAGER, TESTING_ROLE, custom roles, etc.) → generic
-  return 'generic';
+const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8080";
+const USER_KEY = "bd_portal_user";
+
+/* ─── Fetch helper ──────────────────────────────────────────────────────────── */
+const getHeaders = () => {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    const u   = raw ? JSON.parse(raw)?.user : null;
+    return {
+      "Content-Type": "application/json",
+      "User-Id":   String(u?.id   ?? ""),
+      "User-Role": String(u?.role ?? ""),
+    };
+  } catch { return { "Content-Type": "application/json" }; }
+};
+
+const apiFetch = async (path) => {
+  const res = await fetch(API_BASE + path, { headers: getHeaders(), credentials: "include" });
+  if (res.status === 401) throw new Error("SESSION_EXPIRED");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+};
+
+/* ─── Role normalizer — handles all DB variants ─────────────────────────────── */
+function normalizeRole(role) {
+  if (!role) return "generic";
+  const r = role.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  if (r === "SUPERADMIN" || r === "ADMIN") return "admin";
+  // Manager variants
+  if (["MANAGER","SALES_MANAGER","BD_MANAGER","SALES_MGR","REGIONAL_MANAGER","AREA_MANAGER"].includes(r)) return "manager";
+  // Telecaller variants
+  if (["TELECALLER","TELE_CALLER","TELE","CALLING_AGENT"].includes(r)) return "telecaller";
+  // BD executive variants
+  if (["BD_EXECUTIVE","BDEXECUTIVE","BD_EXEC","SALES_EXEC","SALES_EXECUTIVE","BD"].includes(r)) return "bd";
+  return "generic";
 }
 
-const fmt = n => (n ?? 0).toLocaleString('en-IN');
-const fmtCr = v => {
-  const n = parseFloat(v || 0);
-  if (n >= 10000000) return `₹${(n/10000000).toFixed(2)} Cr`;
-  if (n >= 100000)   return `₹${(n/100000).toFixed(2)} L`;
-  return `₹${n.toLocaleString('en-IN',{maximumFractionDigits:0})}`;
-};
-const fmtDate = s => {
-  if (!s) return '—';
-  try { return new Date(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short'}); }
-  catch { return s; }
+/* ─── Helpers ───────────────────────────────────────────────────────────────── */
+const fmtMoney = (n) => {
+  if (!n && n !== 0) return "₹0";
+  const num = typeof n === "string" ? parseFloat(n) : Number(n);
+  if (num >= 1e7) return `₹${(num / 1e7).toFixed(2)} Cr`;
+  if (num >= 1e5) return `₹${(num / 1e5).toFixed(1)} L`;
+  return `₹${num.toLocaleString("en-IN")}`;
 };
 
-const STATUS_COLORS = {
-  'Closed Won':{'bg':'#d1fae5','color':'#065f46'},'Closed Lost':{'bg':'#fee2e2','color':'#991b1b'},
-  'New':{'bg':'#eff6ff','color':'#1e40af'},'Contacted':{'bg':'#fef3c7','color':'#92400e'},
-  'In Discussion':{'bg':'#fde8d8','color':'#9a3412'},'Proposal Sent':{'bg':'#e0e7ff','color':'#3730a3'},
-  'INTERESTED':{'bg':'#d1fae5','color':'#065f46'},'NOT_INTERESTED':{'bg':'#fee2e2','color':'#991b1b'},
-  'NOT_RESPONDED':{'bg':'#fef3c7','color':'#92400e'},'Accepted':{'bg':'#d1fae5','color':'#065f46'},
-  'Draft':{'bg':'#f3f4f6','color':'#374151'},'Sent':{'bg':'#e0e7ff','color':'#3730a3'},
-  'Completed':{'bg':'#d1fae5','color':'#065f46'},'Confirmed':{'bg':'#dbeafe','color':'#1e40af'},
-  'Pending':{'bg':'#fef3c7','color':'#92400e'},
-};
-const StatusBadge = ({s}) => {
-  const c = STATUS_COLORS[s] || {bg:'#f3f4f6',color:'#374151'};
-  return <span style={{background:c.bg,color:c.color,padding:'2px 8px',borderRadius:9999,fontSize:11,fontWeight:600,whiteSpace:'nowrap'}}>{s||'—'}</span>;
+const fmtNum = (n) => (n ?? 0).toLocaleString("en-IN");
+
+const fmtDate = (d) => {
+  if (!d) return "—";
+  try { return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" }); }
+  catch { return "—"; }
 };
 
-const KpiCard = ({icon,label,value,sub,accent='#3b82f6'}) => (
-  <div style={{background:'#fff',borderRadius:10,padding:'1rem 1.25rem',boxShadow:'0 1px 4px rgba(0,0,0,0.08)',borderLeft:`4px solid ${accent}`,display:'flex',flexDirection:'column',gap:4}}>
-    <div style={{fontSize:22}}>{icon}</div>
-    <div style={{fontSize:'1.4rem',fontWeight:700,color:'#111827',lineHeight:1.2}}>{value}</div>
-    <div style={{fontSize:12,fontWeight:600,color:'#374151'}}>{label}</div>
-    {sub && <div style={{fontSize:11,color:'#6b7280'}}>{sub}</div>}
+const daysDiff = (d) => {
+  if (!d) return null;
+  return Math.round((new Date(d) - Date.now()) / 86400000);
+};
+
+const roleFmt = (r) => (r || "").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+const statusBadge = (status) => {
+  if (!status) return <span className="rd-badge rd-badge-gray">—</span>;
+  const s = status.toLowerCase();
+  if (["closed won","converted","paid","accepted","completed","confirmed","interested"].some(x => s.includes(x)))
+    return <span className="rd-badge rd-badge-green">{status}</span>;
+  if (["closed lost","rejected","cancelled","not interested","not_interested"].some(x => s.includes(x)))
+    return <span className="rd-badge rd-badge-red">{status}</span>;
+  if (["new","draft"].some(x => s.includes(x)))
+    return <span className="rd-badge rd-badge-indigo">{status}</span>;
+  if (["contacted","sent","in production"].some(x => s.includes(x)))
+    return <span className="rd-badge rd-badge-blue">{status}</span>;
+  if (["pending","not responded","in discussion","not_responded"].some(x => s.includes(x)))
+    return <span className="rd-badge rd-badge-yellow">{status}</span>;
+  return <span className="rd-badge rd-badge-gray">{status}</span>;
+};
+
+const roleBadgeStyle = (role) => {
+  const r = (role || "").toUpperCase();
+  if (r === "SUPERADMIN") return { background: "#ede9fe", color: "#7c3aed" };
+  if (r === "ADMIN")      return { background: "#dbeafe", color: "#1d4ed8" };
+  if (normalizeRole(role) === "manager")  return { background: "#dcfce7", color: "#15803d" };
+  if (normalizeRole(role) === "bd")       return { background: "#fff7ed", color: "#c2410c" };
+  if (normalizeRole(role) === "telecaller") return { background: "#fef3c7", color: "#b45309" };
+  return { background: "#f1f5f9", color: "#475569" };
+};
+
+/* ─── Motivational quotes ────────────────────────────────────────────────────── */
+const QUOTES = [
+  "Every lead is a new opportunity — make it count! 🚀",
+  "Your hustle today builds tomorrow's success. 💪",
+  "Small wins add up to big victories. Keep pushing! 🏆",
+  "The best time to close a deal is right now. ⚡",
+  "Your follow-ups today are someone's solution tomorrow. 🎯",
+  "Consistency beats talent — show up and deliver! 🌟",
+  "Every 'no' brings you closer to the next 'yes'. 💡",
+  "Your pipeline is your future. Nurture it well! 🌱",
+];
+const getDailyQuote = () => QUOTES[new Date().getDate() % QUOTES.length];
+
+/* ─── Reusable UI ───────────────────────────────────────────────────────────── */
+const Spinner = () => <div className="rd-loading"><div className="rd-spinner" />Loading…</div>;
+const Empty   = ({ icon = "📭", msg = "No data available" }) => (
+  <div className="rd-empty"><div className="rd-empty-icon">{icon}</div>{msg}</div>
+);
+
+const KpiCard = ({ label, value, sub, accent = "#3b82f6", iconBg = "#eff6ff", icon }) => (
+  <div className="rd-kpi-card" style={{ "--kpi-accent": accent, "--kpi-icon-bg": iconBg }}>
+    <div className="rd-kpi-icon">{icon}</div>
+    <div className="rd-kpi-label">{label}</div>
+    <div className="rd-kpi-value">{value ?? "—"}</div>
+    {sub && <div className="rd-kpi-sub">{sub}</div>}
   </div>
 );
 
-const Section = ({title,children,badge}) => (
-  <div style={{background:'#fff',borderRadius:10,padding:'1.25rem',boxShadow:'0 1px 4px rgba(0,0,0,0.08)',marginTop:'1.25rem'}}>
-    <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:'1rem'}}>
-      <h3 style={{margin:0,fontSize:15,fontWeight:700,color:'#111827'}}>{title}</h3>
-      {badge!=null && <span style={{background:'#eff6ff',color:'#1e40af',borderRadius:9999,padding:'1px 8px',fontSize:11,fontWeight:600}}>{badge}</span>}
-    </div>
-    {children}
-  </div>
-);
-
-const SimpleTable = ({cols,rows,empty='No data'}) => (
-  <div style={{overflowX:'auto'}}>
-    {rows.length===0
-      ? <div style={{textAlign:'center',padding:'2rem',color:'#9ca3af',fontSize:13}}>{empty}</div>
-      : <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
-          <thead>
-            <tr style={{borderBottom:'2px solid #f3f4f6'}}>
-              {cols.map(c=><th key={c.key} style={{textAlign:c.right?'right':'left',padding:'6px 10px',color:'#6b7280',fontWeight:600,fontSize:11,textTransform:'uppercase',whiteSpace:'nowrap'}}>{c.label}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row,i)=>(
-              <tr key={i} style={{borderBottom:'1px solid #f9fafb'}}>
-                {cols.map(c=>(
-                  <td key={c.key} style={{padding:'8px 10px',textAlign:c.right?'right':'left',color:c.bold?'#111827':'#374151',fontWeight:c.bold?600:400,whiteSpace:c.nowrap?'nowrap':'normal'}}>
-                    {c.render ? c.render(row) : (row[c.key]??'—')}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-    }
-  </div>
-);
-
-const FollowupList = ({items}) => {
-  if (!items?.length) return <div style={{textAlign:'center',padding:'1.5rem',color:'#9ca3af',fontSize:13}}>No pending follow-ups</div>;
-  return (
-    <div style={{display:'flex',flexDirection:'column',gap:8}}>
-      {items.slice(0,8).map((f,i)=>{
-        const pColor = f.priority==='High'?'#ef4444':f.priority==='Medium'?'#f59e0b':'#10b981';
-        return (
-          <div key={i} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'8px 12px',background:'#f8fafc',borderRadius:8,borderLeft:`3px solid ${pColor}`}}>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:13,color:'#111827',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.leadName||'—'}</div>
-              <div style={{fontSize:11,color:'#6b7280'}}>{f.followupType} · {fmtDate(f.scheduledAt)}{f.assignedToName?` · ${f.assignedToName}`:''}</div>
+/* Card with FIXED HEIGHT and internal scroll */
+const Card = ({ title, sub, right, children, height = 340, noBodyPad = false }) => (
+  <div className="rd-card" style={{ height, display: "flex", flexDirection: "column" }}>
+    {title && (
+      <div className="rd-card-head" style={{ flexShrink: 0 }}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div
+            className="rd-card-title"
+            style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+          >
+            {title}
+          </div>
+          {sub && (
+            <div
+              className="rd-card-sub"
+              style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, fontWeight: 400 }}
+            >
+              {sub}
             </div>
-            <StatusBadge s={f.status} />
+          )}
+        </div>
+        {right}
+      </div>
+    )}
+    <div
+      className="rd-card-body rd-card-scroll"
+      style={{ padding: noBodyPad ? 0 : "14px 18px", flex: 1, minHeight: 0 }}
+    >
+      {children}
+    </div>
+  </div>
+);
+
+/* Tall card for tables that need more space */
+const TallCard = ({ title, sub, right, children }) => (
+  <Card title={title} sub={sub} right={right} height={440} noBodyPad>
+    {children}
+  </Card>
+);
+
+const MiniBarChart = ({ data = [], color = "#3b82f6" }) => {
+  const max = Math.max(...data.map(d => d.value ?? d.v ?? 0), 1);
+  return (
+    <div className="rd-mini-chart">
+      {data.map((d, i) => {
+        const v = d.value ?? d.v ?? 0;
+        const l = d.label ?? d.l ?? "";
+        return (
+          <div key={i} className="rd-mini-bar-wrap">
+            <div className="rd-mini-bar-bg">
+              <div className="rd-mini-bar-fill" style={{ height: `${(v / max) * 100}%`, background: color }} />
+            </div>
+            <div className="rd-mini-bar-val">{v}</div>
+            <div className="rd-mini-bar-label">{l}</div>
           </div>
         );
       })}
@@ -108,388 +181,797 @@ const FollowupList = ({items}) => {
   );
 };
 
-const BarChart = ({data}) => {
-  if (!data?.length) return null;
-  const max = Math.max(...data.map(d=>d.value),1);
+const Funnel = ({ stages = [] }) => {
+  const max = Math.max(stages[0]?.value || 1, 1);
+  const colors = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444"];
   return (
-    <div style={{display:'flex',alignItems:'flex-end',gap:8,height:90,padding:'0 4px'}}>
-      {data.map((d,i)=>(
-        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-          <div style={{fontSize:10,color:'#6b7280',fontWeight:600}}>{d.value}</div>
-          <div style={{width:'100%',borderRadius:'3px 3px 0 0',background:'linear-gradient(to top,#3b82f6,#60a5fa)',height:`${Math.max((d.value/max)*65,3)}px`,minHeight:3}}/>
-          <div style={{fontSize:9,color:'#9ca3af',whiteSpace:'nowrap'}}>{d.label}</div>
+    <div className="rd-funnel">
+      {stages.map((s, i) => (
+        <div key={i} className="rd-funnel-row">
+          <div className="rd-funnel-labels">
+            <span className="rd-funnel-stage">{s.label}</span>
+            <span className="rd-funnel-val">{fmtNum(s.value)}</span>
+          </div>
+          <div className="rd-funnel-bar-bg">
+            <div className="rd-funnel-bar-fill"
+              style={{ width: `${Math.max((s.value / max) * 100, 2)}%`, background: colors[i % colors.length] }} />
+          </div>
         </div>
       ))}
     </div>
   );
 };
 
-const TeamTable = ({members}) => {
-  if (!members?.length) return <div style={{textAlign:'center',padding:'1.5rem',color:'#9ca3af',fontSize:13}}>No team members assigned yet. Contact admin to set up your team.</div>;
-  return (
-    <SimpleTable
-      cols={[
-        {key:'name',label:'Member',bold:true},
-        {key:'role',label:'Role',render:r=><span style={{fontSize:11,color:'#6b7280'}}>{r.role}</span>},
-        {key:'leadsHandled',label:'Leads',right:true,render:r=>fmt(r.leadsHandled)},
-        {key:'interested',label:'Interested',right:true,render:r=><span style={{color:'#059669',fontWeight:600}}>{fmt(r.interested)}</span>},
-        {key:'leadsWon',label:'Won',right:true,render:r=><span style={{color:'#065f46',fontWeight:600}}>{fmt(r.leadsWon)}</span>},
-        {key:'proposalsSent',label:'Proposals',right:true,render:r=>fmt(r.proposalsSent)},
-        {key:'followupsDone',label:'FU Done',right:true,render:r=>fmt(r.followupsDone)},
-        {key:'followupsPending',label:'FU Pending',right:true,render:r=><span style={{color:r.followupsPending>0?'#d97706':'#374151'}}>{fmt(r.followupsPending)}</span>},
-        {key:'conversionRate',label:'Conv%',right:true,render:r=><span style={{color:r.conversionRate>20?'#059669':'#374151',fontWeight:600}}>{r.conversionRate}%</span>},
-      ]}
-      rows={members}
-      empty="No team members"
-    />
-  );
-};
-
-function AdminDashboard({data:d,userName}) {
-  return <>
-    <div style={{marginBottom:'1.25rem'}}>
-      <h2 style={{margin:0,fontSize:22,fontWeight:700,color:'#111827'}}>Welcome back, {userName} 👋</h2>
-      <p style={{margin:'4px 0 0',color:'#6b7280',fontSize:14}}>Full company overview</p>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(155px,1fr))',gap:'0.75rem'}}>
-      <KpiCard icon="📋" label="Total Leads"    value={fmt(d.totalLeads)}      sub={`+${fmt(d.leadsThisMonth)} this month`} accent="#3b82f6"/>
-      <KpiCard icon="✅" label="Closed Won"     value={fmt(d.closedWon)}       accent="#059669"/>
-      <KpiCard icon="🔄" label="Active"         value={fmt(d.activeLeads)}     accent="#8b5cf6"/>
-      <KpiCard icon="📝" label="Proposals"      value={fmt(d.totalProposals)}  sub={`${fmt(d.proposalSent)} sent`} accent="#f59e0b"/>
-      <KpiCard icon="📦" label="Orders"         value={fmt(d.totalOrders)}     sub={fmtCr(d.orderBookValue)} accent="#10b981"/>
-      <KpiCard icon="📞" label="Follow-ups"     value={fmt(d.pendingFollowups)}sub={`${fmt(d.overdueFollowups)} overdue`} accent="#ef4444"/>
-      <KpiCard icon="💬" label="Contacted"      value={fmt(d.contacted)}       accent="#6366f1"/>
-      <KpiCard icon="🤝" label="In Discussion"  value={fmt(d.inDiscussion)}    accent="#ec4899"/>
-    </div>
-    {d.monthlyLeads?.length>0 && <Section title="Lead Trend — Last 6 Months"><BarChart data={d.monthlyLeads}/></Section>}
-    <Section title="Team Performance" badge={d.teamPerformance?.length}><TeamTable members={d.teamPerformance}/></Section>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.25rem',marginTop:'1.25rem'}}>
-      <Section title="Recent Orders" badge={d.recentOrders?.length}>
-        <SimpleTable cols={[
-          {key:'orderBookNo',label:'Order #',bold:true,nowrap:true},
-          {key:'customerName',label:'Customer'},
-          {key:'totalAmount',label:'Value',right:true,render:r=>fmtCr(r.totalAmount)},
-          {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-        ]} rows={d.recentOrders||[]} empty="No recent orders"/>
-      </Section>
-      <Section title="Pending Follow-ups"><FollowupList items={d.followups}/></Section>
-    </div>
-  </>;
-}
-
-function ManagerDashboard({data:d,userName}) {
-  return <>
-    <div style={{marginBottom:'1.25rem'}}>
-      <h2 style={{margin:0,fontSize:22,fontWeight:700,color:'#111827'}}>Hi, {userName} 👋</h2>
-      <p style={{margin:'4px 0 0',color:'#6b7280',fontSize:14}}>Your team's performance overview</p>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.75rem'}}>
-      <KpiCard icon="📋" label="My Leads"       value={fmt(d.myLeads)}          accent="#3b82f6"/>
-      <KpiCard icon="✅" label="Closed Won"      value={fmt(d.closedWon)}        sub={`${d.conversionRate}% conv.`} accent="#059669"/>
-      <KpiCard icon="🔄" label="Active"          value={fmt(d.activeLeads)}      accent="#8b5cf6"/>
-      <KpiCard icon="📝" label="Proposals"       value={fmt(d.myProposals)}      sub={`${fmt(d.acceptedProposals)} accepted`} accent="#f59e0b"/>
-      <KpiCard icon="💰" label="Revenue"         value={fmtCr(d.revenue)}        accent="#10b981"/>
-      <KpiCard icon="📞" label="Follow-ups"      value={fmt(d.pendingFollowups)} sub={`${fmt(d.overdueFollowups)} overdue · ${fmt(d.todayFollowups)} today`} accent="#ef4444"/>
-      <KpiCard icon="💬" label="Contacted"       value={fmt(d.contacted)}        accent="#6366f1"/>
-      <KpiCard icon="🤝" label="In Discussion"   value={fmt(d.inDiscussion)}     accent="#ec4899"/>
-    </div>
-    <Section title="🏆 Your Team's Performance" badge={d.teamMembers?.length}>
-      <TeamTable members={d.teamMembers}/>
-    </Section>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.25rem',marginTop:'1.25rem'}}>
-      <Section title="Recent Leads" badge={d.leads?.length}>
-        <SimpleTable cols={[
-          {key:'name',label:'Client',bold:true},
-          {key:'groupName',label:'Group',render:r=><span style={{fontSize:11}}>{r.groupName||'—'}</span>},
-          {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-        ]} rows={d.leads||[]} empty="No leads yet"/>
-      </Section>
-      <Section title="Recent Proposals">
-        <SimpleTable cols={[
-          {key:'proposalNo',label:'#',bold:true,nowrap:true},
-          {key:'leadName',label:'Lead'},
-          {key:'totalValue',label:'Value',right:true,render:r=>fmtCr(r.totalValue)},
-          {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-        ]} rows={d.proposals||[]} empty="No proposals yet"/>
-      </Section>
-    </div>
-    <Section title="Pending Follow-ups"><FollowupList items={d.followups}/></Section>
-  </>;
-}
-
-function BdDashboard({data:d,userName}) {
-  return <>
-    <div style={{marginBottom:'1.25rem'}}>
-      <h2 style={{margin:0,fontSize:22,fontWeight:700,color:'#111827'}}>Hi, {userName} 👋</h2>
-      <p style={{margin:'4px 0 0',color:'#6b7280',fontSize:14}}>Your leads and proposals</p>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.75rem'}}>
-      <KpiCard icon="📋" label="My Leads"        value={fmt(d.totalLeads)}        accent="#3b82f6"/>
-      <KpiCard icon="✅" label="Closed Won"       value={fmt(d.closedWon)}         sub={`${d.conversionRate}% conv.`} accent="#059669"/>
-      <KpiCard icon="🔄" label="Active"           value={fmt(d.activeLeads)}       accent="#8b5cf6"/>
-      <KpiCard icon="🤝" label="In Discussion"    value={fmt(d.inDiscussion)}      accent="#6366f1"/>
-      <KpiCard icon="📝" label="Proposals Sent"   value={fmt(d.proposalsSent)}     sub={`${fmt(d.acceptedProposals)} accepted`} accent="#f59e0b"/>
-      <KpiCard icon="💰" label="Revenue"          value={fmtCr(d.revenue)}         accent="#10b981"/>
-      <KpiCard icon="📞" label="Follow-ups"       value={fmt(d.pendingFollowups)}  sub={`${fmt(d.overdueFollowups)} overdue`} accent="#ef4444"/>
-      <KpiCard icon="📅" label="Today's FUs"      value={fmt(d.todayFollowups)}    accent="#f59e0b"/>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'1.25rem',marginTop:'1.25rem'}}>
-      <Section title="My Leads" badge={d.leads?.length}>
-        <SimpleTable cols={[
-          {key:'name',label:'Client',bold:true},
-          {key:'groupName',label:'Group',render:r=><span style={{fontSize:11}}>{r.groupName||'—'}</span>},
-          {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-          {key:'source',label:'Source',render:r=><span style={{fontSize:11,color:'#6b7280'}}>{r.source||'—'}</span>},
-        ]} rows={d.leads||[]} empty="No leads assigned yet"/>
-      </Section>
-      <Section title="My Proposals">
-        <SimpleTable cols={[
-          {key:'proposalNo',label:'#',bold:true,nowrap:true},
-          {key:'leadName',label:'Lead'},
-          {key:'totalValue',label:'Value',right:true,render:r=>fmtCr(r.totalValue)},
-          {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-        ]} rows={d.proposals||[]} empty="No proposals yet"/>
-      </Section>
-    </div>
-    <Section title="Pending Follow-ups"><FollowupList items={d.followups}/></Section>
-  </>;
-}
-
-function TcDashboard({data:d,userName}) {
-  const tcColor = s => ({INTERESTED:{bg:'#d1fae5',color:'#065f46'},NOT_INTERESTED:{bg:'#fee2e2',color:'#991b1b'},NOT_RESPONDED:{bg:'#fef3c7',color:'#92400e'}}[s]||{bg:'#f3f4f6',color:'#374151'});
-  const pct = d.total>0 ? Math.round((d.interested/d.total)*100) : 0;
-  return <>
-    <div style={{marginBottom:'1.25rem'}}>
-      <h2 style={{margin:0,fontSize:22,fontWeight:700,color:'#111827'}}>Hi, {userName} 👋</h2>
-      <p style={{margin:'4px 0 0',color:'#6b7280',fontSize:14}}>Your calling activity</p>
-    </div>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:'0.75rem'}}>
-      <KpiCard icon="📋" label="Total Assigned"  value={fmt(d.total)}          accent="#3b82f6"/>
-      <KpiCard icon="📞" label="Called"          value={fmt(d.called)}         accent="#6366f1"/>
-      <KpiCard icon="✅" label="Interested"      value={fmt(d.interested)}     accent="#059669"/>
-      <KpiCard icon="❌" label="Not Interested"  value={fmt(d.notInterested)}  accent="#ef4444"/>
-      <KpiCard icon="⏳" label="Not Responded"   value={fmt(d.notResponded)}   accent="#f59e0b"/>
-      <KpiCard icon="🆕" label="Pending"         value={fmt(d.pending)}        accent="#8b5cf6"/>
-      <KpiCard icon="🤝" label="Handed to BD"    value={fmt(d.handedOff)}      accent="#10b981"/>
-      <KpiCard icon="📅" label="Today's FUs"     value={fmt(d.todayFollowups)} sub={`${fmt(d.overdueFollowups)} overdue`} accent="#ec4899"/>
-    </div>
-    {d.total>0 && (
-      <div style={{background:'#fff',borderRadius:10,padding:'1rem 1.25rem',boxShadow:'0 1px 4px rgba(0,0,0,0.08)',marginTop:'1.25rem'}}>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
-          <span style={{fontSize:13,fontWeight:600,color:'#374151'}}>Interest Rate</span>
-          <span style={{fontSize:13,fontWeight:700,color:'#059669'}}>{pct}%</span>
-        </div>
-        <div style={{height:8,background:'#f3f4f6',borderRadius:4,overflow:'hidden'}}>
-          <div style={{height:'100%',borderRadius:4,background:'linear-gradient(to right,#059669,#34d399)',width:`${Math.min(pct,100)}%`}}/>
-        </div>
+/* ─── Follow-up block (scrollable inside fixed card) ────────────────────────── */
+const FollowupBlock = ({ todayCount = 0, overdueCount = 0, upcomingCount = 0, followups = [] }) => (
+  <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div className="rd-followup-stats" style={{ flexShrink: 0 }}>
+      <div className="rd-fu-stat">
+        <div className="rd-fu-stat-value rd-fu-today">{todayCount}</div>
+        <div className="rd-fu-stat-label">Today</div>
       </div>
-    )}
-    <Section title="My Recent Leads" badge={d.leads?.length}>
-      <SimpleTable cols={[
-        {key:'name',label:'Client',bold:true},
-        {key:'phone',label:'Phone',nowrap:true},
-        {key:'groupName',label:'Group',render:r=><span style={{fontSize:11}}>{r.groupName||'—'}</span>},
-        {key:'telecallerStatus',label:'Status',render:r=>{const c=tcColor(r.telecallerStatus);return <span style={{background:c.bg,color:c.color,padding:'2px 8px',borderRadius:9999,fontSize:11,fontWeight:600}}>{r.telecallerStatus||'NEW'}</span>;}},
-        {key:'handedOffToBD',label:'BD',render:r=>r.handedOffToBD?<span style={{color:'#059669',fontSize:11}}>✅ {r.bdAssigneeName||'BD'}</span>:<span style={{color:'#9ca3af',fontSize:11}}>—</span>},
-      ]} rows={d.leads||[]} empty="No leads assigned yet"/>
-    </Section>
-    <Section title="Pending Follow-ups"><FollowupList items={d.followups}/></Section>
-  </>;
-}
-
-const Skeleton = () => (
-  <div style={{padding:24}}>
-    <div style={{height:32,background:'#f3f4f6',borderRadius:8,marginBottom:8,width:'40%'}}/>
-    <div style={{height:16,background:'#f9fafb',borderRadius:6,marginBottom:24,width:'30%'}}/>
-    <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12}}>
-      {[...Array(8)].map((_,i)=><div key={i} style={{height:90,background:'#f3f4f6',borderRadius:10}}/>)}
+      <div className="rd-fu-stat">
+        <div className="rd-fu-stat-value rd-fu-overdue">{overdueCount}</div>
+        <div className="rd-fu-stat-label">Overdue</div>
+      </div>
+      <div className="rd-fu-stat">
+        <div className="rd-fu-stat-value rd-fu-upcoming">{upcomingCount}</div>
+        <div className="rd-fu-stat-label">Upcoming</div>
+      </div>
     </div>
-    <div style={{height:200,background:'#f3f4f6',borderRadius:10,marginTop:16}}/>
-    <div style={{height:200,background:'#f3f4f6',borderRadius:10,marginTop:16}}/>
+    {followups.length === 0
+      ? <Empty icon="✅" msg="All follow-ups are up to date!" />
+      : (
+        <div className="rd-followup-list" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+          {followups.map((f, i) => {
+            const dd = daysDiff(f.scheduledAt);
+            const cls = dd < 0 ? "overdue" : dd === 0 ? "today" : "upcoming";
+            const dotColor = dd < 0 ? "#ef4444" : dd === 0 ? "#3b82f6" : "#f59e0b";
+            return (
+              <div key={f.id || i} className={`rd-fu-item ${cls}`}>
+                <div className="rd-fu-dot" style={{ background: dotColor }} />
+                <div className="rd-fu-content">
+                  <div className="rd-fu-lead-name">{f.leadName || `Follow-up #${f.id}`}</div>
+                  <div className="rd-fu-meta">
+                    {f.followupType || "Call"} · {fmtDate(f.scheduledAt)}
+                    {f.assignedToName && ` · ${f.assignedToName}`}
+                  </div>
+                </div>
+                <div className="rd-fu-days" style={{ color: dotColor }}>
+                  {dd < 0 ? `${Math.abs(dd)}d overdue` : dd === 0 ? "Today" : `In ${dd}d`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )
+    }
   </div>
 );
 
-// ── GENERIC DASHBOARD — for any role without a dedicated view ─────────────────
-// Shown for: PROCUREMENT_MANAGER, SALES_EXEC, TESTING_ROLE, any custom role
-// L3 roles also see their team's performance table
-function GenericDashboard({data:d, tasks, userName, role}) {
-  const levelLabel = d.levelOrder <= 2 ? 'Company-wide' : d.levelOrder === 3 ? 'Team' : 'Personal';
-  const hasLeads = d.myLeads > 0 || d.activeLeads > 0 || d.closedWon > 0;
-  const isL3 = d.levelOrder === 3;
-
-  const roleFmt = role => (role || '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-
-  // Task status colors
-  const taskStatusColor = s => {
-    if (!s) return {bg:'#f3f4f6',color:'#374151'};
-    const m = {Pending:{bg:'#fef3c7',color:'#92400e'},Completed:{bg:'#d1fae5',color:'#065f46'},
-               Overdue:{bg:'#fee2e2',color:'#991b1b'},'In Progress':{bg:'#dbeafe',color:'#1e40af'}};
-    return m[s]||{bg:'#f3f4f6',color:'#374151'};
-  };
-
+/* ─── Team table ─────────────────────────────────────────────────────────────── */
+const TeamTable = ({ members = [] }) => {
+  if (!members.length) return <Empty icon="👥" msg="No team members found. Ask admin to assign team members to you." />;
   return (
-    <>
-      {/* Header */}
-      <div style={{marginBottom:'1.25rem'}}>
-        <h2 style={{margin:0,fontSize:22,fontWeight:700,color:'#111827'}}>Hi, {userName} 👋</h2>
-        <p style={{margin:'4px 0 0',color:'#6b7280',fontSize:14}}>
-          <span style={{background:'#f3f4f6',color:'#374151',padding:'2px 10px',borderRadius:9999,fontSize:12,fontWeight:600,marginRight:8}}>
-            {roleFmt(d.roleName)}
-          </span>
-          {levelLabel} view · Here's what needs your attention today
-        </p>
-      </div>
-
-      {/* Follow-up KPIs — always shown */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(145px,1fr))',gap:'0.75rem'}}>
-        <KpiCard icon="📞" label="Pending Follow-ups"  value={fmt(d.pendingFollowups)}  sub={`${fmt(d.overdueFollowups)} overdue`} accent="#ef4444"/>
-        <KpiCard icon="📅" label="Today's Follow-ups"  value={fmt(d.todayFollowups)}    accent="#f59e0b"/>
-        <KpiCard icon="📋" label="My Tasks"            value={fmt(tasks.total)}          sub={`${fmt(tasks.pending)} pending`} accent="#3b82f6"/>
-        <KpiCard icon="⚠️" label="Overdue Tasks"       value={fmt(tasks.overdue)}        accent="#dc2626"/>
-        {hasLeads && <KpiCard icon="🎯" label="My Leads"      value={fmt(d.myLeads)}    sub={`${fmt(d.closedWon)} won`} accent="#059669"/>}
-        {hasLeads && <KpiCard icon="🔄" label="Active Leads"  value={fmt(d.activeLeads)} accent="#8b5cf6"/>}
-        {hasLeads && <KpiCard icon="📝" label="My Proposals"  value={fmt(d.myProposals)} accent="#6366f1"/>}
-      </div>
-
-      {/* L3: Team performance — key section */}
-      {isL3 && (
-        <Section title="🏆 Your Team's Performance" badge={d.teamMembers?.length}>
-          {d.teamMembers?.length > 0
-            ? <TeamTable members={d.teamMembers}/>
-            : <div style={{textAlign:'center',padding:'1.5rem',color:'#9ca3af',fontSize:13}}>
-                No team members found. Ask admin to assign team members to you.
-              </div>
-          }
-        </Section>
-      )}
-
-      {/* Tasks table */}
-      <Section title="My Pending Tasks" badge={tasks.items?.length}>
-        {tasks.items?.length > 0
-          ? <SimpleTable
-              cols={[
-                {key:'title',label:'Task',bold:true},
-                {key:'category',label:'Category',render:r=><span style={{fontSize:11,color:'#6b7280'}}>{r.category||'—'}</span>},
-                {key:'priority',label:'Priority',render:r=>{
-                  const c=r.priority==='High'?'#ef4444':r.priority==='Medium'?'#f59e0b':'#10b981';
-                  return <span style={{color:c,fontWeight:600,fontSize:12}}>{r.priority||'—'}</span>;
-                }},
-                {key:'dueDate',label:'Due',nowrap:true,render:r=>fmtDate(r.dueDate)},
-                {key:'status',label:'Status',render:r=>{const c=taskStatusColor(r.status);return <span style={{background:c.bg,color:c.color,padding:'2px 8px',borderRadius:9999,fontSize:11,fontWeight:600}}>{r.status||'—'}</span>;}},
-                {key:'assignedToName',label:'Assigned By',render:r=><span style={{fontSize:11,color:'#6b7280'}}>{r.createdByName||'—'}</span>},
-              ]}
-              rows={tasks.items}
-              empty="No pending tasks"
-            />
-          : <div style={{textAlign:'center',padding:'2rem',color:'#9ca3af',fontSize:13}}>
-              ✅ No pending tasks right now
-            </div>
-        }
-      </Section>
-
-      {/* Follow-ups list */}
-      <div style={{display:'grid',gridTemplateColumns:hasLeads&&d.leads?.length>0?'1fr 1fr':'1fr',gap:'1.25rem',marginTop:'1.25rem'}}>
-        <Section title="Pending Follow-ups">
-          <FollowupList items={d.followups}/>
-        </Section>
-        {hasLeads && d.leads?.length > 0 && (
-          <Section title="My Recent Leads" badge={d.leads?.length}>
-            <SimpleTable
-              cols={[
-                {key:'name',label:'Client',bold:true},
-                {key:'groupName',label:'Group',render:r=><span style={{fontSize:11}}>{r.groupName||'—'}</span>},
-                {key:'status',label:'Status',render:r=><StatusBadge s={r.status}/>},
-              ]}
-              rows={d.leads||[]}
-              empty="No leads"
-            />
-          </Section>
-        )}
-      </div>
-    </>
+    <table className="rd-table" style={{ width: "100%" }}>
+      <thead>
+        <tr>
+          <th>Member</th><th>Role</th><th>Leads</th><th>Won</th>
+          <th>Revenue</th><th>Proposals</th><th>FU Done</th><th>FU Pending</th><th>Rate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {members.map((t, i) => {
+          const rs = roleBadgeStyle(t.role);
+          return (
+            <tr key={i}>
+              <td>
+                <div className="rd-team-member-cell">
+                  <div className="rd-avatar" style={{ background: rs.background, color: rs.color }}>
+                    {(t.name || "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="name-cell">{t.name}</span>
+                </div>
+              </td>
+              <td><span className="rd-badge" style={rs}>{roleFmt(t.role)}</span></td>
+              <td>{fmtNum(t.leadsHandled)}</td>
+              <td style={{ color: "#059669", fontWeight: 700 }}>{fmtNum(t.leadsWon)}</td>
+              <td style={{ color: "#059669" }}>{t.revenue ? fmtMoney(t.revenue) : "—"}</td>
+              <td>{fmtNum(t.proposalsSent)}</td>
+              <td>{fmtNum(t.followupsDone)}</td>
+              <td style={{ color: t.followupsPending > 0 ? "#f59e0b" : "#10b981" }}>{fmtNum(t.followupsPending)}</td>
+              <td><span style={{ fontWeight: 700, color: t.conversionRate > 20 ? "#059669" : "#374151" }}>{t.conversionRate ?? 0}%</span></td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
-}
+};
 
-export default function Dashboard() {
-  const { user } = useAuth();
-  const [data,    setData]    = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState(null);
-  // Tasks fetched separately for the generic view
-  const [tasks, setTasks] = useState({ total: 0, pending: 0, overdue: 0, items: [] });
+/* ─── Leads table ─────────────────────────────────────────────────────────────── */
+const LeadsTable = ({ leads = [], emptyMsg = "No leads found" }) => {
+  if (!leads.length) return <Empty icon="📂" msg={emptyMsg} />;
+  return (
+    <table className="rd-table" style={{ width: "100%" }}>
+      <thead>
+        <tr><th>Lead Name</th><th>Status</th><th>Group</th><th>Source</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        {leads.map((l, i) => (
+          <tr key={i}>
+            <td className="name-cell">{l.name}</td>
+            <td>{statusBadge(l.status)}</td>
+            <td style={{ color: "#64748b" }}>{[l.groupName, l.subGroupName].filter(Boolean).join(" / ") || "—"}</td>
+            <td>{l.source || "—"}</td>
+            <td>{fmtDate(l.createdAt)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
-  const role     = user?.role || '';
-  const userId   = user?.id   || '';
-  const userName = user?.name || user?.username || 'there';
-  const endpoint = getDashboardEndpoint(role);
+/* ─── Proposals table ────────────────────────────────────────────────────────── */
+const ProposalsTable = ({ proposals = [] }) => {
+  if (!proposals.length) return <Empty icon="📄" msg="No proposals yet" />;
+  return (
+    <table className="rd-table" style={{ width: "100%" }}>
+      <thead>
+        <tr><th>Proposal No</th><th>Lead</th><th>Value</th><th>Status</th><th>Date</th></tr>
+      </thead>
+      <tbody>
+        {proposals.map((p, i) => (
+          <tr key={i}>
+            <td style={{ fontFamily: "monospace", color: "#1d4ed8", fontWeight: 700 }}>{p.proposalNo || `PROP-${p.id}`}</td>
+            <td>{p.leadName || "—"}</td>
+            <td style={{ color: "#059669", fontWeight: 600 }}>{fmtMoney(p.totalValue)}</td>
+            <td>{statusBadge(p.status)}</td>
+            <td>{fmtDate(p.createdAt)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
-  // Fetch tasks for the generic dashboard view
-  const fetchTasks = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/tasks?userId=${userId}&status=Pending&size=10&page=1`,
-        { credentials:'include', headers:{ 'User-Id': String(userId), 'User-Role': role } }
-      );
-      if (!res.ok) return;
-      const json = await res.json();
-      const items = json.data || json.tasks || [];
-      const total   = json.totalElements || json.total || items.length;
-      const pending = items.filter(t => t.status === 'Pending' || t.status === 'In Progress').length;
-      const overdue = items.filter(t => {
-        if (!t.dueDate) return false;
-        return new Date(t.dueDate) < new Date() && t.status !== 'Completed';
-      }).length;
-      setTasks({ total, pending, overdue, items: items.slice(0, 8) });
-    } catch { /* tasks are optional — silently ignore */ }
-  }, [userId, role]);
+/* ─── Task list ──────────────────────────────────────────────────────────────── */
+const TaskList = ({ tasks = [] }) => {
+  if (!tasks.length) return <Empty icon="✅" msg="No pending tasks — you're all caught up!" />;
+  return (
+    <div className="rd-task-list">
+      {tasks.map((t, i) => {
+        const isOverdue = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "Completed";
+        const pColor = t.priority === "High" ? "#ef4444" : t.priority === "Medium" ? "#f59e0b" : "#10b981";
+        const sc = isOverdue
+          ? { bg: "#fee2e2", color: "#991b1b" }
+          : { Pending: { bg: "#fef3c7", color: "#92400e" }, "In Progress": { bg: "#dbeafe", color: "#1e40af" }, Completed: { bg: "#d1fae5", color: "#065f46" } }[t.status]
+          || { bg: "#f3f4f6", color: "#374151" };
+        return (
+          <div key={i} className="rd-task-item" style={{ borderLeft: `3px solid ${pColor}` }}>
+            <div className="rd-task-main">
+              <div className="rd-task-title">{t.title || "—"}</div>
+              <div className="rd-task-meta">
+                {t.category && <span className="rd-tag">{t.category}</span>}
+                {t.dueDate && <span style={{ fontSize: 11, color: isOverdue ? "#ef4444" : "#94a3b8" }}>Due {fmtDate(t.dueDate)}{isOverdue ? " ⚠️" : ""}</span>}
+              </div>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+              <span style={{ background: sc.bg, color: sc.color, padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600 }}>
+                {isOverdue ? "Overdue" : t.status}
+              </span>
+              <span style={{ fontSize: 10, color: "#94a3b8" }}>{t.priority}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
 
-  const fetchDashboard = useCallback(async () => {
-    if (!userId) { setLoading(false); return; }
-    setLoading(true); setError(null);
-    try {
-      const res = await fetch(`${API_BASE_URL}/dashboard/${endpoint}`, {
-        credentials: 'include',
-        headers: { 'Content-Type':'application/json', 'User-Id': String(userId), 'User-Role': role }
-      });
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const json = await res.json();
-      if (json.success) setData(json.data);
-      else throw new Error(json.message || 'Failed to load dashboard');
-    } catch(e) {
-      setError(e.message || 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  }, [endpoint, userId, role]);
+/* ═══════════════════════════════════════════════════════════════════════════════
+   SUPER ADMIN / ADMIN
+═══════════════════════════════════════════════════════════════════════════════ */
+const SuperAdminDashboard = () => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
 
   useEffect(() => {
-    fetchDashboard();
-    if (endpoint === 'generic') fetchTasks();
-  }, [fetchDashboard, fetchTasks, endpoint]);
+    apiFetch("/dashboard/admin")
+      .then(res => { if (res.success) setD(res.data); else setErr(res.message); })
+      .catch(e => setErr(e.message));
+  }, []);
 
-  if (loading) return <Skeleton/>;
+  if (!d && !err) return <Spinner />;
+  if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
-  if (error) return (
-    <div className="dashboard-home-container">
-      <div style={{background:'#fff',borderRadius:10,padding:'2rem',textAlign:'center',boxShadow:'0 1px 4px rgba(0,0,0,0.08)'}}>
-        <div style={{fontSize:40,marginBottom:12}}>⚠️</div>
-        <h3 style={{color:'#374151',marginBottom:8}}>Could not load dashboard</h3>
-        <p style={{color:'#6b7280',fontSize:14,marginBottom:16}}>{error}</p>
-        <button onClick={fetchDashboard} style={{background:'#3b82f6',color:'#fff',border:'none',padding:'8px 20px',borderRadius:8,cursor:'pointer',fontSize:14}}>Retry</button>
+  const kpis = [
+    { label: "Total Leads",      value: fmtNum(d.totalLeads),      sub: `+${fmtNum(d.leadsThisMonth)} this month`, accent: "#3b82f6", iconBg: "#eff6ff", icon: "🎯" },
+    { label: "Leads This Month", value: fmtNum(d.leadsThisMonth),  sub: "Current month",       accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "📅" },
+    { label: "Closed Won",       value: fmtNum(d.closedWon),       sub: "Converted leads",     accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
+    { label: "Proposals",        value: fmtNum(d.totalProposals),  sub: `${fmtNum(d.proposalSent)} sent`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📋" },
+    { label: "Order Book",       value: fmtMoney(d.orderBookValue),sub: `${fmtNum(d.totalOrders)} orders`, accent: "#06b6d4", iconBg: "#ecfeff", icon: "💰" },
+    { label: "Follow-ups",       value: fmtNum(d.pendingFollowups),sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "🔔" },
+    { label: "Contacted",        value: fmtNum(d.contacted),       sub: "Leads reached",       accent: "#6366f1", iconBg: "#eef2ff", icon: "💬" },
+    { label: "In Discussion",    value: fmtNum(d.inDiscussion),    sub: "Active conversations",accent: "#ec4899", iconBg: "#fdf2f8", icon: "🤝" },
+  ];
+
+  return (
+    <div>
+      <div className="rd-kpi-grid rd-kpi-grid-8">
+        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+      </div>
+
+      {/* Row 1: Chart + Pipeline side by side */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <Card title="📈 Monthly Leads" sub="New leads per month" height={260}>
+          <MiniBarChart data={d.monthlyLeads || []} color="#3b82f6" />
+        </Card>
+        <Card title="🔀 Lead Pipeline" sub="Stage breakdown" height={260}>
+          <Funnel stages={[
+            { label: "Total",         value: d.totalLeads   || 0 },
+            { label: "Contacted",     value: d.contacted    || 0 },
+            { label: "In Discussion", value: d.inDiscussion || 0 },
+            { label: "Proposal Sent", value: d.proposalSent || 0 },
+            { label: "Closed Won",    value: d.closedWon    || 0 },
+          ]} />
+        </Card>
+      </div>
+
+      {/* Row 2: Team Performance + Follow-up Reminders side by side */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        {(d.teamPerformance || []).length > 0 ? (
+          <TallCard title="🏆 Team Performance" sub="All team members' activity">
+            <TeamTable members={d.teamPerformance} />
+          </TallCard>
+        ) : <div />}
+        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={440}>
+          <FollowupBlock
+            todayCount={d.todayFollowups}
+            overdueCount={d.overdueFollowups}
+            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
+            followups={d.followups || []}
+          />
+        </Card>
+      </div>
+
+      {/* Recent Orders — fixed height, internal scroll */}
+      <div style={{ marginBottom: 14 }}>
+        <Card title="📦 Recent Orders" sub="Latest order book entries" height={360} noBodyPad>
+          {!(d.recentOrders?.length) ? <Empty /> : (
+            <table className="rd-table" style={{ width: "100%" }}>
+              <thead>
+                <tr><th>Order No</th><th>Customer</th><th>Segment</th><th>Amount</th><th>Status</th><th>Date</th></tr>
+              </thead>
+              <tbody>
+                {d.recentOrders.map((o, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 700, color: "#1d4ed8", fontFamily: "monospace" }}>{o.orderBookNo}</td>
+                    <td className="name-cell">{o.customerName || "—"}</td>
+                    <td style={{ color: "#64748b" }}>{[o.groupName, o.subGroupName].filter(Boolean).join(" / ") || "—"}</td>
+                    <td style={{ color: "#059669", fontWeight: 700 }}>{fmtMoney(o.totalAmount)}</td>
+                    <td>{statusBadge(o.status)}</td>
+                    <td>{fmtDate(o.orderDate)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   MANAGER DASHBOARD
+   Handles: MANAGER, SALES_MANAGER, BD_MANAGER + any manager variant
+═══════════════════════════════════════════════════════════════════════════════ */
+const ManagerDashboard = () => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/dashboard/sales-manager")
+      .then(res => { if (res.success) setD(res.data); else setErr(res.message); })
+      .catch(e => setErr(e.message));
+    // Fetch tasks
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      const u = raw ? JSON.parse(raw)?.user : null;
+      if (u?.id) {
+        apiFetch(`/tasks?userId=${u.id}&status=Pending&size=8&page=1`)
+          .then(res => { const items = res.data || res.tasks || []; setTasks(items.slice(0, 8)); })
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  if (!d && !err) return <Spinner />;
+  if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
+
+  const kpis = [
+    { label: "Team Leads",      value: fmtNum(d.myLeads),          sub: "Total in pipeline",           accent: "#3b82f6", iconBg: "#eff6ff", icon: "📋" },
+    { label: "Active",          value: fmtNum(d.activeLeads),      sub: "In progress",                 accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
+    { label: "Closed Won",      value: fmtNum(d.closedWon),        sub: `${d.conversionRate}% conv.`,  accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
+    { label: "Team Revenue",    value: fmtMoney(d.revenue),        sub: "From closed deals",           accent: "#059669", iconBg: "#ecfdf5", icon: "💰" },
+    { label: "Proposals",       value: fmtNum(d.myProposals),      sub: `${fmtNum(d.acceptedProposals)} accepted`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📝" },
+    { label: "In Discussion",   value: fmtNum(d.inDiscussion),     sub: "Active deals",                accent: "#6366f1", iconBg: "#eef2ff", icon: "🤝" },
+    { label: "Pending FU",      value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
+    { label: "Today's FUs",     value: fmtNum(d.todayFollowups),   sub: "Due today",                   accent: "#ec4899", iconBg: "#fdf2f8", icon: "📅" },
+  ];
+
+  return (
+    <div>
+      <div className="rd-kpi-grid rd-kpi-grid-8">
+        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+      </div>
+
+      {/* Row 1: Monthly chart + Pipeline side by side */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <Card title="📈 Team Monthly Leads" sub="Last 6 months" height={260}>
+          <MiniBarChart data={d.monthlyLeads || []} color="#8b5cf6" />
+        </Card>
+        <Card title="🔀 Team Lead Funnel" sub="Stage breakdown" height={260}>
+          <Funnel stages={[
+            { label: "Total",         value: d.myLeads       || 0 },
+            { label: "Contacted",     value: d.contacted     || 0 },
+            { label: "In Discussion", value: d.inDiscussion  || 0 },
+            { label: "Proposals",     value: d.myProposals   || 0 },
+            { label: "Closed Won",    value: d.closedWon     || 0 },
+          ]} />
+        </Card>
+      </div>
+
+      {/* Row 2: Team Performance + Follow-up Reminders */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <TallCard title="🏆 Your Team's Performance" sub="All team members under you">
+          <TeamTable members={d.teamMembers || []} />
+        </TallCard>
+        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={440}>
+          <FollowupBlock
+            todayCount={d.todayFollowups}
+            overdueCount={d.overdueFollowups}
+            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
+            followups={d.followups || []}
+          />
+        </Card>
+      </div>
+
+      {/* Row 3: Recent leads + Tasks */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <Card title="📋 Recent Team Leads" sub="Latest leads in your team" height={360} noBodyPad>
+          <LeadsTable leads={d.leads || []} emptyMsg="No leads assigned yet" />
+        </Card>
+        <Card title="✅ My Pending Tasks" height={360}>
+          <TaskList tasks={tasks} />
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   BD EXECUTIVE DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════ */
+const BDExecutiveDashboard = () => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/dashboard/bd")
+      .then(res => { if (res.success) setD(res.data); else setErr(res.message); })
+      .catch(e => setErr(e.message));
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      const u = raw ? JSON.parse(raw)?.user : null;
+      if (u?.id) {
+        apiFetch(`/tasks?userId=${u.id}&status=Pending&size=8&page=1`)
+          .then(res => { setTasks((res.data || res.tasks || []).slice(0, 8)); })
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  if (!d && !err) return <Spinner />;
+  if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
+
+  const kpis = [
+    { label: "BD Leads",        value: fmtNum(d.totalLeads),    sub: "Assigned to me as BD",           accent: "#3b82f6", iconBg: "#eff6ff", icon: "📂" },
+    { label: "Active",          value: fmtNum(d.activeLeads),   sub: "In my pipeline",                 accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
+    { label: "Closed Won",      value: fmtNum(d.closedWon),     sub: `${d.conversionRate}% conv.`,     accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
+    { label: "In Discussion",   value: fmtNum(d.inDiscussion),  sub: "Active deals",                   accent: "#6366f1", iconBg: "#eef2ff", icon: "🤝" },
+    { label: "Proposals Sent",  value: fmtNum(d.proposalsSent), sub: `${fmtNum(d.acceptedProposals)} accepted`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📋" },
+    { label: "My Revenue",      value: fmtMoney(d.revenue),     sub: "From closed deals",              accent: "#059669", iconBg: "#ecfdf5", icon: "💰" },
+    { label: "Pending FU",      value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
+    { label: "Today's FUs",     value: fmtNum(d.todayFollowups),sub: "Due today",                      accent: "#ec4899", iconBg: "#fdf2f8", icon: "📅" },
+  ];
+
+  return (
+    <div>
+      <div className="rd-kpi-grid rd-kpi-grid-8">
+        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+      </div>
+
+      {/* Row 1: Leads + Funnel */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <Card title="📋 My Lead Conversions" sub="Leads where I am the BD" height={340} noBodyPad>
+          <LeadsTable leads={d.leads || []} emptyMsg="No BD leads assigned yet" />
+        </Card>
+        <Card title="🔀 My Conversion Funnel" height={340}>
+          <Funnel stages={[
+            { label: "BD Leads",      value: d.totalLeads        || 0 },
+            { label: "In Discussion", value: d.inDiscussion      || 0 },
+            { label: "Proposals",     value: d.proposalsSent     || 0 },
+            { label: "Accepted",      value: d.acceptedProposals || 0 },
+            { label: "Closed Won",    value: d.closedWon         || 0 },
+          ]} />
+        </Card>
+      </div>
+
+      {/* Row 2: Follow-up Reminders + Proposals + Tasks — all equal height */}
+      <div className="rd-row rd-row-3" style={{ marginBottom: 14 }}>
+        <Card title="⏰ Follow-up Reminders" sub="Your pending actions" height={420}>
+          <FollowupBlock
+            todayCount={d.todayFollowups}
+            overdueCount={d.overdueFollowups}
+            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
+            followups={d.followups || []}
+          />
+        </Card>
+        <Card title="📝 My Proposals" height={420} noBodyPad>
+          <ProposalsTable proposals={d.proposals || []} />
+        </Card>
+        <Card title="✅ My Pending Tasks" height={420}>
+          <TaskList tasks={tasks} />
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   TELECALLER DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════ */
+const TelecallerDashboard = () => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/dashboard/telecaller")
+      .then(res => { if (res.success) setD(res.data); else setErr(res.message); })
+      .catch(e => setErr(e.message));
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      const u = raw ? JSON.parse(raw)?.user : null;
+      if (u?.id) {
+        apiFetch(`/tasks?userId=${u.id}&status=Pending&size=8&page=1`)
+          .then(res => { setTasks((res.data || res.tasks || []).slice(0, 8)); })
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  if (!d && !err) return <Spinner />;
+  if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
+
+  const tcBadge = (status) => {
+    if (!status) return <span className="rd-badge rd-badge-gray">Not Called</span>;
+    const map = {
+      "INTERESTED":     <span className="rd-badge rd-badge-green">Interested</span>,
+      "NOT_INTERESTED": <span className="rd-badge rd-badge-red">Not Interested</span>,
+      "NOT_RESPONDED":  <span className="rd-badge rd-badge-yellow">Not Responded</span>,
+      "NEW":            <span className="rd-badge rd-badge-indigo">New</span>,
+      "PENDING":        <span className="rd-badge rd-badge-indigo">Pending</span>,
+    };
+    return map[status.toUpperCase()] || <span className="rd-badge rd-badge-gray">{status}</span>;
+  };
+
+  const pct = d.total > 0 ? Math.round((d.interested / d.total) * 100) : 0;
+
+  /* Compact stat pill — replaces full KpiCard for telecaller */
+  const StatPill = ({ icon, label, value, accent, bg }) => (
+    <div style={{
+      background: "#fff", borderRadius: 8, padding: "10px 14px",
+      border: `1px solid #f1f5f9`, borderTop: `3px solid ${accent}`,
+      display: "flex", alignItems: "center", gap: 10, minWidth: 0,
+      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+    }}>
+      <div style={{ width: 28, height: 28, borderRadius: 6, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>{icon}</div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{value}</div>
+        <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 2, whiteSpace: "nowrap" }}>{label}</div>
       </div>
     </div>
   );
 
-  if (!data) return null;
+  const CARD_HEIGHT = 440; // single consistent height for all 3 bottom cards
 
   return (
-    <div className="dashboard-home-container" style={{maxWidth:1400}}>
-      {endpoint==='admin'         && <AdminDashboard   data={data} userName={userName}/>}
-      {endpoint==='sales-manager' && <ManagerDashboard data={data} userName={userName}/>}
-      {endpoint==='bd'            && <BdDashboard      data={data} userName={userName}/>}
-      {endpoint==='telecaller'    && <TcDashboard      data={data} userName={userName}/>}
-      {endpoint==='generic'       && <GenericDashboard data={data} tasks={tasks} userName={userName} role={role}/>}
+    <div>
+
+      {/* ── Compact KPI strip (horizontal pills, not tall cards) ── */}
+      <div className="rd-tc-kpi-strip">
+        <StatPill icon="📋" label="Assigned"       value={fmtNum(d.total)}          accent="#3b82f6" bg="#eff6ff" />
+        <StatPill icon="📞" label="Called"          value={fmtNum(d.called)}         accent="#8b5cf6" bg="#f5f3ff" />
+        <StatPill icon="🟢" label="Interested"      value={fmtNum(d.interested)}     accent="#10b981" bg="#ecfdf5" />
+        <StatPill icon="🔴" label="Not Interested"  value={fmtNum(d.notInterested)}  accent="#ef4444" bg="#fef2f2" />
+        <StatPill icon="⏳" label="No Response"     value={fmtNum(d.notResponded)}   accent="#f59e0b" bg="#fffbeb" />
+        <StatPill icon="🆕" label="Pending"         value={fmtNum(d.pending)}        accent="#6366f1" bg="#eef2ff" />
+        <StatPill icon="🤝" label="Handed to BD"    value={fmtNum(d.handedOff)}      accent="#06b6d4" bg="#ecfeff" />
+        <StatPill icon="📅" label="Today's FUs"     value={fmtNum(d.todayFollowups)} accent="#ec4899" bg="#fdf2f8" />
+        <StatPill icon="⚠️" label="Overdue FUs"     value={fmtNum(d.overdueFollowups)} accent="#dc2626" bg="#fef2f2" />
+      </div>
+
+      {/* ── Interest rate bar (compact, inline) ── */}
+      {d.total > 0 && (
+        <div className="rd-tc-interest-bar">
+          <div className="rd-tc-interest-left">
+            <span style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>📊 Interest Rate</span>
+            <div className="rd-tc-progress-track">
+              <div className="rd-tc-progress-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+            </div>
+          </div>
+          <div className="rd-tc-interest-right">
+            <span style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{pct}%</span>
+            <span style={{ fontSize: 11, color: "#64748b" }}>interest rate</span>
+          </div>
+          <div className="rd-tc-interest-legend">
+            <span style={{ color: "#059669" }}>● {fmtNum(d.interested)} interested</span>
+            <span style={{ color: "#ef4444" }}>● {fmtNum(d.notInterested)} not interested</span>
+            <span style={{ color: "#f59e0b" }}>● {fmtNum(d.notResponded)} no response</span>
+          </div>
+        </div>
+      )}
+
+      {/* ── Three equal-height cards side by side ── */}
+      <div className="rd-row rd-row-3">
+
+        {/* Lead Queue */}
+        <Card title="📋 My Lead Queue" sub="Leads assigned for calling" height={CARD_HEIGHT} noBodyPad>
+          {!(d.leads?.length) ? <Empty icon="📞" msg="No leads in your queue" /> : (
+            <table className="rd-table" style={{ width: "100%" }}>
+              <thead>
+                <tr>
+                  <th>Name</th><th>Phone</th><th>Status</th><th>BD</th><th>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {d.leads.map((l, i) => (
+                  <tr key={i}>
+                    <td className="name-cell">{l.name}</td>
+                    <td style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>{l.phone || "—"}</td>
+                    <td>{tcBadge(l.telecallerStatus)}</td>
+                    <td>{l.handedOffToBD
+                      ? <span className="rd-badge rd-badge-green" style={{ fontSize: 10 }}>{l.bdAssigneeName || "✓"}</span>
+                      : <span style={{ color: "#94a3b8", fontSize: 11 }}>—</span>}
+                    </td>
+                    <td style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDate(l.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Card>
+
+        {/* Follow-up Reminders */}
+        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={CARD_HEIGHT}>
+          <FollowupBlock
+            todayCount={d.todayFollowups}
+            overdueCount={d.overdueFollowups}
+            upcomingCount={0}
+            followups={d.followups || []}
+          />
+        </Card>
+
+        {/* Tasks */}
+        <Card title="✅ My Tasks" sub="Pending tasks" height={CARD_HEIGHT}>
+          <TaskList tasks={tasks} />
+        </Card>
+
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   GENERIC DASHBOARD
+   Shown for ALL other roles: Procurement, Accounts, HR, custom roles, etc.
+   Never shows "empty" — always shows meaningful data
+═══════════════════════════════════════════════════════════════════════════════ */
+const GenericDashboard = ({ role }) => {
+  const [d, setD] = useState(null);
+  const [err, setErr] = useState(null);
+  const [tasks, setTasks] = useState([]);
+
+  useEffect(() => {
+    apiFetch("/dashboard/generic")
+      .then(res => { if (res.success) setD(res.data); else setErr(res.message); })
+      .catch(e => setErr(e.message));
+    try {
+      const raw = localStorage.getItem(USER_KEY);
+      const u = raw ? JSON.parse(raw)?.user : null;
+      if (u?.id) {
+        apiFetch(`/tasks?userId=${u.id}&status=Pending&size=8&page=1`)
+          .then(res => { setTasks((res.data || res.tasks || []).slice(0, 8)); })
+          .catch(() => {});
+      }
+    } catch {}
+  }, []);
+
+  if (!d && !err) return <Spinner />;
+  if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
+
+  const hasLeads   = (d.myLeads || 0) > 0 || (d.activeLeads || 0) > 0;
+  const isL3       = d.levelOrder === 3;
+
+  const pendingFU  = d.pendingFollowups || 0;
+  const overdueFU  = d.overdueFollowups || 0;
+  const todayFU    = d.todayFollowups   || 0;
+  const upcomingFU = Math.max(0, pendingFU - overdueFU - todayFU);
+
+  const pendingTasks  = tasks.filter(t => t.status === "Pending" || t.status === "In Progress").length;
+  const overdueTasks  = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "Completed").length;
+
+  const kpis = [
+    { label: "Pending Follow-ups", value: fmtNum(pendingFU),  sub: `${fmtNum(overdueFU)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
+    { label: "Today's FUs",        value: fmtNum(todayFU),    sub: "Due today",                    accent: "#f59e0b", iconBg: "#fffbeb", icon: "📅" },
+    { label: "My Tasks",           value: fmtNum(tasks.length),sub: `${fmtNum(pendingTasks)} pending`, accent: "#3b82f6", iconBg: "#eff6ff", icon: "📋" },
+    { label: "Overdue Tasks",      value: fmtNum(overdueTasks),sub: "Need attention",              accent: "#dc2626", iconBg: "#fef2f2", icon: "⚠️" },
+    ...(hasLeads ? [
+      { label: "My Leads",         value: fmtNum(d.myLeads),   sub: `${fmtNum(d.closedWon)} won`, accent: "#059669", iconBg: "#ecfdf5", icon: "🎯" },
+      { label: "Active Leads",     value: fmtNum(d.activeLeads),sub: "In pipeline",               accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
+      { label: "My Proposals",     value: fmtNum(d.myProposals),sub: "All proposals",             accent: "#6366f1", iconBg: "#eef2ff", icon: "📝" },
+    ] : []),
+  ];
+
+  return (
+    <div>
+      <div className="rd-kpi-grid rd-kpi-grid-8">
+        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+      </div>
+
+      {/* L3 managers: show team performance */}
+      {isL3 && (d.teamMembers || []).length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <TallCard title="🏆 Your Team's Performance" sub="Performance of team members under you">
+            <TeamTable members={d.teamMembers} />
+          </TallCard>
+        </div>
+      )}
+
+      {/* Row: Follow-ups + Tasks */}
+      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+        <Card title="⏰ Follow-up Reminders" sub="Your pending follow-up actions" height={420}>
+          <FollowupBlock
+            todayCount={todayFU}
+            overdueCount={overdueFU}
+            upcomingCount={upcomingFU}
+            followups={d.followups || []}
+          />
+        </Card>
+        <Card title="✅ My Pending Tasks" sub="Tasks assigned to you" height={420}>
+          <TaskList tasks={tasks} />
+        </Card>
+      </div>
+
+      {/* Leads section if applicable */}
+      {hasLeads && (
+        <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
+          <Card title="📋 My Recent Leads" height={340} noBodyPad>
+            <LeadsTable leads={d.leads || []} />
+          </Card>
+          <Card title="📊 My Performance" height={340}>
+            <Funnel stages={[
+              { label: "My Leads",   value: d.myLeads     || 0 },
+              { label: "Active",     value: d.activeLeads || 0 },
+              { label: "Proposals",  value: d.myProposals || 0 },
+              { label: "Closed Won", value: d.closedWon   || 0 },
+            ]} />
+            <div style={{ display: "flex", gap: 16, marginTop: 20 }}>
+              <div style={{ flex: 1, textAlign: "center", padding: 12, background: "#f8fafc", borderRadius: 10 }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#059669" }}>
+                  {d.myLeads > 0 ? Math.round(((d.closedWon || 0) / d.myLeads) * 100) : 0}%
+                </div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Conversion Rate</div>
+              </div>
+              <div style={{ flex: 1, textAlign: "center", padding: 12, background: "#f8fafc", borderRadius: 10 }}>
+                <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6" }}>{fmtNum(d.myProposals)}</div>
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Proposals Made</div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Empty state for roles with no relevant data at all */}
+      {!hasLeads && !tasks.length && !pendingFU && (
+        <div style={{ marginBottom: 20 }}>
+          <Card title="👋 Getting Started" height={200}>
+            <div style={{ textAlign: "center", padding: "20px 0", color: "#64748b" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🌟</div>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Welcome to your dashboard!</div>
+              <div style={{ fontSize: 13 }}>Your activity will show up here as you start working in the system.</div>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   ROOT — picks layout by role
+═══════════════════════════════════════════════════════════════════════════════ */
+export default function RoleDashboard() {
+  const { user, loading: authLoading } = useContext(AuthContext);
+
+  if (authLoading) return <div className="rd-container"><Spinner /></div>;
+  if (!user) return (
+    <div className="rd-container">
+      <div className="rd-empty"><div className="rd-empty-icon">🔒</div>Please log in to view your dashboard.</div>
+    </div>
+  );
+
+  const role       = user.role || "";
+  const normalized = normalizeRole(role);
+  const rs         = roleBadgeStyle(role);
+  const h          = new Date().getHours();
+  const greeting   = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+  const name       = user.fullName || user.name || user.username || "there";
+
+  const titleMap = {
+    admin:      "Company Overview",
+    manager:    "Team Dashboard",
+    bd:         "BD Dashboard",
+    telecaller: "Calling Dashboard",
+    generic:    "My Dashboard",
+  };
+
+  const subtitleMap = {
+    admin:      "Full company overview — everything at a glance",
+    manager:    "Your team is counting on you — lead them to success!",
+    bd:         "Your leads, your targets — let's close them today! 💪",
+    telecaller: "Every call is a chance — dial with purpose! 📞",
+    generic:    getDailyQuote(),
+  };
+
+  const renderView = () => {
+    if (normalized === "admin")      return <SuperAdminDashboard />;
+    if (normalized === "manager")    return <ManagerDashboard />;
+    if (normalized === "bd")         return <BDExecutiveDashboard />;
+    if (normalized === "telecaller") return <TelecallerDashboard />;
+    return <GenericDashboard role={role} />;
+  };
+
+  return (
+    <div className="rd-container">
+      {/* ── Header greeting ── */}
+      <div className="rd-greeting-banner">
+        <div className="rd-greeting-left">
+          <div className="rd-greeting-time">{greeting},</div>
+          <div className="rd-greeting-name">{name} 👋</div>
+          <div className="rd-greeting-sub">
+            <span className="rd-role-badge" style={{ ...rs, marginRight: 8 }}>{roleFmt(role)}</span>
+            {subtitleMap[normalized]}
+          </div>
+        </div>
+        <div className="rd-greeting-quote">
+          <span className="rd-quote-mark">"</span>
+          {getDailyQuote()}
+        </div>
+        <div className="rd-greeting-meta">
+          <div className="rd-greeting-date">
+            {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+          </div>
+          <div className="rd-greeting-title">{titleMap[normalized]}</div>
+        </div>
+      </div>
+
+      {renderView()}
     </div>
   );
 }

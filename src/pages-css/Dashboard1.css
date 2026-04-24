@@ -1,0 +1,519 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Dashboard.css — ISTL CRM  (complete rewrite)
+   Key features:
+     - Fixed-height section cards with internal overflow scroll
+     - Beautiful greeting banner
+     - Consistent KPI grid
+     - All blocks fixed — no layout shifts when data grows
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Root container ─────────────────────────────────────────────────────────── */
+.db-root {
+  padding: 20px 24px 40px;
+  max-width: 1440px;
+  background: #f8fafc;
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* ── Greeting Banner ─────────────────────────────────────────────────────────── */
+.db-greeting-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 60%, #3b82f6 100%);
+  border-radius: 14px;
+  padding: 20px 28px;
+  margin-bottom: 20px;
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.25);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.db-greeting-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.db-greeting-time {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.db-greeting-name {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.db-greeting-sub {
+  font-size: 13px;
+  opacity: 0.85;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 2px;
+  flex-wrap: wrap;
+}
+
+.db-role-tag {
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 20px;
+  padding: 1px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.db-greeting-quote {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 10px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-style: italic;
+  max-width: 360px;
+  line-height: 1.5;
+  opacity: 0.95;
+  position: relative;
+}
+
+.db-quote-mark {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: -4px;
+  margin-right: 2px;
+  opacity: 0.6;
+}
+
+/* ── KPI Grid ──────────────────────────────────────────────────────────────── */
+.db-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.db-kpi-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  border-left-width: 4px;
+  border-left-style: solid;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: default;
+}
+
+.db-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.db-kpi-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.db-kpi-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.1;
+}
+
+.db-kpi-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.db-kpi-sub {
+  font-size: 10.5px;
+  color: #6b7280;
+}
+
+.db-kpi-trend {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── Section card (FIXED HEIGHT + inner scroll) ───────────────────────────── */
+.db-section {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* clip content to fixed height */
+}
+
+.db-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  flex-shrink: 0; /* header never shrinks */
+}
+
+.db-section-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.db-section-badge {
+  background: #eff6ff;
+  color: #1e40af;
+  border-radius: 9999px;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.db-section-body {
+  flex: 1;
+  overflow-y: auto; /* ← internal scroll when content overflows */
+  overflow-x: auto;
+  padding: 10px 14px 12px;
+  min-height: 0;
+}
+
+/* Custom scrollbar inside sections */
+.db-section-body::-webkit-scrollbar { width: 4px; height: 4px; }
+.db-section-body::-webkit-scrollbar-track { background: transparent; }
+.db-section-body::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.db-section-body::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* ── Layout rows ───────────────────────────────────────────────────────────── */
+.db-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.db-col-2 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────────── */
+.db-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.db-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.db-table thead tr {
+  border-bottom: 2px solid #f1f5f9;
+}
+
+.db-table th {
+  padding: 6px 10px;
+  color: #6b7280;
+  font-weight: 600;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  background: #f8fafc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.db-table tbody tr {
+  border-bottom: 1px solid #f8fafc;
+  transition: background 0.1s;
+}
+
+.db-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.db-table td {
+  padding: 8px 10px;
+  color: #374151;
+  vertical-align: middle;
+}
+
+.db-empty {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+/* ── Follow-up list ────────────────────────────────────────────────────────── */
+.db-followup-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.db-followup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left-width: 3px;
+  border-left-style: solid;
+  gap: 8px;
+}
+
+.db-followup-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.db-followup-name {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-followup-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+/* ── Task list ─────────────────────────────────────────────────────────────── */
+.db-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.db-task-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border-left-width: 3px;
+  border-left-style: solid;
+  gap: 10px;
+}
+
+.db-task-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.db-task-title {
+  font-weight: 600;
+  font-size: 12.5px;
+  color: #111827;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-task-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+}
+
+.db-tag {
+  background: #f3f4f6;
+  color: #6b7280;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+/* ── Bar chart ─────────────────────────────────────────────────────────────── */
+.db-barchart {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  height: 120px;
+  padding: 0 4px 4px;
+}
+
+.db-bar-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  height: 100%;
+  justify-content: flex-end;
+}
+
+.db-bar-val {
+  font-size: 10px;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.db-bar {
+  width: 100%;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(to top, #2563eb, #60a5fa);
+  min-height: 3px;
+  transition: height 0.4s ease;
+}
+
+.db-bar-label {
+  font-size: 9px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+/* ── Pipeline ──────────────────────────────────────────────────────────────── */
+.db-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.db-pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.db-pipeline-bar-wrap {
+  height: 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.db-pipeline-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.db-pipeline-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.db-pipeline-label {
+  font-size: 12px;
+  color: #374151;
+}
+
+.db-pipeline-count {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* ── Progress card ─────────────────────────────────────────────────────────── */
+.db-progress-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 14px 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+  margin-bottom: 12px;
+}
+
+.db-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.db-progress-track {
+  height: 10px;
+  background: #f1f5f9;
+  border-radius: 5px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.db-progress-fill {
+  height: 100%;
+  border-radius: 5px;
+  background: linear-gradient(to right, #059669, #34d399);
+  transition: width 0.5s ease;
+}
+
+.db-progress-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* ── Skeleton animation ────────────────────────────────────────────────────── */
+.db-skel {
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+  background-size: 200% 100%;
+  animation: db-shimmer 1.4s infinite;
+}
+
+@keyframes db-shimmer {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* ── Responsive ────────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  .db-row-2 {
+    grid-template-columns: 1fr;
+  }
+  .db-greeting-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .db-greeting-quote {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .db-root { padding: 12px 14px 24px; }
+  .db-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .db-kpi-value { font-size: 1.2rem; }
+  .db-greeting-name { font-size: 18px; }
+}
+
+/* ── Legacy dashboard-home-container from old CSS (keep compatibility) ──────── */
+.dashboard-home-container {
+  padding: 24px;
+  max-width: 1440px;
+  background: #f8fafc;
+  min-height: 100vh;
+  box-sizing: border-box;
+}

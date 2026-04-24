@@ -32,6 +32,23 @@ const DEFAULT_PROPOSAL_TEMPLATE = {
   systemPricing: [],
   bomItems: [],
 };
+// Unified status helper - module-level so all components can use it
+// Priority: main lead.status always wins if it is Closed Won / Closed Lost
+// (e.g. NOT_INTERESTED with no follow-up → backend sets status="Closed Lost", show that)
+// Otherwise, if telecaller has set a status, surface it as the display status.
+const getUnifiedStatus = (lead) => {
+  if (!lead) return 'New';
+  const s  = lead.status || 'New';
+  const tc = lead.telecallerStatus;
+  // Closed Won / Closed Lost always take final precedence
+  if (s === 'Closed Won' || s === 'Closed Lost') return s;
+  // Telecaller statuses surface when main status hasn't moved past "New"
+  if (tc === 'INTERESTED')     return 'Interested';
+  if (tc === 'NOT_INTERESTED') return 'Not Interested';
+  if (tc === 'NOT_RESPONDED')  return 'Not Responded';
+  return s;
+};
+
 const LeadFollowupsOverviewSnippet = ({ leadId, onGoToFollowups }) => {
   const [data, setData] = React.useState(null);
 
@@ -723,6 +740,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const getStatusClass = s => ({
     'New': 'leads-enquiries-badge-new', 'Contacted': 'leads-enquiries-badge-contacted', 'In Discussion': 'leads-enquiries-badge-discussion',
     'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost',
+    'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost', 'Not Responded': 'leads-enquiries-badge-default',
   }[s] || 'leads-enquiries-badge-default');
 
   const getPriorityClass = p => ({ 'High': 'leads-enquiries-badge-high', 'Medium': 'leads-enquiries-badge-medium', 'Low': 'leads-enquiries-badge-low' }[p] || 'leads-enquiries-badge-default');
@@ -792,7 +810,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         </div>
         <div className="ld-hero-badges">
           <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
-          <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>{lead.status}</span>
+          <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>{getUnifiedStatus(lead)}</span>
         </div>
         <div className="ld-hero-actions">
           {permissions.CREATE && (
@@ -909,7 +927,6 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                     ['Telecaller', lead.telecallerName || lead.assignedToName],
                     ['BD Executive', lead.bdAssignedToName],
                     ['BD Assigned At', lead.bdAssignedAt],
-                    ['TC Status', lead.telecallerStatus],
                   ].filter(([, v]) => v).map(([l, v]) => (
                     <div className="ld-field-row" key={l}>
                       <span className="ld-field-label">{l}</span>
@@ -1402,12 +1419,12 @@ const isFirstFilterRender = useRef(true);
   setError(null);
   try {
     const filterBody = {
-      searchTerm: search    || null,               // ← param, NOT searchTerm
-      status:     status   !== 'All' ? status   : null,  // ← param, NOT statusFilter
-      priority:   priority !== 'All' ? priority : null,  // ← param, NOT priorityFilter
-      source:     source   !== 'All' ? source   : null,  // ← param, NOT sourceFilter
-      groupName:    group    || null,              // ← param, NOT groupName
-      subGroupName: subGroup || null,              // ← param, NOT subGroupName
+      searchTerm:   search   || null,
+      status:       status   !== 'All' ? status : null,
+      priority:     priority !== 'All' ? priority : null,
+      source:       source   !== 'All' ? source   : null,
+      groupName:    group    || null,
+      subGroupName: subGroup || null,
     };
 
     const data = await fetchWithHeaders(
@@ -1635,7 +1652,7 @@ useEffect(() => {
   };
 
   // ── Badge helpers ─────────────────────────────────────────────────
-  const getStatusClass = s => ({ 'New': 'leads-enquiries-badge-new', 'Contacted': 'leads-enquiries-badge-contacted', 'In Discussion': 'leads-enquiries-badge-discussion', 'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost' }[s] || 'leads-enquiries-badge-default');
+  const getStatusClass = s => ({ 'New': 'leads-enquiries-badge-new', 'Contacted': 'leads-enquiries-badge-contacted', 'In Discussion': 'leads-enquiries-badge-discussion', 'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost', 'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost', 'Not Responded': 'leads-enquiries-badge-default' }[s] || 'leads-enquiries-badge-default');
   const getPriorityClass = p => ({ 'High': 'leads-enquiries-badge-high', 'Medium': 'leads-enquiries-badge-medium', 'Low': 'leads-enquiries-badge-low' }[p] || 'leads-enquiries-badge-default');
 
   // ── Sort icon ────────────────────────────────────────────────────
@@ -1659,7 +1676,11 @@ useEffect(() => {
       case 'assignedToName': return lead.assignedToName || '-';
       case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-';
       case 'priority': return <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>;
-      case 'status': return <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>{lead.status}</span>;
+      case 'status': return (
+        <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>
+          {getUnifiedStatus(lead)}
+        </span>
+      );
       case 'actions': return (
         <div className="leads-enquiries-action-buttons-cell">
           {canView && (
@@ -1787,8 +1808,15 @@ useEffect(() => {
         <div className="leads-enquiries-filters">
           <select className="leads-enquiries-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="All">All Status</option>
-            <option>New</option><option>Contacted</option><option>In Discussion</option>
-            <option>Proposal Sent</option><option>Closed Won</option><option>Closed Lost</option>
+            <option>New</option>
+            <option>Interested</option>
+            <option>Not Interested</option>
+            <option>Not Responded</option>
+            <option>Contacted</option>
+            <option>In Discussion</option>
+            <option>Proposal Sent</option>
+            <option>Closed Won</option>
+            <option>Closed Lost</option>
           </select>
           <select className="leads-enquiries-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
             <option value="All">All Priority</option><option>High</option><option>Medium</option><option>Low</option>
@@ -1882,7 +1910,7 @@ useEffect(() => {
                     <div className="leads-enquiries-card-id">{lead.leadCode}</div>
                     <div className="leads-enquiries-card-badges">
                       <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
-                      <span className={`leads-enquiries-badge ${getStatusClass(lead.status)}`}>{lead.status}</span>
+                      <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>{getUnifiedStatus(lead)}</span>
                     </div>
                   </div>
                   <div className="leads-enquiries-card-body">
@@ -2226,8 +2254,15 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
               } : {}),
             }));
           }}>
-            <option>New</option><option>Contacted</option><option>In Discussion</option>
-            <option>Proposal Sent</option><option>Closed Won</option><option>Closed Lost</option>
+            <option>New</option>
+            <option>Interested</option>
+            <option>Not Interested</option>
+            <option>Not Responded</option>
+            <option>Contacted</option>
+            <option>In Discussion</option>
+            <option>Proposal Sent</option>
+            <option>Closed Won</option>
+            <option>Closed Lost</option>
           </select>
         </div>
         <div className="leads-enquiries-form-group">

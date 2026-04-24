@@ -24,6 +24,8 @@ export default function ClientDashboardFollowUps() {
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
   const [allLeads, setAllLeads] = useState([]);
+  const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
+  const [leadSearch, setLeadSearch] = useState('');
   const [groups, setGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
 
@@ -342,6 +344,8 @@ export default function ClientDashboardFollowUps() {
     });
     setLeads([]);
     setSubGroups([]);
+    setLeadDropdownOpen(false);
+    setLeadSearch('');
   };
 
   const resetEditForm = () => {
@@ -369,6 +373,8 @@ export default function ClientDashboardFollowUps() {
         modalSubGroupName: '',
         leadId: ''
       }));
+      setLeadSearch('');
+      setLeadDropdownOpen(false);
     }
 
     // Reset lead when subgroup changes
@@ -378,6 +384,8 @@ export default function ClientDashboardFollowUps() {
         [name]: value,
         leadId: ''
       }));
+      setLeadSearch('');
+      setLeadDropdownOpen(false);
     }
   };
 
@@ -402,7 +410,8 @@ export default function ClientDashboardFollowUps() {
     setLoading(true);
 
     try {
-      const selectedLead = allLeads.find(l => l.id === parseInt(addForm.leadId));
+      const selectedLead = leads.find(l => l.id === parseInt(addForm.leadId))
+                        || allLeads.find(l => l.id === parseInt(addForm.leadId));
 
       const scheduledAt = addForm.scheduledTime
         ? `${addForm.scheduledDate} ${addForm.scheduledTime}:00`
@@ -1020,20 +1029,175 @@ export default function ClientDashboardFollowUps() {
 
                   <div className="followup-form-group followup-form-full">
                     <label>Lead *</label>
-                    <select
-                      name="leadId"
-                      value={addForm.leadId}
-                      onChange={handleAddFormChange}
-                      required
-                      disabled={!addForm.modalGroupName}
-                    >
-                      <option value="">Select a lead</option>
-                      {leads.map(lead => (
-                        <option key={lead.id} value={lead.id}>
-                          {lead.leadCode} - {lead.name} ({lead.email})
-                        </option>
-                      ))}
-                    </select>
+                    <div style={{ position: 'relative' }}>
+                      {/* Trigger button */}
+                      <div
+                        onClick={() => {
+                          if (!addForm.modalGroupName) return;
+                          setLeadDropdownOpen(o => !o);
+                          setLeadSearch('');
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '10px 36px 10px 14px',
+                          fontSize: '14px',
+                          border: `1px solid ${leadDropdownOpen ? '#3b82f6' : '#e2e8f0'}`,
+                          borderRadius: '8px',
+                          background: !addForm.modalGroupName ? '#f8fafc' : 'white',
+                          cursor: !addForm.modalGroupName ? 'not-allowed' : 'pointer',
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          minHeight: '44px',
+                          userSelect: 'none',
+                          boxShadow: leadDropdownOpen ? '0 0 0 3px rgba(59,130,246,0.1)' : 'none',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <span style={{ color: addForm.leadId ? '#111827' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                          {addForm.leadId
+                            ? (() => {
+                                const sel = leads.find(l => String(l.id) === String(addForm.leadId));
+                                return sel
+                                  ? `${sel.leadCode} — ${sel.name}${sel.phone ? ' • ' + sel.phone : ''}`
+                                  : 'Select a lead';
+                              })()
+                            : !addForm.modalGroupName
+                              ? 'Select a group first'
+                              : leads.length === 0
+                                ? 'No leads found for this group'
+                                : '— Select a Lead —'}
+                        </span>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"
+                          style={{ flexShrink: 0, color: '#6b7280', transform: leadDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s', marginLeft: 8 }}>
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+
+                      {/* Dropdown panel */}
+                      {leadDropdownOpen && (
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                          background: 'white', border: '1.5px solid #3b82f6', borderRadius: '10px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.13)', zIndex: 9999, overflow: 'hidden'
+                        }}>
+                          {/* Search box */}
+                          <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={leadSearch}
+                              onChange={e => setLeadSearch(e.target.value)}
+                              placeholder="Search by name, code, phone, email…"
+                              onClick={e => e.stopPropagation()}
+                              style={{
+                                width: '100%', padding: '8px 12px', fontSize: '13px',
+                                border: '1px solid #e2e8f0', borderRadius: '6px',
+                                outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
+                              }}
+                            />
+                          </div>
+
+                          {/* Options list */}
+                          <div style={{ maxHeight: '260px', overflowY: 'auto' }}>
+                            {/* Clear option */}
+                            <div
+                              onClick={() => {
+                                setAddForm(prev => ({ ...prev, leadId: '' }));
+                                setLeadDropdownOpen(false);
+                                setLeadSearch('');
+                              }}
+                              style={{ padding: '9px 14px', fontSize: '13px', color: '#9ca3af', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                            >
+                              — Select a Lead —
+                            </div>
+
+                            {leads
+                              .filter(l => {
+                                if (!leadSearch) return true;
+                                const q = leadSearch.toLowerCase();
+                                return (
+                                  l.name?.toLowerCase().includes(q) ||
+                                  l.leadCode?.toLowerCase().includes(q) ||
+                                  l.phone?.includes(leadSearch) ||
+                                  l.email?.toLowerCase().includes(q) ||
+                                  l.status?.toLowerCase().includes(q)
+                                );
+                              })
+                              .map(l => {
+                                const isSelected = String(addForm.leadId) === String(l.id);
+                                return (
+                                  <div
+                                    key={l.id}
+                                    onClick={() => {
+                                      setAddForm(prev => ({ ...prev, leadId: String(l.id) }));
+                                      setLeadDropdownOpen(false);
+                                      setLeadSearch('');
+                                    }}
+                                    style={{
+                                      padding: '10px 14px', cursor: 'pointer',
+                                      background: isSelected ? '#eff6ff' : 'white',
+                                      borderLeft: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
+                                      borderBottom: '1px solid #f8fafc',
+                                    }}
+                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
+                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'white'; }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#6366f1', background: '#eef2ff', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
+                                        {l.leadCode}
+                                      </span>
+                                      <span style={{ fontWeight: 600, color: '#111827', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {l.name}
+                                      </span>
+                                      {l.status && (
+                                        <span style={{
+                                          marginLeft: 'auto', flexShrink: 0, fontSize: '11px', fontWeight: 600,
+                                          padding: '1px 7px', borderRadius: 20,
+                                          background: l.status === 'Closed Won' ? '#dcfce7' : l.status === 'Closed Lost' ? '#fee2e2' : '#f1f5f9',
+                                          color:      l.status === 'Closed Won' ? '#166534' : l.status === 'Closed Lost' ? '#991b1b' : '#475569',
+                                        }}>
+                                          {l.status}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: 3, display: 'flex', gap: 10 }}>
+                                      {l.phone && <span>📞 {l.phone}</span>}
+                                      {l.email && <span>✉️ {l.email}</span>}
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            }
+
+                            {leads.filter(l => {
+                              if (!leadSearch) return true;
+                              const q = leadSearch.toLowerCase();
+                              return l.name?.toLowerCase().includes(q) || l.leadCode?.toLowerCase().includes(q) || l.phone?.includes(leadSearch) || l.email?.toLowerCase().includes(q);
+                            }).length === 0 && (
+                              <div style={{ padding: '16px', fontSize: '13px', color: '#9ca3af', textAlign: 'center' }}>
+                                No leads match "{leadSearch}"
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer */}
+                          <div style={{ padding: '6px 14px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                            <span>{leads.length} lead{leads.length !== 1 ? 's' : ''} in this group</span>
+                            {leadSearch && <span>{leads.filter(l => l.name?.toLowerCase().includes(leadSearch.toLowerCase()) || l.leadCode?.toLowerCase().includes(leadSearch.toLowerCase())).length} match{leads.filter(l => l.name?.toLowerCase().includes(leadSearch.toLowerCase()) || l.leadCode?.toLowerCase().includes(leadSearch.toLowerCase())).length !== 1 ? 'es' : ''}</span>}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Click-outside overlay */}
+                      {leadDropdownOpen && (
+                        <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => { setLeadDropdownOpen(false); setLeadSearch(''); }} />
+                      )}
+                    </div>
+
                     {!addForm.modalGroupName && (
                       <small className="followup-help-text">Please select a group first</small>
                     )}

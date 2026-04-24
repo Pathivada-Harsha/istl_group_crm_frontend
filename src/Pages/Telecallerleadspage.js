@@ -45,6 +45,14 @@ export default function TelecallerLeadsPage() {
   const [saving,      setSaving]      = useState(false);
   const [toast,       setToast]       = useState(null);
 
+  // Follow-up modal state
+  const [followupModal,   setFollowupModal]   = useState(false);
+  const [followupDate,    setFollowupDate]    = useState('');
+  const [followupTime,    setFollowupTime]    = useState('09:00');
+  const [followupNote,    setFollowupNote]    = useState('');
+  const [followupSaving,  setFollowupSaving]  = useState(false);
+  const [pendingFULead,   setPendingFULead]   = useState(null);
+
   // Edit form state
   const [editForm, setEditForm] = useState({
     name: "", email: "", phone: "", source: "",
@@ -121,6 +129,10 @@ export default function TelecallerLeadsPage() {
 
   // ── Status modal ─────────────────────────────────────────────────────────
   const openStatusModal = (lead) => {
+    if (lead.leadStatus === "Closed Won" || lead.leadStatus === "Closed Lost") {
+      showToast(`This lead is ${lead.leadStatus} — status cannot be changed.`, "info");
+      return;
+    }
     if (lead.handedOffToBD) {
       showToast("This lead has been handed off to BD — status cannot be changed.", "info");
       return;
@@ -156,6 +168,18 @@ export default function TelecallerLeadsPage() {
     }
     setSaving(true);
     try {
+      // For NOT_INTERESTED / NOT_RESPONDED: show follow-up modal FIRST,
+      // then call the API with needsFollowUp after user decides.
+      if (newStatus === "NOT_INTERESTED" || newStatus === "NOT_RESPONDED") {
+        setSaving(false);
+        setStatusModal(false);
+        setPendingFULead({ ...selected, _pendingStatus: newStatus, _pendingReason: reason.trim() });
+        setFollowupDate('');
+        setFollowupTime('09:00');
+        setFollowupModal(true);
+        return;
+      }
+
       await api.put(`/telecaller/lead/${selected.id}/status`, {
         telecallerStatus: newStatus,
         reason:           reason.trim(),
@@ -173,6 +197,7 @@ export default function TelecallerLeadsPage() {
       });
       showToast("Status updated!", "success");
       setStatusModal(false);
+
       // Refresh selected so the detail modal shows the updated status immediately
       if (modalOpen) {
         try {
@@ -191,6 +216,10 @@ export default function TelecallerLeadsPage() {
 
   // ── Edit modal ────────────────────────────────────────────────────────────
   const openEditModal = (lead) => {
+    if (lead.leadStatus === "Closed Won" || lead.leadStatus === "Closed Lost") {
+      showToast(`This lead is ${lead.leadStatus} — it cannot be edited.`, "info");
+      return;
+    }
     if (lead.handedOffToBD) {
       showToast("This lead has been handed off to BD and cannot be edited here.", "info");
       return;
@@ -383,7 +412,7 @@ export default function TelecallerLeadsPage() {
 
       {/* ── Detail Modal ── */}
       {modalOpen && selected && (
-        <div className="tc-modal-overlay" onClick={() => setModalOpen(false)}>
+        <div className="tc-modal-overlay" >
           <div className="tc-modal" onClick={e => e.stopPropagation()}>
             <div className="tc-modal-header">
               <div>
@@ -440,7 +469,17 @@ export default function TelecallerLeadsPage() {
               <div className="tc-section-title">Lead Info</div>
               <DetailRow label="Group"    value={selected.groupName} />
               <DetailRow label="Category" value={selected.subGroupName} />
-              <DetailRow label="Status"   value={<StatusBadge status={selected.telecallerStatus} />} />
+              <DetailRow label="TC Status"  value={<StatusBadge status={selected.telecallerStatus} leadStatus={selected.leadStatus} />} />
+              {selected.leadStatus && selected.leadStatus !== "New" && (
+                <DetailRow label="Lead Status" value={
+                  <span style={{
+                    fontWeight: 600,
+                    color: selected.leadStatus === "Closed Won" ? "#059669"
+                         : selected.leadStatus === "Closed Lost" ? "#dc2626"
+                         : "#374151"
+                  }}>{selected.leadStatus}</span>
+                } />
+              )}
               {selected.capacity && (
                 <DetailRow label="Capacity" value={
                   <span className="tc-capacity-chip">
@@ -477,18 +516,23 @@ export default function TelecallerLeadsPage() {
             </div>
 
             <div className="tc-modal-footer">
-              {!selected.handedOffToBD && (
-                <>
-                  <button className="tc-btn-primary"
-                    onClick={() => { setModalOpen(false); openStatusModal(selected); }}>
-                    Update Status
-                  </button>
-                  <button className="tc-btn-edit"
-                    onClick={() => { setModalOpen(false); openEditModal(selected); }}>
-                    ✏️ Edit Details
-                  </button>
-                </>
-              )}
+              {selected.leadStatus === "Closed Won" || selected.leadStatus === "Closed Lost"
+                ? <span style={{ fontSize: 13, color: selected.leadStatus === "Closed Won" ? "#059669" : "#dc2626", fontWeight: 600 }}>
+                    🔒 This lead is {selected.leadStatus} — no further updates allowed.
+                  </span>
+                : !selected.handedOffToBD && (
+                  <>
+                    <button className="tc-btn-primary"
+                      onClick={() => { setModalOpen(false); openStatusModal(selected); }}>
+                      Update Status
+                    </button>
+                    <button className="tc-btn-edit"
+                      onClick={() => { setModalOpen(false); openEditModal(selected); }}>
+                      ✏️ Edit Details
+                    </button>
+                  </>
+                )
+              }
               <button className="tc-btn-secondary" onClick={() => setModalOpen(false)}>Close</button>
             </div>
           </div>
@@ -497,7 +541,7 @@ export default function TelecallerLeadsPage() {
 
       {/* ── Edit Lead Modal ── */}
       {editModal && selected && (
-        <div className="tc-modal-overlay" onClick={() => setEditModal(false)}>
+        <div className="tc-modal-overlay" >
           <div className="tc-modal tc-modal--edit" onClick={e => e.stopPropagation()}>
             <div className="tc-modal-header">
               <h2>✏️ Edit Lead Details</h2>
@@ -681,7 +725,7 @@ export default function TelecallerLeadsPage() {
 
       {/* ── Status Update Modal ── */}
       {statusModal && selected && (
-        <div className="tc-modal-overlay" onClick={() => setStatusModal(false)}>
+        <div className="tc-modal-overlay" >
           <div className="tc-modal tc-modal--sm" onClick={e => e.stopPropagation()}>
             <div className="tc-modal-header">
               <h2>Update Status</h2>
@@ -697,7 +741,7 @@ export default function TelecallerLeadsPage() {
                   { value: "NOT_INTERESTED", emoji: "❌", label: "Not Interested",
                     desc: "Client is not interested. A reason is required." },
                   { value: "NOT_RESPONDED",  emoji: "⏳", label: "Not Responded",
-                    desc: "No response. Lead resurfaces in 7 days." },
+                    desc: "No response. Lead resurfaces tomorrow for a retry." },
                 ].map(opt => (
                   <label key={opt.value}
                     className={`tc-status-option ${newStatus === opt.value ? "selected" : ""}`}
@@ -837,6 +881,124 @@ export default function TelecallerLeadsPage() {
           </div>
         </div>
       )}
+
+      {/* ── Follow-up Modal ── */}
+      {followupModal && pendingFULead && (
+        <div className="tc-modal-overlay" >
+          <div className="tc-modal tc-modal--sm" onClick={e => e.stopPropagation()}>
+            <div className="tc-modal-header">
+              <h2>📅 Schedule Follow-up?</h2>
+              <button className="tc-modal-close" onClick={() => setFollowupModal(false)}>✕</button>
+            </div>
+            <div className="tc-modal-body">
+              <p style={{ margin: '0 0 8px', fontWeight: 500 }}>{pendingFULead.name} · {pendingFULead.leadCode}</p>
+              <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+                Would you like to schedule a follow-up call for this lead? This is <strong>optional</strong>.
+                {pendingFULead._pendingStatus === "NOT_INTERESTED"
+                  ? " If skipped, the lead will be automatically marked as Closed Lost."
+                  : " If skipped, the lead will resurface tomorrow in your queue."}
+              </p>
+              <div className="tc-reason-field">
+                <label>Follow-up Date &amp; Time <span className="tc-req">*</span></label>
+                <div className="tc-datetime-row">
+                  <div className="tc-datetime-field">
+                    <span className="tc-datetime-icon">📅</span>
+                    <input type="date" className="tc-date-input" value={followupDate}
+                      onChange={e => setFollowupDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]} />
+                  </div>
+                  <div className="tc-datetime-field">
+                    <span className="tc-datetime-icon">🕐</span>
+                    <input type="time" className="tc-time-input" value={followupTime}
+                      onChange={e => setFollowupTime(e.target.value)} />
+                  </div>
+                </div>
+                <div className="tc-time-presets">
+                  {['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'].map(t => (
+                    <button key={t} type="button"
+                      className={`tc-time-preset ${followupTime === t ? 'active' : ''}`}
+                      onClick={() => setFollowupTime(t)}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                {followupDate && (
+                  <div className="tc-datetime-preview">
+                    📌 {new Date(`${followupDate}T${followupTime}`).toLocaleString('en-IN', {
+                      weekday: 'short', day: 'numeric', month: 'short',
+                      year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </div>
+                )}
+              </div>
+              <div className="tc-reason-field">
+                <label>Notes (optional)</label>
+                <textarea rows={2} placeholder="What to discuss on the follow-up call…"
+                  value={followupNote} onChange={e => setFollowupNote(e.target.value)} />
+              </div>
+            </div>
+            <div className="tc-modal-footer">
+              <button className="tc-btn-primary"
+                disabled={!followupDate || !followupTime || followupSaving}
+                onClick={async () => {
+                  setFollowupSaving(true);
+                  try {
+                    // 1. Submit status with needsFollowUp = true → backend sets "Not Interested"
+                    await api.put(`/telecaller/lead/${pendingFULead.id}/status`, {
+                      telecallerStatus: pendingFULead._pendingStatus,
+                      reason:           pendingFULead._pendingReason || '',
+                      needsFollowUp:    true,
+                    });
+                    // 2. Create the follow-up reminder
+                    await api.post(`/telecaller/lead/${pendingFULead.id}/followup`, {
+                      scheduledAt:  `${followupDate} ${followupTime}:00`,
+                      followupType: "Call",
+                      notes:        followupNote.trim() || null,
+                      priority:     "Medium",
+                    });
+                    showToast("Status updated & follow-up scheduled!", "success");
+                  } catch (err) {
+                    showToast(err.message || "Could not save. Please try again.", "error");
+                  } finally {
+                    setFollowupSaving(false);
+                    setFollowupModal(false);
+                    fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current);
+                    fetchStats();
+                  }
+                }}>
+                {followupSaving ? "Saving…" : "✅ Schedule Follow-up"}
+              </button>
+              <button className="tc-btn-secondary" disabled={followupSaving}
+                onClick={async () => {
+                  setFollowupSaving(true);
+                  try {
+                    // Submit status with needsFollowUp = false → backend sets "Closed Lost" for NOT_INTERESTED
+                    await api.put(`/telecaller/lead/${pendingFULead.id}/status`, {
+                      telecallerStatus: pendingFULead._pendingStatus,
+                      reason:           pendingFULead._pendingReason || '',
+                      needsFollowUp:    false,
+                    });
+                    showToast(
+                      pendingFULead._pendingStatus === "NOT_INTERESTED"
+                        ? "No follow-up — lead marked as Closed Lost."
+                        : "No follow-up — lead will resurface tomorrow.",
+                      "info"
+                    );
+                  } catch (err) {
+                    showToast(err.message || "Update failed.", "error");
+                  } finally {
+                    setFollowupSaving(false);
+                    setFollowupModal(false);
+                    fetchLeads(pageRef.current, filterRef.current, pageSizeRef.current);
+                    fetchStats();
+                  }
+                }}>
+                {followupSaving ? "Saving…" : "Skip"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -876,22 +1038,26 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
         {lead.enquiry?.slice(0, 100)}{lead.enquiry?.length > 100 ? "…" : ""}
       </p>
       <div className="tc-card-footer">
-        <StatusBadge status={lead.telecallerStatus} />
-        {lead.handedOffToBD
-          ? <span className="tc-handed-off-label">
-              🤝 BD: {lead.bdAssignedToName || "Assigned"}
+        <StatusBadge status={lead.telecallerStatus} leadStatus={lead.leadStatus} />
+        {lead.leadStatus === "Closed Won" || lead.leadStatus === "Closed Lost"
+          ? <span className="tc-handed-off-label" style={{ color: lead.leadStatus === "Closed Won" ? "#059669" : "#dc2626" }}>
+              🔒 {lead.leadStatus}
             </span>
-          : <div className="tc-card-actions">
-              <button className="tc-btn-status"
-                onClick={e => { e.stopPropagation(); onUpdateStatus(); }}>
-                Update Status
-              </button>
-              <button className="tc-btn-edit-sm"
-                onClick={e => { e.stopPropagation(); onEdit(); }}
-                title="Edit lead details">
-                ✏️
-              </button>
-            </div>
+          : lead.handedOffToBD
+            ? <span className="tc-handed-off-label">
+                🤝 BD: {lead.bdAssignedToName || "Assigned"}
+              </span>
+            : <div className="tc-card-actions">
+                <button className="tc-btn-status"
+                  onClick={e => { e.stopPropagation(); onUpdateStatus(); }}>
+                  Update Status
+                </button>
+                <button className="tc-btn-edit-sm"
+                  onClick={e => { e.stopPropagation(); onEdit(); }}
+                  title="Edit lead details">
+                  ✏️
+                </button>
+              </div>
         }
       </div>
       <div className="tc-card-viewlink" onClick={onDetail}>View Details →</div>
@@ -899,9 +1065,13 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, leadStatus }) {
   const s = status || "NEW";
   const c = STATUS_CONFIG[s] || STATUS_CONFIG.NEW;
+  // If lead became Closed Lost via NOT_INTERESTED (no follow-up), show that
+  if (s === "NOT_INTERESTED" && leadStatus === "Closed Lost") {
+    return <span className="tc-status-badge" style={{ color: "#dc2626", background: "#fef2f2" }}>Closed Lost</span>;
+  }
   return <span className="tc-status-badge" style={{ color: c.color, background: c.bg }}>{c.label}</span>;
 }
 
