@@ -17,6 +17,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+
 const BillsManagementPage = () => {
   const [bills, setBills] = useState([]);
   const [selectedBills, setSelectedBills] = useState([]);
@@ -714,7 +715,7 @@ const BillsManagementPage = () => {
         if (item.quantity > item.maxBillableQty) {
           showError(
             `Item ${i + 1}: Quantity (${item.quantity}) exceeds maximum allowed (${item.maxBillableQty}). ` +
-            `You can bill up to: Original bill qty (${item.originalBillQty || 0}) + Pending (${item.pendingQty || 0})`
+            `Max = previous qty (${item.originalBillQty || 0}) + pending (${item.pendingQty || 0})`
           );
           return;
         }
@@ -1385,15 +1386,15 @@ const BillsManagementPage = () => {
                         >
                           <Eye size={16} />
                         </button>
-                        {bill.status !== 'Paid' && (
-                          <>
-                            <button
+                        <button
                               className="procurement-bills-received-action-btn"
                               onClick={() => handleEditBill(bill)}
                               title="Edit"
                             >
                               <Edit2 size={16} />
                             </button>
+                        {bill.status !== 'Paid' && (
+                          <>
                             <button
                               className="procurement-bills-received-action-btn"
                               onClick={() => handleAddPayment(bill)}
@@ -1407,24 +1408,6 @@ const BillsManagementPage = () => {
                               title="Mark Paid"
                             >
                               <Check size={16} />
-                            </button>
-                          </>
-                        )}
-                        {bill.billFilePath && (
-                          <>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleViewFile(bill.id)}
-                              title="View File"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleDownloadFile(bill.id, bill.billFileName)}
-                              title="Download"
-                            >
-                              <Download size={16} />
                             </button>
                           </>
                         )}
@@ -1529,7 +1512,7 @@ const BillsManagementPage = () => {
 
       {/* CREATE/EDIT MODAL */}
       {showCreateEditModal && formData && (
-        <div className="bill-form-modal-overlay" onClick={() => setShowCreateEditModal(false)}>
+        <div className="bill-form-modal-overlay">
           <div className="bill-form-modal-container" onClick={(e) => e.stopPropagation()}>
             <div className="bill-form-modal-header">
               <h2>{editMode ? 'Edit Bill' : 'Create New Bill'}</h2>
@@ -1783,16 +1766,27 @@ const BillsManagementPage = () => {
                               }}
                             />
                             {item.poItemId && item.maxBillableQty != null && (() => {
-                              const max = item.maxBillableQty;
                               const entered = parseFloat(item.quantity) || 0;
-                              const pct = max > 0 ? Math.min(100, (entered / max) * 100) : 0;
+                              const original = item.originalBillQty || 0;
+                              const pending = item.pendingQty || 0;
+                              const max = original + pending;
                               const over = entered > max;
+                              const pct = max > 0 ? Math.min(100, (entered / max) * 100) : 0;
+                              // Remaining pending on PO after this bill saves
+                              // = current pending - (new qty - original qty)
+                              const pendingAfter = pending - (entered - original);
                               return (
                                 <div style={{ marginTop: 4 }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: over ? '#dc2626' : '#64748b', marginBottom: 2 }}>
-                                    <span>{entered} / {max}</span>
-                                    <span style={{ color: over ? '#dc2626' : '#15803d', fontWeight: 600 }}>
-                                      {over ? `⚠ exceeds by ${entered - max}` : `${max - entered} left`}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: 2 }}>
+                                    <span style={{ color: '#64748b' }}>
+                                      {entered} / {max}
+                                    </span>
+                                    <span style={{ fontWeight: 600, color: over ? '#dc2626' : pendingAfter <= 0 ? '#15803d' : '#0369a1' }}>
+                                      {over
+                                        ? `⚠ over by ${entered - max}`
+                                        : pendingAfter <= 0
+                                          ? '✓ fully billed'
+                                          : `${pendingAfter} pending after save`}
                                     </span>
                                   </div>
                                   <div style={{ height: 4, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
@@ -1877,9 +1871,31 @@ const BillsManagementPage = () => {
 
               {/* File Upload */}
               <div className="bill-form-section">
-                <h3 className="bill-form-section-title">Attach Bill Document</h3>
-                <div className="bill-form-field">
-                  <label className="bill-form-label">Upload Bill (PDF, PNG, JPG - Max 10MB)</label>
+                <h3 className="bill-form-section-title">Bill Document</h3>
+                {editMode && formData.billFilePath && (
+                  <div className="bill-edit-existing-file">
+                    <div className="bill-edit-existing-file-info">
+                      <FileText size={16} />
+                      <span>{formData.billFileName || 'Uploaded document'}</span>
+                      {formData.billFileSize && (
+                        <span className="bill-edit-file-size">({(formData.billFileSize / 1024).toFixed(1)} KB)</span>
+                      )}
+                    </div>
+                    <div className="bill-edit-existing-file-actions">
+                      <button
+                        type="button"
+                        className="bill-edit-file-btn bill-edit-file-btn-view"
+                        onClick={() => handleViewFile(formData.id)}
+                      >
+                        <Eye size={13} /> View File
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="bill-form-field" style={{ marginTop: editMode && formData.billFilePath ? 10 : 0 }}>
+                  <label className="bill-form-label">
+                    {editMode && formData.billFilePath ? 'Replace Document (PDF, PNG, JPG - Max 10MB)' : 'Upload Bill (PDF, PNG, JPG - Max 10MB)'}
+                  </label>
                   <input
                     className="bill-form-file-input"
                     type="file"
@@ -1888,6 +1904,9 @@ const BillsManagementPage = () => {
                   />
                   {selectedFile && (
                     <p className="bill-form-file-selected">✓ {selectedFile.name} selected</p>
+                  )}
+                  {editMode && !formData.billFilePath && !selectedFile && (
+                    <p className="bill-form-file-hint">No document uploaded yet.</p>
                   )}
                 </div>
               </div>
@@ -1922,7 +1941,7 @@ const BillsManagementPage = () => {
 
       {/* DETAIL DRAWER */}
       {showDetailDrawer && selectedBill && (
-        <div className="procurement-bills-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+        <div className="procurement-bills-received-drawer-overlay">
           <div className="procurement-bills-received-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-drawer-header">
               <div>
@@ -2082,7 +2101,7 @@ const BillsManagementPage = () => {
                 )}
               </div>
 
-              {/* Bill File */}
+              {/* Bill Document */}
               {selectedBill.billFilePath && (
                 <div className="procurement-bills-received-drawer-section">
                   <h3>Bill Document</h3>
@@ -2101,19 +2120,7 @@ const BillsManagementPage = () => {
                           className="procurement-bills-received-btn-link"
                           onClick={() => handleViewFile(selectedBill.id)}
                         >
-                          <Eye size={14} /> View
-                        </button>
-                        <button
-                          className="procurement-bills-received-btn-link bill-btn-link-green"
-                          onClick={() => handleOpenFileInTab(selectedBill.id)}
-                        >
-                          <ExternalLink size={14} /> Open in Tab
-                        </button>
-                        <button
-                          className="procurement-bills-received-btn-link bill-btn-link-purple"
-                          onClick={() => handleDownloadFile(selectedBill.id, selectedBill.billFileName)}
-                        >
-                          <Download size={14} /> Download
+                          <Eye size={14} /> View File
                         </button>
                       </div>
                     </div>
@@ -2135,6 +2142,13 @@ const BillsManagementPage = () => {
 
               {/* Action Buttons */}
               <div className="procurement-bills-received-drawer-actions">
+                <button
+                  className="procurement-bills-received-btn-secondary"
+                  onClick={() => handleEditBill(selectedBill)}
+                >
+                  <Edit2 size={18} style={{ marginRight: '8px' }} />
+                  Edit Bill
+                </button>
                 {selectedBill.status !== 'Paid' && (
                   <>
                     <button
@@ -2146,13 +2160,6 @@ const BillsManagementPage = () => {
                     >
                       <CreditCard size={18} style={{ marginRight: '8px' }} />
                       Add Payment
-                    </button>
-                    <button
-                      className="procurement-bills-received-btn-secondary"
-                      onClick={() => handleEditBill(selectedBill)}
-                    >
-                      <Edit2 size={18} style={{ marginRight: '8px' }} />
-                      Edit Bill
                     </button>
                     <button
                       className="procurement-bills-received-btn-secondary"
@@ -2180,7 +2187,7 @@ const BillsManagementPage = () => {
 
       {/* Payment Modal */}
       {showPaymentModal && paymentData && selectedBill && (
-        <div className="procurement-bills-received-modal-overlay" onClick={() => setShowPaymentModal(false)}>
+        <div className="procurement-bills-received-modal-overlay">
           <div className="procurement-bills-received-payment-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-modal-header">
               <h2>Record Payment</h2>
@@ -2303,11 +2310,6 @@ const BillsManagementPage = () => {
       {showFileViewModal && fileViewUrl && (
         <div
           className="procurement-bills-received-modal-overlay"
-          onClick={() => {
-            window.URL.revokeObjectURL(fileViewUrl);
-            setFileViewUrl(null);
-            setShowFileViewModal(false);
-          }}
         >
           <div
             className="procurement-bills-received-file-view-modal"
