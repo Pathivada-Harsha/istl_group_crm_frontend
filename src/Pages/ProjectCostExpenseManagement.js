@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Search, Download, Plus, X, Edit2, Eye, Trash2,
-  Calendar, IndianRupee, CreditCard, FileText,
+  Download, Plus, X, Edit2, Eye, Trash2,
+  IndianRupee, CreditCard, FileText,
   CheckCircle, Clock, XCircle, Briefcase,
   MapPin, Utensils, Plane, Hotel, Users,
   ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
-  History, Filter, Receipt, Wallet, DollarSign, RefreshCw
+  Receipt, RefreshCw,
 } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
@@ -20,12 +20,10 @@ import '../pages-css/ProjectCostExpenseManagement.css';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const EXPENSE_CATEGORIES = ['Travel', 'Site Visit', 'Accommodation', 'Food', 'Commission', 'Miscellaneous'];
+const EXPENSE_CATEGORIES = ['Travel', 'Site Visit', 'Accommodation', 'Food', 'Transportation', 'Labour Charges', 'Commission', 'Miscellaneous', 'Other'];
 const PAYMENT_MODES = ['Cash', 'Bank_Transfer', 'UPI', 'Card', 'Cheque'];
 const formatPaymentMode = (mode) => mode === 'Bank_Transfer' ? 'Bank Transfer' : (mode || '');
-const COMMISSION_TYPES = ['Sales', 'Referral', 'Partner'];
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
-const ADVANCE_STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected', 'Settled'];
 
 const DEFAULT_COLUMNS = [
   { key: 'expenseCode', label: 'Code', sortable: true, visible: true },
@@ -46,8 +44,10 @@ const CategoryIcon = ({ cat }) => ({
   'Site Visit': <MapPin size={14} />,
   'Accommodation': <Hotel size={14} />,
   'Food': <Utensils size={14} />,
+  'Transportation': <Briefcase size={14} />,
+  'Labour Charges': <Users size={14} />,
   'Commission': <Users size={14} />,
-  'Miscellaneous': <Briefcase size={14} />,
+  'Miscellaneous': <FileText size={14} />,
 }[cat] || <FileText size={14} />);
 
 const StatusBadge = ({ s }) => (
@@ -61,10 +61,12 @@ const ProjectCostExpenseManagement = () => {
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
+  // ── Role-based access ──────────────────────────────────────────────────────
+  const userRole = (user?.role || localStorage.getItem('userRole') || '').toLowerCase();
+  const canApprove = ['superadmin', 'super_admin', 'admin', 'accounts', 'account'].some(r => userRole.includes(r));
+
   const [expenses, setExpenses] = useState([]);
-  const [advances, setAdvances] = useState([]);
   const [stats, setStats] = useState(null);
-  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('expenses');
 
@@ -87,33 +89,30 @@ const ProjectCostExpenseManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'alert', onConfirm: null });
   const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailDrawer, setShowDetailDrawer] = useState(false);
-  const [showAdvanceModal, setShowAdvanceModal] = useState(false);
   const [showItemsModal, setShowItemsModal] = useState(false);
   const [itemsModalExpense, setItemsModalExpense] = useState(null);
-  const [selectedExpense, setSelectedExpense] = useState(null);
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewModalExpense, setViewModalExpense] = useState(null);
   const [expenseFormData, setExpenseFormData] = useState(null);
-  const [advanceFormData, setAdvanceFormData] = useState(null);
+
+  // ── Bill upload state ──────────────────────────────────────────────────────
+  const [billFile, setBillFile] = useState(null);           // File object
+  const [billUploading, setBillUploading] = useState(false);
+  const billInputRef = useRef(null);
+
+  // ── Per-item project dropdowns cache (key = item.id) ──────────────────────
+  const [itemProjects, setItemProjects] = useState({});     // { [itemId]: [{id,name}] }
+  const [itemProjectsLoading, setItemProjectsLoading] = useState({});
 
   const [modalGroups, setModalGroups] = useState([]);
   const [modalSubGroups, setModalSubGroups] = useState([]);
   const [modalProjects, setModalProjects] = useState([]);
   const [modalGroupName, setModalGroupName] = useState('');
   const [modalSubGroupName, setModalSubGroupName] = useState('');
-  const [modalProjectId, setModalProjectId] = useState('');
   const [modalDropdownLoading, setModalDropdownLoading] = useState({
     groups: false, subGroups: false, projects: false,
   });
 
-  const [advModalGroups, setAdvModalGroups] = useState([]);
-  const [advModalSubGroups, setAdvModalSubGroups] = useState([]);
-  const [advModalProjects, setAdvModalProjects] = useState([]);
-  const [advModalGroupName, setAdvModalGroupName] = useState('');
-  const [advModalSubGroupName, setAdvModalSubGroupName] = useState('');
-  const [advModalProjectId, setAdvModalProjectId] = useState('');
-  const [advModalDropdownLoading, setAdvModalDropdownLoading] = useState({
-    groups: false, subGroups: false, projects: false,
-  });
 
   const [availableUsers, setAvailableUsers] = useState([]);
 
@@ -163,81 +162,83 @@ const ProjectCostExpenseManagement = () => {
   const handleModalGroupChange = (e) => {
     const newGroupName = e.target.value;
     setModalGroupName(newGroupName);
-    setModalSubGroupName(''); setModalProjectId('');
+    setModalSubGroupName('')
     setModalSubGroups([]); setModalProjects([]);
+    setItemProjects({}); // clear all item project caches
     setExpenseFormData(prev => ({ ...prev, groupName: newGroupName, subGroupName: '', projectId: '' }));
     if (newGroupName) fetchModalSubGroups(newGroupName);
   };
 
   const handleModalSubGroupChange = (e) => {
     const newSubGroupName = e.target.value;
-    setModalSubGroupName(newSubGroupName); setModalProjectId(''); setModalProjects([]);
+    setModalSubGroupName(newSubGroupName); setModalProjects([]);
+    setItemProjects({}); // clear item project caches
     setExpenseFormData(prev => ({ ...prev, subGroupName: newSubGroupName, projectId: '' }));
-    if (modalGroupName && newSubGroupName) fetchModalProjects(modalGroupName, newSubGroupName);
+    if (modalGroupName && newSubGroupName) {
+      fetchModalProjects(modalGroupName, newSubGroupName);
+      // Load projects for all existing items
+      setTimeout(() => refreshAllItemProjects(modalGroupName, newSubGroupName), 100);
+    }
   };
 
+  // eslint-disable-next-line no-unused-vars
   const handleModalProjectChange = (e) => {
     const newProjectId = e.target.value;
-    setModalProjectId(newProjectId);
     setExpenseFormData(prev => ({ ...prev, projectId: newProjectId }));
   };
 
+  // ── Per-item project loader ────────────────────────────────────────────────
+  // When group/subgroup is set, load projects for every item dropdown
+  const loadItemProjects = async (itemId, grp, sub) => {
+    if (!grp || !sub) { setItemProjects(prev => ({ ...prev, [itemId]: [] })); return; }
+    setItemProjectsLoading(prev => ({ ...prev, [itemId]: true }));
+    try {
+      const projects = await filterApi.getProjects(grp, sub);
+      setItemProjects(prev => ({ ...prev, [itemId]: projects }));
+    } catch { /* silent */ }
+    finally { setItemProjectsLoading(prev => ({ ...prev, [itemId]: false })); }
+  };
+
+  // When group/subgroup changes in create modal, refresh all item project lists
+  const refreshAllItemProjects = (grp, sub) => {
+    if (!expenseFormData?.expenseItems) return;
+    expenseFormData.expenseItems.forEach(item => loadItemProjects(item.id, grp, sub));
+  };
+
+  // ── Bill upload handler ────────────────────────────────────────────────────
+  const handleBillUpload = async (expenseId) => {
+    if (!billFile) return null;
+    if (billFile.size > 10 * 1024 * 1024) {
+      showError('File size must not exceed 10 MB'); return null;
+    }
+    setBillUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', billFile);
+      const headers = { ...getAuthHeaders() };
+      delete headers['Content-Type']; // let browser set multipart boundary
+      const res = await fetch(`${API_BASE_URL}/project-expenses/${expenseId}/receipt`, {
+        method: 'POST', headers, credentials: 'include', body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      setBillFile(null);
+      return data.receiptUrl;
+    } catch (err) { showError('Bill upload failed: ' + err.message); return null; }
+    finally { setBillUploading(false); }
+  };
+
   // ── Modal dropdown handlers — ADVANCE ────────────────────────────────────────
-  const fetchAdvModalGroups = async () => {
-    setAdvModalDropdownLoading(prev => ({ ...prev, groups: true }));
-    try { const groups = await filterApi.getAllGroups(); setAdvModalGroups(groups); }
-    catch { showError('Failed to load groups'); }
-    finally { setAdvModalDropdownLoading(prev => ({ ...prev, groups: false })); }
-  };
-
-  const fetchAdvModalSubGroups = async (grp) => {
-    if (!grp) { setAdvModalSubGroups([]); setAdvModalProjects([]); return; }
-    setAdvModalDropdownLoading(prev => ({ ...prev, subGroups: true }));
-    try { const subGroups = await filterApi.getSubGroups(grp); setAdvModalSubGroups(subGroups); }
-    catch { showError('Failed to load sub-groups'); }
-    finally { setAdvModalDropdownLoading(prev => ({ ...prev, subGroups: false })); }
-  };
-
-  const fetchAdvModalProjects = async (grp, sub) => {
-    if (!grp || !sub) { setAdvModalProjects([]); return; }
-    setAdvModalDropdownLoading(prev => ({ ...prev, projects: true }));
-    try { const projects = await filterApi.getProjects(grp, sub); setAdvModalProjects(projects); }
-    catch { showError('Failed to load projects'); }
-    finally { setAdvModalDropdownLoading(prev => ({ ...prev, projects: false })); }
-  };
-
-  const handleAdvModalGroupChange = (e) => {
-    const v = e.target.value;
-    setAdvModalGroupName(v); setAdvModalSubGroupName(''); setAdvModalProjectId('');
-    setAdvModalSubGroups([]); setAdvModalProjects([]);
-    setAdvanceFormData(prev => ({ ...prev, groupName: v, subGroupName: '', projectId: '' }));
-    if (v) fetchAdvModalSubGroups(v);
-  };
-
-  const handleAdvModalSubGroupChange = (e) => {
-    const v = e.target.value;
-    setAdvModalSubGroupName(v); setAdvModalProjectId(''); setAdvModalProjects([]);
-    setAdvanceFormData(prev => ({ ...prev, subGroupName: v, projectId: '' }));
-    if (advModalGroupName && v) fetchAdvModalProjects(advModalGroupName, v);
-  };
-
-  const handleAdvModalProjectChange = (e) => {
-    const v = e.target.value;
-    setAdvModalProjectId(v);
-    setAdvanceFormData(prev => ({ ...prev, projectId: v }));
-  };
-
   // ── Fetch users ───────────────────────────────────────────────────────────────
   useEffect(() => {
     filterApi.getLeadsUsers().then(setAvailableUsers).catch(() => { });
   }, []);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────────
-  useEffect(() => {
+// eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => {
     fetchExpenses();
     fetchStats();
-    fetchAdvances();
-    fetchHistory();
   }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, pageSize,
     filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, sortBy, sortDir]);
 
@@ -282,92 +283,114 @@ const ProjectCostExpenseManagement = () => {
     } catch { /* silent */ }
   };
 
-  const fetchAdvances = async () => {
-    try {
-      const params = new URLSearchParams({ page: 0, size: 50 });
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId) params.append('projectId', projectId);
-      const response = await fetch(`${API_BASE_URL}/project-expenses/advances?${params}`, {
-        headers: getAuthHeaders(), credentials: 'include',
-      });
-      if (response.ok) { const d = await response.json(); setAdvances(d.content || []); }
-    } catch { /* silent */ }
-  };
 
-  const fetchHistory = async () => {
-    try {
-      const params = new URLSearchParams({ page: 0, size: 50 });
-      if (projectId) params.append('projectId', projectId);
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      const response = await fetch(`${API_BASE_URL}/project-expenses/history?${params}`, {
-        headers: getAuthHeaders(), credentials: 'include',
-      });
-      if (response.ok) { const d = await response.json(); setHistory(d.content || []); }
-    } catch { /* silent */ }
-  };
 
   // ── Add / Create Expense ──────────────────────────────────────────────────────
   const handleAddNewExpense = () => {
+    setBillFile(null);
+    setItemProjects({});
+    const initItem = { id: Date.now(), category: 'Travel', projectId: '', amount: '', paymentMode: 'UPI', description: '' };
     setExpenseFormData({
-      groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '',
+      groupName: groupName || '', subGroupName: subGroupName || '',
       tripDate: new Date().toISOString().split('T')[0],
       tripReason: '',
-      paidByUserId: '', paidByName: '',
-      commissionType: '', commissionGivenTo: '',
-      commissionPercentage: '', commissionFixedAmount: '', salesOrderRef: '',
-      expenseItems: [{ id: Date.now(), category: 'Travel', amount: '', paymentMode: 'UPI', description: '' }],
+      status: 'Approved',
+      paidByUserId: String(user?.id || ''), paidByName: user?.name || '',
+      adjustedAdvanceId: '', advanceAdjustedAmount: '',
+      expenseItems: [initItem],
     });
     setModalGroupName(groupName || '');
     setModalSubGroupName(subGroupName || '');
-    setModalProjectId(projectId || '');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     fetchModalGroups();
     if (groupName) {
       fetchModalSubGroups(groupName);
-      if (subGroupName) fetchModalProjects(groupName, subGroupName);
+      if (subGroupName) {
+        fetchModalProjects(groupName, subGroupName);
+        loadItemProjects(initItem.id, groupName, subGroupName);
+      }
     }
     setShowCreateModal(true);
   };
 
   const handleCreateExpense = async () => {
-    if (!expenseFormData.groupName || !expenseFormData.subGroupName) {
-      showError('Group and Sub-Group are required'); return;
-    }
-    if (!expenseFormData.tripDate) {
-      showError('Date is required'); return;
-    }
-    if (!expenseFormData.expenseItems?.length) {
-      showError('Add at least one expense item'); return;
-    }
+    const { groupName: grp, subGroupName: sub, tripDate, tripReason, paidByUserId, paidByName, expenseItems } = expenseFormData || {};
+    if (!grp || !sub) { showError('Group and Sub-Group are required'); return; }
+    if (!tripDate) { showError('Date is required'); return; }
+    if (!expenseItems?.length) { showError('Add at least one expense item'); return; }
+
+    // Validate every item has a project and amount
+    const missingProject = expenseItems.find(i => !i.projectId);
+    if (missingProject) { showError('Every item must have a project assigned'); return; }
+    const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
+    if (missingAmount) { showError('Every item must have a valid amount'); return; }
+
+    // ── Group items by projectId — one expense record per project ────────────
+    const byProject = {};
+    expenseItems.forEach(i => {
+      if (!byProject[i.projectId]) byProject[i.projectId] = [];
+      byProject[i.projectId].push(i);
+    });
+    const projectGroups = Object.entries(byProject); // [[projectId, [items]], ...]
+
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/project-expenses`, {
-        method: 'POST', headers: getAuthHeaders(), credentials: 'include',
-        body: JSON.stringify({
-          groupName: expenseFormData.groupName, subGroupName: expenseFormData.subGroupName,
-          projectId: expenseFormData.projectId || null, tripDate: expenseFormData.tripDate,
-          tripReason: expenseFormData.tripReason || null,
-          paidByUserId: expenseFormData.paidByUserId || null, paidByName: expenseFormData.paidByName || '',
-          commissionType: expenseFormData.commissionType || null,
-          commissionGivenTo: expenseFormData.commissionGivenTo || null,
-          commissionPercentage: expenseFormData.commissionPercentage ? parseFloat(expenseFormData.commissionPercentage) : null,
-          commissionFixedAmount: expenseFormData.commissionFixedAmount ? parseFloat(expenseFormData.commissionFixedAmount) : null,
-          salesOrderRef: expenseFormData.salesOrderRef || null,
-          expenseItems: expenseFormData.expenseItems.map(i => ({
-            category: i.category, amount: parseFloat(i.amount) || 0,
-            paymentMode: i.paymentMode, description: i.description || '',
+      const results = [];
+      for (const [pid, items] of projectGroups) {
+        const body = {
+          groupName: grp, subGroupName: sub,
+          projectId: pid,                          // one valid projectId per call
+          tripDate, tripReason: tripReason || null,
+          status: expenseFormData.status || 'Approved',
+          paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
+          paidByName: paidByName || '',
+          expenseItems: items.map(i => ({
+            category: i.category,
+            amount: parseFloat(i.amount) || 0,
+            paymentMode: i.paymentMode,
+            description: i.description || '',
           })),
-        }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      showSuccess(`${expenseFormData.expenseItems.length} expense(s) created successfully!`);
-      setShowCreateModal(false);
+        };
+        const res = await fetch(`${API_BASE_URL}/project-expenses`, {
+          method: 'POST', headers: getAuthHeaders(), credentials: 'include',
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`Failed for project ${pid}: ${errText}`);
+        }
+        const created = await res.json();
+        results.push(Array.isArray(created) ? created[0] : created);
+      }
+
+      // Upload bill to the first created expense if file selected
+      if (billFile && results[0]?.id) await handleBillUpload(results[0].id);
+
+      const projectCount = projectGroups.length;
+      const itemCount = expenseItems.length;
+      showSuccess(
+        projectCount === 1
+          ? `Expense created with ${itemCount} item(s) for 1 project`
+          : `${itemCount} item(s) split across ${projectCount} project expense records`
+      );
+      setShowCreateModal(false); setBillFile(null);
       fetchExpenses(); fetchStats();
     } catch (error) { showError(error.message || 'Failed to create expense'); }
     finally { setLoading(false); }
-  };
+  }
+
+  
+  // ── Fetch Payments ───────────────────────────────────────────────────────────
+
+
+  // ── Record single payment (from expense row button) ────────────────────────
+
+
+  // ── Bulk Payment (multiple expenses at once) ───────────────────────────────
+
+
+  // ── Bulk Advance (multi-project at once) ────────────────────────────────────
+
 
   // ── View / Edit / Update / Delete Expense ─────────────────────────────────────
   const handleViewExpense = async (expense) => {
@@ -377,68 +400,144 @@ const ProjectCostExpenseManagement = () => {
         headers: getAuthHeaders(), credentials: 'include',
       });
       if (!response.ok) throw new Error('Failed to fetch expense details');
-      setSelectedExpense(await response.json());
-      setShowDetailDrawer(true);
-    } catch (error) { showError('Failed to load expense details'); }
+      const data = await response.json();
+      setViewModalExpense(data);
+      setShowViewModal(true);
+    } catch (error) {
+      // fallback: open with existing data
+      setViewModalExpense(expense);
+      setShowViewModal(true);
+    }
     finally { setLoading(false); }
   };
 
   const handleEditExpense = (expense) => {
+    setBillFile(null);
+    setItemProjects({});
+    // Build items from expenseItems array; fall back to legacy single-item format
+    // ExpenseItemResponse from backend does NOT include projectId on each item —
+    // all items under one expense share the parent expense's projectId.
+    const parentProjectId = expense.projectId ? String(expense.projectId) : '';
+    const items = (expense.expenseItems && expense.expenseItems.length > 0)
+      ? expense.expenseItems.map(i => ({
+          id: i.id || Date.now() + Math.random(),
+          category: i.category || 'Travel',
+          projectId: i.projectId ? String(i.projectId) : parentProjectId,
+          amount: i.amount?.toString() || '',
+          paymentMode: i.paymentMode || 'UPI',
+          description: i.description || '',
+        }))
+      : [{ id: Date.now(), category: expense.category || 'Travel',
+           projectId: expense.projectId ? String(expense.projectId) : '',
+           amount: expense.amount?.toString() || '',
+           paymentMode: expense.paymentMode || 'UPI',
+           description: expense.description || '' }];
+
     setExpenseFormData({
       id: expense.id, groupName: expense.groupName || '', subGroupName: expense.subGroupName || '',
       projectId: expense.projectId || '', tripDate: expense.tripDate || '',
       visitType: expense.visitType || 'Site Visit', tripReason: expense.tripReason || '',
-      tripOutcome: expense.tripOutcome || '', paidByUserId: expense.paidByUserId || '',
+      tripOutcome: expense.tripOutcome || '', paidByUserId: expense.paidByUserId?.toString() || '',
       paidByName: expense.paidByName || '', approvedByUserId: expense.approvedByUserId || '',
       approvedByName: expense.approvedByName || '', status: expense.status || 'Pending',
-      category: expense.category || '', amount: expense.amount || '',
-      paymentMode: expense.paymentMode || '', description: expense.description || '',
+      receiptUrl: expense.receiptUrl || '',
       commissionType: expense.commissionType || '', commissionGivenTo: expense.commissionGivenTo || '',
       commissionPercentage: expense.commissionPercentage || '', commissionFixedAmount: expense.commissionFixedAmount || '',
       salesOrderRef: expense.salesOrderRef || '',
+      expenseItems: items,
     });
     setModalGroupName(expense.groupName || '');
     setModalSubGroupName(expense.subGroupName || '');
-    setModalProjectId(expense.projectId || '');
+    // No default project — each item carries its own projectId
     fetchModalGroups();
     if (expense.groupName) {
       fetchModalSubGroups(expense.groupName);
-      if (expense.subGroupName) fetchModalProjects(expense.groupName, expense.subGroupName);
+      if (expense.subGroupName) {
+        fetchModalProjects(expense.groupName, expense.subGroupName);
+        // Pre-load per-item project dropdowns
+        items.forEach(item => loadItemProjects(item.id, expense.groupName, expense.subGroupName));
+      }
     }
     setShowEditModal(true);
-  };
+  }
 
   const handleUpdateExpense = async () => {
-    if (!expenseFormData.groupName || !expenseFormData.subGroupName) {
-      showError('Group and Sub-Group are required'); return;
-    }
-    if (!expenseFormData.amount || parseFloat(expenseFormData.amount) <= 0) {
-      showError('Valid amount is required'); return;
-    }
+    const { id, groupName: grp, subGroupName: sub, tripDate, tripReason,
+            paidByUserId, paidByName, expenseItems } = expenseFormData || {};
+    if (!grp || !sub) { showError('Group and Sub-Group are required'); return; }
+    if (!expenseItems?.length) { showError('Add at least one expense item'); return; }
+
+    const missingProject = expenseItems.find(i => !i.projectId);
+    if (missingProject) { showError('Every item must have a project assigned'); return; }
+    const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
+    if (missingAmount) { showError('Every item must have a valid amount'); return; }
+
+    // Check if all items belong to the SAME project as the original expense
+    const allSameProject = expenseItems.every(i => i.projectId === expenseItems[0].projectId);
+
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/project-expenses/${expenseFormData.id}`, {
-        method: 'PUT', headers: getAuthHeaders(), credentials: 'include',
-        body: JSON.stringify({
-          groupName: expenseFormData.groupName, subGroupName: expenseFormData.subGroupName,
-          projectId: expenseFormData.projectId, category: expenseFormData.category,
-          amount: parseFloat(expenseFormData.amount), paymentMode: expenseFormData.paymentMode,
-          description: expenseFormData.description, status: expenseFormData.status,
-          tripReason: expenseFormData.tripReason, tripOutcome: expenseFormData.tripOutcome,
-        }),
-      });
-      if (!response.ok) throw new Error('Failed to update expense');
-      showSuccess('Expense updated successfully!');
-      setShowEditModal(false);
-      fetchExpenses(); fetchStats();
-      if (showDetailDrawer && selectedExpense?.id === expenseFormData.id) {
-        handleViewExpense({ id: expenseFormData.id });
-      }
-    } catch (error) { showError('Failed to update expense'); }
-    finally { setLoading(false); }
-  };
+      if (allSameProject) {
+        // Simple update — single project, use PUT on the existing expense
+        const res = await fetch(`${API_BASE_URL}/project-expenses/${id}`, {
+          method: 'PUT', headers: getAuthHeaders(), credentials: 'include',
+          body: JSON.stringify({
+            groupName: grp, subGroupName: sub,
+            projectId: expenseItems[0].projectId,
+            tripDate, tripReason: tripReason || null,
+            paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
+            paidByName: paidByName || '',
+            expenseItems: expenseItems.map(i => ({
+              category: i.category, amount: parseFloat(i.amount) || 0,
+              paymentMode: i.paymentMode, description: i.description || '',
+            })),
+          }),
+        });
+        if (!res.ok) throw new Error('Failed to update expense');
+        if (billFile) await handleBillUpload(id);
+        showSuccess('Expense updated successfully!');
+      } else {
+        // Multi-project: DELETE original, create new split records
+        await fetch(`${API_BASE_URL}/project-expenses/${id}`, {
+          method: 'DELETE', headers: getAuthHeaders(), credentials: 'include',
+        });
 
-  const handleStatusChange = (id, newStatus) => {
+        const byProject = {};
+        expenseItems.forEach(i => {
+          if (!byProject[i.projectId]) byProject[i.projectId] = [];
+          byProject[i.projectId].push(i);
+        });
+
+        const results = [];
+        for (const [pid, items] of Object.entries(byProject)) {
+          const res = await fetch(`${API_BASE_URL}/project-expenses`, {
+            method: 'POST', headers: getAuthHeaders(), credentials: 'include',
+            body: JSON.stringify({
+              groupName: grp, subGroupName: sub, projectId: pid,
+              tripDate, tripReason: tripReason || null,
+              paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
+              paidByName: paidByName || '',
+              expenseItems: items.map(i => ({
+                category: i.category, amount: parseFloat(i.amount) || 0,
+                paymentMode: i.paymentMode, description: i.description || '',
+              })),
+            }),
+          });
+          if (!res.ok) throw new Error('Failed to create split expense');
+          const created = await res.json();
+          results.push(Array.isArray(created) ? created[0] : created);
+        }
+        if (billFile && results[0]?.id) await handleBillUpload(results[0].id);
+        showSuccess(`Updated: split into ${Object.keys(byProject).length} project expense records`);
+      }
+
+      setShowEditModal(false); setBillFile(null);
+      fetchExpenses(); fetchStats();
+    } catch (error) { showError(error.message || 'Failed to update expense'); }
+    finally { setLoading(false); }
+  }
+
+    const handleStatusChange = (id, newStatus) => {
     const isReject = newStatus === 'Rejected';
     setConfirmModal({
       show: true,
@@ -485,60 +584,9 @@ const ProjectCostExpenseManagement = () => {
       });
       if (!response.ok) throw new Error('Failed to delete expense');
       showSuccess('Expense deleted successfully');
-      setShowDetailDrawer(false);
+      // detail drawer removed
       fetchExpenses(); fetchStats();
     } catch (error) { showError('Failed to delete expense'); }
-    finally { setLoading(false); }
-  };
-
-  // ── Advance ───────────────────────────────────────────────────────────────────
-  const handleAddNewAdvance = (relatedExpense = null) => {
-    const grp = relatedExpense?.groupName || groupName || '';
-    const sub = relatedExpense?.subGroupName || subGroupName || '';
-    const pid = relatedExpense?.projectId || projectId || '';
-    setAdvanceFormData({
-      groupName: grp, subGroupName: sub, projectId: pid,
-      advanceDate: new Date().toISOString().split('T')[0],
-      expectedTripDate: relatedExpense?.tripDate || '',
-      tripPurpose: relatedExpense
-        ? `Advance for ${relatedExpense.category} – ${relatedExpense.tripReason || ''}`.trim() : '',
-      requestedByUserId: '', requestedByName: '', approvedByUserId: '', approvedByName: '',
-      status: 'Pending', relatedExpenseId: relatedExpense?.id || null,
-      advancePayments: [{
-        id: Date.now(), advanceNumber: 1, amount: '', paymentMode: 'Bank_Transfer',
-        paymentDate: new Date().toISOString().split('T')[0], notes: ''
-      }],
-    });
-    setAdvModalGroupName(grp); setAdvModalSubGroupName(sub); setAdvModalProjectId(pid);
-    setAdvModalGroups([]); setAdvModalSubGroups([]); setAdvModalProjects([]);
-    fetchAdvModalGroups();
-    if (grp) { fetchAdvModalSubGroups(grp); if (sub) fetchAdvModalProjects(grp, sub); }
-    setShowAdvanceModal(true);
-  };
-
-  const handleCreateAdvance = async () => {
-    if (!advanceFormData.groupName || !advanceFormData.subGroupName) {
-      showError('Group and Sub-Group are required'); return;
-    }
-    if (!advanceFormData.projectId) { showError('Project is required'); return; }
-    if (!advanceFormData.tripPurpose?.trim()) { showError('Trip Purpose is required'); return; }
-    if (advanceFormData.advancePayments.some(p => !p.amount || parseFloat(p.amount) <= 0)) {
-      showError('Enter valid amounts for all advance payments'); return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/project-expenses/advances`, {
-        method: 'POST', headers: getAuthHeaders(), credentials: 'include',
-        body: JSON.stringify({
-          ...advanceFormData,
-          advancePayments: advanceFormData.advancePayments.map(p => ({ ...p, amount: parseFloat(p.amount) })),
-        }),
-      });
-      if (!response.ok) throw new Error(await response.text());
-      showSuccess('Advance recorded successfully!');
-      setShowAdvanceModal(false);
-      fetchAdvances(); fetchStats();
-    } catch (error) { showError(error.message || 'Failed to record advance'); }
     finally { setLoading(false); }
   };
 
@@ -599,9 +647,15 @@ const ProjectCostExpenseManagement = () => {
       case 'paidByName': return exp.paidByName || '—';
       case 'actions': return (
         <div className="exp-actions-cell">
+          <StatusBadge s={exp.status} />
           <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
           <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
-          <button className="exp-act-btn adv-btn" title="Advance" onClick={() => handleAddNewAdvance(exp)}><DollarSign size={14} /></button>
+          {canApprove && exp.status === 'Pending' && (
+            <>
+              <button className="exp-act-btn approve-btn" title="Approve" onClick={() => handleStatusChange(exp.id, 'Approved')}><CheckCircle size={14} /></button>
+              <button className="exp-act-btn reject-btn" title="Reject" onClick={() => handleStatusChange(exp.id, 'Rejected')}><XCircle size={14} /></button>
+            </>
+          )}
           <button className="exp-act-btn del-btn" title="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
         </div>
       );
@@ -616,7 +670,7 @@ const ProjectCostExpenseManagement = () => {
     { title: 'Pending Approval', value: fmt(stats.pendingExpenses), icon: <Clock size={32} />, color: '#f59e0b' },
     { title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />, color: '#3b82f6' },
     { title: 'Total Commission', value: fmt(stats.totalCommission), icon: <Users size={32} />, color: '#8b5cf6' },
-    { title: 'Total Advances', value: fmt(stats.totalAdvances), icon: <Wallet size={32} />, color: '#06b6d4' },
+    { title: 'Total Advances', value: fmt(stats.totalAdvances), icon: <Receipt size={32} />, color: '#06b6d4' },
   ] : [];
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -686,14 +740,12 @@ const ProjectCostExpenseManagement = () => {
           <button className="exp-mgmt-btn-primary" onClick={handleAddNewExpense}>
             <Plus size={18} /> Add Expense
           </button>
-          <button className="exp-mgmt-btn-success" onClick={() => handleAddNewAdvance()}>
-            <DollarSign size={18} /> Record Advance
-          </button>
+
           <button className="exp-mgmt-btn-secondary">
             <Download size={18} /> Export
           </button>
           <button className="exp-mgmt-btn-icon" title="Refresh"
-            onClick={() => { fetchExpenses(); fetchStats(); fetchAdvances(); fetchHistory(); }}>
+            onClick={() => { fetchExpenses(); fetchStats(); }}>
             <RefreshCw size={16} />
           </button>
           <button className="exp-mgmt-btn-columns" onClick={() => setShowColPanel(v => !v)}>
@@ -766,8 +818,6 @@ const ProjectCostExpenseManagement = () => {
       <div className="exp-tabs">
         {[
           ['expenses', `Expenses (${totalElements})`, <FileText size={14} />],
-          ['advances', `Advances (${advances.length})`, <Wallet size={14} />],
-          ['history', 'History', <History size={14} />],
         ].map(([tab, lbl, icon]) => (
           <button key={tab} className={`exp-tab${activeTab === tab ? ' active' : ''}`}
             onClick={() => setActiveTab(tab)}>
@@ -861,705 +911,694 @@ const ProjectCostExpenseManagement = () => {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          ADVANCES TABLE — with scroll wrapper + data-label attrs
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'advances' && (
-        <div className="exp-mgmt-table-container">
-          <div className="exp-table-scroll-wrapper">
-            <table className="exp-mgmt-table">
-              <thead>
-                <tr>
-                  <th>Code</th><th>Date</th><th>Group / Project</th><th>Purpose</th>
-                  <th>Expected Trip</th><th>Requested By</th><th>Approved By</th>
-                  <th>Total</th><th>Payments</th><th>Status</th><th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {advances.length === 0 ? (
-                  <tr><td colSpan={11} className="exp-empty-state">No advances found.</td></tr>
-                ) : advances.map(adv => (
-                  <tr key={adv.id} className="exp-mgmt-table-row">
-                    <td data-label="Code"><span className="exp-code">{adv.advanceCode}</span></td>
-                    <td data-label="Date">{fmtDate(adv.advanceDate)}</td>
-                    <td data-label="Group / Project">
-                      <div className="exp-group-cell">
-                        {adv.groupName && <span className="grp-name">{adv.groupName}</span>}
-                        {adv.subGroupName && <span className="sub-name">{adv.subGroupName}</span>}
-                        {adv.projectId && <span className="prj-name">{adv.projectId}</span>}
-                      </div>
-                    </td>
-                    <td data-label="Purpose" className="exp-purpose-cell">
-                      {adv.tripPurpose?.length > 50 ? adv.tripPurpose.substring(0, 50) + '…' : adv.tripPurpose}
-                    </td>
-                    <td data-label="Expected Trip">{fmtDate(adv.expectedTripDate)}</td>
-                    <td data-label="Requested By">{adv.requestedByName || '—'}</td>
-                    <td data-label="Approved By">{adv.approvedByName || '—'}</td>
-                    <td data-label="Total"><strong className="exp-amount">{fmt(adv.totalAdvanceAmount)}</strong></td>
-                    <td data-label="Payments">{adv.advancePayments?.length || 0} payment(s)</td>
-                    <td data-label="Status"><StatusBadge s={adv.status} /></td>
-                    <td data-label="Actions" className="actions-td">
-                      <div className="exp-actions-cell">
-                        {adv.status === 'Pending' && (
-                          <button className="exp-act-btn ok-btn" title="Approve"
-                            onClick={() => setConfirmModal({
-                              show: true,
-                              title: 'Approve Advance',
-                              message: `Approve advance ${adv.advanceCode}?`,
-                              type: 'confirm',
-                              onConfirm: async () => {
-                                setConfirmModal({ show: false });
-                                try {
-                                  const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
-                                    { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include', body: JSON.stringify({ status: 'Approved' }) });
-                                  if (!r.ok) throw new Error();
-                                  showSuccess('Advance approved'); fetchAdvances();
-                                } catch { showError('Failed to approve'); }
-                              },
-                            })}><CheckCircle size={14} /></button>
-                        )}
-                        {adv.status === 'Approved' && (
-                          <button className="exp-act-btn ok-btn settle-btn"
-                            onClick={() => setConfirmModal({
-                              show: true,
-                              title: 'Settle Advance',
-                              message: `Mark advance ${adv.advanceCode} as settled?`,
-                              type: 'confirm',
-                              onConfirm: async () => {
-                                setConfirmModal({ show: false });
-                                try {
-                                  const r = await fetch(`${API_BASE_URL}/project-expenses/advances/${adv.id}/status`,
-                                    { method: 'PATCH', headers: getAuthHeaders(), credentials: 'include', body: JSON.stringify({ status: 'Settled' }) });
-                                  if (!r.ok) throw new Error();
-                                  showSuccess('Advance settled'); fetchAdvances(); fetchStats();
-                                } catch { showError('Failed to settle'); }
-                              },
-                            })}>Settle</button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>{/* end exp-table-scroll-wrapper */}
-        </div>
-      )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          HISTORY TABLE — with scroll wrapper + data-label attrs
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeTab === 'history' && (
-        <div className="exp-mgmt-table-container">
-          <div className="exp-table-scroll-wrapper">
-            <table className="exp-mgmt-table">
-              <thead>
-                <tr>
-                  <th>Date</th><th>Type</th><th>Reference ID</th><th>Action</th>
-                  <th>Changed By</th><th>Old Status</th><th>New Status</th><th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.length === 0 ? (
-                  <tr><td colSpan={8} className="exp-empty-state">No history found.</td></tr>
-                ) : history.map(h => (
-                  <tr key={h.id} className="exp-mgmt-table-row">
-                    <td data-label="Date">{fmtDate(h.createdAt)}</td>
-                    <td data-label="Type"><StatusBadge s={h.referenceType} /></td>
-                    <td data-label="Ref ID"><span className="exp-code">#{h.referenceId}</span></td>
-                    <td data-label="Action"><span className="history-action-badge">{h.action}</span></td>
-                    <td data-label="Changed By">{h.changedByName || '—'}</td>
-                    <td data-label="Old Status">{h.oldStatus || '—'}</td>
-                    <td data-label="New Status">{h.newStatus || '—'}</td>
-                    <td data-label="Description">{h.changeDescription}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>{/* end exp-table-scroll-wrapper */}
-        </div>
-      )}
+      {showCreateModal && expenseFormData && (() => {
+        const grp  = modalGroupName;
+        const sub  = modalSubGroupName;
+        const total = (expenseFormData.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+        const pendingAdvances = []; // advance feature removed
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          ADD EXPENSE MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
-      {showCreateModal && expenseFormData && (
-        <div className="exp-mgmt-modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="exp-mgmt-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="exp-mgmt-modal-header">
-              <h2>Add New Trip Expense</h2>
-              <button className="exp-mgmt-modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
-            </div>
-            <div className="exp-mgmt-edit-form">
+        const addItem = () => {
+          const newId = Date.now();
+          setExpenseFormData(prev => ({
+            ...prev,
+            expenseItems: [...prev.expenseItems, {
+              id: newId, category: 'Travel', projectId: prev.projectId || '', amount: '', paymentMode: 'UPI', description: '',
+            }],
+          }));
+          if (grp && sub) loadItemProjects(newId, grp, sub);
+        };
 
-              {/* Project Assignment */}
-              <div className="exp-form-section">
-                <h3>Project Assignment</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Group *</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange}
-                      disabled={modalDropdownLoading.groups}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Sub-Group *</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange}
-                      disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                      <option value="">
-                        {!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub-Group'}
-                      </option>
-                      {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
+        const removeItem = (id) => setExpenseFormData(prev => ({
+          ...prev, expenseItems: prev.expenseItems.filter(i => i.id !== id),
+        }));
+
+        const updateItem = (id, field, val) => setExpenseFormData(prev => ({
+          ...prev, expenseItems: prev.expenseItems.map(i => i.id === id ? { ...i, [field]: val } : i),
+        }));
+
+        return (
+          <div className="exp-mgmt-modal-overlay">
+            <div className="exp-modal-redesigned" onClick={e => e.stopPropagation()}>
+              {/* ── Header ── */}
+              <div className="exp-modal-hdr">
+                <div className="exp-modal-hdr-left">
+                  <Receipt size={20} />
+                  <div>
+                    <h2>Add Expense Entry</h2>
+                    <p>Each item can be assigned to a different project</p>
                   </div>
                 </div>
-                <div className="vendor-form-group">
-                  <label>Project *</label>
-                  <select value={modalProjectId} onChange={handleModalProjectChange}
-                    disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                    <option value="">
-                      {!modalSubGroupName ? 'Select Sub-Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
-                    </option>
-                    {modalProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}{p.location ? ` - ${p.location}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
+                <button className="exp-modal-close-x" onClick={() => setShowCreateModal(false)}><X size={18} /></button>
               </div>
 
-              {/* Expense Information */}
-              <div className="exp-form-section">
-                <h3>Expense Information</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Date *</label>
-                    <input type="date" value={expenseFormData.tripDate}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, tripDate: e.target.value })} />
+              <div className="exp-modal-body">
+                {/* ── Section 1: Group / SubGroup ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">1</span> Scope</div>
+                  <div className="exp-form-row2">
+                    <div className="exp-field">
+                      <label>Group *</label>
+                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
+                        <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
+                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="exp-field">
+                      <label>Sub-Group *</label>
+                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
+                        <option value="">{!modalGroupName ? 'Select group first' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub-Group'}</option>
+                        {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
                   </div>
-                  <div className="vendor-form-group">
-                    <label>Paid By</label>
-                    <select value={expenseFormData.paidByUserId}
-                      onChange={(e) => {
-                        const u = availableUsers.find(u => String(u.id) === e.target.value);
-                        setExpenseFormData({ ...expenseFormData, paidByUserId: e.target.value, paidByName: u?.name || '' });
-                      }}>
-                      <option value="">Select User</option>
-                      {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
+                  {modalSubGroupName && (
+                    <div className="exp-scope-hint">
+                      <span>✓ Projects loaded — assign each expense item to a project below</span>
+                    </div>
+                  )}
                 </div>
-                <div className="vendor-form-group">
-                  <label>Purpose / Description</label>
-                  <textarea rows={2} value={expenseFormData.tripReason}
-                    placeholder="E.g. Material transport to site, employee travel to client…"
-                    onChange={(e) => setExpenseFormData({ ...expenseFormData, tripReason: e.target.value })} />
-                </div>
-              </div>
 
-              {/* Expense Items */}
-              <div className="exp-form-section">
-                <div className="exp-items-header">
-                  <h3>Expense Items</h3>
-                  <button className="exp-mgmt-btn-primary btn-sm"
-                    onClick={() => setExpenseFormData(prev => ({
-                      ...prev,
-                      expenseItems: [...prev.expenseItems, {
-                        id: Date.now(), category: 'Food', amount: '', paymentMode: 'Cash', description: '',
-                      }],
-                    }))}>
-                    <Plus size={13} /> Add Item
-                  </button>
+                {/* ── Section 2: Expense Info ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">2</span> Expense Info</div>
+                  <div className="exp-form-row3">
+                    <div className="exp-field">
+                      <label>Date *</label>
+                      <input type="date" value={expenseFormData.tripDate}
+                        onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
+                    </div>
+                    <div className="exp-field">
+                      <label>Paid By</label>
+                      <select value={expenseFormData.paidByUserId}
+                        onChange={e => {
+                          const u = availableUsers.find(u => String(u.id) === e.target.value);
+                          setExpenseFormData(p => ({ ...p, paidByUserId: e.target.value, paidByName: u?.name || '' }));
+                        }}>
+                        <option value="">Select user</option>
+                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="exp-field">
+                      <label>Purpose / Description</label>
+                      <input type="text" value={expenseFormData.tripReason} placeholder="e.g. Site visit, material transport…"
+                        onChange={e => setExpenseFormData(p => ({ ...p, tripReason: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="exp-form-row2" style={{marginTop:10}}>
+                    <div className="exp-field">
+                      <label>Status</label>
+                      <select value={expenseFormData.status || 'Approved'}
+                        onChange={e => setExpenseFormData(p => ({ ...p, status: e.target.value }))}
+                        style={{borderColor: expenseFormData.status === 'Approved' ? '#16a34a' : expenseFormData.status === 'Rejected' ? '#dc2626' : '#f59e0b'}}>
+                        <option value="Approved">✅ Approved</option>
+                        <option value="Pending">⏳ Pending</option>
+                        <option value="Rejected">❌ Rejected</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
-                {expenseFormData.expenseItems.map((item, idx) => (
-                  <div key={item.id} className="exp-item-card">
-                    <div className="exp-item-header">
-                      <span>Item #{idx + 1}</span>
-                      {expenseFormData.expenseItems.length > 1 && (
-                        <button className="exp-item-remove"
-                          onClick={() => setExpenseFormData(prev => ({
-                            ...prev, expenseItems: prev.expenseItems.filter(i => i.id !== item.id),
-                          }))}>
-                          <Trash2 size={12} /> Remove
-                        </button>
+
+                {/* ── Section 3: Expense Items ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label-row">
+                    <div className="exp-section-label"><span className="exp-section-num">3</span> Expense Items</div>
+                    <button className="exp-add-item-btn" onClick={addItem} disabled={!modalSubGroupName}>
+                      <Plus size={13} /> Add Item
+                    </button>
+                  </div>
+
+                  {!modalSubGroupName && (
+                    <div className="exp-items-hint">Select Group + Sub-Group first to assign projects per item</div>
+                  )}
+
+                  <div className="exp-items-list">
+                    {(expenseFormData.expenseItems || []).map((item, idx) => {
+                      const projList = itemProjects[item.id] || modalProjects;
+                      const isLoading = itemProjectsLoading[item.id];
+                      return (
+                        <div key={item.id} className="exp-item-row">
+                          <div className="exp-item-row-num">#{idx + 1}</div>
+                          <div className="exp-item-fields">
+                            <div className="exp-item-top-row">
+                              <div className="exp-field exp-field-sm">
+                                <label>Category *</label>
+                                <select
+                                  value={EXPENSE_CATEGORIES.includes(item.category) ? item.category : 'Other'}
+                                  onChange={e => updateItem(item.id, 'category', e.target.value === 'Other' ? '' : e.target.value)}>
+                                  {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                                </select>
+                                {(!EXPENSE_CATEGORIES.slice(0,-1).includes(item.category)) && (
+                                  <input
+                                    type="text"
+                                    className="exp-other-input"
+                                    placeholder="Specify category…"
+                                    value={EXPENSE_CATEGORIES.includes(item.category) ? '' : item.category}
+                                    onChange={e => updateItem(item.id, 'category', e.target.value)}
+                                    autoFocus
+                                  />
+                                )}
+                              </div>
+                              <div className="exp-field exp-field-sm">
+                                <label>Amount (₹) *</label>
+                                <input type="number" step="0.01" min="0" placeholder="0.00" value={item.amount}
+                                  onChange={e => updateItem(item.id, 'amount', e.target.value)} />
+                              </div>
+                              <div className="exp-field exp-field-sm">
+                                <label>Payment Mode</label>
+                                <select value={item.paymentMode} onChange={e => updateItem(item.id, 'paymentMode', e.target.value)}>
+                                  {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
+                                </select>
+                              </div>
+                              <div className="exp-field exp-field-proj">
+                                <label>Project * <span className="exp-field-hint">(required)</span></label>
+                                <select value={item.projectId}
+                                  onChange={e => updateItem(item.id, 'projectId', e.target.value)}
+                                  disabled={!modalSubGroupName || isLoading}
+                                  style={!item.projectId ? {borderColor:'#ef4444',boxShadow:'0 0 0 2px rgba(239,68,68,.15)'} : {}}>
+                                  <option value="">{isLoading ? 'Loading…' : !modalSubGroupName ? 'Select sub-group first' : '— Select Project *'}</option>
+                                  {projList.map(p => (
+                                    <option key={p.id} value={String(p.id)}>{p.name}{p.location ? ` – ${p.location}` : ''}</option>
+                                  ))}
+                                </select>
+                              </div>
+                              {expenseFormData.expenseItems.length > 1 && (
+                                <button className="exp-item-del-btn" onClick={() => removeItem(item.id)} title="Remove item">
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="exp-field" style={{marginTop:4}}>
+                              <input type="text" placeholder="Notes / description for this item…" value={item.description}
+                                onChange={e => updateItem(item.id, 'description', e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="exp-items-total-bar">
+                    <span>
+                      Total — {(() => {
+                        const projSet = new Set((expenseFormData.expenseItems||[]).filter(i=>i.projectId).map(i=>i.projectId));
+                        return projSet.size > 1
+                          ? <span style={{color:'#1d4ed8',fontWeight:600}}>splits into {projSet.size} separate project expenses on save</span>
+                          : <span style={{color:'#64748b'}}>1 expense record</span>;
+                      })()}
+                    </span>
+                    <strong className="exp-total-amt">{fmt(total)}</strong>
+                  </div>
+                </div>
+
+                {/* ── Section 4: Bill Upload ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">4</span> Bill / Receipt Upload <span className="exp-field-hint">(max 10 MB)</span></div>
+                  <div className="exp-bill-upload-area"
+                    onClick={() => billInputRef.current?.click()}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setBillFile(f); }}>
+                    <input ref={billInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{display:'none'}}
+                      onChange={e => setBillFile(e.target.files[0] || null)} />
+                    {billFile ? (
+                      <div className="exp-bill-selected">
+                        <FileText size={18} />
+                        <span>{billFile.name}</span>
+                        <span className="exp-bill-size">({(billFile.size / 1024 / 1024).toFixed(2)} MB)</span>
+                        <button onClick={e => { e.stopPropagation(); setBillFile(null); }}><X size={14} /></button>
+                      </div>
+                    ) : (
+                      <div className="exp-bill-empty">
+                        <Receipt size={22} />
+                        <span>Click or drag to upload bill / receipt</span>
+                        <small>PDF, JPG, PNG — max 10 MB</small>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Section 5: Advance Adjustment ── */}
+                {pendingAdvances.length > 0 && (
+                  <div className="exp-modal-section">
+                    <div className="exp-section-label"><span className="exp-section-num">5</span> Adjust Advance <span className="exp-field-hint">(optional)</span></div>
+                    <div className="exp-form-row2">
+                      <div className="exp-field">
+                        <label>Select Advance to Adjust</label>
+                        <select value={expenseFormData.adjustedAdvanceId || ''}
+                          onChange={e => setExpenseFormData(p => ({ ...p, adjustedAdvanceId: e.target.value }))}>
+                          <option value="">— No advance adjustment —</option>
+                          {pendingAdvances.map(a => (
+                            <option key={a.id} value={a.id}>
+                              {a.advanceCode} — {fmt(a.totalAmount)} ({a.projectId || a.groupName}) — {a.status}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {expenseFormData.adjustedAdvanceId && (
+                        <div className="exp-field">
+                          <label>Amount to Adjust (₹)</label>
+                          <input type="number" min="0" step="0.01" placeholder="0.00"
+                            value={expenseFormData.advanceAdjustedAmount || ''}
+                            onChange={e => setExpenseFormData(p => ({ ...p, advanceAdjustedAmount: e.target.value }))} />
+                        </div>
                       )}
                     </div>
-                    <div className="vendor-form-row">
-                      <div className="vendor-form-group">
-                        <label>Category *</label>
-                        <select value={item.category}
-                          onChange={(e) => setExpenseFormData(prev => ({
-                            ...prev, expenseItems: prev.expenseItems.map(i =>
-                              i.id === item.id ? { ...i, category: e.target.value } : i),
-                          }))}>
-                          {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                        </select>
-                      </div>
-                      <div className="vendor-form-group">
-                        <label>Amount (₹) *</label>
-                        <input type="number" step="0.01" placeholder="0.00" value={item.amount}
-                          onChange={(e) => setExpenseFormData(prev => ({
-                            ...prev, expenseItems: prev.expenseItems.map(i =>
-                              i.id === item.id ? { ...i, amount: e.target.value } : i),
-                          }))} />
-                      </div>
-                      <div className="vendor-form-group">
-                        <label>Payment Mode</label>
-                        <select value={item.paymentMode}
-                          onChange={(e) => setExpenseFormData(prev => ({
-                            ...prev, expenseItems: prev.expenseItems.map(i =>
-                              i.id === item.id ? { ...i, paymentMode: e.target.value } : i),
-                          }))}>
-                          {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="vendor-form-group">
-                      <label>Description / Notes</label>
-                      <input type="text" value={item.description} placeholder="E.g. Flight to Mumbai…"
-                        onChange={(e) => setExpenseFormData(prev => ({
-                          ...prev, expenseItems: prev.expenseItems.map(i =>
-                            i.id === item.id ? { ...i, description: e.target.value } : i),
-                        }))} />
-                    </div>
-                  </div>
-                ))}
-                <div className="exp-items-total">
-                  <span>Total Trip Amount:</span>
-                  <strong>{fmt(expenseFormData.expenseItems.reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}</strong>
-                </div>
-              </div>
-
-            </div>
-            <div className="exp-mgmt-modal-actions">
-              <button className="exp-mgmt-btn-primary" onClick={handleCreateExpense}>
-                Save {expenseFormData.expenseItems.length} Expense(s)
-              </button>
-              <button className="exp-mgmt-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          EDIT EXPENSE MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
-      {showEditModal && expenseFormData && (
-        <div className="exp-mgmt-modal-overlay" onClick={() => setShowEditModal(false)}>
-          <div className="exp-mgmt-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="exp-mgmt-modal-header">
-              <h2>Edit Expense</h2>
-              <button className="exp-mgmt-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
-            </div>
-            <div className="exp-mgmt-edit-form">
-              <div className="exp-form-section">
-                <h3>Project Assignment</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Group</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange}
-                      disabled={modalDropdownLoading.groups}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Sub-Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange}
-                      disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                      <option value="">
-                        {!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub-Group'}
-                      </option>
-                      {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-group">
-                  <label>Project</label>
-                  <select value={modalProjectId} onChange={handleModalProjectChange}
-                    disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                    <option value="">
-                      {!modalSubGroupName ? 'Select Sub-Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
-                    </option>
-                    {modalProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}{p.location ? ` - ${p.location}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="exp-form-section">
-                <h3>Expense Details</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Category</label>
-                    <select value={expenseFormData.category}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, category: e.target.value })}>
-                      {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Amount (₹) *</label>
-                    <input type="number" step="0.01" value={expenseFormData.amount}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, amount: e.target.value })} />
-                  </div>
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Payment Mode</label>
-                    <select value={expenseFormData.paymentMode}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, paymentMode: e.target.value })}>
-                      {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Status</label>
-                    <select value={expenseFormData.status}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, status: e.target.value })}>
-                      {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-group">
-                  <label>Description</label>
-                  <textarea rows={2} value={expenseFormData.description}
-                    onChange={(e) => setExpenseFormData({ ...expenseFormData, description: e.target.value })} />
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Trip Reason</label>
-                    <textarea rows={2} value={expenseFormData.tripReason}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, tripReason: e.target.value })} />
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Trip Outcome</label>
-                    <textarea rows={2} value={expenseFormData.tripOutcome}
-                      onChange={(e) => setExpenseFormData({ ...expenseFormData, tripOutcome: e.target.value })} />
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="exp-mgmt-modal-actions">
-              <button className="exp-mgmt-btn-primary" onClick={handleUpdateExpense}>Save Changes</button>
-              <button className="exp-mgmt-btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          ADVANCE MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
-      {showAdvanceModal && advanceFormData && (
-        <div className="exp-mgmt-modal-overlay" onClick={() => setShowAdvanceModal(false)}>
-          <div className="exp-mgmt-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="exp-mgmt-modal-header">
-              <h2>Record Advance Payment</h2>
-              <button className="exp-mgmt-modal-close" onClick={() => setShowAdvanceModal(false)}>✕</button>
-            </div>
-            <div className="exp-mgmt-edit-form">
-              <div className="exp-form-section">
-                <h3>Project Assignment</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Group *</label>
-                    <select value={advModalGroupName} onChange={handleAdvModalGroupChange}
-                      disabled={advModalDropdownLoading.groups}>
-                      <option value="">{advModalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {advModalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Sub-Group *</label>
-                    <select value={advModalSubGroupName} onChange={handleAdvModalSubGroupChange}
-                      disabled={!advModalGroupName || advModalDropdownLoading.subGroups}>
-                      <option value="">
-                        {!advModalGroupName ? 'Select Group First' : advModalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub-Group'}
-                      </option>
-                      {advModalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-group">
-                  <label>Project *</label>
-                  <select value={advModalProjectId} onChange={handleAdvModalProjectChange}
-                    disabled={!advModalSubGroupName || advModalDropdownLoading.projects}>
-                    <option value="">
-                      {!advModalSubGroupName ? 'Select Sub-Group First' : advModalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
-                    </option>
-                    {advModalProjects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}{p.location ? ` - ${p.location}` : ''}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="exp-form-section">
-                <h3>Trip Details</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Request Date *</label>
-                    <input type="date" value={advanceFormData.advanceDate}
-                      onChange={(e) => setAdvanceFormData({ ...advanceFormData, advanceDate: e.target.value })} />
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Expected Trip Date</label>
-                    <input type="date" value={advanceFormData.expectedTripDate}
-                      onChange={(e) => setAdvanceFormData({ ...advanceFormData, expectedTripDate: e.target.value })} />
-                  </div>
-                </div>
-                <div className="vendor-form-group">
-                  <label>Trip Purpose *</label>
-                  <textarea rows={2} value={advanceFormData.tripPurpose}
-                    placeholder="E.g. Site visit to Hyderabad for installation…"
-                    onChange={(e) => setAdvanceFormData({ ...advanceFormData, tripPurpose: e.target.value })} />
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Requested By</label>
-                    <select value={advanceFormData.requestedByUserId}
-                      onChange={(e) => {
-                        const u = availableUsers.find(u => String(u.id) === e.target.value);
-                        setAdvanceFormData({ ...advanceFormData, requestedByUserId: e.target.value, requestedByName: u?.name || '' });
-                      }}>
-                      <option value="">Select User</option>
-                      {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group">
-                    <label>Approved By</label>
-                    <select value={advanceFormData.approvedByUserId}
-                      onChange={(e) => {
-                        const u = availableUsers.find(u => String(u.id) === e.target.value);
-                        setAdvanceFormData({ ...advanceFormData, approvedByUserId: e.target.value, approvedByName: u?.name || '' });
-                      }}>
-                      <option value="">Select Manager</option>
-                      {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group">
-                    <label>Status</label>
-                    <select value={advanceFormData.status}
-                      onChange={(e) => setAdvanceFormData({ ...advanceFormData, status: e.target.value })}>
-                      {ADVANCE_STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="exp-form-section">
-                <div className="exp-items-header">
-                  <h3>Advance Payments</h3>
-                  <button className="exp-mgmt-btn-primary btn-sm"
-                    disabled={advanceFormData.advancePayments.length >= 3}
-                    onClick={() => setAdvanceFormData(prev => ({
-                      ...prev,
-                      advancePayments: [...prev.advancePayments, {
-                        id: Date.now(), advanceNumber: prev.advancePayments.length + 1,
-                        amount: '', paymentMode: 'Bank_Transfer',
-                        paymentDate: new Date().toISOString().split('T')[0], notes: '',
-                      }],
-                    }))}>
-                    <Plus size={13} /> Add Payment
-                  </button>
-                </div>
-                <p className="exp-help-text">Maximum 3 advance payments per trip</p>
-                {advanceFormData.advancePayments.map((pmt) => (
-                  <div key={pmt.id} className="exp-item-card">
-                    <div className="exp-item-header">
-                      <span>Advance #{pmt.advanceNumber}</span>
-                      {advanceFormData.advancePayments.length > 1 && (
-                        <button className="exp-item-remove"
-                          onClick={() => setAdvanceFormData(prev => ({
-                            ...prev,
-                            advancePayments: prev.advancePayments
-                              .filter(p => p.id !== pmt.id)
-                              .map((p, i) => ({ ...p, advanceNumber: i + 1 })),
-                          }))}>
-                          <Trash2 size={12} /> Remove
-                        </button>
-                      )}
-                    </div>
-                    <div className="vendor-form-row">
-                      <div className="vendor-form-group">
-                        <label>Amount (₹) *</label>
-                        <input type="number" step="0.01" value={pmt.amount}
-                          onChange={(e) => setAdvanceFormData(prev => ({
-                            ...prev, advancePayments: prev.advancePayments.map(p =>
-                              p.id === pmt.id ? { ...p, amount: e.target.value } : p),
-                          }))} />
-                      </div>
-                      <div className="vendor-form-group">
-                        <label>Payment Mode</label>
-                        <select value={pmt.paymentMode}
-                          onChange={(e) => setAdvanceFormData(prev => ({
-                            ...prev, advancePayments: prev.advancePayments.map(p =>
-                              p.id === pmt.id ? { ...p, paymentMode: e.target.value } : p),
-                          }))}>
-                          {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-                        </select>
-                      </div>
-                      <div className="vendor-form-group">
-                        <label>Payment Date</label>
-                        <input type="date" value={pmt.paymentDate}
-                          onChange={(e) => setAdvanceFormData(prev => ({
-                            ...prev, advancePayments: prev.advancePayments.map(p =>
-                              p.id === pmt.id ? { ...p, paymentDate: e.target.value } : p),
-                          }))} />
-                      </div>
-                    </div>
-                    <div className="vendor-form-group">
-                      <label>Notes</label>
-                      <input type="text" value={pmt.notes} placeholder="E.g. First advance for travel booking…"
-                        onChange={(e) => setAdvanceFormData(prev => ({
-                          ...prev, advancePayments: prev.advancePayments.map(p =>
-                            p.id === pmt.id ? { ...p, notes: e.target.value } : p),
-                        }))} />
-                    </div>
-                  </div>
-                ))}
-                <div className="exp-items-total">
-                  <span>Total Advance:</span>
-                  <strong>{fmt(advanceFormData.advancePayments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0))}</strong>
-                </div>
-              </div>
-            </div>
-            <div className="exp-mgmt-modal-actions">
-              <button className="exp-mgmt-btn-primary" onClick={handleCreateAdvance}>Save Advance</button>
-              <button className="exp-mgmt-btn-secondary" onClick={() => setShowAdvanceModal(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════════════
-          DETAIL DRAWER
-      ══════════════════════════════════════════════════════════════════════ */}
-      {showDetailDrawer && selectedExpense && (
-        <div className="exp-mgmt-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
-          <div className="exp-mgmt-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="exp-mgmt-drawer-header">
-              <div>
-                <h2>{selectedExpense.expenseCode}</h2>
-                <p className="exp-mgmt-drawer-subtitle">
-                  {selectedExpense.groupName}{selectedExpense.subGroupName ? ` › ${selectedExpense.subGroupName}` : ''}
-                  {selectedExpense.projectId ? ` › ${selectedExpense.projectId}` : ''}
-                </p>
-              </div>
-              <button className="exp-mgmt-drawer-close" onClick={() => setShowDetailDrawer(false)}>✕</button>
-            </div>
-            <div className="exp-mgmt-drawer-content">
-              <div className="exp-mgmt-drawer-section">
-                <h3>Expense Information</h3>
-                <div className="vendor-info-grid">
-                  {[
-                    [<Calendar size={18} />, 'Date', fmtDate(selectedExpense.tripDate)],
-                    [<IndianRupee size={18} />, 'Total Amount', fmt(selectedExpense.totalAmount)],
-                    [<Users size={18} />, 'Paid By', selectedExpense.paidByName || 'N/A'],
-                    [<Clock size={18} />, 'Status', null],
-                  ].map(([icon, label, val], i) => (
-                    <div key={i} className="vendor-info-item">
-                      {icon}
-                      <div>
-                        <span className="info-label">{label}</span>
-                        {label === 'Status'
-                          ? <StatusBadge s={selectedExpense.status} />
-                          : <span className="info-value">{val || 'N/A'}</span>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {selectedExpense.tripReason && (
-                  <div className="exp-info-box" style={{ marginTop: 14 }}>
-                    <h4>Purpose / Description</h4>
-                    <p>{selectedExpense.tripReason}</p>
                   </div>
                 )}
               </div>
 
-              {/* Expense Items Table */}
-              <div className="exp-mgmt-drawer-section">
-                <h3>Expense Items ({(selectedExpense.expenseItems || []).length})</h3>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              {/* ── Footer ── */}
+              <div className="exp-modal-footer">
+                <div className="exp-modal-footer-left">
+                  {(() => {
+                    const items = expenseFormData.expenseItems || [];
+                    const projSet = new Set(items.filter(i => i.projectId).map(i => i.projectId));
+                    const unassigned = items.filter(i => !i.projectId).length;
+                    return (
+                      <span className="exp-footer-total">
+                        {items.length} item(s) · {fmt(total)}
+                        {projSet.size > 1 && <span style={{color:'#1d4ed8',marginLeft:8}}>→ {projSet.size} project records</span>}
+                        {unassigned > 0 && <span style={{color:'#ef4444',marginLeft:8}}>⚠ {unassigned} item(s) need a project</span>}
+                      </span>
+                    );
+                  })()}
+                  {billFile && <span className="exp-footer-bill"><Receipt size={12} /> {billFile.name}</span>}
+                </div>
+                <div className="exp-modal-footer-right">
+                  <button className="exp-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                  <button className="exp-btn-primary" onClick={handleCreateExpense} disabled={loading || billUploading}>
+                    {loading || billUploading ? 'Saving…' : `Save ${expenseFormData.expenseItems.length} Expense(s)`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          EDIT EXPENSE MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showEditModal && expenseFormData && (() => {
+        const grp  = modalGroupName;
+        const sub  = modalSubGroupName;
+        const total = (expenseFormData.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0);
+
+        const addItem = () => {
+          const newId = Date.now();
+          setExpenseFormData(prev => ({
+            ...prev,
+            expenseItems: [...prev.expenseItems, {
+              id: newId, category: 'Travel', projectId: prev.projectId || '', amount: '', paymentMode: 'UPI', description: '',
+            }],
+          }));
+          if (grp && sub) loadItemProjects(newId, grp, sub);
+        };
+
+        const removeItem = (id) => setExpenseFormData(prev => ({
+          ...prev, expenseItems: prev.expenseItems.filter(i => i.id !== id),
+        }));
+
+        const updateItem = (id, field, val) => setExpenseFormData(prev => ({
+          ...prev, expenseItems: prev.expenseItems.map(i => i.id === id ? { ...i, [field]: val } : i),
+        }));
+
+        return (
+          <div className="exp-mgmt-modal-overlay">
+            <div className="exp-modal-redesigned" onClick={e => e.stopPropagation()}>
+              {/* ── Header ── */}
+              <div className="exp-modal-hdr">
+                <div className="exp-modal-hdr-left">
+                  <Edit2 size={20} />
+                  <div>
+                    <h2>Edit Expense — {expenseFormData.expenseCode || `#${expenseFormData.id}`}</h2>
+                    <p>Update expense details, items, or upload a new bill</p>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  {canApprove && expenseFormData.status === 'Pending' && (
+                    <>
+                      <button className="exp-btn-approve" onClick={() => { performStatusChange(expenseFormData.id, 'Approved'); setShowEditModal(false); }}>
+                        <CheckCircle size={14} /> Approve
+                      </button>
+                      <button className="exp-btn-reject" onClick={() => { performStatusChange(expenseFormData.id, 'Rejected'); setShowEditModal(false); }}>
+                        <XCircle size={14} /> Reject
+                      </button>
+                    </>
+                  )}
+                  <button className="exp-modal-close-x" onClick={() => setShowEditModal(false)}><X size={18} /></button>
+                </div>
+              </div>
+
+              <div className="exp-modal-body">
+                {/* ── Section 1: Scope ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">1</span> Scope</div>
+                  <div className="exp-form-row2">
+                    <div className="exp-field">
+                      <label>Group *</label>
+                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
+                        <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
+                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="exp-field">
+                      <label>Sub-Group *</label>
+                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
+                        <option value="">{!modalGroupName ? 'Select group first' : 'Select Sub-Group'}</option>
+                        {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Section 2: Expense Info ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">2</span> Expense Info</div>
+                  <div className="exp-form-row3">
+                    <div className="exp-field">
+                      <label>Date *</label>
+                      <input type="date" value={expenseFormData.tripDate}
+                        onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
+                    </div>
+                    <div className="exp-field">
+                      <label>Paid By</label>
+                      <select value={expenseFormData.paidByUserId}
+                        onChange={e => {
+                          const u = availableUsers.find(u => String(u.id) === e.target.value);
+                          setExpenseFormData(p => ({ ...p, paidByUserId: e.target.value, paidByName: u?.name || '' }));
+                        }}>
+                        <option value="">Select user</option>
+                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="exp-field">
+                      <label>Status</label>
+                      <select value={expenseFormData.status}
+                        onChange={e => setExpenseFormData(p => ({ ...p, status: e.target.value }))}
+                        disabled={!canApprove && expenseFormData.status !== 'Pending'}>
+                        {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="exp-field" style={{marginTop:8}}>
+                    <label>Purpose / Description</label>
+                    <input type="text" value={expenseFormData.tripReason} placeholder="e.g. Site visit, material transport…"
+                      onChange={e => setExpenseFormData(p => ({ ...p, tripReason: e.target.value }))} />
+                  </div>
+                </div>
+
+                {/* ── Section 3: Expense Items ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label-row">
+                    <div className="exp-section-label"><span className="exp-section-num">3</span> Expense Items</div>
+                    <button className="exp-add-item-btn" onClick={addItem}><Plus size={13} /> Add Item</button>
+                  </div>
+                  <div className="exp-items-list">
+                    {(expenseFormData.expenseItems || []).map((item, idx) => {
+                      const projList = itemProjects[item.id] || modalProjects;
+                      const isLoading = itemProjectsLoading[item.id];
+                      return (
+                        <div key={item.id} className="exp-item-row">
+                          <div className="exp-item-row-num">#{idx + 1}</div>
+                          <div className="exp-item-fields">
+                            <div className="exp-item-top-row">
+                              <div className="exp-field exp-field-sm">
+                                <label>Category *</label>
+                                <select
+                                  value={EXPENSE_CATEGORIES.includes(item.category) ? item.category : 'Other'}
+                                  onChange={e => updateItem(item.id, 'category', e.target.value === 'Other' ? '' : e.target.value)}>
+                                  {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                                </select>
+                                {(!EXPENSE_CATEGORIES.slice(0,-1).includes(item.category)) && (
+                                  <input
+                                    type="text"
+                                    className="exp-other-input"
+                                    placeholder="Specify category…"
+                                    value={EXPENSE_CATEGORIES.includes(item.category) ? '' : item.category}
+                                    onChange={e => updateItem(item.id, 'category', e.target.value)}
+                                    autoFocus
+                                  />
+                                )}
+                              </div>
+                              <div className="exp-field exp-field-sm">
+                                <label>Amount (₹) *</label>
+                                <input type="number" step="0.01" min="0" value={item.amount}
+                                  onChange={e => updateItem(item.id, 'amount', e.target.value)} />
+                              </div>
+                              <div className="exp-field exp-field-sm">
+                                <label>Payment Mode</label>
+                                <select value={item.paymentMode} onChange={e => updateItem(item.id, 'paymentMode', e.target.value)}>
+                                  {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
+                                </select>
+                              </div>
+                              <div className="exp-field exp-field-proj">
+                                <label>Project * <span className="exp-field-hint">(required)</span></label>
+                                <select value={item.projectId}
+                                  onChange={e => updateItem(item.id, 'projectId', e.target.value)}
+                                  disabled={isLoading}
+                                  style={!item.projectId ? {borderColor:'#ef4444',boxShadow:'0 0 0 2px rgba(239,68,68,.15)'} : {}}>
+                                  <option value="">{isLoading ? 'Loading…' : '— Select Project *'}</option>
+                                  {projList.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
+                                  {/* Show current project if not yet in list */}
+                                  {item.projectId && !projList.find(p => String(p.id) === String(item.projectId)) && !isLoading && (
+                                    <option key={item.projectId} value={item.projectId}>Project #{item.projectId} (current)</option>
+                                  )}
+                                </select>
+                              </div>
+                              {expenseFormData.expenseItems.length > 1 && (
+                                <button className="exp-item-del-btn" onClick={() => removeItem(item.id)}><Trash2 size={13} /></button>
+                              )}
+                            </div>
+                            <div className="exp-field" style={{marginTop:4}}>
+                              <input type="text" placeholder="Notes…" value={item.description}
+                                onChange={e => updateItem(item.id, 'description', e.target.value)} />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="exp-items-total-bar">
+                    <span>
+                      Total — {(() => {
+                        const projSet = new Set((expenseFormData.expenseItems||[]).filter(i=>i.projectId).map(i=>i.projectId));
+                        return projSet.size > 1
+                          ? <span style={{color:'#1d4ed8',fontWeight:600}}>splits into {projSet.size} separate project expenses on save</span>
+                          : <span style={{color:'#64748b'}}>1 expense record</span>;
+                      })()}
+                    </span>
+                    <strong className="exp-total-amt">{fmt(total)}</strong>
+                  </div>
+                </div>
+
+                {/* ── Section 4: Bill Upload ── */}
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">4</span> Bill / Receipt</div>
+                  {expenseFormData.receiptUrl && (
+                    <div className="exp-existing-bill">
+                      <FileText size={14} /> Current bill on file &nbsp;
+                      <a href={expenseFormData.receiptUrl} target="_blank" rel="noreferrer">View</a>
+                    </div>
+                  )}
+                  <div className="exp-bill-upload-area"
+                    onClick={() => billInputRef.current?.click()}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setBillFile(f); }}>
+                    <input ref={billInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.webp" style={{display:'none'}}
+                      onChange={e => setBillFile(e.target.files[0] || null)} />
+                    {billFile ? (
+                      <div className="exp-bill-selected">
+                        <FileText size={18} /><span>{billFile.name}</span>
+                        <span className="exp-bill-size">({(billFile.size/1024/1024).toFixed(2)} MB)</span>
+                        <button onClick={e => { e.stopPropagation(); setBillFile(null); }}><X size={14}/></button>
+                      </div>
+                    ) : (
+                      <div className="exp-bill-empty">
+                        <Receipt size={22}/><span>{expenseFormData.receiptUrl ? 'Upload replacement bill' : 'Upload bill / receipt'}</span>
+                        <small>PDF, JPG, PNG — max 10 MB</small>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Approval section for managers ── */}
+                {canApprove && (
+                  <div className="exp-modal-section exp-approval-section">
+                    <div className="exp-section-label"><span className="exp-section-num">5</span> Approval</div>
+                    <div className="exp-approval-info">
+                      <span>Status: <strong><StatusBadge s={expenseFormData.status} /></strong></span>
+                      <span className="exp-approval-hint">You can approve or reject using the buttons in the header above.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Footer ── */}
+              <div className="exp-modal-footer">
+                <div className="exp-modal-footer-left">
+                  <span className="exp-footer-total">{(expenseFormData.expenseItems || []).length} item(s) · {fmt(total)}</span>
+                </div>
+                <div className="exp-modal-footer-right">
+                  <button className="exp-btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
+                  <button className="exp-btn-primary" onClick={handleUpdateExpense} disabled={loading || billUploading}>
+                    {loading || billUploading ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          ADVANCE MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+
+      {/* ══ SINGLE PAYMENT MODAL ═══════════════════════════════════════════ */}
+
+      {/* ══════════════════════════════════════════════════════════════════════
+          VIEW EXPENSE MODAL
+      ══════════════════════════════════════════════════════════════════════ */}
+      {showViewModal && viewModalExpense && (
+        <div className="exp-mgmt-modal-overlay" onClick={() => setShowViewModal(false)}>
+          <div className="exp-view-modal" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="exp-modal-hdr">
+              <div className="exp-modal-hdr-left">
+                <Eye size={20} />
+                <div>
+                  <h2>Expense — {viewModalExpense.expenseCode || `#${viewModalExpense.id}`}</h2>
+                  <p>{fmtDate(viewModalExpense.tripDate)}{viewModalExpense.paidByName ? ` · Paid by ${viewModalExpense.paidByName}` : ''}</p>
+                </div>
+              </div>
+              <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <button className="exp-btn-approve" onClick={() => { setShowViewModal(false); handleEditExpense(viewModalExpense); }}>
+                  <Edit2 size={13} /> Edit
+                </button>
+                <button className="exp-modal-close-x" onClick={() => setShowViewModal(false)}><X size={18} /></button>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="exp-modal-body">
+              {/* Status + Group Info */}
+              <div className="exp-modal-section">
+                <div className="exp-section-label"><span className="exp-section-num">1</span> Overview</div>
+                <div className="exp-view-grid">
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Status</span>
+                    <span><StatusBadge s={viewModalExpense.status} /></span>
+                  </div>
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Date</span>
+                    <span className="exp-view-val">{fmtDate(viewModalExpense.tripDate)}</span>
+                  </div>
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Group</span>
+                    <span className="exp-view-val">{viewModalExpense.groupName || '—'}</span>
+                  </div>
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Sub-Group</span>
+                    <span className="exp-view-val">{viewModalExpense.subGroupName || '—'}</span>
+                  </div>
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Paid By</span>
+                    <span className="exp-view-val">{viewModalExpense.paidByName || '—'}</span>
+                  </div>
+                  <div className="exp-view-item">
+                    <span className="exp-view-label">Total</span>
+                    <span className="exp-view-val" style={{fontWeight:700,color:'#15803d',fontSize:15}}>{fmt(viewModalExpense.totalAmount)}</span>
+                  </div>
+                  {viewModalExpense.tripReason && (
+                    <div className="exp-view-item exp-view-full">
+                      <span className="exp-view-label">Purpose</span>
+                      <span className="exp-view-val">{viewModalExpense.tripReason}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Expense Items */}
+              <div className="exp-modal-section">
+                <div className="exp-section-label"><span className="exp-section-num">2</span> Expense Items</div>
+                <table className="exp-view-table">
                   <thead>
-                    <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>#</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Category</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Description</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Mode</th>
-                      <th style={{ padding: '8px 10px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Amount</th>
+                    <tr>
+                      <th>#</th>
+                      <th>Category</th>
+                      <th>Description</th>
+                      <th>Mode</th>
+                      <th style={{textAlign:'right'}}>Amount</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedExpense.expenseItems || []).map((item, i) => (
-                      <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                        <td style={{ padding: '10px', color: '#94a3b8' }}>{i + 1}</td>
-                        <td style={{ padding: '10px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {(viewModalExpense.expenseItems || []).map((item, i) => (
+                      <tr key={i}>
+                        <td style={{color:'#94a3b8',fontSize:12}}>{i+1}</td>
+                        <td>
+                          <div style={{display:'flex',alignItems:'center',gap:6}}>
                             <CategoryIcon cat={item.category} />
-                            <span style={{ fontWeight: 500 }}>{item.category}</span>
+                            <span style={{fontWeight:500}}>{item.category}</span>
                           </div>
                         </td>
-                        <td style={{ padding: '10px', color: '#64748b' }}>{item.description || '—'}</td>
-                        <td style={{ padding: '10px', color: '#64748b' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <td style={{color:'#64748b'}}>{item.description || '—'}</td>
+                        <td style={{color:'#64748b'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:4}}>
                             <CreditCard size={12} />{formatPaymentMode(item.paymentMode)}
                           </div>
                         </td>
-                        <td style={{ padding: '10px', textAlign: 'right', fontWeight: 600 }}>{fmt(item.amount)}</td>
+                        <td style={{textAlign:'right',fontWeight:700}}>{fmt(item.amount)}</td>
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr style={{ borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
-                      <td colSpan={4} style={{ padding: '10px', fontWeight: 600 }}>Total</td>
-                      <td style={{ padding: '10px', textAlign: 'right', fontWeight: 700, fontSize: 14 }}>
-                        {fmt(selectedExpense.totalAmount)}
+                    <tr>
+                      <td colSpan={4} style={{fontWeight:600,color:'#374151',padding:'10px 12px'}}>Total</td>
+                      <td style={{textAlign:'right',fontWeight:800,fontSize:15,color:'#111827',padding:'10px 12px'}}>
+                        {fmt((viewModalExpense.expenseItems||[]).reduce((s,i)=>s+(parseFloat(i.amount)||0),0))}
                       </td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
 
-              {selectedExpense.receiptUrl && (
-                <div className="exp-mgmt-drawer-section">
-                  <h3>Receipt</h3>
-                  <a href={selectedExpense.receiptUrl} target="_blank" rel="noreferrer" className="exp-receipt-link">
+              {/* Receipt */}
+              {viewModalExpense.receiptUrl && (
+                <div className="exp-modal-section">
+                  <div className="exp-section-label"><span className="exp-section-num">3</span> Bill / Receipt</div>
+                  <a href={viewModalExpense.receiptUrl} target="_blank" rel="noreferrer" className="exp-receipt-link">
                     <FileText size={14} /> View Receipt
                   </a>
                 </div>
               )}
-              <div className="exp-mgmt-drawer-actions">
-                <button className="exp-mgmt-btn-primary"
-                  onClick={() => { setShowDetailDrawer(false); handleEditExpense(selectedExpense); }}>
-                  Edit Expense
-                </button>
-                {selectedExpense.status === 'Pending' && (
+            </div>
+
+            {/* Footer */}
+            <div className="exp-modal-footer">
+              <div className="exp-modal-footer-left">
+                <span className="exp-footer-total">{(viewModalExpense.expenseItems||[]).length} item(s) · {fmt(viewModalExpense.totalAmount)}</span>
+              </div>
+              <div className="exp-modal-footer-right">
+                {canApprove && viewModalExpense.status === 'Pending' && (
                   <>
-                    <button className="exp-mgmt-btn-success"
-                      onClick={() => { handleStatusChange(selectedExpense.id, 'Approved'); setShowDetailDrawer(false); }}>
-                      Approve
+                    <button className="exp-btn-approve" onClick={() => { handleStatusChange(viewModalExpense.id,'Approved'); setShowViewModal(false); }}>
+                      <CheckCircle size={13} /> Approve
                     </button>
-                    <button className="exp-mgmt-btn-secondary"
-                      onClick={() => { handleStatusChange(selectedExpense.id, 'Rejected'); setShowDetailDrawer(false); }}>
-                      Reject
+                    <button className="exp-btn-reject" onClick={() => { handleStatusChange(viewModalExpense.id,'Rejected'); setShowViewModal(false); }}>
+                      <XCircle size={13} /> Reject
                     </button>
                   </>
                 )}
-                <button className="exp-mgmt-btn-danger" onClick={() => handleDeleteExpense(selectedExpense.id)}>
-                  Delete
-                </button>
+                <button className="exp-btn-secondary" onClick={() => setShowViewModal(false)}>Close</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          EXPENSE ITEMS DETAIL MODAL
-      ══════════════════════════════════════════════════════════════════════ */}
-      {showItemsModal && itemsModalExpense && (
-        <div className="exp-mgmt-modal-overlay" onClick={() => setShowItemsModal(false)}>
+{showItemsModal && itemsModalExpense && (
+        <div className="exp-mgmt-modal-overlay">
           <div className="exp-items-detail-modal" onClick={(e) => e.stopPropagation()}>
             <div className="exp-mgmt-modal-header">
               <div>

@@ -27,13 +27,6 @@ const fmtShort = (n) => {
 };
 // PDF-safe formatters — jsPDF built-in fonts don't support Unicode ₹ (U+20B9)
 // Use "Rs." prefix which renders correctly in all PDF fonts
-const pFmt = (n) => {
-  const v = parseFloat(n) || 0;
-  const neg = v < 0;
-  const abs = Math.abs(v);
-  const formatted = abs.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return (neg ? '-' : '') + 'Rs.' + formatted;
-};
 const pFmtShort = (n) => {
   const v = parseFloat(n) || 0;
   const neg = v < 0;
@@ -122,12 +115,15 @@ export default function ProjectReports() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
   // ── localStorage keys ────────────────────────────────────────────────────────
+  // Cache version — bump this whenever the report data structure changes
+  // so stale localStorage data is automatically invalidated on next load.
+  const CACHE_VERSION = 'v4';
   const SK = {
     group:    'pr_sel_group',
     subGroup: 'pr_sel_subgroup',
     project:  'pr_sel_project',
     tab:      'pr_active_tab',
-    report:   'pr_report_cache',
+    report:   `pr_report_cache_${CACHE_VERSION}`,
   };
 
   // Project selection — initialise from localStorage so selections survive refresh
@@ -142,8 +138,16 @@ export default function ProjectReports() {
   // Report data — restore from cache so it survives browser refresh
   const [report, setReport]   = useState(() => {
     try {
-      const cached = localStorage.getItem(SK.report);
-      return cached ? JSON.parse(cached) : null;
+      const cached = localStorage.getItem(`pr_report_cache_${CACHE_VERSION}`);
+      if (!cached) return null;
+      const parsed = JSON.parse(cached);
+      // Invalidate cache if netProfit === grossProfit (stale pre-fix data where GST wasn't subtracted)
+      const prof = parsed?.profitability;
+      if (prof && prof.netProfit !== undefined && prof.grossProfit !== undefined
+          && prof.netProfit === prof.grossProfit && prof.additionalGST && parseFloat(prof.additionalGST) !== 0) {
+        return null; // force fresh fetch
+      }
+      return parsed;
     } catch { return null; }
   });
   const [loading, setLoading] = useState(false);
@@ -253,15 +257,23 @@ export default function ProjectReports() {
     const addSheet = (name, rows, headerRows = []) => {
       const ws = XLSX.utils.aoa_to_sheet(rows);
 
-      // ── Auto column widths based on content ──────────────────────────────
+      // ── Smart column widths ───────────────────────────────────────────────
+      // Min 14 chars wide, max 50. Header row (row 0) gets +4 bonus width.
+      // Number cells are kept compact; text cells scale with content length.
       const colWidths = [];
-      rows.forEach(row => {
+      rows.forEach((row, ri) => {
+        const isHeader = ri === 0;
         (row || []).forEach((cell, ci) => {
-          const len = cell != null ? String(cell).length : 0;
-          colWidths[ci] = Math.min(Math.max(colWidths[ci] || 8, len + 2), 60);
+          const raw = cell == null ? '' : String(cell);
+          const isNum = typeof cell === 'number';
+          const len = isNum
+            ? Math.max(14, raw.length + 2)
+            : Math.min(50, Math.max(14, raw.length + 3));
+          const weighted = isHeader ? len + 4 : len;
+          colWidths[ci] = Math.max(colWidths[ci] || 14, weighted);
         });
       });
-      ws['!cols'] = colWidths.map(w => ({ wch: w }));
+      ws['!cols'] = colWidths.map(w => ({ wch: Math.max(14, Math.min(w, 50)) }));
 
       // ── Bold specified header rows + any ALL-CAPS section title rows ─────
       const boldRowSet = new Set(headerRows);
@@ -301,7 +313,8 @@ export default function ProjectReports() {
       ['Budget', parseFloat(ov.budget) || 0], ['Progress %', parseFloat(ov.progressPercentage) || 0],
       [],
       ['FINANCIAL SNAPSHOT', '', '', '', '', ''],
-      ['Total Contract Value (Invoiced)', parseFloat(ov.totalContractValue) || 0],
+      ['Contract Value (Project Budget)', parseFloat(ov.totalContractValue) || 0],
+      ['Total Invoiced to Client', parseFloat(ov.totalInvoiced || 0) || 0],
       ['Total Received', parseFloat(ov.totalReceived) || 0],
       ['Amount to be Received (Billing Pending)', parseFloat(bil.totalPending) || 0],
       ['Total Procurement (Billed)', parseFloat(ov.totalProcurement) || 0],
@@ -394,15 +407,23 @@ export default function ProjectReports() {
       ['PROFITABILITY ANALYSIS'],                                                          // 0
       [],                                                                                  // 1
       ['REVENUE', '', 'COST', '', 'PROFIT', ''],                                          // 2
-      ['Total Revenue (Invoiced)', parseFloat(prof.totalRevenue)||0, 'Total Procurement', parseFloat(prof.totalProcurement)||0, 'Gross Profit', parseFloat(prof.grossProfit)||0],
-      ['', '', 'Project Expenses', parseFloat(prof.projectExpenses)||0, 'Net Profit', parseFloat(prof.netProfit)||0],
-      ['', '', '', '', 'Gross Margin %', parseFloat(prof.grossMarginPercent)||0],
+      ['Total Project Value', parseFloat(prof.totalRevenue)||0, 'Total Procurement', parseFloat(prof.totalProcurement)||0, 'Gross Profit', parseFloat(prof.grossProfit)||0],
+      ['', '', 'Project Expenses', parseFloat(prof.projectExpenses)||0, 'Net Profit (after GST)', parseFloat(prof.netProfit)||0],
+      ['', '', 'Net GST Liability', parseFloat(prof.additionalGST)||0, 'Gross Margin %', parseFloat(prof.grossMarginPercent)||0],
       ['', '', '', '', 'Net Margin %', parseFloat(prof.netMarginPercent)||0],
       [],                                                                                  // 7
-      ['GST ANALYSIS', ''],                                                                // 8
-      ['Invoice GST (Tax Collected)', parseFloat(prof.invoiceGSTAmount)||0],
-      ['PO / Bill GST (Tax Paid)', parseFloat(prof.poGSTAmount)||0],
-      ['Additional / Net GST', parseFloat(prof.additionalGST)||0],
+      ['P&L WATERFALL (Profit = Revenue − Procurement − Expenses − Net GST)', ''],        // 8
+      ['Project Value', parseFloat(prof.totalRevenue)||0],
+      ['− Procurement Cost', -(parseFloat(prof.totalProcurement)||0)],
+      ['= Gross Profit', parseFloat(prof.grossProfit)||0],
+      ['− Project Expenses', -(parseFloat(prof.projectExpenses)||0)],
+      ['− Net GST Liability (Invoice GST collected − Vendor GST ITC)', -(parseFloat(prof.additionalGST)||0)],
+      ['= Net Profit', parseFloat(prof.netProfit)||0],
+      [],
+      ['GST ANALYSIS', ''],
+      ['Invoice GST Collected (from client)', parseFloat(prof.invoiceGSTAmount)||0],
+      ['Procurement GST Paid to Vendors (Input Tax Credit)', parseFloat(prof.poGSTAmount)||0],
+      ['Net GST Payable to Govt', parseFloat(prof.additionalGST)||0],
       [],                                                                                  // 12
       ['PROJECT EXPENSES', ''],                                                            // 13
       expHeaders,                                                                          // 14
@@ -489,8 +510,8 @@ export default function ProjectReports() {
 
       const bilBars=[{label:'Invoiced',value:vn(bil.totalInvoiced),color:'#2563eb'},{label:'Received',value:vn(bil.totalReceived),color:'#059669'},{label:'Pending',value:vn(bil.totalPending),color:'#d97706'},{label:'Advances',value:vn(bil.totalAdvances),color:'#7c3aed'}];
       const prBars=[{label:'PO Value',value:vn(proc.totalPOValue),color:'#1e3a8a'},{label:'Billed',value:vn(proc.totalBilled),color:'#d97706'},{label:'Paid',value:vn(proc.totalPaid),color:'#059669'},{label:'Balance',value:vn(proc.totalBalance),color:'#dc2626'}];
-      const plBars=[{label:'Revenue',value:Math.abs(vn(prof.totalRevenue)),color:'#059669'},{label:'Procure.',value:Math.abs(vn(prof.totalProcurement)),color:'#d97706'},{label:'Expenses',value:Math.abs(vn(prof.projectExpenses)),color:'#f43f5e'},{label:isP?'Profit':'Loss',value:Math.abs(vn(prof.netProfit)),color:isP?'#0d9488':'#dc2626'}];
-      const costSegs=[{label:'Revenue',value:vn(prof.totalRevenue),color:'#059669'},{label:'Procurement',value:vn(prof.totalProcurement),color:'#d97706'},{label:'Expenses',value:vn(prof.projectExpenses),color:'#f43f5e'}].filter(s=>s.value>0);
+      const plBars=[{label:'Proj.Val',value:Math.abs(vn(prof.totalRevenue)),color:'#059669'},{label:'Procure.',value:Math.abs(vn(prof.totalProcurement)),color:'#d97706'},{label:'Expenses',value:Math.abs(vn(prof.projectExpenses)),color:'#f43f5e'},{label:isP?'Profit':'Loss',value:Math.abs(vn(prof.netProfit)),color:isP?'#0d9488':'#dc2626'}];
+      const costSegs=[{label:'Project Value',value:vn(prof.totalRevenue),color:'#059669'},{label:'Procurement',value:vn(prof.totalProcurement),color:'#d97706'},{label:'Expenses',value:vn(prof.projectExpenses),color:'#f43f5e'}].filter(s=>s.value>0);
 
       const imgBil  = barChart(bilBars);
       const imgPr   = barChart(prBars);
@@ -503,8 +524,8 @@ export default function ProjectReports() {
       const findings=[
         parseFloat(bPct)>=90?{tag:'BILLING',c:'#059669',bg:'#f0fdf4',t:`Excellent collection rate of ${bPct}% — receivables well managed.`}:parseFloat(bPct)>=60?{tag:'BILLING',c:'#d97706',bg:'#fffbeb',t:`Collection rate ${bPct}%. ${pFmtShort(bil.totalPending)} outstanding from client.`}:{tag:'BILLING',c:'#dc2626',bg:'#fef2f2',t:`Low collection rate of ${bPct}%. ${pFmtShort(bil.totalPending)} requires immediate follow-up.`},
         parseFloat(pPct)>=90?{tag:'PAYMENTS',c:'#059669',bg:'#f0fdf4',t:`Vendor payments ${pPct}% complete — obligations nearly fully discharged.`}:{tag:'PAYMENTS',c:'#d97706',bg:'#fffbeb',t:`${pPct}% of vendor bills paid. ${pFmtShort(proc.totalBalance)} outstanding to suppliers.`},
-        isP?{tag:'PROFIT',c:'#059669',bg:'#f0fdf4',t:`Profitable — net margin ${pct(prof.netMarginPercent)}, net profit ${pFmtShort(prof.netProfit)}.`}:{tag:'PROFIT',c:'#dc2626',bg:'#fef2f2',t:`Loss of ${pFmtShort(prof.netProfit)} (${pct(prof.netMarginPercent)} margin). Costs exceed revenue.`},
-        vn(prof.additionalGST)>=0?{tag:'GST',c:'#2563eb',bg:'#eff6ff',t:`GST surplus ${pFmtShort(prof.additionalGST)} — collected more from client than paid to vendors.`}:{tag:'GST',c:'#d97706',bg:'#fffbeb',t:`GST deficit ${pFmtShort(Math.abs(vn(prof.additionalGST)))} — eligible for Input Tax Credit (ITC).`},
+        isP?{tag:'PROFIT',c:'#059669',bg:'#f0fdf4',t:`Profitable — net margin ${pct(prof.netMarginPercent)}, net profit ${pFmtShort(prof.netProfit)} (after GST deduction).`}:{tag:'PROFIT',c:'#dc2626',bg:'#fef2f2',t:`Loss of ${pFmtShort(prof.netProfit)} (${pct(prof.netMarginPercent)} margin). Costs including net GST exceed revenue.`},
+        vn(prof.additionalGST)>=0?{tag:'GST',c:'#d97706',bg:'#fffbeb',t:`Net GST liability ${pFmtShort(prof.additionalGST)} deducted from profit (invoice GST collected minus ITC from vendors).`}:{tag:'GST',c:'#059669',bg:'#f0fdf4',t:`Net ITC benefit ${pFmtShort(Math.abs(vn(prof.additionalGST)))} — vendors GST paid exceeds invoice GST, reducing tax burden.`},
       ];
       const recs=[];
       if(parseFloat(bPct)<80) recs.push(`Follow up on ${pFmtShort(bil.totalPending)} pending from client to improve cash flow.`);
@@ -686,7 +707,7 @@ tbody tr:nth-child(even) td{background:#f9fafb}
   </div>
   <div class="cover-strip">
     <div class="cover-strip-item">
-      <div class="cover-strip-label">Contract Value</div>
+      <div class="cover-strip-label">Contract Value (Budget)</div>
       <div class="cover-strip-value">${fmtShort(ov.totalContractValue)}</div>
       <div class="cover-strip-sub">Total invoiced to client</div>
     </div>
@@ -730,7 +751,7 @@ tbody tr:nth-child(even) td{background:#f9fafb}
       ${[['Project ID',ov.projectId],['Project Name',ov.projectName],['Status',ov.status],['Location',ov.location],['Group',ov.groupName],['Sub Group',ov.subGroupName],['Start Date',ov.startDate],['End Date',ov.endDate],['Budget',fmt(ov.budget)],['Progress',pct(ov.progressPercentage)],['Gross Margin',pct(prof.grossMarginPercent)],['Net Margin',pct(prof.netMarginPercent)]].map(([l,v])=>`<div class="info-item"><div class="info-label">${l}</div><div class="info-value">${v||'—'}</div></div>`).join('')}
     </div>
 
-    ${narrative(`The project is currently <strong>${ov.status||'in progress'}</strong>, with an overall completion of <strong>${pct(ov.progressPercentage)}</strong> against a total allocated budget of <strong>${fmt(ov.budget)}</strong>. The project runs from ${ov.startDate||'N/A'} through ${ov.endDate||'N/A'}. A contract value of <strong>${fmt(ov.totalContractValue)}</strong> has been invoiced to the client, with <strong>${fmt(ov.totalReceived)}</strong> received — representing a collection rate of <strong>${bPct}%</strong>.`)}
+    ${narrative(`The project is currently <strong>${ov.status||'in progress'}</strong>, with an overall completion of <strong>${pct(ov.progressPercentage)}</strong> against a total allocated budget of <strong>${fmt(ov.budget)}</strong>. The project runs from ${ov.startDate||'N/A'} through ${ov.endDate||'N/A'}. The agreed contract value is <strong>${fmt(ov.totalContractValue)}</strong>. Total invoiced to client is <strong>${fmt(bil.totalInvoiced)}</strong>, with <strong>${fmt(ov.totalReceived)}</strong> received — representing a collection rate of <strong>${bPct}%</strong>.`)}
   </div>
   ${pageFooter(2,'Project Overview')}
 </div>
@@ -786,7 +807,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${pageHeader('Section 03 — Billing Status','#065f46')}
     ${sectionTitle('🧾','Billing Status — Invoices','#065f46')}
     <div class="kpi-grid">
-      <div class="kpi-card" style="border-top-color:#2563eb"><div class="kpi-label">Total Invoiced</div><div class="kpi-value" style="color:#2563eb">${fmtShort(bil.totalInvoiced)}</div><div class="kpi-sub">Raised to client</div></div>
+      <div class="kpi-card" style="border-top-color:#6366f1"><div class="kpi-label">Contract Value</div><div class="kpi-value" style="color:#6366f1">${fmtShort(ov.totalContractValue)}</div><div class="kpi-sub">Project budget (agreed)</div></div>
+      <div class="kpi-card" style="border-top-color:#2563eb"><div class="kpi-label">Total Invoiced</div><div class="kpi-value" style="color:#2563eb">${fmtShort(bil.totalInvoiced)}</div><div class="kpi-sub">Raised to client (incl. GST)</div></div>
       <div class="kpi-card" style="border-top-color:#059669"><div class="kpi-label">Total Received</div><div class="kpi-value" style="color:#059669">${fmtShort(bil.totalReceived)}</div><div class="kpi-sub">Payments collected</div></div>
       <div class="kpi-card" style="border-top-color:#f59e0b"><div class="kpi-label">Pending</div><div class="kpi-value" style="color:#f59e0b">${fmtShort(bil.totalPending)}</div><div class="kpi-sub">Yet to be collected</div></div>
       <div class="kpi-card" style="border-top-color:#7c3aed"><div class="kpi-label">Advances</div><div class="kpi-value" style="color:#7c3aed">${fmtShort(bil.totalAdvances)}</div><div class="kpi-sub">Advance receipts</div></div>
@@ -875,29 +897,31 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${pageHeader('Section 05 — Profitability Analysis','#4a1d96')}
     ${sectionTitle('📈','Profitability & Margin Analysis','#4a1d96')}
     <div class="kpi-grid">
-      <div class="kpi-card" style="border-top-color:#059669"><div class="kpi-label">Total Revenue</div><div class="kpi-value" style="color:#059669">${fmtShort(prof.totalRevenue)}</div><div class="kpi-sub">From invoices</div></div>
+      <div class="kpi-card" style="border-top-color:#6366f1"><div class="kpi-label">Contract Value</div><div class="kpi-value" style="color:#6366f1">${fmtShort(ov.totalContractValue)}</div><div class="kpi-sub">Project budget (agreed)</div></div>
+      <div class="kpi-card" style="border-top-color:#2563eb"><div class="kpi-label">Total Invoiced</div><div class="kpi-value" style="color:#2563eb">${fmtShort(prof.totalRevenue)}</div><div class="kpi-sub">Raised to client (incl. GST)</div></div>
       <div class="kpi-card" style="border-top-color:${vn(prof.grossProfit)>=0?'#059669':'#dc2626'}"><div class="kpi-label">Gross Profit</div><div class="kpi-value" style="color:${vn(prof.grossProfit)>=0?'#059669':'#dc2626'}">${fmtShort(prof.grossProfit)}</div><div class="kpi-sub">${pct(prof.grossMarginPercent)} gross margin</div></div>
+      <div class="kpi-card" style="border-top-color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}"><div class="kpi-label">Net GST Liability</div><div class="kpi-value" style="color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}">${fmtShort(prof.additionalGST)}</div><div class="kpi-sub">Deducted from profit</div></div>
       <div class="kpi-card" style="border-top-color:${isP?'#059669':'#dc2626'}"><div class="kpi-label">Net Profit</div><div class="kpi-value" style="color:${isP?'#059669':'#dc2626'}">${fmtShort(prof.netProfit)}</div><div class="kpi-sub">${pct(prof.netMarginPercent)} net margin</div></div>
-      <div class="kpi-card" style="border-top-color:#dc2626"><div class="kpi-label">Project Expenses</div><div class="kpi-value" style="color:#dc2626">${fmtShort(prof.projectExpenses)}</div><div class="kpi-sub">Additional costs</div></div>
     </div>
-    ${narrative(`This section presents the profit and loss statement for <strong>${ov.projectName||'the project'}</strong>. Total revenue of <strong>${fmt(prof.totalRevenue)}</strong> (based on invoiced amounts) is set against procurement costs of <strong>${fmt(prof.totalProcurement)}</strong> to arrive at a gross profit of <strong>${fmt(prof.grossProfit)}</strong> (${pct(prof.grossMarginPercent)} gross margin). After deducting project expenses of <strong>${fmt(prof.projectExpenses)}</strong>, the net ${isP?'profit':'loss'} stands at <strong>${fmt(prof.netProfit)}</strong> — a net margin of <strong>${pct(prof.netMarginPercent)}</strong>.`)}
+    ${narrative(`This section presents the profit and loss statement for <strong>${ov.projectName||'the project'}</strong>. Total project value of <strong>${fmt(prof.totalRevenue)}</strong> (contract budget) is set against procurement costs of <strong>${fmt(prof.totalProcurement)}</strong> to arrive at a gross profit of <strong>${fmt(prof.grossProfit)}</strong> (${pct(prof.grossMarginPercent)} gross margin). After deducting project expenses of <strong>${fmt(prof.projectExpenses)}</strong> and net GST liability of <strong>${fmt(prof.additionalGST)}</strong> (GST collected from client minus input tax credit from vendors), the net ${isP?'profit':'loss'} stands at <strong>${fmt(prof.netProfit)}</strong> — a net margin of <strong>${pct(prof.netMarginPercent)}</strong>.`)}
 
     <div class="table-section-title">Profit &amp; Loss Statement</div>
     <div class="pl-box">
-      <div class="pl-row"><span>Total Revenue (Invoiced)</span><span class="g">${fmt(prof.totalRevenue)}</span></div>
+      <div class="pl-row"><span>Total Invoiced to Client <small style="font-weight:400;color:#6b7280">(incl. GST)</small></span><span class="g">${fmt(prof.totalRevenue)}</span></div>
       <div class="pl-row pl-indent"><span>− Procurement Cost (Vendor Bills)</span><span class="rd">− ${fmt(prof.totalProcurement)}</span></div>
       <div class="pl-row pl-subtotal"><span>= Gross Profit</span><span>${fmt(prof.grossProfit)} &nbsp;<small style="font-weight:400;color:#6b7280">(${pct(prof.grossMarginPercent)})</small></span></div>
       <div class="pl-row pl-indent"><span>− Project Expenses (Travel / Misc)</span><span class="rd">− ${fmt(prof.projectExpenses)}</span></div>
+      <div class="pl-row pl-indent" style="background:#eff6ff;border-left:3px solid #2563eb"><span style="color:#1d4ed8">− Net GST Liability <small style="font-weight:400">(Invoice GST − ITC)</small></span><span class="rd">− ${fmt(prof.additionalGST)}</span></div>
       <div class="pl-row pl-total ${isP?'pl-profit':'pl-loss'}"><span>= Net ${isP?'Profit':'Loss'}</span><span>${fmt(prof.netProfit)} &nbsp;<small>(${pct(prof.netMarginPercent)})</small></span></div>
     </div>
 
     <div class="table-section-title">GST Analysis</div>
     <div class="gst-box">
-      <div class="gst-title">GST Summary — Invoice GST Collected &minus; PO / Bill GST Paid = Net Position</div>
+      <div class="gst-title">GST Summary — Net GST is deducted from profit (tax collected must be remitted to govt, net of input tax credit)</div>
       <div class="gst-grid">
-        <div><div class="gst-label">Invoice GST Collected (from client)</div><div class="gst-value g">${fmt(prof.invoiceGSTAmount)}</div></div>
-        <div><div class="gst-label">PO / Bill GST Paid (to vendors)</div><div class="gst-value am">${fmt(prof.poGSTAmount)}</div></div>
-        <div><div class="gst-label">Net Additional GST Position</div><div class="gst-value ${vn(prof.additionalGST)>=0?'g':'rd'}">${fmt(prof.additionalGST)}</div></div>
+        <div><div class="gst-label">Invoice GST Collected from Client</div><div class="gst-value g">${fmt(prof.invoiceGSTAmount)}</div></div>
+        <div><div class="gst-label">Procurement GST Paid to Vendors (Input Tax Credit)</div><div class="gst-value am">${fmt(prof.poGSTAmount)}</div></div>
+        <div><div class="gst-label">Net GST Payable to Govt (deducted from profit)</div><div class="gst-value ${vn(prof.additionalGST)>=0?'am':'g'}">${fmt(prof.additionalGST)}</div></div>
       </div>
     </div>
     ${(prof.expenses||[]).length>0?`
@@ -1092,7 +1116,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
             ['Project ID', ov.projectId], ['Status', ov.status],
             ['Location', ov.location], ['Group › Sub', `${ov.groupName||''}${ov.subGroupName?' › '+ov.subGroupName:''}`],
             ['Start Date', ov.startDate], ['End Date', ov.endDate],
-            ['Budget', fmt(ov.budget)], ['Progress', pct(ov.progressPercentage)],
+            ['Contract Value (Budget)', fmt(ov.totalContractValue)], ['Total Invoiced to Client', fmt(ov.totalInvoiced || bil.totalInvoiced)],
+            ['Progress', pct(ov.progressPercentage)], ['Budget (Original)', fmt(ov.budget)],
           ].map(([k, v]) => (
             <div key={k} className="pr-info-item">
               <span className="pr-info-key">{k}</span>
@@ -1234,43 +1259,69 @@ tbody tr:nth-child(even) td{background:#f9fafb}
 
   const renderProfitability = () => {
     const prof = report?.profitability || {};
+    const ov2  = report?.overview || {};
     const isProfit = parseFloat(prof.netProfit) >= 0;
+    const netGST = parseFloat(prof.additionalGST) || 0;
     return (
       <div className="pr-section">
+        {/* Formula note */}
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12.5, color: '#475569' }}>
+          <strong>Profit formula:</strong>&nbsp; Total Invoiced to Client &minus; Total Procurement Bills &minus; Approved Project Expenses &minus; Net GST Liability = Net Profit
+        </div>
         <div className="pr-kpi-row">
-          <KPI label="Total Revenue" value={fmtShort(prof.totalRevenue)} color="#059669" icon={<TrendingUp size={20}/>} />
-          <KPI label="Gross Profit" value={fmtShort(prof.grossProfit)} sub={pct(prof.grossMarginPercent)} color="#059669" icon={<BarChart2 size={20}/>} />
-          <KPI label="Net Profit" value={fmtShort(prof.netProfit)} sub={pct(prof.netMarginPercent)} color={isProfit?'#059669':'#dc2626'} icon={<IndianRupee size={20}/>} />
-          <KPI label="Project Expenses" value={fmtShort(prof.projectExpenses)} color="#dc2626" icon={<AlertCircle size={20}/>} />
+          <KPI label="Contract Value" value={fmtShort(ov2.totalContractValue)} sub="Project budget (agreed)" color="#6366f1" icon={<IndianRupee size={20}/>} />
+          <KPI label="Total Invoiced" value={fmtShort(prof.totalRevenue)} sub="Raised to client (incl. GST)" color="#2563eb" icon={<FileText size={20}/>} />
+          <KPI label="Procurement Bills" value={fmtShort(prof.totalProcurement)} sub="Vendor bills total (incl. GST)" color="#ea580c" icon={<Package size={20}/>} />
+          <KPI label="Project Expenses" value={fmtShort(prof.projectExpenses)} sub="Approved employee expenses" color="#dc2626" icon={<AlertCircle size={20}/>} />
+          <KPI label="Net GST Liability" value={fmtShort(prof.additionalGST)} sub="Invoice GST − Vendor GST (ITC)" color={netGST >= 0 ? '#d97706' : '#059669'} icon={<BarChart2 size={20}/>} />
+          <KPI label="Net Profit" value={fmtShort(prof.netProfit)} sub={pct(prof.netMarginPercent) + ' margin'} color={isProfit?'#059669':'#dc2626'} icon={<TrendingUp size={20}/>} />
         </div>
         <div className="pr-profit-breakdown">
           <div className="pr-breakdown-row">
-            <span>Total Revenue (Invoiced)</span><span className="pr-green">{fmt(prof.totalRevenue)}</span>
+            <span>Total Invoiced to Client <small style={{fontWeight:400,color:'#6b7280'}}>(incl. GST — basis for profit)</small></span>
+            <span className="pr-green">{fmt(prof.totalRevenue)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
-            <span>− Procurement (Bills)</span><span className="pr-red">−{fmt(prof.totalProcurement)}</span>
+            <span>− Total Procurement Bills <small style={{fontWeight:400,color:'#6b7280'}}>(vendor bills incl. GST)</small></span>
+            <span className="pr-red">−{fmt(prof.totalProcurement)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-result">
-            <span>= Gross Profit</span><span>{fmt(prof.grossProfit)}</span>
+            <span>= Gross Profit <small style={{fontWeight:400,color:'#6b7280'}}>(before expenses & GST)</small></span>
+            <span>{fmt(prof.grossProfit)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
-            <span>− Project Expenses</span><span className="pr-red">−{fmt(prof.projectExpenses)}</span>
+            <span>− Project Expenses <small style={{fontWeight:400,color:'#6b7280'}}>(approved employee expenses only)</small></span>
+            <span className="pr-red">−{fmt(prof.projectExpenses)}</span>
+          </div>
+          <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: '3px solid #d97706', background: '#fffbeb' }}>
+            <span style={{ color: '#92400e' }}>− Net GST Liability <small style={{ fontWeight: 400, color: '#78716c' }}>(Invoice GST collected − Vendor GST paid as ITC)</small></span>
+            <span className="pr-red">−{fmt(prof.additionalGST)}</span>
           </div>
           <div className={`pr-breakdown-row pr-breakdown-final ${isProfit?'pr-profit':'pr-loss'}`}>
-            <span>= Net Profit</span><span>{fmt(prof.netProfit)} ({pct(prof.netMarginPercent)})</span>
+            <span>
+              = Net {isProfit ? 'Profit' : 'Loss'} <small style={{fontWeight:400}}>({pct(prof.netMarginPercent)} on invoiced)</small>
+              {parseFloat(prof.netProfit) === parseFloat(prof.grossProfit) && parseFloat(prof.additionalGST) !== 0 && (
+                <span style={{color:'#dc2626',fontSize:11,marginLeft:8}}>⚠ Please regenerate report to apply latest formula</span>
+              )}
+            </span>
+            <span style={{fontSize:16,fontWeight:800}}>{fmt(prof.netProfit)}</span>
           </div>
         </div>
         <div className="pr-gst-box">
-          <div className="pr-gst-title">GST Analysis (Additional GST = Invoice GST − PO GST)</div>
+          <div className="pr-gst-title">GST Detail — Net GST deducted from profit (GST collected from client is a tax liability, net of Input Tax Credit from vendors)</div>
           <div className="pr-gst-row">
-            <div><span>Invoice GST Collected</span><strong>{fmt(prof.invoiceGSTAmount)}</strong></div>
-            <div><span>PO/Bill GST Paid</span><strong>{fmt(prof.poGSTAmount)}</strong></div>
-            <div><span>Net Additional GST</span><strong className={parseFloat(prof.additionalGST)>=0?'pr-green':'pr-red'}>{fmt(prof.additionalGST)}</strong></div>
+            <div><span>Invoice GST Collected from Client</span><strong style={{color:'#d97706'}}>{fmt(prof.invoiceGSTAmount)}</strong></div>
+            <div><span>Procurement GST Paid to Vendors (ITC)</span><strong style={{color:'#059669'}}>−{fmt(prof.poGSTAmount)}</strong></div>
+            <div><span>Net GST Payable to Govt</span><strong className={netGST>=0?'pr-red':'pr-green'}>{fmt(prof.additionalGST)}</strong></div>
+          </div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>
+            💡 Net GST = Invoice GST − ITC. Deducted from profit because GST collected from client belongs to the government, not the company.
           </div>
         </div>
+
         {(prof.expenses||[]).length > 0 && (
           <>
-            <h3 className="pr-subtable-title">Project Expenses</h3>
+            <h3 className="pr-subtable-title">Project Expenses <small style={{fontWeight:400,color:'#6b7280',fontSize:12}}>(approved expenses shown below; only approved amounts deducted from profit)</small></h3>
             <div className="pr-table-wrap">
               <table className="pr-table">
                 <thead><tr><th>Code</th><th>Date</th><th>Category</th><th>Amount</th><th>Paid By</th><th>Status</th></tr></thead>

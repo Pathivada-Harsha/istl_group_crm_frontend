@@ -978,7 +978,7 @@ export default function ClientDashboardFollowUps() {
 
       {/* Add Follow-up Modal */}
       {showAddModal && (
-        <div className="followup-modal-overlay" onClick={() => { setShowAddModal(false); resetAddForm(); }}>
+        <div className="followup-modal-overlay">
           <div className="followup-modal" onClick={(e) => e.stopPropagation()}>
             <div className="followup-modal-header">
               <h2>Add New Follow-up</h2>
@@ -1315,7 +1315,7 @@ export default function ClientDashboardFollowUps() {
 
       {/* Edit Follow-up Modal */}
       {showEditModal && editingFollowup && (
-        <div className="followup-modal-overlay" onClick={() => { setShowEditModal(false); resetEditForm(); setEditingFollowup(null); }}>
+        <div className="followup-modal-overlay">
           <div className="followup-modal" onClick={(e) => e.stopPropagation()}>
             <div className="followup-modal-header">
               <h2>Edit Follow-up</h2>

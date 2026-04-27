@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   TrendingUp, TrendingDown, DollarSign, IndianRupee, Package, FileText, Users,
   Calendar, Clock, AlertCircle, CheckCircle, XCircle, Activity,
@@ -165,9 +166,9 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
                   ))}
                 </div>
                 {projectId && (
-                  <a href={`/finance/expenses?projectId=${projectId}`} className="db-view-all-link" onClick={e => e.stopPropagation()}>
+                  <Link to={`/project-cost-expense?projectId=${projectId}`} className="db-view-all-link" onClick={e => e.stopPropagation()}>
                     View all expenses →
-                  </a>
+                  </Link>
                 )}
               </div>
             )}
@@ -533,6 +534,7 @@ const ProjectDashboard = () => {
   const [aggData, setAggData]           = useState(null);      // aggregated data
   const [showSpentModal, setShowSpentModal] = useState(false); // Amount Spent breakdown modal
   const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
+  const [showProfitModal, setShowProfitModal] = useState(false); // Profit breakdown modal
 
   // Determine which mode we are in
   const mode = projectId ? 'PROJECT' : groupName ? (subGroupName ? 'SUBGROUP' : 'GROUP') : 'ALL';
@@ -708,27 +710,30 @@ const ProjectDashboard = () => {
                 <h3 className="section-title"><IndianRupee size={20} />Project Financial Overview</h3>
                 <div className="kpi-grid">
                   {[
-                    { icon: <Wallet size={36} />, color: '#3b82f6', val: formatCurrency(dashboardData.financialData.totalProjectValue), label: 'Total Project Value', sub: 'Contract budget' },
+                    { icon: <Wallet size={36} />, color: '#3b82f6', val: formatCurrency(dashboardData.financialData.totalProjectValue), label: 'Contract Value', sub: 'Project budget (agreed)' },
+                    { icon: <FileText size={36} />, color: '#6366f1', val: formatCurrency(dashboardData.financialData.amountToBeReceived), label: 'Total Invoiced', sub: 'Raised to client (incl. GST)' },
                     {
                       icon: <TrendingDown size={36} />, color: '#f59e0b',
                       val: formatCurrency((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.totalEmployeeExpenses || 0)),
                       label: 'Amount Spent',
-                      sub: `Procurement + Expenses · ${dashboardData.financialData.budgetUtilizationPercent?.toFixed(1)}% of budget`,
+                      sub: 'Paid to vendors + Approved Expenses',
                       clickable: true,
                     },
-                    ...(dashboardData.financialData.isCompleted ? [{
-                      icon: <Target size={36} />, color: '#22c55e',
+                    {
+                      icon: <Target size={36} />, color: (dashboardData.financialData.projectedProfit ?? 0) >= 0 ? '#22c55e' : '#ef4444',
                       val: formatCurrency(dashboardData.financialData.projectedProfit),
-                      label: 'Actual Profit',
-                      sub: `${dashboardData.financialData.profitMargin?.toFixed(1)}% margin · Final`
-                    }] : []),
+                      label: 'Net Profit',
+                      sub: `${dashboardData.financialData.profitMargin?.toFixed(1)}% margin · Invoiced − Bills − Expenses − Net GST`,
+                      clickable: true,
+                      onClick: () => setShowProfitModal(true),
+                    },
                   ].map((k, i) => (
                     <div
                       key={i}
                       className={`kpi-card${k.clickable ? ' kpi-card-clickable' : ''}`}
                       style={{ borderTopColor: k.color }}
-                      onClick={k.clickable ? () => setShowSpentModal(true) : undefined}
-                      title={k.clickable ? 'Click to see spending breakdown' : undefined}
+                      onClick={k.clickable ? (k.onClick || (() => setShowSpentModal(true))) : undefined}
+                      title={k.clickable ? 'Click to see breakdown' : undefined}
                     >
                       <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
                       <div className="kpi-content">
@@ -817,12 +822,13 @@ const ProjectDashboard = () => {
                   <h3 className="section-title" style={{ color: '#fff' }}><CheckCircle size={20} /> Project Completed — Final Profit Summary</h3>
                   <div className="metrics-grid">
                     {[
-                      ['Total Project Value',    formatCurrency(dashboardData.financialData.totalProjectValue),  'Contract budget'],
-                      ['Procurement Cost',        formatCurrency(dashboardData.financialData.totalSpent),         'Paid to vendors'],
-                      ['Employee & Expense Cost', formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee expenses'],
-                      ['Total Cost',              formatCurrency((dashboardData.financialData.totalSpent ?? 0) + (dashboardData.financialData.totalEmployeeExpenses ?? 0)), 'Procurement + Employee'],
-                      ['Actual Profit',           formatCurrency(dashboardData.financialData.projectedProfit),   'Project Value − Total Cost'],
-                      ['Profit Margin',           `${dashboardData.financialData.profitMargin?.toFixed(1)}%`,    '(Profit / Project Value) × 100'],
+                      ['Contract Value (Budget)',   formatCurrency(dashboardData.financialData.totalProjectValue),  'Agreed project contract amount'],
+                      ['Total Invoiced to Client', formatCurrency(dashboardData.financialData.amountToBeReceived), 'Sum of all invoices raised (incl. GST)'],
+                      ['− Procurement Bills',      formatCurrency(dashboardData.financialData.totalPayable),      'Total vendor bills (incl. GST)'],
+                      ['− Approved Expenses',      formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee & project expenses'],
+                      ['− Net GST Liability',      formatCurrency(dashboardData.financialData.netGST ?? 0),        'Invoice GST collected − Vendor GST paid (ITC)'],
+                      ['= Net Profit',             formatCurrency(dashboardData.financialData.projectedProfit),   'Invoiced − Bills − Expenses − Net GST'],
+                      ['Profit Margin',            `${dashboardData.financialData.profitMargin?.toFixed(1)}%`,    '(Profit ÷ Total Invoiced) × 100'],
                     ].map(([title, val, sub], i) => (
                       <div key={i} className="metric-card" style={{ background: 'rgba(255,255,255,.1)', border: 'none' }}>
                         <div className="metric-header"><span className="metric-title" style={{ color: '#fff' }}>{title}</span></div>
@@ -1194,6 +1200,95 @@ const ProjectDashboard = () => {
                   </div>
                 )}
 
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── Profit Breakdown Modal ───────────────────────────────────────── */}
+      {showProfitModal && dashboardData?.financialData && (() => {
+        const fd = dashboardData.financialData;
+        const isProfit = (fd.projectedProfit ?? 0) >= 0;
+        const accentColor = isProfit ? '#16a34a' : '#dc2626';
+        const netGST = fd.netGST ?? 0;
+        const invGST = fd.invoiceGSTCollected ?? 0;
+        const procGST = fd.procurementGSTPaid ?? 0;
+
+        const Row = ({ label, value, color, borderTop, bold, bg, fontSize }) => (
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            padding: '7px 14px',
+            borderTop: borderTop ? '1.5px solid #e5e7eb' : undefined,
+            background: bg || 'transparent',
+          }}>
+            <span style={{ fontSize: fontSize || 13, color: bold ? '#111827' : '#374151', fontWeight: bold ? 600 : 400 }}>{label}</span>
+            <span style={{ fontSize: fontSize || 13, fontWeight: bold ? 700 : 500, color: color || '#111827', whiteSpace: 'nowrap' }}>{value}</span>
+          </div>
+        );
+
+        return (
+          <div className="spent-modal-overlay" onClick={() => setShowProfitModal(false)}>
+            <div onClick={e => e.stopPropagation()} style={{
+              background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460,
+              boxShadow: '0 20px 60px rgba(0,0,0,0.18)', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Target size={18} style={{ color: accentColor }} />
+                  <span style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>Profit Breakdown</span>
+                </div>
+                <button onClick={() => setShowProfitModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', display: 'flex', padding: 4 }}><X size={18} /></button>
+              </div>
+
+              {/* Formula pill */}
+              <div style={{ margin: '10px 14px 4px', padding: '7px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11.5, color: '#475569', textAlign: 'center' }}>
+                Value &nbsp;−&nbsp; Procurement &nbsp;−&nbsp; Expenses &nbsp;−&nbsp; Net GST &nbsp;=&nbsp; <strong style={{ color: accentColor }}>Profit</strong>
+              </div>
+
+              {/* P&L Waterfall */}
+              <div style={{ margin: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                <Row label="Total Invoiced to Client" value={formatCurrency(fd.amountToBeReceived || 0)} color="#16a34a" bold />
+                <Row label="− Procurement Bills (vendor bills)" value={`−${formatCurrency(fd.totalPayable || 0)}`} color="#dc2626" borderTop />
+                <Row label="− Approved Expenses (employee)" value={`−${formatCurrency(fd.totalEmployeeExpenses || 0)}`} color="#dc2626" borderTop />
+                <Row label="− Net GST Liability" value={`−${formatCurrency(netGST)}`} color="#d97706" borderTop />
+                <Row
+                  label={isProfit ? '= Actual Profit' : '= Net Loss'}
+                  value={formatCurrency(fd.projectedProfit)}
+                  color={accentColor} bold borderTop
+                  bg={isProfit ? '#f0fdf4' : '#fef2f2'}
+                  fontSize={14}
+                />
+                <div style={{ padding: '4px 14px 8px', background: isProfit ? '#f0fdf4' : '#fef2f2', borderTop: '1px dashed #d1fae5' }}>
+                  <span style={{ fontSize: 11, color: '#6b7280' }}>Profit Margin: <strong style={{ color: accentColor }}>{fd.profitMargin?.toFixed(1)}%</strong></span>
+                </div>
+              </div>
+
+              {/* GST breakdown */}
+              <div style={{ margin: '0 14px 14px', border: '1px solid #bfdbfe', borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ background: '#eff6ff', padding: '7px 14px', borderBottom: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 5 }}><Percent size={13} /> Net GST Detail</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>−{formatCurrency(netGST)}</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', padding: '10px 0 8px' }}>
+                  <div>
+                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Invoice GST</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#b45309' }}>{formatCurrency(invGST)}</div>
+                  </div>
+                  <div style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Vendor GST (ITC)</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>−{formatCurrency(procGST)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Net Payable</div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>{formatCurrency(netGST)}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10.5, color: '#94a3b8', padding: '0 14px 8px', textAlign: 'center' }}>
+                  GST collected from client is a tax liability — deducted from profit
+                </div>
               </div>
             </div>
           </div>

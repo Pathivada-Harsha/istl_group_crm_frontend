@@ -118,7 +118,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
   const isComplete = form.newStatus === 'Completed';
 
   return (
-    <div className="tm-overlay" onClick={onClose}>
+    <div className="tm-overlay">
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div>
@@ -303,7 +303,7 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
   const clearAll  = () => setEntries(p => p.map(e => ({ ...e, checked: false })));
 
   return (
-    <div className="tm-overlay" onClick={onClose}>
+    <div className="tm-overlay">
       <div className="tm-modal" style={{width:'min(820px,96vw)',maxHeight:'90vh',display:'flex',flexDirection:'column'}} onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div>
@@ -515,7 +515,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
   };
 
   return (
-    <div className="tm-overlay" onClick={onClose}>
+    <div className="tm-overlay">
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()} style={{width:'min(780px,97vw)',maxHeight:'92vh'}}>
         <div className="tm-mhdr">
           <div>
@@ -634,7 +634,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
   };
 
   return (
-    <div className="tm-overlay" onClick={onClose}>
+    <div className="tm-overlay">
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div><h2>{isEdit ? '✏️ Edit Task' : '➕ Add New Task'}</h2><p className="tm-msub">{isEdit ? 'Update task details' : 'Create a task for yourself or a team member'}</p></div>
@@ -738,7 +738,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
   const elapsed = diffHrs(task.startedAt, task.closedAt || new Date().toISOString());
 
   return (
-    <div className="tm-overlay" onClick={onClose}>
+    <div className="tm-overlay">
       <div className="tm-modal tm-modal-xl" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div>
@@ -900,18 +900,24 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                     onDragEnd={onDragEnd}
                     onClick={() => onDetail(task)}>
                     <div className="tm-ci-top">
-                      <span className="tm-tcode">{task.taskCode}</span>
+                      <span className="tm-tcode" style={{fontSize:10,color:'#94a3b8',fontWeight:700}}>{task.taskCode}</span>
                       <PBadge p={task.priority} />
                     </div>
                     <p className="tm-ci-title">{task.title}</p>
-                    {task.projectName && <p className="tm-ci-proj">🏗️ {task.projectName}</p>}
-                    {task.otherContext && <p className="tm-ci-proj" style={{ color: '#c2410c' }}>📌 {task.otherContext}</p>}
-                    {task.relatedTo && <p className="tm-ci-rel">↳ {task.relatedTo}</p>}
+                    {task.projectName && <p className="tm-ci-proj" title={task.projectName}>🏗️ {task.projectName}</p>}
+                    {task.otherContext && <p className="tm-ci-proj" style={{ color: '#c2410c' }} title={task.otherContext}>📌 {task.otherContext}</p>}
+                    {task.relatedTo && (
+                      <p className="tm-ci-rel" title={task.relatedTo}>
+                        ↳ {task.relatedTo.length > 55 ? task.relatedTo.slice(0, 55) + '…' : task.relatedTo}
+                      </p>
+                    )}
                     <div className="tm-ci-bot">
                       <span className="tm-chip">📁 {task.category}</span>
                       <span className={`tm-due-sm ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨' : '📅'} {fmtDate(task.dueDate)}</span>
                     </div>
-                    {isSuperAdmin && task.assignedToName && <div className="tm-ci-who">👤 {task.assignedToName}</div>}
+                    {isSuperAdmin && task.assignedToName && (
+                      <div className="tm-ci-who" title={task.assignedToName}>👤 {task.assignedToName}</div>
+                    )}
                     <div className="tm-ci-footer">
                       <div className="tm-mini-prog">
                         <div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%` }} /></div>
@@ -919,11 +925,11 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                       </div>
                       {totalH > 0 && <span className="tm-ci-hours">⏱ {totalH.toFixed(1)}h</span>}
                     </div>
-                    <div className="tm-ci-actions" style={{display:'flex',gap:6,marginTop:6}}>
+                    <div className="tm-ci-actions">
                       {status !== 'Completed' && status !== 'Cancelled' && (
-                        <button className="tm-ci-log-btn" style={{flex:1}} onClick={e => { e.stopPropagation(); onLog(task); }}>📝 Work Entry</button>
+                        <button className="tm-ci-log-btn" onClick={e => { e.stopPropagation(); onLog(task); }}>📝 Work Entry</button>
                       )}
-                      <button className="tm-ci-log-btn" style={{flex:1,background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe'}} onClick={e => { e.stopPropagation(); onEdit(task); }}>✏️ Edit</button>
+                      <button className="tm-ci-log-btn" style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe'}} onClick={e => { e.stopPropagation(); onEdit(task); }}>✏️ Edit</button>
                     </div>
                     <div className="tm-drag-hint">⠿ drag to move status</div>
                   </div>
