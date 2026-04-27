@@ -458,7 +458,7 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
 
       {/* Excel Upload Modal */}
       {showExcelModal && (
-        <div className="orderbook-modal-overlay" onClick={e => e.stopPropagation()}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-modal" onClick={e => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Import Items from Excel</h2>
@@ -1008,7 +1008,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
       {/* Delete Order Confirm */}
       {showDeleteOrderConfirm && (
-        <div className="orderbook-modal-overlay" onClick={e => e.stopPropagation()}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-delete-modal" onClick={e => e.stopPropagation()}>
             <div className="orderbook-delete-icon">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10" strokeWidth="2"/><line x1="12" y1="8" x2="12" y2="12" strokeWidth="2" strokeLinecap="round"/><line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2" strokeLinecap="round"/></svg>
@@ -1026,7 +1026,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
       {/* PO Upload Modal */}
       {showPOUploadModal && poUploadOrder && (
-        <div className="orderbook-modal-overlay" onClick={e => e.stopPropagation()}>
+        <div className="orderbook-modal-overlay">
           <div className="orderbook-modal" onClick={e => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Upload PO for {poUploadOrder.orderBookNo}</h2>
@@ -1678,7 +1678,7 @@ useEffect(() => {
 
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
-        <div className="cust-modal-overlay" onClick={() => setShowDeleteModal(false)}>
+        <div className="cust-modal-overlay">
           <div className="customer-delete-modal" onClick={e => e.stopPropagation()}>
             <div className="customer-delete-modal-icon">
               <div className="customer-delete-icon-circle"><span>!</span></div>
@@ -1695,7 +1695,7 @@ useEffect(() => {
 
       {/* ── Quick Create Order Book Modal ──────────────────────────── */}
       {quickObCustomer && (
-        <div className="cust-modal-overlay" onClick={closeQuickOb}>
+        <div className="cust-modal-overlay">
           <div className="cust-modal" style={{maxWidth:520}} onClick={e => e.stopPropagation()}>
             <div className="cust-modal-header">
               <div>

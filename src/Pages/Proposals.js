@@ -593,7 +593,7 @@ const ProposalsWithTemplate = () => {
 
       {/* ── Delete Modal ── */}
       {showDeleteModal && (
-        <div className="p-modal-overlay" onClick={()=>setShowDeleteModal(false)}>
+        <div className="p-modal-overlay">
           <div className="p-delete-modal" onClick={e=>e.stopPropagation()}>
             <div className="p-delete-icon-wrap"><div className="p-delete-icon-circle">!</div></div>
             <h2 className="p-delete-title">Delete Proposal</h2>
@@ -608,7 +608,7 @@ const ProposalsWithTemplate = () => {
 
       {/* ── View Modal ── */}
       {showViewModal && selectedProposal && (
-        <div className="p-modal-overlay" onClick={()=>setShowViewModal(false)}>
+        <div className="p-modal-overlay">
           <div className="p-modal p-modal-lg" onClick={e=>e.stopPropagation()}>
             <div className="p-modal-hdr">
               <div>
@@ -689,7 +689,7 @@ const ProposalsWithTemplate = () => {
 
       {/* ── Create/Edit Modal ── */}
       {showCreateModal && (
-        <div className="p-modal-overlay" onClick={()=>{setShowCreateModal(false);resetForm();}}>
+        <div className="p-modal-overlay">
           <div className="p-modal p-modal-lg" onClick={e=>e.stopPropagation()}>
             <div className="p-modal-hdr">
               <h2>{isEditMode ? 'Edit Proposal' : 'New Proposal'}</h2>
@@ -755,7 +755,7 @@ const ProposalsWithTemplate = () => {
 
       {/* ── Template Editor Modal ── */}
       {showTemplateModal && (
-        <div className="p-modal-overlay" onClick={()=>setShowTemplateModal(false)}>
+        <div className="p-modal-overlay">
           <div className="p-modal p-modal-xl" onClick={e=>e.stopPropagation()}>
             <div className="p-modal-hdr">
               <h2>📝 Edit Template Content</h2>

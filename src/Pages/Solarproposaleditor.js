@@ -1136,7 +1136,7 @@ const PremiumSolarProposal = () => {
 
       {/* Edit Form Modal */}
       {showEditForm && (
-        <div className="modal-overlay" onClick={handleCancel}>
+        <div className="modal-overlay">
           <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Edit Proposal Details</h2>

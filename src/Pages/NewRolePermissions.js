@@ -107,6 +107,7 @@ export default function NewRolePermissions() {
   const [hierarchyData, setHierarchyData] = useState([]);
   const [hierarchyLoading, setHierarchyLoading] = useState(false);
   const [hierForm, setHierForm] = useState({ roleName: '', levelOrder: 4, description: '', canAssignRoles: [], canSeenRoles: [] });
+  const [deleteHierConfirm, setDeleteHierConfirm] = useState(null); // roleName string
   const [editingHier, setEditingHier] = useState(null);
 
   // Menu item CRUD state
@@ -172,8 +173,11 @@ export default function NewRolePermissions() {
     } catch { addToast("Network error", "error"); }
   };
 
-  const deleteHierarchyEntry = async (roleName) => {
-    if (!window.confirm('Delete hierarchy entry for "' + roleName + '"?')) return;
+  const deleteHierarchyEntry = (roleName) => { setDeleteHierConfirm(roleName); };
+
+  const confirmDeleteHierarchy = async () => {
+    const roleName = deleteHierConfirm;
+    setDeleteHierConfirm(null);
     try {
       const res = await fetch(`${API}/role-hierarchy/${roleName}`, {
         method: "DELETE", credentials: "include", headers: { "User-Role": "SUPERADMIN" },
@@ -1063,6 +1067,24 @@ export default function NewRolePermissions() {
           )
         )}
       </main>
+
+      {/* ── Delete Hierarchy Confirmation Modal ── */}
+      {deleteHierConfirm && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}}>
+          <div style={{background:'#fff',borderRadius:16,padding:'36px 32px 28px',width:'min(420px,94vw)',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+            <div style={{width:64,height:64,borderRadius:'50%',background:'#fff0f0',border:'1px solid #fecaca',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:28}}>🗑️</div>
+            <h3 style={{margin:'0 0 10px',fontSize:20,fontWeight:700,color:'#0f172a'}}>Delete Hierarchy Entry</h3>
+            <p style={{margin:'0 0 28px',fontSize:14,color:'#64748b',lineHeight:1.6}}>
+              Delete hierarchy entry for <strong>"{deleteHierConfirm}"</strong>?<br/>
+              <strong style={{color:'#dc2626'}}>This action cannot be undone.</strong>
+            </p>
+            <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+              <button onClick={() => setDeleteHierConfirm(null)} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'1.5px solid #e2e8f0',background:'#fff',fontSize:14,fontWeight:600,color:'#374151',cursor:'pointer'}}>Cancel</button>
+              <button onClick={confirmDeleteHierarchy} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'none',background:'#dc2626',fontSize:14,fontWeight:600,color:'#fff',cursor:'pointer'}}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

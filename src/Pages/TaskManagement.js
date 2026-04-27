@@ -7,7 +7,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
 import '../pages-css/TaskManagement.css';
-import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2 } from 'react-icons/fi';
+import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2, FiPlus, FiZap, FiClock, FiBriefcase, FiTag, FiArrowRight, FiFileText, FiList, FiAlertTriangle } from 'react-icons/fi';
 
 const API = process.env.REACT_APP_API_URL;
 const hdrs = (u) => ({
@@ -127,7 +127,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div>
-            <h2>📝 Add Work Entry</h2>
+            <h2><FiClipboard size={18} style={{marginRight:8}} />Add Work Entry</h2>
             <p className="tm-msub">Describe what you did on this task — be as detailed as possible</p>
           </div>
           <button className="tm-xbtn" onClick={onClose}>✕</button>
@@ -142,7 +142,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div className="tm-strip-row" style={{marginTop:6}}>
             <PBadge p={task.priority} />
             <span className="tm-chip">📁 {task.category}</span>
-            {task.projectName && <span className="tm-chip tm-chip-blue">🏗️ {task.projectName}</span>}
+            {task.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span>}
             {task.relatedTo && <span className="tm-chip" style={{color:'#7c3aed',background:'#f5f3ff'}}>↳ {task.relatedTo}</span>}
           </div>
         </div>
@@ -264,7 +264,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
         <div className="tm-mftr">
           <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !hasChanges}>
-            {saving ? 'Saving…' : isComplete ? '✅ Save & Mark Complete' : '💾 Save Work Entry'}
+            {saving ? 'Saving…' : isComplete ? '✅ Save & Mark Complete' : 'Save Work Entry'}
           </button>
         </div>
       </div>
@@ -322,7 +322,7 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
         <div style={{padding:'10px 20px',background:'#f8fafc',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
           <span style={{fontSize:12,color:'#64748b'}}>{activeTasks.length} active tasks</span>
           <span style={{fontSize:12,fontWeight:700,color:'#3b82f6'}}>{checkedCount} selected</span>
-          {totalHrs > 0 && <span style={{fontSize:12,fontWeight:700,color:'#059669'}}>⏱ {totalHrs.toFixed(1)}h total today</span>}
+          {totalHrs > 0 && <span style={{fontSize:12,fontWeight:700,color:'#059669'}}><FiClock size={11} style={{marginRight:3}} />{totalHrs.toFixed(1)}h total today</span>}
           <div style={{marginLeft:'auto',display:'flex',gap:8}}>
             <button className="tm-btn tm-ghost tm-sm" onClick={selectAll}>Select All</button>
             <button className="tm-btn tm-ghost tm-sm" onClick={clearAll}>Clear</button>
@@ -361,7 +361,7 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
                       <span style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#94a3b8'}}>{e.taskCode}</span>
                       <PBadge p={e.priority} />
                       <span className="tm-chip">📁 {e.category}</span>
-                      {e.projectName && <span className="tm-chip tm-chip-blue">🏗️ {e.projectName}</span>}
+                      {e.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{e.projectName}</span>}
                     </div>
                     <p style={{margin:'3px 0 0',fontSize:13,fontWeight:600,color:'#0f172a',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.title}</p>
                   </div>
@@ -440,7 +440,7 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
         <div className="tm-mftr" style={{borderTop:'2px solid #f1f5f9'}}>
           <div style={{fontSize:12,color:'#64748b'}}>
             {checkedCount > 0
-              ? `Saving ${checkedCount} update${checkedCount>1?'s':''}${totalHrs>0?` · ⏱ ${totalHrs.toFixed(1)}h`:''}`
+              ? `Saving ${checkedCount} update${checkedCount>1?'s':''}${totalHrs>0?` · ${totalHrs.toFixed(1)}h`:''}`
               : 'Select tasks you worked on today'}
           </div>
           <div style={{display:'flex',gap:8}}>
@@ -524,7 +524,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()} style={{width:'min(780px,97vw)',maxHeight:'92vh'}}>
         <div className="tm-mhdr">
           <div>
-            <h2>⚡ Quick Work Log</h2>
+            <h2><FiZap size={18} style={{marginRight:8}} />Quick Work Log</h2>
             <p className="tm-msub">Record what you worked on today — these are logged as completed tasks assigned to you</p>
           </div>
           <button className="tm-xbtn" onClick={onClose}>✕</button>
@@ -568,7 +568,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
                   <select className="tm-sel" style={{width:'100%',maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis'}} value={e.projectId} onChange={ev => setField(e.id,'projectId',ev.target.value)}>
                     <option value="">— No project —</option>
                     {projects.map(p => <option key={p.projectUniqueId||p.id} value={p.projectUniqueId||p.id}>{p.projectName}</option>)}
-                    <option value="OTHER">📌 Other / Ad-hoc</option>
+                    <option value="OTHER"><FiTag size={12} style={{marginRight:4}} />Other / Ad-hoc</option>
                   </select>
                   {e.projectId === 'OTHER' && (
                     <input className="tm-inp" style={{marginTop:6}} placeholder="Describe context — e.g. Admin, Training, Internal..."
@@ -587,7 +587,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
 
           {totalHrs > 0 && (
             <div style={{marginTop:14,padding:'10px 14px',background:'#ecfdf5',borderRadius:8,fontSize:13,color:'#059669',fontWeight:600}}>
-              ⏱ Total today: {totalHrs.toFixed(1)} hours across {entries.filter(e=>e.title.trim()).length} activit{entries.filter(e=>e.title.trim()).length===1?'y':'ies'}
+              Total today: {totalHrs.toFixed(1)} hours across {entries.filter(e=>e.title.trim()).length} activit{entries.filter(e=>e.title.trim()).length===1?'y':'ies'}
             </div>
           )}
         </div>
@@ -595,7 +595,7 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
           <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="tm-btn tm-primary" onClick={submit}
             disabled={saving || !entries.some(e => e.title.trim())}>
-            {saving ? 'Saving…' : `⚡ Log ${entries.filter(e=>e.title.trim()).length} Activit${entries.filter(e=>e.title.trim()).length===1?'y':'ies'}`}
+            {saving ? 'Saving…' : `Log ${entries.filter(e=>e.title.trim()).length} Activit${entries.filter(e=>e.title.trim()).length===1?'y':'ies'}`}
           </button>
         </div>
       </div>
@@ -642,7 +642,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
     <div className="tm-overlay">
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
-          <div><h2>{isEdit ? '✏️ Edit Task' : '➕ Add New Task'}</h2><p className="tm-msub">{isEdit ? 'Update task details' : 'Create a task for yourself or a team member'}</p></div>
+          <div><h2>{isEdit ? 'Edit Task' : 'Add New Task'}</h2><p className="tm-msub">{isEdit ? 'Update task details' : 'Create a task for yourself or a team member'}</p></div>
           <button className="tm-xbtn" onClick={onClose}>✕</button>
         </div>
         <div className="tm-mbody">
@@ -687,7 +687,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
             <select className="tm-sel" value={form.projectId} onChange={e => set('projectId', e.target.value)}>
               <option value="">— No specific project —</option>
               {projects.map(p => <option key={p.projectUniqueId || p.id} value={p.projectUniqueId || p.id}>{p.projectName}</option>)}
-              <option value="OTHER">📌 Other / Ad-hoc work</option>
+              <option value="OTHER"><FiTag size={12} style={{marginRight:4}} />Other / Ad-hoc work</option>
             </select>
           </div>
           {form.projectId === 'OTHER' && (
@@ -726,7 +726,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
         </div>
         <div className="tm-mftr">
           <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !form.title.trim()}>{saving ? 'Saving…' : isEdit ? '✏️ Update Task' : '➕ Add Task'}</button>
+          <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !form.title.trim()}>{saving ? 'Saving…' : isEdit ? 'Update Task' : '+ Add Task'}</button>
         </div>
       </div>
     </div>
@@ -757,14 +757,14 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
           {/* Meta grid */}
           <div className="tm-detail-grid">
             <div className="tm-dg-item"><span className="tm-dg-lbl">Category</span><span className="tm-chip">📁 {task.category}</span></div>
-            <div className="tm-dg-item"><span className="tm-dg-lbl">Project</span><span>{task.projectName ? <span className="tm-chip tm-chip-blue">🏗️ {task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange">📌 {task.otherContext}</span> : '—'}</span></div>
+            <div className="tm-dg-item"><span className="tm-dg-lbl">Project</span><span>{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Assigned To</span><span className="tm-dg-val">{task.assignedToName || '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Created By</span><span className="tm-dg-val">{task.createdByName || '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Due Date</span><span className={`tm-dg-val ${isOD ? 'tm-red' : ''}`}>{fmtDate(task.dueDate)}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Start Date</span><span className="tm-dg-val">{task.startDate ? fmtDT(task.startDate) : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">End Date</span><span className="tm-dg-val">{task.endDate ? fmtDT(task.endDate) : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Est. Hours</span><span className="tm-dg-val">{task.estimatedHours ? `${task.estimatedHours}h` : '—'}</span></div>
-            <div className="tm-dg-item"><span className="tm-dg-lbl">Hours Logged</span><span className="tm-dg-val tm-blue-val">⏱ {totalH > 0 ? `${totalH.toFixed(1)}h` : '—'}</span></div>
+            <div className="tm-dg-item"><span className="tm-dg-lbl">Hours Logged</span><span className="tm-dg-val tm-blue-val"><FiClock size={11} style={{marginRight:3}} />{totalH > 0 ? `${totalH.toFixed(1)}h` : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Time Elapsed</span><span className="tm-dg-val">{elapsed ? `${elapsed}h` : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Started At</span><span className="tm-dg-val">{task.startedAt ? fmtDT(task.startedAt) : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Closed At</span><span className="tm-dg-val">{task.closedAt ? fmtDT(task.closedAt) : '—'}</span></div>
@@ -781,7 +781,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
             {task.estimatedHours && totalH > 0 && (
               <div className="tm-time-ratio">
                 <span>Logged {totalH.toFixed(1)}h of {task.estimatedHours}h estimated</span>
-                <span className={totalH > task.estimatedHours ? 'tm-red' : 'tm-green-txt'}>{totalH > task.estimatedHours ? '⚠️ Over estimate' : '✓ On track'}</span>
+                <span className={totalH > task.estimatedHours ? 'tm-red' : 'tm-green-txt'}>{totalH > task.estimatedHours ? '⚠ Over estimate' : '✓ On track'}</span>
               </div>
             )}
           </div>
@@ -791,7 +791,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
             <h4>Work Entries ({(task.updates || []).length} entries · {totalH.toFixed(1)}h total)</h4>
             {!(task.updates?.length) ? (
               <div style={{textAlign:'center',padding:'24px 0',color:'#94a3b8'}}>
-                <div style={{fontSize:28,marginBottom:6}}>📋</div>
+                <div style={{marginBottom:6}}><FiList size={28} color="#94a3b8" /></div>
                 <p style={{fontSize:13,margin:0}}>No work entries yet.</p>
                 <p style={{fontSize:11,margin:'4px 0 0',color:'#cbd5e1'}}>Click "Add Work Entry" to log what you've done on this task.</p>
               </div>
@@ -813,7 +813,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
                           <span className="tm-type-pill">{u.updateType || 'Update'}</span>
                           <span className="tm-hist-when">{fmtDate(u.updatedAt)}</span>
                           {(u.startTime || u.endTime) && <span className="tm-hist-time">🕐 {fmtTime(u.startTime)}{u.endTime ? ` → ${fmtTime(u.endTime)}` : ''}</span>}
-                          {u.hoursSpent > 0 && <span className="tm-hours-pill">⏱ {u.hoursSpent}h</span>}
+                          {u.hoursSpent > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{u.hoursSpent}h</span>}
                           {u.statusChanged && <span className="tm-hist-sc">→ <strong>{u.newStatus}</strong></span>}
                         </div>
                         {/* Summary line */}
@@ -829,7 +829,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
                           </div>
                         )}
                         {u.blockedReason && <p className="tm-hist-blk">🔴 Blocked: {u.blockedReason}</p>}
-                        {u.notes && <p className="tm-hist-notes">📋 {u.notes}</p>}
+                        {u.notes && <p className="tm-hist-notes"><FiFileText size={12} style={{marginRight:4}} />{u.notes}</p>}
                       </div>
                     </div>
                   );
@@ -906,8 +906,8 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                       <PBadge p={task.priority} />
                     </div>
                     <p className="tm-ci-title">{task.title}</p>
-                    {task.projectName && <p className="tm-ci-proj" title={task.projectName}>🏗️ {task.projectName}</p>}
-                    {task.otherContext && <p className="tm-ci-proj" style={{ color: '#c2410c' }} title={task.otherContext}>📌 {task.otherContext}</p>}
+                    {task.projectName && <p className="tm-ci-proj" title={task.projectName}><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</p>}
+                    {task.otherContext && <p className="tm-ci-proj" style={{ color: '#c2410c' }} title={task.otherContext}><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</p>}
                     {task.relatedTo && (
                       <p className="tm-ci-rel" title={task.relatedTo}>
                         ↳ {task.relatedTo.length > 55 ? task.relatedTo.slice(0, 55) + '…' : task.relatedTo}
@@ -925,7 +925,7 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                         <div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%` }} /></div>
                         <span>{task.completionPercent || 0}%</span>
                       </div>
-                      {totalH > 0 && <span className="tm-ci-hours">⏱ {totalH.toFixed(1)}h</span>}
+                      {totalH > 0 && <span className="tm-ci-hours"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span>}
                     </div>
                     <div className="tm-ci-actions">
                       <button className="tm-ci-log-btn" onClick={e => { e.stopPropagation(); onLog(task); }}>
@@ -1201,7 +1201,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
             <div style={{textAlign:'right'}}>
               <div style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>{teamTotal} task{teamTotal!==1?'s':''} · {totalEntries} entr{totalEntries!==1?'ies':'y'}</div>
-              {totalHours > 0 && <div style={{fontSize:11,color:'#0e7490',fontWeight:600}}>⏱ {totalHours.toFixed(1)}h logged</div>}
+              {totalHours > 0 && <div style={{fontSize:11,color:'#0e7490',fontWeight:600}}><FiClock size={11} style={{marginRight:3}} />{totalHours.toFixed(1)}h logged</div>}
             </div>
             <button className="tm-btn tm-ghost"
               onClick={() => logView==='logs'
@@ -1233,7 +1233,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           </div>
           {/* 3-way view toggle */}
           <div style={{display:'flex',border:'1px solid #e2e8f0',borderRadius:9,overflow:'hidden',background:'#f8fafc'}}>
-            {[['table','☰ Tasks'],['logs','📋 Work Logs'],['grid','⊞ Grid']].map(([v,l]) => (
+            {[['table','Tasks'],['logs','Work Logs'],['grid','Grid']].map(([v,l]) => (
               <button key={v} onClick={() => setLogView(v)} style={{
                 padding:'7px 14px',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,
                 background:logView===v?'#0f172a':'transparent',
@@ -1251,7 +1251,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           </div>
         ) : rows.length === 0 ? (
           <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
-            <div style={{fontSize:36,marginBottom:10}}>📋</div>
+            <div style={{fontSize:36,marginBottom:10}}><FiList size={36} color="#94a3b8" /></div>
             <p style={{fontSize:13,margin:0}}>
               {selectedEmp ? `No tasks found for ${selectedEmp.name}.` : `No tasks found. Try widening the date range or selecting an employee.`}
             </p>
@@ -1299,7 +1299,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           {r.relatedTo !== '—' && <span style={{fontSize:11,color:'#64748b',display:'block'}}>↳ {r.relatedTo}</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          {r.project !== '—' ? <span className="tm-chip tm-chip-blue">🏗️ {r.project}</span> : <span style={{color:'#94a3b8'}}>—</span>}
+                          {r.project !== '—' ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span> : <span style={{color:'#94a3b8'}}>—</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><span className="tm-chip">📁 {r.category}</span></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><PBadge p={r.priority} /></td>
@@ -1313,7 +1313,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           </div>
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          {r.totalHours > 0 ? <span className="tm-hours-pill">⏱ {r.totalHours.toFixed(1)}h</span> : <span style={{color:'#94a3b8'}}>—</span>}
+                          {r.totalHours > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours.toFixed(1)}h</span> : <span style={{color:'#94a3b8'}}>—</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:12,color:'#475569',whiteSpace:'nowrap'}}>
                           {r.dueDate !== '—' ? fmtDate(r.dueDate) : '—'}
@@ -1375,7 +1375,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                                 🕐 {fmtTime(u.startTime)}{u.endTime?` → ${fmtTime(u.endTime)}`:''}
                                               </span>
                                             )}
-                                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {parseFloat(u.hoursSpent).toFixed(1)}h</span>}
+                                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{parseFloat(u.hoursSpent).toFixed(1)}h</span>}
                                             {u.statusChanged && (
                                               <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'1px 8px',borderRadius:5,fontWeight:600}}>
                                                 → {u.newStatus}
@@ -1403,7 +1403,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                           )}
                                           {u.notes && (
                                             <div style={{background:'#f5f3ff',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#7c3aed',marginTop:4}}>
-                                              📋 {u.notes}
+                                              <FiFileText size={12} style={{marginRight:4,verticalAlign:'middle'}} />{u.notes}
                                             </div>
                                           )}
                                         </div>
@@ -1428,7 +1428,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           <div>
             {allEntries.length === 0 ? (
               <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
-                <div style={{fontSize:36,marginBottom:8}}>📝</div>
+                <div style={{fontSize:36,marginBottom:8}}><FiClipboard size={36} color="#94a3b8" /></div>
                 <p style={{fontSize:13,margin:0}}>No work entries found for this period.</p>
               </div>
             ) : Object.entries(logsByEmployee).map(([empName, empData]) => (
@@ -1444,7 +1444,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                   </div>
                   <div style={{flex:1}}>
                     <div style={{fontSize:14,fontWeight:800,color:'#0f172a'}}>{empName}</div>
-                    <div style={{fontSize:11,color:'#64748b'}}>{empData.role} · {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'} · ⏱ {empData.entries.reduce((s,e)=>s+(parseFloat(e.hoursSpent)||0),0).toFixed(1)}h</div>
+                    <div style={{fontSize:11,color:'#64748b'}}>{empData.role} · {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'} · {empData.entries.reduce((s,e)=>s+(parseFloat(e.hoursSpent)||0),0).toFixed(1)}h</div>
                   </div>
                   <span style={{fontSize:12,fontWeight:700,color:'#3b82f6',background:'#eff6ff',padding:'3px 12px',borderRadius:20}}>
                     {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'}
@@ -1479,7 +1479,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                             onClick={() => { const t = teamTasks.find(x=>x.id===u.taskId); if(t) onDetail(t); }}>
                             <span style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#94a3b8'}}>{u.taskCode}</span>
                             <span style={{fontSize:12,fontWeight:600,color:'#0f172a'}}>{u.taskTitle}</span>
-                            {u.projectName && <span className="tm-chip tm-chip-blue" style={{padding:'1px 6px'}}>🏗️ {u.projectName}</span>}
+                            {u.projectName && <span className="tm-chip tm-chip-blue" style={{padding:'1px 6px'}}><FiBriefcase size={11} style={{marginRight:3}} />{u.projectName}</span>}
                             <SBadge s={u.taskStatus} />
                           </div>
 
@@ -1492,10 +1492,10 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                 {fmtTime(u.startTime)}{u.endTime?` – ${fmtTime(u.endTime)}`:''}
                               </span>
                             )}
-                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill">⏱ {parseFloat(u.hoursSpent).toFixed(1)}h</span>} {/* FIX #4 */}
+                            {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{parseFloat(u.hoursSpent).toFixed(1)}h</span>} {/* FIX #4 */}
                             {u.statusChanged && (
                               <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'2px 8px',borderRadius:5,fontWeight:700,border:'1px solid #6ee7b7'}}>
-                                ✓ → {u.newStatus}
+                                <FiArrowRight size={12} style={{marginRight:3}} />{u.newStatus}
                               </span>
                             )}
                           </div>
@@ -1521,7 +1521,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           )}
                           {u.notes && (
                             <div style={{background:'#f5f3ff',border:'1px solid #e9d5ff',borderRadius:6,padding:'7px 12px',fontSize:12,color:'#7c3aed',marginTop:4}}>
-                              📋 {u.notes}
+                              <FiFileText size={12} style={{marginRight:4,verticalAlign:'middle'}} />{u.notes}
                             </div>
                           )}
                         </div>
@@ -1560,10 +1560,10 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                   <p style={{fontSize:13,fontWeight:600,color:'#0f172a',margin:'2px 0 0',lineHeight:1.3}}>{r.taskTitle}</p>
                 </div>
                 <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>
-                  {r.project !== '—' && <span className="tm-chip tm-chip-blue">🏗️ {r.project}</span>}
+                  {r.project !== '—' && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span>}
                   <span className="tm-chip">📁 {r.category}</span>
                   <PBadge p={r.priority} />
-                  {r.totalHours > 0 && <span className="tm-hours-pill">⏱ {r.totalHours}h</span>}
+                  {r.totalHours > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours}h</span>}
                 </div>
                 <div style={{marginBottom:8}}>
                   <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#64748b',marginBottom:3}}>
@@ -1615,7 +1615,7 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
       <div className="tm-today-hdr">
         <div>
           <h3>📅 {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h3>
-          <p>{todayUpds.length} update{todayUpds.length !== 1 ? 's' : ''} logged · ⏱ {totalH.toFixed(1)}h tracked today</p>
+          <p>{todayUpds.length} update{todayUpds.length !== 1 ? 's' : ''} logged · {totalH.toFixed(1)}h tracked today</p>
         </div>
       </div>
       {todayUpds.length > 0 && (
@@ -1628,12 +1628,12 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
                 <div className="tm-tl-meta">
                   <span className="tm-tcode">{u.task.taskCode}</span>
                   <span className="tm-type-pill">{u.updateType}</span>
-                  {u.hoursSpent > 0 && <span className="tm-hours-pill">⏱ {u.hoursSpent}h</span>}
-                  {u.task.projectName && <span className="tm-chip tm-chip-blue">🏗️ {u.task.projectName}</span>}
+                  {u.hoursSpent > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{u.hoursSpent}h</span>}
+                  {u.task.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{u.task.projectName}</span>}
                 </div>
                 <p className="tm-tl-title">{u.task.title}</p>
                 <p className="tm-tl-text">{u.workDone}</p>
-                {u.notes && <p className="tm-tl-notes">📋 {u.notes}</p>}
+                {u.notes && <p className="tm-tl-notes"><FiFileText size={12} style={{marginRight:4}} />{u.notes}</p>}
               </div>
             </div>
           ))}
@@ -1641,13 +1641,13 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
       )}
       {todayTasks.length > 0 && (
         <div className="tm-today-due">
-          <p className="tm-today-due-lbl">⚡ Due today and still open:</p>
+          <p className="tm-today-due-lbl"><FiAlertTriangle size={13} style={{marginRight:5,color:"#f59e0b"}} />Due today and still open:</p>
           {todayTasks.map(t => (
             <div key={t.id} className="tm-today-task" onClick={() => onDetail(t)}>
               <SBadge s={t.status} />
               <span className="tm-tcode">{t.taskCode}</span>
               <span style={{ flex: 1, fontSize: 13, color: '#0f172a' }}>{t.title}</span>
-              <button className="tm-btn tm-ghost tm-sm" onClick={e => { e.stopPropagation(); onLog(t); }}>📝 Work Entry</button>
+              <button className="tm-btn tm-ghost tm-sm" onClick={e => { e.stopPropagation(); onLog(t); }}><FiClipboard size={13} style={{marginRight:4}} />Work Entry</button>
             </div>
           ))}
         </div>
@@ -2026,13 +2026,13 @@ export default function TaskManagement() {
           <button className="tm-btn tm-ghost" onClick={() => exportCSV(taskExportRows(), `tasks_${todayStr()}.csv`)}>📤 Export</button>
           <button className="tm-btn" style={{background:'#f0fdf4',color:'#16a34a',border:'1px solid #bbf7d0',fontWeight:700}}
             onClick={() => setShowQuickLog(true)} title="Quickly log all work done today as completed activities">
-            ⚡ Quick Log
+            <FiZap size={14} style={{marginRight:5}} />Quick Log
           </button>
           <button className="tm-btn" style={{background:'#fffbeb',color:'#d97706',border:'1px solid #fde68a',fontWeight:700}}
             onClick={() => setShowBulkLog(true)} title="Update all your in-progress tasks at end of day">
             📓 Log My Day
           </button>
-          <button className="tm-btn tm-primary" onClick={() => setShowAdd(true)}>➕ Add Task</button>
+          <button className="tm-btn tm-primary" onClick={() => setShowAdd(true)}><FiPlus size={15} style={{marginRight:6}} />Add Task</button>
         </div>
       </div>
 
@@ -2108,7 +2108,7 @@ export default function TaskManagement() {
                 <p style={{fontSize:13,margin:0}}>Loading…</p>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="tm-empty"><div style={{ fontSize: 36 }}>📋</div><p>No tasks match your filters.</p></div>
+              <div className="tm-empty"><div style={{ fontSize: 36 }}><FiList size={36} color="#94a3b8" /></div><p>No tasks match your filters.</p></div>
             ) : (
               <>
                 <div className="tm-tbl-scroll-wrap">
@@ -2134,7 +2134,7 @@ export default function TaskManagement() {
                                 {task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}
                               </div>
                             </td>
-                            <td>{task.projectName ? <span className="tm-chip tm-chip-blue">🏗️ {task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange">📌 {task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>
+                            <td>{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>
                             <td><span className="tm-chip">📁 {task.category}</span></td>
                             <td><PBadge p={task.priority} /></td>
                             <td><SBadge s={task.status} /></td>
@@ -2150,7 +2150,7 @@ export default function TaskManagement() {
                                 {task.endDate ? <div style={{ color: '#059669' }}>■ {fmtDT(task.endDate)}</div> : null}
                               </div>
                             </td>
-                            <td>{totalH > 0 ? <span className="tm-hours-pill">⏱ {totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>
+                            <td>{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>
                             {isSA && <td><span className="tm-assignee">{task.assignedToName || '—'}</span></td>}
                             <td><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>
                             <td onClick={e => e.stopPropagation()}>
@@ -2190,22 +2190,20 @@ export default function TaskManagement() {
           position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
           display:'flex', alignItems:'center', justifyContent:'center',
           zIndex:9999, padding:16,
-        }}
-          onClick={() => setDeleteConfirm(null)}>
+        }}>
           <div style={{
             background:'#fff', borderRadius:16, padding:'36px 32px 28px',
             width:'min(420px,94vw)', textAlign:'center',
             boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
             animation:'tm-pop .18s ease',
-          }}
-            onClick={e => e.stopPropagation()}>
+          }}>
             {/* Trash icon circle */}
             <div style={{
               width:64, height:64, borderRadius:'50%',
               background:'#fff0f0', border:'1px solid #fecaca',
               display:'flex', alignItems:'center', justifyContent:'center',
               margin:'0 auto 20px', fontSize:26,
-            }}>🗑️</div>
+            }}><FiTrash2 size={28} color="#dc2626" /></div>
             <h3 style={{ margin:'0 0 10px', fontSize:20, fontWeight:700, color:'#0f172a' }}>
               Delete Task
             </h3>

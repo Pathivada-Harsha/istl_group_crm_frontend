@@ -253,7 +253,8 @@ const FollowupBlock = ({ todayCount = 0, overdueCount = 0, upcomingCount = 0, fo
 const TeamTable = ({ members = [] }) => {
   if (!members.length) return <Empty icon="👥" msg="No team members found. Ask admin to assign team members to you." />;
   return (
-    <table className="rd-table" style={{ width: "100%" }}>
+    <div className="rd-table-wrap">
+    <table className="rd-table" style={{ width: "100%", minWidth: 700 }}>
       <thead>
         <tr>
           <th>Member</th><th>Role</th><th>Leads</th><th>Won</th>
@@ -286,6 +287,7 @@ const TeamTable = ({ members = [] }) => {
         })}
       </tbody>
     </table>
+    </div>
   );
 };
 
