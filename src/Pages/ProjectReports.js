@@ -117,7 +117,7 @@ export default function ProjectReports() {
   // ── localStorage keys ────────────────────────────────────────────────────────
   // Cache version — bump this whenever the report data structure changes
   // so stale localStorage data is automatically invalidated on next load.
-  const CACHE_VERSION = 'v4';
+  const CACHE_VERSION = 'v5'; // bumped: profitability now uses excl-GST basis
   const SK = {
     group:    'pr_sel_group',
     subGroup: 'pr_sel_subgroup',
@@ -407,14 +407,14 @@ export default function ProjectReports() {
       ['PROFITABILITY ANALYSIS'],                                                          // 0
       [],                                                                                  // 1
       ['REVENUE', '', 'COST', '', 'PROFIT', ''],                                          // 2
-      ['Total Project Value', parseFloat(prof.totalRevenue)||0, 'Total Procurement', parseFloat(prof.totalProcurement)||0, 'Gross Profit', parseFloat(prof.grossProfit)||0],
+      ['Total Invoiced (excl.GST)', parseFloat(prof.totalRevenueExclGST||prof.totalRevenue)||0, 'Procurement (excl.GST)', parseFloat(prof.totalProcurementExclGST||prof.totalProcurement)||0, 'Gross Profit', parseFloat(prof.grossProfit)||0],
       ['', '', 'Project Expenses', parseFloat(prof.projectExpenses)||0, 'Net Profit (after GST)', parseFloat(prof.netProfit)||0],
       ['', '', 'Net GST Liability', parseFloat(prof.additionalGST)||0, 'Gross Margin %', parseFloat(prof.grossMarginPercent)||0],
       ['', '', '', '', 'Net Margin %', parseFloat(prof.netMarginPercent)||0],
       [],                                                                                  // 7
       ['P&L WATERFALL (Profit = Revenue − Procurement − Expenses − Net GST)', ''],        // 8
-      ['Project Value', parseFloat(prof.totalRevenue)||0],
-      ['− Procurement Cost', -(parseFloat(prof.totalProcurement)||0)],
+      ['Invoiced (excl.GST)', parseFloat(prof.totalRevenueExclGST||prof.totalRevenue)||0],
+      ['− Procurement (excl.GST)', -(parseFloat(prof.totalProcurementExclGST||prof.totalProcurement)||0)],
       ['= Gross Profit', parseFloat(prof.grossProfit)||0],
       ['− Project Expenses', -(parseFloat(prof.projectExpenses)||0)],
       ['− Net GST Liability (Invoice GST collected − Vendor GST ITC)', -(parseFloat(prof.additionalGST)||0)],
@@ -510,8 +510,8 @@ export default function ProjectReports() {
 
       const bilBars=[{label:'Invoiced',value:vn(bil.totalInvoiced),color:'#2563eb'},{label:'Received',value:vn(bil.totalReceived),color:'#059669'},{label:'Pending',value:vn(bil.totalPending),color:'#d97706'},{label:'Advances',value:vn(bil.totalAdvances),color:'#7c3aed'}];
       const prBars=[{label:'PO Value',value:vn(proc.totalPOValue),color:'#1e3a8a'},{label:'Billed',value:vn(proc.totalBilled),color:'#d97706'},{label:'Paid',value:vn(proc.totalPaid),color:'#059669'},{label:'Balance',value:vn(proc.totalBalance),color:'#dc2626'}];
-      const plBars=[{label:'Proj.Val',value:Math.abs(vn(prof.totalRevenue)),color:'#059669'},{label:'Procure.',value:Math.abs(vn(prof.totalProcurement)),color:'#d97706'},{label:'Expenses',value:Math.abs(vn(prof.projectExpenses)),color:'#f43f5e'},{label:isP?'Profit':'Loss',value:Math.abs(vn(prof.netProfit)),color:isP?'#0d9488':'#dc2626'}];
-      const costSegs=[{label:'Project Value',value:vn(prof.totalRevenue),color:'#059669'},{label:'Procurement',value:vn(prof.totalProcurement),color:'#d97706'},{label:'Expenses',value:vn(prof.projectExpenses),color:'#f43f5e'}].filter(s=>s.value>0);
+      const plBars=[{label:'Invoiced',value:Math.abs(vn(prof.totalRevenueExclGST||prof.totalRevenue)),color:'#059669'},{label:'Procure.',value:Math.abs(vn(prof.totalProcurementExclGST||prof.totalProcurement)),color:'#d97706'},{label:'Expenses',value:Math.abs(vn(prof.projectExpenses)),color:'#f43f5e'},{label:'Net GST',value:Math.abs(vn(prof.additionalGST)),color:'#f59e0b'},{label:isP?'Profit':'Loss',value:Math.abs(vn(prof.netProfit)),color:isP?'#0d9488':'#dc2626'}];
+      const costSegs=[{label:'Invoiced (excl.GST)',value:vn(prof.totalRevenueExclGST||prof.totalRevenue),color:'#059669'},{label:'Procurement (excl.GST)',value:vn(prof.totalProcurementExclGST||prof.totalProcurement),color:'#d97706'},{label:'Expenses',value:vn(prof.projectExpenses),color:'#f43f5e'},{label:'Net GST Liability',value:Math.max(0,vn(prof.additionalGST)),color:'#f59e0b'}].filter(s=>s.value>0);
 
       const imgBil  = barChart(bilBars);
       const imgPr   = barChart(prBars);
@@ -524,7 +524,7 @@ export default function ProjectReports() {
       const findings=[
         parseFloat(bPct)>=90?{tag:'BILLING',c:'#059669',bg:'#f0fdf4',t:`Excellent collection rate of ${bPct}% — receivables well managed.`}:parseFloat(bPct)>=60?{tag:'BILLING',c:'#d97706',bg:'#fffbeb',t:`Collection rate ${bPct}%. ${pFmtShort(bil.totalPending)} outstanding from client.`}:{tag:'BILLING',c:'#dc2626',bg:'#fef2f2',t:`Low collection rate of ${bPct}%. ${pFmtShort(bil.totalPending)} requires immediate follow-up.`},
         parseFloat(pPct)>=90?{tag:'PAYMENTS',c:'#059669',bg:'#f0fdf4',t:`Vendor payments ${pPct}% complete — obligations nearly fully discharged.`}:{tag:'PAYMENTS',c:'#d97706',bg:'#fffbeb',t:`${pPct}% of vendor bills paid. ${pFmtShort(proc.totalBalance)} outstanding to suppliers.`},
-        isP?{tag:'PROFIT',c:'#059669',bg:'#f0fdf4',t:`Profitable — net margin ${pct(prof.netMarginPercent)}, net profit ${pFmtShort(prof.netProfit)} (after GST deduction).`}:{tag:'PROFIT',c:'#dc2626',bg:'#fef2f2',t:`Loss of ${pFmtShort(prof.netProfit)} (${pct(prof.netMarginPercent)} margin). Costs including net GST exceed revenue.`},
+        isP?{tag:'PROFIT',c:'#059669',bg:'#f0fdf4',t:`Profitable — net margin ${pct(prof.netMarginPercent)}, net profit ${pFmtShort(prof.netProfit)} (after GST deduction).`}:{tag:'PROFIT',c:'#dc2626',bg:'#fef2f2',t:`Loss of ${pFmtShort(Math.abs(vn(prof.netProfit)))} (${pct(Math.abs(parseFloat(prof.netMarginPercent)||0))}% margin). Costs including net GST exceed revenue.`},
         vn(prof.additionalGST)>=0?{tag:'GST',c:'#d97706',bg:'#fffbeb',t:`Net GST liability ${pFmtShort(prof.additionalGST)} deducted from profit (invoice GST collected minus ITC from vendors).`}:{tag:'GST',c:'#059669',bg:'#f0fdf4',t:`Net ITC benefit ${pFmtShort(Math.abs(vn(prof.additionalGST)))} — vendors GST paid exceeds invoice GST, reducing tax burden.`},
       ];
       const recs=[];
@@ -630,15 +630,30 @@ html,body{font-family:'Poppins','Segoe UI',Arial,sans-serif;font-size:10pt;color
 /* ── TABLES ── */
 .table-section-title{font-size:10pt;font-weight:700;color:#1e293b;margin:20px 0 8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0;display:flex;align-items:center;gap:8px}
 .table-section-title::before{content:'';display:inline-block;width:4px;height:16px;background:#3b82f6;border-radius:2px}
-table{width:100%;border-collapse:collapse;font-size:7.5pt;table-layout:auto}
+table{width:100%;border-collapse:collapse;font-size:7pt;table-layout:fixed}
 thead tr{background:#1e293b}
-th{color:#fff;padding:6px 8px;text-align:left;font-size:7pt;font-weight:600;white-space:nowrap;letter-spacing:.02em}
+th{color:#fff;padding:5px 7px;text-align:left;font-size:6.5pt;font-weight:600;white-space:nowrap;letter-spacing:.02em;overflow:hidden}
 th.r,td.r{text-align:right}
-td{padding:5px 8px;border-bottom:1px solid #f1f5f9;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td{padding:4px 7px;border-bottom:1px solid #f1f5f9;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:0}
 tr:last-child td{border-bottom:none}
 tbody tr:nth-child(even) td{background:#f9fafb}
-.table-wrap{overflow-x:auto;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:18px}
+.table-wrap{overflow:hidden;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:18px}
 .g{color:#059669;font-weight:600} .rd{color:#dc2626;font-weight:600} .am{color:#d97706;font-weight:600}
+/* Fixed column widths per table type */
+.tbl-inv th:nth-child(1){width:16%} .tbl-inv th:nth-child(2){width:9%} .tbl-inv th:nth-child(3){width:9%}
+.tbl-inv th:nth-child(4){width:20%} .tbl-inv th:nth-child(5){width:12%} .tbl-inv th:nth-child(6){width:12%}
+.tbl-inv th:nth-child(7){width:12%} .tbl-inv th:nth-child(8){width:10%}
+.tbl-rec th:nth-child(1){width:16%} .tbl-rec th:nth-child(2){width:9%} .tbl-rec th:nth-child(3){width:11%}
+.tbl-rec th:nth-child(4){width:12%} .tbl-rec th:nth-child(5){width:12%} .tbl-rec th:nth-child(6){width:12%}
+.tbl-rec th:nth-child(7){width:13%} .tbl-rec th:nth-child(8){width:15%}
+.tbl-po th:nth-child(1){width:14%} .tbl-po th:nth-child(2){width:9%} .tbl-po th:nth-child(3){width:22%}
+.tbl-po th:nth-child(4){width:13%} .tbl-po th:nth-child(5){width:14%} .tbl-po th:nth-child(6){width:14%}
+.tbl-po th:nth-child(7){width:7%}  .tbl-po th:nth-child(8){width:7%}
+.tbl-bill th:nth-child(1){width:14%} .tbl-bill th:nth-child(2){width:9%} .tbl-bill th:nth-child(3){width:9%}
+.tbl-bill th:nth-child(4){width:18%} .tbl-bill th:nth-child(5){width:12%} .tbl-bill th:nth-child(6){width:12%}
+.tbl-bill th:nth-child(7){width:12%} .tbl-bill th:nth-child(8){width:8%} .tbl-bill th:nth-child(9){width:6%}
+.tbl-exp th:nth-child(1){width:16%} .tbl-exp th:nth-child(2){width:11%} .tbl-exp th:nth-child(3){width:28%}
+.tbl-exp th:nth-child(4){width:14%} .tbl-exp th:nth-child(5){width:18%} .tbl-exp th:nth-child(6){width:13%}
 
 /* ── BADGES ── */
 .badge{display:inline-block;padding:2px 9px;border-radius:99px;font-size:7pt;font-weight:600;white-space:nowrap}
@@ -816,9 +831,9 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${narrative(`A total of <strong>${(bil.invoices||[]).length} invoice(s)</strong> have been raised against this project amounting to <strong>${fmt(bil.totalInvoiced)}</strong>. Of this, <strong>${fmt(bil.totalReceived)}</strong> has been received — a collection rate of <strong>${bPct}%</strong>. The remaining <strong>${fmt(bil.totalPending)}</strong> is pending collection from the client and requires follow-up to maintain healthy project cash flow.`)}
     <div class="table-section-title">Invoice Details</div>
     <div class="table-wrap">
-      <table>
+      <table class="tbl-inv">
         <thead><tr><th>Invoice No</th><th>Date</th><th>Due Date</th><th>Customer</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th></tr></thead>
-        <tbody>${(bil.invoices||[]).map(r=>`<tr><td>${r.invoiceNo||'—'}</td><td>${r.invoiceDate||'—'}</td><td>${r.dueDate||'—'}</td><td>${r.customerName||'—'}</td><td class="r g">${fmt(r.totalAmount)}</td><td class="r">${fmt(r.paidAmount)}</td><td class="r ${vn(r.balanceAmount)>0?'rd':''}">${fmt(r.balanceAmount)}</td><td>${sb(r.status)}</td></tr>`).join('')}${(bil.invoices||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No invoices recorded</td></tr>':''}</tbody>
+        <tbody>${(bil.invoices||[]).map(r=>`<tr><td>${r.invoiceNo||'—'}</td><td>${r.invoiceDate||'—'}</td><td>${r.dueDate||'—'}</td><td title="${r.customerName||''}">${(r.customerName||'—').substring(0,22)}</td><td class="r g">${fmtShort(r.totalAmount)}</td><td class="r">${fmtShort(r.paidAmount)}</td><td class="r ${vn(r.balanceAmount)>0?'rd':''}">${fmtShort(r.balanceAmount)}</td><td>${sb(r.status)}</td></tr>`).join('')}${(bil.invoices||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No invoices recorded</td></tr>':''}</tbody>
       </table>
     </div>
   </div>
@@ -835,9 +850,9 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${narrative(`The receipts table below captures all payment transactions received against this project — including advance payments, invoice settlements, and partial receipts. Each receipt is reconciled against its linked invoice, providing a clear audit trail of all incoming funds. Applied amounts represent funds matched to specific invoices, while unapplied amounts represent unallocated credit balances.`)}
     <div class="table-section-title">Receipts / Payments Received</div>
     <div class="table-wrap">
-      <table>
+      <table class="tbl-rec">
         <thead><tr><th>Receipt No</th><th>Date</th><th>Type</th><th class="r">Amount</th><th class="r">Applied</th><th class="r">Unapplied</th><th>Method</th><th>Invoice Ref</th></tr></thead>
-        <tbody>${(bil.receipts||[]).map(r=>`<tr><td>${r.receiptNo||'—'}</td><td>${r.receiptDate||'—'}</td><td><span class="badge ${r.receiptType==='ADVANCE'?'badge-advance':'badge-invoice_payment'}">${r.receiptType||'—'}</span></td><td class="r g">${fmt(r.amount)}</td><td class="r">${fmt(r.appliedAmount)}</td><td class="r am">${fmt(r.unappliedAmount)}</td><td>${r.paymentMethod||'—'}</td><td>${r.linkedInvoiceNo||'—'}</td></tr>`).join('')}${(bil.receipts||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No receipts recorded</td></tr>':''}</tbody>
+        <tbody>${(bil.receipts||[]).map(r=>`<tr><td>${r.receiptNo||'—'}</td><td>${r.receiptDate||'—'}</td><td><span class="badge ${r.receiptType==='ADVANCE'?'badge-advance':'badge-invoice_payment'}">${(r.receiptType||'—').replace('INVOICE_PAYMENT','INV.PMT')}</span></td><td class="r g">${fmtShort(r.amount)}</td><td class="r">${fmtShort(r.appliedAmount)}</td><td class="r am">${fmtShort(r.unappliedAmount)}</td><td>${(r.paymentMethod||'—').substring(0,10)}</td><td>${r.linkedInvoiceNo||'—'}</td></tr>`).join('')}${(bil.receipts||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No receipts recorded</td></tr>':''}</tbody>
       </table>
     </div>
     ${(bil.receipts||[]).length>0?narrative(`A total of <strong>${(bil.receipts||[]).length} receipt(s)</strong> have been recorded amounting to <strong>${fmt(bil.totalReceived)}</strong>. Advance receipts of <strong>${fmt(bil.totalAdvances)}</strong> have been collected. All transactions have been recorded via the CRM and are available for audit.`): ''}
@@ -861,9 +876,9 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${narrative(`This section details all purchase orders issued to vendors in relation to this project. A total of <strong>${(proc.purchaseOrders||[]).length} purchase order(s)</strong> have been raised with a combined value of <strong>${fmt(proc.totalPOValue)}</strong>. Vendor bills of <strong>${fmt(proc.totalBilled)}</strong> have been received, of which <strong>${fmt(proc.totalPaid)}</strong> has been paid — a payment completion rate of <strong>${pPct}%</strong>. An outstanding balance of <strong>${fmt(proc.totalBalance)}</strong> is yet to be settled with vendors.`)}
     <div class="table-section-title">Purchase Orders</div>
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>PO No</th><th>Date</th><th>Vendor</th><th class="r">Value</th><th>Payment Status</th><th>Delivery Status</th><th class="r">Ordered</th><th class="r">Delivered</th></tr></thead>
-        <tbody>${(proc.purchaseOrders||[]).map(r=>`<tr><td>${r.poNo||'—'}</td><td>${r.orderDate||'—'}</td><td>${r.vendorName||'—'}</td><td class="r g">${fmt(r.totalValue)}</td><td>${sb(r.paymentStatus)}</td><td>${sb(r.status)}</td><td class="r">${r.totalItems||0}</td><td class="r">${r.deliveredItems||0}</td></tr>`).join('')}${(proc.purchaseOrders||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No purchase orders recorded</td></tr>':''}</tbody>
+      <table class="tbl-po">
+        <thead><tr><th>PO No</th><th>Date</th><th>Vendor</th><th class="r">Value</th><th>Pmt Status</th><th>Delivery</th><th class="r">Ord.</th><th class="r">Del.</th></tr></thead>
+        <tbody>${(proc.purchaseOrders||[]).map(r=>`<tr><td>${r.poNo||'—'}</td><td>${r.orderDate||'—'}</td><td title="${r.vendorName||''}">${(r.vendorName||'—').substring(0,20)}</td><td class="r g">${fmtShort(r.totalValue)}</td><td>${sb(r.paymentStatus)}</td><td>${sb(r.status)}</td><td class="r">${r.totalItems||0}</td><td class="r">${r.deliveredItems||0}</td></tr>`).join('')}${(proc.purchaseOrders||[]).length===0?'<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:16px">No purchase orders recorded</td></tr>':''}</tbody>
       </table>
     </div>
   </div>
@@ -880,9 +895,9 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${narrative(`The vendor bills register below captures all bills raised by suppliers against their respective purchase orders. Each bill is tracked for payment status and outstanding balance. Timely clearance of vendor dues is essential to maintain healthy supplier relationships and ensure uninterrupted project execution. Bills highlighted in red indicate outstanding balances that require attention.`)}
     <div class="table-section-title">Bills Received from Vendors</div>
     <div class="table-wrap">
-      <table>
-        <thead><tr><th>Bill No</th><th>Bill Date</th><th>Due Date</th><th>Vendor</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th><th>PO Ref</th><th class="r">GST</th></tr></thead>
-        <tbody>${(proc.bills||[]).map(r=>`<tr><td>${r.billNo||'—'}</td><td>${r.billDate||'—'}</td><td>${r.dueDate||'—'}</td><td>${r.vendorName||'—'}</td><td class="r">${fmt(r.totalAmount)}</td><td class="r g">${fmt(r.paidAmount)}</td><td class="r ${vn(r.balanceAmount)>0?'rd':''}">${fmt(r.balanceAmount)}</td><td>${sb(r.status)}</td><td>${r.linkedPONo||'—'}</td><td class="r">${fmt(r.taxAmount)}</td></tr>`).join('')}${(proc.bills||[]).length===0?'<tr><td colspan="10" style="text-align:center;color:#94a3b8;padding:16px">No bills recorded</td></tr>':''}</tbody>
+      <table class="tbl-bill">
+        <thead><tr><th>Bill No</th><th>Bill Date</th><th>Due Date</th><th>Vendor</th><th class="r">Total</th><th class="r">Paid</th><th class="r">Balance</th><th>Status</th><th>PO Ref</th></tr></thead>
+        <tbody>${(proc.bills||[]).map(r=>`<tr><td>${r.billNo||'—'}</td><td>${r.billDate||'—'}</td><td>${r.dueDate||'—'}</td><td title="${r.vendorName||''}">${(r.vendorName||'—').substring(0,18)}</td><td class="r">${fmtShort(r.totalAmount)}</td><td class="r g">${fmtShort(r.paidAmount)}</td><td class="r ${vn(r.balanceAmount)>0?'rd':''}">${fmtShort(r.balanceAmount)}</td><td>${sb(r.status)}</td><td>${(r.linkedPONo||'—').substring(0,10)}</td></tr>`).join('')}${(proc.bills||[]).length===0?'<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:16px">No bills recorded</td></tr>':''}</tbody>
       </table>
     </div>
   </div>
@@ -898,20 +913,20 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ${sectionTitle('📈','Profitability & Margin Analysis','#4a1d96')}
     <div class="kpi-grid">
       <div class="kpi-card" style="border-top-color:#6366f1"><div class="kpi-label">Contract Value</div><div class="kpi-value" style="color:#6366f1">${fmtShort(ov.totalContractValue)}</div><div class="kpi-sub">Project budget (agreed)</div></div>
-      <div class="kpi-card" style="border-top-color:#2563eb"><div class="kpi-label">Total Invoiced</div><div class="kpi-value" style="color:#2563eb">${fmtShort(prof.totalRevenue)}</div><div class="kpi-sub">Raised to client (incl. GST)</div></div>
+      <div class="kpi-card" style="border-top-color:#2563eb"><div class="kpi-label">Invoiced (excl. GST)</div><div class="kpi-value" style="color:#2563eb">${fmtShort(prof.totalRevenueExclGST||prof.totalRevenue)}</div><div class="kpi-sub">Basis for profit calculation</div></div>
       <div class="kpi-card" style="border-top-color:${vn(prof.grossProfit)>=0?'#059669':'#dc2626'}"><div class="kpi-label">Gross Profit</div><div class="kpi-value" style="color:${vn(prof.grossProfit)>=0?'#059669':'#dc2626'}">${fmtShort(prof.grossProfit)}</div><div class="kpi-sub">${pct(prof.grossMarginPercent)} gross margin</div></div>
-      <div class="kpi-card" style="border-top-color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}"><div class="kpi-label">Net GST Liability</div><div class="kpi-value" style="color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}">${fmtShort(prof.additionalGST)}</div><div class="kpi-sub">Deducted from profit</div></div>
+      <div class="kpi-card" style="border-top-color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}"><div class="kpi-label">Net GST Liability</div><div class="kpi-value" style="color:${vn(prof.additionalGST)>=0?'#d97706':'#059669'}">${fmtShort(prof.additionalGST)}</div><div class="kpi-sub">Invoice GST − ITC (vendor GST)</div></div>
       <div class="kpi-card" style="border-top-color:${isP?'#059669':'#dc2626'}"><div class="kpi-label">Net Profit</div><div class="kpi-value" style="color:${isP?'#059669':'#dc2626'}">${fmtShort(prof.netProfit)}</div><div class="kpi-sub">${pct(prof.netMarginPercent)} net margin</div></div>
     </div>
-    ${narrative(`This section presents the profit and loss statement for <strong>${ov.projectName||'the project'}</strong>. Total project value of <strong>${fmt(prof.totalRevenue)}</strong> (contract budget) is set against procurement costs of <strong>${fmt(prof.totalProcurement)}</strong> to arrive at a gross profit of <strong>${fmt(prof.grossProfit)}</strong> (${pct(prof.grossMarginPercent)} gross margin). After deducting project expenses of <strong>${fmt(prof.projectExpenses)}</strong> and net GST liability of <strong>${fmt(prof.additionalGST)}</strong> (GST collected from client minus input tax credit from vendors), the net ${isP?'profit':'loss'} stands at <strong>${fmt(prof.netProfit)}</strong> — a net margin of <strong>${pct(prof.netMarginPercent)}</strong>.`)}
+    ${narrative(`This section presents the profit and loss statement for <strong>${ov.projectName||'the project'}</strong>. Total invoiced to the client (excluding GST) is <strong>${fmt(prof.totalRevenueExclGST||prof.totalRevenue)}</strong>. Deducting vendor procurement bills (excl. GST) of <strong>${fmt(prof.totalProcurementExclGST||prof.totalProcurement)}</strong> gives a gross profit of <strong>${fmt(prof.grossProfit)}</strong> (${pct(prof.grossMarginPercent)} gross margin). After deducting approved project expenses of <strong>${fmt(prof.projectExpenses)}</strong> and net GST liability of <strong>${fmt(prof.additionalGST)}</strong> (invoice GST collected <em>${fmt(prof.invoiceGSTAmount)}</em> minus vendor ITC <em>${fmt(prof.poGSTAmount)}</em>), the net ${isP?'profit':'loss'} stands at <strong>${fmt(prof.netProfit)}</strong> — a net margin of <strong>${pct(prof.netMarginPercent)}</strong>.`)}
 
     <div class="table-section-title">Profit &amp; Loss Statement</div>
     <div class="pl-box">
-      <div class="pl-row"><span>Total Invoiced to Client <small style="font-weight:400;color:#6b7280">(incl. GST)</small></span><span class="g">${fmt(prof.totalRevenue)}</span></div>
-      <div class="pl-row pl-indent"><span>− Procurement Cost (Vendor Bills)</span><span class="rd">− ${fmt(prof.totalProcurement)}</span></div>
-      <div class="pl-row pl-subtotal"><span>= Gross Profit</span><span>${fmt(prof.grossProfit)} &nbsp;<small style="font-weight:400;color:#6b7280">(${pct(prof.grossMarginPercent)})</small></span></div>
-      <div class="pl-row pl-indent"><span>− Project Expenses (Travel / Misc)</span><span class="rd">− ${fmt(prof.projectExpenses)}</span></div>
-      <div class="pl-row pl-indent" style="background:#eff6ff;border-left:3px solid #2563eb"><span style="color:#1d4ed8">− Net GST Liability <small style="font-weight:400">(Invoice GST − ITC)</small></span><span class="rd">− ${fmt(prof.additionalGST)}</span></div>
+      <div class="pl-row" style="background:#f0fdf4"><span>Total Invoiced to Client <small style="font-weight:400;color:#6b7280">(excl. GST — basis for profit)</small></span><span class="g">${fmt(prof.totalRevenueExclGST||prof.totalRevenue)}</span></div>
+      <div class="pl-row pl-indent"><span>− Total Procurement Bills <small style="font-weight:400;color:#6b7280">(vendor bills excl. GST)</small></span><span class="rd">− ${fmt(prof.totalProcurementExclGST||prof.totalProcurement)}</span></div>
+      <div class="pl-row pl-subtotal"><span>= Gross Profit</span><span class="${vn(prof.grossProfit)>=0?'g':'rd'}">${fmt(prof.grossProfit)} &nbsp;<small style="font-weight:400;color:#6b7280">(${pct(prof.grossMarginPercent)})</small></span></div>
+      <div class="pl-row pl-indent"><span>− Project Expenses <small style="font-weight:400;color:#6b7280">(approved employee expenses only)</small></span><span class="rd">− ${fmt(prof.projectExpenses)}</span></div>
+      <div class="pl-row pl-indent" style="background:#eff6ff;border-left:3px solid #2563eb"><span style="color:#1d4ed8">− Net GST Liability <small style="font-weight:400">(Invoice GST collected − Vendor GST paid as ITC)</small></span><span class="rd">− ${fmt(prof.additionalGST)}</span></div>
       <div class="pl-row pl-total ${isP?'pl-profit':'pl-loss'}"><span>= Net ${isP?'Profit':'Loss'}</span><span>${fmt(prof.netProfit)} &nbsp;<small>(${pct(prof.netMarginPercent)})</small></span></div>
     </div>
 
@@ -926,9 +941,9 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     </div>
     ${(prof.expenses||[]).length>0?`
     <div class="table-section-title">Project Expenses Breakdown</div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="tbl-exp">
       <thead><tr><th>Expense Code</th><th>Date</th><th>Category</th><th class="r">Amount</th><th>Paid By</th><th>Status</th></tr></thead>
-      <tbody>${(prof.expenses||[]).map(r=>`<tr><td>${r.expenseCode||'—'}</td><td>${r.tripDate||'—'}</td><td>${r.category||'—'}</td><td class="r">${fmt(r.amount)}</td><td>${r.paidBy||'—'}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody>
+      <tbody>${(prof.expenses||[]).map(r=>`<tr><td>${r.expenseCode||'—'}</td><td>${r.tripDate||'—'}</td><td title="${r.category||''}">${(r.category||'—').substring(0,22)}</td><td class="r">${fmtShort(r.amount)}</td><td title="${r.paidBy||''}">${(r.paidBy||'—').substring(0,14)}</td><td>${sb(r.status)}</td></tr>`).join('')}</tbody>
     </table></div>`:''}
   </div>
   ${pageFooter(8,'Profitability Analysis')}
@@ -1066,8 +1081,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
       { label: 'Balance',  value: parseFloat(proc.totalBalance)||0,  color: '#dc2626' },
     ];
     const profitSegs = [
-      { label: 'Revenue',      value: parseFloat(prof.totalRevenue)||0,     color: '#059669' },
-      { label: 'Procurement',  value: parseFloat(prof.totalProcurement)||0, color: '#ea580c' },
+      { label: 'Invoiced (excl.GST)',    value: parseFloat(prof.totalRevenueExclGST||prof.totalRevenue)||0,       color: '#059669' },
+      { label: 'Procurement (excl.GST)',  value: parseFloat(prof.totalProcurementExclGST||prof.totalProcurement)||0, color: '#ea580c' },
       { label: 'Expenses',     value: parseFloat(prof.projectExpenses)||0,  color: '#dc2626' },
     ];
     return (
@@ -1266,36 +1281,36 @@ tbody tr:nth-child(even) td{background:#f9fafb}
       <div className="pr-section">
         {/* Formula note */}
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', marginBottom: 16, fontSize: 12.5, color: '#475569' }}>
-          <strong>Profit formula:</strong>&nbsp; Total Invoiced to Client &minus; Total Procurement Bills &minus; Approved Project Expenses &minus; Net GST Liability = Net Profit
+          <strong>Profit formula:</strong>&nbsp; Total Invoiced to Client (excl. GST) &minus; Total Procurement Bills (excl. GST) &minus; Approved Project Expenses &minus; Net GST Liability = Net Profit
         </div>
         <div className="pr-kpi-row">
           <KPI label="Contract Value" value={fmtShort(ov2.totalContractValue)} sub="Project budget (agreed)" color="#6366f1" icon={<IndianRupee size={20}/>} />
-          <KPI label="Total Invoiced" value={fmtShort(prof.totalRevenue)} sub="Raised to client (incl. GST)" color="#2563eb" icon={<FileText size={20}/>} />
-          <KPI label="Procurement Bills" value={fmtShort(prof.totalProcurement)} sub="Vendor bills total (incl. GST)" color="#ea580c" icon={<Package size={20}/>} />
+          <KPI label="Invoiced (excl. GST)" value={fmtShort(prof.totalRevenueExclGST ?? prof.totalRevenue)} sub="Basis for profit calc" color="#2563eb" icon={<FileText size={20}/>} />
+          <KPI label="Procurement (excl. GST)" value={fmtShort(prof.totalProcurementExclGST ?? prof.totalProcurement)} sub="Vendor bills excl. GST" color="#ea580c" icon={<Package size={20}/>} />
           <KPI label="Project Expenses" value={fmtShort(prof.projectExpenses)} sub="Approved employee expenses" color="#dc2626" icon={<AlertCircle size={20}/>} />
           <KPI label="Net GST Liability" value={fmtShort(prof.additionalGST)} sub="Invoice GST − Vendor GST (ITC)" color={netGST >= 0 ? '#d97706' : '#059669'} icon={<BarChart2 size={20}/>} />
           <KPI label="Net Profit" value={fmtShort(prof.netProfit)} sub={pct(prof.netMarginPercent) + ' margin'} color={isProfit?'#059669':'#dc2626'} icon={<TrendingUp size={20}/>} />
         </div>
         <div className="pr-profit-breakdown">
-          <div className="pr-breakdown-row">
-            <span>Total Invoiced to Client <small style={{fontWeight:400,color:'#6b7280'}}>(incl. GST — basis for profit)</small></span>
-            <span className="pr-green">{fmt(prof.totalRevenue)}</span>
+          <div className="pr-breakdown-row" style={{background:'#f0fdf4'}}>
+            <span>Total Invoiced to Client <small style={{fontWeight:400,color:'#6b7280'}}>(excl. GST — basis for profit)</small></span>
+            <span className="pr-green">{fmt(prof.totalRevenueExclGST ?? prof.totalRevenue)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
-            <span>− Total Procurement Bills <small style={{fontWeight:400,color:'#6b7280'}}>(vendor bills incl. GST)</small></span>
-            <span className="pr-red">−{fmt(prof.totalProcurement)}</span>
+            <span>− Total Procurement Bills <small style={{fontWeight:400,color:'#6b7280'}}>(vendor bills excl. GST)</small></span>
+            <span className="pr-red" style={{minWidth: 'max-content'}}>− {fmt(prof.totalProcurementExclGST ?? prof.totalProcurement)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-result">
-            <span>= Gross Profit <small style={{fontWeight:400,color:'#6b7280'}}>(before expenses & GST)</small></span>
-            <span>{fmt(prof.grossProfit)}</span>
+            <span>= Gross Profit</span>
+            <span className={parseFloat(prof.grossProfit)>=0?'pr-green':'pr-red'}>{fmt(prof.grossProfit)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
             <span>− Project Expenses <small style={{fontWeight:400,color:'#6b7280'}}>(approved employee expenses only)</small></span>
-            <span className="pr-red">−{fmt(prof.projectExpenses)}</span>
+            <span className="pr-red" style={{flexShrink:0,textAlign:'right',minWidth:140}}>− {fmt(prof.projectExpenses)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: '3px solid #d97706', background: '#fffbeb' }}>
             <span style={{ color: '#92400e' }}>− Net GST Liability <small style={{ fontWeight: 400, color: '#78716c' }}>(Invoice GST collected − Vendor GST paid as ITC)</small></span>
-            <span className="pr-red">−{fmt(prof.additionalGST)}</span>
+            <span className="pr-red" style={{flexShrink:0,textAlign:'right',minWidth:140}}>− {fmt(prof.additionalGST)}</span>
           </div>
           <div className={`pr-breakdown-row pr-breakdown-final ${isProfit?'pr-profit':'pr-loss'}`}>
             <span>
