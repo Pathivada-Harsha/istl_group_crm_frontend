@@ -1461,7 +1461,7 @@ const ProjectCostExpenseManagement = () => {
           VIEW EXPENSE MODAL
       ══════════════════════════════════════════════════════════════════════ */}
       {showViewModal && viewModalExpense && (
-        <div className="exp-mgmt-modal-overlay" onClick={() => setShowViewModal(false)}>
+        <div className="exp-mgmt-modal-overlay">
           <div className="exp-view-modal" onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div className="exp-modal-hdr">
