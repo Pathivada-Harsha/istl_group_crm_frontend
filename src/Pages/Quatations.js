@@ -18,6 +18,7 @@ const QuotationsReceived = () => {
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
   const [poFormData, setPOFormData] = useState(null);
+  const [poConfirm, setPOConfirm] = useState(null); // { type, callback }
   const [filters, setFilters] = useState({
     search: '',
     status: 'all',
@@ -707,86 +708,56 @@ const QuotationsReceived = () => {
    * Create PO from quotation
    */
   const handleCreatePOFromQuotation = async () => {
-    // Validation
-    if (!poFormData.expectedDelivery) {
-      showError('Expected delivery date is required');
-      return;
-    }
-
-    // Check if at least one item has quantity > 0
+    if (!poFormData.expectedDelivery) { showError('Expected delivery date is required'); return; }
     const hasItems = poFormData.items.some(item => item.selectedQuantity > 0);
-    if (!hasItems) {
-      showError('Please select quantity for at least one item');
-      return;
-    }
+    if (!hasItems) { showError('Please select quantity for at least one item'); return; }
 
-    if (!window.confirm('Create Purchase Order from this quotation?')) {
-      return;
-    }
+    // Show confirm modal instead of window.confirm
+    setPOConfirm({
+      message: 'Create Purchase Order from this quotation?',
+      onConfirm: async () => {
+        setPOConfirm(null);
+        setLoading(true);
+        try {
+          const poItems = poFormData.items
+            .filter(item => item.selectedQuantity > 0)
+            .map(item => ({
+              itemName: item.itemName,
+              itemDescription: item.description || '',
+              quantity: item.selectedQuantity,
+              unitPrice: item.unitPrice,
+              gst: item.taxPercent,
+              discount: 0
+            }));
+          const poData = {
+            quotationId: poFormData.quotationId, vendorId: poFormData.vendorId,
+            rfqId: poFormData.rfqId, groupName: poFormData.groupName,
+            subGroupName: poFormData.subGroupName, projectId: poFormData.projectId,
+            orderDate: poFormData.orderDate, expectedDelivery: poFormData.expectedDelivery,
+            paymentTerms: poFormData.paymentTerms, shippingAddress: poFormData.shippingAddress,
+            notes: poFormData.notes, items: poItems, status: 'Draft', paymentStatus: 'Pending'
+          };
 
-    setLoading(true);
-    try {
-      // Filter out items with 0 quantity and prepare data
-      const poItems = poFormData.items
-        .filter(item => item.selectedQuantity > 0)
-        .map(item => ({
-          itemName: item.itemName,
-          itemDescription: item.description || '',
-          quantity: item.selectedQuantity,
-          unitPrice: item.unitPrice,
-          gst: item.taxPercent,
-          discount: 0
-        }));
-
-      const poData = {
-        quotationId: poFormData.quotationId,
-        vendorId: poFormData.vendorId,
-        rfqId: poFormData.rfqId,
-        groupName: poFormData.groupName,
-        subGroupName: poFormData.subGroupName,
-        projectId: poFormData.projectId,
-        orderDate: poFormData.orderDate,
-        expectedDelivery: poFormData.expectedDelivery,
-        paymentTerms: poFormData.paymentTerms,
-        shippingAddress: poFormData.shippingAddress,
-        notes: poFormData.notes,
-        items: poItems,
-        status: 'Draft',
-        paymentStatus: 'Pending'
-      };
-
-      const response = await fetch(`${API_BASE_URL}/purchase-orders/from-quotation`, {
-        credentials: "include",
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...getAuthHeaders()
-        },
-        body: JSON.stringify(poData)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create PO');
+          const response = await fetch(`${API_BASE_URL}/purchase-orders/from-quotation`, {
+            credentials: "include", method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify(poData)
+          });
+          if (!response.ok) { const err = await response.json(); throw new Error(err.message || 'Failed to create PO'); }
+          const createdPO = await response.json();
+          showSuccess(`Purchase Order ${createdPO.poNo} created successfully!`);
+          setShowCreatePOFromQuotationModal(false);
+          setPOFormData(null);
+          await handleUpdateStatus(poFormData.quotationId, 'PO Created');
+          fetchQuotations();
+          fetchStats();
+        } catch (error) {
+          showError(error.message || 'Failed to create Purchase Order');
+        } finally {
+          setLoading(false);
+        }
       }
-
-      const createdPO = await response.json();
-      showSuccess(`Purchase Order ${createdPO.poNo} created successfully!`);
-      setShowCreatePOFromQuotationModal(false);
-      setPOFormData(null);
-
-      // Update quotation status to "PO Created"
-      await handleUpdateStatus(poFormData.quotationId, 'PO Created');
-
-      fetchQuotations();
-      fetchStats();
-
-    } catch (error) {
-      console.error('Failed to create PO:', error);
-      showError(error.message || 'Failed to create Purchase Order');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   /**
@@ -858,37 +829,28 @@ const QuotationsReceived = () => {
    * Create PO from quotation
    */
   const handleCreatePO = async (quotationId) => {
-    if (!canCreate) {
-      showError('You do not have permission to create purchase orders');
-      return;
-    }
-
-    if (!window.confirm('Create Purchase Order from this quotation? This will also create/update the vendor.')) {
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/create-po`, {
-        credentials: "include",
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (!response.ok) throw new Error('Failed to create PO');
-
-      const data = await response.json();
-      showSuccess(`Purchase Order created successfully!`);
-      setShowDetailDrawer(false);
-      fetchQuotations();
-      fetchStats();
-
-    } catch (error) {
-      console.error('Failed to create PO:', error);
-      showError('Failed to create Purchase Order');
-    } finally {
-      setLoading(false);
-    }
+    if (!canCreate) { showError('You do not have permission to create purchase orders'); return; }
+    setPOConfirm({
+      message: 'Create Purchase Order from this quotation? This will also create/update the vendor.',
+      onConfirm: async () => {
+        setPOConfirm(null);
+        setLoading(true);
+        try {
+          const response = await fetch(`${API_BASE_URL}/quotations/${quotationId}/create-po`, {
+            credentials: "include", method: 'POST', headers: getAuthHeaders()
+          });
+          if (!response.ok) throw new Error('Failed to create PO');
+          showSuccess(`Purchase Order created successfully!`);
+          setShowDetailDrawer(false);
+          fetchQuotations();
+          fetchStats();
+        } catch (error) {
+          showError('Failed to create Purchase Order');
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   /**
@@ -1504,7 +1466,7 @@ const QuotationsReceived = () => {
       </div>
       {/* Detail Drawer - UPDATED WITH FULL DETAILS */}
       {showDetailDrawer && selectedQuotation && (
-        <div className="procurement-quotation-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+        <div className="procurement-quotation-received-drawer-overlay">
           <div className="procurement-quotation-received-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-quotation-received-drawer-header">
               <div>
@@ -1772,7 +1734,7 @@ const QuotationsReceived = () => {
 
       {/* Upload Modal - COMPLETE CODE WITH PROPER ALIGNMENT */}
       {showUploadQuotationModal && quotationFormData && (
-        <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowUploadQuotationModal(false)}>
+        <div className="procurement-quotation-received-modal-overlay">
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px' }}>
             <div className="procurement-quotation-received-modal-header">
               <h2>Upload New Quotation</h2>
@@ -2326,7 +2288,7 @@ const QuotationsReceived = () => {
 
       {/* Create PO Modal */}
       {showCreatePOFromQuotationModal && poFormData && (
-        <div className="procurement-quotation-received-modal-overlay" onClick={() => setShowCreatePOFromQuotationModal(false)}>
+        <div className="procurement-quotation-received-modal-overlay">
           <div className="procurement-quotation-received-upload-modal" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-quotation-received-modal-header">
               <h2>
@@ -2510,6 +2472,21 @@ const QuotationsReceived = () => {
               >
                 Cancel
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Create PO Confirmation Modal ── */}
+      {poConfirm && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}}>
+          <div style={{background:'#fff',borderRadius:16,padding:'36px 32px 28px',width:'min(440px,94vw)',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+            <div style={{width:64,height:64,borderRadius:'50%',background:'#eff6ff',border:'1px solid #bfdbfe',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:28}}>🛒</div>
+            <h3 style={{margin:'0 0 10px',fontSize:20,fontWeight:700,color:'#0f172a'}}>Create Purchase Order</h3>
+            <p style={{margin:'0 0 28px',fontSize:14,color:'#64748b',lineHeight:1.6}}>{poConfirm.message}</p>
+            <div style={{display:'flex',gap:12,justifyContent:'center'}}>
+              <button onClick={() => setPOConfirm(null)} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'1.5px solid #e2e8f0',background:'#fff',fontSize:14,fontWeight:600,color:'#374151',cursor:'pointer'}}>Cancel</button>
+              <button onClick={poConfirm.onConfirm} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'none',background:'#2563eb',fontSize:14,fontWeight:600,color:'#fff',cursor:'pointer'}}>Confirm</button>
             </div>
           </div>
         </div>

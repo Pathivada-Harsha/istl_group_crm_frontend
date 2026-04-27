@@ -245,9 +245,17 @@ div.rd-card-sub {
 /* TABLE */
 .rd-table-wrap {
   overflow-x: auto;
+  overflow-y: visible;
   width: 100%;
   display: block;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
+.rd-table-wrap::-webkit-scrollbar { height: 5px; }
+.rd-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.rd-table-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.rd-table-wrap::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 .rd-table {
   width: 100%;
   border-collapse: collapse;

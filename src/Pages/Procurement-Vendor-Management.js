@@ -776,7 +776,7 @@ const VendorManagement = () => {
 
       {/* ─── Detail Drawer (unchanged) ──────────────────────────────────────── */}
       {showDetailDrawer && selectedVendor && (
-        <div className="vendor-management-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+        <div className="vendor-management-drawer-overlay">
           <div className="vendor-management-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="vendor-management-drawer-header">
               <div>
@@ -879,7 +879,7 @@ const VendorManagement = () => {
 
       {/* ─── Edit Modal (unchanged) ──────────────────────────────────────────── */}
       {showEditModal && editFormData && (
-        <div className="vendor-management-modal-overlay" onClick={() => setShowEditModal(false)}>
+        <div className="vendor-management-modal-overlay">
           <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="vendor-management-modal-header">
               <h2>Edit Vendor</h2>
@@ -957,7 +957,7 @@ const VendorManagement = () => {
 
       {/* ─── Create Modal (unchanged) ────────────────────────────────────────── */}
       {showCreateModal && editFormData && (
-        <div className="vendor-management-modal-overlay" onClick={() => setShowCreateModal(false)}>
+        <div className="vendor-management-modal-overlay">
           <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
             <div className="vendor-management-modal-header">
               <h2>Add New Vendor</h2>

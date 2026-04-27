@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import "../pages-css/Follow-ups.css";
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import { FiTrash2, FiEdit } from 'react-icons/fi';
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
@@ -19,6 +20,7 @@ export default function ClientDashboardFollowUps() {
   const [filteredFollowUps, setFilteredFollowUps] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // followup id to delete
   const [editingFollowup, setEditingFollowup] = useState(null);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
@@ -583,8 +585,13 @@ export default function ClientDashboardFollowUps() {
     setShowEditModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!window.confirm("Delete this follow-up?")) return;
+  const handleDelete = (id) => {
+    setDeleteConfirm(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteConfirm;
+    setDeleteConfirm(null);
 
     setLoading(true);
     try {
@@ -917,18 +924,14 @@ export default function ClientDashboardFollowUps() {
                           onClick={() => handleEdit(followup)}
                           title="Edit"
                         >
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
+                          <FiEdit size={14} />
                         </button>
                         <button
                           className="followup-action-btn action-delete"
                           onClick={() => handleDelete(followup.id)}
                           title="Delete"
                         >
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <FiTrash2 size={14} />
                         </button>
                       </div>
                     </td>
@@ -1456,6 +1459,58 @@ export default function ClientDashboardFollowUps() {
           </div>
         </div>
       )}
+
+      {/* ── Bootstrap-style Delete Confirmation Modal ── */}
+      {deleteConfirm && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:9999, padding:16,
+        }}>
+          <div style={{
+            background:'#fff', borderRadius:16, padding:'36px 32px 28px',
+            width:'min(420px,94vw)', textAlign:'center',
+            boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
+            animation:'fu-pop .18s ease',
+          }}>
+            <div style={{
+              width:64, height:64, borderRadius:'50%',
+              background:'#fff0f0', border:'1px solid #fecaca',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              margin:'0 auto 20px',
+            }}>
+              <FiTrash2 size={28} color="#dc2626" />
+            </div>
+            <h3 style={{ margin:'0 0 10px', fontSize:20, fontWeight:700, color:'#0f172a' }}>
+              Delete Follow-Up
+            </h3>
+            <p style={{ margin:'0 0 28px', fontSize:14, color:'#64748b', lineHeight:1.6 }}>
+              Are you sure you want to delete this follow-up?<br />
+              <strong style={{ color:'#dc2626' }}>This action cannot be undone.</strong>
+            </p>
+            <div style={{ display:'flex', gap:12, justifyContent:'center' }}>
+              <button onClick={() => setDeleteConfirm(null)} style={{
+                flex:1, padding:'10px 20px', borderRadius:10,
+                border:'1.5px solid #e2e8f0', background:'#fff',
+                fontSize:14, fontWeight:600, color:'#374151', cursor:'pointer',
+              }}>Cancel</button>
+              <button onClick={confirmDelete} style={{
+                flex:1, padding:'10px 20px', borderRadius:10,
+                border:'none', background:'#dc2626',
+                fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer',
+              }}>Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/* ── pop-in animation for modal ── */
+const fuStyle = document.createElement('style');
+fuStyle.textContent = '@keyframes fu-pop { from { transform:scale(.88); opacity:0 } to { transform:scale(1); opacity:1 } }';
+if (!document.head.querySelector('[data-fu-anim]')) {
+  fuStyle.setAttribute('data-fu-anim','1');
+  document.head.appendChild(fuStyle);
 }

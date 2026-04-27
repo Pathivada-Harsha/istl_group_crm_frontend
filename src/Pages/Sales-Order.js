@@ -254,7 +254,7 @@ const AddOrderModal = ({ onClose, onCreate }) => {
   }
 
   return (
-    <div className="sales-salesorder-modal-overlay" onClick={onClose}>
+    <div className="sales-salesorder-modal-overlay">
       <div className="sales-salesorder-modal" onClick={(e) => e.stopPropagation()}>
         <div className="sales-salesorder-modal-header">
           <h3>Create New Sales Order</h3>
@@ -348,7 +348,7 @@ const OrderDetailDrawer = ({ order, onClose, onSave }) => {
   }
 
   return (
-    <div className="sales-salesorder-drawer-overlay" onClick={onClose}>
+    <div className="sales-salesorder-drawer-overlay">
       <div className="sales-salesorder-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="sales-salesorder-drawer-header">
           <div>

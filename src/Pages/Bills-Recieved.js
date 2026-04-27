@@ -1658,7 +1658,7 @@ const BillsReceived = () => {
 
       {/* DETAIL DRAWER */}
       {showDetailDrawer && selectedBill && (
-        <div className="procurement-bills-received-drawer-overlay" onClick={() => setShowDetailDrawer(false)}>
+        <div className="procurement-bills-received-drawer-overlay">
           <div className="procurement-bills-received-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="procurement-bills-received-drawer-header">
               <div>
