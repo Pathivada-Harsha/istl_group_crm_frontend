@@ -778,3 +778,62 @@
   .tm-col { max-height: 50vh; }
   .tm-card-item { padding: 10px 11px; }
 }
+/* ── Fixed-height scrollable table (Issues 1) ──────────────────────── */
+.tm-tbl-scroll-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 520px;          /* fixed height — adjust as needed */
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+.tm-tbl-scroll-wrap::-webkit-scrollbar { width: 5px; height: 5px; }
+.tm-tbl-scroll-wrap::-webkit-scrollbar-track { background: transparent; }
+.tm-tbl-scroll-wrap::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.tm-tbl-scroll-wrap::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+.tm-tbl.tm-tbl-fixed { min-width: 1000px; }
+
+/* Sticky header inside the scroll wrapper */
+.tm-tbl.tm-tbl-fixed thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+  box-shadow: 0 1px 0 #e2e8f0;
+}
+
+/* ── Delete modal pop animation ─────────────────────────────────────── */
+@keyframes tm-pop {
+  from { transform: scale(0.88); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ── Icon action buttons (table view) ──────────────────────────────── */
+.tm-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  transition: background .13s, border-color .13s, transform .1s;
+  flex-shrink: 0;
+}
+.tm-act:hover { transform: translateY(-1px); }
+
+.tm-act-log  { color: #2563eb; border-color: #bfdbfe; background: #eff6ff; }
+.tm-act-log:hover  { background: #dbeafe; }
+
+.tm-act-done { color: #059669; border-color: #6ee7b7; background: #ecfdf5; }
+.tm-act-done:hover { background: #d1fae5; }
+
+.tm-act-edit { color: #d97706; border-color: #fcd34d; background: #fffbeb; }
+.tm-act-edit:hover { background: #fef3c7; }
+
+.tm-act-del  { color: #dc2626; border-color: #fca5a5; background: #fef2f2; }
+.tm-act-del:hover  { background: #fee2e2; }
