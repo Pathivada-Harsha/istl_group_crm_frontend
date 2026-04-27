@@ -7,6 +7,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
 import '../pages-css/TaskManagement.css';
+import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2 } from 'react-icons/fi';
 
 const API = process.env.REACT_APP_API_URL;
 const hdrs = (u) => ({
@@ -105,15 +106,19 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
   }, [form.startTime, form.endTime]);
 
   const submit = async () => {
-    if (!form.workDone.trim()) return;
+    // Allow saving if work summary is filled OR status/progress changed — no hard block
     setSaving(true);
-    // Combine summary + detail into workDone for backend; store detail in notes if present
     const combined = form.description.trim()
-      ? `${form.workDone.trim()}\n\n${form.description.trim()}`
+      ? `${form.workDone.trim()}${form.workDone.trim() ? '\n\n' : ''}${form.description.trim()}`
       : form.workDone.trim();
-    await onSave({ taskId: task.id, ...form, workDone: combined, hoursSpent: parseFloat(form.hoursSpent) || 0 });
+    await onSave({ taskId: task.id, ...form, workDone: combined || '(Status/progress updated)', hoursSpent: parseFloat(form.hoursSpent) || 0 });
     setSaving(false);
   };
+
+  // Button is enabled when: work summary filled, OR status changed, OR progress changed
+  const hasChanges = form.workDone.trim() !== ''
+    || form.newStatus !== task.status
+    || form.completionPercent !== (task.completionPercent || 0);
 
   const isComplete = form.newStatus === 'Completed';
 
@@ -160,8 +165,8 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div style={{background:'#f8fafc',borderRadius:10,padding:'14px 16px',marginBottom:16,border:'1px solid #f1f5f9'}}>
             <div className="tm-fg" style={{margin:'0 0 12px'}}>
               <label style={{fontWeight:700,color:'#0f172a',fontSize:13}}>
-                Work Summary <span className="tm-req">*</span>
-                <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>One line — what did you work on?</span>
+                Work Summary
+                <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>One line — what did you work on? (optional if status/progress changed)</span>
               </label>
               <input
                 className="tm-inp"
@@ -258,7 +263,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
 
         <div className="tm-mftr">
           <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !form.workDone.trim()}>
+          <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !hasChanges}>
             {saving ? 'Saving…' : isComplete ? '✅ Save & Mark Complete' : '💾 Save Work Entry'}
           </button>
         </div>
@@ -833,15 +838,12 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
             )}
           </div>
         </div>
-        {task.status !== 'Completed' && task.status !== 'Cancelled' && (
-          <div className="tm-mftr">
-            <button className="tm-btn tm-ghost" onClick={onClose}>Close</button>
-            <button className="tm-btn tm-primary" onClick={() => { onLog(task); onClose(); }}>📝 Add Work Entry</button>
-          </div>
-        )}
-        {(task.status === 'Completed' || task.status === 'Cancelled') && (
-          <div className="tm-mftr"><button className="tm-btn tm-ghost" onClick={onClose}>Close</button></div>
-        )}
+        <div className="tm-mftr">
+          <button className="tm-btn tm-ghost" onClick={onClose}>Close</button>
+          <button className="tm-btn tm-primary" onClick={() => { onLog(task); onClose(); }}>
+            <FiClipboard size={14} style={{marginRight:6}} />Add Work Entry
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -926,10 +928,12 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                       {totalH > 0 && <span className="tm-ci-hours">⏱ {totalH.toFixed(1)}h</span>}
                     </div>
                     <div className="tm-ci-actions">
-                      {status !== 'Completed' && status !== 'Cancelled' && (
-                        <button className="tm-ci-log-btn" onClick={e => { e.stopPropagation(); onLog(task); }}>📝 Work Entry</button>
-                      )}
-                      <button className="tm-ci-log-btn" style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe'}} onClick={e => { e.stopPropagation(); onEdit(task); }}>✏️ Edit</button>
+                      <button className="tm-ci-log-btn" onClick={e => { e.stopPropagation(); onLog(task); }}>
+                        <FiClipboard size={13} style={{marginRight:4}} />Work Entry
+                      </button>
+                      <button className="tm-ci-log-btn" style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe'}} onClick={e => { e.stopPropagation(); onEdit(task); }}>
+                        <FiEdit size={13} style={{marginRight:4}} />Edit
+                      </button>
                     </div>
                     <div className="tm-drag-hint">⠿ drag to move status</div>
                   </div>
@@ -1741,6 +1745,7 @@ export default function TaskManagement() {
   const [detailTask, setDetail]   = useState(null);
   const [showBulkLog, setShowBulkLog]   = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // taskId to delete
 
   // FIX #3: debounced search — keeps cursor in place, avoids refetch on every keystroke
   const [searchInput, setSearchInput] = useState('');
@@ -1953,8 +1958,14 @@ export default function TaskManagement() {
   };
 
   const deleteTask = async (id) => {
-    if (!window.confirm('Delete this task? This cannot be undone.')) return;
+    setDeleteConfirm(id);
+  };
+
+  const confirmDelete = async () => {
+    const id = deleteConfirm;
+    setDeleteConfirm(null);
     setTasks(p => p.filter(t => t.id !== id));
+    setTotalTasks(p => Math.max(0, p - 1));   // FIX: keep count in sync
     try { await fetch(`${API}/tasks/${id}`, { method: 'DELETE', credentials: 'include', headers: hdrs(user) }); } catch {}
     showSuccess('Task deleted.');
   };
@@ -2100,8 +2111,8 @@ export default function TaskManagement() {
               <div className="tm-empty"><div style={{ fontSize: 36 }}>📋</div><p>No tasks match your filters.</p></div>
             ) : (
               <>
-                <div className="tm-tbl-wrap">
-                  <table className="tm-tbl">
+                <div className="tm-tbl-scroll-wrap">
+                  <table className="tm-tbl tm-tbl-fixed">
                     <thead>
                       <tr>
                         <th>Task</th><th>Project</th><th>Category</th><th>Priority</th><th>Status</th>
@@ -2144,10 +2155,12 @@ export default function TaskManagement() {
                             <td><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>
                             <td onClick={e => e.stopPropagation()}>
                               <div className="tm-acts">
-                                {task.status !== 'Completed' && task.status !== 'Cancelled' && <button className="tm-act" title="Add Work Entry" onClick={() => setLogTask(task)}>📝</button>}
-                                {task.status !== 'Completed' && task.status !== 'Cancelled' && <button className="tm-act" title="Mark Complete" onClick={() => quickComplete(task)}>✅</button>}
-                                <button className="tm-act" title="Edit" onClick={() => setEditTask(task)}>✏️</button>
-                                {isSA && <button className="tm-act" title="Delete" onClick={() => deleteTask(task.id)}>🗑️</button>}
+                                <button className="tm-act tm-act-log"    title="Add Work Entry"  onClick={() => setLogTask(task)}><FiClipboard size={15} /></button>
+                                {task.status !== 'Completed' && task.status !== 'Cancelled' && (
+                                  <button className="tm-act tm-act-done" title="Mark Complete"   onClick={() => quickComplete(task)}><FiCheckCircle size={15} /></button>
+                                )}
+                                <button className="tm-act tm-act-edit"   title="Edit"            onClick={() => setEditTask(task)}><FiEdit size={15} /></button>
+                                {isSA && <button className="tm-act tm-act-del" title="Delete"    onClick={() => deleteTask(task.id)}><FiTrash2 size={15} /></button>}
                               </div>
                             </td>
                           </tr>
@@ -2170,6 +2183,59 @@ export default function TaskManagement() {
       {detailTask && <TaskDetailModal task={detailTask} onClose={() => setDetail(null)} onLog={setLogTask} isSuperAdmin={isSA} />}
       {showBulkLog  && <BulkDayLogModal tasks={tasks} onClose={() => setShowBulkLog(false)} onSaveAll={saveBulkLog} />}
       {showQuickLog && <QuickSelfTaskModal user={user} projects={projects} onClose={() => setShowQuickLog(false)} onSave={saveTask} />}
+
+      {/* ── Bootstrap-style Delete Confirmation Modal ── */}
+      {deleteConfirm && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.45)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:9999, padding:16,
+        }}
+          onClick={() => setDeleteConfirm(null)}>
+          <div style={{
+            background:'#fff', borderRadius:16, padding:'36px 32px 28px',
+            width:'min(420px,94vw)', textAlign:'center',
+            boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
+            animation:'tm-pop .18s ease',
+          }}
+            onClick={e => e.stopPropagation()}>
+            {/* Trash icon circle */}
+            <div style={{
+              width:64, height:64, borderRadius:'50%',
+              background:'#fff0f0', border:'1px solid #fecaca',
+              display:'flex', alignItems:'center', justifyContent:'center',
+              margin:'0 auto 20px', fontSize:26,
+            }}>🗑️</div>
+            <h3 style={{ margin:'0 0 10px', fontSize:20, fontWeight:700, color:'#0f172a' }}>
+              Delete Task
+            </h3>
+            <p style={{ margin:'0 0 28px', fontSize:14, color:'#64748b', lineHeight:1.6 }}>
+              Are you sure you want to delete this task?<br />
+              <strong style={{ color:'#dc2626' }}>This action cannot be undone.</strong>
+            </p>
+            <div style={{ display:'flex', gap:12, justifyContent:'center' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                style={{
+                  flex:1, padding:'10px 20px', borderRadius:10,
+                  border:'1.5px solid #e2e8f0', background:'#fff',
+                  fontSize:14, fontWeight:600, color:'#374151', cursor:'pointer',
+                }}>
+                Cancel
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  flex:1, padding:'10px 20px', borderRadius:10,
+                  border:'none', background:'#dc2626',
+                  fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer',
+                }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
