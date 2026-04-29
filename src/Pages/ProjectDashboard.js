@@ -734,14 +734,18 @@ const ProjectDashboard = () => {
                       sub: 'Paid to vendors + Approved Expenses',
                       clickable: true,
                     },
-                    {
-                      icon: <Target size={36} />, color: (dashboardData.financialData.projectedProfit ?? 0) >= 0 ? '#22c55e' : '#ef4444',
-                      val: fmtKpi(dashboardData.financialData.projectedProfit),
-                      label: 'Net Profit',
-                      sub: `${Math.abs(dashboardData.financialData.profitMargin ?? 0).toFixed(1)}% margin · Invoiced(excl.GST) − Bills(excl.GST) − Expenses − Net GST`,
-                      clickable: true,
-                      onClick: () => setShowProfitModal(true),
-                    },
+                    ...(dashboardData.financialData.isCompleted ? [(() => {
+                      const p = dashboardData.financialData.projectedProfit ?? 0;
+                      const isLoss = p < 0;
+                      return {
+                        icon: <Target size={36} />, color: isLoss ? '#ef4444' : '#22c55e',
+                        val: fmtKpi(Math.abs(p)),
+                        label: isLoss ? 'In Loss' : 'Net Profit',
+                        sub: `${Math.abs(dashboardData.financialData.profitMargin ?? 0).toFixed(1)}% margin · Received − Paid − Expenses − Net GST`,
+                        clickable: true,
+                        onClick: () => setShowProfitModal(true),
+                      };
+                    })()] : []),
                   ].map((k, i) => (
                     <div
                       key={i}
@@ -786,7 +790,7 @@ const ProjectDashboard = () => {
                 <div className="metrics-grid">
                   {[
                     { icon: <IndianRupee size={24} />, title: 'Billed Amount',       val: formatCurrency(dashboardData.financialData.amountToBeReceived), sub: ['Total Invoice Raised'], cls: [] },
-                    { icon: <CheckCircle size={24} />, title: 'Amount Received',     val: formatCurrency(dashboardData.financialData.amountReceived),      sub: [`${dashboardData.financialData.billingPercentage?.toFixed(1)}% Received`, 'From client payments'], cls: ['success', null] },
+                    { icon: <CheckCircle size={24} />, title: 'Amount Received',     val: formatCurrency(dashboardData.financialData.amountReceived),      sub: [`${dashboardData.financialData.billingPercentage?.toFixed(1)}% Received`, dashboardData.financialData.advanceAmount > 0 ? `Advances: ${formatCurrency(dashboardData.financialData.advanceAmount)}` : null, dashboardData.financialData.invoicePaymentAmount > 0 ? `Invoices: ${formatCurrency(dashboardData.financialData.invoicePaymentAmount)}` : null].filter(Boolean), cls: ['success', null, null] },
                     { icon: <Clock size={24} />,       title: 'Pending Receipts',    val: formatCurrency(dashboardData.financialData.pendingReceipts),     sub: [`${(100 - (dashboardData.financialData.billingPercentage || 0)).toFixed(1)}% Pending`, 'Yet to collect'], cls: ['warning', null] },
                     { icon: <TrendingUp size={24} />,  title: 'Collection Progress', val: `${dashboardData.financialData.billingPercentage?.toFixed(1)}%`, sub: null, progress: dashboardData.financialData.billingPercentage, progressClass: 'success' },
                   ].map((m, i) => (
@@ -832,20 +836,24 @@ const ProjectDashboard = () => {
 
               <ExpenseDashboardSection expenseData={dashboardData.expenseData} projectId={projectId} />
 
-              {dashboardData.financialData.isCompleted && (
-                <div className="dashboard-section" style={{ background: 'linear-gradient(135deg,#22c55e,#16a34a)', color: '#fff' }}>
-                  <h3 className="section-title" style={{ color: '#fff' }}><CheckCircle size={20} /> Project Completed — Final Profit Summary</h3>
+              {dashboardData.financialData.isCompleted && (() => {
+                const completedProfit = parseFloat(dashboardData.financialData.projectedProfit) || 0;
+                const completedIsLoss = completedProfit < 0;
+                const completedBg = completedIsLoss ? 'linear-gradient(135deg,#ef4444,#b91c1c)' : 'linear-gradient(135deg,#22c55e,#16a34a)';
+                return (
+                <div className="dashboard-section" style={{ background: completedBg, color: '#fff' }}>
+                  <h3 className="section-title" style={{ color: '#fff' }}>{completedIsLoss ? <AlertCircle size={20} /> : <CheckCircle size={20} />} Project Completed — {completedIsLoss ? 'Final Loss Summary' : 'Final Profit Summary'}</h3>
                   <div className="metrics-grid">
                     {[
                       ['Contract Value (Budget)',   formatCurrency(dashboardData.financialData.totalProjectValue),  'Agreed project contract amount'],
-                      ['Total Invoiced (excl. GST)', formatCurrency(dashboardData.financialData.amountToBeReceivedExclGST ?? dashboardData.financialData.amountToBeReceived), 'Basis for profit — invoiced excl. GST'],
-                      ['− Procurement Bills (excl. GST)', formatCurrency(dashboardData.financialData.totalPayableExclGST ?? dashboardData.financialData.totalPayable), 'Total vendor bills excl. GST'],
-                      ['− Approved Expenses',      formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee & project expenses'],
-                      [(parseFloat(dashboardData.financialData.netGST)||0) >= 0 ? '− Net GST Liability' : '+ Net GST ITC Benefit',
+                      ['Received from Client',      formatCurrency(dashboardData.financialData.amountReceived ?? 0), 'Actual cash received (advances + invoice payments)'],
+                      ['− Bills Paid to Vendors',   formatCurrency(dashboardData.financialData.amountPaid ?? 0),    'Actual payments made to vendors'],
+                      ['− Approved Expenses',       formatCurrency(dashboardData.financialData.totalEmployeeExpenses ?? 0), 'Approved employee & project expenses'],
+                      ['− Net GST (Invoice GST − Vendor GST)',
                         formatCurrency(Math.abs(parseFloat(dashboardData.financialData.netGST)||0)),
-                        'Invoice GST collected − Vendor GST paid (ITC)'],
-                      ['= Net Profit',             formatCurrency(dashboardData.financialData.projectedProfit),   'Invoiced − Bills − Expenses − Net GST'],
-                      ['Profit Margin',            `${Math.abs(dashboardData.financialData.profitMargin ?? 0).toFixed(1)}%`,    '(Profit ÷ Total Invoiced excl. GST) × 100'],
+                        'Net GST always deducted from profit'],
+                      [completedIsLoss ? '= In Loss' : '= Net Profit', formatCurrency(Math.abs(parseFloat(dashboardData.financialData.projectedProfit) || 0)), completedIsLoss ? 'Outflows exceeded cash received' : 'Received − Paid − Expenses − Net GST'],
+                      [(completedIsLoss ? 'Loss' : 'Profit') + ' Margin', `${Math.abs(dashboardData.financialData.profitMargin ?? 0).toFixed(1)}%`, `(${completedIsLoss ? 'Loss' : 'Profit'} ÷ Amount Received) × 100`],
                     ].map(([title, val, sub], i) => (
                       <div key={i} className="metric-card" style={{ background: 'rgba(255,255,255,.1)', border: 'none' }}>
                         <div className="metric-header"><span className="metric-title" style={{ color: '#fff' }}>{title}</span></div>
@@ -855,7 +863,8 @@ const ProjectDashboard = () => {
                     ))}
                   </div>
                 </div>
-              )}
+                );
+              })()}
             </>
           )}
 
@@ -1107,7 +1116,6 @@ const ProjectDashboard = () => {
       {showCashModal && dashboardData?.financialData && (() => {
         const fd = dashboardData.financialData;
         const isCompleted  = fd.isCompleted;
-        const isProfit     = (fd.projectedProfit ?? 0) >= 0;
 
         // ── All values from backend — no frontend recalculation ──────────────
         const cashInflow   = parseFloat(fd.amountReceived)        || 0;
@@ -1116,8 +1124,8 @@ const ProjectDashboard = () => {
         const invoiceGST   = parseFloat(fd.invoiceGSTCollected)   || 0;  // GST billed to client
         const vendorGST    = parseFloat(fd.procurementGSTPaid)    || 0;  // ITC from vendor bills
         const netGST       = parseFloat(fd.netGST)                || 0;  // invoiceGST - vendorGST
-        // cashOutflow = what backend used: paid vendors + expenses + max(0, netGST)
-        const cashOutflow  = paidVendors + expenses + Math.max(0, netGST);
+        // cashOutflow: paid vendors + expenses + netGST (always subtract full net GST)
+        const cashOutflow  = paidVendors + expenses + netGST;
 
         const isDeficit    = (parseFloat(fd.cashDeficit) || 0) > 0;
         const accentColor  = isDeficit ? '#ef4444' : '#22c55e';
@@ -1182,13 +1190,13 @@ const ProjectDashboard = () => {
                   <div className="spent-block-header" style={{ background: '#fef2f2', color: '#b91c1c', borderBottom: '1px solid #fecaca' }}>
                     <CreditCard size={15} />
                     <span style={{ fontWeight: 700 }}>Cash Outflow</span>
-                    <span className="spent-block-total" style={{ color: '#b91c1c' }}>− {formatCurrency(cashOutflow)}</span>
+                    <span className="spent-block-total" style={{ color: '#b91c1c' }}>{formatCurrency(cashOutflow)}</span>
                   </div>
 
                   {/* Paid to vendors */}
                   <div className="spent-row" style={{ borderBottom: '1px solid #f1f5f9' }}>
                     <span className="spent-row-label" style={{ fontWeight: 600, color: '#374151' }}>Paid to Vendors</span>
-                    <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 700 }}>− {formatCurrency(paidVendors)}</span>
+                    <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 700 }}>{formatCurrency(paidVendors)}</span>
                   </div>
                   <div className="spent-row spent-row--sub">
                     <span className="spent-row-label">Total billed by vendors</span>
@@ -1202,17 +1210,17 @@ const ProjectDashboard = () => {
                   {/* Expenses */}
                   <div className="spent-row" style={{ borderTop: '1px solid #f1f5f9', borderBottom: '1px solid #f1f5f9' }}>
                     <span className="spent-row-label" style={{ fontWeight: 600, color: '#374151' }}>Approved Expenses</span>
-                    <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 700 }}>− {formatCurrency(expenses)}</span>
+                    <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 700 }}>{formatCurrency(expenses)}</span>
                   </div>
 
                   {/* Net GST Liability */}
                   <div className="spent-row" style={{ borderTop: '1px solid #f1f5f9', background: '#fffbeb' }}>
                     <span className="spent-row-label" style={{ fontWeight: 600, color: '#92400e' }}>
-                      Net GST Liability
-                      <span style={{ fontWeight: 400, fontSize: 11, color: '#78716c', display: 'block' }}>Invoice GST collected − Vendor GST paid (ITC)</span>
+                      Net GST (Invoice GST − Vendor GST)
+                      <span style={{ fontWeight: 400, fontSize: 11, color: '#78716c', display: 'block' }}>Always deducted from profit</span>
                     </span>
-                    <span className="spent-row-amount" style={{ color: netGST > 0 ? '#d97706' : '#15803d', fontWeight: 700 }}>
-                      {netGST > 0 ? `− ${formatCurrency(netGST)}` : `+ ${formatCurrency(Math.abs(netGST))} (ITC benefit)`}
+                    <span className="spent-row-amount" style={{ color: '#d97706', fontWeight: 700 }}>
+                      {formatCurrency(netGST)}
                     </span>
                   </div>
                   <div className="spent-row spent-row--sub" style={{ background: '#fffbeb' }}>
@@ -1220,8 +1228,8 @@ const ProjectDashboard = () => {
                     <span className="spent-row-amount">{formatCurrency(invoiceGST)}</span>
                   </div>
                   <div className="spent-row spent-row--sub" style={{ background: '#fffbeb' }}>
-                    <span className="spent-row-label">Vendor GST paid (Input Tax Credit)</span>
-                    <span className="spent-row-amount" style={{ color: '#15803d' }}>− {formatCurrency(vendorGST)}</span>
+                    <span className="spent-row-label">Vendor GST paid</span>
+                    <span className="spent-row-amount">{formatCurrency(vendorGST)}</span>
                   </div>
                 </div>
 
@@ -1250,46 +1258,50 @@ const ProjectDashboard = () => {
                 </div>
 
                 {/* ── PROJECT PROFIT (only when completed) ── */}
-                {isCompleted && (
-                  <div className="spent-block" style={{ border: `1.5px solid ${isProfit ? '#bbf7d0' : '#fecaca'}` }}>
-                    <div className="spent-block-header" style={{ background: isProfit ? '#f0fdf4' : '#fef2f2', color: isProfit ? '#15803d' : '#b91c1c', borderBottom: `1px solid ${isProfit ? '#bbf7d0' : '#fecaca'}` }}>
-                      <CheckCircle size={15} />
-                      <span style={{ fontWeight: 700 }}>✅ Project Completed — Final Profit</span>
+                {isCompleted && (() => {
+                  const cpBlock = parseFloat(fd.projectedProfit) || 0;
+                  const clBlock = cpBlock < 0;
+                  const bdrCol  = clBlock ? '#fecaca' : '#bbf7d0';
+                  const bgCol   = clBlock ? '#fef2f2' : '#f0fdf4';
+                  const txtCol  = clBlock ? '#b91c1c' : '#15803d';
+                  return (
+                    <div className="spent-block" style={{ border: `1.5px solid ${bdrCol}` }}>
+                      <div className="spent-block-header" style={{ background: bgCol, color: txtCol, borderBottom: `1px solid ${bdrCol}` }}>
+                        {clBlock ? <AlertCircle size={15} /> : <CheckCircle size={15} />}
+                        <span style={{ fontWeight: 700 }}>{clBlock ? '🔴 Project Completed — In Loss' : '✅ Project Completed — Final Profit'}</span>
+                      </div>
+                      <div className="spent-row" style={{ background: '#f0fdf4' }}>
+                        <span className="spent-row-label" style={{ color: '#15803d', fontWeight: 600 }}>Received from Clients</span>
+                        <span className="spent-row-amount" style={{ color: '#15803d', fontWeight: 700 }}>{formatCurrency(cashInflow)}</span>
+                      </div>
+                      <div className="spent-row" style={{ background: '#fff5f5' }}>
+                        <span className="spent-row-label">Bills Paid to Vendors</span>
+                        <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 600 }}>{formatCurrency(paidVendors)}</span>
+                      </div>
+                      <div className="spent-row" style={{ background: '#fff5f5' }}>
+                        <span className="spent-row-label">Approved Expenses</span>
+                        <span className="spent-row-amount" style={{ color: '#dc2626', fontWeight: 600 }}>{formatCurrency(expenses)}</span>
+                      </div>
+                      <div className="spent-row" style={{ background: '#fffbeb' }}>
+                        <span className="spent-row-label" style={{ color: '#92400e' }}>
+                          Net GST (Invoice GST − Vendor GST)
+                        </span>
+                        <span className="spent-row-amount" style={{ color: '#d97706', fontWeight: 600 }}>
+                          {formatCurrency(netGST)}
+                        </span>
+                      </div>
+                      <div className="spent-row" style={{ background: clBlock ? '#fef2f2' : '#f0fdf4', borderTop: `2px solid ${bdrCol}` }}>
+                        <span className="spent-row-label" style={{ fontWeight: 800, fontSize: 14, color: txtCol }}>
+                          {clBlock ? '🔴 In Loss' : '🟢 Net Profit'}
+                        </span>
+                        <span className="spent-row-amount" style={{ fontSize: 16, fontWeight: 800, color: txtCol }}>
+                          {formatCurrency(Math.abs(cpBlock))}
+                          <span style={{ fontSize: 11, fontWeight: 500, marginLeft: 6, color: '#6b7280' }}>({Math.abs(fd.profitMargin ?? 0).toFixed(1)}% {clBlock ? 'loss margin' : 'margin'})</span>
+                        </span>
+                      </div>
                     </div>
-                    <div className="spent-row">
-                      <span className="spent-row-label">Total Invoiced (excl. GST)</span>
-                      <span className="spent-row-amount" style={{ color: '#15803d' }}>{formatCurrency((fd.amountToBeReceivedExclGST ?? fd.amountToBeReceived) || 0)}</span>
-                    </div>
-                    <div className="spent-row">
-                      <span className="spent-row-label">− Procurement Bills (excl. GST)</span>
-                      <span className="spent-row-amount" style={{ color: '#dc2626' }}>− {formatCurrency((fd.totalPayableExclGST ?? fd.totalPayable) || 0)}</span>
-                    </div>
-                    <div className="spent-row">
-                      <span className="spent-row-label">− Approved Expenses</span>
-                      <span className="spent-row-amount" style={{ color: '#dc2626' }}>− {formatCurrency(expenses)}</span>
-                    </div>
-                    <div className="spent-row">
-                      <span className="spent-row-label">
-                        {netGST >= 0 ? '− Net GST Liability' : '+ Net GST (ITC benefit)'}
-                        <span style={{ fontWeight: 400, fontSize: 10, color: '#78716c', display: 'block' }}>Invoice GST collected − Vendor GST paid</span>
-                      </span>
-                      <span className="spent-row-amount" style={{ color: netGST >= 0 ? '#d97706' : '#15803d' }}>
-                        {netGST >= 0
-                          ? `− ${formatCurrency(netGST)}`
-                          : `+ ${formatCurrency(Math.abs(netGST))}`}
-                      </span>
-                    </div>
-                    <div className="spent-row" style={{ background: isProfit ? '#f0fdf4' : '#fef2f2', borderTop: `2px solid ${isProfit ? '#bbf7d0' : '#fecaca'}` }}>
-                      <span className="spent-row-label" style={{ fontWeight: 800, fontSize: 14, color: isProfit ? '#15803d' : '#b91c1c' }}>
-                        {isProfit ? '🟢 Net Profit' : '🔴 Net Loss'}
-                      </span>
-                      <span className="spent-row-amount" style={{ fontSize: 16, fontWeight: 800, color: isProfit ? '#15803d' : '#b91c1c' }}>
-                        {isProfit ? '' : '− '}{formatCurrency(Math.abs(fd.projectedProfit ?? 0))}
-                        <span style={{ fontSize: 11, fontWeight: 500, marginLeft: 6, color: '#6b7280' }}>({Math.abs(fd.profitMargin ?? 0).toFixed(1)}% margin)</span>
-                      </span>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Tip */}
                 {isDeficit && (
@@ -1305,10 +1317,11 @@ const ProjectDashboard = () => {
       })()}
 
       {/* ─── Profit Breakdown Modal ───────────────────────────────────────── */}
-      {showProfitModal && dashboardData?.financialData && (() => {
+      {showProfitModal && dashboardData?.financialData && dashboardData.financialData.isCompleted && (() => {
         const fd = dashboardData.financialData;
-        const isProfit = (fd.projectedProfit ?? 0) >= 0;
-        const accentColor = isProfit ? '#16a34a' : '#dc2626';
+        const modalProfit = parseFloat(fd.projectedProfit) || 0;
+        const modalIsLoss = modalProfit < 0;
+        const accentColor = modalIsLoss ? '#dc2626' : '#16a34a';
         const netGST = fd.netGST ?? 0;
         const invGST = fd.invoiceGSTCollected ?? 0;
         const procGST = fd.procurementGSTPaid ?? 0;
@@ -1329,11 +1342,11 @@ const ProjectDashboard = () => {
           <div className="spent-modal-overlay">
             <div onClick={e => e.stopPropagation()} style={{
               background: '#fff', borderRadius: 14, width: '100%', maxWidth: 460,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.18)', overflow: 'hidden',
-              display: 'flex', flexDirection: 'column',
+              maxHeight: '90vh', boxShadow: '0 20px 60px rgba(0,0,0,0.18)',
+              display: 'flex', flexDirection: 'column', overflow: 'hidden',
             }}>
-              {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #f1f5f9' }}>
+              {/* Header — fixed, never scrolls */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Target size={18} style={{ color: accentColor }} />
                   <span style={{ fontWeight: 700, fontSize: 15, color: '#111827' }}>Profit Breakdown</span>
@@ -1341,58 +1354,67 @@ const ProjectDashboard = () => {
                 <button onClick={() => setShowProfitModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', display: 'flex', padding: 4 }}><X size={18} /></button>
               </div>
 
-              {/* Formula pill */}
-              <div style={{ margin: '10px 14px 4px', padding: '7px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11.5, color: '#475569', textAlign: 'center' }}>
-                Invoiced (excl. GST) &nbsp;−&nbsp; Procurement (excl. GST) &nbsp;−&nbsp; Expenses &nbsp;−&nbsp; Net GST &nbsp;=&nbsp; <strong style={{ color: accentColor }}>Net Profit</strong>
-              </div>
+              {/* Scrollable body */}
+              <div style={{ overflowY: 'auto', padding: '10px 14px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-              {/* P&L Waterfall */}
-              <div style={{ margin: '8px 14px', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-                <Row label="Total Invoiced to Client (excl. GST)" value={formatCurrency(fd.amountToBeReceivedExclGST ?? fd.amountToBeReceived ?? 0)} color="#16a34a" bold />
-                <Row label="− Procurement Bills (excl. GST)" value={`− ${formatCurrency(fd.totalPayableExclGST ?? fd.totalPayable ?? 0)}`} color="#dc2626" borderTop />
-                <Row label="− Approved Expenses (employee)" value={`− ${formatCurrency(fd.totalEmployeeExpenses || 0)}`} color="#dc2626" borderTop />
-                <Row
-                  label={netGST >= 0 ? '− Net GST Liability' : '+ Net GST (ITC benefit)'}
-                  value={netGST >= 0 ? `− ${formatCurrency(netGST)}` : `+ ${formatCurrency(Math.abs(netGST))}`}
-                  color={netGST >= 0 ? '#d97706' : '#16a34a'} borderTop />
-                <Row
-                  label={isProfit ? '= Net Profit' : '= Net Loss'}
-                  value={isProfit ? formatCurrency(fd.projectedProfit) : `− ${formatCurrency(Math.abs(fd.projectedProfit ?? 0))}`}
-                  color={accentColor} bold borderTop
-                  bg={isProfit ? '#f0fdf4' : '#fef2f2'}
-                  fontSize={14}
-                />
-                <div style={{ padding: '4px 14px 8px', background: isProfit ? '#f0fdf4' : '#fef2f2', borderTop: '1px dashed #d1fae5' }}>
-                  <span style={{ fontSize: 11, color: '#6b7280' }}>Net Margin: <strong style={{ color: accentColor }}>{Math.abs(fd.profitMargin ?? 0).toFixed(1)}% {!isProfit ? '(loss)' : ''}</strong></span>
+                {/* Formula pill */}
+                <div style={{ padding: '7px 12px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 11.5, color: '#475569', textAlign: 'center' }}>
+                  Received from Clients &nbsp;−&nbsp; Bills Paid to Vendors &nbsp;−&nbsp; Expenses &nbsp;−&nbsp; Net GST &nbsp;=&nbsp; <strong style={{ color: accentColor }}>{modalIsLoss ? 'Loss' : 'Net Profit'}</strong>
                 </div>
-              </div>
 
-              {/* GST breakdown */}
-              <div style={{ margin: '0 14px 14px', border: '1px solid #bfdbfe', borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ background: '#eff6ff', padding: '7px 14px', borderBottom: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 5 }}><Percent size={13} /> Net GST Detail</span>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: netGST >= 0 ? '#d97706' : '#16a34a' }}>
-                    {netGST >= 0 ? `−${formatCurrency(netGST)}` : `+${formatCurrency(Math.abs(netGST))} ITC`}
-                  </span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', padding: '10px 0 8px' }}>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Invoice GST</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#b45309' }}>{formatCurrency(invGST)}</div>
+                {/* P&L Waterfall */}
+                <div style={{ border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                  {/* Inflow row — green */}
+                  <Row label="Received from Clients" value={formatCurrency(fd.amountReceived ?? 0)}
+                    color="#16a34a" bold bg="#f0fdf4" />
+                  {/* Deduction rows — red tint bg, amount in red, label clean (no − prefix) */}
+                  <Row label="Bills Paid to Vendors" value={formatCurrency(fd.amountPaid ?? fd.totalSpent ?? 0)}
+                    color="#dc2626" borderTop bg="#fff5f5" />
+                  <Row label="Approved Expenses" value={formatCurrency(fd.totalEmployeeExpenses || 0)}
+                    color="#dc2626" borderTop bg="#fff5f5" />
+                  <Row
+                    label="Net GST (Invoice GST − Vendor GST)"
+                    value={formatCurrency(netGST)}
+                    color="#d97706" borderTop bg="#fffbeb" />
+                  {/* Result row */}
+                  <Row
+                    label={modalIsLoss ? '= In Loss' : '= Net Profit'}
+                    value={formatCurrency(Math.abs(modalProfit))}
+                    color={accentColor} bold borderTop
+                    bg={modalIsLoss ? '#fef2f2' : '#f0fdf4'}
+                    fontSize={14}
+                  />
+                  <div style={{ padding: '4px 14px 8px', background: modalIsLoss ? '#fef2f2' : '#f0fdf4', borderTop: `1px dashed ${modalIsLoss ? '#fecaca' : '#d1fae5'}` }}>
+                    <span style={{ fontSize: 11, color: '#6b7280' }}>{modalIsLoss ? 'Loss' : 'Net'} Margin: <strong style={{ color: accentColor }}>{Math.abs(fd.profitMargin ?? 0).toFixed(1)}%{modalIsLoss ? ' (In Loss)' : ''}</strong></span>
                   </div>
-                  <div style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
-                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Vendor GST (ITC)</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#16a34a' }}>−{formatCurrency(procGST)}</div>
+                </div>
+
+                {/* GST breakdown */}
+                <div style={{ border: '1px solid #bfdbfe', borderRadius: 10, overflow: 'hidden' }}>
+                  <div style={{ background: '#eff6ff', padding: '7px 14px', borderBottom: '1px solid #bfdbfe', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 5 }}><Percent size={13} /> Net GST Detail</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>{formatCurrency(netGST)}</span>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Net {netGST >= 0 ? 'Payable' : 'ITC Benefit'}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: netGST >= 0 ? '#d97706' : '#16a34a' }}>{formatCurrency(Math.abs(netGST))}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', textAlign: 'center', padding: '10px 0 8px' }}>
+                    <div>
+                      <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Invoice GST</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#b45309' }}>{formatCurrency(invGST)}</div>
+                    </div>
+                    <div style={{ borderLeft: '1px solid #e5e7eb', borderRight: '1px solid #e5e7eb' }}>
+                      <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Vendor GST Paid</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#374151' }}>{formatCurrency(procGST)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, color: '#6b7280', marginBottom: 2 }}>Net GST</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#d97706' }}>{formatCurrency(netGST)}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: '#94a3b8', padding: '0 14px 8px', textAlign: 'center' }}>
+                    Net GST (Invoice GST − Vendor GST) always deducted from profit
                   </div>
                 </div>
-                <div style={{ fontSize: 10.5, color: '#94a3b8', padding: '0 14px 8px', textAlign: 'center' }}>
-                  GST collected from client is a tax liability — deducted from profit
-                </div>
-              </div>
+
+              </div>{/* end scrollable body */}
             </div>
           </div>
         );

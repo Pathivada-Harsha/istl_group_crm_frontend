@@ -349,15 +349,10 @@ const fetchStats = async () => {
   try {
     const params = new URLSearchParams();
 
-    // Scope filters
+    // Scope filters — KPI cards always match the table, no createdBy restriction.
     if (groupName) params.append("groupId", groupName);
     if (subGroupName) params.append("subGroupId", subGroupName);
     if (projectId) params.append("projectId", projectId);
-
-    // Only apply createdBy filter for non-admin users.
-    // Admins should see company-wide KPI numbers, not just their own invoices.
-    const isAdmin = user?.role === "ADMIN" || user?.role === "SUPERADMIN";
-    if (user?.id && !isAdmin) params.append("createdBy", user.id);
 
     const response = await fetch(
       `${API_BASE_URL}/invoices/summary?${params.toString()}`,

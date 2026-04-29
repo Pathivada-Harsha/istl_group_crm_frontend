@@ -153,7 +153,7 @@ const Card = ({ title, sub, right, children, height = 340, noBodyPad = false }) 
   </div>
 );
 
-/* Tall card for tables that need more space */
+/* Tall card for tables that need more space — fixed height, internal scroll */
 const TallCard = ({ title, sub, right, children }) => (
   <Card title={title} sub={sub} right={right} height={440} noBodyPad>
     {children}
@@ -253,12 +253,12 @@ const FollowupBlock = ({ todayCount = 0, overdueCount = 0, upcomingCount = 0, fo
 const TeamTable = ({ members = [] }) => {
   if (!members.length) return <Empty icon="👥" msg="No team members found. Ask admin to assign team members to you." />;
   return (
-    <div className="rd-table-wrap">
-    <table className="rd-table" style={{ width: "100%", minWidth: 700 }}>
+    <div style={{ overflowX: 'auto', width: '100%' }}>
+    <table className="rd-table" style={{ width: "100%", minWidth: 620 }}>
       <thead>
         <tr>
-          <th>Member</th><th>Role</th><th>Leads</th><th>Won</th>
-          <th>Revenue</th><th>Proposals</th><th>FU Done</th><th>FU Pending</th><th>Rate</th>
+          <th>Member</th><th>Role</th><th style={{textAlign:'center'}}>Leads</th><th style={{textAlign:'center'}}>Won</th>
+          <th style={{textAlign:'right'}}>Revenue</th><th style={{textAlign:'center'}}>Props</th><th style={{textAlign:'center'}}>FU Done</th><th style={{textAlign:'center'}}>FU Pend.</th><th style={{textAlign:'center'}}>Rate</th>
         </tr>
       </thead>
       <tbody>
@@ -266,22 +266,22 @@ const TeamTable = ({ members = [] }) => {
           const rs = roleBadgeStyle(t.role);
           return (
             <tr key={i}>
-              <td>
+              <td style={{maxWidth: 110, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
                 <div className="rd-team-member-cell">
                   <div className="rd-avatar" style={{ background: rs.background, color: rs.color }}>
                     {(t.name || "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="name-cell">{t.name}</span>
+                  <span className="name-cell" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</span>
                 </div>
               </td>
-              <td><span className="rd-badge" style={rs}>{roleFmt(t.role)}</span></td>
-              <td>{fmtNum(t.leadsHandled)}</td>
-              <td style={{ color: "#059669", fontWeight: 700 }}>{fmtNum(t.leadsWon)}</td>
-              <td style={{ color: "#059669" }}>{t.revenue ? fmtMoney(t.revenue) : "—"}</td>
-              <td>{fmtNum(t.proposalsSent)}</td>
-              <td>{fmtNum(t.followupsDone)}</td>
-              <td style={{ color: t.followupsPending > 0 ? "#f59e0b" : "#10b981" }}>{fmtNum(t.followupsPending)}</td>
-              <td><span style={{ fontWeight: 700, color: t.conversionRate > 20 ? "#059669" : "#374151" }}>{t.conversionRate ?? 0}%</span></td>
+              <td><span className="rd-badge" style={{...rs, whiteSpace:'nowrap', fontSize:10}}>{roleFmt(t.role)}</span></td>
+              <td style={{textAlign:'center'}}>{fmtNum(t.leadsHandled)}</td>
+              <td style={{ color: "#059669", fontWeight: 700, textAlign:'center' }}>{fmtNum(t.leadsWon)}</td>
+              <td style={{ color: "#059669", textAlign:'right' }}>{t.revenue ? fmtMoney(t.revenue) : "—"}</td>
+              <td style={{textAlign:'center'}}>{fmtNum(t.proposalsSent)}</td>
+              <td style={{textAlign:'center'}}>{fmtNum(t.followupsDone)}</td>
+              <td style={{ color: t.followupsPending > 0 ? "#f59e0b" : "#10b981", textAlign:'center' }}>{fmtNum(t.followupsPending)}</td>
+              <td style={{textAlign:'center'}}><span style={{ fontWeight: 700, color: t.conversionRate > 20 ? "#059669" : "#374151" }}>{t.conversionRate ?? 0}%</span></td>
             </tr>
           );
         })}
