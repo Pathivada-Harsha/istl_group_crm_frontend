@@ -882,15 +882,32 @@ useEffect(() => {
 
   const confirmDeleteUser = async () => {
     if (!userToDelete) return;
-    setLoading(true); setLoadingText('Deleting...'); setShowDeleteConfirm(false);
-    try {
-      const res = await fetch(`${API}/users/deleteUser/${userToDelete.id}`, { credentials: "include", method: 'DELETE' });
-      if (res.ok) {
-        if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
-        showToast('User deleted successfully!', 'success');
-      } else { showToast('Error deleting user', 'error'); }
-      setLoading(false); setUserToDelete(null);
-    } catch { setLoading(false); showToast('Error deleting user', 'error'); setUserToDelete(null); }
+    setShowDeleteConfirm(false);
+
+    // If user is ACTIVE → deactivate first; if already INACTIVE → permanently delete
+    if (userToDelete.is_active) {
+      // Step 1: Deactivate
+      setLoading(true); setLoadingText('Deactivating...');
+      try {
+        const res = await fetch(`${API}/users/deactivateUser/${userToDelete.id}`, { credentials: "include", method: 'PUT' });
+        if (res.ok) {
+          if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+          showToast('User deactivated successfully! Delete again to permanently remove.', 'warning');
+        } else { showToast('Error deactivating user', 'error'); }
+        setLoading(false); setUserToDelete(null);
+      } catch { setLoading(false); showToast('Error deactivating user', 'error'); setUserToDelete(null); }
+    } else {
+      // Step 2: Permanently delete (user was already inactive)
+      setLoading(true); setLoadingText('Deleting...');
+      try {
+        const res = await fetch(`${API}/users/deleteUser/${userToDelete.id}`, { credentials: "include", method: 'DELETE' });
+        if (res.ok) {
+          if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
+          showToast('User deleted successfully!', 'success');
+        } else { showToast('Error deleting user', 'error'); }
+        setLoading(false); setUserToDelete(null);
+      } catch { setLoading(false); showToast('Error deleting user', 'error'); setUserToDelete(null); }
+    }
   };
 
   const refreshMenuItems = async () => {
@@ -2054,11 +2071,18 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
         </div>
       )}
 
-      {/* Delete Confirm */}
+      {/* Delete / Deactivate Confirm */}
       <ConfirmModal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setUserToDelete(null); }}
-        onConfirm={confirmDeleteUser} title="Delete User"
-        message={`Are you sure you want to delete ${userToDelete?.full_name}?`}
-        confirmText="Delete" cancelText="Cancel" type="danger" />
+        onConfirm={confirmDeleteUser}
+        title={userToDelete?.is_active ? "Deactivate User" : "Delete User"}
+        message={
+          userToDelete?.is_active
+            ? `"${userToDelete?.full_name}" is currently active. They will be marked as Inactive. Delete again to permanently remove.`
+            : `"${userToDelete?.full_name}" is already inactive. Are you sure you want to permanently delete this user? This cannot be undone.`
+        }
+        confirmText={userToDelete?.is_active ? "Deactivate" : "Delete Permanently"}
+        cancelText="Cancel"
+        type={userToDelete?.is_active ? "warning" : "danger"} />
     </div>
   );
 };
