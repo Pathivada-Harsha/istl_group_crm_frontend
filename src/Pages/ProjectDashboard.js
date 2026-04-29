@@ -19,7 +19,7 @@ import CrmPreloader from "../components/preLoader.js";
 import {
   BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
-  ComposedChart
+  ComposedChart, Treemap, RadialBarChart, RadialBar
 } from 'recharts';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -225,6 +225,75 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
   const breakdownRef = React.useRef(null);
   const scrollToBreakdown = () => breakdownRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
+  // ── Status filter for the projects breakdown table ─────────────────────────
+  const [statusFilter, setStatusFilter] = React.useState('ALL');
+  const [statusModal, setStatusModal]   = React.useState(null); // { status, projects[] }
+
+  const filteredProjects = statusFilter === 'ALL'
+    ? projects
+    : projects.filter(p => p.status === statusFilter || p.status?.replace(/ /g,'_') === statusFilter);
+
+  // Called when a KPI status card is clicked
+  const handleStatusCardClick = (statusKey) => {
+    if (projects.length === 0) return;
+    const matched = projects.filter(p =>
+      p.status === statusKey || p.status?.replace(/ /g,'_') === statusKey ||
+      p.status?.toLowerCase() === statusKey.toLowerCase()
+    );
+    if (matched.length === 0) return;
+    setStatusModal({ status: statusKey, projects: matched });
+  };
+
+  // ── Sub-group / project contribution chart data ───────────────────────────
+  // ALL scope: group-wise contribution | GROUP scope: sub-group-wise | SUBGROUP: project-wise
+  const contributionData = React.useMemo(() => {
+    if (projects.length === 0) return [];
+    const total = projects.reduce((s, p) => s + (Number(p.budget) || 0), 0);
+    if (total === 0) return [];
+
+    // ALL scope — group by groupId
+    if (data.scope === 'ALL' || !data.scope) {
+      const hasGroups = projects.some(p => p.groupId);
+      if (hasGroups) {
+        const map = {};
+        projects.forEach(p => {
+          const key = p.groupId || 'Unassigned';
+          if (!map[key]) map[key] = { name: key, budget: 0, count: 0 };
+          map[key].budget += Number(p.budget) || 0;
+          map[key].count  += 1;
+        });
+        return Object.values(map)
+          .map(g => ({ ...g, pct: total > 0 ? +((g.budget / total) * 100).toFixed(1) : 0 }))
+          .sort((a, b) => b.budget - a.budget);
+      }
+    }
+
+    if (data.scope === 'GROUP') {
+      // Group by subGroupName
+      const map = {};
+      projects.forEach(p => {
+        const key = p.subGroupName || p.subGroup || 'Other';
+        if (!map[key]) map[key] = { name: key, budget: 0, count: 0 };
+        map[key].budget += Number(p.budget) || 0;
+        map[key].count  += 1;
+      });
+      return Object.values(map)
+        .map(g => ({ ...g, pct: total > 0 ? +((g.budget / total) * 100).toFixed(1) : 0 }))
+        .sort((a, b) => b.budget - a.budget);
+    }
+
+    // SUBGROUP scope — each project's contribution
+    return projects
+      .map(p => ({
+        name: p.projectName?.slice(0, 22) + (p.projectName?.length > 22 ? '…' : ''),
+        budget: Number(p.budget) || 0,
+        pct: +((Number(p.budget) / total) * 100).toFixed(1),
+        count: 1,
+      }))
+      .sort((a, b) => b.budget - a.budget)
+      .slice(0, 10);
+  }, [projects, data.scope]);
+
   const EmptyChart = ({ message = 'No data' }) => (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: '#94a3b8' }}>
       <div style={{ textAlign: 'center' }}><BarChart3 size={40} style={{ margin: '0 auto 8px', opacity: .3 }} /><p style={{ fontSize: 13 }}>{message}</p></div>
@@ -240,7 +309,8 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
     .map(p => ({ name: p.projectName?.slice(0, 18) + (p.projectName?.length > 18 ? '…' : ''), budget: Number(p.budget || 0), received: Number(p.received || 0), spent: Number(p.spent || 0) }));
 
   return (
-    <div>
+    <>
+      <div>
       {/* Scope Banner */}
       <div className="agg-scope-banner">
         <div className="agg-scope-icon">
@@ -268,21 +338,34 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
         <h3 className="section-title"><Briefcase size={20} />Projects Overview</h3>
         <div className="kpi-grid">
           {[
-            { label: 'Total Projects',      val: data.totalProjects,        color: '#3b82f6', icon: <Briefcase size={32} /> },
-            { label: 'Completed',           val: data.completedProjects,    color: '#22c55e', icon: <CheckCircle size={32} /> },
-            { label: 'In Progress',         val: data.inProgressProjects,   color: '#06b6d4', icon: <Activity size={32} /> },
-            { label: 'Planning',            val: data.planningProjects,     color: '#f59e0b', icon: <Target size={32} /> },
-            { label: 'On Hold',             val: data.onHoldProjects,       color: '#8b5cf6', icon: <Clock size={32} /> },
-            { label: 'Cancelled',           val: data.cancelledProjects,    color: '#ef4444', icon: <XCircle size={32} /> },
+            { label: 'Total Projects', val: data.totalProjects,      color: '#3b82f6', icon: <Briefcase size={32} />,   statusKey: 'ALL' },
+            { label: 'Completed',      val: data.completedProjects,  color: '#22c55e', icon: <CheckCircle size={32} />, statusKey: 'COMPLETED' },
+            { label: 'In Progress',    val: data.inProgressProjects, color: '#06b6d4', icon: <Activity size={32} />,    statusKey: 'IN_PROGRESS' },
+            { label: 'Planning',       val: data.planningProjects,   color: '#f59e0b', icon: <Target size={32} />,      statusKey: 'PLANNING' },
+            { label: 'On Hold',        val: data.onHoldProjects,     color: '#8b5cf6', icon: <Clock size={32} />,       statusKey: 'ON_HOLD' },
+            { label: 'Cancelled',      val: data.cancelledProjects,  color: '#ef4444', icon: <XCircle size={32} />,     statusKey: 'CANCELLED' },
           ].filter(k => k.val > 0 || k.label === 'Total Projects').map((k, i) => (
-            <div key={i} className="kpi-card" style={{ borderTopColor: k.color, cursor: projects.length > 0 ? 'pointer' : 'default' }}
-              onClick={projects.length > 0 ? scrollToBreakdown : undefined}
-              title={projects.length > 0 ? 'Click to view Projects Breakdown' : undefined}>
+            <div key={i} className="kpi-card" style={{ borderTopColor: k.color, cursor: projects.length > 0 ? 'pointer' : 'default',
+              outline: statusFilter === k.statusKey ? `2px solid ${k.color}` : 'none' }}
+              onClick={() => {
+                if (!projects.length) return;
+                if (k.statusKey === 'ALL') {
+                  setStatusFilter('ALL');
+                  scrollToBreakdown();
+                } else {
+                  handleStatusCardClick(k.statusKey);
+                }
+              }}
+              title={projects.length > 0 ? (k.statusKey === 'ALL' ? 'View all projects' : `Click to view ${k.label} projects`) : undefined}>
               <div className="kpi-icon" style={{ color: k.color }}>{k.icon}</div>
               <div className="kpi-content">
                 <div className="kpi-value">{k.val}</div>
                 <div className="kpi-label">{k.label}</div>
-                {projects.length > 0 && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>↓ View breakdown</div>}
+                {projects.length > 0 && (
+                  <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>
+                    {k.statusKey === 'ALL' ? '↓ View all' : '→ Filter table'}
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -443,12 +526,112 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
         )}
       </div>
 
+      {/* ── Contribution Chart: Group (ALL) / Sub-group (GROUP) / Project (SUBGROUP) ── */}
+      {contributionData.length > 1 && (
+        <div className="dashboard-section">
+          <h3 className="section-title">
+            <Percent size={20} />
+            {data.scope === 'SUBGROUP'
+              ? 'Project-wise Turnover Contribution'
+              : data.scope === 'GROUP'
+              ? 'Sub-group Turnover Contribution'
+              : 'Group-wise Turnover Contribution'}
+          </h3>
+          <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            {/* Horizontal Bar chart — budget amounts */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h4 className="chart-title">
+                  <BarChart3 size={15} />
+                  {data.scope === 'SUBGROUP' ? 'Projects by Order Value (₹)' : data.scope === 'GROUP' ? 'Sub-groups by Order Value (₹)' : 'Groups by Order Value (₹)'}
+                </h4>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={contributionData} layout="vertical" margin={{ left: 10, right: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
+                  <Tooltip
+                    formatter={(v, name) => name === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, name]}
+                    labelFormatter={label => label}
+                    contentStyle={{ fontSize: 12 }}
+                  />
+                  <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
+                    {contributionData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Pie chart — % contribution */}
+            <div className="chart-card">
+              <div className="chart-header">
+                <h4 className="chart-title">
+                  <PieChart size={15} />
+                  {data.scope === 'SUBGROUP' ? 'Project Turnover Share (%)' : data.scope === 'GROUP' ? 'Sub-group Turnover Share (%)' : 'Group Turnover Share (%)'}
+                </h4>
+              </div>
+              <ResponsiveContainer width="100%" height={260}>
+                <RechartsPieChart>
+                  <Pie
+                    data={contributionData}
+                    dataKey="pct"
+                    nameKey="name"
+                    cx="50%" cy="50%"
+                    outerRadius={90}
+                    labelLine={false}
+                    label={({ name, pct }) => `${pct}%`}
+                  >
+                    {contributionData.map((_, i) => (
+                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(v, name) => [`${v}%`, name]} />
+                  <Legend
+                    formatter={(value, entry) => `${value} (${entry.payload.pct}%)`}
+                    wrapperStyle={{ fontSize: 12 }}
+                  />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Projects Breakdown Table */}
       {projects.length > 0 && (
         <div className="dashboard-section" ref={breakdownRef}>
-          <h3 className="section-title"><Briefcase size={20} />Projects Breakdown
-            <span style={{ marginLeft: 10, fontSize: 12, fontWeight: 400, color: '#6b7280' }}>({projects.length} projects)</span>
-          </h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+            <h3 className="section-title" style={{ margin: 0 }}>
+              <Briefcase size={20} />Projects Breakdown
+              <span style={{ marginLeft: 10, fontSize: 12, fontWeight: 400, color: '#6b7280' }}>
+                ({filteredProjects.length}{statusFilter !== 'ALL' ? ` ${statusFilter.replace(/_/g,' ')}` : ''} of {projects.length} total)
+              </span>
+            </h3>
+            {/* Status filter pills */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {['ALL','COMPLETED','IN_PROGRESS','PLANNING','ON_HOLD','CANCELLED'].filter(s =>
+                s === 'ALL' || projects.some(p => p.status === s || p.status?.replace(/ /g,'_') === s)
+              ).map(s => {
+                const colors = { COMPLETED:'#22c55e', IN_PROGRESS:'#06b6d4', PLANNING:'#f59e0b', ON_HOLD:'#8b5cf6', CANCELLED:'#ef4444', ALL:'#3b82f6' };
+                const active = statusFilter === s;
+                return (
+                  <button key={s} onClick={() => setStatusFilter(s)}
+                    style={{
+                      padding:'4px 12px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
+                      border: `1.5px solid ${colors[s]}`,
+                      background: active ? colors[s] : 'transparent',
+                      color: active ? '#fff' : colors[s],
+                      transition: 'all 0.15s'
+                    }}>
+                    {s === 'ALL' ? 'All' : s.replace(/_/g,' ')}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="agg-table-wrapper">
             {/* Sticky header sits outside the scroll area */}
             <div className="agg-table-scroll">
@@ -478,7 +661,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                   </tr>
                 </thead>
                 <tbody>
-                  {projects.map((p, i) => {
+                  {filteredProjects.map((p, i) => {
                     const statusColors = { COMPLETED: '#22c55e', IN_PROGRESS: '#3b82f6', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
                     return (
                       <tr key={i} className={i % 2 === 0 ? 'agg-tr-even' : 'agg-tr-odd'}>
@@ -520,7 +703,161 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
           </div>
         </div>
       )}
-    </div>
+      </div>
+
+      {/* ── Status Filter Modal ──────────────────────────────────────────────── */}
+      {statusModal && (() => {
+        const statusMeta = {
+          COMPLETED:   { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', light: '#dcfce7', icon: <CheckCircle size={18} />, label: 'Completed' },
+          IN_PROGRESS: { color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', light: '#dbeafe', icon: <Activity size={18} />,    label: 'In Progress' },
+          PLANNING:    { color: '#d97706', bg: '#fffbeb', border: '#fde68a', light: '#fef3c7', icon: <Target size={18} />,      label: 'Planning' },
+          ON_HOLD:     { color: '#7c3aed', bg: '#faf5ff', border: '#ddd6fe', light: '#ede9fe', icon: <Clock size={18} />,       label: 'On Hold' },
+          CANCELLED:   { color: '#dc2626', bg: '#fef2f2', border: '#fecaca', light: '#fee2e2', icon: <XCircle size={18} />,     label: 'Cancelled' },
+        };
+        const meta = statusMeta[statusModal.status] || { color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe', light: '#dbeafe', icon: <Briefcase size={18} />, label: statusModal.status };
+        const totalBudget   = statusModal.projects.reduce((s,p)=>s+(Number(p.budget)||0),0);
+        const totalReceived = statusModal.projects.reduce((s,p)=>s+(Number(p.received)||0),0);
+        const totalSpent    = statusModal.projects.reduce((s,p)=>s+(Number(p.spent)||0),0);
+        const totalPending  = statusModal.projects.reduce((s,p)=>s+(Number(p.pendingPay)||0),0);
+        return (
+          <div style={{
+            position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
+            zIndex:10200, display:'flex', alignItems:'center', justifyContent:'center', padding:20
+          }} onClick={() => setStatusModal(null)}>
+            <div style={{
+              background:'#fff', borderRadius:16, width:'100%', maxWidth:960,
+              maxHeight:'88vh', display:'flex', flexDirection:'column',
+              boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden',
+            }} onClick={e => e.stopPropagation()}>
+
+              {/* ── Colored Header ── */}
+              <div style={{
+                background: `linear-gradient(135deg, ${meta.color}ee, ${meta.color}cc)`,
+                padding: '18px 24px', flexShrink: 0,
+              }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    <div style={{ background:'rgba(255,255,255,0.2)', borderRadius:10, padding:8, display:'flex', color:'#fff' }}>
+                      {meta.icon}
+                    </div>
+                    <div>
+                      <div style={{ color:'rgba(255,255,255,0.75)', fontSize:11, fontWeight:600, letterSpacing:'0.6px', textTransform:'uppercase', marginBottom:2 }}>
+                        Project Status
+                      </div>
+                      <h3 style={{ margin:0, fontSize:18, fontWeight:800, color:'#fff', display:'flex', alignItems:'center', gap:8 }}>
+                        {meta.label} Projects
+                        <span style={{ fontSize:13, fontWeight:500, background:'rgba(255,255,255,0.22)', borderRadius:20, padding:'2px 10px' }}>
+                          {statusModal.projects.length}
+                        </span>
+                      </h3>
+                    </div>
+                  </div>
+                  <button onClick={() => setStatusModal(null)}
+                    style={{ background:'rgba(255,255,255,0.2)', border:'none', cursor:'pointer', color:'#fff', padding:8, borderRadius:8, display:'flex', transition:'background 0.15s' }}
+                    onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.3)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='rgba(255,255,255,0.2)'}>
+                    <X size={18} />
+                  </button>
+                </div>
+
+                {/* Summary KPI strip */}
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginTop:16 }}>
+                  {[
+                    { label: 'Total Order Value', value: formatCurrency(totalBudget),   icon: <Wallet size={14} /> },
+                    { label: 'Amount Received',   value: formatCurrency(totalReceived), icon: <TrendingUp size={14} /> },
+                    { label: 'Vendor Paid',        value: formatCurrency(totalSpent),    icon: <ShoppingCart size={14} /> },
+                    { label: 'Pending Payable',    value: formatCurrency(totalPending),  icon: <AlertCircle size={14} /> },
+                  ].map((k, i) => (
+                    <div key={i} style={{ background:'rgba(255,255,255,0.18)', borderRadius:10, padding:'10px 14px', backdropFilter:'blur(4px)' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:5, color:'rgba(255,255,255,0.75)', fontSize:11, marginBottom:4 }}>
+                        {k.icon} {k.label}
+                      </div>
+                      <div style={{ color:'#fff', fontWeight:800, fontSize:15 }}>{k.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Table ── */}
+              <div style={{ overflow:'auto', flex:1, padding:'0' }}>
+                <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
+                  <thead>
+                    <tr style={{ background:'#f8fafc', position:'sticky', top:0, zIndex:2 }}>
+                      <th style={{ padding:'12px 16px', textAlign:'left', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>#</th>
+                      <th style={{ padding:'12px 16px', textAlign:'left', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px' }}>Project</th>
+                      <th style={{ padding:'12px 16px', textAlign:'left', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>Group / Sub-group</th>
+                      <th style={{ padding:'12px 16px', textAlign:'right', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>Order Value</th>
+                      <th style={{ padding:'12px 16px', textAlign:'right', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>Received</th>
+                      <th style={{ padding:'12px 16px', textAlign:'right', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>Vendor Paid</th>
+                      <th style={{ padding:'12px 16px', textAlign:'right', borderBottom:`2px solid ${meta.border}`, color:'#374151', fontWeight:700, fontSize:11.5, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>Pending Pay</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {statusModal.projects.map((p, i) => {
+                      const collPct = totalBudget > 0 ? Math.min(100, (Number(p.received||0)/Number(p.budget||1))*100) : 0;
+                      return (
+                        <tr key={i}
+                          style={{ background: i % 2 === 0 ? '#fff' : '#fafbfd', transition:'background 0.12s', cursor:'default' }}
+                          onMouseEnter={e=>e.currentTarget.style.background=meta.light}
+                          onMouseLeave={e=>e.currentTarget.style.background=i%2===0?'#fff':'#fafbfd'}>
+                          <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9', color:'#94a3b8', fontWeight:600, fontSize:12 }}>{i+1}</td>
+                          <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9', maxWidth:220 }}>
+                            <div style={{ fontWeight:700, color:'#0f172a', fontSize:13, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.projectName}</div>
+                            <div style={{ fontSize:10.5, color:'#94a3b8', marginTop:2, display:'flex', alignItems:'center', gap:4 }}>
+                              <span style={{ background: meta.bg, color: meta.color, borderRadius:4, padding:'1px 6px', fontWeight:600, fontSize:10 }}>{p.projectId}</span>
+                            </div>
+                            {/* Mini collection progress bar */}
+                            <div style={{ marginTop:5, height:3, background:'#e5e7eb', borderRadius:99, width:100, overflow:'hidden' }}>
+                              <div style={{ height:'100%', width:`${collPct}%`, background: meta.color, borderRadius:99, transition:'width 0.4s' }} />
+                            </div>
+                            <div style={{ fontSize:9.5, color:'#94a3b8', marginTop:2 }}>{collPct.toFixed(0)}% collected</div>
+                          </td>
+                          <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9' }}>
+                            {p.groupId && (
+                              <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#f1f5f9', color:'#374151', borderRadius:5, padding:'2px 8px', fontSize:11.5, fontWeight:600 }}>
+                                <Layers size={10} /> {p.groupId}
+                              </span>
+                            )}
+                            {p.subGroupName && <div style={{ fontSize:10.5, color:'#94a3b8', marginTop:3 }}>{p.subGroupName}</div>}
+                            {!p.groupId && !p.subGroupName && <span style={{ color:'#d1d5db', fontSize:12 }}>—</span>}
+                          </td>
+                          <td style={{ padding:'11px 16px', textAlign:'right', borderBottom:'1px solid #f1f5f9', color:'#0f172a', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>{formatCurrency(p.budget)}</td>
+                          <td style={{ padding:'11px 16px', textAlign:'right', borderBottom:'1px solid #f1f5f9', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                            <span style={{ color:'#16a34a' }}>{formatCurrency(p.received)}</span>
+                          </td>
+                          <td style={{ padding:'11px 16px', textAlign:'right', borderBottom:'1px solid #f1f5f9', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                            <span style={{ color:'#dc2626' }}>{formatCurrency(p.spent)}</span>
+                          </td>
+                          <td style={{ padding:'11px 16px', textAlign:'right', borderBottom:'1px solid #f1f5f9', fontWeight:700, fontSize:13, whiteSpace:'nowrap' }}>
+                            <span style={{
+                              background: Number(p.pendingPay)>0 ? '#fff7ed' : '#f0fdf4',
+                              color: Number(p.pendingPay)>0 ? '#d97706' : '#16a34a',
+                              borderRadius:6, padding:'2px 8px', fontSize:12
+                            }}>{formatCurrency(p.pendingPay)}</span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background:`linear-gradient(135deg, ${meta.color}18, ${meta.color}0a)`, position:'sticky', bottom:0, zIndex:2 }}>
+                      <td colSpan={3} style={{ padding:'12px 16px', borderTop:`2px solid ${meta.border}`, color: meta.color, fontWeight:800, fontSize:12.5, letterSpacing:'0.3px' }}>
+                        TOTAL — {statusModal.projects.length} project{statusModal.projects.length!==1?'s':''}
+                      </td>
+                      <td style={{ padding:'12px 16px', textAlign:'right', borderTop:`2px solid ${meta.border}`, color:'#0f172a', fontWeight:800, fontSize:13, whiteSpace:'nowrap' }}>{formatCurrency(totalBudget)}</td>
+                      <td style={{ padding:'12px 16px', textAlign:'right', borderTop:`2px solid ${meta.border}`, color:'#16a34a', fontWeight:800, fontSize:13, whiteSpace:'nowrap' }}>{formatCurrency(totalReceived)}</td>
+                      <td style={{ padding:'12px 16px', textAlign:'right', borderTop:`2px solid ${meta.border}`, color:'#dc2626', fontWeight:800, fontSize:13, whiteSpace:'nowrap' }}>{formatCurrency(totalSpent)}</td>
+                      <td style={{ padding:'12px 16px', textAlign:'right', borderTop:`2px solid ${meta.border}`, color:'#d97706', fontWeight:800, fontSize:13, whiteSpace:'nowrap' }}>{formatCurrency(totalPending)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+    </>
   );
 };
 

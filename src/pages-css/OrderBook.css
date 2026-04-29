@@ -922,3 +922,293 @@
   max-height: 480px;
 }
 }
+/* ── Export Excel Button ──────────────────────────────────────── */
+.orderbook-btn-export {
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  transition: background 0.2s;
+}
+.orderbook-btn-export:hover:not(:disabled) { background: #15803d; }
+.orderbook-btn-export:disabled { background: #86efac; cursor: not-allowed; }
+.ob-export-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.3);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  font-weight: 700;
+  min-width: 20px;
+}
+
+/* ── Attachment Section (View modal) ─────────────────────────── */
+.ob-attachment-section {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid #e2e8f0;
+}
+.ob-attachment-label {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  color: #374151;
+  margin-bottom: 10px;
+}
+.ob-attachment-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ob-attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+.ob-attachment-icon { font-size: 22px; flex-shrink: 0; }
+.ob-attachment-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+.ob-attachment-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  flex-shrink: 0;
+}
+.ob-attachment-actions { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.ob-attachment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid transparent;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.ob-attachment-btn-view {
+  background: #ede9fe;
+  color: #7c3aed;
+  border-color: #c4b5fd;
+}
+.ob-attachment-btn-view:hover { background: #ddd6fe; }
+.ob-attachment-btn-download {
+  background: #dcfce7;
+  color: #16a34a;
+  border-color: #86efac;
+}
+.ob-attachment-btn-download:hover { background: #bbf7d0; }
+
+/* ── File Upload Zone (Create/Edit modal & PO upload modal) ──── */
+.ob-file-upload-zone {
+  position: relative;
+  border: 2px dashed #c4b5fd;
+  border-radius: 8px;
+  background: #faf5ff;
+  transition: border-color 0.2s, background 0.2s;
+}
+.ob-file-upload-zone:hover { border-color: #7c3aed; background: #f5f0ff; }
+.ob-file-input-hidden {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  z-index: 1;
+}
+.ob-file-upload-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 16px;
+  cursor: pointer;
+  gap: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+.ob-file-upload-label span {
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  word-break: break-all;
+}
+.ob-file-upload-label small { font-size: 11px; color: #9ca3af; }
+.ob-file-upload-icon {
+  font-size: 26px;
+  color: #7c3aed;
+  margin-bottom: 2px;
+}
+.ob-file-clear-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #fee2e2;
+  color: #dc2626;
+  border: none;
+  border-radius: 50%;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 11px;
+  z-index: 2;
+  transition: background 0.15s;
+}
+.ob-file-clear-btn:hover { background: #fca5a5; }
+
+/* Existing attachment display in Edit modal */
+.ob-existing-attachment { margin-bottom: 8px; }
+
+/* ── File Viewer Modal ────────────────────────────────────────── */
+.ob-file-viewer-overlay { z-index: 1100; }
+.ob-file-viewer-modal {
+  max-width: 92vw;
+  width: 1000px;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+}
+.ob-file-viewer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.ob-file-viewer-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+.ob-file-viewer-title h2 {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 400px;
+}
+.ob-file-viewer-icon { font-size: 20px; flex-shrink: 0; }
+.ob-file-viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.ob-file-viewer-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  background: #1e1e2e;
+  border-radius: 0 0 12px 12px;
+}
+.ob-file-viewer-iframe {
+  width: 100%;
+  height: 75vh;
+  border: none;
+  border-radius: 0 0 12px 12px;
+}
+.ob-file-viewer-image-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  overflow: auto;
+}
+.ob-file-viewer-image {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+.ob-file-viewer-unsupported {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px;
+  color: #cbd5e1;
+}
+.ob-file-viewer-unsupported-icon { font-size: 56px; opacity: 0.5; }
+.ob-file-viewer-unsupported p { font-size: 15px; color: #94a3b8; }
+
+@media (max-width: 768px) {
+  .ob-file-viewer-modal { width: 100%; max-height: 95vh; }
+  .ob-file-viewer-iframe { height: 65vh; }
+  .ob-attachment-card { flex-direction: column; align-items: flex-start; }
+  .ob-attachment-name { max-width: 200px; }
+  .ob-file-viewer-title h2 { max-width: 180px; }
+}
+
+/* ── File Viewer: loading state ──────────────────────────────── */
+.ob-file-viewer-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  color: #94a3b8;
+}
+.ob-file-viewer-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(124, 58, 237, 0.2);
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: ob-spin 0.8s linear infinite;
+}
+@keyframes ob-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Export button loading spinner ───────────────────────────── */
+.ob-export-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: ob-spin 0.7s linear infinite;
+  vertical-align: middle;
+  margin-right: 4px;
+}

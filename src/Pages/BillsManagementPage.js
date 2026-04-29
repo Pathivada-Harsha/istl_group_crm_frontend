@@ -629,6 +629,7 @@ const BillsManagementPage = () => {
       });
 
       setShowDetailDrawer(false);
+      setSelectedFile(null);   // ← clear any previously selected file from another bill
       setShowCreateEditModal(true);
       
     } catch (error) {
@@ -2306,10 +2307,10 @@ const BillsManagementPage = () => {
         </div>
       )}
 
-      {/* File View Modal */}
+      {/* File View Modal — uses bill-file-view-overlay so it sits above the edit modal */}
       {showFileViewModal && fileViewUrl && (
         <div
-          className="procurement-bills-received-modal-overlay"
+          className="bill-file-view-overlay"
         >
           <div
             className="procurement-bills-received-file-view-modal"

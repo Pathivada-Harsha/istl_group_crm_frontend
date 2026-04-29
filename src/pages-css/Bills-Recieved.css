@@ -936,6 +936,22 @@
 }
 
 /* File View Modal */
+/* ── File view modal overlay: must sit ABOVE the edit modal (z-index 9999) ── */
+.bill-file-view-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  z-index: 10100;          /* higher than bill-form-modal-overlay (9999) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: procurement-bills-received-fadeIn 0.2s;
+}
+
 .procurement-bills-received-file-view-modal {
   background: #fff;
   border-radius: 12px;

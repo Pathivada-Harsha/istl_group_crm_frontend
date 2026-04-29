@@ -8,7 +8,7 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
-import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
+import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -16,13 +16,12 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 function OrderBook() {
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const obPerms   = pagePermissions?.ORDER_BOOK || [];
-  const canCreate = obPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = obPerms.includes('EDIT')   || isAccountsExecutive;
   const canDelete = obPerms.includes('DELETE') && !isAccountsExecutive;
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
   const [excelFile, setExcelFile] = useState(null);
+
   // State
   const [orderBooks, setOrderBooks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -84,6 +83,14 @@ function OrderBook() {
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedOrderBook, setSelectedOrderBook] = useState(null);
 
+  // File Viewer Modal
+  const [showFileViewerModal, setShowFileViewerModal] = useState(false);
+  const [fileViewerUrl, setFileViewerUrl] = useState('');   // blob: URL created from fetch
+  const [fileViewerName, setFileViewerName] = useState('');
+  const [fileViewerType, setFileViewerType] = useState('');
+  const [fileViewerLoading, setFileViewerLoading] = useState(false);
+  const fileViewerBlobRef = React.useRef(null); // track blob URL for cleanup
+
   // Form State
   const [formData, setFormData] = useState({
     customerId: '',
@@ -102,6 +109,10 @@ function OrderBook() {
     items: []
   });
 
+  // Attachment file state for create/edit
+  const [attachmentFile, setAttachmentFile] = useState(null);
+  const [existingAttachment, setExistingAttachment] = useState(null); // {fileName, filePath}
+
   // PO Upload State
   const [poUploadData, setPoUploadData] = useState({
     file: null,
@@ -112,6 +123,7 @@ function OrderBook() {
   useEffect(() => {
     fetchOrderBooks();
     fetchGroups();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, rowsPerPage, groupName, subGroupName]);
 
   useEffect(() => {
@@ -123,6 +135,7 @@ function OrderBook() {
     } else {
       fetchOrderBooks();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTerm, statusFilter, fromDate, toDate]);
 
   useEffect(() => {
@@ -133,6 +146,7 @@ function OrderBook() {
       setSubGroups([]);
       setCustomers([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.groupName, formData.subGroupName]);
 
   const fetchOrderBooks = async () => {
@@ -182,11 +196,8 @@ function OrderBook() {
       const data = await excelFile.arrayBuffer();
       const workbook = XLSX.read(data, { type: 'array' });
 
-      // Get the first sheet
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
-
-      // Convert to JSON
       const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
       if (jsonData.length === 0) {
@@ -195,7 +206,6 @@ function OrderBook() {
         return;
       }
 
-      // Map Excel data to items structure
       const mappedItems = jsonData.map((row, index) => ({
         lineNo: index + 1,
         itemName: row['Item Name'] || row['itemName'] || '',
@@ -212,7 +222,6 @@ function OrderBook() {
         customUnit: ''
       }));
 
-      // Filter out empty rows (where itemName is missing)
       const validItems = mappedItems.filter(item => item.itemName && item.itemName.trim() !== '');
 
       if (validItems.length === 0) {
@@ -221,12 +230,7 @@ function OrderBook() {
         return;
       }
 
-      // Update formData with imported items
-      setFormData(prev => ({
-        ...prev,
-        items: validItems
-      }));
-
+      setFormData(prev => ({ ...prev, items: validItems }));
       showSuccess(`Successfully imported ${validItems.length} items from Excel`);
       setShowExcelUploadModal(false);
       setExcelFile(null);
@@ -239,8 +243,6 @@ function OrderBook() {
     }
   };
 
-  // ============================================================
-  // Generate and download CSV template client-side (no backend endpoint needed)
   const downloadExcelTemplate = () => {
     const headers = [
       'Line No', 'Item Name', 'Specification', 'Description',
@@ -263,6 +265,206 @@ function OrderBook() {
     window.URL.revokeObjectURL(url);
     showSuccess('Template downloaded successfully!');
   };
+
+  // ── Export ALL filtered order books to Excel ────────────────────
+  // Fetches every matching record (not just the current page) using the
+  // same active filters: group, subGroup, status, date range, searchTerm.
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (totalItems === 0) {
+      showWarning('No order books to export');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      // ── Fetch ALL matching records in one request ────────────────
+      // Use the same endpoint that is currently active (search vs getAll)
+      const hasFilters = searchTerm || statusFilter !== 'All' || fromDate || toDate;
+
+      let allRecords = [];
+
+      if (hasFilters) {
+        // Use search endpoint with size = totalItems to get everything
+        const params = new URLSearchParams({
+          page: 0,
+          size: totalItems || 10000
+        });
+        if (searchTerm)            params.append('searchTerm', searchTerm);
+        if (statusFilter !== 'All') params.append('status', statusFilter);
+        if (groupName)             params.append('groupName', groupName);
+        if (subGroupName)          params.append('subGroupName', subGroupName);
+        if (fromDate)              params.append('fromDate', fromDate);
+        if (toDate)                params.append('toDate', toDate);
+
+        const res = await fetch(`${API_BASE_URL}/order-book/search?${params}`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'User-Id': user.id, 'User-Role': user.role }
+        });
+        if (!res.ok) throw new Error('Failed to fetch data for export');
+        const data = await res.json();
+        allRecords = data.data || [];
+      } else {
+        // Use getAll endpoint with size = totalItems
+        const params = new URLSearchParams({
+          page: 0,
+          size: totalItems || 10000
+        });
+        if (groupName)    params.append('groupName', groupName);
+        if (subGroupName) params.append('subGroupName', subGroupName);
+
+        const res = await fetch(`${API_BASE_URL}/order-book/getAll?${params}`, {
+          credentials: 'include',
+          headers: { 'User-Id': user.id, 'User-Role': user.role }
+        });
+        if (!res.ok) throw new Error('Failed to fetch data for export');
+        const data = await res.json();
+        allRecords = data.data || [];
+      }
+
+      if (allRecords.length === 0) {
+        showWarning('No records found for the selected filters');
+        return;
+      }
+
+      // ── Build Excel rows ─────────────────────────────────────────
+      const exportData = allRecords.map((o, idx) => ({
+        'S.No':             idx + 1,
+        'Customer':         o.customerName || '',
+        'Group':            o.groupName || '',
+        'Sub Group':        o.subGroupName || '',
+        'Order Title':      o.orderTitle || '',
+        'Order Date':       o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '',
+        'PO Number':        o.poNumber || '',
+        'PO Date':          o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '',
+        'Status':           o.status || '',
+        'Subtotal (₹)':     o.subtotal    ? parseFloat(o.subtotal).toFixed(2)    : '0.00',
+        'Tax Amount (₹)':   o.taxAmount   ? parseFloat(o.taxAmount).toFixed(2)   : '0.00',
+        'Total Amount (₹)': o.totalAmount ? parseFloat(o.totalAmount).toFixed(2) : '0.00',
+        'Created By':       o.createdByName || '',
+        'Has Attachment':   o.hasPoFile ? 'Yes' : 'No',
+      }));
+
+      // ── Auto column widths ───────────────────────────────────────
+      const worksheet  = XLSX.utils.json_to_sheet(exportData);
+      const colWidths  = Object.keys(exportData[0]).map(key => ({
+        wch: Math.max(key.length, ...exportData.map(r => String(r[key] || '').length)) + 2
+      }));
+      worksheet['!cols'] = colWidths;
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Order Books');
+
+      // ── Filename includes active filter labels ───────────────────
+      const date = new Date().toISOString().split('T')[0];
+      const filterLabel = [
+        statusFilter !== 'All' ? statusFilter : '',
+        groupName    || '',
+        subGroupName || '',
+        fromDate     ? `from_${fromDate}` : '',
+        toDate       ? `to_${toDate}`     : '',
+      ].filter(Boolean).join('_');
+
+      XLSX.writeFile(
+        workbook,
+        `OrderBooks_${filterLabel ? filterLabel + '_' : ''}${date}.xlsx`
+      );
+      showSuccess(`Exported ${exportData.length} of ${totalItems} order books to Excel`);
+
+    } catch (err) {
+      showError(err.message || 'Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // ── Open file in viewer modal ─────────────────────────────────────
+  // Fetches the file via authenticated fetch() → creates a blob: URL.
+  // This avoids the X-Frame-Options / cross-origin / cookie issues that
+  // occur when setting an API URL directly as an iframe src.
+  const handleViewFile = async (orderId, fileName) => {
+    if (!orderId) return;
+
+    // Revoke any previous blob URL to free memory
+    if (fileViewerBlobRef.current) {
+      URL.revokeObjectURL(fileViewerBlobRef.current);
+      fileViewerBlobRef.current = null;
+    }
+
+    const ext = (fileName || '').split('.').pop().toLowerCase();
+    setFileViewerName(fileName || 'Attached File');
+    setFileViewerType(ext);
+    setFileViewerUrl('');        // clear previous
+    setFileViewerLoading(true);
+    setShowFileViewerModal(true);
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/order-book/${orderId}/download-po`,
+        {
+          credentials: 'include',
+          headers: {
+            'User-Id':   String(user.id),
+            'User-Role': user.role,
+          },
+        }
+      );
+
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+      const blob    = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      fileViewerBlobRef.current = blobUrl;
+      setFileViewerUrl(blobUrl);
+    } catch (err) {
+      console.error('File viewer fetch error:', err);
+      showError('Could not load the file. Please try downloading it instead.');
+      setShowFileViewerModal(false);
+    } finally {
+      setFileViewerLoading(false);
+    }
+  };
+
+  // Download: fetch blob and trigger <a> download (works with session cookies)
+  const handleDownloadFile = async (orderId, fileName) => {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/order-book/${orderId}/download-po?forceDownload=true`,
+        {
+          credentials: 'include',
+          headers: {
+            'User-Id':   String(user.id),
+            'User-Role': user.role,
+          },
+        }
+      );
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const blob = await response.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = fileName || 'attachment';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      showError('Download failed. Please try again.');
+    }
+  };
+
+  const getFileIcon = (fileName) => {
+    if (!fileName) return <FaFileAlt />;
+    const ext = fileName.split('.').pop().toLowerCase();
+    if (ext === 'pdf') return <FaFilePdf style={{ color: '#e53e3e' }} />;
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <FaFileImage style={{ color: '#38a169' }} />;
+    return <FaFileAlt style={{ color: '#3182ce' }} />;
+  };
+
+  const isImageFile = (ext) => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
+  const isPdfFile = (ext) => ext === 'pdf';
 
   const handleSearch = async () => {
     setLoading(true);
@@ -307,18 +509,11 @@ function OrderBook() {
     try {
       const response = await fetch(`${API_BASE_URL}/filters/leads-groups`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch groups');
-
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setGroups(data);
-      }
+      if (Array.isArray(data)) setGroups(data);
     } catch (err) {
       console.error('Error fetching groups:', err);
       setGroups([]);
@@ -326,26 +521,15 @@ function OrderBook() {
   };
 
   const fetchSubGroupsForForm = async (group) => {
-    if (!group) {
-      setSubGroups([]);
-      return;
-    }
-
+    if (!group) { setSubGroups([]); return; }
     try {
       const response = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch subgroups');
-
       const data = await response.json();
-      if (Array.isArray(data)) {
-        setSubGroups(data);
-      }
+      if (Array.isArray(data)) setSubGroups(data);
     } catch (err) {
       console.error('Error fetching subgroups:', err);
       setSubGroups([]);
@@ -353,26 +537,16 @@ function OrderBook() {
   };
 
   const fetchCustomersByGroup = async (group, subGroup) => {
-    if (!group) {
-      setCustomers([]);
-      return;
-    }
-
+    if (!group) { setCustomers([]); return; }
     try {
       const params = new URLSearchParams();
       params.append('groupName', group);
       if (subGroup) params.append('subGroupName', subGroup);
-
       const response = await fetch(`${API_BASE_URL}/customers/by-group?${params}`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch customers');
-
       const data = await response.json();
       if (data.success) {
         const customerList = Array.isArray(data.data) ? data.data : data.data.content || [];
@@ -385,22 +559,13 @@ function OrderBook() {
   };
 
   const fetchProposalsByCustomer = async (customerId) => {
-    if (!customerId) {
-      setProposals([]);
-      return;
-    }
-
+    if (!customerId) { setProposals([]); return; }
     try {
       const response = await fetch(`${API_BASE_URL}/proposals/by-customer/${customerId}`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch proposals');
-
       const data = await response.json();
       if (data.success) {
         const proposalList = Array.isArray(data.data) ? data.data : [];
@@ -414,19 +579,13 @@ function OrderBook() {
 
   const loadProposalItems = async (proposalId) => {
     if (!proposalId) return;
-
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/proposal-items/${proposalId}`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to load proposal items');
-
       const data = await response.json();
       if (data.success) {
         const items = (data.data || []).map((item, index) => ({
@@ -444,7 +603,6 @@ function OrderBook() {
           isCustomUnit: false,
           customUnit: ''
         }));
-
         setFormData(prev => ({ ...prev, items }));
         showSuccess('Proposal items loaded successfully');
       }
@@ -462,7 +620,6 @@ function OrderBook() {
 
   const handleEdit = async (orderBook) => {
     setSelectedOrderBook(orderBook);
-
     setFormData(prev => ({
       ...prev,
       groupName: orderBook.groupName || '',
@@ -473,22 +630,24 @@ function OrderBook() {
       await fetchSubGroupsForForm(orderBook.groupName);
       await fetchCustomersByGroup(orderBook.groupName, orderBook.subGroupName);
     }
-
     if (orderBook.customerId) {
       await fetchProposalsByCustomer(orderBook.customerId);
     }
 
+    // Restore existing attachment info (file lives in DB; no file path needed)
+    if (orderBook.hasPoFile && orderBook.poFileName) {
+      setExistingAttachment({ fileName: orderBook.poFileName, mimeType: orderBook.poFileMimeType });
+    } else {
+      setExistingAttachment(null);
+    }
+    setAttachmentFile(null);
+
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch items');
-
       const data = await response.json();
       if (data.success) {
         setTimeout(() => {
@@ -517,7 +676,6 @@ function OrderBook() {
             }))
           });
         }, 300);
-
         setIsEditMode(true);
         setShowCreateModal(true);
       }
@@ -528,18 +686,12 @@ function OrderBook() {
 
   const handleView = async (orderBook) => {
     setSelectedOrderBook(orderBook);
-
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to fetch items');
-
       const data = await response.json();
       if (data.success) {
         setSelectedOrderBook({ ...orderBook, items: data.data || [] });
@@ -557,20 +709,14 @@ function OrderBook() {
 
   const handleDeleteConfirm = async () => {
     if (!deleteOrderId) return;
-
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/delete/${deleteOrderId}`, {
         method: 'DELETE',
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        }
+        headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-
       if (!response.ok) throw new Error('Failed to delete order book');
-
       const data = await response.json();
       if (data.success) {
         showSuccess('Order book deleted successfully');
@@ -613,7 +759,6 @@ function OrderBook() {
       const url = isEditMode
         ? `${API_BASE_URL}/order-book/update/${selectedOrderBook.id}`
         : `${API_BASE_URL}/order-book/create`;
-
       const method = isEditMode ? 'PUT' : 'POST';
 
       const response = await fetch(url, {
@@ -634,6 +779,28 @@ function OrderBook() {
 
       const data = await response.json();
       if (data.success) {
+        const savedId = data.data?.id || (isEditMode ? selectedOrderBook.id : null);
+
+        // If there's an attachment file, upload it now
+        if (attachmentFile && savedId) {
+          try {
+            const poFormData = new FormData();
+            poFormData.append('file', attachmentFile);
+            poFormData.append('poNumber', formData.poNumber || data.data?.poNumber || '');
+            if (formData.poDate) poFormData.append('poDate', formData.poDate);
+
+            await fetch(`${API_BASE_URL}/order-book/${savedId}/upload-po`, {
+              method: 'POST',
+              credentials: "include",
+              headers: { 'User-Id': user.id, 'User-Role': user.role },
+              body: poFormData
+            });
+          } catch (uploadErr) {
+            console.error('Attachment upload error:', uploadErr);
+            showWarning('Order book saved but file attachment failed. Use Upload PO to retry.');
+          }
+        }
+
         showSuccess(isEditMode ? 'Order book updated successfully' : 'Order book created successfully');
         setShowCreateModal(false);
         resetForm();
@@ -658,28 +825,21 @@ function OrderBook() {
 
   const handlePOUpload = async (e) => {
     e.preventDefault();
-
     if (!poUploadData.file || !poUploadData.poNumber) {
       showWarning('Please select a file and enter PO number');
       return;
     }
-
     setLoading(true);
     try {
       const formDataUpload = new FormData();
       formDataUpload.append('file', poUploadData.file);
       formDataUpload.append('poNumber', poUploadData.poNumber);
-      if (poUploadData.poDate) {
-        formDataUpload.append('poDate', poUploadData.poDate);
-      }
+      if (poUploadData.poDate) formDataUpload.append('poDate', poUploadData.poDate);
 
       const response = await fetch(`${API_BASE_URL}/order-book/${selectedOrderBook.id}/upload-po`, {
         method: 'POST',
         credentials: "include",
-        headers: {
-          'User-Id': user.id,
-          'User-Role': user.role
-        },
+        headers: { 'User-Id': user.id, 'User-Role': user.role },
         body: formDataUpload
       });
 
@@ -724,6 +884,8 @@ function OrderBook() {
     setCustomers([]);
     setProposals([]);
     setSubGroups([]);
+    setAttachmentFile(null);
+    setExistingAttachment(null);
   };
 
   const addItem = () => {
@@ -753,7 +915,6 @@ function OrderBook() {
   const updateItem = (index, field, value) => {
     setFormData(prev => {
       const items = [...prev.items];
-
       if (field === 'unit') {
         if (value === 'Custom') {
           items[index].isCustomUnit = true;
@@ -767,7 +928,6 @@ function OrderBook() {
       } else {
         items[index][field] = value;
       }
-
       return { ...prev, items };
     });
   };
@@ -787,7 +947,6 @@ function OrderBook() {
     const unitPrice = parseFloat(item.unitPrice) || 0;
     const discountPercent = parseFloat(item.discountPercent) || 0;
     const taxPercent = parseFloat(item.taxPercent) || 0;
-
     const subtotal = quantity * unitPrice;
     const discount = subtotal * (discountPercent / 100);
     const taxable = subtotal - discount;
@@ -814,26 +973,28 @@ function OrderBook() {
 
   const closeModal = (modalSetter) => {
     modalSetter(false);
-    if (modalSetter === setShowCreateModal) {
-      resetForm();
-    }
-    if (modalSetter === setShowDeleteConfirm) {
-      setDeleteOrderId(null);
+    if (modalSetter === setShowCreateModal) resetForm();
+    if (modalSetter === setShowDeleteConfirm) setDeleteOrderId(null);
+    if (modalSetter === setShowFileViewerModal) {
+      // Revoke the blob URL to free browser memory
+      if (fileViewerBlobRef.current) {
+        URL.revokeObjectURL(fileViewerBlobRef.current);
+        fileViewerBlobRef.current = null;
+      }
+      setFileViewerUrl('');
+      setFileViewerName('');
+      setFileViewerType('');
+      setFileViewerLoading(false);
     }
   };
 
   const formatDisplayValue = (value) => {
-    if (value === null || value === undefined || value === '' || value === 0) {
-      return '-';
-    }
+    if (value === null || value === undefined || value === '' || value === 0) return '-';
     return value;
   };
 
   const toggleColumnVisibility = (columnKey) => {
-    setVisibleColumns(prev => ({
-      ...prev,
-      [columnKey]: !prev[columnKey]
-    }));
+    setVisibleColumns(prev => ({ ...prev, [columnKey]: !prev[columnKey] }));
   };
 
   const columnDefinitions = [
@@ -890,7 +1051,6 @@ function OrderBook() {
     return String(aVal).localeCompare(String(bVal)) * dir;
   });
 
-  // ── Drag-and-drop column reorder ──────────────────────────────
   const handleDragStart = (key) => { dragCol.current = key; };
   const handleDragEnter = (key) => { dragOverCol.current = key; };
   const handleDragEnd   = () => {
@@ -909,16 +1069,13 @@ function OrderBook() {
     dragOverCol.current = null;
   };
 
-  // Column metadata — label, cell renderer, sort key
   const columnMeta = {
     orderNo:          {
-      label: 'Order No',
-      sortKey: 'orderNo',
+      label: 'Order No', sortKey: 'orderNo',
       render: (o) => <td key="orderNo" className="orderbook-id">{o.orderBookNo}</td>
     },
     customer:         {
-      label: 'Customer',
-      sortKey: 'customer',
+      label: 'Customer', sortKey: 'customer',
       render: (o) => (
         <td key="customer">
           <div className="orderbook-customer-info">
@@ -928,80 +1085,34 @@ function OrderBook() {
         </td>
       )
     },
-    group:            {
-      label: 'Group',
-      sortKey: 'group',
-      render: (o) => <td key="group">{o.groupName || '-'}</td>
-    },
-    subGroup:         {
-      label: 'Sub Group',
-      sortKey: 'subGroup',
-      render: (o) => <td key="subGroup">{o.subGroupName || '-'}</td>
-    },
-    orderTitle:       {
-      label: 'Order Title',
-      sortKey: 'orderTitle',
-      render: (o) => <td key="orderTitle">{o.orderTitle}</td>
-    },
-    orderDate:        {
-      label: 'Order Date',
-      sortKey: 'orderDate',
-      render: (o) => <td key="orderDate">{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td>
-    },
-    expectedDelivery: {
-      label: 'Expected Delivery',
-      sortKey: 'expectedDelivery',
-      render: (o) => <td key="expectedDelivery">{o.expectedDeliveryDate ? new Date(o.expectedDeliveryDate).toLocaleDateString('en-IN') : '-'}</td>
-    },
-    poNumber:         {
-      label: 'PO Number',
-      sortKey: 'poNumber',
-      render: (o) => <td key="poNumber">{o.poNumber || '-'}</td>
-    },
-    poDate:           {
-      label: 'PO Date',
-      sortKey: 'poDate',
-      render: (o) => <td key="poDate">{o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '-'}</td>
-    },
-    totalAmount:      {
-      label: 'Total Amount (₹)',
-      sortKey: 'totalAmount',
-      render: (o) => <td key="totalAmount" className="orderbook-amount">₹{o.totalAmount ? parseFloat(o.totalAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
-    },
-    advanceAmount:    {
-      label: 'Advance Amount (₹)',
-      sortKey: 'advanceAmount',
-      render: (o) => <td key="advanceAmount" className="orderbook-amount">₹{o.advanceAmount ? parseFloat(o.advanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
-    },
-    balanceAmount:    {
-      label: 'Balance Amount (₹)',
-      sortKey: 'balanceAmount',
-      render: (o) => <td key="balanceAmount" className="orderbook-amount orderbook-balance">₹{o.balanceAmount ? parseFloat(o.balanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td>
-    },
+    group:            { label: 'Group',     sortKey: 'group',     render: (o) => <td key="group">{o.groupName || '-'}</td> },
+    subGroup:         { label: 'Sub Group', sortKey: 'subGroup',  render: (o) => <td key="subGroup">{o.subGroupName || '-'}</td> },
+    orderTitle:       { label: 'Order Title', sortKey: 'orderTitle', render: (o) => <td key="orderTitle">{o.orderTitle}</td> },
+    orderDate:        { label: 'Order Date', sortKey: 'orderDate', render: (o) => <td key="orderDate">{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td> },
+    expectedDelivery: { label: 'Expected Delivery', sortKey: 'expectedDelivery', render: (o) => <td key="expectedDelivery">{o.expectedDeliveryDate ? new Date(o.expectedDeliveryDate).toLocaleDateString('en-IN') : '-'}</td> },
+    poNumber:         { label: 'PO Number', sortKey: 'poNumber', render: (o) => <td key="poNumber">{o.poNumber || '-'}</td> },
+    poDate:           { label: 'PO Date',   sortKey: 'poDate',   render: (o) => <td key="poDate">{o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '-'}</td> },
+    totalAmount:      { label: 'Total Amount (₹)', sortKey: 'totalAmount', render: (o) => <td key="totalAmount" className="orderbook-amount">₹{o.totalAmount ? parseFloat(o.totalAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
+    advanceAmount:    { label: 'Advance Amount (₹)', sortKey: 'advanceAmount', render: (o) => <td key="advanceAmount" className="orderbook-amount">₹{o.advanceAmount ? parseFloat(o.advanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
+    balanceAmount:    { label: 'Balance Amount (₹)', sortKey: 'balanceAmount', render: (o) => <td key="balanceAmount" className="orderbook-amount orderbook-balance">₹{o.balanceAmount ? parseFloat(o.balanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
     status:           {
-      label: 'Status',
-      sortKey: 'status',
+      label: 'Status', sortKey: 'status',
       render: (o) => (
         <td key="status">
           <span className={`orderbook-status ${getStatusClass(o.status)}`}>{o.status}</span>
         </td>
       )
     },
-    createdBy:        {
-      label: 'Created By',
-      sortKey: 'createdBy',
-      render: (o) => <td key="createdBy">{o.createdByName || '-'}</td>
-    },
+    createdBy:        { label: 'Created By', sortKey: 'createdBy', render: (o) => <td key="createdBy">{o.createdByName || '-'}</td> },
     actions:          {
-      label: 'Actions',
-      sortKey: null,
+      label: 'Actions', sortKey: null,
       render: (o) => (
         <td key="actions">
           <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
-            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View">   <FaEye /></button>
-            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit">   <FaEdit /></button>
+            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View"><FaEye /></button>
+            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit"><FaEdit /></button>
             <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
-{canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>}
+            {canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>}
           </div>
         </td>
       )
@@ -1096,6 +1207,25 @@ function OrderBook() {
         </div>
 
         <div className="orderbook-action-buttons">
+          {/* Export Excel Button - exports ALL filtered records, not just current page */}
+          <button
+            className="orderbook-btn orderbook-btn-export orderbook-btn-icon"
+            onClick={handleExportExcel}
+            title={totalItems > 0 ? `Export all ${totalItems} matching order book(s) to Excel` : 'No records to export'}
+            disabled={totalItems === 0 || exporting}
+          >
+            {exporting ? (
+              <><span className="ob-export-spinner" /> Exporting…</>
+            ) : (
+              <>
+                <FaFileExcel /> Export Excel
+                {totalItems > 0 && (
+                  <span className="ob-export-count">{totalItems}</span>
+                )}
+              </>
+            )}
+          </button>
+
           <div className="orderbook-column-picker-container">
             <button
               className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
@@ -1201,13 +1331,9 @@ function OrderBook() {
             ) : (
               <>No entries to display</>
             )}
-
             <select
               value={rowsPerPage}
-              onChange={(e) => {
-                setRowsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
+              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
               className="orderbook-rows-select"
             >
               <option value={10}>10 Rows</option>
@@ -1217,24 +1343,9 @@ function OrderBook() {
             </select>
           </div>
           <div className="orderbook-pagination-controls">
-            
-            <button
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-              className="orderbook-pagination-btn"
-            >
-              Previous
-            </button>
-            <span className="orderbook-pagination-current">
-              Page {currentPage} of {totalPages || 1}
-            </span>
-            <button
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages || totalPages === 0}
-              className="orderbook-pagination-btn"
-            >
-              Next
-            </button>
+            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="orderbook-pagination-btn">Previous</button>
+            <span className="orderbook-pagination-current">Page {currentPage} of {totalPages || 1}</span>
+            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="orderbook-pagination-btn">Next</button>
           </div>
         </div>
       </div>
@@ -1254,17 +1365,8 @@ function OrderBook() {
             <p>Are you sure you want to delete this order book?</p>
             <p className="orderbook-delete-warning">This action cannot be undone.</p>
             <div className="orderbook-delete-actions">
-              <button
-                className="orderbook-btn orderbook-btn-secondary"
-                onClick={() => closeModal(setShowDeleteConfirm)}
-              >
-                Cancel
-              </button>
-              <button
-                className="orderbook-btn orderbook-btn-danger"
-                onClick={handleDeleteConfirm}
-                disabled={loading}
-              >
+              <button className="orderbook-btn orderbook-btn-secondary" onClick={() => closeModal(setShowDeleteConfirm)}>Cancel</button>
+              <button className="orderbook-btn orderbook-btn-danger" onClick={handleDeleteConfirm} disabled={loading}>
                 {loading ? 'Deleting...' : 'Confirm Delete'}
               </button>
             </div>
@@ -1272,7 +1374,7 @@ function OrderBook() {
         </div>
       )}
 
-      {/* View Modal */}
+      {/* ── View Modal ───────────────────────────────────────────────── */}
       {showViewModal && selectedOrderBook && (
         <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
@@ -1308,6 +1410,43 @@ function OrderBook() {
                   <div className="orderbook-description">
                     <strong>Description:</strong>
                     <p>{selectedOrderBook.orderDescription}</p>
+                  </div>
+                )}
+
+                {/* Attachment section in View Modal */}
+                {selectedOrderBook.hasPoFile && (
+                  <div className="ob-attachment-section">
+                    <strong className="ob-attachment-label">
+                      <FaFileAlt style={{ marginRight: 6, verticalAlign: 'middle' }} />
+                      Attached Document
+                    </strong>
+                    <div className="ob-attachment-card">
+                      <div className="ob-attachment-info">
+                        <span className="ob-attachment-icon">
+                          {getFileIcon(selectedOrderBook.poFileName)}
+                        </span>
+                        <span className="ob-attachment-name">
+                          {selectedOrderBook.poFileName || 'Attached File'}
+                        </span>
+                      </div>
+                      <div className="ob-attachment-actions">
+                        <button
+                          className="ob-attachment-btn ob-attachment-btn-view"
+                          onClick={() => handleViewFile(selectedOrderBook.id, selectedOrderBook.poFileName)}
+                          title="Open file in viewer"
+                        >
+                          <FaEye /> View
+                        </button>
+                        <button
+                          className="ob-attachment-btn ob-attachment-btn-download"
+                          onClick={() => handleDownloadFile(selectedOrderBook.id, selectedOrderBook.poFileName)}
+                          title="Download file"
+                          type="button"
+                        >
+                          <FaDownload /> Download
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1394,7 +1533,7 @@ function OrderBook() {
         </div>
       )}
 
-      {/* Create/Edit Modal */}
+      {/* ── Create/Edit Modal ──────────────────────────────────────── */}
       {showCreateModal && (
         <div className="orderbook-modal-overlay" onClick={(e) => e.stopPropagation()}>
           <div className="orderbook-modal orderbook-modal-large" onClick={(e) => e.stopPropagation()}>
@@ -1413,13 +1552,7 @@ function OrderBook() {
                     <select
                       value={formData.groupName}
                       onChange={(e) => {
-                        setFormData({
-                          ...formData,
-                          groupName: e.target.value,
-                          subGroupName: '',
-                          customerId: '',
-                          proposalId: ''
-                        });
+                        setFormData({ ...formData, groupName: e.target.value, subGroupName: '', customerId: '', proposalId: '' });
                       }}
                       required
                     >
@@ -1437,12 +1570,7 @@ function OrderBook() {
                     <select
                       value={formData.subGroupName}
                       onChange={(e) => {
-                        setFormData({
-                          ...formData,
-                          subGroupName: e.target.value,
-                          customerId: '',
-                          proposalId: ''
-                        });
+                        setFormData({ ...formData, subGroupName: e.target.value, customerId: '', proposalId: '' });
                       }}
                       disabled={!formData.groupName}
                     >
@@ -1474,9 +1602,7 @@ function OrderBook() {
                       ))}
                     </select>
                     {!formData.groupName && (
-                      <small className="orderbook-help-text">
-                        Please select a group first
-                      </small>
+                      <small className="orderbook-help-text">Please select a group first</small>
                     )}
                   </div>
 
@@ -1486,9 +1612,7 @@ function OrderBook() {
                       value={formData.proposalId}
                       onChange={(e) => {
                         setFormData({ ...formData, proposalId: e.target.value });
-                        if (e.target.value) {
-                          loadProposalItems(e.target.value);
-                        }
+                        if (e.target.value) loadProposalItems(e.target.value);
                       }}
                       disabled={!formData.customerId}
                     >
@@ -1500,9 +1624,7 @@ function OrderBook() {
                       ))}
                     </select>
                     {formData.proposalId && (
-                      <small className="orderbook-help-text">
-                        Items will be loaded automatically from proposal
-                      </small>
+                      <small className="orderbook-help-text">Items will be loaded automatically from proposal</small>
                     )}
                   </div>
 
@@ -1582,6 +1704,66 @@ function OrderBook() {
                     />
                   </div>
 
+                  {/* ── Attachment field ── */}
+                  <div className="orderbook-form-group orderbook-form-full">
+                    <label>
+                      <FaFileAlt style={{ marginRight: 6, verticalAlign: 'middle', color: '#7c3aed' }} />
+                      Attach Document (PO / Reference File)
+                    </label>
+
+                    {/* Show existing attachment if in edit mode */}
+                    {existingAttachment && existingAttachment.fileName && !attachmentFile && (
+                      <div className="ob-existing-attachment">
+                        <div className="ob-attachment-card" style={{ marginBottom: 10 }}>
+                          <div className="ob-attachment-info">
+                            <span className="ob-attachment-icon">{getFileIcon(existingAttachment.fileName)}</span>
+                            <span className="ob-attachment-name">{existingAttachment.fileName}</span>
+                            <span className="ob-attachment-badge">Current</span>
+                          </div>
+                          <div className="ob-attachment-actions">
+                            <button
+                              type="button"
+                              className="ob-attachment-btn ob-attachment-btn-view"
+                              onClick={() => handleViewFile(selectedOrderBook?.id, existingAttachment.fileName)}
+                            >
+                              <FaEye /> View
+                            </button>
+                          </div>
+                        </div>
+                        <small className="orderbook-help-text">Upload a new file below to replace the current attachment</small>
+                      </div>
+                    )}
+
+                    <div className="ob-file-upload-zone">
+                      <input
+                        type="file"
+                        id="ob-attachment-input"
+                        className="ob-file-input-hidden"
+                        onChange={(e) => setAttachmentFile(e.target.files[0] || null)}
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xls,.xlsx"
+                      />
+                      <label htmlFor="ob-attachment-input" className="ob-file-upload-label">
+                        <FaCloudUploadAlt className="ob-file-upload-icon" />
+                        <span>
+                          {attachmentFile
+                            ? attachmentFile.name
+                            : 'Click to browse or drag & drop'}
+                        </span>
+                        <small>PDF, DOC, DOCX, XLS, XLSX, JPG, PNG</small>
+                      </label>
+                      {attachmentFile && (
+                        <button
+                          type="button"
+                          className="ob-file-clear-btn"
+                          onClick={() => setAttachmentFile(null)}
+                          title="Remove selected file"
+                        >
+                          <FaTimes />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
                   <div className="orderbook-form-group orderbook-form-full">
                     <label>Description</label>
                     <textarea
@@ -1609,27 +1791,13 @@ function OrderBook() {
                 <div className="orderbook-items-header">
                   <h3>Order Items</h3>
                   <div style={{ display: 'flex', gap: '10px' }}>
-                    <button
-                      type="button"
-                      className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
-                      onClick={downloadExcelTemplate}
-                      title="Download Excel Template"
-                    >
+                    <button type="button" className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon" onClick={downloadExcelTemplate} title="Download Excel Template">
                       <FaFileDownload /> Download Template
                     </button>
-                    <button
-                      type="button"
-                      className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon"
-                      onClick={() => setShowExcelUploadModal(true)}
-                      title="Import from Excel"
-                    >
+                    <button type="button" className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon" onClick={() => setShowExcelUploadModal(true)} title="Import from Excel">
                       <FaUpload /> Import Excel
                     </button>
-                    <button
-                      type="button"
-                      className="orderbook-btn orderbook-btn-secondary"
-                      onClick={addItem}
-                    >
+                    <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={addItem}>
                       + Add Item
                     </button>
                   </div>
@@ -1660,26 +1828,23 @@ function OrderBook() {
                         <tbody>
                           {formData.items.map((item, index) => (
                             <tr key={index}>
-                              <td className="orderbook-table-cell-centered">
-                                {item.lineNo}
-                              </td>
+                              <td className="orderbook-table-cell-centered">{item.lineNo}</td>
                               <td>
                                 <ItemNameAutocomplete
                                   value={item.itemName}
                                   onChange={(val) => updateItem(index, 'itemName', val)}
                                   onSelect={(catalogueItem) => {
-                                    // Auto-fill all fields from catalogue selection
                                     setFormData(prev => {
                                       const items = [...prev.items];
                                       items[index] = {
                                         ...items[index],
                                         itemName:        catalogueItem.itemName,
-                                        specification:   catalogueItem.specification  || items[index].specification,
-                                        description:     catalogueItem.description    || items[index].description,
-                                        unit:            catalogueItem.unit           || items[index].unit,
-                                        unitPrice:       catalogueItem.unitPrice      != null ? catalogueItem.unitPrice      : items[index].unitPrice,
-                                        taxPercent:      catalogueItem.taxPercent     != null ? catalogueItem.taxPercent     : items[index].taxPercent,
-                                        discountPercent: catalogueItem.discountPercent!= null ? catalogueItem.discountPercent: items[index].discountPercent,
+                                        specification:   catalogueItem.specification   || items[index].specification,
+                                        description:     catalogueItem.description     || items[index].description,
+                                        unit:            catalogueItem.unit            || items[index].unit,
+                                        unitPrice:       catalogueItem.unitPrice       != null ? catalogueItem.unitPrice       : items[index].unitPrice,
+                                        taxPercent:      catalogueItem.taxPercent      != null ? catalogueItem.taxPercent      : items[index].taxPercent,
+                                        discountPercent: catalogueItem.discountPercent != null ? catalogueItem.discountPercent : items[index].discountPercent,
                                         isCustomUnit: false,
                                         customUnit: '',
                                       };
@@ -1692,84 +1857,30 @@ function OrderBook() {
                                 />
                               </td>
                               <td>
-                                <input
-                                  type="text"
-                                  className="orderbook-table-input"
-                                  value={item.specification}
-                                  onChange={(e) => updateItem(index, 'specification', e.target.value)}
-                                  placeholder="Specification"
-                                />
+                                <input type="text" className="orderbook-table-input" value={item.specification} onChange={(e) => updateItem(index, 'specification', e.target.value)} placeholder="Specification" />
                               </td>
                               <td>
-                                <input
-                                  type="number"
-                                  step="0.0001"
-                                  className="orderbook-table-input orderbook-table-input-number"
-                                  value={item.quantity}
-                                  onChange={(e) => updateItem(index, 'quantity', e.target.value)}
-                                  placeholder="0"
-                                  required
-                                />
+                                <input type="number" step="0.0001" className="orderbook-table-input orderbook-table-input-number" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} placeholder="0" required />
                               </td>
                               <td>
                                 {item.isCustomUnit ? (
-                                  <input
-                                    type="text"
-                                    className="orderbook-table-input"
-                                    value={item.customUnit}
-                                    onChange={(e) => updateItem(index, 'customUnit', e.target.value)}
-                                    placeholder="Enter custom unit"
-                                    required
-                                  />
+                                  <input type="text" className="orderbook-table-input" value={item.customUnit} onChange={(e) => updateItem(index, 'customUnit', e.target.value)} placeholder="Enter custom unit" required />
                                 ) : (
-                                  <UnitTypeDropdown
-                                    value={item.unit}
-                                    onChange={(e) => updateItem(index, 'unit', e.target.value)}
-                                    className="orderbook-table-input"
-                                    placeholder="Select Unit"
-                                  />
+                                  <UnitTypeDropdown value={item.unit} onChange={(e) => updateItem(index, 'unit', e.target.value)} className="orderbook-table-input" placeholder="Select Unit" />
                                 )}
                               </td>
                               <td>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  className="orderbook-table-input orderbook-table-input-number"
-                                  value={item.unitPrice}
-                                  onChange={(e) => updateItem(index, 'unitPrice', e.target.value)}
-                                  placeholder="0.00"
-                                />
+                                <input type="number" step="0.01" className="orderbook-table-input orderbook-table-input-number" value={item.unitPrice} onChange={(e) => updateItem(index, 'unitPrice', e.target.value)} placeholder="0.00" />
                               </td>
                               <td>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  className="orderbook-table-input orderbook-table-input-number"
-                                  value={item.discountPercent}
-                                  onChange={(e) => updateItem(index, 'discountPercent', e.target.value)}
-                                  placeholder="0"
-                                />
+                                <input type="number" step="0.01" className="orderbook-table-input orderbook-table-input-number" value={item.discountPercent} onChange={(e) => updateItem(index, 'discountPercent', e.target.value)} placeholder="0" />
                               </td>
                               <td>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  className="orderbook-table-input orderbook-table-input-number"
-                                  value={item.taxPercent}
-                                  onChange={(e) => updateItem(index, 'taxPercent', e.target.value)}
-                                  placeholder="0"
-                                />
+                                <input type="number" step="0.01" className="orderbook-table-input orderbook-table-input-number" value={item.taxPercent} onChange={(e) => updateItem(index, 'taxPercent', e.target.value)} placeholder="0" />
                               </td>
-                              <td className="orderbook-table-cell-total">
-                                ₹{calculateItemTotal(item).toFixed(2)}
-                              </td>
+                              <td className="orderbook-table-cell-total">₹{calculateItemTotal(item).toFixed(2)}</td>
                               <td className="orderbook-table-cell-centered">
-                                <button
-                                  type="button"
-                                  className="orderbook-table-delete-btn"
-                                  onClick={() => removeItem(index)}
-                                  title="Remove item"
-                                >
+                                <button type="button" className="orderbook-table-delete-btn" onClick={() => removeItem(index)} title="Remove item">
                                   <FaTrash />
                                 </button>
                               </td>
@@ -1789,18 +1900,8 @@ function OrderBook() {
 
               {/* Submit Buttons */}
               <div className="orderbook-modal-actions">
-                <button
-                  type="button"
-                  className="orderbook-btn orderbook-btn-secondary"
-                  onClick={() => closeModal(setShowCreateModal)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="orderbook-btn orderbook-btn-primary"
-                  disabled={loading}
-                >
+                <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={() => closeModal(setShowCreateModal)}>Cancel</button>
+                <button type="submit" className="orderbook-btn orderbook-btn-primary" disabled={loading}>
                   {loading ? 'Saving...' : (isEditMode ? 'Update Order Book' : 'Create Order Book')}
                 </button>
               </div>
@@ -1841,30 +1942,31 @@ function OrderBook() {
 
               <div className="orderbook-form-group">
                 <label>PO File *</label>
-                <input
-                  type="file"
-                  onChange={(e) => setPoUploadData({ ...poUploadData, file: e.target.files[0] })}
-                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                  required
-                />
-                <small className="orderbook-help-text">
-                  Accepted formats: PDF, DOC, DOCX, JPG, PNG
-                </small>
+                <div className="ob-file-upload-zone">
+                  <input
+                    type="file"
+                    id="ob-po-file-input"
+                    className="ob-file-input-hidden"
+                    onChange={(e) => setPoUploadData({ ...poUploadData, file: e.target.files[0] })}
+                    accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                    required
+                  />
+                  <label htmlFor="ob-po-file-input" className="ob-file-upload-label">
+                    <FaCloudUploadAlt className="ob-file-upload-icon" />
+                    <span>{poUploadData.file ? poUploadData.file.name : 'Click to select file'}</span>
+                    <small>PDF, DOC, DOCX, JPG, PNG</small>
+                  </label>
+                  {poUploadData.file && (
+                    <button type="button" className="ob-file-clear-btn" onClick={() => setPoUploadData({ ...poUploadData, file: null })} title="Remove file">
+                      <FaTimes />
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="orderbook-modal-actions">
-                <button
-                  type="button"
-                  className="orderbook-btn orderbook-btn-secondary"
-                  onClick={() => closeModal(setShowPOUploadModal)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="orderbook-btn orderbook-btn-primary"
-                  disabled={loading}
-                >
+                <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={() => closeModal(setShowPOUploadModal)}>Cancel</button>
+                <button type="submit" className="orderbook-btn orderbook-btn-primary" disabled={loading}>
                   {loading ? 'Uploading...' : 'Upload PO'}
                 </button>
               </div>
@@ -1879,20 +1981,11 @@ function OrderBook() {
           <div className="orderbook-modal" onClick={(e) => e.stopPropagation()}>
             <div className="orderbook-modal-header">
               <h2>Import Items from Excel</h2>
-              <button className="orderbook-modal-close" onClick={() => {
-                setShowExcelUploadModal(false);
-                setExcelFile(null);
-              }}>×</button>
+              <button className="orderbook-modal-close" onClick={() => { setShowExcelUploadModal(false); setExcelFile(null); }}>×</button>
             </div>
 
             <form onSubmit={handleExcelUpload} className="orderbook-modal-content">
-              <div className="orderbook-info-box" style={{
-                background: '#e3f2fd',
-                padding: '15px',
-                borderRadius: '8px',
-                marginBottom: '20px',
-                border: '1px solid #90caf9'
-              }}>
+              <div className="orderbook-info-box" style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #90caf9' }}>
                 <h4 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>📋 Excel Format Instructions:</h4>
                 <ul style={{ margin: 0, paddingLeft: '20px', color: '#555' }}>
                   <li>Use the downloaded template for correct format</li>
@@ -1906,32 +1999,12 @@ function OrderBook() {
               <div className="orderbook-form-group">
                 <label>
                   Excel File *
-                  <button
-                    type="button"
-                    onClick={downloadExcelTemplate}
-                    style={{
-                      marginLeft: '10px',
-                      padding: '4px 12px',
-                      fontSize: '12px',
-                      background: '#4CAF50',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '4px',
-                      cursor: 'pointer'
-                    }}
-                  >
+                  <button type="button" onClick={downloadExcelTemplate} style={{ marginLeft: '10px', padding: '4px 12px', fontSize: '12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     <FaFileDownload /> Download Template
                   </button>
                 </label>
-                <input
-                  type="file"
-                  onChange={(e) => setExcelFile(e.target.files[0])}
-                  accept=".xlsx,.xls"
-                  required
-                />
-                <small className="orderbook-help-text">
-                  Accepted formats: .xlsx, .xls
-                </small>
+                <input type="file" onChange={(e) => setExcelFile(e.target.files[0])} accept=".xlsx,.xls" required />
+                <small className="orderbook-help-text">Accepted formats: .xlsx, .xls</small>
                 {excelFile && (
                   <small style={{ display: 'block', marginTop: '8px', color: '#4CAF50' }}>
                     ✓ Selected: {excelFile.name}
@@ -1940,25 +2013,87 @@ function OrderBook() {
               </div>
 
               <div className="orderbook-modal-actions">
-                <button
-                  type="button"
-                  className="orderbook-btn orderbook-btn-secondary"
-                  onClick={() => {
-                    setShowExcelUploadModal(false);
-                    setExcelFile(null);
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="orderbook-btn orderbook-btn-primary"
-                  disabled={loading || !excelFile}
-                >
+                <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={() => { setShowExcelUploadModal(false); setExcelFile(null); }}>Cancel</button>
+                <button type="submit" className="orderbook-btn orderbook-btn-primary" disabled={loading || !excelFile}>
                   {loading ? 'Importing...' : 'Import Items'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── File Viewer Modal ─────────────────────────────────────── */}
+      {showFileViewerModal && (
+        <div className="orderbook-modal-overlay ob-file-viewer-overlay" onClick={() => closeModal(setShowFileViewerModal)}>
+          <div className="orderbook-modal ob-file-viewer-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="orderbook-modal-header ob-file-viewer-header">
+              <div className="ob-file-viewer-title">
+                <span className="ob-file-viewer-icon">{getFileIcon(fileViewerName)}</span>
+                <h2 title={fileViewerName}>{fileViewerName}</h2>
+              </div>
+              <div className="ob-file-viewer-controls">
+                <button
+                  type="button"
+                  className="ob-attachment-btn ob-attachment-btn-download"
+                  onClick={() => handleDownloadFile(
+                    selectedOrderBook?.id,
+                    fileViewerName
+                  )}
+                  title="Download"
+                >
+                  <FaDownload /> Download
+                </button>
+                <a
+                  className="ob-attachment-btn ob-attachment-btn-view"
+                  href={fileViewerUrl || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="Open in new tab"
+                  style={{ pointerEvents: fileViewerUrl ? 'auto' : 'none', opacity: fileViewerUrl ? 1 : 0.5 }}
+                >
+                  <FaEye /> Open
+                </a>
+                <button className="orderbook-modal-close" onClick={() => closeModal(setShowFileViewerModal)}>×</button>
+              </div>
+            </div>
+
+            <div className="ob-file-viewer-body">
+              {fileViewerLoading && (
+                <div className="ob-file-viewer-loading">
+                  <div className="ob-file-viewer-spinner" />
+                  <p>Loading file…</p>
+                </div>
+              )}
+              {!fileViewerLoading && isPdfFile(fileViewerType) && (
+                <iframe
+                  src={fileViewerUrl}
+                  title={fileViewerName}
+                  className="ob-file-viewer-iframe"
+                />
+              )}
+              {!fileViewerLoading && isImageFile(fileViewerType) && (
+                <div className="ob-file-viewer-image-wrapper">
+                  <img src={fileViewerUrl} alt={fileViewerName} className="ob-file-viewer-image" />
+                </div>
+              )}
+              {!fileViewerLoading && !isPdfFile(fileViewerType) && !isImageFile(fileViewerType) && fileViewerUrl && (
+                <div className="ob-file-viewer-unsupported">
+                  <div className="ob-file-viewer-unsupported-icon">{getFileIcon(fileViewerName)}</div>
+                  <p>This file type cannot be previewed in the browser.</p>
+                  <button
+                    type="button"
+                    className="orderbook-btn orderbook-btn-primary"
+                    onClick={() => handleDownloadFile(
+                      selectedOrderBook?.id,
+                      fileViewerName
+                    )}
+                  >
+                    <FaDownload /> Download to View
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
