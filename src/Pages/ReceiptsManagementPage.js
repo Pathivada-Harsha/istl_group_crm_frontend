@@ -654,7 +654,7 @@ const ReceiptsManagementPage = () => {
       if (groupName) params.append("groupId", groupName);
       if (subGroupName) params.append("subGroupId", subGroupName);
       if (projectId) params.append("projectId", projectId);
-      if (user?.id) params.append("createdBy", user.id);
+      // KPI cards always match the table — no createdBy restriction.
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
       if (response.ok) setStats(await response.json());
       else setStats({ totalReceipts: 0, totalAmount: 0, appliedAmount: 0, unappliedAmount: 0, advanceReceipts: 0, invoiceReceipts: 0 });
@@ -1794,7 +1794,7 @@ const ReceiptsManagementPage = () => {
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Group *</label>
                       <select value={editReceiptGroupName}
-                        onChange={e => { const v = e.target.value; setEditReceiptGroupName(v); setEditReceiptSubGroupName(''); setEditReceiptProjectId(''); setEditReceiptProjectSubs([]); setEditReceiptProjectList([]); if (v) fetchEditReceiptSubs(v); }}
+                        onChange={handleEditReceiptGroupChange}
                         disabled={editReceiptProjectLoading.groups}
                         style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white' }}>
                         <option value="">{editReceiptProjectLoading.groups ? 'Loading groups...' : 'Select Group'}</option>
@@ -1804,7 +1804,7 @@ const ReceiptsManagementPage = () => {
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Sub Group</label>
                       <select value={editReceiptSubGroupName}
-                        onChange={e => { const v = e.target.value; setEditReceiptSubGroupName(v); setEditReceiptProjectId(''); setEditReceiptProjectList([]); if (editReceiptGroupName && v) fetchEditReceiptProjects(editReceiptGroupName, v); }}
+                        onChange={handleEditReceiptSubGroupChange}
                         disabled={!editReceiptGroupName || editReceiptProjectLoading.subs}
                         style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptGroupName ? '#f9fafb' : 'white' }}>
                         <option value="">{editReceiptProjectLoading.subs ? 'Loading...' : !editReceiptGroupName ? 'Select Group first' : 'Select Sub Group'}</option>
@@ -1814,7 +1814,7 @@ const ReceiptsManagementPage = () => {
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Project *</label>
                       <select value={editReceiptProjectId}
-                        onChange={e => setEditReceiptProjectId(e.target.value)}
+                        onChange={handleEditReceiptProjectChange}
                         disabled={!editReceiptSubGroupName || editReceiptProjectLoading.projects}
                         style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptSubGroupName ? '#f9fafb' : 'white' }}>
                         <option value="">{editReceiptProjectLoading.projects ? 'Loading...' : !editReceiptSubGroupName ? 'Select Sub Group first' : 'Select Project'}</option>
@@ -1822,6 +1822,13 @@ const ReceiptsManagementPage = () => {
                       </select>
                     </div>
                   </div>
+                  {editReceiptProjectId && editReceiptProjectId !== (editingReceipt.projectId || '') && (
+                    <div style={{ marginTop: '10px' }}>
+                      <button className="receipts-page-btn-primary" style={{ fontSize: '12px', padding: '6px 14px' }} onClick={handleApplyEditReceiptProject}>
+                        Apply Project Change
+                      </button>
+                    </div>
+                  )}
                   {(editReceiptGroupName !== (editingReceipt.groupId || '') || editReceiptSubGroupName !== (editingReceipt.subGroupId || '') || editReceiptProjectId !== (editingReceipt.projectId || '')) && parseFloat(editingReceipt.appliedAmount) > 0 && (
                     <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef9c3', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
                       ⚠ This advance has <strong>{formatCurrency(editingReceipt.appliedAmount)}</strong> already allocated to invoices.
