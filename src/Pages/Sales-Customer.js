@@ -35,14 +35,15 @@ const INDIAN_STATES = [
 
 // ── All Columns Definition ────────────────────────────────────────────────────
 const ALL_COLUMNS = [
-  { key: 'group',    label: 'Group',    sortable: true,  required: false },
-  { key: 'company',  label: 'Company',  sortable: true,  required: false },
-  { key: 'name',     label: 'Name',     sortable: true,  required: true  },
-  { key: 'phone',    label: 'Phone',    sortable: true,  required: false },
-  { key: 'email',    label: 'Email',    sortable: true,  required: false },
-  { key: 'status',   label: 'Status',   sortable: true,  required: false },
-  { key: 'city',     label: 'City',     sortable: true,  required: false },
-  { key: 'actions',  label: 'Actions',  sortable: false, required: true  },
+  { key: 'group',     label: 'Group',      sortable: true,  required: false },
+  { key: 'company',   label: 'Company',    sortable: true,  required: false },
+  { key: 'name',      label: 'Name',       sortable: true,  required: true  },
+  { key: 'phone',     label: 'Phone',      sortable: true,  required: false },
+  { key: 'email',     label: 'Email',      sortable: true,  required: false },
+  { key: 'status',    label: 'Status',     sortable: true,  required: false },
+  { key: 'createdBy', label: 'Created By', sortable: false, required: false },
+  { key: 'city',      label: 'City',       sortable: true,  required: false },
+  { key: 'actions',   label: 'Actions',    sortable: false, required: true  },
 ];
 
 const DEFAULT_ORDER   = ALL_COLUMNS.map(c => c.key);
@@ -695,7 +696,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                 ))}
               </div>
             </div>
-            <div className="ld-info-card">
+              <div className="ld-info-card">
               <h4 className="ld-card-title">Business Details</h4>
               <div className="ld-field-list">
                 {[
@@ -704,6 +705,8 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   ['Group', customer.groupName || '-'],
                   ['Category', customer.subGroupName || '-'],
                   ['Assigned To', customer.assignedToName || '-'],
+                  ['Created By', customer.createdByName || '-'],
+                  ...(customer.closedByName ? [['Converted By (Lead)', customer.closedByName]] : []),
                   ['Address', customer.address ? `${customer.address}, ${customer.city || ''}, ${customer.state || ''} ${customer.pincode ? '- '+customer.pincode : ''}` : '-'],
                 ].map(([l,v]) => (
                   <div className="ld-field-row" key={l}>
@@ -1385,13 +1388,23 @@ useEffect(() => {
   // ── Render cell ───────────────────────────────────────────────────
   const renderCell = (customer, colKey) => {
     switch(colKey) {
-      case 'group':   return <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName || 'Others'}</span>;
-      case 'company': return customer.companyName || 'N/A';
-      case 'name':    return <span className="cust-font-medium">{customer.name || 'N/A'}</span>;
-      case 'phone':   return customer.phone || 'N/A';
-      case 'email':   return customer.email || 'N/A';
-      case 'city':    return customer.city || '-';
-      case 'status':  return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
+      case 'group':     return <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName || 'Others'}</span>;
+      case 'company':   return customer.companyName || 'N/A';
+      case 'name':      return <span className="cust-font-medium">{customer.name || 'N/A'}</span>;
+      case 'phone':     return customer.phone || 'N/A';
+      case 'email':     return customer.email || 'N/A';
+      case 'city':      return customer.city || '-';
+      case 'status':    return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
+      case 'createdBy': return (
+        <div style={{ lineHeight: 1.3 }}>
+          <div style={{ fontWeight: 500, fontSize: 12, color: '#374151' }}>{customer.createdByName || '-'}</div>
+          {customer.closedByName && customer.closedByName !== customer.createdByName && (
+            <div style={{ fontSize: 10.5, color: '#6b7280', marginTop: 1 }}>
+              Closed by: {customer.closedByName}
+            </div>
+          )}
+        </div>
+      );
       case 'actions': return (
         <div className="cust-action-buttons-cell-center" style={{textAlign:'center'}}>
           {canView && (
@@ -1657,6 +1670,13 @@ useEffect(() => {
                 <div className="cust-card-footer" onClick={e => e.stopPropagation()}>
                   <div className="cust-card-source" style={{fontSize:12,color:'#9ca3af'}}>
                     {customer.gstNumber ? `GST: ${customer.gstNumber}` : 'No GST'}
+                    {customer.createdByName && (
+                      <div style={{marginTop:2,fontSize:11,color:'#9ca3af'}}>
+                        By: <span style={{color:'#6b7280',fontWeight:500}}>{customer.createdByName}</span>
+                        {customer.closedByName && customer.closedByName !== customer.createdByName &&
+                          <span style={{color:'#9ca3af'}}> · Closed: {customer.closedByName}</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="cust-card-actions">
                     {canView && <button className="cust-card-action-btn cust-action-view" onClick={() => handleViewCustomer(customer)} title="View Customer"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>}

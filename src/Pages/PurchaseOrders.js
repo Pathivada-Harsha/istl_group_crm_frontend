@@ -1005,7 +1005,7 @@ const PurchaseOrders = () => {
       {/* Action Bar */}
       <div className="purchase-orders-action-bar">
         <div className="purchase-orders-search-filters">
-          <input type="text" placeholder="Search by PO Number, Vendor ID, RFQ ID..." className="purchase-orders-search" value={filters.search}
+          <input type="text" placeholder="Search by PO Number, RFQ ID, Vendor Name..." className="purchase-orders-search" value={filters.search}
             onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(0); }} />
           <select className="purchase-orders-filter" value={filters.status}
             onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value })); setCurrentPage(0); }}>

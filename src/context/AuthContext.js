@@ -53,19 +53,17 @@ const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
 };
 
 /**
- * If the logged-in user is ACCOUNTS_EXECUTIVE and their pagePermissions
- * from the server are missing or incomplete for any of the above pages,
- * we merge in the override so the UI unlocks those pages.
+ * Applies role-specific permission overrides.
+ * - SUPERADMIN / ADMIN: trust the server's pagePermissions entirely — no frontend override.
+ *   Their permissions are managed in the DB just like any other role.
+ * - ACCOUNTS_EXECUTIVE: merges in the hardcoded baseline if the server gave nothing,
+ *   so the UI unlocks the finance pages they always need.
  */
 const applyAccountsExecutiveOverride = (role, serverPagePermissions) => {
   const merged = { ...(serverPagePermissions || {}) };
 
-  // SUPERADMIN / ADMIN always get full permissions regardless of server config
+  // SUPERADMIN / ADMIN — use whatever the server returned, no forced override
   if (SUPERADMIN_ROLES.includes(role)) {
-    Object.entries(SUPERADMIN_PERMISSIONS).forEach(([page, perms]) => {
-      const existing = merged[page] || [];
-      merged[page] = Array.from(new Set([...existing, ...perms]));
-    });
     return merged;
   }
 

@@ -1154,7 +1154,7 @@ function OrderBook() {
           <input
             type="text"
             className="orderbook-search"
-            placeholder="Search by Order No, Title, PO Number..."
+            placeholder="Search by Order No, Title, PO Number, Customer Name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />

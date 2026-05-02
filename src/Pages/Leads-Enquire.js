@@ -1005,10 +1005,12 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
               <div className="ld-section-hdr">
                 <h4 className="ld-card-title" style={{ margin: 0 }}>{proposals.length} Proposal{proposals.length !== 1 ? 's' : ''}</h4>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  <label className="ld-pact-btn ld-pact-upload" title="Upload an offline proposal PDF given by client" style={{cursor:'pointer',padding:'7px 14px',fontSize:13}} onClick={() => { setShowOfflinePanel(v => !v); setShowProposalForm(false); }}>
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                    Upload Offline PDF
-                  </label>
+                  {permissions.DOWNLOAD && (
+                    <label className="ld-pact-btn ld-pact-upload" title="Upload an offline proposal PDF given by client" style={{cursor:'pointer',padding:'7px 14px',fontSize:13}} onClick={() => { setShowOfflinePanel(v => !v); setShowProposalForm(false); }}>
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                      Upload Offline PDF
+                    </label>
+                  )}
                   {permissions.CREATE && (
                     <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
                       + New Proposal
@@ -1103,7 +1105,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
                         <div className="ld-proposal-actions">
-                          {p.offlinePdfPath ? (
+                          {permissions.DOWNLOAD && (p.offlinePdfPath ? (
                             /* ── Offline PDF uploaded — show View / Download / Replace only ── */
                             <>
                               <button className="ld-pact-btn ld-pact-offline-view" onClick={() => handleViewOffline(p.id, p.offlinePdfName)} title="View uploaded offline proposal">
@@ -1139,7 +1141,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                                 />
                               </label>
                             </>
-                          )}
+                          ))}
                           {permissions.EDIT && (
                             <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingProposal(p); setShowProposalForm(true); }} title="Edit">
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -1691,18 +1693,26 @@ useEffect(() => {
           <button className="leads-enquiries-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="View Timeline">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </button>
-          <button className={`leads-enquiries-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => { if (canCreate) { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); } }} disabled={!canCreate} title="Add Follow-up">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          </button>
-          <button className={`leads-enquiries-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => handleView(lead)} disabled={!canCreate} title="View Proposals">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-          </button>
-          <button className={`leads-enquiries-action-btn leads-enquiries-action-edit ${!canEdit ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => handleEdit(lead)} disabled={!canEdit} title="Edit">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
-          </button>
-          <button className={`leads-enquiries-action-btn leads-enquiries-action-delete ${!canDelete ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => handleDelete(lead)} disabled={!canDelete} title="Delete">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          </button>
+          {canCreate && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-followup" onClick={() => { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); }} title="Add Follow-up">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+            </button>
+          )}
+          {canCreate && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-proposal" onClick={() => handleView(lead)} title="View Proposals">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            </button>
+          )}
+          {canEdit && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            </button>
+          )}
+          {canDelete && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-delete" onClick={() => handleDelete(lead)} title="Delete">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
+          )}
         </div>
       );
       default: return '-';
@@ -1826,22 +1836,27 @@ useEffect(() => {
           </select>
         </div>
         <div className="leads-enquiries-action-buttons">
-          <button
-            className={`leads-enquiries-btn leads-enquiries-btn-primary${!canCreate ? ' leads-enquiries-btn-disabled' : ''}`}
-            onClick={() => { if (canCreate) { resetForm(); setShowAddModal(true); } else showError('No permission'); }}
-            disabled={!canCreate}
-          >
-            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
-            Add New Lead
-          </button>
-          <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
-            <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-            Export
-          </button>
-          <LeadsExcelPanel
-            leads={leads}
-            onImportDone={() => fetchLeads(1, rowsPerPage)}
-          />
+          {canCreate && (
+            <button
+              className="leads-enquiries-btn leads-enquiries-btn-primary"
+              onClick={() => { resetForm(); setShowAddModal(true); }}
+            >
+              <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+              Add New Lead
+            </button>
+          )}
+          {leadsPermissions.includes('DOWNLOAD') && (
+            <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
+              <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+              Export
+            </button>
+          )}
+          {canCreate && (
+            <LeadsExcelPanel
+              leads={leads}
+              onImportDone={() => fetchLeads(1, rowsPerPage)}
+            />
+          )}
         </div>
       </div>
 
@@ -1933,8 +1948,8 @@ useEffect(() => {
                   <div className="leads-enquiries-card-actions">
                     {canView && <button className="leads-enquiries-card-action-btn leads-enquiries-action-view" onClick={() => handleView(lead)} title="View Details"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg></button>}
                     <button className="leads-enquiries-card-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="Timeline"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
-                    <button className={`leads-enquiries-card-action-btn leads-enquiries-action-followup ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => { if (canCreate) { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); } }} disabled={!canCreate} title="Follow-up"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>
-                    <button className={`leads-enquiries-card-action-btn leads-enquiries-action-proposal ${!canCreate ? 'leads-enquiries-action-disabled' : ''}`} onClick={() => handleView(lead)} disabled={!canCreate} title="View Proposals"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>
+                    {canCreate && <button className="leads-enquiries-card-action-btn leads-enquiries-action-followup" onClick={() => { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); }} title="Follow-up"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>}
+                    {canCreate && <button className="leads-enquiries-card-action-btn leads-enquiries-action-proposal" onClick={() => handleView(lead)} title="View Proposals"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>}
                     {canEdit && <button className="leads-enquiries-card-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>}
                     {canDelete && <button className="leads-enquiries-card-action-btn leads-enquiries-action-delete" onClick={() => handleDelete(lead)} title="Delete"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
                   </div>

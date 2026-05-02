@@ -1165,7 +1165,7 @@ const BillsManagementPage = () => {
         <div className="procurement-bills-received-search-filters">
           <input
             type="text"
-            placeholder="Search by Bill ID, Vendor..."
+            placeholder="Search by Bill ID, Bill No, Vendor Name..."
             className="procurement-bills-received-search"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}

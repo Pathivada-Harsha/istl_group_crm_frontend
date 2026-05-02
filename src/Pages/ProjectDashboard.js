@@ -487,7 +487,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
         {statusDistribution.length > 0 ? (
           <div className="chart-card">
             <div className="chart-header"><h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4></div>
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={220}>
               <RechartsPieChart>
                 <Pie data={statusDistribution} cx="50%" cy="50%" labelLine={false}
                   label={e => `${e.name} (${e.value})`} outerRadius={90} dataKey="value">
@@ -508,7 +508,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
         {topByBudget.length > 0 ? (
           <div className="chart-card">
             <div className="chart-header"><h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4></div>
-            <ResponsiveContainer width="100%" height={280}>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topByBudget} margin={{ left: 10, right: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" tick={{ fontSize: 10 }} />
@@ -546,7 +546,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                   {data.scope === 'SUBGROUP' ? 'Projects by Order Value (₹)' : data.scope === 'GROUP' ? 'Sub-groups by Order Value (₹)' : 'Groups by Order Value (₹)'}
                 </h4>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={contributionData} layout="vertical" margin={{ left: 10, right: 30 }}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
@@ -573,7 +573,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                   {data.scope === 'SUBGROUP' ? 'Project Turnover Share (%)' : data.scope === 'GROUP' ? 'Sub-group Turnover Share (%)' : 'Group Turnover Share (%)'}
                 </h4>
               </div>
-              <ResponsiveContainer width="100%" height={260}>
+              <ResponsiveContainer width="100%" height={210}>
                 <RechartsPieChart>
                   <Pie
                     data={contributionData}
@@ -801,8 +801,8 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
                           onMouseEnter={e=>e.currentTarget.style.background=meta.light}
                           onMouseLeave={e=>e.currentTarget.style.background=i%2===0?'#fff':'#fafbfd'}>
                           <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9', color:'#94a3b8', fontWeight:600, fontSize:12 }}>{i+1}</td>
-                          <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9', maxWidth:220 }}>
-                            <div style={{ fontWeight:700, color:'#0f172a', fontSize:13, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{p.projectName}</div>
+                          <td style={{ padding:'11px 16px', borderBottom:'1px solid #f1f5f9', maxWidth:260 }}>
+                            <div style={{ fontWeight:700, color:'#0f172a', fontSize:13, whiteSpace:'normal', wordBreak:'break-word', lineHeight:1.35 }}>{p.projectName}</div>
                             <div style={{ fontSize:10.5, color:'#94a3b8', marginTop:2, display:'flex', alignItems:'center', gap:4 }}>
                               <span style={{ background: meta.bg, color: meta.color, borderRadius:4, padding:'1px 6px', fontWeight:600, fontSize:10 }}>{p.projectId}</span>
                             </div>
@@ -1240,7 +1240,7 @@ const ProjectDashboard = () => {
             {dashboardData.spendingTrend?.length > 0 ? (
               <div className="chart-card full-width">
                 <div className="chart-header"><h4 className="chart-title"><TrendingUp size={18} />Monthly Spending Trend</h4></div>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={230}>
                   <ComposedChart data={dashboardData.spendingTrend}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="month" /><YAxis />
@@ -1257,7 +1257,7 @@ const ProjectDashboard = () => {
             {dashboardData.procurementData?.posByStatus?.length > 0 ? (
               <div className="chart-card">
                 <div className="chart-header"><h4 className="chart-title">PO Status Distribution</h4></div>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={230}>
                   <RechartsPieChart>
                     <Pie data={dashboardData.procurementData.posByStatus} cx="50%" cy="50%" labelLine={false}
                       label={e => `${e.name} (${e.value})`} outerRadius={80} dataKey="value">
@@ -1274,7 +1274,7 @@ const ProjectDashboard = () => {
             {dashboardData.procurementData?.categoryDistribution?.length > 0 ? (
               <div className="chart-card">
                 <div className="chart-header"><h4 className="chart-title">Top Categories</h4></div>
-                <ResponsiveContainer width="100%" height={300}>
+                <ResponsiveContainer width="100%" height={230}>
                   <BarChart data={dashboardData.procurementData.categoryDistribution} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" /><YAxis dataKey="name" type="category" width={100} />

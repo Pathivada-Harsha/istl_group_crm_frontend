@@ -819,7 +819,7 @@ const QuotationsReceived = () => {
       {/* Action Bar */}
       <div className="procurement-quotation-received-action-bar">
         <div className="procurement-quotation-received-search-filters">
-          <input type="text" placeholder="Search by Quotation No, Vendor ID, RFQ ID…" className="procurement-quotation-received-search" value={filters.search}
+          <input type="text" placeholder="Search by Quotation No, RFQ ID, Vendor Name…" className="procurement-quotation-received-search" value={filters.search}
             onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
           <select className="procurement-quotation-received-filter" value={filters.status}
             onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>

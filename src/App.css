@@ -2,6 +2,7 @@
 .app {
   min-height: 100vh;
   background-color: #f9fafb;
+  overflow-x: hidden;
 }
 
 /* Main content default */

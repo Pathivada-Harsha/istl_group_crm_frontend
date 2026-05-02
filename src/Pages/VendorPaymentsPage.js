@@ -592,7 +592,7 @@ export default function VendorPaymentsPage() {
       {/* Action bar */}
       <div className="receipts-page-action-bar">
         <div className="receipts-page-search-filters">
-          <input type="text" className="receipts-page-search" placeholder="Search payments..."
+          <input type="text" className="receipts-page-search" placeholder="Search by Advance No, Vendor Name..."
             value={filters.search} onChange={e=>{setFilters(f=>({...f,search:e.target.value}));setCurrentPage(0);}}/>
           <select className="receipts-page-filter" value={filters.paymentType}
             onChange={e=>{setFilters(f=>({...f,paymentType:e.target.value}));setCurrentPage(0);}}>
