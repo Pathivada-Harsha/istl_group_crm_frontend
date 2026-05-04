@@ -32,7 +32,9 @@
   padding: 24px;
 }
 
-/* Fullpage mode (login etc.) */
+/* Fullpage mode (login, 404, etc.) — strip ALL shell spacing */
 .main-content.fullpage {
   margin-left: 0 !important;
+  padding-top: 0 !important;
+  min-height: 100vh;
 }

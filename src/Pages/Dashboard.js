@@ -676,19 +676,19 @@ const TelecallerDashboard = () => {
 
   /* Compact stat pill — replaces full KpiCard for telecaller */
   const StatPill = ({ icon, label, value, accent, bg }) => (
-    <div style={{
-      background: "#fff", borderRadius: 8, padding: "10px 14px",
-      border: `1px solid #f1f5f9`, borderTop: `3px solid ${accent}`,
-      display: "flex", alignItems: "center", gap: 10, minWidth: 0,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-    }}>
-      <div style={{ width: 28, height: 28, borderRadius: 6, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>{icon}</div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{value}</div>
-        <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.05em", marginTop: 2, whiteSpace: "nowrap" }}>{label}</div>
-      </div>
+  <div style={{
+    background: "#fff", borderRadius: 8, padding: "10px 12px",
+    border: `1px solid #f1f5f9`, borderTop: `3px solid ${accent}`,
+    display: "flex", alignItems: "center", gap: 8, minWidth: 0,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflow: "hidden",
+  }}>
+    <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0 }}>{icon}</div>
+    <div style={{ minWidth: 0, flex: 1 }}>
+      <div style={{ fontSize: 17, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2, whiteSpace: "normal", lineHeight: 1.3, wordBreak: "break-word" }}>{label}</div>
     </div>
-  );
+  </div>
+);
 
   const CARD_HEIGHT = 440; // single consistent height for all 3 bottom cards
 
