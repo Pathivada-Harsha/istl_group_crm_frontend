@@ -496,6 +496,7 @@ export default function Profile() {
                       name="confirm" 
                       value={pwdForm.confirm} 
                       onChange={handlePwdChange}
+                      onPaste={(e) => e.preventDefault()}
                       disabled={passwordLoading}
                     />
                     <button

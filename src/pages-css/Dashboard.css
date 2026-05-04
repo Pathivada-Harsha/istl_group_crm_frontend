@@ -412,7 +412,10 @@ div.rd-card-sub {
 .rd-empty { text-align: center; padding: 28px 16px; color: #94a3b8; font-size: 13px; }
 .rd-empty-icon { font-size: 24px; margin-bottom: 8px; }
 
-/* RESPONSIVE */
+/* ══════════════════════════════════════════════════════════
+   GENERAL RESPONSIVE
+   ══════════════════════════════════════════════════════════ */
+
 @media (min-width: 1600px) {
   .rd-kpi-grid-8 { grid-template-columns: repeat(8, 1fr); }
 }
@@ -448,7 +451,7 @@ div.rd-card-sub {
    TELECALLER — compact KPI strip + inline interest bar
    ══════════════════════════════════════════════════════════ */
 
-/* Horizontal pill strip — 9 pills, wraps on small screens */
+/* Horizontal pill strip — 9 pills */
 .rd-tc-kpi-strip {
   display: grid;
   grid-template-columns: repeat(9, 1fr);
@@ -512,14 +515,136 @@ div.rd-card-sub {
   flex-shrink: 0;
 }
 
-/* Responsive for telecaller strip */
+/* ── Telecaller card height override on mobile — ────────────
+   Card height is set via inline style (440px).
+   On small screens we want auto height so content isn't cut off.
+───────────────────────────────────────────────────────────── */
+
+/* ══════════════════════════════════════════════════════════
+   TELECALLER RESPONSIVE BREAKPOINTS
+   ══════════════════════════════════════════════════════════ */
+
+/* Large desktop: 9 cols */
+@media (min-width: 1401px) {
+  .rd-tc-kpi-strip { grid-template-columns: repeat(9, 1fr); }
+}
+
+/* Medium desktop / laptop: 5 cols */
 @media (max-width: 1400px) {
   .rd-tc-kpi-strip { grid-template-columns: repeat(5, 1fr); }
 }
+
+/* Tablet landscape / small laptop: 3 cols */
 @media (max-width: 1024px) {
-  .rd-tc-kpi-strip { grid-template-columns: repeat(3, 1fr); }
-  .rd-tc-interest-bar { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .rd-tc-kpi-strip {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  .rd-tc-interest-bar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .rd-tc-interest-left { min-width: 0; width: 100%; }
+  .rd-tc-interest-right { flex-direction: row; align-items: center; gap: 8px; }
+
+  /* Release fixed height on bottom cards so they don't clip */
+  .rd-row.rd-row-3 .rd-card {
+    height: auto !important;
+    min-height: 280px;
+  }
+  /* Allow the card body to scroll for tables */
+  .rd-row.rd-row-3 .rd-card-body.rd-card-scroll {
+    overflow-x: auto;
+    max-height: 360px;
+  }
 }
+
+/* Tablet portrait: 3 cols still */
+@media (max-width: 768px) {
+  .rd-tc-kpi-strip {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  /* All bottom cards become full width (rd-row-3 → 1 col handled above) */
+  .rd-row.rd-row-3 .rd-card {
+    height: auto !important;
+    min-height: 0;
+  }
+  .rd-row.rd-row-3 .rd-card-body.rd-card-scroll {
+    overflow-x: auto;
+    max-height: 320px;
+  }
+  /* Table scroll wrapper inside cards */
+  .rd-row.rd-row-3 table.rd-table {
+    min-width: 460px;
+  }
+  .rd-tc-interest-bar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .rd-tc-interest-legend {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+  }
+}
+
+/* Mobile: 2 cols for KPI strip */
 @media (max-width: 640px) {
-  .rd-tc-kpi-strip { grid-template-columns: repeat(2, 1fr); }
+  .rd-tc-kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+  .rd-tc-interest-bar {
+    padding: 10px 12px;
+  }
+  .rd-tc-interest-left { min-width: 0; }
+  /* Smaller font in stat pills on mobile */
+  .rd-tc-kpi-strip > div {
+    padding: 8px 10px !important;
+  }
+  .rd-tc-kpi-strip > div > div:first-child {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 11px !important;
+  }
+  .rd-row.rd-row-3 .rd-card-body.rd-card-scroll {
+    max-height: 280px;
+  }
+}
+
+/* Small mobile: 2 cols, compact */
+@media (max-width: 480px) {
+  .rd-container { padding: 8px 10px 16px; }
+  .rd-tc-kpi-strip {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .rd-greeting-banner {
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .rd-greeting-name { font-size: 16px; }
+  .rd-greeting-sub  { font-size: 12px; }
+  .rd-greeting-quote,
+  .rd-greeting-meta { display: none; }
+  .rd-tc-interest-bar { padding: 8px 10px; gap: 6px; margin-bottom: 10px; }
+  .rd-tc-interest-legend { font-size: 10px; }
+  .rd-followup-stats { flex-direction: row; gap: 6px; }
+  .rd-fu-stat { padding: 6px 4px; }
+  .rd-fu-stat-value { font-size: 15px; }
+  .rd-row.rd-row-3 .rd-card { height: auto !important; }
+  .rd-row.rd-row-3 .rd-card-body.rd-card-scroll { max-height: 260px; }
+}
+
+/* Very small phones */
+@media (max-width: 360px) {
+  .rd-tc-kpi-strip { grid-template-columns: repeat(2, 1fr); gap: 5px; }
+  .rd-container { padding: 6px 8px 14px; }
+  .rd-tc-kpi-strip > div {
+    padding: 7px 8px !important;
+    gap: 6px !important;
+  }
 }
