@@ -17,7 +17,8 @@ export const setupFetchInterceptor = () => {
     // ✅ Skip login/logout endpoints — don't intercept auth calls
     const isAuthCall = url.includes('/login/userLogin') || 
                        url.includes('/login/logout') ||
-                       url.includes('/login/ping');
+                       url.includes('/login/ping') ||
+                       url.includes('/login/forgot-password/');
 
     if (isBackendCall && !isAuthCall && response.status === 401) {
       console.warn("Session expired - redirecting to login");

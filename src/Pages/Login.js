@@ -97,7 +97,12 @@ export default function Login() {
     e.preventDefault();
     setFpError("");
     if (!fpIdentifier.trim()) {
-      setFpError("Please enter your username or mobile number.");
+      setFpError("Please enter your email address.");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(fpIdentifier.trim())) {
+      setFpError("Please enter a valid email address.");
       return;
     }
     setFpLoading(true);
@@ -289,7 +294,7 @@ export default function Login() {
     const stepTitle = ["", "Forgot Password", "Enter OTP", "Reset Password"][fpStep];
     const stepSub = [
       "",
-      "Enter your username or registered mobile number",
+      "Enter your registered email address",
       `We sent a 6-digit code to ${fpMaskedEmail || "your registered email"}`,
       "Choose a strong new password",
     ][fpStep];
@@ -402,14 +407,14 @@ export default function Login() {
               {/* ── STEP 1: Enter username/mobile ── */}
               {fpStep === 1 && (
                 <form className="fp-form" onSubmit={handleFpVerify}>
-                  <label className="fp-label">Username or Mobile Number</label>
+                  <label className="fp-label">Email Address</label>
                   <input
                     className="fp-input"
-                    type="text"
-                    placeholder="e.g. john_doe or 9876543210"
+                    type="email"
+                    placeholder="e.g. john@example.com"
                     value={fpIdentifier}
                     onChange={(e) => setFpIdentifier(e.target.value)}
-                    autoComplete="off"
+                    autoComplete="email"
                     disabled={fpLoading}
                   />
                   {fpError && <div className="fp-error">{fpError}</div>}
