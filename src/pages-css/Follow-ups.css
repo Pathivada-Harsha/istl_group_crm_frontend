@@ -1366,3 +1366,17 @@
   display: flex;
   justify-content: space-between;
 }
+/* ── View action button ── */
+.followup-action-btn.action-view {
+  color: #0891b2;
+  border-color: #0891b2;
+}
+.followup-action-btn.action-view:hover {
+  background: #0891b2;
+  color: white;
+}
+
+/* ── Row hover cursor (clickable rows) ── */
+.followups-table tbody tr {
+  cursor: pointer;
+}

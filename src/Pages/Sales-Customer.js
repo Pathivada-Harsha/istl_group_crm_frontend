@@ -20,6 +20,9 @@ import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 import { FaEye, FaEdit, FaTrash, FaUpload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
+import api from '../services/leadsapi.js';
+import ConfirmationModal from '../components/ConfirmationModal.js';
+import useConfirmationModal from '../components/HandleConfirmationModal.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -35,15 +38,14 @@ const INDIAN_STATES = [
 
 // ── All Columns Definition ────────────────────────────────────────────────────
 const ALL_COLUMNS = [
-  { key: 'group',     label: 'Group',      sortable: true,  required: false },
-  { key: 'company',   label: 'Company',    sortable: true,  required: false },
-  { key: 'name',      label: 'Name',       sortable: true,  required: true  },
-  { key: 'phone',     label: 'Phone',      sortable: true,  required: false },
-  { key: 'email',     label: 'Email',      sortable: true,  required: false },
-  { key: 'status',    label: 'Status',     sortable: true,  required: false },
-  { key: 'createdBy', label: 'Created By', sortable: false, required: false },
-  { key: 'city',      label: 'City',       sortable: true,  required: false },
-  { key: 'actions',   label: 'Actions',    sortable: false, required: true  },
+  { key: 'group',    label: 'Group',    sortable: true,  required: false },
+  { key: 'company',  label: 'Company',  sortable: true,  required: false },
+  { key: 'name',     label: 'Name',     sortable: true,  required: true  },
+  { key: 'phone',    label: 'Phone',    sortable: true,  required: false },
+  { key: 'email',    label: 'Email',    sortable: true,  required: false },
+  { key: 'status',   label: 'Status',   sortable: true,  required: false },
+  { key: 'city',     label: 'City',     sortable: true,  required: false },
+  { key: 'actions',  label: 'Actions',  sortable: false, required: true  },
 ];
 
 const DEFAULT_ORDER   = ALL_COLUMNS.map(c => c.key);
@@ -483,13 +485,524 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
   );
 };
 
+// ── Follow-up helpers ─────────────────────────────────────────────────────────
+const _pad = n => String(n).padStart(2, '0');
+const _fmt = s => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return `${_pad(d.getDate())}-${_pad(d.getMonth()+1)}-${d.getFullYear()} ${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
+};
+const _fmtDate = s => {
+  if (!s) return '—';
+  const d = new Date(s);
+  return `${_pad(d.getDate())} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]} ${d.getFullYear()}`;
+};
+const _fmtTime = s => {
+  if (!s) return '';
+  const d = new Date(s);
+  return `${_pad(d.getHours())}:${_pad(d.getMinutes())}`;
+};
+const _isOverdue = f => f.status === 'Pending' && f.scheduledAt && new Date(f.scheduledAt) < new Date();
+
+const FU_TYPE_META = {
+  Call:    { icon: '📞', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  Email:   { icon: '✉️',  color: '#059669', bg: '#ECFDF5', border: '#A7F3D0' },
+  Meeting: { icon: '🤝', color: '#7C3AED', bg: '#F5F3FF', border: '#DDD6FE' },
+  Visit:   { icon: '🏠', color: '#D97706', bg: '#FFFBEB', border: '#FDE68A' },
+  Demo:    { icon: '💻', color: '#DC2626', bg: '#FFF1F2', border: '#FECDD3' },
+};
+const FU_STATUS_META = {
+  Pending:     { bg: '#FEF9C3', color: '#92400E', dot: '#F59E0B' },
+  Completed:   { bg: '#D1FAE5', color: '#065F46', dot: '#10B981' },
+  Cancelled:   { bg: '#FEE2E2', color: '#991B1B', dot: '#EF4444' },
+  Rescheduled: { bg: '#E0E7FF', color: '#3730A3', dot: '#6366F1' },
+};
+const FU_PRIORITY_COLOR = { High: '#EF4444', Medium: '#F59E0B', Low: '#10B981' };
+
+// ── CustomerFollowupCard ──────────────────────────────────────────────────────
+function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onDeleted, onView, onEdit, showToast, showConfirmation, permissions }) {
+  const [busy, setBusy] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const tm = FU_TYPE_META[f.followupType] || FU_TYPE_META.Call;
+  const sm = FU_STATUS_META[f.status]    || FU_STATUS_META.Pending;
+  const overdue = _isOverdue(f);
+  const isPending = f.status === 'Pending';
+  const isCancelled = f.status === 'Cancelled';
+
+  const cancelFollowup = async () => {
+    const confirmed = await showConfirmation({
+      title: 'Cancel Follow-up',
+      message: `Cancel this ${f.followupType} follow-up scheduled on ${_fmtDate(f.scheduledAt)}?\n\nIt will be marked as Cancelled but not deleted.`,
+      type: 'alert',
+      confirmText: 'Yes, Cancel It',
+      cancelText: 'Keep It',
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await api.put(`/followups/update/${f.id}`, { status: 'Cancelled', outcome: 'Cancelled by user' });
+      onCancelled();
+    } catch (e) { showToast(e.message || 'Failed', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const deleteFollowup = async () => {
+    const confirmed = await showConfirmation({
+      title: 'Delete Follow-up',
+      message: `Permanently delete this ${f.followupType} follow-up?\n\n⚠ This action cannot be undone.`,
+      type: 'alert',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+    });
+    if (!confirmed) return;
+    setBusy(true);
+    try {
+      await api.delete(`/followups/delete/${f.id}`);
+      onDeleted();
+    } catch (e) { showToast(e.message || 'Failed to delete', 'error'); }
+    finally { setBusy(false); }
+  };
+
+  const cardBorderColor = overdue ? '#EF4444' : isCancelled ? '#d1d5db' : f.status === 'Completed' ? '#10B981' : tm.color;
+  const cardOpacity = (isCancelled || f.status === 'Completed') ? 0.75 : 1;
+
+  return (
+    <div style={{
+      borderLeft: `4px solid ${cardBorderColor}`,
+      background: '#fff',
+      borderRadius: 10,
+      marginBottom: 8,
+      padding: '10px 12px',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+      opacity: cardOpacity,
+      transition: 'opacity 0.2s',
+    }}>
+      {/* Row 1: chips + date + action buttons */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span style={{ background: tm.bg, color: tm.color, border: `1px solid ${tm.border}`, borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 600 }}>
+          {tm.icon} {f.followupType}
+        </span>
+        <span style={{ background: sm.bg, color: sm.color, borderRadius: 20, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          <span style={{ width: 6, height: 6, borderRadius: '50%', background: sm.dot, display: 'inline-block' }}/>{f.status}
+        </span>
+        {overdue && <span style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 20, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>⚠ Overdue</span>}
+        <span style={{ fontSize: 11, fontWeight: 600, color: FU_PRIORITY_COLOR[f.priority] || '#F59E0B' }}>● {f.priority}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</span>
+
+        {/* Action buttons — always visible, small */}
+        <div style={{ display: 'flex', gap: 4, marginLeft: 6 }}>
+          {/* View */}
+          <button onClick={() => onView(f)} title="View details"
+            style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #0891b2', background: '#f0f9ff', color: '#0891b2', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+            👁
+          </button>
+          {/* Edit — only for non-completed/non-cancelled */}
+          {!isCancelled && f.status !== 'Completed' && (
+            <button onClick={() => onEdit(f)} title="Edit"
+              style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #6366f1', background: '#f5f3ff', color: '#6366f1', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+              ✏
+            </button>
+          )}
+          {/* Cancel — pending only */}
+          {isPending && (
+            <button onClick={cancelFollowup} disabled={busy} title="Cancel"
+              style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+              {busy ? '…' : '✕'}
+            </button>
+          )}
+          {/* Delete — always available */}
+          <button onClick={deleteFollowup} disabled={busy} title="Delete permanently"
+            style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #ef4444', background: '#fff1f2', color: '#dc2626', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+            {busy ? '…' : '🗑'}
+          </button>
+        </div>
+      </div>
+
+      {/* Row 2: people + created */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: '#6b7280', marginTop: 5 }}>
+        {f.assignedToName && <span>👤 {f.assignedToName}</span>}
+        <span>By {f.createdByName || '—'} · {_fmtDate(f.createdAt)}</span>
+        {f.completedAt && <span style={{ color: '#059669' }}>✓ {_fmt(f.completedAt)}</span>}
+      </div>
+
+      {/* Notes */}
+      {f.notes && (
+        <div style={{ background: '#f0f9ff', borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
+          <span style={{ fontSize: 10, color: '#0369a1', fontWeight: 700, marginRight: 4 }}>📋 Notes:</span>
+          <span style={{ color: '#374151' }}>{f.notes}</span>
+        </div>
+      )}
+
+      {/* Outcome */}
+      {f.outcome && (
+        <div style={{ background: '#f0fdf4', borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
+          <span style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginRight: 4 }}>📊 Outcome:</span>
+          <span style={{ color: '#374151' }}>
+            {expanded || f.outcome.length < 150 ? f.outcome : <>{f.outcome.slice(0, 150)}…</>}
+          </span>
+          {f.outcome.length > 150 && (
+            <button onClick={() => setExpanded(!expanded)} style={{ background: 'none', border: 'none', color: '#059669', fontSize: 11, cursor: 'pointer', padding: '0 4px' }}>
+              {expanded ? '▲ less' : '▼ more'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Record Outcome button for pending */}
+      {isPending && (
+        <div style={{ marginTop: 8 }}>
+          <button onClick={onComplete}
+            style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+            ✓ Record Outcome
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CustomerAddFollowupForm ───────────────────────────────────────────────────
+function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCancel }) {
+  const [saving, setSaving] = useState(false);
+  const nowPlus30 = new Date(Date.now() + 30 * 60000);
+  const defaultDT = new Date(nowPlus30.getTime() - nowPlus30.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const [form, setForm] = useState({ followupType: 'Call', scheduledAt: defaultDT, priority: 'Medium', notes: '', assignedTo: currentUser?.id || '' });
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  const submit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const dt = form.scheduledAt.replace('T', ' ') + ':00';
+      await api.post('/followups/create', {
+        relatedType:  'CUSTOMER',
+        relatedId:    customer.id,
+        customerId:   customer.id,
+        groupName:    customer.groupName    || null,
+        subGroupName: customer.subGroupName || null,
+        followupType: form.followupType,
+        scheduledAt:  dt,
+        priority:     form.priority,
+        notes:        form.notes.trim() || null,
+        status:       'Pending',
+        assignedTo:   form.assignedTo ? parseInt(form.assignedTo) : null,
+      });
+      onCreated();
+    } catch (e) { if (e.message !== 'SESSION_EXPIRED') alert(e.message || 'Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <h5 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#065F46' }}>📅 Schedule New Follow-up</h5>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>✕</button>
+      </div>
+      <form onSubmit={submit}>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Type</label>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {Object.entries(FU_TYPE_META).map(([type, meta]) => (
+              <button key={type} type="button"
+                onClick={() => setForm(p => ({ ...p, followupType: type }))}
+                style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${form.followupType === type ? meta.color : '#d1d5db'}`,
+                  background: form.followupType === type ? meta.bg : '#fff', color: form.followupType === type ? meta.color : '#374151',
+                  fontSize: 12, cursor: 'pointer', fontWeight: form.followupType === type ? 700 : 400 }}>
+                {meta.icon} {type}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Date & Time *</label>
+            <input type="datetime-local" required value={form.scheduledAt} onChange={set('scheduledAt')}
+              style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}/>
+          </div>
+          <div style={{ width: 130 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Priority</label>
+            <select value={form.priority} onChange={set('priority')}
+              style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}>
+              <option>High</option><option>Medium</option><option>Low</option>
+            </select>
+          </div>
+        </div>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Assign To *</label>
+          <select value={form.assignedTo} onChange={set('assignedTo')} required
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}>
+            {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.id === currentUser?.id ? ' (Me)' : ''}</option>)}
+          </select>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Notes</label>
+          <textarea rows={3} value={form.notes} onChange={set('notes')} placeholder="What to cover in this follow-up…"
+            style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button type="button" onClick={onCancel}
+            style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button type="submit" disabled={saving}
+            style={{ padding: '6px 16px', border: 'none', borderRadius: 6, background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            {saving ? 'Scheduling…' : '📅 Schedule Follow-up'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// ── CustomerCompleteModal ─────────────────────────────────────────────────────
+function CustomerCompleteModal({ followup: f, onSaved, onCancel }) {
+  const [saving, setSaving] = useState(false);
+  const [outcome, setOutcome] = useState('');
+  const [newStatus, setNewStatus] = useState('Completed');
+  const tm = FU_TYPE_META[f.followupType] || FU_TYPE_META.Call;
+
+  const submit = async e => {
+    e.preventDefault();
+    if (!outcome.trim()) { alert('Please describe what happened'); return; }
+    setSaving(true);
+    try {
+      await api.put(`/followups/update/${f.id}`, { status: newStatus, outcome: outcome.trim() });
+      onSaved();
+    } catch (e) { if (e.message !== 'SESSION_EXPIRED') alert(e.message || 'Failed to save'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 24, width: '90%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+          <div>
+            <span style={{ background: tm.bg, color: tm.color, border: `1px solid ${tm.border}`, borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>{tm.icon} {f.followupType}</span>
+            <h4 style={{ margin: '8px 0 2px', fontSize: 16, fontWeight: 700 }}>Record Outcome</h4>
+            <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Scheduled: {_fmt(f.scheduledAt)}</p>
+          </div>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6b7280' }}>✕</button>
+        </div>
+        {f.notes && (
+          <div style={{ background: '#f9fafb', borderRadius: 6, padding: '10px 12px', marginBottom: 14, fontSize: 13 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>📋 Original notes</div>
+            <p style={{ margin: 0 }}>{f.notes}</p>
+          </div>
+        )}
+        <form onSubmit={submit}>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#374151' }}>📊 Outcome *</label>
+            <textarea rows={5} required value={outcome} onChange={e => setOutcome(e.target.value)}
+              placeholder="Describe what happened, what was discussed, next steps…"
+              style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
+            <span style={{ fontSize: 11, color: '#9ca3af' }}>{outcome.length} chars</span>
+          </div>
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Mark as</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[{ v: 'Completed', icon: '✓', label: 'Completed' }, { v: 'Rescheduled', icon: '↻', label: 'Rescheduled' }, { v: 'Cancelled', icon: '✕', label: 'Cancelled' }].map(opt => {
+                const sm = FU_STATUS_META[opt.v];
+                const active = newStatus === opt.v;
+                return (
+                  <label key={opt.v} onClick={() => setNewStatus(opt.v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? sm.color : '#d1d5db'}`, background: active ? sm.bg : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400, color: active ? sm.color : '#374151' }}>
+                    <input type="radio" name="ns" value={opt.v} checked={active} onChange={() => setNewStatus(opt.v)} style={{ display: 'none' }}/>{opt.icon} {opt.label}
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding: '7px 18px', border: 'none', borderRadius: 6, background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+              {saving ? 'Saving…' : 'Save Outcome'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── CustomerViewModal ─────────────────────────────────────────────────────────
+function CustomerViewModal({ followup: f, onClose, onEdit, onComplete }) {
+  const tm = FU_TYPE_META[f.followupType] || FU_TYPE_META.Call;
+  const sm = FU_STATUS_META[f.status]    || FU_STATUS_META.Pending;
+  const overdue = _isOverdue(f);
+  const P = { High: { bg:'#FEE2E2',color:'#991B1B' }, Medium: { bg:'#FEF3C7',color:'#92400E' }, Low: { bg:'#D1FAE5',color:'#065F46' } };
+  const pm = P[f.priority] || P.Medium;
+  return (
+    <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:14, width:'min(540px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        {/* Header */}
+        <div style={{ background: tm.bg, padding:'16px 20px', borderRadius:'14px 14px 0 0', borderBottom:`2px solid ${tm.color}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, border:`1.5px solid ${tm.color}30` }}>{tm.icon}</div>
+            <div>
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                <span style={{ fontWeight:700, fontSize:16, color:'#0f172a' }}>{f.followupType} Follow-up</span>
+                <span style={{ background:sm.bg, color:sm.color, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', gap:3 }}>
+                  <span style={{ width:6, height:6, borderRadius:'50%', background:sm.dot, display:'inline-block' }}/>{f.status}
+                </span>
+                {overdue && <span style={{ background:'#FEE2E2', color:'#991B1B', borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
+              </div>
+              <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>#{f.id}</div>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#6b7280', lineHeight:1 }}>✕</button>
+        </div>
+        {/* Body */}
+        <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Priority</div>
+              <span style={{ background:pm.bg, color:pm.color, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700 }}>{f.priority}</span>
+            </div>
+            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>📅 Scheduled</div>
+              <div style={{ fontWeight:700, fontSize:13, color: overdue ? '#DC2626' : '#0f172a' }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</div>
+              {f.completedAt && <div style={{ fontSize:11, color:'#059669', marginTop:2 }}>✓ {_fmt(f.completedAt)}</div>}
+            </div>
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Assigned To</div>
+              <div style={{ fontWeight:600, fontSize:13 }}>{f.assignedToName || 'Unassigned'}</div>
+            </div>
+            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Created By</div>
+              <div style={{ fontWeight:600, fontSize:13 }}>{f.createdByName || '—'}</div>
+              <div style={{ fontSize:11, color:'#64748b' }}>{_fmtDate(f.createdAt)}</div>
+            </div>
+          </div>
+          {f.notes && (
+            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#0369a1', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📋 Pre-call Notes</div>
+              <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.notes}</p>
+            </div>
+          )}
+          {f.outcome && (
+            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'#15803d', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📊 Outcome / Result</div>
+              <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
+            </div>
+          )}
+          {!f.notes && !f.outcome && <div style={{ textAlign:'center', color:'#94a3b8', fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>}
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
+            <button onClick={onClose} style={{ padding:'6px 14px', border:'1px solid #e2e8f0', borderRadius:7, background:'#fff', fontSize:13, cursor:'pointer' }}>Close</button>
+            {f.status === 'Pending' && <button onClick={() => onComplete(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:'#059669', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>✓ Record Outcome</button>}
+            {f.status !== 'Cancelled' && f.status !== 'Completed' && <button onClick={() => onEdit(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>✏ Edit</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CustomerEditModal ─────────────────────────────────────────────────────────
+function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel }) {
+  const [saving, setSaving] = useState(false);
+  const parseScheduled = s => {
+    if (!s) return '';
+    const m = String(s).match(/^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2})/);
+    return m ? `${m[1]}T${m[2]}` : '';
+  };
+  const [form, setForm] = useState({
+    followupType: f.followupType || 'Call',
+    scheduledAt: parseScheduled(f.scheduledAt),
+    priority: f.priority || 'Medium',
+    assignedTo: f.assignedTo || currentUser?.id || '',
+    notes: f.notes || '',
+    status: f.status || 'Pending',
+  });
+  const set = k => e => setForm(p => ({ ...p, [k]: e.target.value }));
+
+  const submit = async e => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      const dt = form.scheduledAt.replace('T', ' ') + ':00';
+      await api.put(`/followups/update/${f.id}`, {
+        followupType: form.followupType,
+        scheduledAt: dt,
+        priority: form.priority,
+        assignedTo: form.assignedTo ? parseInt(form.assignedTo) : null,
+        notes: form.notes.trim() || null,
+        status: form.status,
+      });
+      onSaved();
+    } catch (e) { if (e.message !== 'SESSION_EXPIRED') alert(e.message || 'Failed to update'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div onClick={onCancel} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:14, width:'min(500px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding:'16px 20px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <h4 style={{ margin:0, fontSize:16, fontWeight:700 }}>✏ Edit Follow-up</h4>
+          <button onClick={onCancel} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#6b7280' }}>✕</button>
+        </div>
+        <form onSubmit={submit} style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {Object.entries(FU_TYPE_META).map(([type, meta]) => (
+              <button key={type} type="button" onClick={() => setForm(p => ({ ...p, followupType: type }))}
+                style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${form.followupType===type ? meta.color : '#d1d5db'}`, background: form.followupType===type ? meta.bg : '#fff', color: form.followupType===type ? meta.color : '#374151', fontSize:12, cursor:'pointer', fontWeight: form.followupType===type ? 700 : 400 }}>
+                {meta.icon} {type}
+              </button>
+            ))}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+            <div>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Date & Time *</label>
+              <input type="datetime-local" required value={form.scheduledAt} onChange={set('scheduledAt')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13, boxSizing:'border-box' }}/>
+            </div>
+            <div>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Priority</label>
+              <select value={form.priority} onChange={set('priority')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
+                <option>High</option><option>Medium</option><option>Low</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Status</label>
+              <select value={form.status} onChange={set('status')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
+                <option>Pending</option><option>Completed</option><option>Cancelled</option><option>Rescheduled</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Assign To</label>
+              <select value={form.assignedTo} onChange={set('assignedTo')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.id===currentUser?.id?' (Me)':''}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Notes</label>
+            <textarea rows={3} value={form.notes} onChange={set('notes')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13, resize:'vertical', boxSizing:'border-box' }}/>
+          </div>
+          <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
+            <button type="button" onClick={onCancel} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:7, background:'#fff', fontSize:13, cursor:'pointer' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding:'7px 18px', border:'none', borderRadius:7, background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+              {saving ? 'Saving…' : 'Save Changes'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Customer Detail Page ──────────────────────────────────────────────────────
 const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError }) => {
+  const { confirmModal, showConfirmation } = useConfirmationModal();
   const [activeTab, setActiveTab]       = useState('overview');
   const [orderBooks, setOrderBooks]     = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [followups, setFollowups]       = useState([]);
   const [loadingFollowups, setLoadingFollowups] = useState(false);
+  const [showAddFollowup, setShowAddFollowup]   = useState(false);
+  const [completingFollowup, setCompletingFollowup] = useState(null);
+  const [viewingFollowup, setViewingFollowup]   = useState(null);
+  const [editingFollowup, setEditingFollowup]   = useState(null);
+  const [followupUsers, setFollowupUsers]     = useState([]);
+  const [followupFilter, setFollowupFilter]   = useState('All');
+  const [followupToast, setFollowupToast]     = useState(null);
   const [showOrderForm, setShowOrderForm]   = useState(false);
   const [editingOrder, setEditingOrder]     = useState(null);
   const [selectedOrder, setSelectedOrder]   = useState(null);
@@ -557,20 +1070,34 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
     finally { setLoadingOrders(false); }
   }, [customer.id]);
 
+  const fuToast$ = (msg, type = 'success') => {
+    setFollowupToast({ msg, type });
+    setTimeout(() => setFollowupToast(null), 3500);
+  };
+
   const fetchFollowups = useCallback(async () => {
     setLoadingFollowups(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/followups/entity/Customer/${customer.id}`, { credentials: 'include', headers });
-      const data = await res.json();
-      if (data.success) setFollowups(data.data || []);
-    } catch { }
+      // Use the dedicated customer followups endpoint (added in FollowupsController)
+      const data = await api.get(`/followups/entity/Customer/${customer.id}`);
+      if (data && data.success) setFollowups(data.data || []);
+    } catch (e) {
+      if (e.message !== 'SESSION_EXPIRED') console.error('Failed to load followups', e);
+    }
     finally { setLoadingFollowups(false); }
   }, [customer.id]);
+
+  const fetchFollowupUsers = useCallback(async () => {
+    try {
+      const data = await api.get('/filters/leads-users');
+      setFollowupUsers(Array.isArray(data) ? data : []);
+    } catch { }
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'overview')  fetchOverview();
     if (activeTab === 'orderbooks') fetchOrderBooks();
-    if (activeTab === 'followups')  fetchFollowups();
+    if (activeTab === 'followups')  { fetchFollowups(); fetchFollowupUsers(); }
   }, [activeTab]);
 
   const handleViewOrder = async (order) => {
@@ -623,6 +1150,17 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
   return (
     <div className="ld-detail-page">
+      <ConfirmationModal
+        show={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        showCancel={confirmModal.showCancel}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={confirmModal.onCancel}
+      />
       {/* Top bar */}
       <div className="ld-detail-topbar">
         <button className="ld-back-btn" onClick={onBack}>
@@ -696,7 +1234,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                 ))}
               </div>
             </div>
-              <div className="ld-info-card">
+            <div className="ld-info-card">
               <h4 className="ld-card-title">Business Details</h4>
               <div className="ld-field-list">
                 {[
@@ -705,8 +1243,6 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   ['Group', customer.groupName || '-'],
                   ['Category', customer.subGroupName || '-'],
                   ['Assigned To', customer.assignedToName || '-'],
-                  ['Created By', customer.createdByName || '-'],
-                  ...(customer.closedByName ? [['Converted By (Lead)', customer.closedByName]] : []),
                   ['Address', customer.address ? `${customer.address}, ${customer.city || ''}, ${customer.state || ''} ${customer.pincode ? '- '+customer.pincode : ''}` : '-'],
                 ].map(([l,v]) => (
                   <div className="ld-field-row" key={l}>
@@ -941,7 +1477,8 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   <button className="ld-btn ld-btn-pri" onClick={() => setShowOrderForm(true)}>Create First Order Book</button>
                 </div>
               ) : (
-                <div className="ld-proposals-list">
+                <div style={{ maxHeight: 'calc(100vh - 280px)', overflowY: 'auto', overflowX: 'hidden', paddingRight: 4 }}>
+                  <div className="ld-proposals-list">
                   {orderBooks.map(order => (
                     <div key={order.id} className="ld-proposal-card">
                       <div className="ld-proposal-card-left">
@@ -977,6 +1514,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                     </div>
                   ))}
                 </div>
+                </div>
               )}
             </div>
           )}
@@ -984,30 +1522,149 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       )}
 
       {/* ── FOLLOW-UPS ── */}
-      {activeTab === 'followups' && (
-        <div className="ld-tab-content">
-          <h4 className="ld-card-title">Follow-up History</h4>
-          {loadingFollowups ? <div className="ld-loading-row">Loading...</div> :
-           followups.length === 0 ? <div className="ld-empty-state"><div className="ld-empty-icon">📞</div><p>No follow-ups recorded.</p></div> :
-           <div className="ld-history-list">
-             {followups.map(f => (
-               <div key={f.id} className="ld-history-item">
-                 <div className="ld-history-icon">{f.followupType === 'Call' ? '📞' : f.followupType === 'Email' ? '📧' : f.followupType === 'Meeting' ? '🤝' : '📋'}</div>
-                 <div className="ld-history-body">
-                   <div className="ld-history-hdr">
-                     <span className="ld-history-type">{f.followupType}</span>
-                     <span className={`cust-badge ${f.priority === 'High' ? 'cust-badge-high' : f.priority === 'Low' ? 'cust-badge-low' : 'cust-badge-medium'}`}>{f.priority}</span>
-                     <span className="ld-history-date">{f.scheduledAt ? new Date(f.scheduledAt).toLocaleString() : '-'}</span>
-                   </div>
-                   {f.notes && <div className="ld-history-desc">{f.notes}</div>}
-                   <div style={{fontSize:11,color:'#9ca3af',marginTop:4}}>Status: {f.status} {f.assignedToName ? `· Assigned: ${f.assignedToName}` : ''}</div>
-                 </div>
-               </div>
-             ))}
-           </div>
-          }
-        </div>
-      )}
+      {activeTab === 'followups' && (() => {
+        const fuCounts = {
+          All:       followups.length,
+          Upcoming:  followups.filter(f => f.status === 'Pending' && !_isOverdue(f)).length,
+          Overdue:   followups.filter(_isOverdue).length,
+          Completed: followups.filter(f => f.status === 'Completed').length,
+          Cancelled: followups.filter(f => f.status === 'Cancelled').length,
+        };
+        const fuFiltered = followups.filter(f => {
+          if (followupFilter === 'Upcoming')  return f.status === 'Pending' && !_isOverdue(f);
+          if (followupFilter === 'Overdue')   return _isOverdue(f);
+          if (followupFilter === 'Completed') return f.status === 'Completed';
+          if (followupFilter === 'Cancelled') return f.status === 'Cancelled';
+          return true;
+        });
+        const fuSorted = [...fuFiltered].sort((a, b) => {
+          const ao = _isOverdue(a), bo = _isOverdue(b);
+          if (ao !== bo) return ao ? -1 : 1;
+          return new Date(b.scheduledAt) - new Date(a.scheduledAt);
+        });
+
+        return (
+          <div className="ld-tab-content">
+            {/* Toast */}
+            {followupToast && (
+              <div style={{ padding: '8px 14px', borderRadius: 6, marginBottom: 10, fontSize: 13, fontWeight: 600,
+                background: followupToast.type === 'error' ? '#FEE2E2' : '#D1FAE5',
+                color: followupToast.type === 'error' ? '#991B1B' : '#065F46' }}>
+                {followupToast.msg}
+              </div>
+            )}
+
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h4 className="ld-card-title" style={{ margin: 0 }}>Follow-up Log</h4>
+                <span style={{ background: '#e5e7eb', color: '#374151', borderRadius: 20, padding: '1px 10px', fontSize: 12, fontWeight: 700 }}>{followups.length}</span>
+                {fuCounts.Overdue > 0 && (
+                  <span style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>⚠ {fuCounts.Overdue} overdue</span>
+                )}
+              </div>
+              {permissions?.CREATE !== false && (
+                <button onClick={() => { setShowAddFollowup(true); }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/>
+                  </svg>
+                  Schedule Follow-up
+                </button>
+              )}
+            </div>
+
+            {/* Filter bar */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+              {['All','Upcoming','Overdue','Completed','Cancelled'].map(f => (
+                <button key={f} onClick={() => setFollowupFilter(f)}
+                  style={{ padding: '4px 12px', borderRadius: 20, border: `1.5px solid ${followupFilter === f ? '#059669' : '#d1d5db'}`,
+                    background: followupFilter === f ? '#ecfdf5' : '#fff', color: followupFilter === f ? '#065F46' : '#374151',
+                    fontSize: 12, fontWeight: followupFilter === f ? 700 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {f}
+                  {fuCounts[f] > 0 && <span style={{ background: followupFilter === f ? '#059669' : '#e5e7eb', color: followupFilter === f ? '#fff' : '#374151', borderRadius: 20, padding: '0 6px', fontSize: 11 }}>{fuCounts[f]}</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* Add form */}
+            {showAddFollowup && (
+              <CustomerAddFollowupForm
+                customer={customer}
+                currentUser={currentUser}
+                users={followupUsers}
+                onCreated={() => { setShowAddFollowup(false); fetchFollowups(); fuToast$('Follow-up scheduled!'); }}
+                onCancel={() => setShowAddFollowup(false)}
+              />
+            )}
+
+            {/* Complete modal */}
+            {completingFollowup && (
+              <CustomerCompleteModal
+                followup={completingFollowup}
+                onSaved={() => { setCompletingFollowup(null); fetchFollowups(); fuToast$('Outcome saved!'); }}
+                onCancel={() => setCompletingFollowup(null)}
+              />
+            )}
+
+            {/* View modal */}
+            {viewingFollowup && (
+              <CustomerViewModal
+                followup={viewingFollowup}
+                onClose={() => setViewingFollowup(null)}
+                onEdit={fu => { setViewingFollowup(null); setEditingFollowup(fu); }}
+                onComplete={fu => { setViewingFollowup(null); setCompletingFollowup(fu); }}
+              />
+            )}
+
+            {/* Edit modal */}
+            {editingFollowup && (
+              <CustomerEditModal
+                followup={editingFollowup}
+                users={followupUsers}
+                currentUser={currentUser}
+                onSaved={() => { setEditingFollowup(null); fetchFollowups(); fuToast$('Updated!'); }}
+                onCancel={() => setEditingFollowup(null)}
+              />
+            )}
+
+            {/* List */}
+            {loadingFollowups ? (
+              <div className="ld-loading-row">Loading…</div>
+            ) : fuSorted.length === 0 ? (
+              <div className="ld-empty-state">
+                <div className="ld-empty-icon">{followupFilter === 'Overdue' ? '✅' : '📞'}</div>
+                <p>{followupFilter === 'Overdue' ? 'No overdue follow-ups — you\'re on track!' :
+                    followupFilter === 'Completed' ? 'No completed follow-ups yet.' :
+                    followupFilter === 'Cancelled' ? 'No cancelled follow-ups.' :
+                    followupFilter === 'Upcoming'  ? 'No upcoming follow-ups scheduled.' :
+                    'No follow-ups recorded yet.'}</p>
+                {followupFilter === 'All' && permissions?.CREATE !== false && (
+                  <button onClick={() => setShowAddFollowup(true)}
+                    style={{ marginTop: 10, padding: '7px 16px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    Schedule First Follow-up
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div>
+                {fuSorted.map((f, i) => (
+                  <CustomerFollowupCard key={f.id} followup={f} index={i}
+                    onComplete={() => setCompletingFollowup(f)}
+                    onCancelled={() => { fetchFollowups(); fuToast$('Cancelled'); }}
+                    onDeleted={() => { fetchFollowups(); fuToast$('Deleted'); }}
+                    onView={fu => setViewingFollowup(fu)}
+                    onEdit={fu => setEditingFollowup(fu)}
+                    showToast={fuToast$}
+                    showConfirmation={showConfirmation}
+                    permissions={permissions}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Delete Order Confirm */}
       {showDeleteOrderConfirm && (
@@ -1388,23 +2045,13 @@ useEffect(() => {
   // ── Render cell ───────────────────────────────────────────────────
   const renderCell = (customer, colKey) => {
     switch(colKey) {
-      case 'group':     return <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName || 'Others'}</span>;
-      case 'company':   return customer.companyName || 'N/A';
-      case 'name':      return <span className="cust-font-medium">{customer.name || 'N/A'}</span>;
-      case 'phone':     return customer.phone || 'N/A';
-      case 'email':     return customer.email || 'N/A';
-      case 'city':      return customer.city || '-';
-      case 'status':    return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
-      case 'createdBy': return (
-        <div style={{ lineHeight: 1.3 }}>
-          <div style={{ fontWeight: 500, fontSize: 12, color: '#374151' }}>{customer.createdByName || '-'}</div>
-          {customer.closedByName && customer.closedByName !== customer.createdByName && (
-            <div style={{ fontSize: 10.5, color: '#6b7280', marginTop: 1 }}>
-              Closed by: {customer.closedByName}
-            </div>
-          )}
-        </div>
-      );
+      case 'group':   return <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName || 'Others'}</span>;
+      case 'company': return customer.companyName || 'N/A';
+      case 'name':    return <span className="cust-font-medium">{customer.name || 'N/A'}</span>;
+      case 'phone':   return customer.phone || 'N/A';
+      case 'email':   return customer.email || 'N/A';
+      case 'city':    return customer.city || '-';
+      case 'status':  return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
       case 'actions': return (
         <div className="cust-action-buttons-cell-center" style={{textAlign:'center'}}>
           {canView && (
@@ -1670,13 +2317,6 @@ useEffect(() => {
                 <div className="cust-card-footer" onClick={e => e.stopPropagation()}>
                   <div className="cust-card-source" style={{fontSize:12,color:'#9ca3af'}}>
                     {customer.gstNumber ? `GST: ${customer.gstNumber}` : 'No GST'}
-                    {customer.createdByName && (
-                      <div style={{marginTop:2,fontSize:11,color:'#9ca3af'}}>
-                        By: <span style={{color:'#6b7280',fontWeight:500}}>{customer.createdByName}</span>
-                        {customer.closedByName && customer.closedByName !== customer.createdByName &&
-                          <span style={{color:'#9ca3af'}}> · Closed: {customer.closedByName}</span>}
-                      </div>
-                    )}
                   </div>
                   <div className="cust-card-actions">
                     {canView && <button className="cust-card-action-btn cust-action-view" onClick={() => handleViewCustomer(customer)} title="View Customer"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>}

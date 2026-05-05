@@ -20,7 +20,9 @@ export default function ClientDashboardFollowUps() {
   const [filteredFollowUps, setFilteredFollowUps] = useState([]);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(null); // followup id to delete
+  const [showViewModal, setShowViewModal] = useState(false);
+  const [viewingFollowup, setViewingFollowup] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [editingFollowup, setEditingFollowup] = useState(null);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
@@ -85,12 +87,11 @@ export default function ClientDashboardFollowUps() {
   }, []);
 
   useEffect(() => {
-    fetchFollowUps();
-  }, [groupName, subGroupName]);
-
-  useEffect(() => {
     applyFilters();
   }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm]);
+
+  // Group/subgroup filtering is handled server-side (backend SQL).
+  // applyFilters only handles the UI-level dropdowns (status, priority, type, assignedTo, source, search).
 
   useEffect(() => {
     calculateKPIs();
@@ -113,16 +114,27 @@ export default function ClientDashboardFollowUps() {
     }
   }, [addForm.modalSubGroupName]);
 
-  const fetchFollowUps = async () => {
+  // Re-fetch from backend whenever group/subgroup selection changes.
+  // Backend applies the group filter in SQL — no client-side filtering needed.
+  useEffect(() => {
+    fetchFollowUps();
+  }, [groupName, subGroupName]);
+
+  const fetchFollowUps = async (grp = groupName, subGrp = subGroupName) => {
     setLoading(true);
     try {
-      let url = `${API_BASE_URL}/followups/my-followups`;
+      // Build query params — only include non-empty values so backend treats absent params as "no filter"
+      const params = new URLSearchParams();
+      if (grp)    params.append('groupName',    grp);
+      if (subGrp) params.append('subGroupName', subGrp);
 
-      if (user.role === 'SUPERADMIN' || user.role === 'ADMIN') {
-        url = `${API_BASE_URL}/followups/all`;
-      }
+      const qs = params.toString() ? `?${params.toString()}` : '';
 
-      const response = await fetch(url, {
+      // Always call /my-followups — backend decides what "mine" means per role:
+      //   SUPERADMIN / ADMIN  → all matching records (no userId restriction)
+      //   Everyone else       → only records where assigned_to = me OR created_by = me
+      // groupName / subGroupName params are applied in SQL on the backend.
+      const response = await fetch(`${API_BASE_URL}/followups/my-followups${qs}`, {
         credentials: "include",
         headers: {
           'Content-Type': 'application/json',
@@ -269,13 +281,8 @@ export default function ClientDashboardFollowUps() {
   const applyFilters = () => {
     let filtered = [...followUps];
 
-    // Apply group/subgroup filters from page-level filter
-    if (groupName) {
-      filtered = filtered.filter(f => f.groupName === groupName);
-    }
-    if (subGroupName) {
-      filtered = filtered.filter(f => f.subGroupName === subGroupName);
-    }
+    // Group/subgroup filters are applied server-side on fetch.
+    // Here we only handle the UI dropdown filters.
 
     if (statusFilter !== 'All') {
       filtered = filtered.filter(f => f.status === statusFilter);
@@ -297,9 +304,13 @@ export default function ClientDashboardFollowUps() {
       const term = searchTerm.toLowerCase();
       filtered = filtered.filter(f =>
         (f.notes && f.notes.toLowerCase().includes(term)) ||
+        (f.outcome && f.outcome.toLowerCase().includes(term)) ||
         (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
+        (f.customerCode && f.customerCode.toLowerCase().includes(term)) ||
         (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
-        (f.followupType && f.followupType.toLowerCase().includes(term))
+        (f.createdByName && f.createdByName.toLowerCase().includes(term)) ||
+        (f.followupType && f.followupType.toLowerCase().includes(term)) ||
+        (f.groupName && f.groupName.toLowerCase().includes(term))
       );
     }
 
@@ -567,6 +578,11 @@ export default function ClientDashboardFollowUps() {
     return { date: '', time: '' };
   };
 
+  const handleView = (followup) => {
+    setViewingFollowup(followup);
+    setShowViewModal(true);
+  };
+
   const handleEdit = (followup) => {
     // FIX: Use the robust parser instead of simple string split
     const { date: scheduledDate, time: scheduledTime } = parseDateTimeFromDB(followup.scheduledAt);
@@ -791,7 +807,7 @@ export default function ClientDashboardFollowUps() {
           </svg>
           <input
             type="text"
-            placeholder="Search by notes, lead code, or assigned to..."
+            placeholder="Search by lead, customer, notes, assigned to..."
             className="followups-search-input"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -843,7 +859,7 @@ export default function ClientDashboardFollowUps() {
           <table className="followups-table">
             <thead>
               <tr>
-                <th>Lead</th>
+                <th>Source</th>
                 <th>Type</th>
                 <th>Scheduled</th>
                 <th>Priority</th>
@@ -865,12 +881,27 @@ export default function ClientDashboardFollowUps() {
                 </tr>
               ) : (
                 currentFollowUps.map((followup) => (
-                  <tr key={followup.id} className={isOverdue(followup) ? 'followup-overdue' : ''}>
-                    <td data-label="Lead">
+                  <tr key={followup.id}
+                    className={isOverdue(followup) ? 'followup-overdue' : ''}
+                    onClick={() => handleView(followup)}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <td data-label="Source">
                       <div className="followup-lead-info">
-                        <strong>{followup.leadCode || 'N/A'}</strong>
-                        {followup.groupName && (
-                          <span className="followup-group-badge">{followup.groupName}</span>
+                        {followup.relatedType === 'CUSTOMER' ? (
+                          <>
+                            <span style={{ display:'inline-block', padding:'1px 7px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>🏢 Customer</span>
+                            <strong style={{ display:'block', fontSize:13 }}>{followup.customerCode ? followup.customerCode.split(' — ')[0] : 'N/A'}</strong>
+                            {followup.customerCode && followup.customerCode.includes(' — ') && (
+                              <span className="followup-group-badge">{followup.customerCode.split(' — ')[1]}</span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ display:'inline-block', padding:'1px 7px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>👤 Lead</span>
+                            <strong style={{ display:'block', fontSize:13 }}>{followup.leadCode || 'N/A'}</strong>
+                            {followup.groupName && <span className="followup-group-badge">{followup.groupName}</span>}
+                          </>
                         )}
                       </div>
                     </td>
@@ -917,18 +948,28 @@ export default function ClientDashboardFollowUps() {
                         {followup.notes ? followup.notes.substring(0, 50) + (followup.notes.length > 50 ? '...' : '') : '-'}
                       </div>
                     </td>
-                    <td data-label="Actions" className="followup-actions-td">  {/* ← actions class */}
-                      <div className="followup-actions">
+                    <td data-label="Actions" className="followup-actions-td">
+                      <div className="followup-actions" onClick={e => e.stopPropagation()}>
+                        <button
+                          className="followup-action-btn action-view"
+                          onClick={e => { e.stopPropagation(); handleView(followup); }}
+                          title="View Details"
+                        >
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                          </svg>
+                        </button>
                         <button
                           className="followup-action-btn action-edit"
-                          onClick={() => handleEdit(followup)}
+                          onClick={e => { e.stopPropagation(); handleEdit(followup); }}
                           title="Edit"
                         >
                           <FiEdit size={14} />
                         </button>
                         <button
                           className="followup-action-btn action-delete"
-                          onClick={() => handleDelete(followup.id)}
+                          onClick={e => { e.stopPropagation(); handleDelete(followup.id); }}
                           title="Delete"
                         >
                           <FiTrash2 size={14} />
@@ -1331,16 +1372,26 @@ export default function ClientDashboardFollowUps() {
 
             <div className="followup-modal-lead-info">
               <div className="followup-info-item">
-                <span className="followup-info-label">Lead:</span>
-                <span className="followup-info-value">{editingFollowup.leadCode}</span>
+                <span className="followup-info-label">Source:</span>
+                <span className="followup-info-value">
+                  {editingFollowup.relatedType === 'CUSTOMER'
+                    ? <span style={{ background:'#eff6ff', color:'#1d4ed8', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}>🏢 Customer</span>
+                    : <span style={{ background:'#f0fdf4', color:'#15803d', borderRadius:4, padding:'1px 8px', fontSize:11, fontWeight:700 }}>👤 Lead</span>
+                  }
+                </span>
+              </div>
+              <div className="followup-info-item">
+                <span className="followup-info-label">{editingFollowup.relatedType === 'CUSTOMER' ? 'Customer:' : 'Lead:'}</span>
+                <span className="followup-info-value">
+                  {editingFollowup.relatedType === 'CUSTOMER'
+                    ? (editingFollowup.customerCode || 'N/A')
+                    : (editingFollowup.leadCode || 'N/A')
+                  }
+                </span>
               </div>
               <div className="followup-info-item">
                 <span className="followup-info-label">Group:</span>
                 <span className="followup-info-value">{editingFollowup.groupName || 'N/A'}</span>
-              </div>
-              <div className="followup-info-item">
-                <span className="followup-info-label">Sub Group:</span>
-                <span className="followup-info-value">{editingFollowup.subGroupName || 'N/A'}</span>
               </div>
             </div>
 
@@ -1459,6 +1510,122 @@ export default function ClientDashboardFollowUps() {
           </div>
         </div>
       )}
+
+      {/* ── View Follow-up Details Modal ── */}
+      {showViewModal && viewingFollowup && (() => {
+        const f = viewingFollowup;
+        const isCustomer = f.relatedType === 'CUSTOMER';
+        const TYPE_ICON  = { Call:'📞', Email:'✉️', Meeting:'🤝', Visit:'🏠', Demo:'💻', Proposal:'📄', Other:'📌' };
+        const TYPE_COLOR = { Call:'#2563EB', Email:'#059669', Meeting:'#7C3AED', Visit:'#D97706', Demo:'#DC2626', Proposal:'#0891B2', Other:'#6B7280' };
+        const TYPE_BG    = { Call:'#EFF6FF', Email:'#ECFDF5', Meeting:'#F5F3FF', Visit:'#FFFBEB', Demo:'#FFF1F2', Proposal:'#F0F9FF', Other:'#F9FAFB' };
+        const TYPE_BORDER= { Call:'#BFDBFE', Email:'#A7F3D0', Meeting:'#DDD6FE', Visit:'#FDE68A', Demo:'#FECDD3', Proposal:'#BAE6FD', Other:'#E5E7EB' };
+        const SM = { Pending:{bg:'#FEF9C3',color:'#92400E',dot:'#F59E0B'}, Completed:{bg:'#D1FAE5',color:'#065F46',dot:'#10B981'}, Cancelled:{bg:'#FEE2E2',color:'#991B1B',dot:'#EF4444'}, Rescheduled:{bg:'#E0E7FF',color:'#3730A3',dot:'#6366F1'} };
+        const PM = { High:{bg:'#FEE2E2',color:'#991B1B'}, Medium:{bg:'#FEF3C7',color:'#92400E'}, Low:{bg:'#D1FAE5',color:'#065F46'} };
+        const sm = SM[f.status] || SM.Pending;
+        const pm = PM[f.priority] || PM.Medium;
+        const tc = TYPE_COLOR[f.followupType] || '#6B7280';
+        const tb = TYPE_BG[f.followupType]   || '#F9FAFB';
+        const tbd= TYPE_BORDER[f.followupType]|| '#E5E7EB';
+        const overdue = f.status === 'Pending' && f.scheduledAt && new Date(String(f.scheduledAt).replace(' ','T')) < new Date();
+        const closeFn = () => { setShowViewModal(false); setViewingFollowup(null); };
+
+        return (
+          <div className="followup-modal-overlay" onClick={closeFn}>
+            <div className="followup-modal" onClick={e => e.stopPropagation()} style={{ maxWidth:580 }}>
+              {/* Header */}
+              <div style={{ background:tb, padding:'20px 24px', borderRadius:'16px 16px 0 0', borderBottom:`2px solid ${tc}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, border:`1.5px solid ${tbd}` }}>
+                    {TYPE_ICON[f.followupType] || '📋'}
+                  </div>
+                  <div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
+                      <h3 style={{ margin:0, fontSize:17, fontWeight:700, color:'#0f172a' }}>{f.followupType} Follow-up</h3>
+                      <span style={{ background:sm.bg, color:sm.color, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4 }}>
+                        <span style={{ width:7, height:7, borderRadius:'50%', background:sm.dot, display:'inline-block' }}/>{f.status}
+                      </span>
+                      {overdue && <span style={{ background:'#FEE2E2', color:'#991B1B', borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
+                    </div>
+                    <p style={{ margin:'3px 0 0', fontSize:12, color:'#64748b' }}>Follow-up #{f.id}</p>
+                  </div>
+                </div>
+                <button className="followup-modal-close" onClick={closeFn}>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+
+              <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
+                {/* Source + Priority */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Source</div>
+                    {isCustomer ? (
+                      <>
+                        <span style={{ display:'inline-block', padding:'1px 8px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>🏢 Customer</span>
+                        <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>{f.customerCode ? f.customerCode.split(' — ')[0] : 'N/A'}</div>
+                        {f.customerCode && f.customerCode.includes(' — ') && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{f.customerCode.split(' — ')[1]}</div>}
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ display:'inline-block', padding:'1px 8px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>👤 Lead</span>
+                        <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>{f.leadCode || 'N/A'}</div>
+                        {f.groupName && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{f.groupName}{f.subGroupName ? ` › ${f.subGroupName}` : ''}</div>}
+                      </>
+                    )}
+                  </div>
+                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Priority</div>
+                    <span style={{ background:pm.bg, color:pm.color, borderRadius:20, padding:'4px 14px', fontSize:13, fontWeight:700 }}>{f.priority}</span>
+                  </div>
+                </div>
+
+                {/* Scheduled + People */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📅 Scheduled</div>
+                    <div style={{ fontWeight:700, fontSize:13, color: overdue ? '#DC2626' : '#0f172a' }}>{formatDateTime(f.scheduledAt) || '—'}</div>
+                    {f.completedAt && <div style={{ fontSize:11, color:'#059669', marginTop:4 }}>✓ Completed: {formatDateTime(f.completedAt)}</div>}
+                  </div>
+                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>👥 People</div>
+                    <div style={{ fontSize:13, marginBottom:4 }}><span style={{ color:'#64748b' }}>Assigned: </span><strong>{f.assignedToName || 'Unassigned'}</strong></div>
+                    <div style={{ fontSize:13 }}><span style={{ color:'#64748b' }}>Created by: </span><strong>{f.createdByName || '—'}</strong></div>
+                    {f.createdAt && <div style={{ fontSize:11, color:'#94a3b8', marginTop:3 }}>On {formatDateTime(f.createdAt)}</div>}
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {f.notes && (
+                  <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#0369a1', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📋 Pre-call Notes</div>
+                    <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.notes}</p>
+                  </div>
+                )}
+
+                {/* Outcome */}
+                {f.outcome && (
+                  <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:'#15803d', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📊 Outcome / Result</div>
+                    <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
+                  </div>
+                )}
+
+                {!f.notes && !f.outcome && (
+                  <div style={{ textAlign:'center', color:'#94a3b8', fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>
+                )}
+
+                {/* Footer */}
+                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
+                  <button className="followups-btn followups-btn-secondary" onClick={closeFn}>Close</button>
+                  <button className="followups-btn followups-btn-primary" onClick={() => { closeFn(); handleEdit(f); }}>
+                    <FiEdit size={13} style={{ marginRight:4 }}/> Edit
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Bootstrap-style Delete Confirmation Modal ── */}
       {deleteConfirm && (

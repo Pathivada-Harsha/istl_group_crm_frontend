@@ -13,6 +13,7 @@ import filterApi from '../services/filterApi';
 import UnitTypeDropdown from './../components/Dropdowns/Unittypedropdown.js';
 import { normalizeUnit } from './../components/Dropdowns/unitUtils';
 import { FaIndianRupeeSign } from "react-icons/fa6";
+import * as XLSX from 'xlsx';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -45,13 +46,14 @@ const InvoicesManagementPage = () => {
 
   // Column visibility & order
   const INVOICE_COLUMNS = [
-    { key: 'customerId',    label: 'Customer Name' },
-    { key: 'totalAmount',   label: 'Total Amount' },
-    { key: 'paidAmount',    label: 'Paid Amount' },
-    { key: 'balanceAmount', label: 'Balance' },
-    { key: 'status',        label: 'Status' },
-    { key: 'invoiceDate',   label: 'Invoice Date' },
-    { key: 'dueDate',       label: 'Due Date' },
+    { key: 'invoiceNumber',  label: 'Tally Inv. No' },
+    { key: 'customerId',     label: 'Customer Name' },
+    { key: 'totalAmount',    label: 'Total Amount' },
+    { key: 'paidAmount',     label: 'Paid Amount' },
+    { key: 'balanceAmount',  label: 'Balance' },
+    { key: 'status',         label: 'Status' },
+    { key: 'invoiceDate',    label: 'Invoice Date' },
+    { key: 'dueDate',        label: 'Due Date' },
   ];
   const [columnOrder, setColumnOrder] = useState(INVOICE_COLUMNS.map(c => c.key));
   const [visibleColumns, setVisibleColumns] = useState(INVOICE_COLUMNS.map(c => c.key));
@@ -99,6 +101,7 @@ const InvoicesManagementPage = () => {
     projectId: '',
     groupId: '',
     subGroupId: '',
+    invoiceNumber: '',
     invoiceDate: new Date().toISOString().split('T')[0],
     dueDate: '',
     items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
@@ -634,6 +637,7 @@ const fetchStats = async () => {
       projectId: '',
       groupId: '',
       subGroupId: '',
+      invoiceNumber: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       items: [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
@@ -657,6 +661,7 @@ const fetchStats = async () => {
       projectId: invoice.projectId,
       groupId: invoice.groupId,
       subGroupId: invoice.subGroupId,
+      invoiceNumber: invoice.invoiceNumber || '',
       invoiceDate: invoice.invoiceDate.split('T')[0],
       dueDate: invoice.dueDate ? invoice.dueDate.split('T')[0] : '',
       items: invoice.items || [{ description: '', quantity: '', unitPrice: '', taxPercent: '', unitType: '' }],
@@ -730,6 +735,224 @@ const fetchStats = async () => {
       taxTotal,
       grandTotal: subtotal + taxTotal
     };
+  };
+
+  // ─── Export to Excel ────────────────────────────────────────────────────────
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const handleExportExcel = async () => {
+    setExportLoading(true);
+    try {
+      // Build same params as fetchInvoices but with size=9999 to get ALL records
+      const params = new URLSearchParams({
+        page: 0,
+        size: 9999,
+        sortBy: 'invoiceDate',
+        sortDirection: 'DESC'
+      });
+      if (groupName)                params.append('groupId',    groupName);
+      if (subGroupName)             params.append('subGroupId', subGroupName);
+      if (projectId)                params.append('projectId',  projectId);
+      if (filters.status !== 'all') params.append('status',     filters.status);
+      if (filters.search)           params.append('searchTerm', filters.search);
+
+      const response = await fetch(`${API_BASE_URL}/invoices?${params}`, {
+        credentials: 'include',
+        headers: getAuthHeaders()
+      });
+      if (!response.ok) throw new Error('Failed to fetch invoices for export');
+      const data = await response.json();
+      const allInvoices = data.invoices || [];
+
+      if (allInvoices.length === 0) {
+        showError('No invoices found for the selected filters.');
+        return;
+      }
+
+      // ── Helper formatters ──────────────────────────────────────────────────
+      const fmtCurrency = (v) => v != null ? parseFloat(v).toFixed(2) : '0.00';
+      const fmtDate     = (v) => {
+        if (!v) return '';
+        const d = new Date(v);
+        return isNaN(d) ? v : `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`;
+      };
+      const fmtStatus   = (s) => {
+        if (!s) return '';
+        const m = { DRAFT:'Draft', SENT:'Sent', 'PARTIALLY PAID':'Partially Paid', PAID:'Paid', CANCELLED:'Cancelled' };
+        return m[s.toUpperCase()] || s;
+      };
+
+      // ── KPI calculations ───────────────────────────────────────────────────
+      const total       = allInvoices.length;
+      const totalAmt    = allInvoices.reduce((s, i) => s + (parseFloat(i.totalAmount)   || 0), 0);
+      const paidAmt     = allInvoices.reduce((s, i) => s + (parseFloat(i.paidAmount)    || 0), 0);
+      const balanceAmt  = allInvoices.reduce((s, i) => s + (parseFloat(i.balanceAmount) || parseFloat(i.totalAmount) - parseFloat(i.paidAmount || 0) || 0), 0);
+      const countByStatus = allInvoices.reduce((acc, i) => {
+        const s = fmtStatus(i.status);
+        acc[s] = (acc[s] || 0) + 1;
+        return acc;
+      }, {});
+
+      // ── Build filter description for the summary sheet ────────────────────
+      const filterDesc = [
+        groupName    ? `Group: ${groupName}`         : null,
+        subGroupName ? `Sub-Group: ${subGroupName}`  : null,
+        projectId    ? `Project: ${projectId}`       : null,
+        filters.status !== 'all' ? `Status: ${fmtStatus(filters.status)}` : null,
+        filters.search           ? `Search: "${filters.search}"`          : null,
+      ].filter(Boolean).join('  |  ') || 'All Invoices';
+
+      // ── Sheet 1: Summary ───────────────────────────────────────────────────
+      const exportedAt = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      const summaryRows = [
+        ['INVOICE EXPORT REPORT'],
+        [''],
+        ['Filter Applied', filterDesc],
+        ['Exported At',    exportedAt],
+        [''],
+        ['── SUMMARY ─────────────────────────────────'],
+        ['Total Invoices',      total],
+        ['Total Amount (₹)',    fmtCurrency(totalAmt)],
+        ['Paid Amount (₹)',     fmtCurrency(paidAmt)],
+        ['Balance Amount (₹)', fmtCurrency(balanceAmt)],
+        [''],
+        ['── STATUS BREAKDOWN ────────────────────────'],
+        ['Status', 'Count'],
+        ...Object.entries(countByStatus).map(([s, c]) => [s, c]),
+        [''],
+        ['── AMOUNT BY STATUS ─────────────────────────'],
+        ['Status', 'Total Amount (₹)', 'Paid Amount (₹)', 'Balance (₹)'],
+        ...Object.entries(
+          allInvoices.reduce((acc, inv) => {
+            const s = fmtStatus(inv.status);
+            if (!acc[s]) acc[s] = { total: 0, paid: 0, balance: 0 };
+            acc[s].total   += parseFloat(inv.totalAmount)   || 0;
+            acc[s].paid    += parseFloat(inv.paidAmount)    || 0;
+            acc[s].balance += parseFloat(inv.balanceAmount) || (parseFloat(inv.totalAmount) - parseFloat(inv.paidAmount || 0)) || 0;
+            return acc;
+          }, {})
+        ).map(([s, a]) => [s, fmtCurrency(a.total), fmtCurrency(a.paid), fmtCurrency(a.balance)]),
+      ];
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      wsSummary['!cols'] = [{ wch: 30 }, { wch: 55 }, { wch: 22 }, { wch: 22 }];
+
+      // ── Sheet 2: All Invoices ──────────────────────────────────────────────
+      const headers = [
+        'System Invoice No',
+        'Tally Invoice No',
+        'Customer Name',
+        'Company',
+        'Group',
+        'Sub-Group',
+        'Project ID',
+        'Invoice Date',
+        'Due Date',
+        'Status',
+        'Total Amount (₹)',
+        'Paid Amount (₹)',
+        'Balance Amount (₹)',
+        'Payment Progress (%)',
+        'Overdue',
+      ];
+
+      const rows = allInvoices.map(inv => {
+        const total   = parseFloat(inv.totalAmount)   || 0;
+        const paid    = parseFloat(inv.paidAmount)    || 0;
+        const balance = parseFloat(inv.balanceAmount) ?? (total - paid);
+        const progress = total > 0 ? ((paid / total) * 100).toFixed(1) + '%' : '0%';
+
+        const dueDate  = inv.dueDate ? new Date(inv.dueDate) : null;
+        const isOverdue = dueDate && dueDate < new Date() && fmtStatus(inv.status) !== 'Paid' && fmtStatus(inv.status) !== 'Cancelled';
+
+        return [
+          inv.invoiceNo         || '',
+          inv.invoiceNumber     || '',
+          inv.customerCompanyName || inv.customerName || '',
+          inv.company           || '',
+          inv.groupId           || '',
+          inv.subGroupId        || '',
+          inv.projectId         || '',
+          fmtDate(inv.invoiceDate),
+          fmtDate(inv.dueDate),
+          fmtStatus(inv.status),
+          fmtCurrency(total),
+          fmtCurrency(paid),
+          fmtCurrency(balance),
+          progress,
+          isOverdue ? 'YES' : 'No',
+        ];
+      });
+
+      const wsInvoices = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+
+      // Smart column widths — max of header length and longest data value, capped at 50
+      const colWidths = headers.map((h, colIdx) => {
+        const maxDataLen = rows.reduce((max, row) => {
+          const val = row[colIdx] != null ? String(row[colIdx]) : '';
+          return Math.max(max, val.length);
+        }, 0);
+        return { wch: Math.min(50, Math.max(h.length + 3, maxDataLen + 2)) };
+      });
+      wsInvoices['!cols'] = colWidths;
+
+      // ── Sheet 3: Pending / Overdue Detail ─────────────────────────────────
+      const pendingInvoices = allInvoices.filter(inv => {
+        const s = fmtStatus(inv.status);
+        return s !== 'Paid' && s !== 'Cancelled';
+      });
+
+      const pendingHeaders = [
+        'System Invoice No', 'Tally Invoice No', 'Customer Name',
+        'Group', 'Sub-Group', 'Project ID',
+        'Invoice Date', 'Due Date', 'Days Overdue',
+        'Status', 'Total (₹)', 'Paid (₹)', 'Balance (₹)'
+      ];
+
+      const today = new Date();
+      const pendingRows = pendingInvoices.map(inv => {
+        const dueDate   = inv.dueDate ? new Date(inv.dueDate) : null;
+        const daysOver  = dueDate ? Math.max(0, Math.floor((today - dueDate) / 86400000)) : '';
+        const total     = parseFloat(inv.totalAmount)   || 0;
+        const paid      = parseFloat(inv.paidAmount)    || 0;
+        const balance   = parseFloat(inv.balanceAmount) ?? (total - paid);
+        return [
+          inv.invoiceNo || '', inv.invoiceNumber || '',
+          inv.customerCompanyName || inv.customerName || '',
+          inv.groupId || '', inv.subGroupId || '', inv.projectId || '',
+          fmtDate(inv.invoiceDate), fmtDate(inv.dueDate),
+          daysOver,
+          fmtStatus(inv.status),
+          fmtCurrency(total), fmtCurrency(paid), fmtCurrency(balance)
+        ];
+      });
+
+      const wsPending = XLSX.utils.aoa_to_sheet([pendingHeaders, ...pendingRows]);
+      const pendingColWidths = pendingHeaders.map((h, ci) => {
+        const maxLen = pendingRows.reduce((mx, r) => Math.max(mx, String(r[ci] ?? '').length), 0);
+        return { wch: Math.min(50, Math.max(h.length + 3, maxLen + 2)) };
+      });
+      wsPending['!cols'] = pendingColWidths;
+
+      // ── Build workbook & download ──────────────────────────────────────────
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, wsSummary,  'Summary');
+      XLSX.utils.book_append_sheet(wb, wsInvoices, 'All Invoices');
+      if (pendingRows.length > 0) {
+        XLSX.utils.book_append_sheet(wb, wsPending, 'Pending & Overdue');
+      }
+
+      const filterSlug = [groupName, subGroupName, projectId]
+        .filter(Boolean).join('_').replace(/[^a-zA-Z0-9_]/g, '') || 'all';
+      const dateStr = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `invoices_${filterSlug}_${dateStr}.xlsx`);
+      showSuccess(`Exported ${allInvoices.length} invoice(s) successfully!`);
+    } catch (err) {
+      console.error('Export failed:', err);
+      showError('Export failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   /**
@@ -1121,9 +1344,30 @@ const fetchStats = async () => {
               </div>
             )}
           </div>
-          <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create New Invoice"}>
-            + Create New Invoice
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              onClick={handleExportExcel}
+              disabled={exportLoading}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                padding: '8px 16px', borderRadius: 7, border: '1.5px solid #059669',
+                background: exportLoading ? '#f0fdf4' : '#fff', color: '#059669',
+                fontSize: 13, fontWeight: 600, cursor: exportLoading ? 'wait' : 'pointer',
+                whiteSpace: 'nowrap', transition: 'all 0.15s'
+              }}
+              onMouseEnter={e => { if (!exportLoading) { e.currentTarget.style.background = '#059669'; e.currentTarget.style.color = '#fff'; }}}
+              onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.color = '#059669'; }}
+              title="Export all invoices matching current filters to Excel"
+            >
+              {exportLoading
+                ? <><span style={{ fontSize: 14 }}>⏳</span> Exporting…</>
+                : <><span style={{ fontSize: 14 }}>📊</span> Export Excel</>
+              }
+            </button>
+            <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create New Invoice"}>
+              + Create New Invoice
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1191,6 +1435,13 @@ const fetchStats = async () => {
               getSortedInvoices().map((invoice) => (
                 <tr key={invoice.id}>
                   {orderedVisibleCols.map(key => {
+                    if (key === 'invoiceNumber')  return (
+                      <td key={key}>
+                        {invoice.invoiceNumber
+                          ? <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, color: '#374151' }}>{invoice.invoiceNumber}</span>
+                          : <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>}
+                      </td>
+                    );
                     if (key === 'customerId')    return <td key={key}>{invoice.customerCompanyName || invoice.customerName || `#${invoice.customerId}`}</td>;
                     if (key === 'totalAmount')   return <td key={key} className="Invoices-page-total">{formatCurrency(invoice.totalAmount)}</td>;
                     if (key === 'paidAmount')    return <td key={key}>{formatCurrency(invoice.paidAmount)}</td>;
@@ -1315,6 +1566,15 @@ const fetchStats = async () => {
             <div className="Invoices-page-modal-body">
               <div className="Invoices-page-invoice-view">
                 <div className="Invoices-page-invoice-meta">
+                  <div className="Invoices-page-invoice-meta-item">
+                    <strong>System No:</strong> {selectedInvoice.invoiceNo}
+                  </div>
+                  {selectedInvoice.invoiceNumber && (
+                    <div className="Invoices-page-invoice-meta-item">
+                      <strong>Tally No:</strong>
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>{selectedInvoice.invoiceNumber}</span>
+                    </div>
+                  )}
                   <div className="Invoices-page-invoice-meta-item">
                     <strong>Invoice Date:</strong> {formatDate(selectedInvoice.invoiceDate)}
                   </div>
@@ -1660,6 +1920,19 @@ const fetchStats = async () => {
                         min={formData.invoiceDate}
                       />
                     </div>
+                    <div className="Invoices-page-form-group">
+                      <label>
+                        Tally Invoice Number
+                        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. TAL/2024-25/001"
+                        value={formData.invoiceNumber}
+                        onChange={(e) => setFormData({ ...formData, invoiceNumber: e.target.value })}
+                        style={{ fontFamily: 'monospace' }}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -1828,9 +2101,15 @@ const fetchStats = async () => {
               {/* Invoice summary */}
               <div style={{ padding: '14px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
                 <div className="Invoices-page-payment-row">
-                  <span>Invoice:</span>
+                  <span>System Invoice No:</span>
                   <strong>{selectedInvoice.invoiceNo}</strong>
                 </div>
+                {selectedInvoice.invoiceNumber && (
+                  <div className="Invoices-page-payment-row">
+                    <span>Tally Invoice No:</span>
+                    <strong style={{ fontFamily: 'monospace', color: '#374151' }}>{selectedInvoice.invoiceNumber}</strong>
+                  </div>
+                )}
                 <div className="Invoices-page-payment-row">
                   <span>Customer:</span>
                   <strong>{selectedInvoice.customerCompanyName || selectedInvoice.customerName || `#${selectedInvoice.customerId}`}</strong>
