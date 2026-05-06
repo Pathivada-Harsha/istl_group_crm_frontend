@@ -83,7 +83,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         {
           name: 'Project Cost & Expenses',
           path: '/project-cost-expense',
-          permission: 'SALES_CLIENTS',
+          permission: 'PROJECT_COST_EXPENSE',
           icon: 'M7 4h10M7 8h10M10 8c3 0 5 2 5 4s-2 4-5 4H7m4 0l5 5'
         },
         {
