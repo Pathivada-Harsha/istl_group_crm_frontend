@@ -71,7 +71,13 @@ const SortIcon = ({ columnId, sortConfig }) => {
 const ReceiptsManagementPage = () => {
   const [receipts, setReceipts] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const receiptPerms = pagePermissions?.INVOICES || pagePermissions?.RECEIPTS || [];
+  const canView    = receiptPerms.includes('VIEW')   || isAccountsExecutive;
+  const canCreate  = receiptPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit    = receiptPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete  = receiptPerms.includes('DELETE') && !isAccountsExecutive;
+  const isViewOnly = canView && !canCreate && !canEdit && !canDelete;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -423,11 +429,19 @@ const ReceiptsManagementPage = () => {
   };
 
   // ---------- Existing logic ----------
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'X-User-Id': user?.id || localStorage.getItem('userId'),
-    'X-User-Role': user?.role || localStorage.getItem('userRole')
-  });
+  const getAuthHeaders = () => {
+    try {
+      const raw = localStorage.getItem('bd_portal_user');
+      const u = raw ? (JSON.parse(raw)?.user || {}) : {};
+      return {
+        'Content-Type': 'application/json',
+        'x-user-id':   String(u.id   || user?.id   || ''),
+        'x-user-role': String(u.role || user?.role || ''),
+        'User-Id':     String(u.id   || user?.id   || ''),
+        'User-Role':   String(u.role || user?.role || ''),
+      };
+    } catch { return { 'Content-Type': 'application/json' }; }
+  };
 
   const getStatusClass = (status) => {
     const map = { 'DRAFT': 'Invoices-page-status-draft', 'Draft': 'Invoices-page-status-draft', 'SENT': 'Invoices-page-status-sent', 'Sent': 'Invoices-page-status-sent', 'PAID': 'Invoices-page-status-paid', 'Paid': 'Invoices-page-status-paid', 'PARTIALLY_PAID': 'Invoices-page-payment-partial', 'Partially Paid': 'Invoices-page-payment-partial', 'CANCELLED': 'Invoices-page-status-cancelled', 'Cancelled': 'Invoices-page-status-cancelled' };
@@ -933,16 +947,57 @@ const ReceiptsManagementPage = () => {
       case 'actions': return (
         <td>
           <div className="receipt-action-buttons">
-            <button className="receipt-action-btn btn-view" onClick={() => handleViewReceipt(receipt)} title="View"><Eye size={16} /></button>
-            <button className="receipt-action-btn btn-edit" onClick={() => handleEditReceiptClick(receipt)} title="Edit Receipt"><Edit2 size={16} /></button>
+            {/* View */}
+            <button
+              className={`receipt-action-btn btn-view${!canView ? ' action-btn-disabled' : ''}`}
+              onClick={() => canView && handleViewReceipt(receipt)}
+              title={canView ? 'View' : '🔒 No view permission'}
+              disabled={!canView}
+            ><Eye size={16} /></button>
+
+            {/* Edit */}
+            <button
+              className={`receipt-action-btn btn-edit${!canEdit ? ' action-btn-disabled' : ''}`}
+              onClick={() => canEdit && handleEditReceiptClick(receipt)}
+              title={canEdit ? 'Edit Receipt' : '🔒 No edit permission'}
+              disabled={!canEdit}
+            ><Edit2 size={16} /></button>
+
+            {/* Edit Allocation — ADVANCE type only */}
             {receipt.receiptType === 'ADVANCE' && receipt.appliedAmount > 0 && (
-              <button className="receipt-action-btn btn-edit-allocation" onClick={() => handleEditAllocationClick(receipt)} title="Edit Allocation"><RefreshCw size={16} /></button>
+              <button
+                className={`receipt-action-btn btn-edit-allocation${!canEdit ? ' action-btn-disabled' : ''}`}
+                onClick={() => canEdit && handleEditAllocationClick(receipt)}
+                title={canEdit ? 'Edit Allocation' : '🔒 No edit permission'}
+                disabled={!canEdit}
+              ><RefreshCw size={16} /></button>
             )}
+
+            {/* Adjust Advance */}
             {receipt.unappliedAmount > 0 && receipt.receiptType === 'ADVANCE' && (
-              <button className="receipt-action-btn btn-adjust" onClick={() => handleEditReceipt(receipt)} title="Adjust Advance"><DollarSign size={16} /></button>
+              <button
+                className={`receipt-action-btn btn-adjust${!canEdit ? ' action-btn-disabled' : ''}`}
+                onClick={() => canEdit && handleEditReceipt(receipt)}
+                title={canEdit ? 'Adjust Advance' : '🔒 No edit permission'}
+                disabled={!canEdit}
+              ><DollarSign size={16} /></button>
             )}
-            <button className="receipt-action-btn btn-download" onClick={() => console.log('Download receipt', receipt.id)} title="Download"><Download size={16} /></button>
-            <button className="receipt-action-btn btn-delete" onClick={() => handleDeleteReceiptClick(receipt)} title="Delete"><Trash2 size={16} /></button>
+
+            {/* Download — requires view */}
+            <button
+              className={`receipt-action-btn btn-download${!canView ? ' action-btn-disabled' : ''}`}
+              onClick={() => canView && console.log('Download receipt', receipt.id)}
+              title={canView ? 'Download' : '🔒 No view permission'}
+              disabled={!canView}
+            ><Download size={16} /></button>
+
+            {/* Delete — always shown, disabled if no permission */}
+            <button
+              className={`receipt-action-btn btn-delete${!canDelete ? ' action-btn-disabled' : ''}`}
+              onClick={() => canDelete && handleDeleteReceiptClick(receipt)}
+              title={canDelete ? 'Delete' : '🔒 No delete permission'}
+              disabled={!canDelete}
+            ><Trash2 size={16} /></button>
           </div>
         </td>
       );
@@ -1001,9 +1056,22 @@ const ReceiptsManagementPage = () => {
         <div className="receipts-page-actions">
           <button className="receipts-page-btn-secondary" onClick={handleToggleDeletedReceipts} title="View Deleted Receipts"><Trash2 size={16} style={{ marginRight: '8px' }} />{showDeletedReceipts ? 'Hide Deleted' : 'View Deleted'}</button>
           <button className="receipts-page-btn-secondary" onClick={() => setShowColumnManager(!showColumnManager)} title="Manage Columns"><Settings size={16} style={{ marginRight: '8px' }} />Columns</button>
-          <button className="receipts-page-btn-primary" onClick={handleCreateNew}>+ Record New Receipt</button>
+          <button
+            className={`receipts-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`}
+            onClick={() => canCreate && handleCreateNew()}
+            disabled={!canCreate}
+            title={!canCreate ? '🔒 No create permission' : 'Record New Receipt'}
+          >+ Record New Receipt</button>
         </div>
       </div>
+
+      {/* Permission notice for view-only users */}
+      {isViewOnly && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, fontSize:12, color:'#92400e', fontWeight:500, marginBottom:12 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          You have view-only access. Contact your administrator to request Create, Edit, or Delete permissions.
+        </div>
+      )}
 
       {/* Column Manager */}
       {showColumnManager && (

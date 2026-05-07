@@ -106,10 +106,13 @@ const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
-  const poPerms   = pagePermissions?.PURCHASE_ORDERS || [];
-  const canCreate = poPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = poPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete = poPerms.includes('DELETE') && !isAccountsExecutive;
+  const poPerms    = pagePermissions?.PURCHASE_ORDERS || [];
+  const canView    = poPerms.includes('VIEW')    || isAccountsExecutive;
+  const canCreate  = poPerms.includes('CREATE')  || isAccountsExecutive;
+  const canEdit    = poPerms.includes('EDIT')    || isAccountsExecutive;
+  const canDelete  = poPerms.includes('DELETE')  && !isAccountsExecutive;
+  const canApprove = poPerms.includes('APPROVE') || isAccountsExecutive;
+  const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -956,14 +959,50 @@ const PurchaseOrders = () => {
         return (
           <td key={col.id}>
             <div className="purchase-orders-actions-cell">
-              <button className="purchase-orders-action-btn" onClick={() => handleViewPO(po)} title="View Details"><Eye size={14} /></button>
-              <button className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`} onClick={() => canEdit && handleEditPO(po.id)} title={canEdit ? "Edit PO" : "No edit permission"} style={{ color: '#3b82f6' }} disabled={!canEdit}><Edit2 size={14} /></button>
+              {/* View */}
+              <button
+                className={`purchase-orders-action-btn${!canView ? ' action-btn-disabled' : ''}`}
+                onClick={() => canView && handleViewPO(po)}
+                title={canView ? 'View Details' : '🔒 No view permission'}
+                disabled={!canView}
+              >
+                <Eye size={14} />
+              </button>
+
+              {/* Edit */}
+              <button
+                className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                onClick={() => canEdit && handleEditPO(po.id)}
+                title={canEdit ? 'Edit PO' : '🔒 No edit permission'}
+                style={{ color: canEdit ? '#3b82f6' : undefined }}
+                disabled={!canEdit}
+              >
+                <Edit2 size={14} />
+              </button>
+
+              {/* Mark Delivered — only for active POs */}
               {po.status !== 'Delivered' && po.status !== 'Cancelled' && (
-                <>
-                  <button className="purchase-orders-action-btn" onClick={() => handleUpdateStatus(po.id, 'Delivered')} title="Mark Delivered"><CheckCircle size={14} /></button>
-{canDelete && <button className="purchase-orders-action-btn" onClick={() => handleDeletePO(po.id)} title="Delete PO" style={{ color: '#ef4444' }}><Trash2 size={14} /></button>}
-                </>
+                <button
+                  className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                  onClick={() => canEdit && handleUpdateStatus(po.id, 'Delivered')}
+                  title={canEdit ? 'Mark Delivered' : '🔒 No edit permission'}
+                  style={{ color: canEdit ? '#10b981' : undefined }}
+                  disabled={!canEdit}
+                >
+                  <CheckCircle size={14} />
+                </button>
               )}
+
+              {/* Delete — always shown, disabled if no permission */}
+              <button
+                className={`purchase-orders-action-btn${!canDelete ? ' action-btn-disabled' : ''}`}
+                onClick={() => canDelete && handleDeletePO(po.id)}
+                title={canDelete ? 'Delete PO' : '🔒 No delete permission'}
+                style={{ color: canDelete ? '#ef4444' : undefined }}
+                disabled={!canDelete}
+              >
+                <Trash2 size={14} />
+              </button>
             </div>
           </td>
         );
@@ -1043,12 +1082,22 @@ const PurchaseOrders = () => {
             )}
           </div>
 
-          <button className={`purchase-orders-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleOpenCreatePO()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create PO"}>
+          <button className={`purchase-orders-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleOpenCreatePO()} disabled={!canCreate} title={!canCreate ? "🔒 No create permission" : "Create PO"}>
             <Plus size={16} /> Create PO
           </button>
           <button className="purchase-orders-btn-secondary"><Download size={16} /> Export</button>
         </div>
       </div>
+
+      {/* Permission notice for view-only users */}
+      {isViewOnly && (
+        <div className="po-permission-notice">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          You have view-only access. Contact your administrator to request Create, Edit, Approve or Delete permissions.
+        </div>
+      )}
 
       {/* KPI Cards */}
       {stats && (

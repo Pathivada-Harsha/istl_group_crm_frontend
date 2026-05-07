@@ -1982,3 +1982,39 @@
     padding: 5px 10px;
   }
 }
+/* ── Disabled action button ─────────────────────────────────────────────────── */
+.purchase-orders-action-btn.action-btn-disabled,
+.purchase-orders-action-btn:disabled {
+  color: #cbd5e1 !important;
+  cursor: not-allowed !important;
+  opacity: 0.5;
+  pointer-events: auto;
+}
+.purchase-orders-action-btn.action-btn-disabled:hover,
+.purchase-orders-action-btn:disabled:hover {
+  background-color: transparent !important;
+  transform: none !important;
+}
+
+/* ── Disabled primary button ─────────────────────────────────────────────────── */
+.purchase-orders-btn-primary.action-btn-disabled,
+.purchase-orders-btn-primary:disabled {
+  background: #e2e8f0 !important;
+  color: #94a3b8 !important;
+  cursor: not-allowed !important;
+}
+
+/* ── View-only permission notice ────────────────────────────────────────────── */
+.po-permission-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  font-size: 12px;
+  color: #92400e;
+  font-weight: 500;
+  margin-bottom: 12px;
+}

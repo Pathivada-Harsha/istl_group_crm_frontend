@@ -124,9 +124,11 @@ const VendorManagement = () => {
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const vendorPerms = pagePermissions?.VENDORS || [];
+  const canView     = vendorPerms.includes('VIEW')   || isAccountsExecutive;
   const canCreate   = vendorPerms.includes('CREATE') || isAccountsExecutive;
   const canEdit     = vendorPerms.includes('EDIT')   || isAccountsExecutive;
   const canDelete   = vendorPerms.includes('DELETE') && !isAccountsExecutive;
+  const isViewOnly  = canView && !canCreate && !canEdit && !canDelete;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
@@ -543,9 +545,24 @@ const VendorManagement = () => {
         return (
           <td key={col.id}>
             <div className="vendor-management-actions-cell">
-              <button className="vendor-management-action-btn" onClick={() => handleViewVendor(vendor)} title="View Details"><Eye size={16} /></button>
-              <button className="vendor-management-action-btn" onClick={() => handleEditVendor(vendor)} title="Edit Vendor"><Edit2 size={16} /></button>
-{canDelete && <button className="vendor-management-action-btn vendor-management-action-btn--danger" onClick={() => handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)} title="Delete Vendor"><Trash2 size={16} /></button>}
+              <button
+                className={`vendor-management-action-btn${!canView ? ' action-btn-disabled' : ''}`}
+                onClick={() => canView && handleViewVendor(vendor)}
+                title={canView ? 'View Details' : '🔒 No view permission'}
+                disabled={!canView}
+              ><Eye size={16} /></button>
+              <button
+                className={`vendor-management-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                onClick={() => canEdit && handleEditVendor(vendor)}
+                title={canEdit ? 'Edit Vendor' : '🔒 No edit permission'}
+                disabled={!canEdit}
+              ><Edit2 size={16} /></button>
+              <button
+                className={`vendor-management-action-btn vendor-management-action-btn--danger${!canDelete ? ' action-btn-disabled' : ''}`}
+                onClick={() => canDelete && handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)}
+                title={canDelete ? 'Delete Vendor' : '🔒 No delete permission'}
+                disabled={!canDelete}
+              ><Trash2 size={16} /></button>
             </div>
           </td>
         );

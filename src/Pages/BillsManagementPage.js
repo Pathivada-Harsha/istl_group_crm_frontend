@@ -100,9 +100,12 @@ const BillsManagementPage = () => {
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const billsPerms = pagePermissions?.BILLS || [];
-  const canCreate = billsPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = billsPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete = billsPerms.includes('DELETE') && !isAccountsExecutive;
+  const canView    = billsPerms.includes('VIEW')   || isAccountsExecutive;
+  const canCreate  = billsPerms.includes('CREATE') || isAccountsExecutive;
+  const canEdit    = billsPerms.includes('EDIT')   || isAccountsExecutive;
+  const canDelete  = billsPerms.includes('DELETE') && !isAccountsExecutive;
+  const canApprove = billsPerms.includes('APPROVE')|| isAccountsExecutive;
+  const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -1242,6 +1245,14 @@ const BillsManagementPage = () => {
       </div>
 
       {/* KPI Cards */}
+      {/* Permission notice */}
+      {isViewOnly && (
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, fontSize:12, color:'#92400e', fontWeight:500, marginBottom:12 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          You have view-only access. Contact your administrator to request Create, Edit, Approve or Delete permissions.
+        </div>
+      )}
+
       <div className="procurement-bills-received-kpi-grid">
         <div className="procurement-bills-received-kpi-card">
           <div className="procurement-bills-received-kpi-icon">
@@ -1380,45 +1391,47 @@ const BillsManagementPage = () => {
                     })}
                     <td>
                       <div className="procurement-bills-received-actions-cell">
+                        {/* View */}
                         <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleViewBill(bill.id)}
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-                        </button>
+                          className={`procurement-bills-received-action-btn${!canView ? ' action-btn-disabled' : ''}`}
+                          onClick={() => canView && handleViewBill(bill.id)}
+                          title={canView ? 'View Details' : '🔒 No view permission'}
+                          disabled={!canView}
+                        ><Eye size={16} /></button>
+
+                        {/* Edit */}
                         <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleEditBill(bill)}
-                              title="Edit"
-                            >
-                              <Edit2 size={16} />
-                            </button>
+                          className={`procurement-bills-received-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                          onClick={() => canEdit && handleEditBill(bill)}
+                          title={canEdit ? 'Edit' : '🔒 No edit permission'}
+                          disabled={!canEdit}
+                        ><Edit2 size={16} /></button>
+
+                        {/* Payment & Mark Paid — unpaid bills only */}
                         {bill.status !== 'Paid' && (
                           <>
                             <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleAddPayment(bill)}
-                              title="Add Payment"
-                            >
-                              <CreditCard size={16} />
-                            </button>
+                              className={`procurement-bills-received-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                              onClick={() => canEdit && handleAddPayment(bill)}
+                              title={canEdit ? 'Add Payment' : '🔒 No edit permission'}
+                              disabled={!canEdit}
+                            ><CreditCard size={16} /></button>
                             <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleMarkPaid(bill.id)}
-                              title="Mark Paid"
-                            >
-                              <Check size={16} />
-                            </button>
+                              className={`procurement-bills-received-action-btn${!canApprove ? ' action-btn-disabled' : ''}`}
+                              onClick={() => canApprove && handleMarkPaid(bill.id)}
+                              title={canApprove ? 'Mark Paid' : '🔒 No approve permission'}
+                              disabled={!canApprove}
+                            ><Check size={16} /></button>
                           </>
                         )}
+
+                        {/* Delete — always shown */}
                         <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleDeleteBill(bill.id)}
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                          className={`procurement-bills-received-action-btn${!canDelete ? ' action-btn-disabled' : ''}`}
+                          onClick={() => canDelete && handleDeleteBill(bill.id)}
+                          title={canDelete ? 'Delete' : '🔒 No delete permission'}
+                          disabled={!canDelete}
+                        ><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>

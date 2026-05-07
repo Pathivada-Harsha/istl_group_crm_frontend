@@ -365,11 +365,21 @@ const QuotationsReceived = () => {
 
 
   // ── Auth helper ──────────────────────────────────────────────────────────
-  const getAuthHeaders = () => ({
-    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-    'User-Id': user?.id || localStorage.getItem('userId'),
-    'User-Role': user?.role || localStorage.getItem('userRole'),
-  });
+  const getAuthHeaders = () => {
+    try {
+      const raw = localStorage.getItem('bd_portal_user');
+      const u = raw ? (JSON.parse(raw)?.user || {}) : {};
+      const id   = String(u.id   || user?.id   || '');
+      const role = String(u.role || user?.role || '');
+      return {
+        'Content-Type': 'application/json',
+        'User-Id':   id,
+        'User-Role': role,
+        'X-User-Id':   id,
+        'X-User-Role': role,
+      };
+    } catch { return { 'Content-Type': 'application/json' }; }
+  };
 
   // ── API calls ────────────────────────────────────────────────────────────
   const fetchQuotations = async () => {
@@ -419,9 +429,7 @@ const QuotationsReceived = () => {
       const res = await fetch(`${API_BASE_URL}/vendors/by-group-subgroup`, {
         credentials: 'include',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-          'X-User-Id': user?.id || localStorage.getItem('userId') || '1',
-          'X-User-Role': user?.role || localStorage.getItem('userRole') || 'USER',
+          ...getAuthHeaders(),
         }
       });
       const data = await res.json();
@@ -711,7 +719,7 @@ const QuotationsReceived = () => {
       if (selectedFile) fd.append('file', selectedFile);
       const url = isEditMode ? `${API_BASE_URL}/quotations/${quotationFormData.id}` : `${API_BASE_URL}/quotations/procurement`;
       const method = isEditMode ? 'PUT' : 'POST';
-      const res = await fetch(url, { credentials: 'include', method, headers: { 'Authorization': `Bearer ${localStorage.getItem('authToken')}`, 'X-User-Id': user?.id || localStorage.getItem('userId'), 'X-User-Role': user?.role || localStorage.getItem('userRole') }, body: fd });
+      const res = await fetch(url, { credentials: 'include', method, headers: { ...getAuthHeaders() }, body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       showSuccess(isEditMode ? 'Quotation updated!' : 'Quotation uploaded!');
       setShowUploadQuotationModal(false); setSelectedFile(null); setFilePreview(null);

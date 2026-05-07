@@ -19,7 +19,6 @@ import Login from './Pages/Login';
 import Dashboardtabs from "./Pages/Dashboard.js";
 import Leads from "./Pages/Leads-Enquire";
 import Proposals from "./Pages/Proposals";
-import Quatations from "./Pages/Quatations";
 import ProcurementQuatations from "./Pages/Procurement-Quatation-Recieved";
 import Invoices from "./Pages/InvoicesReceiptsPage.js";
 import TelecallerLeadsPage from "./Pages/Telecallerleadspage.js";

@@ -22,9 +22,12 @@ const InvoicesManagementPage = () => {
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const invoicesPerms = pagePermissions?.INVOICES || [];
+  const canView   = invoicesPerms.includes('VIEW')   || isAccountsExecutive;
   const canCreate = invoicesPerms.includes('CREATE') || isAccountsExecutive;
   const canEdit   = invoicesPerms.includes('EDIT')   || isAccountsExecutive;
   const canDelete = invoicesPerms.includes('DELETE') && !isAccountsExecutive;
+  const canSend   = invoicesPerms.includes('SEND')   || isAccountsExecutive;
+  const isViewOnly = canView && !canCreate && !canEdit && !canDelete;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
   const [loading, setLoading] = useState(false);
@@ -1364,12 +1367,22 @@ const fetchStats = async () => {
                 : <><span style={{ fontSize: 14 }}>📊</span> Export Excel</>
               }
             </button>
-            <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Create New Invoice"}>
+            <button className={`Invoices-page-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateNew()} disabled={!canCreate} title={!canCreate ? "🔒 No create permission" : "Create New Invoice"}>
               + Create New Invoice
             </button>
           </div>
         </div>
       </div>
+
+      {/* Permission notice for view-only users */}
+      {isViewOnly && (
+        <div className="Invoices-page-permission-notice">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          You have view-only access. Contact your administrator to request Create, Edit, or Delete permissions.
+        </div>
+      )}
 
       {/* Stats Cards */}
       {stats && (
@@ -1401,7 +1414,6 @@ const fetchStats = async () => {
 
       {/* Invoices Table */}
       <div className="Invoices-page-table-container">
-        <div className="Invoices-page-table-scroll">
         <table className="Invoices-page-table">
           <thead>
             <tr>
@@ -1460,45 +1472,55 @@ const fetchStats = async () => {
                   })}
                   <td>
                     <div className="Invoices-page-action-buttons">
+                      {/* View — only if VIEW permission */}
                       <button
-                        className="Invoices-page-action-btn Invoices-page-btn-view"
-                        onClick={() => handleViewInvoice(invoice)}
-                        title="View"
+                        className={`Invoices-page-action-btn Invoices-page-btn-view${!canView ? ' action-btn-disabled' : ''}`}
+                        onClick={() => canView && handleViewInvoice(invoice)}
+                        title={canView ? 'View invoice details' : '🔒 No view permission'}
+                        disabled={!canView}
                       >
                         <Eye size={16} />
                       </button>
+
+                      {/* Edit */}
                       <button
                         className={`Invoices-page-action-btn Invoices-page-btn-edit${!canEdit ? ' action-btn-disabled' : ''}`}
                         onClick={() => canEdit && handleEditInvoice(invoice)}
-                        title={canEdit ? "Edit" : "No edit permission"}
+                        title={canEdit ? 'Edit invoice' : '🔒 No edit permission'}
                         disabled={!canEdit}
                       >
                         <Edit2 size={16} />
                       </button>
+
+                      {/* Download PDF — requires VIEW permission */}
                       <button
-                        className="Invoices-page-action-btn Invoices-page-btn-download"
-                        onClick={() => handleDownloadPdf(invoice)}
-                        title="Download PDF"
+                        className={`Invoices-page-action-btn Invoices-page-btn-download${!canView ? ' action-btn-disabled' : ''}`}
+                        onClick={() => canView && handleDownloadPdf(invoice)}
+                        title={canView ? 'Download PDF' : '🔒 No view permission'}
+                        disabled={!canView}
                       >
                         <Download size={16} />
                       </button>
+
+                      {/* Record Payment */}
                       <button
                         className={`Invoices-page-action-btn Invoices-page-btn-payment${!canEdit ? ' action-btn-disabled' : ''}`}
                         onClick={() => canEdit && handleRecordPayment(invoice)}
-                        title={canEdit ? "Record Payment" : "No permission"}
+                        title={canEdit ? 'Record payment' : '🔒 No payment permission'}
                         disabled={!canEdit}
                       >
                         <FaIndianRupeeSign size={16} />
                       </button>
-                      {canDelete && (
+
+                      {/* Delete — always shown, disabled if no permission */}
                       <button
-                        className="Invoices-page-action-btn Invoices-page-btn-delete"
-                        onClick={() => handleDeleteInvoice(invoice.id)}
-                        title="Delete"
+                        className={`Invoices-page-action-btn Invoices-page-btn-delete${!canDelete ? ' action-btn-disabled' : ''}`}
+                        onClick={() => canDelete && handleDeleteInvoice(invoice.id)}
+                        title={canDelete ? 'Delete invoice' : '🔒 No delete permission'}
+                        disabled={!canDelete}
                       >
                         <Trash2 size={16} />
                       </button>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -1506,7 +1528,6 @@ const fetchStats = async () => {
             )}
           </tbody>
         </table>
-        </div>{/* end Invoices-page-table-scroll */}
 
         {/* Pagination */}
         <div className="Invoices-page-pagination">

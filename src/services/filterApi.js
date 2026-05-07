@@ -1,10 +1,29 @@
 // src/services/filterApi.js
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-const getAuthHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-  'Content-Type': 'application/json'
-});
+
+// Read logged-in user from the same key AuthContext uses
+const getUser = () => {
+  try {
+    const raw = localStorage.getItem('bd_portal_user');
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed?.user || {};
+  } catch { return {}; }
+};
+
+const getAuthHeaders = () => {
+  const u = getUser();
+  const id   = String(u.id   || '');
+  const role = String(u.role || '');
+  return {
+    'Content-Type': 'application/json',
+    'User-Id':     id,
+    'User-Role':   role,
+    'X-User-Id':   id,
+    'X-User-Role': role,
+  };
+};
 const filterApi = {
   // Get all groups
    getLeadsUsers : async () => {
@@ -28,9 +47,7 @@ const filterApi = {
     try {
       const response = await fetch(`${API_BASE_URL}/filters/groups`, {credentials: "include",
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -50,9 +67,7 @@ const filterApi = {
       const params = new URLSearchParams({ groupName });
       const response = await fetch(`${API_BASE_URL}/filters/subgroups?${params}`, {credentials: "include",
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -72,9 +87,7 @@ const filterApi = {
       const params = new URLSearchParams({ groupName, subGroupName });
       const response = await fetch(`${API_BASE_URL}/filters/projects?${params}`, {credentials: "include",
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -93,9 +106,7 @@ const filterApi = {
     try {
       const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {
@@ -115,9 +126,7 @@ const filterApi = {
       const params = new URLSearchParams({ subGroupId });
       const response = await fetch(`${API_BASE_URL}/projects?${params}`, {credentials: "include",
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(project),
       });
 
@@ -137,9 +146,7 @@ const filterApi = {
     try {
       const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(project),
       });
 
@@ -159,9 +166,7 @@ const filterApi = {
     try {
       const response = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}`, {credentials: "include",
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: getAuthHeaders(),
       });
 
       if (!response.ok) {

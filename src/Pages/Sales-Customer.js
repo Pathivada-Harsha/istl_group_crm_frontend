@@ -21,8 +21,6 @@ import { FaEye, FaEdit, FaTrash, FaUpload, FaCloudUploadAlt, FaColumns } from 'r
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
 import api from '../services/leadsapi.js';
-import ConfirmationModal from '../components/ConfirmationModal.js';
-import useConfirmationModal from '../components/HandleConfirmationModal.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -520,7 +518,7 @@ const FU_STATUS_META = {
 const FU_PRIORITY_COLOR = { High: '#EF4444', Medium: '#F59E0B', Low: '#10B981' };
 
 // ── CustomerFollowupCard ──────────────────────────────────────────────────────
-function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onDeleted, onView, onEdit, showToast, showConfirmation, permissions }) {
+function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onDeleted, onView, onEdit, showToast, permissions }) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const tm = FU_TYPE_META[f.followupType] || FU_TYPE_META.Call;
@@ -530,14 +528,7 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
   const isCancelled = f.status === 'Cancelled';
 
   const cancelFollowup = async () => {
-    const confirmed = await showConfirmation({
-      title: 'Cancel Follow-up',
-      message: `Cancel this ${f.followupType} follow-up scheduled on ${_fmtDate(f.scheduledAt)}?\n\nIt will be marked as Cancelled but not deleted.`,
-      type: 'alert',
-      confirmText: 'Yes, Cancel It',
-      cancelText: 'Keep It',
-    });
-    if (!confirmed) return;
+    if (!window.confirm('Cancel this follow-up?')) return;
     setBusy(true);
     try {
       await api.put(`/followups/update/${f.id}`, { status: 'Cancelled', outcome: 'Cancelled by user' });
@@ -547,14 +538,7 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
   };
 
   const deleteFollowup = async () => {
-    const confirmed = await showConfirmation({
-      title: 'Delete Follow-up',
-      message: `Permanently delete this ${f.followupType} follow-up?\n\n⚠ This action cannot be undone.`,
-      type: 'alert',
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-    });
-    if (!confirmed) return;
+    if (!window.confirm('Permanently delete this follow-up? This cannot be undone.')) return;
     setBusy(true);
     try {
       await api.delete(`/followups/delete/${f.id}`);
@@ -675,11 +659,9 @@ function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCa
     try {
       const dt = form.scheduledAt.replace('T', ' ') + ':00';
       await api.post('/followups/create', {
-        relatedType:  'CUSTOMER',
-        relatedId:    customer.id,
-        customerId:   customer.id,
-        groupName:    customer.groupName    || null,
-        subGroupName: customer.subGroupName || null,
+        relatedType: 'CUSTOMER',
+        relatedId:   customer.id,
+        customerId:  customer.id,
         followupType: form.followupType,
         scheduledAt:  dt,
         priority:     form.priority,
@@ -990,7 +972,6 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
 
 // ── Customer Detail Page ──────────────────────────────────────────────────────
 const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError }) => {
-  const { confirmModal, showConfirmation } = useConfirmationModal();
   const [activeTab, setActiveTab]       = useState('overview');
   const [orderBooks, setOrderBooks]     = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -1078,12 +1059,10 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
   const fetchFollowups = useCallback(async () => {
     setLoadingFollowups(true);
     try {
-      // Use the dedicated customer followups endpoint (added in FollowupsController)
-      const data = await api.get(`/followups/entity/Customer/${customer.id}`);
-      if (data && data.success) setFollowups(data.data || []);
-    } catch (e) {
-      if (e.message !== 'SESSION_EXPIRED') console.error('Failed to load followups', e);
-    }
+      const res = await fetch(`${API_BASE_URL}/followups/entity/Customer/${customer.id}`, { credentials: 'include', headers });
+      const data = await res.json();
+      if (data.success) setFollowups(data.data || []);
+    } catch { }
     finally { setLoadingFollowups(false); }
   }, [customer.id]);
 
@@ -1150,17 +1129,6 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
   return (
     <div className="ld-detail-page">
-      <ConfirmationModal
-        show={confirmModal.show}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        type={confirmModal.type}
-        confirmText={confirmModal.confirmText}
-        cancelText={confirmModal.cancelText}
-        showCancel={confirmModal.showCancel}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={confirmModal.onCancel}
-      />
       {/* Top bar */}
       <div className="ld-detail-topbar">
         <button className="ld-back-btn" onClick={onBack}>
@@ -1656,7 +1624,6 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                     onView={fu => setViewingFollowup(fu)}
                     onEdit={fu => setEditingFollowup(fu)}
                     showToast={fuToast$}
-                    showConfirmation={showConfirmation}
                     permissions={permissions}
                   />
                 ))}
@@ -1850,7 +1817,12 @@ const CustomerDatabase = () => {
 
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, { credentials:'include', headers:{ 'User-Id': currentUser.id, 'User-Role': currentUser.role } });
+      const id   = String(currentUser.id   || '');
+      const role = String(currentUser.role || '');
+      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, {
+        credentials: 'include',
+        headers: { 'User-Id': id, 'User-Role': role, 'X-User-Id': id, 'X-User-Role': role }
+      });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
     } catch { setUsers([]); }
   };
@@ -1897,7 +1869,6 @@ useEffect(() => {
   } else {
     // No filters — fetch immediately (covers initial mount)
     fetchCustomers(1);
-    fetchUsers();
     fetchGroups();
   }
 
@@ -1929,6 +1900,15 @@ useEffect(() => {
   if (!canView) return;
   fetchGroups();
 }, [canView]);
+// eslint-disable-line react-hooks/exhaustive-deps
+
+// Effect 5 — fetch users for Assign To dropdown.
+// Runs when user.id becomes available (auth resolves asynchronously).
+// Re-runs on user.id change so we always have the correct scoped user list.
+useEffect(() => {
+  if (!canView || !user?.id) return;
+  fetchUsers();
+}, [canView, user?.id]);
 // eslint-disable-line react-hooks/exhaustive-deps
   // ── Sort ──────────────────────────────────────────────────────────
   const handleSort = (colKey) => {
@@ -1982,7 +1962,9 @@ useEffect(() => {
       address: customer.address||'', city: customer.city||'', state: customer.state||'',
       pincode: customer.pincode||'', status: customer.status||'Active', assignedTo: customer.assignedTo
     });
-    setPhoneError(''); setIsAddFormOpen(true);
+    setPhoneError('');
+    fetchUsers();   // always refresh users list when opening edit modal
+    setIsAddFormOpen(true);
   };
 
   const handleDeleteClick = (customerId, customerName) => {
@@ -2185,7 +2167,7 @@ useEffect(() => {
             Export
           </button>
           <button className={`cust-btn cust-btn-primary ${!canCreate?'cust-btn-disabled':''}`}
-            onClick={() => { if(canCreate){ resetForm(); setIsAddFormOpen(true); } else showError('No create permission'); }}
+            onClick={() => { if(canCreate){ resetForm(); fetchUsers(); setIsAddFormOpen(true); } else showError('No create permission'); }}
             disabled={!canCreate}
           >
             <svg className="cust-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
