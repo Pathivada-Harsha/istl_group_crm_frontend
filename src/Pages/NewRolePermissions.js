@@ -326,6 +326,8 @@ export default function NewRolePermissions() {
       setNewMenuItemName('');
       loadData();
       if (selectedRoleId) handleRoleChange(selectedRoleId);
+      // Notify other open pages (e.g. UsersPage) to refresh their menu items list
+      window.dispatchEvent(new CustomEvent('menuItemsChanged'));
     } catch { addToast('Network error', 'error'); }
     finally { setMenuItemLoading(false); }
   };
@@ -347,6 +349,7 @@ export default function NewRolePermissions() {
       setEditingMenuId(null); setEditingMenuName('');
       loadData();
       if (selectedRoleId) handleRoleChange(selectedRoleId);
+      window.dispatchEvent(new CustomEvent('menuItemsChanged'));
     } catch { addToast('Network error', 'error'); }
     finally { setMenuItemLoading(false); }
   };
@@ -364,6 +367,7 @@ export default function NewRolePermissions() {
       addToast(data.message, 'success');
       await loadData();
       if (selectedRoleId) handleRoleChange(selectedRoleId);
+      window.dispatchEvent(new CustomEvent('menuItemsChanged'));
     } catch { addToast('Network error', 'error'); }
     finally { setMenuItemLoading(false); }
   };
@@ -687,30 +691,32 @@ export default function NewRolePermissions() {
           {/* ── New Menu Item form ── */}
           {createTab === "menuitem" && (
             <div className="rp-create-form" style={{ alignItems: 'flex-start' }}>
-              <div className="rp-field">
+              <div className="rp-field" style={{ flex: 1 }}>
                 <label className="rp-field__label">
                   Menu Item Name
                   <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 8 }}>
                     "New Page" will be stored as "new_page"
                   </span>
                 </label>
-                <input className="rp-field__input"
-                  placeholder='e.g. "New Page" → saved as "new_page"'
-                  value={newMenuItemName}
-                  onChange={e => setNewMenuItemName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleAddMenuItem()} />
+                {/* Input + button in a single row */}
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <input className="rp-field__input"
+                    style={{ flex: 1, marginBottom: 0 }}
+                    placeholder='e.g. "New Page" → saved as "new_page"'
+                    value={newMenuItemName}
+                    onChange={e => setNewMenuItemName(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleAddMenuItem()} />
+                  <button className="rp-btn-create" onClick={handleAddMenuItem} disabled={menuItemLoading}
+                    style={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+                    {menuItemLoading ? 'Adding...' : 'Add Menu Item'}
+                  </button>
+                </div>
                 {newMenuItemName.trim() && (
-                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 2, fontWeight: 500 }}>
+                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 4, fontWeight: 500 }}>
                     Will be stored as: <strong>"{toSnakeCase(newMenuItemName)}"</strong>
                   </div>
                 )}
-              </div>
-              {/* FIX #4: alignSelf flex-end aligns button parallel to input */}
-              <div style={{ flexShrink: 0, alignSelf: 'flex-end', paddingBottom: 2 }}>
-                <button className="rp-btn-create" onClick={handleAddMenuItem} disabled={menuItemLoading}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
-                  {menuItemLoading ? 'Adding...' : 'Add Menu Item'}
-                </button>
               </div>
             </div>
           )}

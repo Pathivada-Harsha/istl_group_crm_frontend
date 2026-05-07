@@ -545,6 +545,20 @@ const UsersPage = () => {
       .catch(() => { });
   }, []);
 
+  // When a new menu item is created/edited/deleted in NewRolePermissions (same browser
+  // session), refresh the list immediately so the Edit Menu Permissions modal shows
+  // the latest items without requiring a logout/login.
+  useEffect(() => {
+    const handleMenuItemsChanged = () => {
+      fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" })
+        .then(r => r.json())
+        .then(data => setDynamicMenuItems(Array.isArray(data) ? data : []))
+        .catch(() => { });
+    };
+    window.addEventListener('menuItemsChanged', handleMenuItemsChanged);
+    return () => window.removeEventListener('menuItemsChanged', handleMenuItemsChanged);
+  }, []);
+
   // Fetch logged-in user's ACTUAL DB permissions — bypasses AuthContext overrides
 useEffect(() => {
   if (!user?.id || pagePermissionsStructure.length === 0) return;
@@ -573,9 +587,13 @@ useEffect(() => {
     dbField: item.name,
     backendKey: item.name.toUpperCase(),
   }));
-  const availableMenuPermissions = menuPermissions && Array.isArray(menuPermissions)
-    ? menuPermissionsList.filter(m => menuPermissions.includes(m.backendKey))
-    : menuPermissionsList;
+  // availableMenuPermissions: always use the full live list from the backend.
+  // Filtering by the auth-context menuPermissions was causing newly-created menu
+  // items to be invisible until the admin logged out and back in, because the
+  // auth context is only populated at login time.
+  // refreshMenuItems() re-fetches from the API whenever the edit modal is opened,
+  // so menuPermissionsList is always up-to-date — no auth-context filter needed.
+  const availableMenuPermissions = menuPermissionsList;
 
 
   const mapBackendPermissionToFrontend = (module, action) => {
@@ -949,7 +967,7 @@ const handleEditMenuPermissions = async (u) => {
       });
       if (res.ok) {
         if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
-        setShowEditMenuPermissionsModal(false); setSelectedUser(null); setSelectedUserMenuPermissions({});
+        // ✅ Modal stays open so admin can keep editing — only show a success toast
         showToast('Menu permissions updated!', 'success');
       } else { showToast('Error saving menu permissions', 'error'); }
       setLoading(false);
@@ -993,7 +1011,7 @@ const handleEditMenuPermissions = async (u) => {
       });
       if (res.ok) {
         if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
-        setShowEditUserPermissionsModal(false); setSelectedUser(null); setSelectedUserPermissions([]);
+        // ✅ Modal stays open so admin can keep editing — only show a success toast
         showToast('Page permissions updated!', 'success');
       } else { showToast('Error saving page permissions', 'error'); }
       setLoading(false);
