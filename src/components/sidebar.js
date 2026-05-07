@@ -29,7 +29,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           setLiveMenuPermissions(data);
         }
       })
-      .catch(() => {}); // silently fallback to localStorage value
+      .catch(() => {}); 
   }, [user?.id]);
 
   const toggleGroup = (groupTitle) => {

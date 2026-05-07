@@ -227,6 +227,7 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
 
     const templateId = activeTemplate;
 
+    // ── 1. Parse Excel client-side ─────────────────────────────────────────
     let rows;
     try {
       rows = await parseExcel(file, templateId);
@@ -256,38 +257,57 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
       return;
     }
 
-    setProgress({ done: 0, total: dataRows.length });
-    let imported = 0, skipped = 0;
-    const errors = [];
+    // ── 2. Client-side validation — collect valid payloads & pre-errors ────
+    const validPayloads = [];
+    const preErrors    = [];
 
-    for (let i = 0; i < dataRows.length; i++) {
-      const row       = dataRows[i];
+    dataRows.forEach((row, i) => {
       const excelRow  = i + (templateId === "pm_suryagarh" ? 5 : 4);
       const rowErrors = validateRow(row, templateId);
 
       if (rowErrors.length) {
-        errors.push(`Row ${excelRow}: ${rowErrors.join(", ")}`);
-        skipped++;
-        setProgress({ done: i + 1, total: dataRows.length });
-        continue;
+        preErrors.push(`Row ${excelRow}: ${rowErrors.join(", ")}`);
+      } else {
+        validPayloads.push(rowToPayload(row, templateId));
       }
+    });
 
-      try {
-        await api.post("/leads/create", rowToPayload(row, templateId));
-        imported++;
-      } catch (err) {
-        if (err.message === "SESSION_EXPIRED") break;
-        errors.push(`Row ${excelRow}: ${err.message}`);
-        skipped++;
-      }
-
-      setProgress({ done: i + 1, total: dataRows.length });
+    if (!validPayloads.length) {
+      setResult({ imported: 0, skipped: preErrors.length, errors: preErrors });
+      setShowResult(true);
+      setLoading(false);
+      return;
     }
 
-    setResult({ imported, skipped, errors });
+    setProgress({ done: 0, total: validPayloads.length });
+
+    // ── 3. Single bulk-create request → backend handles assignment + email ──
+    try {
+      const res  = await api.post("/leads/bulk-create", validPayloads);
+      const data = res.data ?? res;
+
+      setResult({
+        imported: data.imported  ?? 0,
+        skipped:  (data.skipped  ?? 0) + preErrors.length,
+        errors:   [...preErrors, ...(data.errors ?? [])],
+      });
+
+      if ((data.imported ?? 0) > 0) onImportDone?.();
+    } catch (err) {
+      if (err.message === "SESSION_EXPIRED") {
+        setLoading(false);
+        return;
+      }
+      setResult({
+        imported: 0,
+        skipped:  dataRows.length,
+        errors:   [...preErrors, `Import request failed: ${err.message}`],
+      });
+    }
+
+    setProgress({ done: validPayloads.length, total: validPayloads.length });
     setShowResult(true);
     setLoading(false);
-    if (imported > 0) onImportDone?.();
   };
 
   const pct = progress.total
