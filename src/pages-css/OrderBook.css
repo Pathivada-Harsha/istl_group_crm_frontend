@@ -470,8 +470,8 @@
   flex-wrap: wrap;
   gap: 8px;
 }
-.orderbook-pagination-info { font-size: 11px; color:#64748b; }
-.orderbook-pagination-controls { display:flex; align-items:center; gap:6px; }
+.orderbook-pagination-info { font-size: 12px; color:#6b7280; display:flex; align-items:center; }
+.orderbook-pagination-controls { display:flex; align-items:center; gap:12px; }
 .orderbook-rows-select {
   padding: 8px;
   border: 1px solid #e2e8f0;
@@ -492,9 +492,40 @@
   font-weight: 500;
   transition: all 0.15s;
 }
-.orderbook-pagination-btn:hover:not(:disabled) { background:#f8fafc; }
+.orderbook-pagination-btn:hover:not(:disabled) { background:#f8fafc; border-color:#2563eb; color:#2563eb; }
 .orderbook-pagination-btn:disabled { opacity:0.5; cursor:not-allowed; }
 .orderbook-pagination-current { font-size:11px; color:#0f172a; font-weight:500; }
+
+/* Page number pills */
+.orderbook-pagination-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.orderbook-pagination-btn-active {
+  background-color: #2563eb !important;
+  color: white !important;
+  border-color: #2563eb !important;
+  font-weight: 600;
+}
+.orderbook-pagination-btn-active:hover {
+  background-color: #1d4ed8 !important;
+}
+.orderbook-pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 13px;
+  color: #9ca3af;
+  user-select: none;
+}
+/* First / Last narrow buttons */
+.orderbook-pagination-buttons button:first-child,
+.orderbook-pagination-buttons button:last-child {
+  min-width: 32px;
+  padding: 5px 6px;
+  font-size: 14px;
+}
 
 /* ── Modal Overlay ────────────────────────────────────────────── */
 .orderbook-modal-overlay {

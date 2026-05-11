@@ -1547,6 +1547,7 @@ useEffect(() => {
   // console.log('⚡ Effect3 fired | isFirstFilterRender:', isFirstFilterRender.current);
   if (isFirstFilterRender.current) { isFirstFilterRender.current = false; return; }
   if (!canView) return;
+  setCurrentPage(1); // reset to page 1 whenever filters change
   const timer = setTimeout(() => {
     fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FILTER_CHANGE');
   }, 400);
@@ -1562,13 +1563,13 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────────────
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
-    fetchLeads(newPage, rowsPerPage);
+    fetchLeads(newPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'PAGE_CHANGE');
   };
 
   const handleRowsPerPageChange = (newSize) => {
     setRowsPerPage(newSize);
     setCurrentPage(1);
-    fetchLeads(1, newSize);
+    fetchLeads(1, newSize, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'ROWS_CHANGE');
   };
 
   // ── Sort (client-side on current page only — for server-side sort, extend later) ──
@@ -1649,7 +1650,7 @@ useEffect(() => {
         if (remainingOnPage === 0 && currentPage > 1) {
           handlePageChange(currentPage - 1);
         } else {
-          fetchLeads(currentPage, rowsPerPage);
+          fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'DELETE_REFRESH');
         }
       }
     } catch (e) { showError(e.message || 'Error deleting'); setDeleteConfirmation(null); }
@@ -1676,7 +1677,7 @@ useEffect(() => {
         if (data.success) {
           const wasClosedWon = data.data?.status === 'Closed Won';
           showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : 'Lead updated successfully');
-          setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage);
+          setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH');
         }
       } else {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/create`, { method: 'POST', body: JSON.stringify(payload) });
@@ -1688,7 +1689,7 @@ useEffect(() => {
           setShowAddModal(false); resetForm();
           // Go to page 1 to see the new record (sorted desc by createdAt)
           setCurrentPage(1);
-          fetchLeads(1, rowsPerPage);
+          fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'CREATE_REFRESH');
         }
       }
     } catch (e) { showError(e.message || 'Error saving lead'); }
@@ -1733,7 +1734,22 @@ useEffect(() => {
       case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : '-';
       case 'source': return lead.source;
       case 'assignedToName': return lead.assignedToName || '-';
-      case 'leadOwner': return lead.leadOwner ? <span style={{fontWeight:500,color:'#1B3A6B'}}>👤 {lead.leadOwner}</span> : <span style={{color:'#9ca3af'}}>—</span>;
+      case 'leadOwner': {
+        if (!lead.leadOwner) return <span style={{color:'#9ca3af'}}>—</span>;
+        const ownerUser = users.find(u => u.name === lead.leadOwner);
+        const hasPhoto  = ownerUser?.avatar_url === 'db';
+        return (
+          <span className="leads-owner-cell">
+            <span className="leads-owner-avatar">
+              {hasPhoto
+                ? <img src={`${API_BASE_URL}/users/avatar/${ownerUser.id}`} alt={lead.leadOwner} className="leads-owner-avatar-img" />
+                : <span className="leads-owner-avatar-initials">{(lead.leadOwner[0]||'').toUpperCase()}</span>
+              }
+            </span>
+            <span className="leads-owner-name">{lead.leadOwner}</span>
+          </span>
+        );
+      }
       case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-';
       case 'priority': return <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>;
       case 'status': return (
@@ -1748,22 +1764,17 @@ useEffect(() => {
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
             </button>
           )}
-          <button className="leads-enquiries-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="View Timeline">
-            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          </button>
-          {canCreate && (
-            <button className="leads-enquiries-action-btn leads-enquiries-action-followup" onClick={() => { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); }} title="Add Follow-up">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-            </button>
-          )}
-          {canCreate && (
-            <button className="leads-enquiries-action-btn leads-enquiries-action-proposal" onClick={() => handleView(lead)} title="View Proposals">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            </button>
-          )}
           {canEdit && (
             <button className="leads-enquiries-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit">
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            </button>
+          )}
+          <button className="leads-enquiries-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="Timeline">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+          {canCreate && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-followup" onClick={() => { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); }} title="Follow-up">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
             </button>
           )}
           {canDelete && (
@@ -1912,7 +1923,7 @@ useEffect(() => {
           {canCreate && (
             <LeadsExcelPanel
               leads={leads}
-              onImportDone={() => fetchLeads(1, rowsPerPage)}
+              onImportDone={() => { setCurrentPage(1); fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'IMPORT_REFRESH'); }}
             />
           )}
         </div>
@@ -2037,7 +2048,7 @@ useEffect(() => {
       {/* Add / Edit Lead Modal */}
       {showAddModal && (
         <div className="leads-enquiries-modal-overlay">
-          <div className="leads-enquiries-modal" onClick={e => e.stopPropagation()}>
+          <div className="leads-enquiries-modal leads-enquiries-modal--wide" onClick={e => e.stopPropagation()}>
             <div className="leads-enquiries-modal-header">
               <h2>{formData.id ? 'Edit Lead' : 'Add New Lead'}</h2>
               <button className="leads-enquiries-modal-close" onClick={() => setShowAddModal(false)}>
@@ -2057,7 +2068,7 @@ useEffect(() => {
 
       {/* Follow-up Modal */}
       {showFollowupModal && selectedLeadForFollowup && (
-        <AddFollowupModal lead={selectedLeadForFollowup} onClose={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); }} onFollowupCreated={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); showSuccess('Follow-up created!'); fetchLeads(currentPage, rowsPerPage); }} />
+        <AddFollowupModal lead={selectedLeadForFollowup} onClose={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); }} onFollowupCreated={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); showSuccess('Follow-up created!'); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FOLLOWUP_REFRESH'); }} />
       )}
 
       {/* Timeline Modal */}

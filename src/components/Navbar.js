@@ -179,7 +179,16 @@ function Navbar({ onMenuClick }) {
               setShowNotifications(false);
               setShowMessages(false);
             }}>
-              <div className="profile-avatar">{getUserInitials()}</div>
+              <div className="profile-avatar">
+                {user?.avatar_url === "db"
+                  ? <img
+                      src={`${process.env.REACT_APP_API_URL}/users/avatar/${user.id}`}
+                      alt={user.name}
+                      className="profile-avatar-img"
+                    />
+                  : getUserInitials()
+                }
+              </div>
               <span className="profile-name">{getDisplayName()}</span>
               <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
