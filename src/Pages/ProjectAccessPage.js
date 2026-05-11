@@ -12,6 +12,10 @@ const STATUS_META = {
   CANCELLED:   { color: '#ef4444', bg: '#fef2f2', label: 'Cancelled' },
 };
 
+const LS_TAB       = 'pa_active_tab';
+const LS_PROJ_SIZE = 'pa_proj_page_size';
+const LS_USER_SIZE = 'pa_user_page_size';
+
 // ─── Toast ────────────────────────────────────────────────────────────────────
 function useToast() {
   const [toasts, setToasts] = useState([]);
@@ -56,7 +60,7 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel }) {
   );
 }
 
-// ─── Grant Modal ──────────────────────────────────────────────────────────────
+// ─── Grant Modal (project→users) ─────────────────────────────────────────────
 function GrantModal({ open, project, users, existingUserIds, onGrant, onClose }) {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [note,        setNote]        = useState('');
@@ -103,7 +107,6 @@ function GrantModal({ open, project, users, existingUserIds, onGrant, onClose })
           <button className="pa-icon-btn" onClick={onClose}>✕</button>
         </div>
 
-        {/* User search + list */}
         <div className="pa-field">
           <input className="pa-input" placeholder="Search users…"
             value={userSearch} onChange={e => setUserSearch(e.target.value)} />
@@ -134,7 +137,6 @@ function GrantModal({ open, project, users, existingUserIds, onGrant, onClose })
           </div>
         </div>
 
-        {/* Note */}
         <div className="pa-field">
           <label className="pa-label">Note <span className="pa-opt">(optional)</span></label>
           <textarea className="pa-textarea" rows={2}
@@ -190,7 +192,198 @@ function EditModal({ open, grant, userName, onSave, onClose }) {
   );
 }
 
-// ─── Project Card ─────────────────────────────────────────────────────────────
+// ─── Assign Projects Modal (user→projects) ────────────────────────────────────
+function AssignProjectsModal({ open, user: targetUser, allProjects, currentProjectIds, onAssign, onRevoke, onClose, saving }) {
+  const [search,   setSearch]   = useState('');
+  const [selected, setSelected] = useState(new Set());
+  const [note,     setNote]     = useState('');
+  const [tab,      setTab]      = useState('assign'); // 'assign' | 'current'
+
+  useEffect(() => {
+    if (open) { setSearch(''); setSelected(new Set()); setNote(''); setTab('assign'); }
+  }, [open]);
+
+  if (!open || !targetUser) return null;
+
+  const available = allProjects.filter(p =>
+    !currentProjectIds.has(String(p.id)) &&
+    ((p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+     (p.id    || '').toLowerCase().includes(search.toLowerCase()))
+  );
+  const current = allProjects.filter(p =>
+    currentProjectIds.has(String(p.id)) &&
+    ((p.name || '').toLowerCase().includes(search.toLowerCase()) ||
+     (p.id   || '').toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const toggle = id => setSelected(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+  const allSel = available.length > 0 && selected.size === available.length;
+  const toggleAll = () => allSel
+    ? setSelected(new Set())
+    : setSelected(new Set(available.map(p => p.id)));
+
+  return (
+    <div className="pa-overlay" onClick={onClose}>
+      <div className="pa-modal pa-modal--assign" onClick={e => e.stopPropagation()}>
+        {/* Header */}
+        <div className="pa-modal-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="pa-uv-avatar" style={{ width: 38, height: 38, fontSize: 15 }}>
+              {(targetUser.full_name || 'U')[0].toUpperCase()}
+            </div>
+            <div>
+              <h3 className="pa-modal-title">{targetUser.full_name}</h3>
+              <p className="pa-modal-sub">{targetUser.role_name} · Manage project access</p>
+            </div>
+          </div>
+          <button className="pa-icon-btn" onClick={onClose}>✕</button>
+        </div>
+
+        {/* Sub-tabs */}
+        <div className="pa-modal-tabs">
+          <button className={`pa-modal-tab ${tab === 'assign' ? 'active' : ''}`}
+            onClick={() => setTab('assign')}>
+            + Assign Projects
+            {selected.size > 0 && <span className="pa-badge" style={{ marginLeft: 6 }}>{selected.size}</span>}
+          </button>
+          <button className={`pa-modal-tab ${tab === 'current' ? 'active' : ''}`}
+            onClick={() => setTab('current')}>
+            ✓ Current Access
+            <span className="pa-badge pa-badge--green" style={{ marginLeft: 6 }}>{currentProjectIds.size}</span>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="pa-field" style={{ paddingBottom: 8 }}>
+          <div className="pa-search-wrap" style={{ flex: 'none' }}>
+            <svg className="pa-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input className="pa-search" style={{ paddingLeft: 32, width: '100%', boxSizing: 'border-box' }}
+              placeholder="Search projects…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button className="pa-search-clear" onClick={() => setSearch('')}>✕</button>}
+          </div>
+        </div>
+
+        {/* Assign tab */}
+        {tab === 'assign' && (
+          <>
+            <div className="pa-field" style={{ paddingBottom: 4 }}>
+              <div className="pa-user-select-header">
+                <span className="pa-label" style={{ margin: 0 }}>
+                  Available Projects
+                  <span className="pa-count-pill">{available.length}</span>
+                </span>
+                {available.length > 0 && (
+                  <button className="pa-btn pa-btn--xs pa-btn--ghost" onClick={toggleAll}>
+                    {allSel ? 'Deselect All' : 'Select All'}
+                  </button>
+                )}
+              </div>
+              <div className="pa-user-list pa-proj-list">
+                {available.length === 0 ? (
+                  <p className="pa-empty-hint">
+                    {search ? 'No projects match your search.' : 'All projects already assigned to this user.'}
+                  </p>
+                ) : (
+                  available.map(p => {
+                    const sm = STATUS_META[(p.status || '').toUpperCase()] || STATUS_META.PLANNING;
+                    const sel = selected.has(p.id);
+                    return (
+                      <label key={p.id} className={`pa-user-item pa-proj-item${sel ? ' selected' : ''}`}>
+                        <input type="checkbox" checked={sel} onChange={() => toggle(p.id)} />
+                        <div className="pa-proj-dot" style={{ background: sm.bg, color: sm.color }}>
+                          {(p.name || 'P')[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="pa-user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.name}
+                          </div>
+                          <div className="pa-user-role">
+                            <span style={{ fontFamily: 'monospace', marginRight: 6 }}>{p.id}</span>
+                            {p.groupId && <span className="pa-chip" style={{ fontSize: 9 }}>{p.groupId}</span>}
+                            {p.subGroup && <span className="pa-chip pa-chip--sub" style={{ fontSize: 9, marginLeft: 4 }}>{p.subGroup}</span>}
+                          </div>
+                        </div>
+                        <span className="pa-status-badge" style={{ background: sm.bg, color: sm.color, fontSize: 9, padding: '2px 6px', flexShrink: 0 }}>
+                          {sm.label}
+                        </span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            <div className="pa-field">
+              <label className="pa-label">Note <span className="pa-opt">(optional)</span></label>
+              <textarea className="pa-textarea" rows={2}
+                placeholder="Reason for granting access…"
+                value={note} onChange={e => setNote(e.target.value)} />
+            </div>
+
+            <div className="pa-modal-actions">
+              <button className="pa-btn pa-btn--ghost" onClick={onClose}>Cancel</button>
+              <button className="pa-btn pa-btn--primary"
+                disabled={selected.size === 0 || saving}
+                onClick={() => onAssign([...selected], note || null)}>
+                {saving ? 'Granting…' : `Grant ${selected.size} Project${selected.size !== 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Current access tab */}
+        {tab === 'current' && (
+          <>
+            <div className="pa-field" style={{ paddingBottom: 4 }}>
+              <div className="pa-user-list pa-proj-list">
+                {current.length === 0 ? (
+                  <p className="pa-empty-hint">
+                    {search ? 'No matching projects in current access.' : 'No projects assigned yet.'}
+                  </p>
+                ) : (
+                  current.map(p => {
+                    const sm = STATUS_META[(p.status || '').toUpperCase()] || STATUS_META.PLANNING;
+                    return (
+                      <div key={p.id} className="pa-proj-current-row">
+                        <div className="pa-proj-dot" style={{ background: sm.bg, color: sm.color }}>
+                          {(p.name || 'P')[0].toUpperCase()}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div className="pa-user-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.name}
+                          </div>
+                          <div className="pa-user-role">
+                            <span style={{ fontFamily: 'monospace', marginRight: 6 }}>{p.id}</span>
+                            {p.groupId && <span className="pa-chip" style={{ fontSize: 9 }}>{p.groupId}</span>}
+                          </div>
+                        </div>
+                        <span className="pa-status-badge" style={{ background: sm.bg, color: sm.color, fontSize: 9, padding: '2px 6px', flexShrink: 0 }}>
+                          {sm.label}
+                        </span>
+                        <button className="pa-act-btn pa-act-btn--del" title="Revoke access"
+                          onClick={() => onRevoke(p.id, p.name)}>✕</button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+            <div className="pa-modal-actions">
+              <button className="pa-btn pa-btn--ghost" onClick={onClose}>Close</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Project Card (Projects tab) ──────────────────────────────────────────────
 function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
   const [grants,    setGrants]   = useState([]);
   const [expanded,  setExpanded] = useState(false);
@@ -272,7 +465,6 @@ function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
         onSave={doEdit} onClose={() => { setEditOpen(false); setEditGrant(null); }} />
 
       <div className="pa-card">
-        {/* Card header */}
         <div className="pa-card-header">
           <div className="pa-card-avatar" style={{ background: sm.bg, color: sm.color }}>
             {(project.name || 'P')[0].toUpperCase()}
@@ -307,7 +499,6 @@ function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
           </div>
         </div>
 
-        {/* Grants table — expandable, scrollable */}
         {expanded && (
           <div className="pa-card-grants">
             {loading ? (
@@ -325,11 +516,8 @@ function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
                 <table className="pa-grants-table">
                   <thead>
                     <tr>
-                      <th>User</th>
-                      <th>Role</th>
-                      <th>Granted By</th>
-                      <th>Note</th>
-                      <th>Granted On</th>
+                      <th>User</th><th>Role</th><th>Granted By</th>
+                      <th>Note</th><th>Granted On</th>
                       {isAdmin && <th></th>}
                     </tr>
                   </thead>
@@ -373,54 +561,253 @@ function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
   );
 }
 
+// ─── User Row (Users tab) ─────────────────────────────────────────────────────
+function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
+  const [grants,       setGrants]       = useState([]);
+  const [fetched,      setFetched]      = useState(false);
+  const [loading,      setLoading]      = useState(false);
+  const [modalOpen,    setModalOpen]    = useState(false);
+  const [assignSaving, setAssignSaving] = useState(false);
+  const [confirm,      setConfirm]      = useState(null); // { projectId, projectName }
+
+  const fetchGrants = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res  = await fetch(`${API}/projects/access/user/${u.id}`, { credentials: 'include', headers: authHeaders });
+      const json = await res.json();
+      if (json.success) setGrants(json.data || []);
+      else setGrants([]);
+    } catch { setGrants([]); }
+    finally { setLoading(false); setFetched(true); }
+  }, [u.id, authHeaders]);
+
+  // Auto-fetch on mount so the row shows current project chips immediately
+  useEffect(() => { fetchGrants(); }, []); // eslint-disable-line
+
+  const openModal = () => {
+    setModalOpen(true);
+  };
+
+  const doAssign = async (projectIds, note) => {
+    setAssignSaving(true);
+    try {
+      let ok = 0;
+      for (const pid of projectIds) {
+        const res  = await fetch(`${API}/projects/${pid}/access`, {
+          method: 'POST', credentials: 'include', headers: authHeaders,
+          body: JSON.stringify({ userIds: [u.id], note }),
+        });
+        const json = await res.json();
+        if (json.success) ok++;
+      }
+      toast.add(`Granted access to ${ok} project${ok !== 1 ? 's' : ''}`);
+      setModalOpen(false);
+      fetchGrants();
+    } catch { toast.add('Network error', 'error'); }
+    finally { setAssignSaving(false); }
+  };
+
+  const doRevoke = async (projectId, projectName) => {
+    setConfirm({ projectId, projectName });
+  };
+
+  const confirmRevoke = async () => {
+    const { projectId, projectName } = confirm;
+    setConfirm(null);
+    try {
+      const res  = await fetch(`${API}/projects/${projectId}/access/${u.id}`, {
+        method: 'DELETE', credentials: 'include', headers: authHeaders,
+      });
+      const json = await res.json();
+      if (json.success) { toast.add(`Removed access to "${projectName}"`); fetchGrants(); }
+      else toast.add(json.message || 'Failed', 'error');
+    } catch { toast.add('Network error', 'error'); }
+  };
+
+  // Entity field is `projectId` (String like 'PROJ-0123').
+  // allProjects uses p.id = projectUniqueId, same format — compare as strings.
+  const grantedProjectIds = new Set(grants.map(g => String(g.projectId)));
+  const grantedProjects   = allProjects.filter(p => grantedProjectIds.has(String(p.id)));
+
+  // Color hue from user id for avatar
+  const hue    = (u.id * 47) % 360;
+  const avatar = (u.full_name || 'U')[0].toUpperCase();
+
+  return (
+    <>
+      <ConfirmModal open={!!confirm} title="Revoke Access"
+        message={`Remove "${u.full_name}"'s access to "${confirm?.projectName}"?`}
+        onConfirm={confirmRevoke} onCancel={() => setConfirm(null)} />
+
+      {modalOpen && (
+        <AssignProjectsModal
+          open={modalOpen}
+          user={u}
+          allProjects={allProjects}
+          currentProjectIds={grantedProjectIds}
+          onAssign={doAssign}
+          onRevoke={doRevoke}
+          onClose={() => setModalOpen(false)}
+          saving={assignSaving}
+        />
+      )}
+
+      <div className="pa-uv-row" onClick={isAdmin ? openModal : undefined} style={{ cursor: isAdmin ? "pointer" : "default" }}>
+        {/* Top colour stripe — matches project card style */}
+        <div style={{ height: 5, background: `hsl(${hue},55%,55%)`, margin: '-16px -18px 4px', borderRadius: '12px 12px 0 0' }} />
+
+        {/* User header */}
+        <div className="pa-uv-user">
+          <div className="pa-uv-avatar" style={{ background: `hsl(${hue},55%,62%)` }}>{avatar}</div>
+          <div className="pa-uv-info">
+            <div className="pa-uv-name">{u.full_name}</div>
+            <div className="pa-uv-meta">
+              <span className="pa-role-chip">{u.role_name || '—'}</span>
+              {u.designation && <span className="pa-muted" style={{ fontSize: 11 }}>{u.designation}</span>}
+            </div>
+          </div>
+          {/* Count pill top-right */}
+          <div className={`pa-uv-count-badge ${!fetched || grantedProjects.length === 0 ? 'zero' : ''}`} style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            {loading ? '…' : grantedProjects.length}
+            <span style={{ fontWeight: 500, opacity: 0.75 }}>proj</span>
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ height: 1, background: '#f1f5f9', margin: '0 -2px' }} />
+
+        {/* Project chips */}
+        <div className="pa-uv-access">
+          {loading ? (
+            <span className="pa-muted" style={{ fontSize: 12 }}>Loading…</span>
+          ) : grantedProjects.length === 0 ? (
+            <span className="pa-uv-no-access">🔓 No projects assigned yet</span>
+          ) : (
+            <div className="pa-uv-chips">
+              {grantedProjects.slice(0, 4).map(p => {
+                const sm = STATUS_META[(p.status || '').toUpperCase()] || STATUS_META.PLANNING;
+                return (
+                  <span key={p.id} className="pa-uv-proj-chip"
+                    style={{ borderColor: sm.color + '55', color: sm.color, background: sm.bg }}>
+                    {p.name.length > 20 ? p.name.slice(0, 20) + '…' : p.name}
+                  </span>
+                );
+              })}
+              {grantedProjects.length > 4 && (
+                <span className="pa-uv-proj-chip pa-uv-more">
+                  +{grantedProjects.length - 4} more
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Actions */}
+        {isAdmin && (
+          <div className="pa-uv-actions">
+            <button className="pa-btn pa-btn--sm pa-btn--primary" onClick={e => { e.stopPropagation(); openModal(); }}
+              style={{ gap: 6, paddingLeft: 14, paddingRight: 14 }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+              </svg>
+              Manage Access
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ─── Pagination Bar ───────────────────────────────────────────────────────────
+function PaginationBar({ page, totalPages, total, pageSize, onPageChange, onSizeChange, sizeOptions, label }) {
+  const start = total === 0 ? 0 : page * pageSize + 1;
+  const end   = Math.min((page + 1) * pageSize, total);
+  return (
+    <div className="pa-pagination">
+      <div className="pa-pagination-info">
+        Showing {start}–{end} of {total} {label || 'items'}
+      </div>
+      <div className="pa-pagination-controls">
+        <select className="pa-page-size-select" value={pageSize}
+          onChange={e => onSizeChange(Number(e.target.value))}>
+          {(sizeOptions || [6, 12, 24, 48]).map(s => (
+            <option key={s} value={s}>{s} / page</option>
+          ))}
+        </select>
+        <button className="pa-page-btn" disabled={page === 0} onClick={() => onPageChange(0)}>«</button>
+        <button className="pa-page-btn" disabled={page === 0} onClick={() => onPageChange(page - 1)}>‹</button>
+        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+          let pg = i;
+          if (totalPages > 5) {
+            const start = Math.max(0, Math.min(page - 2, totalPages - 5));
+            pg = start + i;
+          }
+          return (
+            <button key={pg} className={`pa-page-btn${pg === page ? ' active' : ''}`}
+              onClick={() => onPageChange(pg)}>{pg + 1}</button>
+          );
+        })}
+        <button className="pa-page-btn" disabled={page >= totalPages - 1} onClick={() => onPageChange(page + 1)}>›</button>
+        <button className="pa-page-btn" disabled={page >= totalPages - 1} onClick={() => onPageChange(totalPages - 1)}>»</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function ProjectAccessPage() {
   const { user } = useAuth();
   const toast    = useToast();
-  const searchTimer = useRef(null);
 
-  const [projects,       setProjects]       = useState([]);
-  const [users,          setUsers]          = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [totalCount,     setTotalCount]     = useState(0);
+  // ── Active tab — persisted in localStorage ────────────────────────────────
+  const [activeTab, setActiveTab] = useState(() => localStorage.getItem(LS_TAB) || 'projects');
+  const switchTab = (t) => { setActiveTab(t); localStorage.setItem(LS_TAB, t); };
 
-  // Pagination
-  const PAGE_SIZE_OPTIONS = [6, 12, 24, 48];
-  const [pageSize,    setPageSize]    = useState(12);
-  const [currentPage, setCurrentPage] = useState(0); // 0-based
-
-  // Filter state — these drive backend fetch
-  const [search,         setSearch]         = useState('');
-  const [groupFilter,    setGroupFilter]    = useState('');
-  const [subGroupFilter, setSubGroupFilter] = useState('');
-
-  // Available groups/subgroups for dropdowns — fetched once
-  const [allGroups,    setAllGroups]    = useState([]);
-  const [allSubGroups, setAllSubGroups] = useState([]);
-
-  const isAdmin = ['SUPERADMIN','ADMIN'].includes((user?.role || '').toUpperCase());
-
+  const isAdmin = ['SUPERADMIN', 'ADMIN'].includes((user?.role || '').toUpperCase());
   const authHeaders = {
     'Content-Type': 'application/json',
-    'User-Id':     String(user?.id   || ''),
-    'User-Role':   user?.role || '',
-    'X-User-Id':   String(user?.id   || ''),
-    'X-User-Role': user?.role || '',
+    'User-Id':      String(user?.id   || ''),
+    'User-Role':    user?.role || '',
+    'X-User-Id':    String(user?.id   || ''),
+    'X-User-Role':  user?.role || '',
   };
 
-  // ── Fetch projects from backend with filters ───────────────────────────────
-  const fetchProjects = useCallback(async (srch, grp, sub, pg = 0, sz = 12) => {
-    setLoading(true);
+  // ── Shared: all projects (normalized) ────────────────────────────────────
+  const [allProjectsRaw, setAllProjectsRaw] = useState([]);
+  const [allGroups,      setAllGroups]      = useState([]);
+  const [allSubGroups,   setAllSubGroups]   = useState([]);
+  const [users,          setUsers]          = useState([]);
+  const searchTimer = useRef(null);
+
+  // ── Projects tab state ────────────────────────────────────────────────────
+  const PROJ_SIZE_OPTS = [6, 12, 24, 48];
+  const [projLoading,   setProjLoading]   = useState(false);
+  const [projList,      setProjList]      = useState([]);
+  const [projTotal,     setProjTotal]     = useState(0);
+  const [projPage,      setProjPage]      = useState(0);
+  const [projPageSize,  setProjPageSize]  = useState(() => Number(localStorage.getItem(LS_PROJ_SIZE)) || 12);
+  const [projSearch,    setProjSearch]    = useState('');
+  const [projGroup,     setProjGroup]     = useState('');
+  const [projSubGroup,  setProjSubGroup]  = useState('');
+
+  // ── Users tab state ───────────────────────────────────────────────────────
+  const USER_SIZE_OPTS = [10, 20, 50, 100];
+  const [userLoading,   setUserLoading]   = useState(false);
+  const [userSearch,    setUserSearch]    = useState('');
+  const [userRoleFilter,setUserRoleFilter]= useState('');
+  const [userPage,      setUserPage]      = useState(0);
+  const [userPageSize,  setUserPageSize]  = useState(() => Number(localStorage.getItem(LS_USER_SIZE)) || 20);
+  const [allRoles,      setAllRoles]      = useState([]);
+
+  // ── Fetch helpers ──────────────────────────────────────────────────────────
+
+  const fetchAllProjects = useCallback(async () => {
     try {
-      const params = new URLSearchParams();
-      if (srch) params.append('search',       srch);
-      if (grp)  params.append('groupId',      grp);
-      if (sub)  params.append('subGroupName', sub);
-      const qs  = params.toString() ? `?${params}` : '';
-      const res = await fetch(`${API}/projects${qs}`, { credentials: 'include', headers: authHeaders });
+      const res  = await fetch(`${API}/projects`, { credentials: 'include', headers: authHeaders });
       const json = await res.json();
       const list = Array.isArray(json) ? json : (json.data || []);
-      const normalized = list.map(p => ({
+      const norm = list.map(p => ({
         id:       p.projectUniqueId || p.id,
         name:     p.projectName     || p.name    || '',
         location: p.location        || '',
@@ -428,15 +815,24 @@ export default function ProjectAccessPage() {
         groupId:  p.groupId         || p.group_id     || '',
         subGroup: p.subGroupName    || '',
       }));
-      setTotalCount(normalized.length);
-      // Client-side pagination slice (backend returns all matching)
-      setProjects(normalized.slice(pg * sz, pg * sz + sz));
-      setCurrentPage(pg);
-    } catch { toast.add('Failed to load projects', 'error'); }
-    finally { setLoading(false); }
+      setAllProjectsRaw(norm);
+      return norm;
+    } catch { return []; }
   }, []); // eslint-disable-line
 
-  // ── Fetch all groups for dropdown ─────────────────────────────────────────
+  const applyProjFilters = useCallback((raw, srch, grp, sub, pg, sz) => {
+    let filtered = raw;
+    if (srch) filtered = filtered.filter(p =>
+      (p.name || '').toLowerCase().includes(srch.toLowerCase()) ||
+      (p.id   || '').toLowerCase().includes(srch.toLowerCase())
+    );
+    if (grp) filtered = filtered.filter(p => p.groupId === grp);
+    if (sub) filtered = filtered.filter(p => p.subGroup === sub);
+    setProjTotal(filtered.length);
+    setProjList(filtered.slice(pg * sz, pg * sz + sz));
+    setProjPage(pg);
+  }, []);
+
   const fetchGroups = useCallback(async () => {
     try {
       const res  = await fetch(`${API}/filters/leads-groups`, { credentials: 'include', headers: authHeaders });
@@ -445,7 +841,6 @@ export default function ProjectAccessPage() {
     } catch {}
   }, []); // eslint-disable-line
 
-  // ── Fetch subgroups when group changes ────────────────────────────────────
   const fetchSubGroups = useCallback(async (grp) => {
     if (!grp) { setAllSubGroups([]); return; }
     try {
@@ -455,9 +850,9 @@ export default function ProjectAccessPage() {
     } catch {}
   }, []); // eslint-disable-line
 
-  // ── Fetch users for grant modal ───────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
     if (!user?.id) return;
+    setUserLoading(true);
     try {
       const res  = await fetch(`${API}/login/users/${user.id}?page=1&size=999`, {
         credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -465,57 +860,83 @@ export default function ProjectAccessPage() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       const raw  = json.userWrapper || json.content || json.data || json.users || [];
-      setUsers((Array.isArray(raw) ? raw : []).map(u => ({
-        id:        u.id,
-        full_name: u.name     || u.full_name  || '',
-        username:  u.user_id  || u.username   || '',
-        role_name: u.role     || u.role_name  || '',
-      })));
+      const mapped = (Array.isArray(raw) ? raw : []).map(u => ({
+        id:          u.id,
+        full_name:   u.name      || u.full_name  || '',
+        username:    u.user_id   || u.username   || '',
+        role_name:   u.role      || u.role_name  || '',
+        designation: u.designation || '',
+      }));
+      setUsers(mapped);
+      // Collect unique roles for filter
+      const roles = [...new Set(mapped.map(u => u.role_name).filter(Boolean))].sort();
+      setAllRoles(roles);
     } catch {}
+    finally { setUserLoading(false); }
   }, [user?.id]); // eslint-disable-line
 
-  useEffect(() => { fetchProjects('', '', '', 0, pageSize); fetchGroups(); fetchUsers(); }, []); // eslint-disable-line
+  // ── Init ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const init = async () => {
+      const raw = await fetchAllProjects();
+      applyProjFilters(raw, '', '', '', 0, projPageSize);
+      fetchGroups();
+      fetchUsers();
+    };
+    init();
+  }, []); // eslint-disable-line
 
-  const handleSearch = (val) => {
-    setSearch(val);
+  // ── Projects tab handlers ──────────────────────────────────────────────────
+  const handleProjSearch = (val) => {
+    setProjSearch(val);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => fetchProjects(val, groupFilter, subGroupFilter, 0, pageSize), 350);
+    searchTimer.current = setTimeout(() => applyProjFilters(allProjectsRaw, val, projGroup, projSubGroup, 0, projPageSize), 250);
   };
 
-  const handleGroupChange = (val) => {
-    setGroupFilter(val);
-    setSubGroupFilter('');
-    setAllSubGroups([]);
+  const handleProjGroup = (val) => {
+    setProjGroup(val); setProjSubGroup(''); setAllSubGroups([]);
     fetchSubGroups(val);
-    fetchProjects(search, val, '', 0, pageSize);
+    applyProjFilters(allProjectsRaw, projSearch, val, '', 0, projPageSize);
   };
 
-  const handleSubGroupChange = (val) => {
-    setSubGroupFilter(val);
-    fetchProjects(search, groupFilter, val, 0, pageSize);
+  const handleProjSubGroup = (val) => {
+    setProjSubGroup(val);
+    applyProjFilters(allProjectsRaw, projSearch, projGroup, val, 0, projPageSize);
   };
 
-  const handleReset = () => {
-    setSearch(''); setGroupFilter(''); setSubGroupFilter(''); setAllSubGroups([]);
-    fetchProjects('', '', '', 0, pageSize);
+  const handleProjReset = () => {
+    setProjSearch(''); setProjGroup(''); setProjSubGroup(''); setAllSubGroups([]);
+    applyProjFilters(allProjectsRaw, '', '', '', 0, projPageSize);
   };
 
-  const handlePageChange = (pg) => {
-    fetchProjects(search, groupFilter, subGroupFilter, pg, pageSize);
+  const handleProjPageChange = (pg) => applyProjFilters(allProjectsRaw, projSearch, projGroup, projSubGroup, pg, projPageSize);
+
+  const handleProjPageSize = (sz) => {
+    setProjPageSize(sz); localStorage.setItem(LS_PROJ_SIZE, sz);
+    applyProjFilters(allProjectsRaw, projSearch, projGroup, projSubGroup, 0, sz);
   };
 
-  const handlePageSizeChange = (sz) => {
-    setPageSize(sz);
-    fetchProjects(search, groupFilter, subGroupFilter, 0, sz);
-  };
+  // ── Users tab derived ──────────────────────────────────────────────────────
+  const filteredUsers = users.filter(u =>
+    (!userSearch     || (u.full_name || '').toLowerCase().includes(userSearch.toLowerCase()) ||
+                        (u.username  || '').toLowerCase().includes(userSearch.toLowerCase())) &&
+    (!userRoleFilter || u.role_name === userRoleFilter)
+  );
+  const userTotalPages = Math.ceil(filteredUsers.length / userPageSize);
+  const pagedUsers     = filteredUsers.slice(userPage * userPageSize, (userPage + 1) * userPageSize);
 
-  const totalPages = Math.ceil(totalCount / pageSize);
+  const handleUserSearch = (val) => { setUserSearch(val); setUserPage(0); };
+  const handleUserRole   = (val) => { setUserRoleFilter(val); setUserPage(0); };
+  const handleUserReset  = ()    => { setUserSearch(''); setUserRoleFilter(''); setUserPage(0); };
+  const handleUserPageSize = (sz) => { setUserPageSize(sz); localStorage.setItem(LS_USER_SIZE, sz); setUserPage(0); };
+
+  const projTotalPages = Math.ceil(projTotal / projPageSize);
 
   return (
     <div className="pa-page">
       <ToastStack toasts={toast.toasts} remove={toast.remove} />
 
-      {/* ── Sticky top: header + info + filters ─────────────────────────── */}
+      {/* ── Sticky top ───────────────────────────────────────────────────── */}
       <div className="pa-sticky-top">
 
         {/* Header */}
@@ -528,9 +949,14 @@ export default function ProjectAccessPage() {
           </div>
           <div>
             <h1 className="pa-title">Project Access Control</h1>
-            <p className="pa-subtitle">Grant or remove user access to projects. Users without a grant won't see the project in any dropdown across the CRM.</p>
+            <p className="pa-subtitle">Grant or remove user access to projects across the CRM.</p>
           </div>
-          <button className="pa-btn pa-btn--ghost pa-refresh-btn" onClick={() => fetchProjects(search, groupFilter, subGroupFilter, currentPage, pageSize)} title="Refresh">
+          <button className="pa-btn pa-btn--ghost pa-refresh-btn"
+            onClick={async () => {
+              const raw = await fetchAllProjects();
+              applyProjFilters(raw, projSearch, projGroup, projSubGroup, projPage, projPageSize);
+              fetchUsers();
+            }} title="Refresh">
             ↻ Refresh
           </button>
         </div>
@@ -544,107 +970,155 @@ export default function ProjectAccessPage() {
           <div className="pa-info-sep" />
           <div className="pa-info-item">
             <span className="pa-info-ico">👤</span>
-            <span><strong>All other users</strong> only see projects you grant them. What they can do depends on their page permissions.</span>
+            <span><strong>All other users</strong> only see projects you grant them.</span>
           </div>
           <div className="pa-info-sep" />
           <div className="pa-info-item">
-            <span className="pa-info-ico">🔗</span>
-            <span>Enforced via the <strong>project dropdown</strong> — one control point, all pages</span>
+            <span className="pa-info-ico">💡</span>
+            <span>Use <strong>Users View</strong> to bulk-assign projects to a new user easily.</span>
           </div>
         </div>
 
-        {/* Filter bar */}
-        <div className="pa-filter-bar">
-          <div className="pa-search-wrap">
-            <svg className="pa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-            <input className="pa-search" placeholder="Search by project name or ID…"
-              value={search} onChange={e => handleSearch(e.target.value)} />
-            {search && <button className="pa-search-clear" onClick={() => handleSearch('')}>✕</button>}
-          </div>
-
-          <select className="pa-select" value={groupFilter} onChange={e => handleGroupChange(e.target.value)}>
-            <option value="">All Groups</option>
-            {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
-
-          <select className="pa-select" value={subGroupFilter} onChange={e => handleSubGroupChange(e.target.value)} disabled={!groupFilter}>
-            <option value="">{groupFilter ? 'All Sub-Groups' : 'Select Group First'}</option>
-            {allSubGroups.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-
-          {(search || groupFilter || subGroupFilter) && (
-            <button className="pa-btn pa-btn--ghost pa-btn--sm" onClick={handleReset}>✕ Clear</button>
-          )}
-
-          <div className="pa-filter-count">
-            {loading ? 'Loading…' : `${totalCount} project${totalCount !== 1 ? 's' : ''}`}
-          </div>
+        {/* ── Tab switcher ────────────────────────────────────────────────── */}
+        <div className="pa-tabs">
+          <button className={`pa-tab ${activeTab === 'projects' ? 'active' : ''}`}
+            onClick={() => switchTab('projects')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+              <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+            Projects View
+            <span className="pa-tab-count">{projTotal}</span>
+          </button>
+          <button className={`pa-tab ${activeTab === 'users' ? 'active' : ''}`}
+            onClick={() => switchTab('users')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
+              <circle cx="9" cy="7" r="4"/>
+              <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
+            </svg>
+            Users View
+            <span className="pa-tab-count">{users.length}</span>
+          </button>
         </div>
+
+        {/* ── Filter bar ──────────────────────────────────────────────────── */}
+        {activeTab === 'projects' && (
+          <div className="pa-filter-bar">
+            <div className="pa-search-wrap">
+              <svg className="pa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input className="pa-search" placeholder="Search by project name or ID…"
+                value={projSearch} onChange={e => handleProjSearch(e.target.value)} />
+              {projSearch && <button className="pa-search-clear" onClick={() => handleProjSearch('')}>✕</button>}
+            </div>
+            <select className="pa-select" value={projGroup} onChange={e => handleProjGroup(e.target.value)}>
+              <option value="">All Groups</option>
+              {allGroups.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+            <select className="pa-select" value={projSubGroup} onChange={e => handleProjSubGroup(e.target.value)} disabled={!projGroup}>
+              <option value="">{projGroup ? 'All Sub-Groups' : 'Select Group First'}</option>
+              {allSubGroups.map(s => <option key={s} value={s}>{s}</option>)}
+            </select>
+            {(projSearch || projGroup || projSubGroup) && (
+              <button className="pa-btn pa-btn--ghost pa-btn--sm" onClick={handleProjReset}>✕ Clear</button>
+            )}
+            <div className="pa-filter-count">
+              {projLoading ? 'Loading…' : `${projTotal} project${projTotal !== 1 ? 's' : ''}`}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'users' && (
+          <div className="pa-filter-bar">
+            <div className="pa-search-wrap">
+              <svg className="pa-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+              </svg>
+              <input className="pa-search" placeholder="Search by name or username…"
+                value={userSearch} onChange={e => handleUserSearch(e.target.value)} />
+              {userSearch && <button className="pa-search-clear" onClick={() => handleUserSearch('')}>✕</button>}
+            </div>
+            <select className="pa-select" value={userRoleFilter} onChange={e => handleUserRole(e.target.value)}>
+              <option value="">All Roles</option>
+              {allRoles.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+            {(userSearch || userRoleFilter) && (
+              <button className="pa-btn pa-btn--ghost pa-btn--sm" onClick={handleUserReset}>✕ Clear</button>
+            )}
+            <div className="pa-filter-count">
+              {userLoading ? 'Loading…' : `${filteredUsers.length} user${filteredUsers.length !== 1 ? 's' : ''}`}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── Scrollable grid area ─────────────────────────────────────────── */}
+      {/* ── Scrollable content area ──────────────────────────────────────── */}
       <div className="pa-scroll-area">
-        {loading ? (
-          <div className="pa-loading">
-            <div className="pa-spinner" />
-            <p>Loading projects…</p>
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="pa-empty">
-            <div className="pa-empty-icon">📂</div>
-            <p>{search || groupFilter ? 'No projects match your filters.' : 'No projects found.'}</p>
-            {(search || groupFilter) && (
-              <button className="pa-btn pa-btn--ghost" onClick={handleReset}>Clear filters</button>
-            )}
-          </div>
-        ) : (
-          <>
-            <div className="pa-cards-grid">
-              {projects.map(p => (
-                <ProjectCard key={p.id} project={p} users={users}
-                  authHeaders={authHeaders} toast={toast} isAdmin={isAdmin} />
-              ))}
-            </div>
 
-            {/* Pagination */}
-            <div className="pa-pagination">
-              <div className="pa-pagination-info">
-                Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalCount)} of {totalCount} projects
+        {/* ── PROJECTS TAB ─────────────────────────────────────────────── */}
+        {activeTab === 'projects' && (
+          projLoading ? (
+            <div className="pa-loading"><div className="pa-spinner" /><p>Loading projects…</p></div>
+          ) : projList.length === 0 ? (
+            <div className="pa-empty">
+              <div className="pa-empty-icon">📂</div>
+              <p>{projSearch || projGroup ? 'No projects match your filters.' : 'No projects found.'}</p>
+              {(projSearch || projGroup) && <button className="pa-btn pa-btn--ghost" onClick={handleProjReset}>Clear filters</button>}
+            </div>
+          ) : (
+            <>
+              <div className="pa-cards-grid">
+                {projList.map(p => (
+                  <ProjectCard key={p.id} project={p} users={users}
+                    authHeaders={authHeaders} toast={toast} isAdmin={isAdmin} />
+                ))}
+              </div>
+              <PaginationBar
+                page={projPage} totalPages={projTotalPages} total={projTotal}
+                pageSize={projPageSize} sizeOptions={PROJ_SIZE_OPTS}
+                onPageChange={handleProjPageChange} onSizeChange={handleProjPageSize}
+                label="projects"
+              />
+            </>
+          )
+        )}
+
+        {/* ── USERS TAB ────────────────────────────────────────────────── */}
+        {activeTab === 'users' && (
+          userLoading ? (
+            <div className="pa-loading"><div className="pa-spinner" /><p>Loading users…</p></div>
+          ) : filteredUsers.length === 0 ? (
+            <div className="pa-empty">
+              <div className="pa-empty-icon">👤</div>
+              <p>{userSearch || userRoleFilter ? 'No users match your filters.' : 'No users found.'}</p>
+              {(userSearch || userRoleFilter) && <button className="pa-btn pa-btn--ghost" onClick={handleUserReset}>Clear filters</button>}
+            </div>
+          ) : (
+            <>
+              {/* Summary strip */}
+              <div className="pa-uv-summary">
+                <span>Showing {userPage * userPageSize + 1}–{Math.min((userPage + 1) * userPageSize, filteredUsers.length)} of {filteredUsers.length} users</span>
+                <span className="pa-uv-summary-hint">Click <strong>Manage Access</strong> to assign or revoke projects for any user</span>
               </div>
 
-              <div className="pa-pagination-controls">
-                {/* Rows per page — same style as other pages */}
-                <select className="pa-page-size-select" value={pageSize}
-                  onChange={e => handlePageSizeChange(Number(e.target.value))}>
-                  {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} Cards</option>)}
-                </select>
-
-                <button className="pa-page-btn" disabled={currentPage === 0}
-                  onClick={() => handlePageChange(0)}>«</button>
-                <button className="pa-page-btn" disabled={currentPage === 0}
-                  onClick={() => handlePageChange(currentPage - 1)}>‹</button>
-
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  let pg = i;
-                  if (totalPages > 5) {
-                    const start = Math.max(0, Math.min(currentPage - 2, totalPages - 5));
-                    pg = start + i;
-                  }
-                  return (
-                    <button key={pg} className={`pa-page-btn${pg === currentPage ? ' active' : ''}`}
-                      onClick={() => handlePageChange(pg)}>
-                      {pg + 1}
-                    </button>
-                  );
-                })}
-
-                <button className="pa-page-btn" disabled={currentPage >= totalPages - 1}
-                  onClick={() => handlePageChange(currentPage + 1)}>›</button>
-                <button className="pa-page-btn" disabled={currentPage >= totalPages - 1}
-                  onClick={() => handlePageChange(totalPages - 1)}>»</button>
+              {/* Users list */}
+              <div className="pa-uv-list">
+                {pagedUsers.map(u => (
+                  <UserAccessRow key={u.id} u={u} allProjects={allProjectsRaw}
+                    authHeaders={authHeaders} toast={toast} isAdmin={isAdmin} />
+                ))}
               </div>
-            </div>
-          </>
+
+              <PaginationBar
+                page={userPage} totalPages={userTotalPages} total={filteredUsers.length}
+                pageSize={userPageSize} sizeOptions={USER_SIZE_OPTS}
+                onPageChange={(pg) => setUserPage(pg)} onSizeChange={handleUserPageSize}
+                label="users"
+              />
+            </>
+          )
         )}
       </div>
     </div>

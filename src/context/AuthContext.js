@@ -11,28 +11,9 @@ const USER_KEY = 'bd_portal_user';
 // Pages the accounts executive can fully use (VIEW + CREATE + EDIT).
 // DELETE and ASSIGN are intentionally excluded — the backend enforces this too.
 const ACCOUNTS_EXECUTIVE_ROLE = 'ACCOUNTS_EXECUTIVE';
-const SUPERADMIN_ROLES = ['SUPERADMIN', 'ADMIN'];
-
-// Full permissions granted to SUPERADMIN and ADMIN on all pages
-const SUPERADMIN_PERMISSIONS = {
-  LEADS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'ASSIGN', 'APPROVE', 'DOWNLOAD'],
-  CUSTOMERS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
-  VENDORS:                 ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
-  PROPOSALS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'DOWNLOAD'],
-  PURCHASE_ORDERS:         ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
-  ORDER_BOOK:              ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
-  PROCUREMENT_QUOTATIONS:  ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
-  SALES_QUOTATIONS:        ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
-  INVOICES:                ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'SEND', 'DOWNLOAD'],
-  BILLS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE', 'DOWNLOAD'],
-  PAYMENTS:                ['VIEW', 'CREATE', 'EDIT', 'DELETE', 'APPROVE'],
-  REPORTS:                 ['VIEW'],
-  SETTINGS:                ['VIEW', 'EDIT'],
-  USERS:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
-  ROLES:                   ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
-  FOLLOWUPS:               ['VIEW', 'CREATE', 'EDIT', 'DELETE'],
-  ATTACHMENTS:             ['VIEW', 'UPLOAD', 'DELETE'],
-};
+// NOTE: SUPERADMIN and ADMIN page permissions are now fully DB-driven.
+// The backend no longer grants automatic full access — permissions must be
+// explicitly assigned in the permissions management UI for every user.
 
 const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
   // Finance — core responsibility
@@ -54,18 +35,12 @@ const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
 
 /**
  * Applies role-specific permission overrides.
- * - SUPERADMIN / ADMIN: trust the server's pagePermissions entirely — no frontend override.
- *   Their permissions are managed in the DB just like any other role.
- * - ACCOUNTS_EXECUTIVE: merges in the hardcoded baseline if the server gave nothing,
- *   so the UI unlocks the finance pages they always need.
+ * - ALL roles (including SUPERADMIN/ADMIN): trust the server's pagePermissions entirely.
+ *   Permissions are fully DB-driven — the backend no longer auto-grants access.
+ * - ACCOUNTS_EXECUTIVE: merges in a hardcoded baseline for finance pages they always need.
  */
 const applyAccountsExecutiveOverride = (role, serverPagePermissions) => {
   const merged = { ...(serverPagePermissions || {}) };
-
-  // SUPERADMIN / ADMIN — use whatever the server returned, no forced override
-  if (SUPERADMIN_ROLES.includes(role)) {
-    return merged;
-  }
 
   if (role !== ACCOUNTS_EXECUTIVE_ROLE) return merged;
 

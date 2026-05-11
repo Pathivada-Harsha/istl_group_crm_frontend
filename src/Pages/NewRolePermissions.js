@@ -109,6 +109,9 @@ export default function NewRolePermissions() {
   const [hierForm, setHierForm] = useState({ roleName: '', levelOrder: 4, description: '', canAssignRoles: [], canSeenRoles: [] });
   const [deleteHierConfirm, setDeleteHierConfirm] = useState(null); // roleName string
   const [editingHier, setEditingHier] = useState(null);
+  const [hierRoleUsers, setHierRoleUsers] = useState([]);
+  const [hierRoleUsersLoading, setHierRoleUsersLoading] = useState(false);
+  const [hierRoleStatus, setHierRoleStatus] = useState(null);
 
   // Menu item CRUD state
   const [newMenuItemName, setNewMenuItemName] = useState('');
@@ -145,6 +148,26 @@ export default function NewRolePermissions() {
       if (res.ok) setHierarchyData(await res.json());
     } catch { }
     finally { setHierarchyLoading(false); }
+  };
+
+  // Fetch users belonging to a specific role name
+  const fetchRoleUsers = async (roleName) => {
+    if (!roleName) { setHierRoleUsers([]); setHierRoleStatus(null); return; }
+    setHierRoleUsersLoading(true);
+    try {
+      const res = await fetch(`${API}/login/users/${user.id}?page=1&size=999`, {
+        credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const raw  = json.userWrapper || json.content || json.data || json.users || [];
+        const filtered = (Array.isArray(raw) ? raw : []).filter(u =>
+          (u.role || u.role_name || '').toUpperCase() === roleName.toUpperCase()
+        );
+        setHierRoleUsers(filtered);
+      }
+    } catch {}
+    finally { setHierRoleUsersLoading(false); }
   };
 
   const saveHierarchyEntry = async () => {
@@ -469,78 +492,177 @@ export default function NewRolePermissions() {
   );
 
   // ── Reusable Hierarchy Form ───────────────────────────────────────────────
-  const HierarchyForm = () => (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 20, height: 'fit-content' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-          {editingHier
-            ? <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />Editing: {editingHier}</span>
-            : <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', display: 'inline-block' }} />Add New Entry</span>
-          }
-        </h3>
-        {editingHier && (
-          <button style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '3px 8px', cursor: 'pointer' }}
-            onClick={() => { setEditingHier(null); setHierForm({ roleName: '', levelOrder: 4, description: '', canAssignRoles: [], canSeenRoles: [] }); }}>
-            Cancel
+  const HierarchyForm = () => {
+    const parseList = s => { try { return JSON.parse(s || '[]'); } catch { return []; } };
+    const assignRoles = hierRoleStatus ? parseList(hierRoleStatus.canAssignRoles) : [];
+    const seeRoles    = hierRoleStatus ? parseList(hierRoleStatus.canSeeRoles)    : [];
+    return (
+      <div className="hf-card">
+        {/* Header */}
+        <div className="hf-header">
+          <div className="hf-header-left">
+            <span className={`hf-mode-dot ${editingHier ? 'hf-mode-dot--edit' : 'hf-mode-dot--new'}`} />
+            <span className="hf-header-title">{editingHier ? `Editing: ${editingHier}` : 'Add / Edit Entry'}</span>
+          </div>
+          {editingHier && (
+            <button className="hf-cancel-btn"
+              onClick={() => { setEditingHier(null); setHierForm({ roleName: '', levelOrder: 4, description: '', canAssignRoles: [], canSeenRoles: [] }); setHierRoleStatus(null); setHierRoleUsers([]); }}>
+              ✕ Cancel
+            </button>
+          )}
+        </div>
+
+        <div className="hf-body">
+          {/* ── Role selector ── */}
+          <div className="rp-field">
+            <label className="rp-field__label">Role Name *</label>
+            <select className="rp-field__input" value={hierForm.roleName} disabled={!!editingHier}
+              onChange={e => {
+                const selected = e.target.value;
+                const existing = hierarchyData.find(h => h.roleName === selected);
+                if (existing) {
+                  setHierForm({ roleName: selected, levelOrder: existing.levelOrder || 4, description: existing.description || '', canAssignRoles: parseList(existing.canAssignRoles), canSeenRoles: parseList(existing.canSeeRoles) });
+                  setHierRoleStatus(existing);
+                } else {
+                  setHierForm({ roleName: selected, levelOrder: 4, description: '', canAssignRoles: [], canSeenRoles: [] });
+                  setHierRoleStatus(null);
+                }
+                fetchRoleUsers(selected);
+              }}>
+              <option value="">— Select a role —</option>
+              {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
+            </select>
+          </div>
+
+          {/* ── Current saved status — shown when role has existing entry ── */}
+          {hierRoleStatus && !editingHier && (
+            <div className="hf-status-box">
+              <div className="hf-status-title">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Current saved config
+              </div>
+              <div className="hf-status-rows">
+                <div className="hf-status-row">
+                  <span className="hf-status-key">Level</span>
+                  <span className="hf-level-badge">{hierRoleStatus.levelOrder}</span>
+                </div>
+                {assignRoles.length > 0 && (
+                  <div className="hf-status-row">
+                    <span className="hf-status-key">Creates</span>
+                    <div className="hf-tags">
+                      {assignRoles.map(r => <span key={r} className="hf-tag hf-tag--blue">{r}</span>)}
+                    </div>
+                  </div>
+                )}
+                {seeRoles.length > 0 && (
+                  <div className="hf-status-row">
+                    <span className="hf-status-key">Views</span>
+                    <div className="hf-tags">
+                      {seeRoles.map(r => <span key={r} className="hf-tag hf-tag--green">{r}</span>)}
+                    </div>
+                  </div>
+                )}
+                {hierRoleStatus.description && (
+                  <div className="hf-status-row">
+                    <span className="hf-status-key">Note</span>
+                    <span className="hf-status-desc">{hierRoleStatus.description}</span>
+                  </div>
+                )}
+              </div>
+              <p className="hf-status-hint">Fields below pre-filled — edit and click Update Entry to apply.</p>
+            </div>
+          )}
+
+          {/* ── Users with this role ── */}
+          {hierForm.roleName && (
+            <div className="hf-users-box">
+              <div className="hf-users-header">
+                <span className="hf-users-title">Users with this role</span>
+                {!hierRoleUsersLoading && (
+                  <span className={`hf-users-count ${hierRoleUsers.length > 0 ? 'hf-users-count--has' : ''}`}>
+                    {hierRoleUsers.length}
+                  </span>
+                )}
+              </div>
+              <div className="hf-users-list">
+                {hierRoleUsersLoading ? (
+                  <div className="hf-users-loading"><div className="rp-loader" style={{ width: 14, height: 14, borderWidth: 2 }} /> Loading…</div>
+                ) : hierRoleUsers.length === 0 ? (
+                  <div className="hf-users-empty">No users assigned this role yet</div>
+                ) : (
+                  hierRoleUsers.map(u => (
+                    <div key={u.id} className="hf-user-row">
+                      <div className="hf-user-avatar" style={{ background: `hsl(${(u.id * 47) % 360},55%,62%)` }}>
+                        {(u.name || u.full_name || '?').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="hf-user-info">
+                        <span className="hf-user-name">{u.name || u.full_name}</span>
+                        {(u.designation || u.email) && <span className="hf-user-sub">{u.designation || u.email}</span>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── Level + Description (edit fields) ── */}
+          <div className="hf-row-2">
+            <div className="rp-field">
+              <label className="rp-field__label">Level <span className="hf-hint">1 = top</span></label>
+              <input className="rp-field__input" type="number" min="1" max="20"
+                value={hierForm.levelOrder} onChange={e => setHierForm({ ...hierForm, levelOrder: Number(e.target.value) || 1 })} />
+            </div>
+            <div className="rp-field">
+              <label className="rp-field__label">Description <span className="hf-hint">optional</span></label>
+              <input className="rp-field__input" placeholder="e.g. Regional manager"
+                value={hierForm.description} onChange={e => setHierForm({ ...hierForm, description: e.target.value })} />
+            </div>
+          </div>
+
+          {/* ── Can Create ── */}
+          <div className="rp-field">
+            <label className="rp-field__label">Can Create Users With Role</label>
+            <div className="hf-chips">
+              {roles.map(r => {
+                const nm = r.name.toUpperCase();
+                const on = hierForm.canAssignRoles.includes(nm);
+                return (
+                  <button key={r.id} type="button" className={`hf-chip hf-chip--blue ${on ? 'on' : ''}`}
+                    onClick={() => setHierForm(prev => ({ ...prev, canAssignRoles: on ? prev.canAssignRoles.filter(x => x !== nm) : [...prev.canAssignRoles, nm] }))}>
+                    {on && '✓ '}{r.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Can View ── */}
+          <div className="rp-field">
+            <label className="rp-field__label">Can View Users With Role</label>
+            <div className="hf-chips">
+              {roles.map(r => {
+                const nm = r.name.toUpperCase();
+                const on = (hierForm.canSeenRoles || []).includes(nm);
+                return (
+                  <button key={r.id} type="button" className={`hf-chip hf-chip--green ${on ? 'on' : ''}`}
+                    onClick={() => setHierForm(prev => ({ ...prev, canSeenRoles: on ? (prev.canSeenRoles || []).filter(x => x !== nm) : [...(prev.canSeenRoles || []), nm] }))}>
+                    {on && '✓ '}{r.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ── Save ── */}
+          <button className="rp-btn-save hf-save-btn" onClick={saveHierarchyEntry}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            {editingHier ? 'Update Entry' : 'Save Entry'}
           </button>
-        )}
+        </div>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div className="rp-field">
-          <label className="rp-field__label">Role Name *</label>
-          <select className="rp-field__input" value={hierForm.roleName}
-            onChange={e => setHierForm({ ...hierForm, roleName: e.target.value })} disabled={!!editingHier}>
-            <option value="">-- Select a role --</option>
-            {roles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-          </select>
-        </div>
-        <div className="rp-field">
-          <label className="rp-field__label">Level Order <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400, marginLeft: 5 }}>1=top (SUPERADMIN)...</span></label>
-          <input className="rp-field__input" type="number" min="1" max="20"
-            value={hierForm.levelOrder} onChange={e => setHierForm({ ...hierForm, levelOrder: Number(e.target.value) || 1 })} />
-        </div>
-        <div className="rp-field">
-          <label className="rp-field__label">Description <span style={{ fontWeight: 400, color: '#9ca3af' }}>(optional)</span></label>
-          <input className="rp-field__input" placeholder="e.g. Regional sales manager"
-            value={hierForm.description} onChange={e => setHierForm({ ...hierForm, description: e.target.value })} />
-        </div>
-        <div>
-          <label className="rp-field__label" style={{ display: 'block', marginBottom: 6 }}>Can Create Users With Role</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {roles.map(r => {
-              const on = hierForm.canAssignRoles.includes(r.name.toUpperCase());
-              return (
-                <button key={r.id} type="button"
-                  style={{ padding: '4px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: on ? '1.5px solid #2563eb' : '1.5px solid #e2e8f0', background: on ? '#dbeafe' : '#f9fafb', color: on ? '#1d4ed8' : '#6b7280' }}
-                  onClick={() => { const nm = r.name.toUpperCase(); setHierForm(prev => ({ ...prev, canAssignRoles: prev.canAssignRoles.includes(nm) ? prev.canAssignRoles.filter(x => x !== nm) : [...prev.canAssignRoles, nm] })); }}>
-                  {on && <span style={{ marginRight: 3 }}>✓</span>}{r.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div>
-          <label className="rp-field__label" style={{ display: 'block', marginBottom: 6 }}>Can View Users With Role</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-            {roles.map(r => {
-              const on = (hierForm.canSeenRoles || []).includes(r.name.toUpperCase());
-              return (
-                <button key={r.id} type="button"
-                  style={{ padding: '4px 11px', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', border: on ? '1.5px solid #059669' : '1.5px solid #e2e8f0', background: on ? '#d1fae5' : '#f9fafb', color: on ? '#065f46' : '#6b7280' }}
-                  onClick={() => { const nm = r.name.toUpperCase(); setHierForm(prev => ({ ...prev, canSeenRoles: (prev.canSeenRoles || []).includes(nm) ? (prev.canSeenRoles || []).filter(x => x !== nm) : [...(prev.canSeenRoles || []), nm] })); }}>
-                  {on && <span style={{ marginRight: 3 }}>✓</span>}{r.name}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <button className="rp-btn-save" style={{ width: '100%', justifyContent: 'center', marginTop: 4 }} onClick={saveHierarchyEntry}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          {editingHier ? 'Update Entry' : 'Save Entry'}
-        </button>
-      </div>
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="rp-shell">

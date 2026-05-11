@@ -1726,7 +1726,10 @@ export default function TaskManagement() {
   const isSA = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   // roleLevel fetched from role_hierarchy table — works for any custom role name
   const [roleLevel, setRoleLevel] = useState(null);
-  const isManager = !isSA && roleLevel === 3;    // level 3 = manager in hierarchy
+  // isManager: must be L3 AND role name must contain 'manager' (case-insensitive)
+  // Examples that qualify:  ACCOUNT_MANAGER, PROCUREMENT_MANAGER, BD_MANAGER
+  // Examples that don't:    BD_EXECUTIVE, SALES_EXEC, TELECALLER (even if L3)
+  const isManager = !isSA && roleLevel === 3 && (user?.role || '').toLowerCase().includes('manager');
   const canSeeTeamTab = isSA || isManager;
 
   const [tasks, setTasks]       = useState([]);

@@ -530,6 +530,8 @@ const UsersPage = () => {
   const [teams, setTeams] = useState([]);
   const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
   const [showEditTeamModal, setShowEditTeamModal] = useState(false);
+  const [showViewTeamModal, setShowViewTeamModal] = useState(false);
+  const [viewingTeam, setViewingTeam] = useState(null);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [teamForm, setTeamForm] = useState({ name: '', description: '', memberIds: [] });
   const [teamsLoading, setTeamsLoading] = useState(false);
@@ -1363,6 +1365,11 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
+                          <button style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #e5e7eb', background: '#f0fdf4', color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="View members"
+                            onClick={() => { setViewingTeam(team); setShowViewTeamModal(true); }}>
+                            <FiEye size={13} />
+                          </button>
                           <button style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #e5e7eb', background: '#f8fafc', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Edit team"
                             onClick={() => { setSelectedTeam(team); setTeamForm({ name: team.name, description: team.description || '', memberIds: (team.memberIds || []) }); setShowEditTeamModal(true); fetchAllUsersForTeams(); }}>
@@ -1419,6 +1426,113 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
         </div>
       )}
 
+      {/* VIEW TEAM MEMBERS MODAL */}
+      {showViewTeamModal && viewingTeam && (() => {
+        const teamColors = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ec4899','#8b5cf6','#14b8a6'];
+        const teamColor = teamColors[viewingTeam.id % teamColors.length];
+        const members = viewingTeam.members || [];
+        return (
+          <div className="users-page-modal-overlay" onClick={() => { setShowViewTeamModal(false); setViewingTeam(null); }}>
+            <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}
+              style={{ maxWidth: 520, borderRadius: 16, overflow: 'hidden' }}>
+              {/* Header */}
+              <div className="users-page-modal-header"
+                style={{ background: `linear-gradient(135deg,${teamColor},${teamColor}cc)`, color: '#fff', padding: '20px 24px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#fff' }}>
+                    {viewingTeam.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>{viewingTeam.name}</h2>
+                    <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>
+                      {members.length} member{members.length !== 1 ? 's' : ''}
+                      {viewingTeam.description ? ` · ${viewingTeam.description}` : ''}
+                    </p>
+                  </div>
+                </div>
+                <button className="users-page-modal-close"
+                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}
+                  onClick={() => { setShowViewTeamModal(false); setViewingTeam(null); }}>
+                  <FiX size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="users-page-modal-body" style={{ padding: '20px 24px', maxHeight: '60vh', overflowY: 'auto' }}>
+                {members.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
+                    <FiUsers size={40} style={{ display: 'block', margin: '0 auto 12px', color: '#cbd5e1' }} />
+                    <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>No members yet</div>
+                    <div style={{ fontSize: 13 }}>Edit this team to add members</div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {members.map((m, idx) => (
+                      <div key={m.id} style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '11px 14px', borderRadius: 10,
+                        background: idx % 2 === 0 ? '#f8fafc' : '#fff',
+                        border: '1px solid #f1f5f9',
+                      }}>
+                        {/* Avatar */}
+                        <div style={{
+                          width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                          background: `hsl(${(m.id * 47) % 360},55%,62%)`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#fff', fontSize: 14, fontWeight: 700,
+                          border: `2px solid ${teamColor}30`,
+                        }}>
+                          {(m.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        {/* Info */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {m.name}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {m.role && <span style={{ background: `${teamColor}15`, color: teamColor, borderRadius: 4, padding: '1px 7px', fontWeight: 600, fontSize: 10 }}>{m.role}</span>}
+                            {m.designation && <span style={{ color: '#9ca3af' }}>{m.designation}</span>}
+                            {m.email && <span style={{ color: '#9ca3af' }}>{m.email}</span>}
+                          </div>
+                        </div>
+                        {/* Member number badge */}
+                        <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, flexShrink: 0 }}>
+                          #{idx + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="users-page-modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: '#6b7280' }}>
+                  Team has <strong style={{ color: teamColor }}>{members.length}</strong> member{members.length !== 1 ? 's' : ''}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="users-page-btn users-page-btn-secondary"
+                    onClick={() => { setShowViewTeamModal(false); setViewingTeam(null); }}>
+                    Close
+                  </button>
+                  <button className="users-page-btn users-page-btn-primary"
+                    style={{ background: teamColor, borderColor: teamColor }}
+                    onClick={() => {
+                      setShowViewTeamModal(false);
+                      setSelectedTeam(viewingTeam);
+                      setTeamForm({ name: viewingTeam.name, description: viewingTeam.description || '', memberIds: viewingTeam.memberIds || [] });
+                      setShowEditTeamModal(true);
+                      fetchAllUsersForTeams();
+                    }}>
+                    <FiEdit size={13} style={{ marginRight: 5 }} /> Edit Team
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* CREATE TEAM MODAL */}
       {showCreateTeamModal && (
         <div className="users-page-modal-overlay">
@@ -1471,48 +1585,61 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: '1px solid #e5e7eb' }}>
                   <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
-                    <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 700 }}>{teamForm.memberIds.length} / {allUsersForTeams.length} selected</span>
+                    <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 700 }}>
+                        {teamForm.memberIds.length} selected · {allUsersForTeams.filter(u => !new Set(teams.flatMap(t => t.memberIds || [])).has(u.id)).length} available
+                      </span>
                   </div>
                   {allUsersForTeamsLoading ? (
                     <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
                       <FiLoader size={18} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
                       Loading users...
                     </div>
-                  ) : (allUsersForTeams.length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No users found</div>
-                  ) : (
-                    allUsersForTeams.map(u => {
-                      const isSelected = teamForm.memberIds.includes(u.id);
-                      return (
-                        <label key={u.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                          cursor: 'pointer', transition: 'background 0.1s',
-                          background: isSelected ? '#f0f4ff' : '#fff',
-                          borderBottom: '1px solid #f1f5f9',
-                        }}>
-                          <input type="checkbox" checked={isSelected}
-                            onChange={e => setTeamForm(prev => ({
-                              ...prev,
-                              memberIds: e.target.checked
-                                ? [...prev.memberIds, u.id]
-                                : prev.memberIds.filter(id => id !== u.id)
-                            }))}
-                            style={{ width: 15, height: 15, accentColor: '#6366f1', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
-                          <div style={{
-                            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                            background: isSelected ? '#6366f1' : `hsl(${(u.id * 47) % 360},55%,62%)`,
-                          }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e1b4b' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {u.full_name}
+                  ) : (() => {
+                    // Only show users not already in any team
+                    const allAssignedIds = new Set(teams.flatMap(t => t.memberIds || []));
+                    const availableUsers = allUsersForTeams.filter(u => !allAssignedIds.has(u.id));
+                    return availableUsers.length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: '#cbd5e1' }} />
+                        All users are already assigned to a team
+                      </div>
+                    ) : (
+                      availableUsers.map(u => {
+                        const isSelected = teamForm.memberIds.includes(u.id);
+                        return (
+                          <label key={u.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                            cursor: 'pointer', transition: 'background 0.1s',
+                            background: isSelected ? '#f0f4ff' : '#fff',
+                            borderBottom: '1px solid #f1f5f9',
+                          }}>
+                            <input type="checkbox" checked={isSelected}
+                              onChange={e => setTeamForm(prev => ({
+                                ...prev,
+                                memberIds: e.target.checked
+                                  ? [...prev.memberIds, u.id]
+                                  : prev.memberIds.filter(id => id !== u.id)
+                              }))}
+                              style={{ width: 15, height: 15, accentColor: '#6366f1', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
+                            <div style={{
+                              width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                              background: isSelected ? '#6366f1' : `hsl(${(u.id * 47) % 360},55%,62%)`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#fff', fontSize: 13, fontWeight: 700,
+                            }}>{(u.full_name || '?').charAt(0).toUpperCase()}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e1b4b' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {u.full_name}
+                              </div>
+                              <div style={{ fontSize: 11, color: isSelected ? '#6366f1' : '#9ca3af', marginTop: 1 }}>
+                                {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
+                              </div>
                             </div>
-                            <div style={{ fontSize: 11, color: isSelected ? '#6366f1' : '#9ca3af', marginTop: 1 }}>
-                              {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })))}
+                          </label>
+                        );
+                      })
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1585,48 +1712,70 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: '1px solid #e5e7eb' }}>
                   <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
                     <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
-                    <span style={{ fontSize: 12, color: '#0ea5e9', fontWeight: 700 }}>{teamForm.memberIds.length} / {allUsersForTeams.length} selected</span>
+                    <span style={{ fontSize: 12, color: '#0ea5e9', fontWeight: 700 }}>
+                        {teamForm.memberIds.length} selected
+                      </span>
                   </div>
                   {allUsersForTeamsLoading ? (
                     <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
                       <FiLoader size={18} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
                       Loading users...
                     </div>
-                  ) : (allUsersForTeams.length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>No users found</div>
-                  ) : (
-                    allUsersForTeams.map(u => {
-                      const isSelected = teamForm.memberIds.includes(u.id);
-                      return (
-                        <label key={u.id} style={{
-                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
-                          cursor: 'pointer', transition: 'background 0.1s',
-                          background: isSelected ? '#f0f9ff' : '#fff',
-                          borderBottom: '1px solid #f1f5f9',
-                        }}>
-                          <input type="checkbox" checked={isSelected}
-                            onChange={e => setTeamForm(prev => ({
-                              ...prev,
-                              memberIds: e.target.checked
-                                ? [...prev.memberIds, u.id]
-                                : prev.memberIds.filter(id => id !== u.id)
-                            }))}
-                            style={{ width: 15, height: 15, accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
-                          <div style={{
-                            width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                            background: isSelected ? '#0ea5e9' : `hsl(${(u.id * 47) % 360},55%,62%)`,
-                          }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#0c4a6e' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {u.full_name}
+                  ) : (() => {
+                    // Show: current team's own members + users not in any other team
+                    const currentTeamMemberIds = new Set(selectedTeam?.memberIds || []);
+                    const otherTeamsAssignedIds = new Set(
+                      teams
+                        .filter(t => t.id !== selectedTeam?.id)
+                        .flatMap(t => t.memberIds || [])
+                    );
+                    const availableForEdit = allUsersForTeams.filter(
+                      u => currentTeamMemberIds.has(u.id) || !otherTeamsAssignedIds.has(u.id)
+                    );
+                    return availableForEdit.length === 0 ? (
+                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: '#cbd5e1' }} />
+                        No available users to add
+                      </div>
+                    ) : (
+                      availableForEdit.map(u => {
+                        const isSelected = teamForm.memberIds.includes(u.id);
+                        const isCurrentMember = currentTeamMemberIds.has(u.id);
+                        return (
+                          <label key={u.id} style={{
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
+                            cursor: 'pointer', transition: 'background 0.1s',
+                            background: isSelected ? '#f0f9ff' : '#fff',
+                            borderBottom: '1px solid #f1f5f9',
+                          }}>
+                            <input type="checkbox" checked={isSelected}
+                              onChange={e => setTeamForm(prev => ({
+                                ...prev,
+                                memberIds: e.target.checked
+                                  ? [...prev.memberIds, u.id]
+                                  : prev.memberIds.filter(id => id !== u.id)
+                              }))}
+                              style={{ width: 15, height: 15, accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
+                            <div style={{
+                              width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                              background: isSelected ? '#0ea5e9' : `hsl(${(u.id * 47) % 360},55%,62%)`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              color: '#fff', fontSize: 13, fontWeight: 700,
+                            }}>{(u.full_name || '?').charAt(0).toUpperCase()}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#0c4a6e' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {u.full_name}
+                              </div>
+                              <div style={{ fontSize: 11, color: isSelected ? '#0ea5e9' : '#9ca3af', marginTop: 1 }}>
+                                {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
+                                {isCurrentMember && <span style={{ marginLeft: 6, background: '#e0f2fe', color: '#0284c7', borderRadius: 4, padding: '0 5px', fontSize: 10, fontWeight: 600 }}>Current</span>}
+                              </div>
                             </div>
-                            <div style={{ fontSize: 11, color: isSelected ? '#0ea5e9' : '#9ca3af', marginTop: 1 }}>
-                              {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })))}
+                          </label>
+                        );
+                      })
+                    );
+                  })()}
                 </div>
               </div>
             </div>

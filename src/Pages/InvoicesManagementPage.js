@@ -1414,6 +1414,7 @@ const fetchStats = async () => {
 
       {/* Invoices Table */}
       <div className="Invoices-page-table-container">
+        <div className="Invoices-page-table-scroll">
         <table className="Invoices-page-table">
           <thead>
             <tr>
@@ -1528,6 +1529,7 @@ const fetchStats = async () => {
             )}
           </tbody>
         </table>
+        </div>{/* end Invoices-page-table-scroll */}
 
         {/* Pagination */}
         <div className="Invoices-page-pagination">

@@ -133,6 +133,7 @@ const ALL_COLUMNS = [
   { key: 'source', label: 'Source', sortable: true, required: false },
   { key: 'assignedToName', label: 'Assigned To', sortable: true, required: false },
   { key: 'createdAt', label: 'Created At', sortable: true, required: false },
+  { key: 'leadOwner', label: 'Lead Owner', sortable: true, required: false },
   { key: 'actions', label: 'Actions', sortable: false, required: true },
 ];
 
@@ -748,20 +749,26 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const getPropStatusClass = s => ({ Draft: 'ld-ps-draft', Sent: 'ld-ps-sent', Approved: 'ld-ps-approved', Rejected: 'ld-ps-rejected', 'On Hold': 'ld-ps-hold' }[s] || 'ld-ps-draft');
 
   const HISTORY_CONFIG = {
-    STATUS_CHANGE:      { icon: '🔄', label: 'Status Changed',        color: '#6366f1', bg: '#eef2ff' },
-    LEAD_UPDATED:       { icon: '✏️',  label: 'Lead Updated',          color: '#0284c7', bg: '#e0f2fe' },
-    FOLLOW_UP:          { icon: '📅', label: 'Follow-up Added',        color: '#059669', bg: '#ecfdf5' },
-    FOLLOWUP_ADDED:     { icon: '📅', label: 'Follow-up Added',        color: '#059669', bg: '#ecfdf5' },
-    PROPOSAL_CREATED:   { icon: '📝', label: 'Proposal Created',       color: '#7c3aed', bg: '#f5f3ff' },
-    PROPOSAL_SENT:      { icon: '📤', label: 'Proposal Sent',          color: '#7c3aed', bg: '#f5f3ff' },
-    CREATED:            { icon: '✅', label: 'Lead Created',           color: '#16a34a', bg: '#f0fdf4' },
-    UPDATED:            { icon: '✏️',  label: 'Updated',               color: '#0284c7', bg: '#e0f2fe' },
-    CLOSED_LOST_REASON: { icon: '❌', label: 'Closed — Lost',          color: '#dc2626', bg: '#fef2f2' },
-    CLOSED_WON:         { icon: '🏆', label: 'Closed — Won',           color: '#ca8a04', bg: '#fefce8' },
-    CONVERTED:          { icon: '🎉', label: 'Converted to Customer',  color: '#ca8a04', bg: '#fefce8' },
-    ASSIGNED:           { icon: '👤', label: 'Assigned',               color: '#0284c7', bg: '#e0f2fe' },
-    NOTE_ADDED:         { icon: '💬', label: 'Note Added',             color: '#64748b', bg: '#f8fafc' },
-    TELECALLER_UPDATE:  { icon: '📞', label: 'Telecaller Update',      color: '#db2777', bg: '#fdf2f8' },
+    STATUS_CHANGE:        { icon: '🔄', label: 'Status Changed',           color: '#6366f1', bg: '#eef2ff' },
+    LEAD_UPDATED:         { icon: '✏️',  label: 'Lead Updated',             color: '#0284c7', bg: '#e0f2fe' },
+    FOLLOW_UP:            { icon: '📅', label: 'Follow-up Added',           color: '#059669', bg: '#ecfdf5' },
+    FOLLOWUP_ADDED:       { icon: '📅', label: 'Follow-up Scheduled',       color: '#059669', bg: '#ecfdf5' },
+    FOLLOWUP_COMPLETED:   { icon: '✅', label: 'Follow-up Completed',       color: '#16a34a', bg: '#f0fdf4' },
+    FOLLOWUP_DELETED:     { icon: '🗑', label: 'Follow-up Deleted',         color: '#dc2626', bg: '#fef2f2' },
+    DIRECT_INTERACTION:   { icon: '⚡', label: 'Direct Interaction',        color: '#d97706', bg: '#fffbeb' },
+    PROPOSAL_CREATED:     { icon: '📝', label: 'Proposal Created',          color: '#7c3aed', bg: '#f5f3ff' },
+    PROPOSAL_SENT:        { icon: '📤', label: 'Proposal Sent',             color: '#7c3aed', bg: '#f5f3ff' },
+    CREATED:              { icon: '✅', label: 'Lead Created',              color: '#16a34a', bg: '#f0fdf4' },
+    UPDATED:              { icon: '✏️',  label: 'Updated',                  color: '#0284c7', bg: '#e0f2fe' },
+    CLOSED_LOST_REASON:   { icon: '❌', label: 'Closed — Lost',             color: '#dc2626', bg: '#fef2f2' },
+    CLOSED_WON:           { icon: '🏆', label: 'Closed — Won',              color: '#ca8a04', bg: '#fefce8' },
+    CONVERTED:            { icon: '🎉', label: 'Converted to Customer',     color: '#ca8a04', bg: '#fefce8' },
+    CONVERTED_TO_CUSTOMER:{ icon: '🎉', label: 'Converted to Customer',     color: '#ca8a04', bg: '#fefce8' },
+    ASSIGNED:             { icon: '👤', label: 'Assigned',                  color: '#0284c7', bg: '#e0f2fe' },
+    NOTE_ADDED:           { icon: '💬', label: 'Note Added',                color: '#64748b', bg: '#f8fafc' },
+    TELECALLER_UPDATE:    { icon: '📞', label: 'Telecaller Update',         color: '#db2777', bg: '#fdf2f8' },
+    TELECALLER_STATUS_CHANGE: { icon: '📞', label: 'Telecaller Update',     color: '#db2777', bg: '#fdf2f8' },
+    STATUS_CHANGED:       { icon: '🔄', label: 'Status Changed',            color: '#6366f1', bg: '#eef2ff' },
   };
   const getHistoryIcon = type => (HISTORY_CONFIG[type] || { icon: '📋' }).icon;
 
@@ -872,6 +879,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
               <h4 className="ld-card-title">Assignment & Dates</h4>
               <div className="ld-field-list">
                 {[
+                  ['Lead Owner', lead.leadOwner || '-'],
                   ['Assigned To', lead.assignedToName || '-'],
                   ['Created By', lead.createdByName || '-'],
                   ['Created At', lead.createdAt ? fmtDate(lead.createdAt) : '-'],
@@ -1200,16 +1208,30 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                 {history.map((h, idx) => {
                   const cfg = HISTORY_CONFIG[h.actionType] || { icon: '📋', label: h.actionType?.replace(/_/g, ' ') || 'Activity', color: '#64748b', bg: '#f8fafc' };
                   const summary = getHistorySummary(h);
-                  const hasChange = h.fieldChanged && (h.oldValue || h.newValue);
-                  // newValue is used to store notes for followup entries
-                  const notes = h.actionType?.startsWith('FOLLOWUP') && h.newValue ? h.newValue : null;
+                  const isDirect = h.actionType === 'DIRECT_INTERACTION';
+                  const isCompleted = h.actionType === 'FOLLOWUP_COMPLETED';
+
+                  // For DIRECT_INTERACTION: description = "Direct Visit recorded on … — <outcome text>"
+                  // Extract everything after the first " — " as the outcome
+                  const directOutcome = isDirect && h.description
+                    ? h.description.split(' — ').slice(1).join(' — ').trim()
+                    : null;
+
+                  // For FOLLOWUP_COMPLETED: description = "Follow-up completed: Type — <outcome>"
+                  const completedOutcome = isCompleted && h.description
+                    ? h.description.split(' — ').slice(1).join(' — ').trim()
+                    : null;
+
+                  // newValue = notes (context/background stored by service)
+                  const contextNotes = h.newValue && h.newValue.trim() ? h.newValue.trim() : null;
+
                   return (
                     <div key={h.id} className="ld-history-entry">
                       {idx < history.length - 1 && <div className="ld-history-line" />}
                       <div className="ld-history-bubble" style={{ background: cfg.bg, border: `1.5px solid ${cfg.color}22` }}>
                         <span>{cfg.icon}</span>
                       </div>
-                      <div className="ld-history-card">
+                      <div className={`ld-history-card ${isDirect ? 'ld-history-card--direct' : ''}`}>
                         <div className="ld-history-card-hdr">
                           <span className="ld-history-tag" style={{ color: cfg.color, background: cfg.bg }}>
                             {cfg.label}
@@ -1219,20 +1241,52 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                             <span className="ld-history-when">🕐 {fmtDT(h.createdAt)}</span>
                           </span>
                         </div>
-                        <div className="ld-history-summary">{summary}</div>
-                        {notes && (
-                          <div className="ld-history-notes">
-                            <span className="ld-history-notes-label">Notes</span>
-                            <span className="ld-history-notes-text">{notes}</span>
+
+                        {/* Summary line — for direct, show only the first part (before " — ") */}
+                        <div className="ld-history-summary">
+                          {isDirect && h.description
+                            ? h.description.split(' — ')[0].trim()
+                            : summary}
+                        </div>
+
+                        {/* DIRECT INTERACTION: outcome block */}
+                        {isDirect && directOutcome && (
+                          <div className="ld-history-outcome ld-history-outcome--direct">
+                            <span className="ld-history-outcome-label">⚡ What happened</span>
+                            <span className="ld-history-outcome-text">{directOutcome}</span>
                           </div>
                         )}
-                        {hasChange && h.description && (
+
+                        {/* DIRECT INTERACTION: context/background notes */}
+                        {isDirect && contextNotes && (
+                          <div className="ld-history-notes">
+                            <span className="ld-history-notes-label">Context</span>
+                            <span className="ld-history-notes-text">{contextNotes}</span>
+                          </div>
+                        )}
+
+                        {/* FOLLOWUP COMPLETED: outcome block */}
+                        {isCompleted && completedOutcome && (
+                          <div className="ld-history-outcome">
+                            <span className="ld-history-outcome-label">📊 Outcome</span>
+                            <span className="ld-history-outcome-text">{completedOutcome}</span>
+                          </div>
+                        )}
+
+                        {/* FOLLOWUP COMPLETED: pre-call notes */}
+                        {isCompleted && contextNotes && (
+                          <div className="ld-history-notes">
+                            <span className="ld-history-notes-label">Pre-call Notes</span>
+                            <span className="ld-history-notes-text">{contextNotes}</span>
+                          </div>
+                        )}
+
+                        {/* Other types: field change display */}
+                        {!isDirect && !isCompleted && h.fieldChanged && (h.oldValue || h.newValue) && (
                           <div className="ld-history-change-row">
                             <span className="ld-chg-field">{h.fieldChanged.replace(/_/g, ' ')}</span>
-                            {h.oldValue && !notes && (
-                              <><span className="ld-chg-old">{h.oldValue}</span><span className="ld-chg-arrow">→</span></>
-                            )}
-                            {h.newValue && !notes && <span className="ld-chg-new">{h.newValue}</span>}
+                            {h.oldValue && <><span className="ld-chg-old">{h.oldValue}</span><span className="ld-chg-arrow">→</span></>}
+                            {h.newValue && <span className="ld-chg-new">{h.newValue}</span>}
                           </div>
                         )}
                       </div>
@@ -1390,6 +1444,7 @@ const isFirstFilterRender = useRef(true);
     closedByUserId: null, closedByName: '',
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
+    leadOwner: '',
   });
 
   // ── Derived columns ──────────────────────────────────────────────
@@ -1576,6 +1631,7 @@ useEffect(() => {
       referralPhone: lead.referralPhone || '',
       capacity: lead.capacity || '',
       capacityUnit: lead.capacityUnit || 'kW',
+      leadOwner: lead.leadOwner || '',
     });
     setPhoneError(''); setShowAddModal(true);
   };
@@ -1649,6 +1705,7 @@ useEffect(() => {
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
       capacity: '', capacityUnit: 'kW',
+      leadOwner: '',
     });
     setPhoneError('');
   };
@@ -1676,6 +1733,7 @@ useEffect(() => {
       case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : '-';
       case 'source': return lead.source;
       case 'assignedToName': return lead.assignedToName || '-';
+      case 'leadOwner': return lead.leadOwner ? <span style={{fontWeight:500,color:'#1B3A6B'}}>👤 {lead.leadOwner}</span> : <span style={{color:'#9ca3af'}}>—</span>;
       case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-';
       case 'priority': return <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>;
       case 'status': return (
@@ -1945,6 +2003,12 @@ useEffect(() => {
                     <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" /></svg>
                     {lead.source}
                   </div>
+                  {lead.leadOwner && (
+                    <div className="leads-enquiries-card-owner">
+                      <svg className="leads-enquiries-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      <span>Owner: <strong>{lead.leadOwner}</strong></span>
+                    </div>
+                  )}
                   <div className="leads-enquiries-card-actions">
                     {canView && <button className="leads-enquiries-card-action-btn leads-enquiries-action-view" onClick={() => handleView(lead)} title="View Details"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg></button>}
                     <button className="leads-enquiries-card-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="Timeline"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></button>
@@ -2093,6 +2157,137 @@ const ServerPagination = ({
     </div>
   );
 };
+
+// ─── Lead Owner Dropdown — searchable, with "Other" free-text fallback ──────────
+function LeadOwnerDropdown({ users, value, onChange }) {
+  const [search,   setSearch]   = React.useState('');
+  const [open,     setOpen]     = React.useState(false);
+  const [isOther,  setIsOther]  = React.useState(() =>
+    value && !users.some(u => u.name === value) && value !== '' ? true : false
+  );
+  const [otherVal, setOtherVal] = React.useState(() =>
+    value && !users.some(u => u.name === value) ? value : ''
+  );
+  const ref = React.useRef(null);
+
+  // Close on outside click
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+
+  const filtered = users.filter(u =>
+    u.name?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const selectUser = u => {
+    setIsOther(false);
+    setOtherVal('');
+    onChange(u.name);
+    setOpen(false);
+    setSearch('');
+  };
+
+  const selectOther = () => {
+    setIsOther(true);
+    setOpen(false);
+    setSearch('');
+    onChange(otherVal);
+  };
+
+  const clearOwner = e => {
+    e.stopPropagation();
+    setIsOther(false);
+    setOtherVal('');
+    onChange('');
+  };
+
+  const displayLabel = isOther
+    ? (otherVal || 'Enter name…')
+    : (value || 'Select or search lead owner…');
+
+  const isSelected = !!value || isOther;
+
+  return (
+    <div className="lo-wrap" ref={ref}>
+      {/* Trigger button */}
+      <button type="button" className={`lo-trigger ${open ? 'lo-trigger--open' : ''} ${isSelected ? 'lo-trigger--selected' : ''}`}
+        onClick={() => setOpen(o => !o)}>
+        <span className="lo-trigger-icon">👤</span>
+        <span className="lo-trigger-label">
+          {isSelected
+            ? <><span className="lo-selected-dot" />{displayLabel}</>
+            : displayLabel}
+        </span>
+        {isSelected && (
+          <span className="lo-clear" onClick={clearOwner} title="Clear">✕</span>
+        )}
+        <svg className={`lo-chevron ${open ? 'lo-chevron--up' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Dropdown */}
+      {open && (
+        <div className="lo-dropdown">
+          {/* Search */}
+          <div className="lo-search-wrap">
+            <svg className="lo-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <input autoFocus className="lo-search" placeholder="Search users…"
+              value={search} onChange={e => setSearch(e.target.value)} />
+            {search && <button type="button" className="lo-search-clear" onClick={() => setSearch('')}>✕</button>}
+          </div>
+
+          {/* User list */}
+          <div className="lo-list">
+            {filtered.length === 0 && (
+              <div className="lo-no-results">No users match "{search}"</div>
+            )}
+            {filtered.map(u => (
+              <button key={u.id} type="button"
+                className={`lo-item ${value === u.name && !isOther ? 'lo-item--active' : ''}`}
+                onClick={() => selectUser(u)}>
+                <span className="lo-avatar">{u.name?.[0]?.toUpperCase()}</span>
+                <div className="lo-item-info">
+                  <span className="lo-item-name">{u.name}</span>
+                  {u.role && <span className="lo-item-role">{u.role}</span>}
+                </div>
+                {value === u.name && !isOther && <span className="lo-check">✓</span>}
+              </button>
+            ))}
+
+            {/* Other option */}
+            <button type="button"
+              className={`lo-item lo-item--other ${isOther ? 'lo-item--active' : ''}`}
+              onClick={selectOther}>
+              <span className="lo-avatar lo-avatar--other">+</span>
+              <div className="lo-item-info">
+                <span className="lo-item-name">Other</span>
+                <span className="lo-item-role">Enter a custom name</span>
+              </div>
+              {isOther && <span className="lo-check">✓</span>}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Free-text input when "Other" is selected */}
+      {isOther && (
+        <input
+          autoFocus
+          type="text"
+          className="lo-other-input"
+          placeholder="Type owner name manually…"
+          value={otherVal}
+          onChange={e => { setOtherVal(e.target.value); onChange(e.target.value); }}
+        />
+      )}
+    </div>
+  );
+}
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
 const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser }) => (
@@ -2288,6 +2483,20 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           </select>
           {!canAssign && <small style={{ color: '#6b7280', fontSize: 12 }}>No assign permission</small>}
         </div>
+      </div>
+
+      {/* ── Lead Owner ──────────────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          Lead Owner
+          <span style={{ background: '#EFF6FF', color: '#2563eb', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
+        </label>
+        <LeadOwnerDropdown
+          users={users}
+          value={formData.leadOwner || ''}
+          onChange={val => setFormData(p => ({ ...p, leadOwner: val }))}
+        />
+        <small style={{ color: '#6b7280', fontSize: 11 }}>Person responsible for this lead. Select from users or type a custom name.</small>
       </div>
 
       {formData.status === 'Closed Won' && (
