@@ -64,9 +64,14 @@ const BillsManagementPage = () => {
     { key: 'balanceAmount', label: 'Balance' },
     { key: 'status',        label: 'Payment Status' },
     { key: 'uploadedByName',label: 'Uploaded By' },
+    { key: 'groupName',     label: 'Group' },
+    { key: 'category',      label: 'Category' },
+    { key: 'projectId',     label: 'Project' },
   ];
+  // Default visible: only the original columns — group/category/project start hidden
+  const DEFAULT_VISIBLE = ['billNo','vendorName','poNumber','billDate','dueDate','totalAmount','paidAmount','balanceAmount','status','uploadedByName'];
   const [columnOrder, setColumnOrder] = useState(BILLS_COLUMNS.map(c => c.key));
-  const [visibleColumns, setVisibleColumns] = useState(BILLS_COLUMNS.map(c => c.key));
+  const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
   const [showColumnsPanel, setShowColumnsPanel] = useState(false);
   const columnsPanelRef = useRef(null);
   const dragColRef = useRef(null);
@@ -118,7 +123,43 @@ const BillsManagementPage = () => {
 
   // Fetch bills and KPIs
   useEffect(() => {
-    fetchBills();
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page: pagination.currentPage.toString(),
+          size: pagination.pageSize.toString(),
+          sortBy: 'billDate',
+          sortDirection: 'DESC'
+        });
+        if (projectId)    params.append('projectId',  projectId);
+        if (groupName)    params.append('groupId',    groupName);
+        if (subGroupName) params.append('subGroupId', subGroupName);
+        if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
+        if (filters.search) params.append('search', filters.search);
+        const response = await fetch(`${API_BASE_URL}/bills?${params}`, {
+          headers: getAuthHeaders(), credentials: 'include', signal: controller.signal
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBills(data.bills || []);
+          // Do NOT sync currentPage from API — page is managed locally to ensure filter resets work
+          setPagination(prev => ({
+            ...prev,
+            totalPages: data.totalPages || 0,
+            totalItems: data.totalItems || 0
+          }));
+        } else { showError('Failed to fetch bills'); }
+      } catch (error) {
+        if (error.name === 'AbortError') return; // cancelled by new request — ignore
+        console.error('Error fetching bills:', error);
+        showError('Error fetching bills');
+      } finally { setLoading(false); }
+    };
+    load();
+    return () => controller.abort(); // cancel previous in-flight request when deps change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize]);
 
   useEffect(() => {
@@ -156,9 +197,9 @@ const BillsManagementPage = () => {
       if (response.ok) {
         const data = await response.json();
         setBills(data.bills || []);
+        // Do NOT sync currentPage from API — managed locally
         setPagination(prev => ({
           ...prev,
-          currentPage: data.currentPage || 0,
           totalPages: data.totalPages || 0,
           totalItems: data.totalItems || 0
         }));
@@ -1178,7 +1219,10 @@ const BillsManagementPage = () => {
           <select
             className="procurement-bills-received-filter"
             value={filters.paymentStatus}
-            onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
+            onChange={(e) => {
+              setFilters(prev => ({ ...prev, paymentStatus: e.target.value }));
+              setPagination(prev => ({ ...prev, currentPage: 0 }));
+            }}
           >
             <option value="all">All Payment Status</option>
             <option value="Pending">Pending</option>
@@ -1387,6 +1431,9 @@ const BillsManagementPage = () => {
                         </td>
                       );
                       if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName}</td>;
+                      if (key === 'groupName')      return <td key={key}>{bill.groupName || '—'}</td>;
+                      if (key === 'category')       return <td key={key}>{bill.category || '—'}</td>;
+                      if (key === 'projectId')      return <td key={key}>{bill.projectId || '—'}</td>;
                       return <td key={key}>—</td>;
                     })}
                     <td>

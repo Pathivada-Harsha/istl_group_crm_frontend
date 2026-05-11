@@ -24,12 +24,14 @@ const ALL_QUOTATION_COLUMNS = [
   { id: 'quotationNo', label: 'Quotation No', visible: true },
   { id: 'vendorId', label: 'Vendor Name', visible: true },
   { id: 'rfqId', label: 'RFQ ID', visible: false },
-  { id: 'category', label: 'Category', visible: true },
+  { id: 'category', label: 'Category', visible: false },
   { id: 'quotationValue', label: 'Quotation Value', visible: true },
   { id: 'validUntil', label: 'Valid Until', visible: true },
   { id: 'file', label: 'File', visible: false },
   { id: 'status', label: 'Status', visible: true },
   { id: 'uploadedOn', label: 'Uploaded On', visible: true },
+  { id: 'group', label: 'Group', visible: false },
+  { id: 'project', label: 'Project', visible: false },
   { id: 'actions', label: 'Actions', visible: true, fixed: true },
 ];
 
@@ -81,10 +83,22 @@ const QuotationsReceived = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // ── Column state (drag + visibility) ────────────────────────────────────
+  const COLUMN_VERSION = 'v2'; // bump this whenever ALL_QUOTATION_COLUMNS changes
   const [columns, setColumns] = useState(() => {
     try {
       const saved = localStorage.getItem('quotationColumns');
-      return saved ? JSON.parse(saved) : ALL_QUOTATION_COLUMNS;
+      const version = localStorage.getItem('quotationColumnsVersion');
+      if (saved && version === COLUMN_VERSION) {
+        const parsed = JSON.parse(saved);
+        // Merge: ensure any new columns that don't exist in cache are added
+        const savedIds = new Set(parsed.map(c => c.id));
+        const merged = [...parsed];
+        ALL_QUOTATION_COLUMNS.forEach(col => {
+          if (!savedIds.has(col.id)) merged.push(col);
+        });
+        return merged;
+      }
+      return ALL_QUOTATION_COLUMNS;
     } catch { return ALL_QUOTATION_COLUMNS; }
   });
   const [showColumnManager, setShowColumnManager] = useState(false);
@@ -146,16 +160,53 @@ const QuotationsReceived = () => {
   // ── Persist column config ────────────────────────────────────────────────
   useEffect(() => {
     localStorage.setItem('quotationColumns', JSON.stringify(columns));
+    localStorage.setItem('quotationColumnsVersion', COLUMN_VERSION);
   }, [columns]);
 
   // ── Data fetching effects ────────────────────────────────────────────────
-  useEffect(() => { fetchQuotations(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
+        if (groupName)    params.append('groupName',   groupName);
+        if (subGroupName) params.append('subGroupName', subGroupName);
+        if (projectId)    params.append('projectId',   projectId);
+        if (filters.status !== 'all') params.append('status', filters.status);
+        if (filters.search)           params.append('searchTerm', filters.search);
+        const res = await fetch(`${API_BASE_URL}/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        setQuotations(data.quotations || []);
+        setTotalPages(data.totalPages || 0);
+        setTotalElements(data.totalElements || 0);
+      } catch { showError('Failed to load quotations'); setQuotations([]); }
+      finally { setLoading(false); }
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
 
   // ── Sorting logic ────────────────────────────────────────────────────────
   const sortedQuotations = useMemo(() => {
-    if (!sortConfig.key) return quotations;
-    return [...quotations].sort((a, b) => {
+    // ── Step 1: client-side filter (catches API gaps) ──────────────────────
+    let list = quotations;
+    if (filters.status !== 'all') {
+      list = list.filter(q => q.status === filters.status);
+    }
+    if (filters.search) {
+      const s = filters.search.toLowerCase();
+      list = list.filter(q =>
+        q.quoteNo?.toLowerCase().includes(s) ||
+        q.vendorName?.toLowerCase().includes(s) ||
+        q.rfqId?.toLowerCase().includes(s) ||
+        q.category?.toLowerCase().includes(s)
+      );
+    }
+    // ── Step 2: sort ────────────────────────────────────────────────────────
+    if (!sortConfig.key) return list;
+    return [...list].sort((a, b) => {
       let aVal, bVal;
       switch (sortConfig.key) {
         case 'quotationNo': aVal = a.quoteNo || ''; bVal = b.quoteNo || ''; break;
@@ -172,7 +223,7 @@ const QuotationsReceived = () => {
       if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
       return 0;
     });
-  }, [quotations, sortConfig]);
+  }, [quotations, sortConfig, filters.status, filters.search]);
 
   const handleSort = (colId) => {
     if (!SORTABLE_COLUMNS.has(colId)) return;
@@ -214,6 +265,7 @@ const QuotationsReceived = () => {
   const resetColumns = () => {
     setColumns(ALL_QUOTATION_COLUMNS);
     localStorage.removeItem('quotationColumns');
+    localStorage.removeItem('quotationColumnsVersion');
   };
 
   // ── Excel import handlers ────────────────────────────────────────────────
@@ -672,7 +724,7 @@ const QuotationsReceived = () => {
 
   const handleUploadQuotation = () => {
     setIsEditMode(false);
-    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
+    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
     setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
     setVendorSearch(''); setVendorDropdownOpen(false);
     setModalGroupName(groupName || ''); setModalSubGroupName(subGroupName || ''); setModalProjectId(projectId || '');
@@ -689,6 +741,8 @@ const QuotationsReceived = () => {
     if (!quotationFormData.vendorId) {
       if (!quotationFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
       if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
+      if (!quotationFormData.vendorCategory) { showError('Vendor category is required'); return; }
+      if (!quotationFormData.vendorType) { showError('Vendor type is required'); return; }
     }
     if (!quotationFormData.validTill) { showError('Valid until date is required'); return; }
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -707,7 +761,10 @@ const QuotationsReceived = () => {
       const fd = new FormData();
       const qd = {
         vendorId: quotationFormData.vendorId || null, vendorName: quotationFormData.vendorName?.trim() || null,
-        vendorContact: quotationFormData.vendorContact?.trim() || null, rfqId: quotationFormData.rfqId?.trim() || null,
+        vendorContact: quotationFormData.vendorContact?.trim() || null,
+        vendorCategory: quotationFormData.vendorCategory?.trim() || null,
+        vendorType: quotationFormData.vendorType?.trim() || null,
+        rfqId: quotationFormData.rfqId?.trim() || null,
         validTill: quotationFormData.validTill, groupName: quotationFormData.groupName,
         subGroupName: quotationFormData.subGroupName || null, projectId: quotationFormData.projectId || null,
         category: quotationFormData.category, deliveryTime: quotationFormData.deliveryTime?.trim() || null,
@@ -797,6 +854,8 @@ const QuotationsReceived = () => {
           </div>
         </td>
       );
+      case 'group': return <td>{q.groupName || '—'}</td>;
+      case 'project': return <td>{q.projectId || '—'}</td>;
       default: return <td>—</td>;
     }
   };
@@ -828,9 +887,9 @@ const QuotationsReceived = () => {
       <div className="procurement-quotation-received-action-bar">
         <div className="procurement-quotation-received-search-filters">
           <input type="text" placeholder="Search by Quotation No, RFQ ID, Vendor Name…" className="procurement-quotation-received-search" value={filters.search}
-            onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
+            onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(0); }} />
           <select className="procurement-quotation-received-filter" value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
+            onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value })); setCurrentPage(0); }}>
             <option value="all">All Status</option>
             <option value="New">New</option>
             <option value="Under Review">Under Review</option>
@@ -1137,8 +1196,8 @@ const QuotationsReceived = () => {
       {/* ── Upload / Edit Quotation Modal ── */}
       {showUploadQuotationModal && quotationFormData && (
         <div className="procurement-quotation-received-modal-overlay">
-          <div className="procurement-quotation-received-upload-modal" style={{ maxWidth: 1400 }}>
-            <div className="procurement-quotation-received-modal-header">
+          <div className="procurement-quotation-received-upload-modal" style={{ maxWidth: 1400, display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div className="procurement-quotation-received-modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h2>{isEditMode ? 'Edit Quotation' : 'Upload New Quotation'}</h2>
                 {isEditMode && quotationFormData.quoteNo && <p style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>Quotation: {quotationFormData.quoteNo}</p>}
@@ -1158,7 +1217,7 @@ const QuotationsReceived = () => {
               </div>
             </div>
 
-            <div className="procurement-quotation-received-upload-form">
+            <div className="procurement-quotation-received-upload-form" style={{ flex: 1, overflowY: 'auto' }}>
               {/* Project Assignment */}
               <div className="procurement-quotation-received-form-section" style={{ background: '#f8fafc', padding: 20, borderRadius: 8 }}>
                 <h3>📂 Project Assignment</h3>
@@ -1307,6 +1366,29 @@ const QuotationsReceived = () => {
                         {quotationFormData.vendorContact && quotationFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: 12, marginTop: 4, display: 'block' }}>Must be exactly 10 digits</small>}
                       </div>
                     </div>
+                    <div className="procurement-quotation-received-form-row">
+                      <div className="procurement-quotation-received-form-group">
+                        <label>Category *</label>
+                        <select value={quotationFormData.vendorCategory || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorCategory: e.target.value })}>
+                          <option value="">Select category</option>
+                          <option value="IT Equipment">IT Equipment</option>
+                          <option value="Office Furniture">Office Furniture</option>
+                          <option value="Manufacturing">Manufacturing</option>
+                          <option value="Office Supplies">Office Supplies</option>
+                          <option value="Services">Services</option>
+                        </select>
+                      </div>
+                      <div className="procurement-quotation-received-form-group">
+                        <label>Vendor Type *</label>
+                        <select value={quotationFormData.vendorType || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorType: e.target.value })}>
+                          <option value="">Select type</option>
+                          <option value="Manufacturer">Manufacturer</option>
+                          <option value="Distributor">Distributor</option>
+                          <option value="Service Provider">Service Provider</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: '12px', padding: '12px', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>💡 This vendor will be created when you save the quotation.</div>
                   </div>
                 )}
               </div>
@@ -1498,7 +1580,7 @@ const QuotationsReceived = () => {
               </div>
             </div>
 
-            <div className="procurement-quotation-received-modal-actions">
+            <div className="procurement-quotation-received-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
               <button className="procurement-quotation-received-btn-primary" onClick={handleSaveQuotation} disabled={quotationFormData.items.filter(i => i.included !== false).length === 0}>
                 {isEditMode ? 'Update Quotation' : 'Upload Quotation'}
               </button>
@@ -1624,15 +1706,15 @@ const QuotationsReceived = () => {
       {/* ── Create PO Modal ── */}
       {showCreatePOFromQuotationModal && poFormData && (
         <div className="procurement-quotation-received-modal-overlay">
-          <div className="procurement-quotation-received-upload-modal">
-            <div className="procurement-quotation-received-modal-header">
+          <div className="procurement-quotation-received-upload-modal" style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div className="procurement-quotation-received-modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h2>Create Purchase Order</h2>
                 <p style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>From Quotation: {poFormData.quoteNo}</p>
               </div>
               <button className="procurement-quotation-received-modal-close" onClick={() => setShowCreatePOFromQuotationModal(false)}>✕</button>
             </div>
-            <div className="procurement-quotation-received-upload-form">
+            <div className="procurement-quotation-received-upload-form" style={{ flex: 1, overflowY: 'auto' }}>
               <div className="procurement-quotation-received-form-section">
                 <h3>Purchase Order Details</h3>
                 <div className="procurement-quotation-received-form-row">
@@ -1676,7 +1758,7 @@ const QuotationsReceived = () => {
                 </div>
               </div>
             </div>
-            <div className="procurement-quotation-received-modal-actions">
+            <div className="procurement-quotation-received-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
               <button className="procurement-quotation-received-btn-primary" onClick={handleCreatePOFromQuotation} disabled={!poFormData.expectedDelivery || !poFormData.items.some(i => i.selectedQuantity > 0)}>Create Purchase Order</button>
               <button className="procurement-quotation-received-btn-secondary" onClick={() => setShowCreatePOFromQuotationModal(false)}>Cancel</button>
             </div>

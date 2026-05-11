@@ -34,12 +34,14 @@ const INDIAN_STATES = [
 const DEFAULT_COLUMNS = [
   { id: 'name',               label: 'Vendor Name',          sortable: true,  visible: true  },
   { id: 'contact',            label: 'Contact',              sortable: false, visible: true  },
-  { id: 'category',           label: 'Category',             sortable: true,  visible: true  },
+  { id: 'category',           label: 'Category',             sortable: true,  visible: false },
   { id: 'rating',             label: 'Rating',               sortable: true,  visible: true  },
   { id: 'totalOrders',        label: 'Total Orders',         sortable: true,  visible: true  },
   { id: 'totalPurchaseValue', label: 'Total Purchase Value', sortable: true,  visible: true  },
   { id: 'lastPurchaseDate',   label: 'Last Purchase',        sortable: true,  visible: true  },
   { id: 'status',             label: 'Status',               sortable: true,  visible: true  },
+  { id: 'group',              label: 'Group',                sortable: false, visible: false },
+  { id: 'project',            label: 'Project',              sortable: false, visible: false },
   { id: 'actions',            label: 'Actions',              sortable: false, visible: true  },
 ];
 
@@ -142,7 +144,7 @@ const VendorManagement = () => {
   const dragSrcIndex = useRef(null);
 
   // ── Sort state ──
-  const [sortConfig, setSortConfig] = useState({ key: 'lastPurchaseDate', direction: 'desc' });
+  const [sortConfig, setSortConfig] = useState({ key: 'createdAt', direction: 'desc' });
 
   const [filters, setFilters] = useState({
     search: '', category: 'all', vendorType: 'all',
@@ -173,14 +175,9 @@ const VendorManagement = () => {
   const [modalDropdownLoading, setModalDropdownLoading] = useState({ groups: false, subGroups: false, projects: false });
   const [availableUsers, setAvailableUsers] = useState([]);
 
-  // ─── Filter-bar group/subgroup data ────────────────────────────────────────
-  const [filterGroups, setFilterGroups] = useState([]);
-  const [filterSubGroups, setFilterSubGroups] = useState([]);
-
   // ─── Fetch on filter / sort / page change ──────────────────────────────────
   useEffect(() => {
-    // Load groups for the filter bar on mount, and fetch global stats once
-    filterApi.getAllGroups().then(setFilterGroups).catch(() => {});
+    // Fetch global stats once on mount
     fetchStats();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -330,13 +327,14 @@ const VendorManagement = () => {
 
   const handleCreateVendor = async () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
+    if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
+    if (!editFormData.category) { showError('Category is required'); return; }
+    if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
     // Email is optional — validate format only if provided
     if (editFormData.email?.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(editFormData.email)) { showError('Please enter a valid email address'); return; }
     }
-    if (!editFormData.category) { showError('Category is required'); return; }
-    if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
 
     setLoading(true);
     try {
@@ -354,11 +352,11 @@ const VendorManagement = () => {
       const sortKeyMap = {
         name: 'name', category: 'category', rating: 'rating',
         totalOrders: 'totalOrders', totalPurchaseValue: 'totalPurchaseValue',
-        lastPurchaseDate: 'lastPurchaseDate', status: 'status',
+        lastPurchaseDate: 'lastPurchaseDate', status: 'status', createdAt: 'createdAt',
       };
       const params = new URLSearchParams({
         page: currentPage, size: pageSize,
-        sortBy: sortKeyMap[sortConfig.key] || 'lastPurchaseDate',
+        sortBy: sortKeyMap[sortConfig.key] || 'createdAt',
         sortDirection: sortConfig.direction.toUpperCase()
       });
       // Only filter by group when user explicitly selected one via the filter bar
@@ -426,9 +424,10 @@ const VendorManagement = () => {
   };
 
   const handleUpdateVendor = async () => {
-    if (!editFormData.name || !editFormData.email) {
-      showError('Please fill in required fields (Name, Email)'); return;
-    }
+    if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
+    if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
+    if (!editFormData.category) { showError('Category is required'); return; }
+    if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/vendors/${editFormData.id}`, {
@@ -566,6 +565,10 @@ const VendorManagement = () => {
             </div>
           </td>
         );
+      case 'group':
+        return <td key={col.id}>{vendor.groupName || 'N/A'}</td>;
+      case 'project':
+        return <td key={col.id}>{vendor.projectId || 'N/A'}</td>;
       default:
         return <td key={col.id}>—</td>;
     }
@@ -643,23 +646,6 @@ const VendorManagement = () => {
             className="vendor-management-search" value={filters.search}
             onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }}
           />
-          <select className="vendor-management-filter" value={filters.groupName}
-            onChange={(e) => {
-              const g = e.target.value;
-              setFilters({ ...filters, groupName: g, subGroupName: '' });
-              setFilterSubGroups([]);
-              setCurrentPage(0);
-              if (g) filterApi.getSubGroups(g).then(setFilterSubGroups).catch(() => {});
-            }}>
-            <option value="">All Groups</option>
-            {filterGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-          </select>
-          <select className="vendor-management-filter" value={filters.subGroupName}
-            disabled={!filters.groupName}
-            onChange={(e) => { setFilters({ ...filters, subGroupName: e.target.value }); setCurrentPage(0); }}>
-            <option value="">All Sub Groups</option>
-            {filterSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
-          </select>
           <select className="vendor-management-filter" value={filters.status}
             onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
             <option value="all">All Status</option>
@@ -897,12 +883,12 @@ const VendorManagement = () => {
       {/* ─── Edit Modal (unchanged) ──────────────────────────────────────────── */}
       {showEditModal && editFormData && (
         <div className="vendor-management-modal-overlay">
-          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="vendor-management-modal-header">
+          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
               <h2>Edit Vendor</h2>
               <button className="vendor-management-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
             </div>
-            <div className="vendor-management-edit-form">
+            <div className="vendor-management-edit-form" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div className="vendor-form-section">
                 <h3>Basic Information</h3>
                 <div className="vendor-form-row">
@@ -911,10 +897,10 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Category</label>
+                  <div className="vendor-form-group"><label>Category *</label>
                     <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}>
                       <option value="">Select category</option>
                       <option value="IT Equipment">IT Equipment</option>
@@ -924,6 +910,16 @@ const VendorManagement = () => {
                       <option value="Services">Services</option>
                     </select>
                   </div>
+                  <div className="vendor-form-group"><label>Vendor Type *</label>
+                    <select value={editFormData.vendorType} onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
+                      <option value="">Select type</option>
+                      <option value="Manufacturer">Manufacturer</option>
+                      <option value="Distributor">Distributor</option>
+                      <option value="Service Provider">Service Provider</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Rating</label>
                     <select value={editFormData.rating} onChange={(e) => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}>
                       <option value="0">Not Rated</option>
@@ -934,15 +930,16 @@ const VendorManagement = () => {
                       <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
                     </select>
                   </div>
-                </div>
-                <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Status</label>
                     <select value={editFormData.status} onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}>
                       <option value="Active">Active</option>
                       <option value="Inactive">Inactive</option>
                     </select>
                   </div>
+                </div>
+                <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>
+                  <div className="vendor-form-group"><label>Website</label><input type="url" value={editFormData.website || ''} onChange={(e) => setEditFormData({ ...editFormData, website: e.target.value })} placeholder="https://www.example.com" /></div>
                 </div>
               </div>
               <div className="vendor-form-section">
@@ -964,7 +961,7 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>
               </div>
             </div>
-            <div className="vendor-management-modal-actions">
+            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
               <button className="vendor-management-btn-primary" onClick={handleUpdateVendor}>Save Changes</button>
               <button className="vendor-management-btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
             </div>
@@ -975,12 +972,12 @@ const VendorManagement = () => {
       {/* ─── Create Modal (unchanged) ────────────────────────────────────────── */}
       {showCreateModal && editFormData && (
         <div className="vendor-management-modal-overlay">
-          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="vendor-management-modal-header">
+          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
               <h2>Add New Vendor</h2>
               <button className="vendor-management-modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
             </div>
-            <div className="vendor-management-edit-form">
+            <div className="vendor-management-edit-form" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div className="vendor-form-section">
                 <h3>Project Assignment</h3>
                 <div className="vendor-form-row">
@@ -1012,7 +1009,7 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>
@@ -1082,7 +1079,7 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>
               </div>
             </div>
-            <div className="vendor-management-modal-actions">
+            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
               <button className="vendor-management-btn-primary" onClick={handleCreateVendor}>Create Vendor</button>
               <button className="vendor-management-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
             </div>
