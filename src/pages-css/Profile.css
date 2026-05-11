@@ -25,12 +25,94 @@
 .profile-user-page-card { display: flex; flex-direction: column; gap: 12px; }
 
 /* top */
-.profile-user-page-top { display:flex; gap:12px; align-items:center; }
-.profile-user-page-avatar-wrap { width:84px; height:84px; border-radius:12px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#f3f6f9; flex-shrink:0; }
-.profile-user-page-avatar-img { width:100%; height:100%; object-fit:cover; display:block; }
-.profile-user-page-avatar-initials { font-size:28px; color:#2563eb; font-weight:700; }
+.profile-user-page-top { display:flex; gap:16px; align-items:flex-start; }
 
-.profile-user-page-meta { display:flex; flex-direction:column; gap:4px; }
+/* ── Avatar upload section ──────────────────────────────────────────────── */
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.profile-avatar-circle {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  background: #eef2f9;
+  border: 3px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.profile-avatar-circle:hover {
+  border-color: #2563eb;
+}
+
+.profile-user-page-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.profile-user-page-avatar-initials { font-size: 28px; color: #2563eb; font-weight: 700; }
+
+/* Camera overlay shown on hover */
+.profile-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.50);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+  cursor: pointer;
+  border-radius: 50%;
+  letter-spacing: 0.3px;
+}
+.profile-avatar-circle:hover .profile-avatar-overlay { opacity: 1; }
+
+/* Buttons below avatar */
+.profile-avatar-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: center;
+  width: 100%;
+}
+
+.profile-avatar-btn {
+  font-size: 11px !important;
+  padding: 4px 10px !important;
+  border-radius: 6px !important;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.profile-avatar-remove {
+  color: #dc2626 !important;
+  border-color: #fca5a5 !important;
+  background: transparent !important;
+}
+.profile-avatar-remove:hover:not(:disabled) {
+  background: #fff1f1 !important;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+.profile-user-page-meta { display:flex; flex-direction:column; gap:4px; padding-top: 4px; }
 .profile-user-page-name { margin:0; font-size:20px; color:#0b4c9d; }
 .profile-user-page-role { color:#6b7280; font-size:13px; }
 .profile-user-page-email { color:#374151; font-size:13px; }
@@ -135,6 +217,11 @@
   .profile-user-page-meta { align-items:flex-start; }
 }
 
+@media (max-width: 480px) {
+  .profile-user-page-top { flex-direction: column; align-items: center; text-align: center; }
+  .profile-user-page-meta { align-items: center; }
+}
+
 /* Buttons */
 .btn {
   padding:8px 12px;
@@ -183,22 +270,11 @@ input:disabled {
 }
 
 @keyframes slideInRight {
-  from {
-    transform: translateX(400px);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  from { transform: translateX(400px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
 }
 
-.toast-content {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  flex: 1;
-}
+.toast-content { display: flex; align-items: flex-start; gap: 12px; flex: 1; }
 
 .toast-icon {
   width: 24px;
@@ -212,20 +288,9 @@ input:disabled {
   flex-shrink: 0;
 }
 
-.toast-text {
-  flex: 1;
-}
-
-.toast-title {
-  font-weight: 600;
-  font-size: 14px;
-  margin-bottom: 4px;
-}
-
-.toast-message {
-  font-size: 13px;
-  line-height: 1.4;
-}
+.toast-text { flex: 1; }
+.toast-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.toast-message { font-size: 13px; line-height: 1.4; }
 
 .toast-close {
   background: none;
@@ -242,85 +307,29 @@ input:disabled {
   transition: opacity 0.2s;
   flex-shrink: 0;
 }
-
-.toast-close:hover {
-  opacity: 1;
-}
+.toast-close:hover { opacity: 1; }
 
 /* Success Toast */
-.toast-success {
-  background-color: #d4edda;
-  border-left: 4px solid #28a745;
-}
-
-.toast-success .toast-icon {
-  background-color: #28a745;
-  color: white;
-}
-
-.toast-success .toast-title {
-  color: #155724;
-}
-
-.toast-success .toast-message {
-  color: #155724;
-}
-
-.toast-success .toast-close {
-  color: #155724;
-}
+.toast-success { background-color: #d4edda; border-left: 4px solid #28a745; }
+.toast-success .toast-icon { background-color: #28a745; color: white; }
+.toast-success .toast-title,
+.toast-success .toast-message,
+.toast-success .toast-close { color: #155724; }
 
 /* Error Toast */
-.toast-error {
-  background-color: #f8d7da;
-  border-left: 4px solid #dc3545;
-}
-
-.toast-error .toast-icon {
-  background-color: #dc3545;
-  color: white;
-}
-
-.toast-error .toast-title {
-  color: #721c24;
-}
-
-.toast-error .toast-message {
-  color: #721c24;
-}
-
-.toast-error .toast-close {
-  color: #721c24;
-}
+.toast-error { background-color: #f8d7da; border-left: 4px solid #dc3545; }
+.toast-error .toast-icon { background-color: #dc3545; color: white; }
+.toast-error .toast-title,
+.toast-error .toast-message,
+.toast-error .toast-close { color: #721c24; }
 
 /* Warning Toast */
-.toast-warning {
-  background-color: #fff3cd;
-  border-left: 4px solid #ffc107;
-}
+.toast-warning { background-color: #fff3cd; border-left: 4px solid #ffc107; }
+.toast-warning .toast-icon { background-color: #ffc107; color: #856404; }
+.toast-warning .toast-title,
+.toast-warning .toast-message,
+.toast-warning .toast-close { color: #856404; }
 
-.toast-warning .toast-icon {
-  background-color: #ffc107;
-  color: #856404;
-}
-
-.toast-warning .toast-title {
-  color: #856404;
-}
-
-.toast-warning .toast-message {
-  color: #856404;
-}
-
-.toast-warning .toast-close {
-  color: #856404;
-}
-
-/* Toast Responsive */
 @media (max-width: 768px) {
-  .toast-notification {
-    left: 20px;
-    right: 20px;
-    min-width: auto;
-  }
+  .toast-notification { left: 20px; right: 20px; min-width: auto; }
 }

@@ -1878,12 +1878,11 @@ useEffect(() => {
 }, [canView, searchTerm, selectedGroup, selectedStatus, groupName, subGroupName]);
 // eslint-disable-line react-hooks/exhaustive-deps
 
-// Effect 2 — pagination changes → immediate fetch (skip is handled by Effect 1 covering page 1)
+// Effect 2 — pagination changes → immediate fetch
 useEffect(() => {
   if (!canView) return;
-  fetchCustomers();
-}, [currentPage, rowsPerPage]);
-// eslint-disable-line react-hooks/exhaustive-deps
+  fetchCustomers(currentPage);
+}, [currentPage, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
 // Effect 3 — subgroups for form dropdown
 useEffect(() => {

@@ -121,18 +121,26 @@ function OrderBook() {
   });
 
   useEffect(() => {
-    fetchOrderBooks();
+    // When page/size/group changes, use the correct fetch based on active filters
+    if (searchTerm || statusFilter !== 'All' || fromDate || toDate) {
+      handleSearch();
+    } else {
+      fetchOrderBooks();
+    }
     fetchGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPage, rowsPerPage, groupName, subGroupName]);
 
   useEffect(() => {
+    // When filters change, always reset to page 1
     if (searchTerm || statusFilter !== 'All' || fromDate || toDate) {
+      setCurrentPage(1);
       const debounce = setTimeout(() => {
-        handleSearch();
+        handleSearch(1); // pass page=1 explicitly to avoid stale state
       }, 500);
       return () => clearTimeout(debounce);
     } else {
+      setCurrentPage(1);
       fetchOrderBooks();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -466,11 +474,26 @@ function OrderBook() {
   const isImageFile = (ext) => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
   const isPdfFile = (ext) => ext === 'pdf';
 
-  const handleSearch = async () => {
+  // Page change handler — updates page then triggers correct fetch via Effect 1
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages) return;
+    setCurrentPage(newPage);
+  };
+
+  // Smart refresh: respects active filters
+  const refreshOrderBooks = () => {
+    if (searchTerm || statusFilter !== 'All' || fromDate || toDate) {
+      handleSearch(currentPage);
+    } else {
+      fetchOrderBooks();
+    }
+  };
+
+  const handleSearch = async (pageOverride) => {
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        page: currentPage - 1,
+        page: (pageOverride !== undefined ? pageOverride : currentPage) - 1,
         size: rowsPerPage
       });
 
@@ -722,7 +745,7 @@ function OrderBook() {
         showSuccess('Order book deleted successfully');
         setShowDeleteConfirm(false);
         setDeleteOrderId(null);
-        fetchOrderBooks();
+        refreshOrderBooks();
       }
     } catch (err) {
       showError(err.message || 'Error deleting order book');
@@ -804,7 +827,7 @@ function OrderBook() {
         showSuccess(isEditMode ? 'Order book updated successfully' : 'Order book created successfully');
         setShowCreateModal(false);
         resetForm();
-        fetchOrderBooks();
+        refreshOrderBooks();
       }
     } catch (err) {
       showError(err.message || 'Error saving order book');
@@ -853,7 +876,7 @@ function OrderBook() {
         showSuccess('PO uploaded successfully');
         setShowPOUploadModal(false);
         setPoUploadData({ file: null, poNumber: '', poDate: new Date().toISOString().split('T')[0] });
-        fetchOrderBooks();
+        refreshOrderBooks();
       }
     } catch (err) {
       showError(err.message || 'Error uploading PO');
@@ -1326,11 +1349,9 @@ function OrderBook() {
         {/* Pagination */}
         <div className="orderbook-pagination">
           <div className="orderbook-pagination-info">
-            {totalItems > 0 ? (
-              <>Showing {((currentPage - 1) * rowsPerPage) + 1} to {Math.min(currentPage * rowsPerPage, totalItems)} of {totalItems} entries</>
-            ) : (
-              <>No entries to display</>
-            )}
+            {totalItems > 0
+              ? `Showing ${((currentPage - 1) * rowsPerPage) + 1}–${Math.min(currentPage * rowsPerPage, totalItems)} of ${totalItems} entries`
+              : 'No entries to display'}
             <select
               value={rowsPerPage}
               onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
@@ -1343,9 +1364,36 @@ function OrderBook() {
             </select>
           </div>
           <div className="orderbook-pagination-controls">
-            <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="orderbook-pagination-btn">Previous</button>
+            <div className="orderbook-pagination-buttons">
+              {/* First */}
+              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(1)} disabled={currentPage === 1} title="First page">«</button>
+              {/* Previous */}
+              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
+              {/* Ellipsis left */}
+              {currentPage > 3 && totalPages > 5 && <span className="orderbook-pagination-ellipsis">…</span>}
+              {/* Page number pills */}
+              {(() => {
+                const delta = 2;
+                const left  = Math.max(1, currentPage - delta);
+                const right = Math.min(totalPages, currentPage + delta);
+                const pages = [];
+                for (let i = left; i <= right; i++) pages.push(i);
+                return pages.map(p => (
+                  <button
+                    key={p}
+                    className={`orderbook-pagination-btn${p === currentPage ? ' orderbook-pagination-btn-active' : ''}`}
+                    onClick={() => handlePageChange(p)}
+                  >{p}</button>
+                ));
+              })()}
+              {/* Ellipsis right */}
+              {currentPage < totalPages - 2 && totalPages > 5 && <span className="orderbook-pagination-ellipsis">…</span>}
+              {/* Next */}
+              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
+              {/* Last */}
+              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages || totalPages === 0} title="Last page">»</button>
+            </div>
             <span className="orderbook-pagination-current">Page {currentPage} of {totalPages || 1}</span>
-            <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="orderbook-pagination-btn">Next</button>
           </div>
         </div>
       </div>
