@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
   DollarSign, IndianRupee, CheckCircle, AlertCircle, CreditCard,
-  Trash2, Download
+  Trash2, Download, Columns
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -47,6 +47,43 @@ const BillsReceived = () => {
     pageSize: 10
   });
 
+  // ── Bills column visibility state ──────────────────────────────────────────
+  const DEFAULT_BILLS_COLUMNS = [
+    { id: 'select',        label: '',              visible: true,  fixed: true },
+    { id: 'billNo',        label: 'Bill ID',       visible: true  },
+    { id: 'vendorName',    label: 'Vendor Name',   visible: true  },
+    { id: 'linkedPO',      label: 'Linked PO',     visible: true  },
+    { id: 'billDate',      label: 'Bill Date',     visible: true  },
+    { id: 'dueDate',       label: 'Due Date',      visible: true  },
+    { id: 'amount',        label: 'Amount',        visible: true  },
+    { id: 'paidAmount',    label: 'Paid Amount',   visible: true  },
+    { id: 'balance',       label: 'Balance',       visible: true  },
+    { id: 'paymentStatus', label: 'Payment Status',visible: true  },
+    { id: 'uploadedBy',    label: 'Uploaded By',   visible: true  },
+    { id: 'group',         label: 'Group',         visible: false },
+    { id: 'category',      label: 'Category',      visible: false },
+    { id: 'project',       label: 'Project',       visible: false },
+    { id: 'actions',       label: 'Actions',       visible: true,  fixed: true },
+  ];
+  // Always merge with DEFAULT so new columns (group/category/project) survive old localStorage cache
+  const mergeBillColumns = (saved) => {
+    const savedIds = new Set(saved.map(c => c.id));
+    const merged = [...saved];
+    DEFAULT_BILLS_COLUMNS.forEach(col => { if (!savedIds.has(col.id)) merged.push(col); });
+    return merged;
+  };
+  const [billColumns, setBillColumns] = useState(() => {
+    try {
+      const s = localStorage.getItem('billsColumns');
+      if (s) return mergeBillColumns(JSON.parse(s));
+      return DEFAULT_BILLS_COLUMNS;
+    } catch { return DEFAULT_BILLS_COLUMNS; }
+  });
+  const [showBillColumnManager, setShowBillColumnManager] = useState(false);
+  const toggleBillColumn = (id) => setBillColumns(cols => cols.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  const resetBillColumns = () => { setBillColumns(DEFAULT_BILLS_COLUMNS); localStorage.removeItem('billsColumns'); };
+  useEffect(() => { localStorage.setItem('billsColumns', JSON.stringify(billColumns)); }, [billColumns]);
+
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedBill, setSelectedBill] = useState(null);
   const [showCreateEditModal, setShowCreateEditModal] = useState(false);
@@ -90,7 +127,39 @@ const BillsReceived = () => {
 
   // Fetch bills and KPIs
   useEffect(() => {
-    fetchBills();
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({
+          page: pagination.currentPage.toString(),
+          size: pagination.pageSize.toString(),
+          sortBy: 'billDate',
+          sortDirection: 'DESC'
+        });
+        if (projectId)    params.append('projectId',  projectId);
+        if (groupName)    params.append('groupId',    groupName);
+        if (subGroupName) params.append('subGroupId', subGroupName);
+        if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
+        if (filters.search) params.append('search', filters.search);
+        const response = await fetch(`${API_BASE_URL}/bills?${params}`, {
+          headers: getAuthHeaders(), credentials: 'include', signal: controller.signal
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setBills(data.bills || []);
+          // NOTE: do NOT sync currentPage from API — managed locally
+          setPagination(prev => ({ ...prev, totalPages: data.totalPages || 0, totalItems: data.totalItems || 0 }));
+        } else { showError('Failed to fetch bills'); }
+      } catch (error) {
+        if (error.name === 'AbortError') return; // cancelled — ignore
+        console.error('Error fetching bills:', error);
+        showError('Error fetching bills');
+      } finally { setLoading(false); }
+    };
+    load();
+    return () => controller.abort(); // cancel previous request when deps change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize]);
 
   useEffect(() => {
@@ -128,9 +197,9 @@ const BillsReceived = () => {
       if (response.ok) {
         const data = await response.json();
         setBills(data.bills || []);
+        // NOTE: do NOT sync currentPage from API — managed locally
         setPagination(prev => ({
           ...prev,
-          currentPage: data.currentPage || 0,
           totalPages: data.totalPages || 0,
           totalItems: data.totalItems || 0
         }));
@@ -1041,7 +1110,10 @@ const BillsReceived = () => {
           <select
             className="procurement-bills-received-filter"
             value={filters.paymentStatus}
-            onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
+            onChange={(e) => {
+              setFilters(prev => ({ ...prev, paymentStatus: e.target.value }));
+              setPagination(prev => ({ ...prev, currentPage: 0 }));
+            }}
           >
             <option value="all">All Payment Status</option>
             <option value="Pending">Pending</option>
@@ -1051,6 +1123,30 @@ const BillsReceived = () => {
         </div>
 
         <div className="procurement-bills-received-actions">
+          {/* Column Manager */}
+          <div style={{ position: 'relative' }}>
+            <button className="procurement-bills-received-btn-secondary" onClick={() => setShowBillColumnManager(v => !v)} title="Manage Columns" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Columns size={16} /> Columns
+            </button>
+            {showBillColumnManager && (
+              <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 1000, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 28px rgba(0,0,0,0.14)', minWidth: 220, padding: '12px 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 14px 10px', borderBottom: '1px solid #f1f5f9', marginBottom: 6 }}>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: '#1e293b' }}>Column Management</span>
+                  <button onClick={() => setShowBillColumnManager(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 18 }}>×</button>
+                </div>
+                {billColumns.filter(c => c.id !== 'select').map(col => (
+                  <label key={col.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 16px', cursor: col.fixed ? 'default' : 'pointer', fontSize: 13, color: '#334155' }}>
+                    <input type="checkbox" checked={col.visible} onChange={() => toggleBillColumn(col.id)} disabled={col.fixed} style={{ width: 15, height: 15 }} />
+                    <span>{col.label}</span>
+                    {col.fixed && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 4, padding: '1px 5px' }}>fixed</span>}
+                  </label>
+                ))}
+                <div style={{ borderTop: '1px solid #f1f5f9', marginTop: 6, padding: '8px 16px 0' }}>
+                  <button onClick={resetBillColumns} style={{ fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}>Reset to default</button>
+                </div>
+              </div>
+            )}
+          </div>
           <button className={`procurement-bills-received-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleCreateBill()} disabled={!canCreate} title={!canCreate ? "No create permission" : "Add New Bill"}>
             <Plus size={18} style={{ marginRight: '8px' }} />
             Add New Bill
@@ -1123,30 +1219,19 @@ const BillsReceived = () => {
           <table className="procurement-bills-received-table">
             <thead>
               <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAll}
-                    checked={selectedBills.length === bills.length && bills.length > 0}
-                  />
-                </th>
-                <th>Bill ID</th>
-                <th>Vendor Name</th>
-                <th>Linked PO</th>
-                <th>Bill Date</th>
-                <th>Due Date</th>
-                <th>Amount</th>
-                <th>Paid Amount</th>
-                <th>Balance</th>
-                <th>Payment Status</th>
-                <th>Uploaded By</th>
-                <th>Actions</th>
+                {billColumns.filter(c => c.visible).map(col => (
+                  <th key={col.id}>
+                    {col.id === 'select' ? (
+                      <input type="checkbox" onChange={handleSelectAll} checked={selectedBills.length === bills.length && bills.length > 0} />
+                    ) : col.label}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {bills.length === 0 ? (
                 <tr>
-                  <td colSpan="12" style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <td colSpan={billColumns.filter(c => c.visible).length} style={{ textAlign: 'center', padding: '60px 20px' }}>
                     <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
                     <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>
                       No bills found. Click "Add New Bill" to create one.
@@ -1156,96 +1241,46 @@ const BillsReceived = () => {
               ) : (
                 bills.map(bill => (
                   <tr key={bill.id} className="procurement-bills-received-table-row">
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedBills.includes(bill.id)}
-                        onChange={() => handleSelectBill(bill.id)}
-                      />
-                    </td>
-                    <td className="procurement-bills-received-table-id">{bill.billNo}</td>
-                    <td className="procurement-bills-received-table-vendor">{bill.vendorName}</td>
-                    <td>
-                      {bill.poNumber ? (
-                        <span className="procurement-bills-received-link">{bill.poNumber}</span>
-                      ) : (
-                        <span className="procurement-bills-received-no-link">—</span>
-                      )}
-                    </td>
-                    <td>{formatDate(bill.billDate)}</td>
-                    <td>{formatDate(bill.dueDate)}</td>
-                    <td className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>
-                    <td className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>
-                    <td className="procurement-bills-received-table-balance">
-                      {formatCurrency(bill.balanceAmount)}
-                    </td>
-                    <td>
-                      <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
-                        {bill.status}
-                      </span>
-                    </td>
-                    <td>{bill.uploadedByName}</td>
-                    <td>
-                      <div className="procurement-bills-received-actions-cell">
-                        <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleViewBill(bill.id)}
-                          title="View Details"
-                        >
-                          <Eye size={16} />
-                        </button>
-                        {bill.status !== 'Paid' && (
-                          <>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleEditBill(bill)}
-                              title="Edit"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleAddPayment(bill)}
-                              title="Add Payment"
-                            >
-                              <CreditCard size={16} />
-                            </button>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleMarkPaid(bill.id)}
-                              title="Mark Paid"
-                            >
-                              <Check size={16} />
-                            </button>
-                          </>
-                        )}
-                        {bill.billFilePath && (
-                          <>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleViewFile(bill.id)}
-                              title="View File"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              className="procurement-bills-received-action-btn"
-                              onClick={() => handleDownloadFile(bill.id, bill.billFileName)}
-                              title="Download"
-                            >
-                              <Download size={16} />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          className="procurement-bills-received-action-btn"
-                          onClick={() => handleDeleteBill(bill.id)}
-                          title="Delete"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+                    {billColumns.filter(c => c.visible).map(col => {
+                      switch (col.id) {
+                        case 'select': return <td key={col.id}><input type="checkbox" checked={selectedBills.includes(bill.id)} onChange={() => handleSelectBill(bill.id)} /></td>;
+                        case 'billNo': return <td key={col.id} className="procurement-bills-received-table-id">{bill.billNo}</td>;
+                        case 'vendorName': return <td key={col.id} className="procurement-bills-received-table-vendor">{bill.vendorName}</td>;
+                        case 'linkedPO': return <td key={col.id}>{bill.poNumber ? <span className="procurement-bills-received-link">{bill.poNumber}</span> : <span className="procurement-bills-received-no-link">—</span>}</td>;
+                        case 'billDate': return <td key={col.id}>{formatDate(bill.billDate)}</td>;
+                        case 'dueDate': return <td key={col.id}>{formatDate(bill.dueDate)}</td>;
+                        case 'amount': return <td key={col.id} className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>;
+                        case 'paidAmount': return <td key={col.id} className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>;
+                        case 'balance': return <td key={col.id} className="procurement-bills-received-table-balance">{formatCurrency(bill.balanceAmount)}</td>;
+                        case 'paymentStatus': return <td key={col.id}><span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>{bill.status}</span></td>;
+                        case 'uploadedBy': return <td key={col.id}>{bill.uploadedByName}</td>;
+                        case 'group': return <td key={col.id}>{bill.groupName || '—'}</td>;
+                        case 'category': return <td key={col.id}>{bill.category || '—'}</td>;
+                        case 'project': return <td key={col.id}>{bill.projectId || '—'}</td>;
+                        case 'actions': return (
+                          <td key={col.id}>
+                            <div className="procurement-bills-received-actions-cell">
+                              <button className="procurement-bills-received-action-btn" onClick={() => handleViewBill(bill.id)} title="View Details"><Eye size={16} /></button>
+                              {bill.status !== 'Paid' && (
+                                <>
+                                  <button className="procurement-bills-received-action-btn" onClick={() => handleEditBill(bill)} title="Edit"><Edit2 size={16} /></button>
+                                  <button className="procurement-bills-received-action-btn" onClick={() => handleAddPayment(bill)} title="Add Payment"><CreditCard size={16} /></button>
+                                  <button className="procurement-bills-received-action-btn" onClick={() => handleMarkPaid(bill.id)} title="Mark Paid"><Check size={16} /></button>
+                                </>
+                              )}
+                              {bill.billFilePath && (
+                                <>
+                                  <button className="procurement-bills-received-action-btn" onClick={() => handleViewFile(bill.id)} title="View File"><Eye size={16} /></button>
+                                  <button className="procurement-bills-received-action-btn" onClick={() => handleDownloadFile(bill.id, bill.billFileName)} title="Download"><Download size={16} /></button>
+                                </>
+                              )}
+                              <button className="procurement-bills-received-action-btn" onClick={() => handleDeleteBill(bill.id)} title="Delete"><Trash2 size={16} /></button>
+                            </div>
+                          </td>
+                        );
+                        default: return <td key={col.id}>—</td>;
+                      }
+                    })}
                   </tr>
                 ))
               )}

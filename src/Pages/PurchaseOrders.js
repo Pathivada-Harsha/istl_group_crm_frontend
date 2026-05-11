@@ -27,6 +27,9 @@ const DEFAULT_COLUMNS = [
   { id: 'deliveryProgress', label: 'Delivery Progress',  sortable: false, visible: true },
   { id: 'paymentStatus',    label: 'Payment Status',     sortable: true,  visible: true },
   { id: 'status',           label: 'Status',             sortable: true,  visible: true },
+  { id: 'group',            label: 'Group',              sortable: false, visible: false },
+  { id: 'category',         label: 'Category',           sortable: false, visible: false },
+  { id: 'project',          label: 'Project',            sortable: false, visible: false },
   { id: 'actions',          label: 'Actions',            sortable: false, visible: true },
 ];
 
@@ -852,6 +855,8 @@ const PurchaseOrders = () => {
     if (showNewVendorForm) {
       if (!createPOFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
       if (!createPOFormData.vendorContact || createPOFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
+      if (!createPOFormData.vendorCategory) { showError('Vendor category is required'); return; }
+      if (!createPOFormData.vendorType) { showError('Vendor type is required'); return; }
     }
     const selectedItems = createPOFormData.items.filter(i => i.selected);
     if (selectedItems.length === 0) { showError('Please select at least one item'); return; }
@@ -870,6 +875,8 @@ const PurchaseOrders = () => {
         vendorId: createPOFormData.vendorId || null,
         vendorName: showNewVendorForm ? createPOFormData.vendorName : null,
         vendorContact: createPOFormData.vendorContact || null,
+        vendorCategory: showNewVendorForm ? createPOFormData.vendorCategory : null,
+        vendorType: showNewVendorForm ? createPOFormData.vendorType : null,
         rfqId: createPOFormData.quotation?.rfqId || null,
         groupName: modalGroupName, subGroupName: modalSubGroupName || null, projectId: modalProjectId || null,
         orderDate: createPOFormData.orderDate, expectedDelivery: createPOFormData.expectedDelivery,
@@ -1006,6 +1013,12 @@ const PurchaseOrders = () => {
             </div>
           </td>
         );
+      case 'group':
+        return <td key={col.id}>{po.groupName || '—'}</td>;
+      case 'category':
+        return <td key={col.id}>{po.vendorCategory || po.category || '—'}</td>;
+      case 'project':
+        return <td key={col.id}>{po.projectId || '—'}</td>;
       default:
         return <td key={col.id}>—</td>;
     }
@@ -1442,13 +1455,13 @@ const PurchaseOrders = () => {
       {/* ─── Create / Edit PO Modal (unchanged logic) ─────────────────────────── */}
       {showCreatePOModal && (
         <div className="purchase-orders-modal-overlay">
-          <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px', maxHeight: '90vh', overflow: 'auto' }}>
-            <div className="purchase-orders-modal-header">
+          <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="purchase-orders-modal-header" style={{ flexShrink: 0 }}>
               <h2>{isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'}</h2>
               <button className="purchase-orders-modal-close" onClick={handleCloseCreatePOModal}><X size={24} /></button>
             </div>
 
-            <div className="purchase-orders-modal-content">
+            <div className="purchase-orders-modal-content" style={{ flex: 1, overflowY: 'auto' }}>
               {/* Step 1: Project Selection */}
               <div className="po-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '2px solid #e2e8f0' }}>
                 <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📂</span> Step 1: Select Project</h3>
@@ -1745,6 +1758,26 @@ const PurchaseOrders = () => {
                               <input type="tel" value={createPOFormData.vendorContact || ''} onChange={(e) => handleNewVendorContactChange(e.target.value)} placeholder="Enter 10-digit mobile" maxLength={10} style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
                               {createPOFormData.vendorContact && createPOFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>⚠️ Must be 10 digits ({createPOFormData.vendorContact.length}/10)</small>}
                             </div>
+                            <div className="po-form-group">
+                              <label>Category *</label>
+                              <select value={createPOFormData.vendorCategory || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorCategory: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                                <option value="">Select category</option>
+                                <option value="IT Equipment">IT Equipment</option>
+                                <option value="Office Furniture">Office Furniture</option>
+                                <option value="Manufacturing">Manufacturing</option>
+                                <option value="Office Supplies">Office Supplies</option>
+                                <option value="Services">Services</option>
+                              </select>
+                            </div>
+                            <div className="po-form-group">
+                              <label>Vendor Type *</label>
+                              <select value={createPOFormData.vendorType || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorType: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                                <option value="">Select type</option>
+                                <option value="Manufacturer">Manufacturer</option>
+                                <option value="Distributor">Distributor</option>
+                                <option value="Service Provider">Service Provider</option>
+                              </select>
+                            </div>
                           </div>
                           <div style={{ marginTop: '12px', padding: '12px', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>💡 This vendor will be created immediately when you submit the PO.</div>
                         </div>
@@ -1937,7 +1970,7 @@ const PurchaseOrders = () => {
               )}
             </div>
 
-            <div className="purchase-orders-modal-actions" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px' }}>
+            <div className="purchase-orders-modal-actions" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px', flexShrink: 0, padding: '16px 24px' }}>
               <button
                 className="purchase-orders-btn-primary" onClick={handleCreatePO}
                 disabled={!modalGroupName || createPOFormData.items.filter(i => i.selected).length === 0}

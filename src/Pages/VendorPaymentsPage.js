@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Eye, Edit2, Trash2, Download, DollarSign, Settings, GripVertical,
+  Eye, Edit2, Trash2, Download, DollarSign, IndianRupee, Settings, GripVertical,
   ChevronUp, ChevronDown, ChevronsUpDown, Link2, RefreshCw
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
@@ -36,15 +36,18 @@ const useConfirmationModal = () => {
 
 // ── columns ───────────────────────────────────────────────────────────────────
 const ALL_COLUMNS = [
-  { id:'advanceNo',   label:'Payment No',    visible:true },
-  { id:'advanceDate', label:'Payment Date',  visible:true },
-  { id:'vendor',      label:'Vendor',        visible:true },
-  { id:'paymentType', label:'Type',          visible:true },
-  { id:'amount',      label:'Amount',        visible:true },
-  { id:'applied',     label:'Applied',       visible:true },
-  { id:'unapplied',   label:'Unapplied',     visible:true },
-  { id:'paymentMode', label:'Payment Mode',  visible:true },
-  { id:'reference',   label:'Reference',     visible:true },
+  { id:'advanceNo',   label:'Payment No',    visible:true  },
+  { id:'advanceDate', label:'Payment Date',  visible:true  },
+  { id:'vendor',      label:'Vendor',        visible:true  },
+  { id:'paymentType', label:'Type',          visible:true  },
+  { id:'amount',      label:'Amount',        visible:true  },
+  { id:'applied',     label:'Applied',       visible:true  },
+  { id:'unapplied',   label:'Unapplied',     visible:true  },
+  { id:'paymentMode', label:'Payment Mode',  visible:true  },
+  { id:'reference',   label:'Reference',     visible:true  },
+  { id:'group',       label:'Group',         visible:false },
+  { id:'category',    label:'Category',      visible:false },
+  { id:'project',     label:'Project',       visible:false },
   { id:'actions',     label:'Actions',       visible:true, fixed:true }
 ];
 const SORTABLE = new Set(['advanceNo','advanceDate','vendor','paymentType','amount','applied','unapplied','paymentMode','reference']);
@@ -65,9 +68,20 @@ export default function VendorPaymentsPage() {
   const { confirmModal, showConfirmation } = useConfirmationModal();
 
   // columns
+  const VP_COL_VERSION = 'v2';
   const [columns, setColumns] = useState(() => {
-    const s = localStorage.getItem('vendorPaymentsColumns');
-    return s ? JSON.parse(s) : ALL_COLUMNS;
+    try {
+      const s = localStorage.getItem('vendorPaymentsColumns');
+      const v = localStorage.getItem('vendorPaymentsColumnsVersion');
+      if (s && v === VP_COL_VERSION) {
+        const parsed = JSON.parse(s);
+        const savedIds = new Set(parsed.map(c => c.id));
+        const merged = [...parsed];
+        ALL_COLUMNS.forEach(col => { if (!savedIds.has(col.id)) merged.push(col); });
+        return merged;
+      }
+      return ALL_COLUMNS;
+    } catch { return ALL_COLUMNS; }
   });
   const [showColumnManager, setShowColumnManager] = useState(false);
 
@@ -140,7 +154,10 @@ export default function VendorPaymentsPage() {
   const [modalProjectId, setModalProjectId]   = useState('');
   const [mdlLoading, setMdlLoading]           = useState({ groups:false, subGroups:false, projects:false });
 
-  useEffect(()=>{ localStorage.setItem('vendorPaymentsColumns', JSON.stringify(columns)); },[columns]);
+  useEffect(()=>{ 
+    localStorage.setItem('vendorPaymentsColumns', JSON.stringify(columns)); 
+    localStorage.setItem('vendorPaymentsColumnsVersion', VP_COL_VERSION);
+  },[columns]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{ fetchAdvances(); },[groupName,subGroupName,projectId,currentPage,pageSize,filters.paymentType,filters.search]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -534,7 +551,7 @@ export default function VendorPaymentsPage() {
     items.splice(result.destination.index,0,r);
     setColumns(items);
   };
-  const resetColumns=()=>{setColumns(ALL_COLUMNS);localStorage.removeItem('vendorPaymentsColumns');};
+  const resetColumns=()=>{setColumns(ALL_COLUMNS);localStorage.removeItem('vendorPaymentsColumns');localStorage.removeItem('vendorPaymentsColumnsVersion');};
 
   // ── formatters ────────────────────────────────────────────────────────────
   const fmt  =(n)=>{const v=parseFloat(n)||0;return `₹${v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`};
@@ -555,13 +572,16 @@ export default function VendorPaymentsPage() {
       case 'unapplied':   return <td className="text-warning">{fmt(adv.unappliedAmount)}</td>;
       case 'paymentMode': return <td>{adv.paymentMode||'—'}</td>;
       case 'reference':   return <td>{adv.transactionReference||'—'}</td>;
+      case 'group':       return <td>{adv.groupName||'—'}</td>;
+      case 'category':    return <td>{adv.category||'—'}</td>;
+      case 'project':     return <td>{adv.projectId||'—'}</td>;
       case 'actions':     return (
         <td>
           <div className="receipt-action-buttons">
             <button className="receipt-action-btn btn-view"   onClick={()=>handleViewAdvance(adv)} title="View"><Eye size={16}/></button>
             <button className="receipt-action-btn btn-edit"   onClick={()=>handleEditClick(adv)}   title="Edit"><Edit2 size={16}/></button>
             {adv.paymentType==='ADVANCE'&&parseFloat(adv.unappliedAmount)>0&&(
-              <button className="receipt-action-btn btn-adjust" onClick={()=>handleAdjustAdvance(adv)} title="Allocate to Bill"><DollarSign size={16}/></button>
+              <button className="receipt-action-btn btn-adjust" onClick={()=>handleAdjustAdvance(adv)} title="Allocate to Bill"><IndianRupee size={16}/></button>
             )}
             <button className="receipt-action-btn btn-delete" onClick={()=>handleDelete(adv)} title="Delete"><Trash2 size={16}/></button>
           </div>
@@ -698,9 +718,22 @@ export default function VendorPaymentsPage() {
             </select>
           </div>
           <div className="receipts-page-pagination-controls">
+            <button onClick={()=>setCurrentPage(0)} disabled={currentPage===0} className="receipts-page-pagination-btn">«</button>
             <button onClick={()=>setCurrentPage(p=>Math.max(p-1,0))} disabled={currentPage===0} className="receipts-page-pagination-btn">Previous</button>
-            <span className="receipts-page-pagination-current">Page {currentPage+1} of {totalPages}</span>
+            {[...Array(Math.min(5,totalPages))].map((_,i)=>{
+              const pn = currentPage<3 ? i : currentPage+i-2;
+              if(pn>=0&&pn<totalPages){
+                return (
+                  <button key={pn} onClick={()=>setCurrentPage(pn)}
+                    className={`receipts-page-pagination-btn${pn===currentPage?' active':''}`}
+                    style={pn===currentPage?{background:'#7c3aed',color:'#fff',borderColor:'#7c3aed',fontWeight:700}:{}}
+                  >{pn+1}</button>
+                );
+              }
+              return null;
+            })}
             <button onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages-1))} disabled={currentPage>=totalPages-1} className="receipts-page-pagination-btn">Next</button>
+            <button onClick={()=>setCurrentPage(totalPages-1)} disabled={currentPage>=totalPages-1} className="receipts-page-pagination-btn">»</button>
           </div>
         </div>
       </div>
