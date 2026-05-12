@@ -161,7 +161,7 @@ export default function VendorPaymentsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{ fetchAdvances(); },[groupName,subGroupName,projectId,currentPage,pageSize,filters.paymentType,filters.search]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId]);
+  useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search]);
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -232,6 +232,9 @@ export default function VendorPaymentsPage() {
       if(groupName)   p.append('groupId',   groupName);
       if(subGroupName)p.append('subGroupId',subGroupName);
       if(projectId)   p.append('projectId', projectId);
+      // Active filters — so KPIs reflect exactly what's visible in the table
+      if(filters.paymentType && filters.paymentType!=='all') p.append('paymentType', filters.paymentType);
+      if(filters.search && filters.search.trim()) p.append('searchTerm', filters.search.trim());
       const res=await fetch(`${API_BASE_URL}/vendor-advances/summary?${p}`,{credentials:'include',headers:getAuthHeaders()});
       if(res.ok) setStats(await res.json());
     } catch {}

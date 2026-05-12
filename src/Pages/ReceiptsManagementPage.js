@@ -187,7 +187,7 @@ const ReceiptsManagementPage = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchReceipts(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
+  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod]);
 
   // ---------- Sorting ----------
   const sortedReceipts = React.useMemo(() => {
@@ -668,7 +668,10 @@ const ReceiptsManagementPage = () => {
       if (groupName) params.append("groupId", groupName);
       if (subGroupName) params.append("subGroupId", subGroupName);
       if (projectId) params.append("projectId", projectId);
-      // KPI cards always match the table — no createdBy restriction.
+      // Active filters — so KPIs reflect exactly what's visible in the table
+      if (filters.search && filters.search.trim()) params.append("searchTerm", filters.search.trim());
+      if (filters.receiptType && filters.receiptType !== 'all') params.append("receiptType", filters.receiptType);
+      if (filters.paymentMethod && filters.paymentMethod !== 'all') params.append("paymentMethod", filters.paymentMethod);
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
       if (response.ok) setStats(await response.json());
       else setStats({ totalReceipts: 0, totalAmount: 0, appliedAmount: 0, unappliedAmount: 0, advanceReceipts: 0, invoiceReceipts: 0 });
@@ -929,6 +932,14 @@ const ReceiptsManagementPage = () => {
     const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
+  const formatIndianShort = (amount) => {
+    if (!amount && amount !== 0) return '₹0';
+    const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
+    if (num >= 10000000) return `₹${(num / 10000000).toFixed(1)} CR`;
+    if (num >= 100000)   return `₹${(num / 100000).toFixed(1)} L`;
+    if (num >= 1000)     return `₹${(num / 1000).toFixed(1)} K`;
+    return `₹${num.toFixed(0)}`;
+  };
   const formatDate = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
   const formatDateTime = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
   const getReceiptTypeBadgeClass = (type) => ({ 'Advance': 'receipt-type-advance', 'Invoice': 'receipt-type-invoice', 'Other': 'receipt-type-other' }[type] || '');
@@ -1038,7 +1049,7 @@ const ReceiptsManagementPage = () => {
 
       <div className="receipts-page-action-bar">
         <div className="receipts-page-search-filters">
-          <input type="text" className="receipts-page-search" placeholder="Search receipts by number..." value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
+          <input type="text" className="receipts-page-search" placeholder="Search by Receipt No, Customer Name..." value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
           <select className="receipts-page-filter" value={filters.receiptType} onChange={(e) => { setFilters({ ...filters, receiptType: e.target.value }); setCurrentPage(0); }}>
             <option value="all">All Types</option>
             <option value="ADVANCE">Advance</option>
@@ -1114,9 +1125,9 @@ const ReceiptsManagementPage = () => {
       {stats && (
         <div className="receipts-page-stats">
           <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL RECEIPTS</div><div className="receipts-page-stat-value">{stats.totalReceipts || 0}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL AMOUNT</div><div className="receipts-page-stat-value">{formatCurrency(stats.totalAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">APPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-success">{formatCurrency(stats.appliedAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">UNAPPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-warning">{formatCurrency(stats.unappliedAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL AMOUNT</div><div className="receipts-page-stat-value" title={formatCurrency(stats.totalAmount)}>{formatIndianShort(stats.totalAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">APPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-success" title={formatCurrency(stats.appliedAmount)}>{formatIndianShort(stats.appliedAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">UNAPPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-warning" title={formatCurrency(stats.unappliedAmount)}>{formatIndianShort(stats.unappliedAmount)}</div></div>
         </div>
       )}
 
