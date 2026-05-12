@@ -1013,13 +1013,13 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
               <div className="ld-section-hdr">
                 <h4 className="ld-card-title" style={{ margin: 0 }}>{proposals.length} Proposal{proposals.length !== 1 ? 's' : ''}</h4>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  {permissions.DOWNLOAD && (
+                  {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                     <label className="ld-pact-btn ld-pact-upload" title="Upload an offline proposal PDF given by client" style={{cursor:'pointer',padding:'7px 14px',fontSize:13}} onClick={() => { setShowOfflinePanel(v => !v); setShowProposalForm(false); }}>
                       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                       Upload Offline PDF
                     </label>
                   )}
-                  {permissions.CREATE && (
+                  {permissions.PROPOSAL_CREATE && (
                     <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
                       + New Proposal
                     </button>
@@ -1079,11 +1079,13 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                   <div className="ld-empty-icon">📝</div>
                   <p>No proposals yet for this lead.</p>
                   <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
-                    {permissions.CREATE && <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>}
+                    {permissions.PROPOSAL_CREATE && <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>}
+                    {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                     <button className="ld-pact-btn ld-pact-upload" style={{padding:'8px 16px',fontSize:13,cursor:'pointer'}} onClick={() => setShowOfflinePanel(v => !v)}>
                       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                       Upload Offline PDF
                     </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1113,7 +1115,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
                         <div className="ld-proposal-actions">
-                          {permissions.DOWNLOAD && (p.offlinePdfPath ? (
+                          {permissions.PROPOSAL_DOWNLOAD && (p.offlinePdfPath ? (
                             /* ── Offline PDF uploaded — show View / Download / Replace only ── */
                             <>
                               <button className="ld-pact-btn ld-pact-offline-view" onClick={() => handleViewOffline(p.id, p.offlinePdfName)} title="View uploaded offline proposal">
@@ -1124,6 +1126,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                 Download
                               </button>
+                              {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                               <label className="ld-pact-btn ld-pact-upload" title="Replace offline PDF" style={{cursor:'pointer'}}>
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                                 {uploadingId === p.id ? 'Uploading…' : 'Replace'}
@@ -1132,6 +1135,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                                   disabled={uploadingId === p.id}
                                 />
                               </label>
+                              )}
                             </>
                           ) : (
                             /* ── No offline PDF — show generated PDF download + upload option ── */
@@ -1140,6 +1144,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                                 PDF
                               </button>
+                              {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                               <label className="ld-pact-btn ld-pact-upload" title="Upload offline proposal PDF given by client" style={{cursor:'pointer'}}>
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
                                 {uploadingId === p.id ? 'Uploading…' : 'Upload Offline PDF'}
@@ -1148,15 +1153,16 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                                   disabled={uploadingId === p.id}
                                 />
                               </label>
+                              )}
                             </>
                           ))}
-                          {permissions.EDIT && (
+                          {permissions.PROPOSAL_EDIT && (
                             <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingProposal(p); setShowProposalForm(true); }} title="Edit">
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                               Edit
                             </button>
                           )}
-                          {permissions.DELETE && (
+                          {permissions.PROPOSAL_DELETE && (
                             <button className="ld-pact-btn ld-pact-delete" onClick={() => handleDeleteProposal(p.id, p.proposalNo)} title="Delete proposal">
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                               Delete
@@ -1388,11 +1394,24 @@ const isFirstFilterRender = useRef(true);
   const canDelete = leadsPermissions.includes('DELETE');
   const canAssign = leadsPermissions.includes('ASSIGN');
 
+  // ── Proposals permissions (used inside Proposals tab of Lead detail) ──
+  const proposalsPermissions = pagePermissions?.PROPOSALS || [];
+
   const currentUser = { id: user.id || 1, role: user.role || 'USER', name: user.name || 'Current User' };
 
   const permissions = {
     VIEW: canView, CREATE: canCreate, EDIT: canEdit, DELETE: canDelete,
     APPROVE: leadsPermissions.includes('APPROVE'), DOWNLOAD: leadsPermissions.includes('DOWNLOAD'),
+    // Proposal-specific permissions — mapped from PROPOSALS page permissions
+    PROPOSAL_VIEW:     proposalsPermissions.includes('VIEW'),
+    PROPOSAL_CREATE:   proposalsPermissions.includes('CREATE'),
+    PROPOSAL_EDIT:     proposalsPermissions.includes('EDIT'),
+    PROPOSAL_DELETE:   proposalsPermissions.includes('DELETE'),
+    PROPOSAL_APPROVE:  proposalsPermissions.includes('APPROVE'),
+    PROPOSAL_UPLOAD:   proposalsPermissions.includes('UPLOAD'),
+    // VIEW on proposals grants download/view of PDFs; UPLOAD grants offline upload
+    PROPOSAL_DOWNLOAD: proposalsPermissions.includes('VIEW'),
+    PROPOSAL_OFFLINE_UPLOAD: proposalsPermissions.includes('UPLOAD') || proposalsPermissions.includes('CREATE'),
   };
 
   // ── UI state ─────────────────────────────────────────────────────
