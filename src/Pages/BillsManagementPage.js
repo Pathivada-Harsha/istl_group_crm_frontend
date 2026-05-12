@@ -164,7 +164,7 @@ const BillsManagementPage = () => {
 
   useEffect(() => {
     fetchKPIs();
-  }, [projectId, groupName, subGroupName]);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus]);
 
   // Fetch MODAL dropdown data when modal opens
   useEffect(() => {
@@ -220,6 +220,8 @@ const BillsManagementPage = () => {
       if (projectId) params.append('projectId', projectId);
       if (groupName) params.append('groupId', groupName);
       if (subGroupName) params.append('subGroupId', subGroupName);
+      // Active filter — so KPIs reflect exactly what's visible in the table
+      if (filters.paymentStatus && filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
 
       const response = await fetch(`${API_BASE_URL}/bills/stats?${params}`, {
         headers: getAuthHeaders(),
