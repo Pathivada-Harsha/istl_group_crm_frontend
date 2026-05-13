@@ -62,6 +62,8 @@ export const AuthContext = createContext({
   sessionTimeout: null,
   warningTime: null,
   loading: true,
+  avatarTs: 0,
+  refreshAvatarTs: () => {},
   login: () => {},
   logout: () => {},
   getUser: () => null,
@@ -76,6 +78,9 @@ export const AuthProvider = ({ children }) => {
   const [sessionTimeout, setSessionTimeout] = useState(null);
   const [warningTime, setWarningTime] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Bumped after every avatar upload so Navbar <img> URL changes and re-fetches
+  const [avatarTs, setAvatarTs] = useState(() => Date.now());
+  const refreshAvatarTs = useCallback(() => setAvatarTs(Date.now()), []);
 
   // Initialize auth state from localStorage
   useEffect(() => {
@@ -197,6 +202,8 @@ export const AuthProvider = ({ children }) => {
     sessionTimeout,
     warningTime,
     loading,
+    avatarTs,
+    refreshAvatarTs,
     login,
     logout,
     getUser,

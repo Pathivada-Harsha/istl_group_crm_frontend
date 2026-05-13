@@ -13,7 +13,7 @@ function Navbar({ onMenuClick }) {
   const notifRef = useRef(null);
   const msgRef = useRef(null);
   const navigate = useNavigate();
-  const { logout, user } = useAuth();
+  const { logout, user, avatarTs } = useAuth();
 
   // sample static notifications
   const notifications = [
@@ -182,7 +182,7 @@ function Navbar({ onMenuClick }) {
               <div className="profile-avatar">
                 {user?.avatar_url === "db"
                   ? <img
-                      src={`${process.env.REACT_APP_API_URL}/users/avatar/${user.id}`}
+                      src={`${process.env.REACT_APP_API_URL}/users/avatar/${user.id}?t=${avatarTs}`}
                       alt={user.name}
                       className="profile-avatar-img"
                     />

@@ -164,7 +164,7 @@ const BillsManagementPage = () => {
 
   useEffect(() => {
     fetchKPIs();
-  }, [projectId, groupName, subGroupName, filters.paymentStatus]);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search]);
 
   // Fetch MODAL dropdown data when modal opens
   useEffect(() => {
@@ -174,6 +174,7 @@ const BillsManagementPage = () => {
   }, [showCreateEditModal]);
 
   const fetchBills = async () => {
+    const controller = new AbortController();
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -182,36 +183,24 @@ const BillsManagementPage = () => {
         sortBy: 'billDate',
         sortDirection: 'DESC'
       });
-
       if (projectId) params.append('projectId', projectId);
       if (groupName) params.append('groupId', groupName);
       if (subGroupName) params.append('subGroupId', subGroupName);
       if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
       if (filters.search) params.append('search', filters.search);
-
       const response = await fetch(`${API_BASE_URL}/bills?${params}`, {
-        headers: getAuthHeaders(),
-        credentials: "include"
+        headers: getAuthHeaders(), credentials: 'include', signal: controller.signal
       });
-
       if (response.ok) {
         const data = await response.json();
         setBills(data.bills || []);
-        // Do NOT sync currentPage from API — managed locally
-        setPagination(prev => ({
-          ...prev,
-          totalPages: data.totalPages || 0,
-          totalItems: data.totalItems || 0
-        }));
-      } else {
-        showError('Failed to fetch bills');
-      }
+        setPagination(prev => ({ ...prev, totalPages: data.totalPages || 0, totalItems: data.totalItems || 0 }));
+      } else { showError('Failed to fetch bills'); }
     } catch (error) {
+      if (error.name === 'AbortError') return;
       console.error('Error fetching bills:', error);
       showError('Error fetching bills');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const fetchKPIs = async () => {
@@ -220,8 +209,9 @@ const BillsManagementPage = () => {
       if (projectId) params.append('projectId', projectId);
       if (groupName) params.append('groupId', groupName);
       if (subGroupName) params.append('subGroupId', subGroupName);
-      // Active filter — so KPIs reflect exactly what's visible in the table
+      // Active filters — so KPIs reflect exactly what's visible in the table
       if (filters.paymentStatus && filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
+      if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
 
       const response = await fetch(`${API_BASE_URL}/bills/stats?${params}`, {
         headers: getAuthHeaders(),
@@ -1315,11 +1305,8 @@ const BillsManagementPage = () => {
             <IndianRupee size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div
-              className="procurement-bills-received-kpi-value"
-              title={`₹${formatCurrency(kpis.totalAmount)}`}
-            >
-              {formatIndianShort(kpis.totalAmount)}
+            <div className="procurement-bills-received-kpi-value">
+              {formatCurrency(kpis.totalAmount)}
             </div>
             <div className="procurement-bills-received-kpi-label">Total Billed Amount</div>
           </div>
@@ -1330,11 +1317,8 @@ const BillsManagementPage = () => {
             <CheckCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div
-              className="procurement-bills-received-kpi-value"
-              title={`₹${formatCurrency(kpis.paidAmount)}`}
-            >
-              {formatIndianShort(kpis.paidAmount)}
+            <div className="procurement-bills-received-kpi-value">
+              {formatCurrency(kpis.paidAmount)}
             </div>
             <div className="procurement-bills-received-kpi-label">Paid Amount</div>
           </div>
@@ -1345,11 +1329,8 @@ const BillsManagementPage = () => {
             <AlertCircle size={28} />
           </div>
           <div className="procurement-bills-received-kpi-content">
-            <div
-              className="procurement-bills-received-kpi-value"
-              title={`₹${formatCurrency(kpis.pendingAmount)}`}
-            >
-              {formatIndianShort(kpis.pendingAmount)}
+            <div className="procurement-bills-received-kpi-value">
+              {formatCurrency(kpis.pendingAmount)}
             </div>
             <div className="procurement-bills-received-kpi-label">Pending Amount</div>
           </div>
@@ -1495,7 +1476,7 @@ const BillsManagementPage = () => {
           <div className="procurement-bills-received-pagination">
             <div className="pagination-info">
               <span>
-                Showing {pagination.currentPage * pagination.pageSize + 1} to{' '}
+                Showing {pagination.totalItems === 0 ? 0 : pagination.currentPage * pagination.pageSize + 1} to{' '}
                 {Math.min((pagination.currentPage + 1) * pagination.pageSize, pagination.totalItems)} of{' '}
                 {pagination.totalItems} bills
               </span>

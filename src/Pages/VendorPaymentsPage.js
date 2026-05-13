@@ -158,10 +158,40 @@ export default function VendorPaymentsPage() {
     localStorage.setItem('vendorPaymentsColumns', JSON.stringify(columns)); 
     localStorage.setItem('vendorPaymentsColumnsVersion', VP_COL_VERSION);
   },[columns]);
+
+  // ── Fetch advances — AbortController cancels stale in-flight requests ───
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const p = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'advanceDate', sortDirection: 'DESC' });
+        if (groupName)    p.append('groupId',    groupName);
+        if (subGroupName) p.append('subGroupId', subGroupName);
+        if (projectId)    p.append('projectId',  projectId);
+        if (filters.paymentType !== 'all') p.append('paymentType', filters.paymentType);
+        if (filters.search) p.append('searchTerm', filters.search);
+        const res = await fetch(`${API_BASE_URL}/vendor-advances?${p}`, {
+          credentials: 'include', headers: getAuthHeaders(), signal: controller.signal
+        });
+        if (!res.ok) throw new Error();
+        const d = await res.json();
+        setAdvances(d.advances || []); setTotalPages(d.totalPages || 0); setTotalElements(d.totalElements || 0);
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        showError('Failed to load payments');
+        setAdvances([]);
+      } finally { setLoading(false); }
+    };
+    load();
+    return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(()=>{ fetchAdvances(); },[groupName,subGroupName,projectId,currentPage,pageSize,filters.paymentType,filters.search]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.paymentType, filters.search]);
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search]);
+
+  const fetchAdvances = () => { /* data is fetched reactively by the useEffect above */ };
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -206,24 +236,6 @@ export default function VendorPaymentsPage() {
     const vis=[...columns.filter(c=>c.visible)], hid=columns.filter(c=>!c.visible);
     const [m]=vis.splice(draggedColIndex,1); vis.splice(i,0,m);
     setColumns([...vis,...hid]); setDraggedColIndex(null);
-  };
-
-  // ── api ───────────────────────────────────────────────────────────────────
-  const fetchAdvances = async () => {
-    setLoading(true);
-    try {
-      const p = new URLSearchParams({page:currentPage,size:pageSize,sortBy:'advanceDate',sortDirection:'DESC'});
-      if(groupName)   p.append('groupId',   groupName);
-      if(subGroupName)p.append('subGroupId',subGroupName);
-      if(projectId)   p.append('projectId', projectId);
-      if(filters.paymentType!=='all') p.append('paymentType',filters.paymentType);
-      if(filters.search) p.append('searchTerm',filters.search);
-      const res = await fetch(`${API_BASE_URL}/vendor-advances?${p}`,{credentials:'include',headers:getAuthHeaders()});
-      if(!res.ok) throw new Error();
-      const d = await res.json();
-      setAdvances(d.advances||[]); setTotalPages(d.totalPages||0); setTotalElements(d.totalElements||0);
-    } catch { showError('Failed to load payments'); setAdvances([]); }
-    finally { setLoading(false); }
   };
 
   const fetchStats = async () => {
@@ -714,7 +726,7 @@ export default function VendorPaymentsPage() {
 
         <div className="receipts-page-pagination">
           <div className="receipts-page-pagination-info">
-            Showing {currentPage*pageSize+1} to {Math.min((currentPage+1)*pageSize,totalElements)} of {totalElements}
+            Showing {totalElements === 0 ? 0 : currentPage*pageSize+1} to {Math.min((currentPage+1)*pageSize,totalElements)} of {totalElements}
             <select value={pageSize} onChange={e=>{setPageSize(Number(e.target.value));setCurrentPage(0);}} className="receipts-page-pagination-size-select">
               <option value="10">10 Rows</option><option value="20">20 Rows</option>
               <option value="50">50 Rows</option><option value="100">100 Rows</option>

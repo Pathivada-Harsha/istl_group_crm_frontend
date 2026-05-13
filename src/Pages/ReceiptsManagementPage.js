@@ -185,7 +185,36 @@ const ReceiptsManagementPage = () => {
 
   useEffect(() => { localStorage.setItem('receiptColumns', JSON.stringify(columns)); }, [columns]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchReceipts(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search]);
+  // ── Fetch receipts — AbortController cancels stale in-flight requests ───
+  useEffect(() => {
+    const controller = new AbortController();
+    const load = async () => {
+      setLoading(true);
+      try {
+        const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'receiptDate', sortDirection: 'DESC' });
+        if (groupName) params.append('groupId', groupName);
+        if (subGroupName) params.append('subGroupId', subGroupName);
+        if (projectId) params.append('projectId', projectId);
+        if (filters.receiptType !== 'all') params.append('receiptType', filters.receiptType);
+        if (filters.search) params.append('searchTerm', filters.search);
+        if (filters.paymentMethod && filters.paymentMethod !== 'all') params.append('paymentMethod', filters.paymentMethod);
+        const response = await fetch(`${API_BASE_URL}/invoices/receipts?${params}`, {
+          credentials: 'include', headers: getAuthHeaders(), signal: controller.signal
+        });
+        if (!response.ok) throw new Error('Failed to fetch receipts');
+        const data = await response.json();
+        setReceipts(data.receipts || []); setTotalPages(data.totalPages || 0); setTotalElements(data.totalElements || 0);
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+        console.error('Failed to fetch receipts:', error);
+        showError('Failed to load receipts');
+        setReceipts([]);
+      } finally { setLoading(false); }
+    };
+    load();
+    return () => controller.abort();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod]);
 
@@ -645,22 +674,9 @@ const ReceiptsManagementPage = () => {
 
   const handleToggleDeletedReceipts = () => { if (!showDeletedReceipts) fetchDeletedReceipts(); setShowDeletedReceipts(!showDeletedReceipts); };
 
-  const fetchReceipts = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'receiptDate', sortDirection: 'DESC' });
-      if (groupName) params.append('groupId', groupName);
-      if (subGroupName) params.append('subGroupId', subGroupName);
-      if (projectId) params.append('projectId', projectId);
-      if (filters.receiptType !== 'all') params.append('receiptType', filters.receiptType);
-      if (filters.search) params.append('searchTerm', filters.search);
-      const response = await fetch(`${API_BASE_URL}/invoices/receipts?${params}`, { credentials: "include", headers: getAuthHeaders() });
-      if (!response.ok) throw new Error('Failed to fetch receipts');
-      const data = await response.json();
-      setReceipts(data.receipts || []); setTotalPages(data.totalPages || 0); setTotalElements(data.totalElements || 0);
-    } catch (error) { console.error('Failed to fetch receipts:', error); showError('Failed to load receipts'); setReceipts([]); }
-    finally { setLoading(false); }
-  };
+  const fetchReceipts = () => { /* data is fetched reactively by the useEffect above */ };
+
+
 
   const fetchStats = async () => {
     try {
@@ -1172,7 +1188,7 @@ const ReceiptsManagementPage = () => {
 
         <div className="receipts-page-pagination">
           <div className="receipts-page-pagination-info">
-            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}
+            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}
             <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="receipts-page-pagination-size-select">
               <option value="10">10 Rows</option><option value="20">20 Rows</option><option value="50">50 Rows</option><option value="100">100 Rows</option>
             </select>

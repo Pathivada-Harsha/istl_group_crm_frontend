@@ -556,3 +556,225 @@
   transition: color .15s;
 }
 .tc-board-search-clear:hover { color: #374151; }
+/* ── Fixed modal layout ─────────────────────────────────────── */
+.tc-modal--fixed-layout {
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+  overflow: hidden;
+}
+.tc-modal-header--fixed {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 10;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 16px 20px 12px;
+  flex-shrink: 0;
+}
+.tc-modal-body--scrollable {
+  overflow-y: auto;
+  flex: 1;
+  padding: 16px 20px;
+}
+.tc-modal-footer--fixed {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  padding: 12px 20px;
+  flex-shrink: 0;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  z-index: 10;
+}
+
+/* ── Wider INTERESTED modal ─────────────────────────────────── */
+.tc-modal--interested {
+  width: min(820px, 96vw);
+  min-width: 340px;
+}
+
+/* ── 2-col grid inside INTERESTED modal ─────────────────────── */
+.tc-interested-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tc-field--full {
+  grid-column: 1 / -1;
+}
+
+/* ── Styled inputs ───────────────────────────────────────────── */
+.tc-styled-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+  transition: border-color .15s;
+  box-sizing: border-box;
+}
+.tc-styled-input:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px #eef2ff;
+}
+
+/* ── Bill upload area ────────────────────────────────────────── */
+.tc-bill-upload {
+  transition: all .18s;
+}
+.tc-bill-upload:hover {
+  border-color: #6366f1 !important;
+  background: #f5f3ff !important;
+}
+
+/* ── Capacity dropdown styled ───────────────────────────────── */
+.tc-reason-field select {
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+  cursor: pointer;
+  background: white;
+}
+.tc-reason-field select:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px #eef2ff;
+}
+.tc-reason-field input[type="number"],
+.tc-reason-field input[type="text"],
+.tc-reason-field input[type="date"],
+.tc-reason-field input[type="time"],
+.tc-reason-field textarea {
+  padding: 8px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color .15s;
+}
+.tc-reason-field input:focus,
+.tc-reason-field textarea:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 3px #eef2ff;
+}
+
+/* ── Bill View Button ────────────────────────────────────────────── */
+.tc-bill-view-btn {
+  background: none;
+  border: 1.5px solid #dbeafe;
+  border-radius: 6px;
+  color: #2563eb;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'Poppins', sans-serif;
+  transition: background .15s, border-color .15s;
+}
+.tc-bill-view-btn:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+}
+
+/* ── Bill Preview Modal ──────────────────────────────────────────── */
+.tc-bill-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.6);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.tc-bill-modal {
+  background: #fff;
+  border-radius: 14px;
+  width: min(900px, 96vw);
+  height: min(88vh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 24px 60px rgba(0,0,0,.22);
+  animation: tcBillIn .18s ease;
+}
+@keyframes tcBillIn {
+  from { opacity: 0; transform: scale(.96) translateY(10px); }
+  to   { opacity: 1; transform: scale(1)  translateY(0); }
+}
+.tc-bill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  background: #f9fafb;
+  border-radius: 14px 14px 0 0;
+}
+.tc-bill-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tc-bill-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.tc-bill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 13px;
+  border-radius: 7px;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-decoration: none;
+  border: none;
+  font-family: 'Poppins', sans-serif;
+  transition: background .15s;
+}
+.tc-bill-btn--newtab  { background:#eff6ff; color:#2563eb; border:1.5px solid #bfdbfe; }
+.tc-bill-btn--newtab:hover { background:#dbeafe; }
+.tc-bill-btn--download { background:#f0fdf4; color:#059669; border:1.5px solid #bbf7d0; }
+.tc-bill-btn--download:hover { background:#dcfce7; }
+.tc-bill-btn--close { background:#f3f4f6; color:#374151; border:1.5px solid #e5e7eb; }
+.tc-bill-btn--close:hover { background:#e5e7eb; }
+.tc-bill-body {
+  flex: 1;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+/* ── Bill preview loading spinner ─────────────────────────────── */
+.tc-bill-spinner {
+  width: 28px; height: 28px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: tcBillSpin .7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes tcBillSpin { to { transform: rotate(360deg); } }

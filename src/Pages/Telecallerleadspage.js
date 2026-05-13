@@ -143,6 +143,13 @@ export default function TelecallerLeadsPage() {
   const [intOtherComment, setIntOtherComment] = useState("");
   const [intCapacity, setIntCapacity] = useState("");
   const [intCapacityUnit, setIntCapacityUnit] = useState("kW");
+  // New INTERESTED fields
+  const [intMonthlyBill, setIntMonthlyBill] = useState("");
+  const [intExistingContractLoad, setIntExistingContractLoad] = useState("");
+  const [intRequiredContractLoad, setIntRequiredContractLoad] = useState("");
+  const [intBillFile, setIntBillFile] = useState(null);
+  const [intBillUploading, setIntBillUploading] = useState(false);
+  const [billPreview, setBillPreview] = useState(null); // { url, name, type }
 
   // ── Date params builder ────────────────────────────────────────────────────
   const buildDateParams = () => {
@@ -274,9 +281,9 @@ export default function TelecallerLeadsPage() {
     const { lead, fromCol } = dragging;
     setDragging(null);
 
-    // Closed Won / Closed Lost — block
-    if (lead.leadStatus === "Closed Won" || lead.leadStatus === "Closed Lost") {
-      showToast("Cannot move a closed lead.", "info"); return;
+    // Only hard-block Closed Won — all other statuses can be changed by telecaller
+    if (lead.leadStatus === "Closed Won") {
+      showToast("Cannot move a Closed Won lead.", "info"); return;
     }
 
     // NOT_INTERESTED: open modal for reason (then follow-up modal)
@@ -293,11 +300,19 @@ export default function TelecallerLeadsPage() {
     if (toCol === "INTERESTED") {
       setSelected(lead);
       setNewStatus("INTERESTED");
-      setReason(""); setDiscussion("");
-      setIntLocation(lead.city ? [lead.city,lead.district,lead.state].filter(Boolean).join(", ") : "");
-      setIntSiteDate(""); setIntPropertyType(""); setIntQuotedPrice("");
-      setIntAddons(""); setIntOtherComment("");
+      setReason(""); 
+      setDiscussion(lead.tcDiscussionNote||"");
+      setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
+      setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
+      setIntPropertyType(lead.tcPropertyType||"");
+      setIntQuotedPrice(lead.tcQuotedPrice||"");
+      setIntAddons(lead.tcAddons||"");
+      setIntOtherComment(lead.tcOtherComments||"");
       setIntCapacity(lead.capacity||""); setIntCapacityUnit(lead.capacityUnit||"kW");
+      setIntMonthlyBill(lead.tcMonthlyBill||"");
+      setIntExistingContractLoad(lead.tcExistingContractLoad||"");
+      setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
+      setIntBillFile(null);
       setDragFromCol(fromCol);
       setStatusModal(true);
       return;
@@ -373,14 +388,25 @@ export default function TelecallerLeadsPage() {
 
   // ── Status modal ───────────────────────────────────────────────────────────
   const openStatusModal = (lead) => {
-    if (lead.leadStatus === "Closed Won" || lead.leadStatus === "Closed Lost") {
-      showToast(`This lead is ${lead.leadStatus} — cannot change.`, "info"); return;
+    if (lead.leadStatus === "Closed Won") {
+      showToast("This lead is Closed Won — status cannot be changed.", "info"); return;
     }
-    if (lead.handedOffToBD) { showToast("Handed off to BD — cannot change.", "info"); return; }
     setSelected(lead); setNewStatus(""); setReason(""); setDiscussion("");
-    setIntLocation(lead.city ? `${lead.city}${lead.district?", "+lead.district:""}${lead.state?", "+lead.state:""}` : "");
-    setIntSiteDate(""); setIntPropertyType(""); setIntQuotedPrice(""); setIntAddons(""); setIntOtherComment("");
+    // Init location as "state||district||city||pincode" from existing lead address
+    setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
+    // Pre-fill existing INTERESTED values so telecaller can update them
+    setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
+    setIntPropertyType(lead.tcPropertyType||"");
+    setIntQuotedPrice(lead.tcQuotedPrice||"");
+    setIntAddons(lead.tcAddons||"");
+    setIntOtherComment(lead.tcOtherComments||"");
     setIntCapacity(lead.capacity||""); setIntCapacityUnit(lead.capacityUnit||"kW");
+    setIntMonthlyBill(lead.tcMonthlyBill||"");
+    setIntExistingContractLoad(lead.tcExistingContractLoad||"");
+    setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
+    setIntBillFile(null);
+    // Pre-fill discussion if re-opening an INTERESTED lead
+    setDiscussion(lead.tcDiscussionNote||"");
     setStatusModal(true);
   };
 
@@ -397,15 +423,59 @@ export default function TelecallerLeadsPage() {
         setFollowupDate(""); setFollowupTime("09:00"); setFollowupModal(true);
         return;
       }
+      // Parse location parts from "state||district||city||pincode" format
+      const locParts = intLocation.split("||");
+      const tcState    = locParts[0]||"";
+      const tcDistrict = locParts[1]||"";
+      const tcCity     = locParts[2]||"";
+      const tcPincode  = locParts[3]||"";
+      const tcLocStr   = [tcCity, tcDistrict, tcState].filter(Boolean).join(", ");
+
       await api.put(`/telecaller/lead/${selected.id}/status`, {
         telecallerStatus: newStatus, reason: reason.trim(), discussionNote: discussion.trim(),
         ...(newStatus==="INTERESTED" && {
-          tcLocation: intLocation.trim()||null, tcSiteVisitDate: intSiteDate||null,
+          tcLocation: tcLocStr||null,
+          tcState: tcState||null,
+          tcDistrict: tcDistrict||null,
+          tcCity: tcCity||null,
+          tcPincode: tcPincode||null,
+          tcSiteVisitDate: intSiteDate||null,
           tcPropertyType: intPropertyType||null, tcQuotedPrice: intQuotedPrice.trim()||null,
           tcAddons: intAddons.trim()||null, tcOtherComments: intOtherComment.trim()||null,
           capacity: intCapacity.trim()||null, capacityUnit: intCapacityUnit||"kW",
+          tcMonthlyBill: intMonthlyBill.trim()||null,
+          tcExistingContractLoad: intExistingContractLoad.trim()||null,
+          tcRequiredContractLoad: intRequiredContractLoad.trim()||null,
         }),
       });
+      // Upload bill file if selected (works for any status update, not just first INTERESTED)
+      if (intBillFile) {
+        try {
+          setIntBillUploading(true);
+          const form = new FormData();
+          form.append("file", intBillFile);
+          // Use same localStorage pattern as leadsapi.js: key="bd_portal_user", user under .user
+          const stored = JSON.parse(localStorage.getItem("bd_portal_user")||"{}");
+          const authUser = stored?.user || stored || {};
+          const uploadResp = await fetch(`${API_BASE_URL}/telecaller/lead/${selected.id}/upload-bill`, {
+            method: "POST",
+            headers: {
+              "User-Id":   String(authUser.id   || ""),
+              "User-Role": String(authUser.role  || "TELECALLER"),
+            },
+            body: form,
+          });
+          if (!uploadResp.ok) {
+            const errData = await uploadResp.json().catch(()=>({}));
+            showToast("Bill upload failed: " + (errData.message||uploadResp.status), "error");
+          }
+        } catch(uploadErr) {
+          showToast("Bill upload failed: " + uploadErr.message, "error");
+        } finally {
+          setIntBillUploading(false);
+          setIntBillFile(null);
+        }
+      }
       showToast("Status updated!","success");
       setStatusModal(false);
       setDragFromCol(null);
@@ -420,13 +490,17 @@ export default function TelecallerLeadsPage() {
 
   // ── Edit modal ─────────────────────────────────────────────────────────────
   const openEditModal = (lead) => {
-    if (lead.leadStatus==="Closed Won"||lead.leadStatus==="Closed Lost") { showToast(`Lead is ${lead.leadStatus}.`,"info"); return; }
-    if (lead.handedOffToBD) { showToast("Handed off — cannot edit.","info"); return; }
+    // Always allow editing basic lead details regardless of status.
+    // The only hard block is if the lead record itself is deleted.
     setSelected(lead);
-    setEditForm({ name:lead.name||"",email:lead.email||"",phone:lead.phone||"",source:lead.source||"",
-      priority:lead.priority||"Medium",enquiry:lead.enquiry||"",state:lead.state||"",district:lead.district||"",
-      city:lead.city||"",pincode:lead.pincode||"",subsidyRequired:lead.subsidyRequired||"",
-      referralName:lead.referralName||"",referralPhone:lead.referralPhone||"",capacity:lead.capacity||"",capacityUnit:lead.capacityUnit||"kW" });
+    setEditForm({
+      name:lead.name||"", email:lead.email||"", phone:lead.phone||"",
+      source:lead.source||"", priority:lead.priority||"Medium",
+      enquiry:lead.enquiry||"", state:lead.state||"", district:lead.district||"",
+      city:lead.city||"", pincode:lead.pincode||"", subsidyRequired:lead.subsidyRequired||"",
+      referralName:lead.referralName||"", referralPhone:lead.referralPhone||"",
+      capacity:lead.capacity||"", capacityUnit:lead.capacityUnit||"kW"
+    });
     setEditModal(true);
   };
 
@@ -692,28 +766,27 @@ export default function TelecallerLeadsPage() {
       {/* ── Detail Modal ── */}
       {modalOpen && selected && (
         <div className="tc-modal-overlay">
-          <div className="tc-modal tc-modal--wide" onClick={e=>e.stopPropagation()}>
-            <div className="tc-modal-header">
+          <div className="tc-modal tc-modal--wide tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
+            <div className="tc-modal-header tc-modal-header--fixed">
               <div><h2>{selected.name}</h2><span className="tc-lead-code">{selected.leadCode}</span></div>
               <button className="tc-modal-close" onClick={()=>setModalOpen(false)}>✕</button>
             </div>
             {selected.handedOffToBD && (
               <div className="tc-handed-off-banner">🤝 Handed off to BD Team{selected.bdAssignedToName&&<span> → <strong>{selected.bdAssignedToName}</strong></span>}{selected.bdAssignedAt&&<span className="tc-handoff-date"> on {selected.bdAssignedAt}</span>}</div>
             )}
-            <div className="tc-modal-body tc-modal-body--grid">
+            <div className="tc-modal-body tc-modal-body--scrollable tc-modal-body--grid">
               <div>
                 <div className="tc-section-title">Contact</div>
                 <DetailRow label="Email"    value={selected.email}/>
                 <DetailRow label="Phone"    value={selected.phone}/>
                 <DetailRow label="Source"   value={selected.source}/>
                 <DetailRow label="Priority" value={selected.priority} style={{color:PRIORITY_COLOR[selected.priority]||"#374151",fontWeight:600}}/>
-                {(selected.state||selected.district||selected.city)&&<>
-                  <div className="tc-section-title">Address</div>
-                  <DetailRow label="State"    value={selected.state}/>
-                  <DetailRow label="District" value={selected.district}/>
-                  <DetailRow label="City"     value={selected.city}/>
-                  <DetailRow label="Pincode"  value={selected.pincode}/>
-                </>}
+                {/* Always show address section with all available fields */}
+                <div className="tc-section-title">Address</div>
+                <DetailRow label="State"    value={selected.state||"—"}/>
+                <DetailRow label="District" value={selected.district||"—"}/>
+                <DetailRow label="City"     value={selected.city||"—"}/>
+                <DetailRow label="Pincode"  value={selected.pincode||"—"}/>
               </div>
               <div>
                 <div className="tc-section-title">Lead Info</div>
@@ -724,6 +797,40 @@ export default function TelecallerLeadsPage() {
                 {selected.telecallerReason && <DetailRow label="Reason" value={selected.telecallerReason}/>}
                 <DetailRow label="Assigned On"  value={formatDateTime(selected.createdAt)}/>
                 <DetailRow label="Last Updated" value={selected.telecallerStatusUpdatedAt||"—"}/>
+                {/* TC Interested Details */}
+                {(selected.tcMonthlyBill||selected.tcExistingContractLoad||selected.tcRequiredContractLoad||selected.tcBillFileName||selected.tcQuotedPrice||selected.tcPropertyType||selected.tcSiteVisitDate||selected.tcLocation) && <>
+                  <div className="tc-section-title">Interested Details</div>
+                  {selected.tcPropertyType && <DetailRow label="Property Type" value={selected.tcPropertyType}/>}
+                  {selected.tcLocation && <DetailRow label="Location" value={selected.tcLocation}/>}
+                  {selected.tcSiteVisitDate && <DetailRow label="Site Visit" value={selected.tcSiteVisitDate}/>}
+                  {selected.tcQuotedPrice && <DetailRow label="Quoted Price" value={`₹${selected.tcQuotedPrice}`}/>}
+                  {selected.tcMonthlyBill && <DetailRow label="Monthly Bill" value={`₹${selected.tcMonthlyBill}`}/>}
+                  {selected.tcExistingContractLoad && <DetailRow label="Existing Load" value={selected.tcExistingContractLoad}/>}
+                  {selected.tcRequiredContractLoad && <DetailRow label="Required Load" value={selected.tcRequiredContractLoad}/>}
+                  {selected.tcAddons && <DetailRow label="Add-ons" value={selected.tcAddons}/>}
+                  {/* Bill file — always show if filename exists regardless of other fields */}
+                  {selected.tcBillFileName && (
+                    <div className="tc-detail-row">
+                      <span className="tc-detail-label">Electricity Bill</span>
+                      <span className="tc-detail-value">
+                        {selected.tcHasBillFile ? (
+                          <button
+                            className="tc-bill-view-btn"
+                            onClick={() => setBillPreview({
+                              url: `${API_BASE_URL}/telecaller/lead/${selected.id}/bill`,
+                              name: selected.tcBillFileName,
+                              type: selected.tcBillFileType || 'application/octet-stream',
+                            })}
+                          >
+                            📄 {selected.tcBillFileName}
+                          </button>
+                        ) : (
+                          <span style={{color:"#9ca3af",fontSize:12}}>{selected.tcBillFileName} (not available)</span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </>}
                 <div className="tc-section-title">Team</div>
                 <div className="tc-team-panel">
                   <TeamMember role="Telecaller" name={selected.telecallerName||"You"} icon="📞"/>
@@ -731,15 +838,18 @@ export default function TelecallerLeadsPage() {
                 </div>
               </div>
             </div>
-            {selected.enquiry && <div className="tc-detail-enquiry"><span className="tc-detail-label">Enquiry</span><p>{selected.enquiry}</p></div>}
-            {selected.tcDiscussionNote && <div className="tc-detail-enquiry tc-discussion-note"><span className="tc-detail-label">Discussion Note</span><p>{selected.tcDiscussionNote}</p></div>}
-            <div className="tc-modal-footer">
-              {selected.leadStatus==="Closed Won"||selected.leadStatus==="Closed Lost"
-                ?<span style={{fontSize:13,color:selected.leadStatus==="Closed Won"?"#059669":"#dc2626",fontWeight:600}}>🔒 {selected.leadStatus}</span>
-                :!selected.handedOffToBD&&<>
-                  <button className="tc-btn-primary" onClick={()=>{setModalOpen(false);openStatusModal(selected);}}>Update Status</button>
-                  <button className="tc-btn-edit"    onClick={()=>{setModalOpen(false);openEditModal(selected);}}>✏️ Edit Details</button>
-                </>
+            {selected.enquiry && <div className="tc-detail-enquiry" style={{margin:"0 20px 8px"}}><span className="tc-detail-label">Enquiry</span><p>{selected.enquiry}</p></div>}
+            {selected.tcDiscussionNote && <div className="tc-detail-enquiry tc-discussion-note" style={{margin:"0 20px 8px"}}><span className="tc-detail-label">Discussion Note</span><p>{selected.tcDiscussionNote}</p></div>}
+            <div className="tc-modal-footer tc-modal-footer--fixed">
+              {selected.leadStatus==="Closed Won"
+                ? <>
+                    <span style={{fontSize:13,color:"#059669",fontWeight:600}}>🔒 Closed Won</span>
+                    <button className="tc-btn-edit" onClick={()=>{setModalOpen(false);openEditModal(selected);}}>✏️ Edit Details</button>
+                  </>
+                : <>
+                    <button className="tc-btn-primary" onClick={()=>{setModalOpen(false);openStatusModal(selected);}}>Update Status</button>
+                    <button className="tc-btn-edit"    onClick={()=>{setModalOpen(false);openEditModal(selected);}}>✏️ Edit Details</button>
+                  </>
               }
               <button className="tc-btn-secondary" onClick={()=>setModalOpen(false)}>Close</button>
             </div>
@@ -750,9 +860,9 @@ export default function TelecallerLeadsPage() {
       {/* ── Edit Modal ── */}
       {editModal && selected && (
         <div className="tc-modal-overlay">
-          <div className="tc-modal tc-modal--wide tc-modal--edit" onClick={e=>e.stopPropagation()}>
-            <div className="tc-modal-header"><h2>✏️ Edit Lead Details</h2><button className="tc-modal-close" onClick={()=>setEditModal(false)}>✕</button></div>
-            <div className="tc-modal-body">
+          <div className="tc-modal tc-modal--wide tc-modal--edit tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
+            <div className="tc-modal-header tc-modal-header--fixed"><h2>✏️ Edit Lead Details</h2><button className="tc-modal-close" onClick={()=>setEditModal(false)}>✕</button></div>
+            <div className="tc-modal-body tc-modal-body--scrollable">
               <p className="tc-lead-name-hint">{selected.leadCode} · {selected.name}</p>
               <div className="tc-edit-grid">
                 {[["Client Name","name","text"],["Phone *","phone","text"],["Email","email","email"]].map(([lbl,k,t])=>(
@@ -791,7 +901,7 @@ export default function TelecallerLeadsPage() {
               </div>
               <div className="tc-edit-note">ℹ️ Group, Category, and Solar Scheme are managed by the admin.</div>
             </div>
-            <div className="tc-modal-footer">
+            <div className="tc-modal-footer tc-modal-footer--fixed">
               <button className="tc-btn-primary" disabled={editSaving} onClick={submitEdit}>{editSaving?"Saving…":"Save Changes"}</button>
               <button className="tc-btn-secondary" onClick={()=>setEditModal(false)}>Cancel</button>
             </div>
@@ -802,14 +912,20 @@ export default function TelecallerLeadsPage() {
       {/* ── Status Modal ── */}
       {statusModal && selected && (
         <div className="tc-modal-overlay">
-          <div className="tc-modal tc-modal--sm" onClick={e=>e.stopPropagation()}>
-            <div className="tc-modal-header"><h2>Update Status</h2><button className="tc-modal-close" onClick={()=>setStatusModal(false)}>✕</button></div>
-            <div className="tc-modal-body">
-              <p className="tc-lead-name-hint">{selected.name} · {selected.leadCode}</p>
+          <div className="tc-modal tc-modal--interested tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
+            <div className="tc-modal-header tc-modal-header--fixed">
+              <div>
+                <h2>Update Status</h2>
+                <span className="tc-lead-code" style={{fontSize:12,color:"#6b7280"}}>{selected.name} · {selected.leadCode}</span>
+              </div>
+              <button className="tc-modal-close" onClick={()=>setStatusModal(false)}>✕</button>
+            </div>
+            <div className="tc-modal-body tc-modal-body--scrollable">
               <div className="tc-status-options">
-                {[{value:"INTERESTED",emoji:"✅",label:"Interested",desc:"Client interested. Goes to BD via round-robin."},
+                {[
+                  {value:"INTERESTED",    emoji:"✅",label:"Interested",    desc:"Client interested. Goes to BD via round-robin."},
                   {value:"NOT_INTERESTED",emoji:"❌",label:"Not Interested",desc:"Not interested. Reason required."},
-                  {value:"NOT_RESPONDED",emoji:"⏳",label:"Not Responded",desc:"No response. Resurfaces tomorrow."}
+                  {value:"NOT_RESPONDED", emoji:"⏳",label:"Not Responded", desc:"No response. Resurfaces tomorrow."}
                 ].map(opt=>(
                   <label key={opt.value} className={`tc-status-option ${newStatus===opt.value?"selected":""}`}
                     style={newStatus===opt.value?{borderColor:STATUS_CONFIG[opt.value].color,background:STATUS_CONFIG[opt.value].bg}:{}}>
@@ -819,19 +935,118 @@ export default function TelecallerLeadsPage() {
                   </label>
                 ))}
               </div>
+
               {newStatus==="NOT_INTERESTED"&&(
                 <div className="tc-reason-field"><label>Reason <span className="tc-req">*</span></label>
                   <textarea rows={3} placeholder="Why not interested?" value={reason} onChange={e=>setReason(e.target.value)}/></div>
               )}
+
               {newStatus==="INTERESTED"&&(
                 <div className="tc-interested-fields">
-                  <div className="tc-reason-field"><label>Discussion Summary <span className="tc-req">*</span></label>
-                    <textarea rows={3} value={discussion} onChange={e=>setDiscussion(e.target.value)}/></div>
-                  <div className="tc-reason-field"><label>Location</label>
-                    <input value={intLocation} onChange={e=>setIntLocation(e.target.value)}/></div>
-                  <div className="tc-reason-field"><label>Site Visit Date</label>
-                    <input type="date" value={intSiteDate} onChange={e=>setIntSiteDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
-                  <div className="tc-reason-field"><label>Property Type <span className="tc-req">*</span></label>
+                  {/* Discussion Summary */}
+                  <div className="tc-reason-field tc-field--full"><label>Discussion Summary <span className="tc-req">*</span></label>
+                    <textarea rows={3} value={discussion} onChange={e=>setDiscussion(e.target.value)} placeholder="Summarise the discussion with the customer…"/></div>
+
+                  {/* Location — State/District/City/Pincode fields */}
+                  <div className="tc-reason-field tc-field--full">
+                    <label>Location / Address</label>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 14px",marginTop:6}}>
+                      <div>
+                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>State</label>
+                        <select className="tc-styled-input"
+                          value={intLocation.split("||")[0]||""}
+                          onChange={e=>{
+                            const parts=intLocation.split("||");
+                            parts[0]=e.target.value;
+                            setIntLocation(parts.join("||"));
+                          }}>
+                          <option value="">Select State</option>
+                          {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map(s=><option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>District</label>
+                        <input className="tc-styled-input"
+                          value={intLocation.split("||")[1]||""}
+                          onChange={e=>{
+                            const parts=intLocation.split("||");
+                            while(parts.length<4) parts.push("");
+                            parts[1]=e.target.value;
+                            setIntLocation(parts.join("||"));
+                          }}
+                          placeholder="e.g. Hyderabad"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>City / Village</label>
+                        <input className="tc-styled-input"
+                          value={intLocation.split("||")[2]||""}
+                          onChange={e=>{
+                            const parts=intLocation.split("||");
+                            while(parts.length<4) parts.push("");
+                            parts[2]=e.target.value;
+                            setIntLocation(parts.join("||"));
+                          }}
+                          placeholder="e.g. Uppal"/>
+                      </div>
+                      <div>
+                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>Pincode</label>
+                        <input className="tc-styled-input"
+                          value={intLocation.split("||")[3]||""}
+                          onChange={e=>{
+                            const parts=intLocation.split("||");
+                            while(parts.length<4) parts.push("");
+                            parts[3]=e.target.value.replace(/\D/g,"").slice(0,6);
+                            setIntLocation(parts.join("||"));
+                          }}
+                          placeholder="6-digit PIN" maxLength={6}/>
+                      </div>
+                    </div>
+                    {(!selected.state && !selected.district && !selected.city) && (
+                      <small style={{color:"#f59e0b",fontSize:11,display:"block",marginTop:4}}>⚠️ Address not updated for this lead — please enter manually.</small>
+                    )}
+                    {(selected.state || selected.district || selected.city) && (
+                      <small style={{color:"#6b7280",fontSize:11,display:"block",marginTop:4}}>
+                        Existing: {[selected.city,selected.district,selected.state,selected.pincode].filter(Boolean).join(", ")}
+                      </small>
+                    )}
+                  </div>
+
+                  {/* 2-column grid for fields */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 16px"}}>
+                    <div className="tc-reason-field">
+                      <label>Site Visit Date</label>
+                      <input type="date" value={intSiteDate} onChange={e=>setIntSiteDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/>
+                    </div>
+                    <div className="tc-reason-field">
+                      <label>Quoted Price (₹)</label>
+                      <input className="tc-styled-input" value={intQuotedPrice} onChange={e=>setIntQuotedPrice(e.target.value)} placeholder="e.g. 1,20,000"/>
+                    </div>
+                    <div className="tc-reason-field">
+                      <label>Monthly Bill Amount (₹)</label>
+                      <input className="tc-styled-input" value={intMonthlyBill} onChange={e=>setIntMonthlyBill(e.target.value)} placeholder="e.g. 2500"/>
+                    </div>
+                    <div className="tc-reason-field">
+                      <label>Existing Contracted Load</label>
+                      <input className="tc-styled-input" value={intExistingContractLoad} onChange={e=>setIntExistingContractLoad(e.target.value)} placeholder="e.g. 5 kW"/>
+                    </div>
+                    <div className="tc-reason-field">
+                      <label>Required Contracted Load</label>
+                      <input className="tc-styled-input" value={intRequiredContractLoad} onChange={e=>setIntRequiredContractLoad(e.target.value)} placeholder="e.g. 10 kW"/>
+                    </div>
+                    <div className="tc-reason-field">
+                      <label>Capacity</label>
+                      <div style={{display:"flex",gap:6}}>
+                        <input type="number" className="tc-styled-input" value={intCapacity} onChange={e=>setIntCapacity(e.target.value)} style={{flex:1}} placeholder="0"/>
+                        <select className="tc-styled-input" value={intCapacityUnit} onChange={e=>setIntCapacityUnit(e.target.value)} style={{width:80}}>
+                          {["kWp","kVA","Units","kW","MW","HP"].map(u=><option key={u}>{u}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Property Type */}
+                  <div className="tc-reason-field tc-field--full">
+                    <label>Property Type <span className="tc-req">*</span></label>
                     <div className="tc-property-toggle">
                       {["Residential","Commercial","Industrial"].map(pt=>(
                         <button key={pt} type="button" className={`tc-prop-btn ${intPropertyType===pt?"active":""}`} onClick={()=>setIntPropertyType(pt)}>
@@ -840,26 +1055,102 @@ export default function TelecallerLeadsPage() {
                       ))}
                     </div>
                   </div>
-                  <div className="tc-reason-field"><label>Quoted Price (₹)</label>
-                    <input value={intQuotedPrice} onChange={e=>setIntQuotedPrice(e.target.value)}/></div>
-                  <div className="tc-reason-field"><label>Capacity</label>
-                    <div style={{display:"flex",gap:6}}>
-                      <input type="number" value={intCapacity} onChange={e=>setIntCapacity(e.target.value)} style={{flex:1}}/>
-                      <select value={intCapacityUnit} onChange={e=>setIntCapacityUnit(e.target.value)} style={{width:72}}>
-                        {["kW","MW","kVA","HP"].map(u=><option key={u}>{u}</option>)}
-                      </select>
-                    </div>
+
+                  {/* Add-ons */}
+                  <div className="tc-reason-field tc-field--full">
+                    <label>Add-ons</label>
+                    <input className="tc-styled-input" value={intAddons} onChange={e=>setIntAddons(e.target.value)} placeholder="e.g. Battery backup, Net metering"/>
                   </div>
-                  <div className="tc-reason-field"><label>Add-ons</label>
-                    <input value={intAddons} onChange={e=>setIntAddons(e.target.value)}/></div>
-                  <div className="tc-reason-field"><label>Other Comments</label>
-                    <textarea rows={2} value={intOtherComment} onChange={e=>setIntOtherComment(e.target.value)}/></div>
+
+                  {/* Other Comments */}
+                  <div className="tc-reason-field tc-field--full">
+                    <label>Other Comments</label>
+                    <textarea rows={2} value={intOtherComment} onChange={e=>setIntOtherComment(e.target.value)} placeholder="Additional notes for BD team…"/>
+                  </div>
+
+                  {/* Bill Upload — shows existing bill if present, with option to replace */}
+                  <div className="tc-reason-field tc-field--full">
+                    <label>
+                      Electricity Bill
+                      <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}> (optional, max 10 MB)</span>
+                    </label>
+
+                    {/* Show existing bill if one is stored and no new file selected */}
+                    {selected.tcHasBillFile && selected.tcBillFileName && !intBillFile && (
+                      <div style={{
+                        display:"flex",alignItems:"center",justifyContent:"space-between",
+                        gap:8,padding:"8px 12px",marginBottom:8,
+                        background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:8,
+                      }}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#059669",minWidth:0}}>
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
+                          </svg>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {selected.tcBillFileName}
+                          </span>
+                        </div>
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          <button type="button"
+                            className="tc-bill-btn tc-bill-btn--newtab"
+                            style={{padding:"3px 10px",fontSize:12}}
+                            onClick={()=>setBillPreview({
+                              url:`${API_BASE_URL}/telecaller/lead/${selected.id}/bill`,
+                              name:selected.tcBillFileName,
+                              type:selected.tcBillFileType||"application/octet-stream",
+                            })}>
+                            👁 View
+                          </button>
+                          <label style={{
+                            padding:"3px 10px",fontSize:12,cursor:"pointer",
+                            background:"#eff6ff",color:"#2563eb",
+                            border:"1.5px solid #bfdbfe",borderRadius:7,
+                            display:"inline-flex",alignItems:"center",gap:4,
+                          }}>
+                            🔄 Replace
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
+                              style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                          </label>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Upload area — show when no existing bill OR a new file is being selected */}
+                    {(!selected.tcHasBillFile || intBillFile) && (
+                      <label className="tc-bill-upload" style={{
+                        display:"flex",alignItems:"center",gap:8,cursor:"pointer",
+                        border:"1.5px dashed "+(intBillFile?"#059669":"#d1d5db"),
+                        borderRadius:8,padding:"10px 14px",
+                        background:intBillFile?"#f0fdf4":"#fafafa",
+                        fontSize:13,color:intBillFile?"#059669":"#6b7280",
+                      }}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                        </svg>
+                        <span>{intBillFile ? intBillFile.name : "Choose PDF, JPG, or PNG…"}</span>
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
+                          style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                      </label>
+                    )}
+
+                    {intBillFile && (
+                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                        <span style={{fontSize:11,color:"#059669"}}>✓ {intBillFile.name} — will replace existing</span>
+                        <button type="button"
+                          style={{fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}}
+                          onClick={()=>setIntBillFile(null)}>✕ Cancel</button>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="tc-handoff-note">ℹ️ Lead will be assigned to BD Executive via round-robin.</div>
                 </div>
               )}
             </div>
-            <div className="tc-modal-footer">
-              <button className="tc-btn-primary" disabled={!newStatus||saving} onClick={submitStatus}>{saving?"Saving…":"Confirm"}</button>
+            <div className="tc-modal-footer tc-modal-footer--fixed">
+              <button className="tc-btn-primary" disabled={!newStatus||saving||intBillUploading} onClick={submitStatus}>
+                {saving||intBillUploading ? "Saving…" : "Confirm"}
+              </button>
               <button className="tc-btn-secondary" onClick={()=>{setStatusModal(false);setDragFromCol(null);}}>Cancel</button>
             </div>
           </div>
@@ -869,9 +1160,9 @@ export default function TelecallerLeadsPage() {
       {/* ── Follow-up Modal ── */}
       {followupModal && pendingFULead && (
         <div className="tc-modal-overlay">
-          <div className="tc-modal tc-modal--sm" onClick={e=>e.stopPropagation()}>
-            <div className="tc-modal-header"><h2>📅 Schedule Follow-up?</h2><button className="tc-modal-close" onClick={()=>setFollowupModal(false)}>✕</button></div>
-            <div className="tc-modal-body">
+          <div className="tc-modal tc-modal--sm tc-modal--fixed-layout" onClick={e=>e.stopPropagation()}>
+            <div className="tc-modal-header tc-modal-header--fixed"><h2>📅 Schedule Follow-up?</h2><button className="tc-modal-close" onClick={()=>setFollowupModal(false)}>✕</button></div>
+            <div className="tc-modal-body tc-modal-body--scrollable">
               <p style={{margin:"0 0 8px",fontWeight:500}}>{pendingFULead.name} · {pendingFULead.leadCode}</p>
               <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>
                 Optional. {pendingFULead._pendingStatus==="NOT_INTERESTED"?" If skipped, marked Closed Lost.":" If skipped, resurfaces tomorrow."}
@@ -893,7 +1184,7 @@ export default function TelecallerLeadsPage() {
               <div className="tc-reason-field"><label>Notes</label>
                 <textarea rows={2} value={followupNote} onChange={e=>setFollowupNote(e.target.value)}/></div>
             </div>
-            <div className="tc-modal-footer">
+            <div className="tc-modal-footer tc-modal-footer--fixed">
               <button className="tc-btn-primary" disabled={!followupDate||!followupTime||followupSaving}
                 onClick={async()=>{
                   setFollowupSaving(true);
@@ -916,6 +1207,16 @@ export default function TelecallerLeadsPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Bill File Preview Modal ── */}
+      {billPreview && (
+        <TcBillPreviewModal
+          url={billPreview.url}
+          name={billPreview.name}
+          type={billPreview.type}
+          onClose={() => setBillPreview(null)}
+        />
       )}
     </div>
   );
@@ -989,16 +1290,108 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
       {lead.groupName&&<div className="tc-card-group">🏷 {lead.groupName}{lead.subGroupName?` › ${lead.subGroupName}`:""}{lead.solarScheme&&<span className="tc-scheme-badge">{lead.solarScheme.replace(/_/g," ")}</span>}</div>}
       <p className="tc-card-enquiry">{lead.enquiry?.slice(0,100)}{lead.enquiry?.length>100?"…":""}</p>
       <div className="tc-card-footer" onClick={e=>e.stopPropagation()}>
-        {lead.leadStatus==="Closed Won"||lead.leadStatus==="Closed Lost"
-          ?<span className="tc-handed-off-label" style={{color:lead.leadStatus==="Closed Won"?"#059669":"#dc2626"}}>🔒 {lead.leadStatus}</span>
-          :lead.handedOffToBD
-            ?<span className="tc-handed-off-label">🤝 BD: {lead.bdAssignedToName||"Assigned"}</span>
-            :<div className="tc-card-actions">
-                <button className="tc-btn-status" onClick={e=>{e.stopPropagation();onUpdateStatus();}}>Update Status</button>
-                <button className="tc-btn-view-sm" onClick={e=>{e.stopPropagation();onDetail();}}>👁 View</button>
-                <button className="tc-btn-edit-sm" onClick={e=>{e.stopPropagation();onEdit();}}>✏️ Edit</button>
-              </div>
+        {lead.leadStatus==="Closed Won"
+          ? <div className="tc-card-actions">
+              <span className="tc-handed-off-label" style={{color:"#059669"}}>🔒 Closed Won</span>
+              <button className="tc-btn-edit-sm" onClick={e=>{e.stopPropagation();onEdit();}}>✏️ Edit</button>
+            </div>
+          : <div className="tc-card-actions">
+              <button className="tc-btn-status" onClick={e=>{e.stopPropagation();onUpdateStatus();}}>Update Status</button>
+              <button className="tc-btn-view-sm" onClick={e=>{e.stopPropagation();onDetail();}}>👁 View</button>
+              <button className="tc-btn-edit-sm" onClick={e=>{e.stopPropagation();onEdit();}}>✏️ Edit</button>
+            </div>
         }
+      </div>
+    </div>
+  );
+}
+
+// ── Bill Preview Modal ────────────────────────────────────────────────────────
+function TcBillPreviewModal({ url, name, type, onClose }) {
+  const [blobUrl, setBlobUrl] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error,   setError]   = React.useState(null);
+
+  React.useEffect(() => {
+    let objectUrl = null;
+    const fetchBlob = async () => {
+      try {
+        setLoading(true); setError(null);
+        const stored  = JSON.parse(localStorage.getItem('bd_portal_user') || '{}');
+        const u       = stored?.user || stored || {};
+        const resp    = await fetch(url, {
+          headers: { 'User-Id': String(u.id || ''), 'User-Role': String(u.role || 'TELECALLER') },
+        });
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        const blob = await resp.blob();
+        objectUrl  = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBlob();
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+
+  const isPdf   = type?.includes('pdf') || name?.toLowerCase().endsWith('.pdf');
+  const isImage = type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(name || '');
+
+  return (
+    <div className="tc-bill-overlay" onClick={onClose}>
+      <div className="tc-bill-modal" onClick={e => e.stopPropagation()}>
+        <div className="tc-bill-header">
+          <span className="tc-bill-title">📄 {name}</span>
+          <div className="tc-bill-actions">
+            {blobUrl && (
+              <>
+                <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="tc-bill-btn tc-bill-btn--newtab">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                  Open in New Tab
+                </a>
+                <a href={blobUrl} download={name} className="tc-bill-btn tc-bill-btn--download">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download
+                </a>
+              </>
+            )}
+            <button className="tc-bill-btn tc-bill-btn--close" onClick={onClose}>✕ Close</button>
+          </div>
+        </div>
+        <div className="tc-bill-body">
+          {loading && (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#6b7280"}}>
+              <div className="tc-bill-spinner"/>
+              <span style={{fontSize:14}}>Loading file…</span>
+            </div>
+          )}
+          {error && (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#dc2626"}}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="40" height="40"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+              <p style={{fontSize:14,margin:0}}>Failed to load: {error}</p>
+            </div>
+          )}
+          {!loading && !error && blobUrl && isPdf && (
+            <iframe src={blobUrl} title={name} width="100%" height="100%" style={{border:"none"}} />
+          )}
+          {!loading && !error && blobUrl && isImage && (
+            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",padding:16}}>
+              <img src={blobUrl} alt={name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",borderRadius:8}} />
+            </div>
+          )}
+          {!loading && !error && blobUrl && !isPdf && !isImage && (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16,color:"#6b7280"}}>
+              <p style={{fontSize:14}}>Preview not available for this file type.</p>
+              <a href={blobUrl} download={name} className="tc-bill-btn tc-bill-btn--download">⬇ Download File</a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

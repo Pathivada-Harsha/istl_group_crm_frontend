@@ -880,7 +880,7 @@ const ProjectCostExpenseManagement = () => {
           <div className="table-footer">
             <div className="pagination-info">
               <span>
-                Showing {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} expenses
+                Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} expenses
               </span>
               <select
                 className="page-size-selector"

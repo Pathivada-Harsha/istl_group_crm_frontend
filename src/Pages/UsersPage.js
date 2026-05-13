@@ -515,6 +515,13 @@ const UsersPage = () => {
   const [passwordStrength, setPasswordStrength] = useState({ isValid: null, message: '' });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  // Searchable Reports To dropdown state
+  const [createManagerSearch, setCreateManagerSearch] = useState('');
+  const [createManagerOpen, setCreateManagerOpen] = useState(false);
+  const [editManagerSearch, setEditManagerSearch] = useState('');
+  const [editManagerOpen, setEditManagerOpen] = useState(false);
+  const createManagerRef = React.useRef(null);
+  const editManagerRef = React.useRef(null);
 
   const [toasts, setToasts] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -783,6 +790,16 @@ useEffect(() => {
       setPasswordStrength({ isValid: null, message: '' });
     }
   }, [newUser.password, showAddUserModal]);
+
+  // Close searchable manager dropdowns on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (createManagerRef.current && !createManagerRef.current.contains(e.target)) setCreateManagerOpen(false);
+      if (editManagerRef.current && !editManagerRef.current.contains(e.target)) setEditManagerOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleOpenAddUserModal = () => {
     setNewUser({ user_id: '', name: '', email: '', password: '', confirmPassword: '', phone: '', role: '', managerId: '', team: '', designation: '', is_active: true });
@@ -1887,14 +1904,75 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                 </div>
                 <div className="users-page-form-row">
-                  <div className="users-page-form-group">
+                  <div className="users-page-form-group" ref={createManagerRef} style={{ position: 'relative' }}>
                     <label>Reports To (Manager)</label>
-                    {/* FIX #2: String coercion for select value */}
-                    <select value={String(newUser.managerId || '')}
-                      onChange={e => setNewUser({ ...newUser, managerId: e.target.value ? Number(e.target.value) : '' })}>
-                      <option value="">-- None --</option>
-                      {managerOptions.map(u => <option key={u.id} value={String(u.id)}>{u.full_name} ({u.role_name})</option>)}
-                    </select>
+                    <div
+                      onClick={() => { setCreateManagerOpen(o => !o); setCreateManagerSearch(''); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #d1d5db', borderRadius: 8, padding: '9px 12px',
+                        cursor: 'pointer', background: '#fff', fontSize: 14, color: newUser.managerId ? '#111827' : '#9ca3af',
+                        minHeight: 40
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {newUser.managerId
+                          ? (() => { const u = users.find(u => u.id === Number(newUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
+                          : '-- None --'}
+                      </span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    {createManagerOpen && (
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
+                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden'
+                      }}>
+                        <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Search users..."
+                            value={createManagerSearch}
+                            onChange={e => setCreateManagerSearch(e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
+                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+                        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                          <div
+                            onClick={() => { setNewUser({ ...newUser, managerId: '' }); setCreateManagerOpen(false); }}
+                            style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >-- None --</div>
+                          {users
+                            .filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(createManagerSearch.toLowerCase()))
+                            .map(u => (
+                              <div
+                                key={u.id}
+                                onClick={() => { setNewUser({ ...newUser, managerId: u.id }); setCreateManagerOpen(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: newUser.managerId === u.id ? '#eff6ff' : 'transparent',
+                                  color: '#111827'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={e => e.currentTarget.style.background = newUser.managerId === u.id ? '#eff6ff' : 'transparent'}
+                              >
+                                <div style={{ fontWeight: 500 }}>{u.full_name}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
+                              </div>
+                          ))}
+                          {users.filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(createManagerSearch.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                     <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>Sets who this user reports to in the hierarchy</span>
                   </div>
                   <div className="users-page-form-group">
@@ -1958,16 +2036,76 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                 </div>
                 <div className="users-page-form-row">
-                  <div className="users-page-form-group">
+                  <div className="users-page-form-group" ref={editManagerRef} style={{ position: 'relative' }}>
                     <label>Reports To (Manager)</label>
-                    {/* FIX #2: coerce to String for select comparison - managerId is Long from API */}
-                    <select value={String(selectedUser.managerId || '')}
-                      onChange={e => setSelectedUser({ ...selectedUser, managerId: e.target.value ? Number(e.target.value) : null })}>
-                      <option value="">-- None --</option>
-                      {users.filter(u => u.id !== selectedUser.id).map(u => (
-                        <option key={u.id} value={String(u.id)}>{u.full_name} ({u.role_name})</option>
-                      ))}
-                    </select>
+                    <div
+                      onClick={() => { setEditManagerOpen(o => !o); setEditManagerSearch(''); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        border: '1px solid #d1d5db', borderRadius: 8, padding: '9px 12px',
+                        cursor: 'pointer', background: '#fff', fontSize: 14,
+                        color: selectedUser.managerId ? '#111827' : '#9ca3af', minHeight: 40
+                      }}
+                    >
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {selectedUser.managerId
+                          ? (() => { const u = users.find(u => u.id === Number(selectedUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
+                          : '-- None --'}
+                      </span>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </div>
+                    {editManagerOpen && (
+                      <div style={{
+                        position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
+                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden'
+                      }}>
+                        <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                          <input
+                            autoFocus
+                            type="text"
+                            placeholder="Search users..."
+                            value={editManagerSearch}
+                            onChange={e => setEditManagerSearch(e.target.value)}
+                            onClick={e => e.stopPropagation()}
+                            style={{
+                              width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
+                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                            }}
+                          />
+                        </div>
+                        <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                          <div
+                            onClick={() => { setSelectedUser({ ...selectedUser, managerId: null }); setEditManagerOpen(false); }}
+                            style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >-- None --</div>
+                          {users
+                            .filter(u => u.id !== selectedUser.id)
+                            .filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(editManagerSearch.toLowerCase()))
+                            .map(u => (
+                              <div
+                                key={u.id}
+                                onClick={() => { setSelectedUser({ ...selectedUser, managerId: u.id }); setEditManagerOpen(false); }}
+                                style={{
+                                  padding: '9px 12px', fontSize: 13, cursor: 'pointer',
+                                  background: selectedUser.managerId === u.id ? '#eff6ff' : 'transparent',
+                                  color: '#111827'
+                                }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={e => e.currentTarget.style.background = selectedUser.managerId === u.id ? '#eff6ff' : 'transparent'}
+                              >
+                                <div style={{ fontWeight: 500 }}>{u.full_name}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
+                              </div>
+                          ))}
+                          {users.filter(u => u.id !== selectedUser.id).filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(editManagerSearch.toLowerCase())).length === 0 && (
+                            <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <div className="users-page-form-group">
                     <label>Team</label>

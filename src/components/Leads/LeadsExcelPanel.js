@@ -29,30 +29,7 @@ const TEMPLATES = [
   },
 ];
 
-const EXPORT_COLS = [
-  { key: "leadCode",         label: "Lead Code"      },
-  { key: "name",             label: "Client Name"    },
-  { key: "email",            label: "Email"          },
-  { key: "phone",            label: "Phone"          },
-  { key: "source",           label: "Source"         },
-  { key: "priority",         label: "Priority"       },
-  { key: "status",           label: "Lead Status"    },
-  { key: "telecallerStatus", label: "TC Status"      },
-  { key: "telecallerName",   label: "Telecaller"     },
-  { key: "bdAssignedToName", label: "BD Executive"   },
-  { key: "groupName",        label: "Group"          },
-  { key: "subGroupName",     label: "Category"       },
-  { key: "state",            label: "State"          },
-  { key: "district",         label: "District"       },
-  { key: "city",             label: "City"           },
-  { key: "pincode",          label: "Pincode"        },
-  { key: "solarScheme",      label: "Solar Scheme"   },
-  { key: "enquiry",          label: "Enquiry"        },
-  { key: "createdAt",        label: "Created At"     },
-];
-
-
-export default function LeadsExcelPanel({ leads = [], onImportDone }) {
+export default function LeadsExcelPanel({ onImportDone }) {
   const fileRef          = useRef(null);
   const [loading,        setLoading]        = useState(false);
   const [progress,       setProgress]       = useState({ done: 0, total: 0 });
@@ -60,19 +37,6 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
   const [showResult,     setShowResult]     = useState(false);
   const [templateModal,  setTemplateModal]  = useState(false);
   const [activeTemplate, setActiveTemplate] = useState("standard");
-
-  // ── Export ────────────────────────────────────────────────────────────────
-  const handleExport = () => {
-    if (!leads.length) { alert("No leads to export."); return; }
-    const rows = leads.map(l =>
-      Object.fromEntries(EXPORT_COLS.map(c => [c.label, l[c.key] ?? ""]))
-    );
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
-    ws["!cols"] = EXPORT_COLS.map(c => ({ wch: Math.max(c.label.length + 4, 16) }));
-    XLSX.utils.book_append_sheet(wb, ws, "Leads");
-    XLSX.writeFile(wb, `leads_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
-  };
 
   // ── Download template ─────────────────────────────────────────────────────
   const handleDownloadTemplate = (tpl) => {
@@ -331,12 +295,6 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
         style={{ display: "none" }} onChange={handleImport} />
 
       <div className="lep-buttons">
-        <button className="lep-btn lep-btn--template"
-          onClick={() => setTemplateModal(true)}
-          title="Download import template">
-          <DownloadIcon /> Template
-        </button>
-
         <button className="lep-btn lep-btn--import"
           disabled={loading}
           onClick={() => setTemplateModal(true)}
@@ -344,12 +302,6 @@ export default function LeadsExcelPanel({ leads = [], onImportDone }) {
           {loading
             ? <><span className="lep-spinner" /> {pct}%</>
             : <>📥 Import</>}
-        </button>
-
-        <button className="lep-btn lep-btn--export"
-          onClick={handleExport}
-          title="Export current leads to Excel">
-          📤 Export
         </button>
       </div>
 

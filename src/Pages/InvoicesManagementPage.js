@@ -242,10 +242,10 @@ const InvoicesManagementPage = () => {
     fetchInvoices();
   }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
 
-  // Fetch stats when filters change — now reactive to all active filters
+  // Fetch stats when filters change
   useEffect(() => {
     fetchStats();
-  }, [groupName, subGroupName, projectId, filters.status, filters.search]);
+  }, [groupName, subGroupName, projectId]);
 
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
@@ -349,56 +349,48 @@ const InvoicesManagementPage = () => {
   }, []);
 
   /**
-   * Fetch statistics with filters — reactive to all active filters
+   * Fetch statistics with filters
    */
-  const fetchStats = async () => {
-    try {
-      const params = new URLSearchParams();
+const fetchStats = async () => {
+  try {
+    const params = new URLSearchParams();
 
-      // Scope filters
-      if (groupName) params.append("groupId", groupName);
-      if (subGroupName) params.append("subGroupId", subGroupName);
-      if (projectId) params.append("projectId", projectId);
+    // Scope filters — KPI cards always match the table, no createdBy restriction.
+    if (groupName) params.append("groupId", groupName);
+    if (subGroupName) params.append("subGroupId", subGroupName);
+    if (projectId) params.append("projectId", projectId);
 
-      // Active filters — KPIs must match whatever is shown in the table
-      if (filters.search && filters.search.trim()) params.append("searchTerm", filters.search.trim());
-      if (filters.status && filters.status !== 'all') params.append("status", filters.status);
-
-      const response = await fetch(
-        `${API_BASE_URL}/invoices/summary?${params.toString()}`,
-        {
-          method: "GET",
-          credentials: "include",
-          headers: getAuthHeaders(),
-        }
-      );
-
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      } else {
-        console.error("Failed to fetch stats");
-        setStats({
-          totalCount: 0,
-          paidCount: 0,
-          pendingCount: 0,
-          totalAmount: 0,
-          paidAmount: 0,
-          pendingAmount: 0,
-        });
+    const response = await fetch(
+      `${API_BASE_URL}/invoices/summary?${params.toString()}`,
+      {
+        method: "GET",
+        credentials: "include",
+        headers: getAuthHeaders(),
       }
-    } catch (error) {
-      console.error("Failed to fetch stats:", error);
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      setStats(data);
+    } else {
+      console.error("Failed to fetch stats");
       setStats({
         totalCount: 0,
         paidCount: 0,
         pendingCount: 0,
         totalAmount: 0,
-        paidAmount: 0,
-        pendingAmount: 0,
       });
     }
-  };
+  } catch (error) {
+    console.error("Failed to fetch stats:", error);
+    setStats({
+      totalCount: 0,
+      paidCount: 0,
+      pendingCount: 0,
+      totalAmount: 0,
+    });
+  }
+};
 
 
   /**
@@ -1014,11 +1006,20 @@ const InvoicesManagementPage = () => {
         throw new Error(error.message || 'Failed to save invoice');
       }
 
+      const savedInvoice = await response.json();
+
+      // Instantly update the table with the returned data (no waiting for re-fetch)
+      if (editMode && savedInvoice) {
+        setInvoices(prev =>
+          prev.map(inv => inv.id === savedInvoice.id ? savedInvoice : inv)
+        );
+      }
+
       showSuccess(`Invoice ${editMode ? 'updated' : 'created'} successfully!`);
       setShowCreateModal(false);
-    setInvoicePendingProject(null);
-    setShowInvoiceProjectWarning(false);
-      fetchInvoices();
+      setInvoicePendingProject(null);
+      setShowInvoiceProjectWarning(false);
+      await fetchInvoices();
       fetchStats();
 
     } catch (error) {
@@ -1143,16 +1144,6 @@ const InvoicesManagementPage = () => {
     if (!amount && amount !== 0) return '₹0.00';
     const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
-
-  // Format large amounts as short Indian notation: 1.0 CR, 50.5 L, etc.
-  const formatIndianShort = (amount) => {
-    if (!amount && amount !== 0) return '₹0';
-    const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
-    if (num >= 10000000) return `₹${(num / 10000000).toFixed(1)} CR`;
-    if (num >= 100000)   return `₹${(num / 100000).toFixed(1)} L`;
-    if (num >= 1000)     return `₹${(num / 1000).toFixed(1)} K`;
-    return `₹${num.toFixed(0)}`;
   };
 
   const formatDate = (dateStr) => {
@@ -1289,7 +1280,7 @@ const InvoicesManagementPage = () => {
           <input
             type="text"
             className="Invoices-page-search"
-            placeholder="Search by Invoice No, Tally No, Customer Name..."
+            placeholder="Search invoices by ID..."
             value={filters.search}
             onChange={(e) => {
               setFilters({ ...filters, search: e.target.value });
@@ -1411,26 +1402,20 @@ const InvoicesManagementPage = () => {
           </div>
           <div className="Invoices-page-stat-card">
             <div className="Invoices-page-stat-label">PAID</div>
-            <div
-              className="Invoices-page-stat-value Invoices-page-stat-success"
-              title={formatCurrency(stats.paidAmount)}
-            >
-              {formatIndianShort(stats.paidAmount)}
+            <div className="Invoices-page-stat-value Invoices-page-stat-success">
+              {stats.paidCount || 0}
             </div>
           </div>
           <div className="Invoices-page-stat-card">
             <div className="Invoices-page-stat-label">PENDING</div>
-            <div
-              className="Invoices-page-stat-value Invoices-page-stat-warning"
-              title={formatCurrency(stats.pendingAmount)}
-            >
-              {formatIndianShort(stats.pendingAmount)}
+            <div className="Invoices-page-stat-value Invoices-page-stat-warning">
+              {stats.pendingCount || 0}
             </div>
           </div>
           <div className="Invoices-page-stat-card">
             <div className="Invoices-page-stat-label">TOTAL AMOUNT</div>
-            <div className="Invoices-page-stat-value" title={formatCurrency(stats.totalAmount)}>
-              {formatIndianShort(stats.totalAmount)}
+            <div className="Invoices-page-stat-value">
+              {formatCurrency(stats.totalAmount)}
             </div>
           </div>
         </div>

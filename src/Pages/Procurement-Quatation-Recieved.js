@@ -1029,7 +1029,7 @@ const QuotationsReceived = () => {
         <div className="table-footer">
           <div className="table-footer-left">
             <span>
-              Showing {currentPage * pageSize + 1}–
+              Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1}–
               {Math.min((currentPage + 1) * pageSize, totalElements)} of{" "}
               {totalElements} quotations
             </span>

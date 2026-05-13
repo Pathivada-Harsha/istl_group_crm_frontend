@@ -154,19 +154,19 @@
 /* KPI Cards */
 .procurement-bills-received-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 20px;
 }
 
 .procurement-bills-received-kpi-card {
   background: white;
-  padding:16px;
+  padding: 20px 24px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   transition: all 0.2s;
   min-width: 0;
 }
@@ -177,8 +177,8 @@
 }
 
 .procurement-bills-received-kpi-icon {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -193,7 +193,7 @@
 }
 
 .procurement-bills-received-kpi-value {
-  font-size: 22px;
+  font-size: 18px;
   font-weight: 700;
   color: #1e293b;
   margin-bottom: 4px;
@@ -1404,23 +1404,23 @@
    RESPONSIVE DESIGN
    ============================================= */
 
-/* Large screens: keep 5 KPI columns */
+/* Large screens: 4 KPI columns already set above — keep them */
 @media (max-width: 1400px) {
   .procurement-bills-received-kpi-grid {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
   .procurement-bills-received-kpi-value {
-    font-size: 20px;
+    font-size: 16px;
   }
 }
 
-/* Medium-large: switch to 3 KPI columns */
+/* Medium-large: switch to 2 KPI columns */
 @media (max-width: 1100px) {
   .procurement-bills-received-kpi-grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
   .procurement-bills-received-kpi-value {
-    font-size: 22px;
+    font-size: 16px;
   }
 }
 

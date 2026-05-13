@@ -473,6 +473,99 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
 };
 
 // ─── Overview Proposals Summary (shown in overview tab) ─────────────────────
+// ── Bill File Preview Modal ────────────────────────────────────────────────────
+function BillPreviewModal({ url, name, type, onClose }) {
+  const [blobUrl, setBlobUrl] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error,   setError]   = React.useState(null);
+
+  React.useEffect(() => {
+    let objectUrl = null;
+    const fetchBlob = async () => {
+      try {
+        setLoading(true); setError(null);
+        const stored  = JSON.parse(localStorage.getItem('bd_portal_user') || '{}');
+        const u       = stored?.user || stored || {};
+        const resp    = await fetch(url, {
+          headers: { 'User-Id': String(u.id || ''), 'User-Role': String(u.role || '') },
+        });
+        if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+        const blob = await resp.blob();
+        objectUrl  = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchBlob();
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+
+  const isPdf   = type?.includes('pdf') || name?.toLowerCase().endsWith('.pdf');
+  const isImage = type?.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp)$/i.test(name || '');
+
+  return (
+    <div className="bill-preview-overlay" onClick={onClose}>
+      <div className="bill-preview-modal" onClick={e => e.stopPropagation()}>
+        <div className="bill-preview-header">
+          <span className="bill-preview-title">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+            </svg>
+            {name}
+          </span>
+          <div className="bill-preview-actions">
+            {blobUrl && (
+              <>
+                <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="bill-preview-btn bill-preview-btn--newtab">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                  Open in New Tab
+                </a>
+                <a href={blobUrl} download={name} className="bill-preview-btn bill-preview-btn--download">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </a>
+              </>
+            )}
+            <button className="bill-preview-btn bill-preview-btn--close" onClick={onClose}>✕ Close</button>
+          </div>
+        </div>
+        <div className="bill-preview-body">
+          {loading && (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'#6b7280'}}>
+              <div className="bill-spinner"/>
+              <span style={{fontSize:14}}>Loading file…</span>
+            </div>
+          )}
+          {error && (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'#dc2626'}}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="40" height="40"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+              <p style={{fontSize:14,margin:0}}>Failed to load file: {error}</p>
+            </div>
+          )}
+          {!loading && !error && blobUrl && isPdf && (
+            <iframe src={blobUrl} title={name} width="100%" height="100%" style={{border:'none'}} />
+          )}
+          {!loading && !error && blobUrl && isImage && (
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',padding:16}}>
+              <img src={blobUrl} alt={name} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain',borderRadius:8}} />
+            </div>
+          )}
+          {!loading && !error && blobUrl && !isPdf && !isImage && (
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:16,color:'#6b7280'}}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+              <p style={{fontSize:14,margin:0}}>Preview not available for this file type.</p>
+              <a href={blobUrl} download={name} className="bill-preview-btn bill-preview-btn--download">⬇ Download File</a>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals }) => {
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -565,6 +658,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
   const [timelineModal, setTimelineModal] = useState(false);
   const [pdfModal, setPdfModal] = useState({ open: false, url: null, name: null });
   const [deleteProposalConfirm, setDeleteProposalConfirm] = useState(null); // { id, proposalNo }
+  const [billPreview, setBillPreview] = useState(null); // { url, name, type }
   const [uploadingId, setUploadingId] = useState(null);
   const [showOfflinePanel, setShowOfflinePanel] = useState(false);
   const [offlineTitle, setOfflineTitle] = useState('');
@@ -946,7 +1040,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
             )}
 
             {/* Telecaller interaction details — shown when TC has marked Interested */}
-            {(lead.tcDiscussionNote || lead.tcLocation || lead.tcSiteVisitDate || lead.tcPropertyType || lead.tcQuotedPrice || lead.tcAddons || lead.tcOtherComments) && (
+            {(lead.tcDiscussionNote || lead.tcLocation || lead.tcSiteVisitDate || lead.tcPropertyType || lead.tcQuotedPrice || lead.tcAddons || lead.tcOtherComments || lead.tcMonthlyBill || lead.tcHasBillFile) && (
               <div className="ld-info-card">
                 <h4 className="ld-card-title">Telecaller Interaction Details</h4>
                 <div className="ld-field-list">
@@ -961,6 +1055,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                     ['Site Visit Date', lead.tcSiteVisitDate],
                     ['Property Type', lead.tcPropertyType],
                     ['Pricing Quoted', lead.tcQuotedPrice ? `₹${lead.tcQuotedPrice}` : null],
+                    ['Monthly Bill', lead.tcMonthlyBill ? `₹${lead.tcMonthlyBill}` : null],
+                    ['Existing Contract Load', lead.tcExistingContractLoad],
+                    ['Required Contract Load', lead.tcRequiredContractLoad],
                     ['Add-ons', lead.tcAddons],
                     ['Other Comments', lead.tcOtherComments],
                   ].filter(([, v]) => v).map(([l, v]) => (
@@ -969,6 +1066,24 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                       <span className="ld-field-val">{v}</span>
                     </div>
                   ))}
+                  {lead.tcHasBillFile && lead.tcBillFileName && (
+                    <div className="ld-field-row" key="bill">
+                      <span className="ld-field-label">Electricity Bill</span>
+                      <span className="ld-field-val">
+                        <button
+                          className="ld-bill-view-btn"
+                          onClick={() => setBillPreview({
+                            url: `${API_BASE_URL}/leads/${lead.id}/bill`,
+                            name: lead.tcBillFileName,
+                            type: lead.tcBillFileType || 'application/octet-stream',
+                            leadId: lead.id,
+                          })}
+                        >
+                          📄 {lead.tcBillFileName}
+                        </button>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1354,6 +1469,16 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         />
       )}
 
+      {/* ── Bill File Preview Modal ── */}
+      {billPreview && (
+        <BillPreviewModal
+          url={billPreview.url}
+          name={billPreview.name}
+          type={billPreview.type}
+          onClose={() => setBillPreview(null)}
+        />
+      )}
+
       {followupModal && (
         <AddFollowupModal
           lead={lead}
@@ -1437,6 +1562,10 @@ const isFirstFilterRender = useRef(true);
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('All');
   const [sourceFilter, setSourceFilter] = useState('All');
+  // Date range filter
+  const [dateRangeMode, setDateRangeMode] = useState('all'); // 'all' | 'single' | 'range'
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   // ── Column state ─────────────────────────────────────────────────
   const [columnOrder, setColumnOrder] = useState(DEFAULT_ORDER);
@@ -1464,7 +1593,11 @@ const isFirstFilterRender = useRef(true);
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
     leadOwner: '',
+    // New TC interested fields
+    tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
   });
+  const [billFile, setBillFile] = useState(null);
+  const [billFileUploading, setBillFileUploading] = useState(false);
 
   // ── Derived columns ──────────────────────────────────────────────
   const orderedVisibleColumns = columnOrder
@@ -1489,7 +1622,7 @@ const isFirstFilterRender = useRef(true);
   // SERVER-SIDE FETCH — called whenever page / size / filters change
   // Uses POST /leads/filter so all filter params go in the body.
   // ─────────────────────────────────────────────────────────────────
-  const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason) => {
+  const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason, fromDate, toDate) => {
   // console.trace('🚀 fetchLeads called — reason:', _reason);
   setLoading(true);
   setError(null);
@@ -1501,6 +1634,8 @@ const isFirstFilterRender = useRef(true);
       source:       source   !== 'All' ? source   : null,
       groupName:    group    || null,
       subGroupName: subGroup || null,
+      fromDate:     fromDate || null,
+      toDate:       toDate   || null,
     };
 
     const data = await fetchWithHeaders(
@@ -1549,7 +1684,7 @@ useEffect(() => {
   initialFetchDone.current = true;
   fetchUsers();
   fetchGroups();
-  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'INITIAL_LOAD');
+  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'INITIAL_LOAD', dateFrom, dateTo);
 }, [canView]); // eslint-disable-line react-hooks/exhaustive-deps
 
 // Effect 2 — group/subGroup changes
@@ -1558,7 +1693,7 @@ useEffect(() => {
   if (isFirstGroupRender.current) { isFirstGroupRender.current = false; return; }
   if (!canView) return;
   setCurrentPage(1);
-  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'GROUP_CHANGE');
+  fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'GROUP_CHANGE', dateFrom, dateTo);
 }, [groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
 
 // Effect 3 — search/filter debounced
@@ -1568,10 +1703,10 @@ useEffect(() => {
   if (!canView) return;
   setCurrentPage(1); // reset to page 1 whenever filters change
   const timer = setTimeout(() => {
-    fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FILTER_CHANGE');
+    fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FILTER_CHANGE', dateFrom, dateTo);
   }, 400);
   return () => clearTimeout(timer);
-}, [searchTerm, statusFilter, priorityFilter, sourceFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+}, [searchTerm, statusFilter, priorityFilter, sourceFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
   // ── Form subgroup load ─────────────────────────────────────────────
   useEffect(() => {
     if (formData.groupName) fetchSubGroupsForForm(formData.groupName); else setSubGroups([]);
@@ -1582,13 +1717,13 @@ useEffect(() => {
   // ─────────────────────────────────────────────────────────────────
   const handlePageChange = (newPage) => {
     setCurrentPage(newPage);
-    fetchLeads(newPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'PAGE_CHANGE');
+    fetchLeads(newPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'PAGE_CHANGE', dateFrom, dateTo);
   };
 
   const handleRowsPerPageChange = (newSize) => {
     setRowsPerPage(newSize);
     setCurrentPage(1);
-    fetchLeads(1, newSize, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'ROWS_CHANGE');
+    fetchLeads(1, newSize, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'ROWS_CHANGE', dateFrom, dateTo);
   };
 
   // ── Sort (client-side on current page only — for server-side sort, extend later) ──
@@ -1652,7 +1787,11 @@ useEffect(() => {
       capacity: lead.capacity || '',
       capacityUnit: lead.capacityUnit || 'kW',
       leadOwner: lead.leadOwner || '',
+      tcMonthlyBill: lead.tcMonthlyBill || '',
+      tcExistingContractLoad: lead.tcExistingContractLoad || '',
+      tcRequiredContractLoad: lead.tcRequiredContractLoad || '',
     });
+    setBillFile(null);
     setPhoneError(''); setShowAddModal(true);
   };
 
@@ -1669,7 +1808,7 @@ useEffect(() => {
         if (remainingOnPage === 0 && currentPage > 1) {
           handlePageChange(currentPage - 1);
         } else {
-          fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'DELETE_REFRESH');
+          fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'DELETE_REFRESH', dateFrom, dateTo);
         }
       }
     } catch (e) { showError(e.message || 'Error deleting'); setDeleteConfirmation(null); }
@@ -1690,25 +1829,61 @@ useEffect(() => {
     setLoading(true);
     try {
       const payload = { ...formData };
+      let savedLeadId = formData.id;
 
       if (formData.id) {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${formData.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         if (data.success) {
+          savedLeadId = formData.id;
+          if (billFile) {
+            try {
+              setBillFileUploading(true);
+              const form = new FormData(); form.append('file', billFile);
+              const uploadResp = await fetch(`${API_BASE_URL}/leads/${savedLeadId}/upload-bill`, {
+                method: 'POST',
+                headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+                body: form,
+              });
+              if (!uploadResp.ok) {
+                const err = await uploadResp.json().catch(() => ({}));
+                showError('Bill upload failed: ' + (err.message || uploadResp.status));
+              }
+            } catch (uploadErr) {
+              showError('Bill upload failed: ' + uploadErr.message);
+            } finally { setBillFileUploading(false); }
+          }
           const wasClosedWon = data.data?.status === 'Closed Won';
           showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : 'Lead updated successfully');
-          setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH');
+          setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH', dateFrom, dateTo);
         }
       } else {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/create`, { method: 'POST', body: JSON.stringify(payload) });
         if (data.success) {
+          savedLeadId = data.data?.id;
+          if (billFile && savedLeadId) {
+            try {
+              setBillFileUploading(true);
+              const form = new FormData(); form.append('file', billFile);
+              const uploadResp = await fetch(`${API_BASE_URL}/leads/${savedLeadId}/upload-bill`, {
+                method: 'POST',
+                headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+                body: form,
+              });
+              if (!uploadResp.ok) {
+                const err = await uploadResp.json().catch(() => ({}));
+                showError('Bill upload failed: ' + (err.message || uploadResp.status));
+              }
+            } catch (uploadErr) {
+              showError('Bill upload failed: ' + uploadErr.message);
+            } finally { setBillFileUploading(false); }
+          }
           const wasClosedWon = data.data?.status === 'Closed Won';
           showSuccess(wasClosedWon
             ? 'Lead created & automatically converted to Customer! ✅'
             : 'Lead created successfully');
           setShowAddModal(false); resetForm();
-          // Go to page 1 to see the new record (sorted desc by createdAt)
           setCurrentPage(1);
-          fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'CREATE_REFRESH');
+          fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'CREATE_REFRESH', dateFrom, dateTo);
         }
       }
     } catch (e) { showError(e.message || 'Error saving lead'); }
@@ -1726,8 +1901,10 @@ useEffect(() => {
       referralName: '', referralPhone: '',
       capacity: '', capacityUnit: 'kW',
       leadOwner: '',
+      tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
     });
     setPhoneError('');
+    setBillFile(null);
   };
 
   // ── Badge helpers ─────────────────────────────────────────────────
@@ -1807,14 +1984,74 @@ useEffect(() => {
     }
   };
 
-  // ── Export CSV ────────────────────────────────────────────────────
-  const exportToCSV = () => {
+  // ── Export Excel (ALL filtered data fetched from backend) ─────────────────
+  const exportToCSV = async () => {
     if (!canView) { showError('No permission'); return; }
-    const headers = ['Lead ID', 'Client Name', 'Email', 'Phone', 'Source', 'Priority', 'Status', 'Group', 'Category', 'Assigned To', 'Created At'];
-    const csv = [headers.join(','), ...leads.map(l => [l.leadCode, l.name, l.email, l.phone, l.source, l.priority, l.status, l.groupName || '', l.subGroupName || '', l.assignedToName || '', l.createdAt].join(','))].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `leads_export_${new Date().toISOString().split('T')[0]}.csv`; a.click();
+    try {
+      setLoading(true);
+      const filterBody = {
+        searchTerm:   searchTerm   || null,
+        status:       statusFilter !== 'All' ? statusFilter : null,
+        priority:     priorityFilter !== 'All' ? priorityFilter : null,
+        source:       sourceFilter !== 'All' ? sourceFilter : null,
+        groupName:    groupName    || null,
+        subGroupName: subGroupName || null,
+        fromDate:     dateFrom     || null,
+        toDate:       dateTo       || null,
+        exportAll:    true,
+      };
+      const data = await fetchWithHeaders(
+        `${API_BASE_URL}/leads/filter?page=0&size=10000`,
+        { method: 'POST', body: JSON.stringify(filterBody) }
+      );
+      const allLeads = data.data || [];
+      if (!allLeads.length) { showError('No records to export for the current filters.'); return; }
+
+      // Build rows for xlsx
+      const COLS = [
+        { key: 'leadCode',         label: 'Lead Code'      },
+        { key: 'name',             label: 'Client Name'    },
+        { key: 'email',            label: 'Email'          },
+        { key: 'phone',            label: 'Phone'          },
+        { key: 'source',           label: 'Source'         },
+        { key: 'priority',         label: 'Priority'       },
+        { key: 'status',           label: 'Lead Status'    },
+        { key: 'telecallerStatus', label: 'TC Status'      },
+        { key: 'telecallerName',   label: 'Telecaller'     },
+        { key: 'bdAssignedToName', label: 'BD Executive'   },
+        { key: 'assignedToName',   label: 'Assigned To'    },
+        { key: 'leadOwner',        label: 'Lead Owner'     },
+        { key: 'groupName',        label: 'Group'          },
+        { key: 'subGroupName',     label: 'Category'       },
+        { key: 'state',            label: 'State'          },
+        { key: 'district',         label: 'District'       },
+        { key: 'city',             label: 'City'           },
+        { key: 'pincode',          label: 'Pincode'        },
+        { key: 'capacity',         label: 'Capacity'       },
+        { key: 'capacityUnit',     label: 'Capacity Unit'  },
+        { key: 'tcQuotedPrice',    label: 'Quoted Price'   },
+        { key: 'tcPropertyType',   label: 'Property Type'  },
+        { key: 'tcMonthlyBill',    label: 'Monthly Bill'   },
+        { key: 'enquiry',          label: 'Enquiry'        },
+        { key: 'createdAt',        label: 'Created At'     },
+      ];
+
+      const XLSX = await import('xlsx');
+      const rows = allLeads.map(l =>
+        Object.fromEntries(COLS.map(c => [c.label, l[c.key] ?? '']))
+      );
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!cols'] = COLS.map(c => ({ wch: Math.max(c.label.length + 4, 16) }));
+      XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+      XLSX.writeFile(wb, `leads_export_${new Date().toISOString().slice(0, 10)}.xlsx`);
+
+      showSuccess(`✅ Exported ${allLeads.length} leads to Excel`);
+    } catch (e) {
+      showError('Export failed: ' + e.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Pagination display ────────────────────────────────────────────
@@ -1845,20 +2082,23 @@ useEffect(() => {
 
         {showAddModal && (
           <div className="leads-enquiries-modal-overlay">
-            <div className="leads-enquiries-modal" onClick={e => e.stopPropagation()}>
-              <div className="leads-enquiries-modal-header">
+            <div className="leads-enquiries-modal leads-enquiries-modal--wide leads-enquiries-modal--fixed-layout" onClick={e => e.stopPropagation()}>
+              <div className="leads-enquiries-modal-header leads-enquiries-modal-header--fixed">
                 <h2>{formData.id ? 'Edit Lead' : 'Add New Lead'}</h2>
                 <button className="leads-enquiries-modal-close" onClick={() => setShowAddModal(false)}>
                   <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <LeadFormBody
-                formData={formData} setFormData={setFormData}
-                phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
-                groups={groups} subGroups={subGroups} users={users}
-                canAssign={canAssign} loading={loading} currentUser={user}
-                onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
-              />
+              <div className="leads-enquiries-modal-scrollable-body">
+                <LeadFormBody
+                  formData={formData} setFormData={setFormData}
+                  phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
+                  groups={groups} subGroups={subGroups} users={users}
+                  canAssign={canAssign} loading={loading} currentUser={user}
+                  billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
+                  onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
+                />
+              </div>
             </div>
           </div>
         )}
@@ -1920,8 +2160,70 @@ useEffect(() => {
             <option value="All">All Priority</option><option>High</option><option>Medium</option><option>Low</option>
           </select>
           <select className="leads-enquiries-filter-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-            <option value="All">All Sources</option><option>Website</option><option>Referral</option><option>Cold Call</option><option>Email</option><option>Others</option>
+            <option value="All">All Sources</option>
+            <option>Website</option>
+            <option>Referral</option>
+            <option>Cold Call</option>
+            <option>Email</option>
+            <option>Walk-in</option>
+            <option>Social Media</option>
+            <option>Digital Marketing</option>
+            <option>Campaign</option>
+            <option>Others</option>
           </select>
+
+          {/* Date range filter */}
+          <div className="leads-date-filter-group">
+            <select
+              className="leads-enquiries-filter-select"
+              value={dateRangeMode}
+              onChange={e => { setDateRangeMode(e.target.value); if (e.target.value === 'all') { setDateFrom(''); setDateTo(''); } }}
+              style={{ minWidth: 120 }}
+            >
+              <option value="all">All Dates</option>
+              <option value="single">Single Day</option>
+              <option value="range">Date Range</option>
+            </select>
+            {dateRangeMode === 'single' && (
+              <input
+                type="date"
+                className="leads-enquiries-filter-select"
+                value={dateFrom}
+                onChange={e => { setDateFrom(e.target.value); setDateTo(e.target.value); }}
+                style={{ minWidth: 140, cursor: 'pointer' }}
+              />
+            )}
+            {dateRangeMode === 'range' && (
+              <>
+                <input
+                  type="date"
+                  className="leads-enquiries-filter-select"
+                  value={dateFrom}
+                  onChange={e => setDateFrom(e.target.value)}
+                  style={{ minWidth: 140, cursor: 'pointer' }}
+                  placeholder="From"
+                />
+                <span style={{ alignSelf: 'center', color: '#6b7280', fontSize: 13, padding: '0 4px' }}>—</span>
+                <input
+                  type="date"
+                  className="leads-enquiries-filter-select"
+                  value={dateTo}
+                  onChange={e => setDateTo(e.target.value)}
+                  min={dateFrom}
+                  style={{ minWidth: 140, cursor: 'pointer' }}
+                  placeholder="To"
+                />
+              </>
+            )}
+            {(dateFrom || dateTo) && (
+              <button
+                className="leads-enquiries-btn leads-enquiries-btn-secondary"
+                style={{ padding: '4px 8px', fontSize: 12, minWidth: 'unset' }}
+                onClick={() => { setDateFrom(''); setDateTo(''); setDateRangeMode('all'); }}
+                title="Clear date filter"
+              >✕</button>
+            )}
+          </div>
         </div>
         <div className="leads-enquiries-action-buttons">
           {canCreate && (
@@ -1933,16 +2235,15 @@ useEffect(() => {
               Add New Lead
             </button>
           )}
-          {leadsPermissions.includes('DOWNLOAD') && (
-            <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV}>
+          {canView && (
+            <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={exportToCSV} disabled={loading}>
               <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-              Export
+              {loading ? 'Exporting…' : 'Export'}
             </button>
           )}
           {canCreate && (
             <LeadsExcelPanel
-              leads={leads}
-              onImportDone={() => { setCurrentPage(1); fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'IMPORT_REFRESH'); }}
+              onImportDone={() => { setCurrentPage(1); fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'IMPORT_REFRESH', dateFrom, dateTo); }}
             />
           )}
         </div>
@@ -2067,27 +2368,30 @@ useEffect(() => {
       {/* Add / Edit Lead Modal */}
       {showAddModal && (
         <div className="leads-enquiries-modal-overlay">
-          <div className="leads-enquiries-modal leads-enquiries-modal--wide" onClick={e => e.stopPropagation()}>
-            <div className="leads-enquiries-modal-header">
+          <div className="leads-enquiries-modal leads-enquiries-modal--wide leads-enquiries-modal--fixed-layout" onClick={e => e.stopPropagation()}>
+            <div className="leads-enquiries-modal-header leads-enquiries-modal-header--fixed">
               <h2>{formData.id ? 'Edit Lead' : 'Add New Lead'}</h2>
               <button className="leads-enquiries-modal-close" onClick={() => setShowAddModal(false)}>
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
-            <LeadFormBody
-              formData={formData} setFormData={setFormData}
-              phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
-              groups={groups} subGroups={subGroups} users={users}
-              canAssign={canAssign} loading={loading} currentUser={user}
-              onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
-            />
+            <div className="leads-enquiries-modal-scrollable-body">
+              <LeadFormBody
+                formData={formData} setFormData={setFormData}
+                phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
+                groups={groups} subGroups={subGroups} users={users}
+                canAssign={canAssign} loading={loading} currentUser={user}
+                billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
+                onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
+              />
+            </div>
           </div>
         </div>
       )}
 
       {/* Follow-up Modal */}
       {showFollowupModal && selectedLeadForFollowup && (
-        <AddFollowupModal lead={selectedLeadForFollowup} onClose={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); }} onFollowupCreated={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); showSuccess('Follow-up created!'); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FOLLOWUP_REFRESH'); }} />
+        <AddFollowupModal lead={selectedLeadForFollowup} onClose={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); }} onFollowupCreated={() => { setShowFollowupModal(false); setSelectedLeadForFollowup(null); showSuccess('Follow-up created!'); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FOLLOWUP_REFRESH', dateFrom, dateTo); }} />
       )}
 
       {/* Timeline Modal */}
@@ -2320,7 +2624,7 @@ function LeadOwnerDropdown({ users, value, onChange }) {
 }
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser }) => (
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading }) => (
   <form onSubmit={onSubmit} className="leads-enquiries-form">
     <div className="leads-enquiries-form-section">
       <h3 className="leads-enquiries-form-section-title">Client Information</h3>
@@ -2399,59 +2703,65 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         )}
       </div>
     )}
-    <div className="leads-enquiries-form-group">
-      <label>State</label>
-      <select value={formData.state || ''} onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}>
-        <option value="">Select State</option>
-        <option value="Andhra Pradesh">Andhra Pradesh</option>
-        <option value="Arunachal Pradesh">Arunachal Pradesh</option>
-        <option value="Assam">Assam</option>
-        <option value="Bihar">Bihar</option>
-        <option value="Chhattisgarh">Chhattisgarh</option>
-        <option value="Goa">Goa</option>
-        <option value="Gujarat">Gujarat</option>
-        <option value="Haryana">Haryana</option>
-        <option value="Himachal Pradesh">Himachal Pradesh</option>
-        <option value="Jharkhand">Jharkhand</option>
-        <option value="Karnataka">Karnataka</option>
-        <option value="Kerala">Kerala</option>
-        <option value="Madhya Pradesh">Madhya Pradesh</option>
-        <option value="Maharashtra">Maharashtra</option>
-        <option value="Manipur">Manipur</option>
-        <option value="Meghalaya">Meghalaya</option>
-        <option value="Mizoram">Mizoram</option>
-        <option value="Nagaland">Nagaland</option>
-        <option value="Odisha">Odisha</option>
-        <option value="Punjab">Punjab</option>
-        <option value="Rajasthan">Rajasthan</option>
-        <option value="Sikkim">Sikkim</option>
-        <option value="Tamil Nadu">Tamil Nadu</option>
-        <option value="Telangana">Telangana</option>
-        <option value="Tripura">Tripura</option>
-        <option value="Uttar Pradesh">Uttar Pradesh</option>
-        <option value="Uttarakhand">Uttarakhand</option>
-        <option value="West Bengal">West Bengal</option>
-        <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
-        <option value="Chandigarh">Chandigarh</option>
-        <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
-        <option value="Delhi">Delhi</option>
-        <option value="Jammu and Kashmir">Jammu and Kashmir</option>
-        <option value="Ladakh">Ladakh</option>
-        <option value="Lakshadweep">Lakshadweep</option>
-        <option value="Puducherry">Puducherry</option>
-      </select>
-    </div>
-    <div className="leads-enquiries-form-group">
-      <label>District</label>
-      <input type="text" value={formData.district || ''} onChange={e => setFormData(p => ({ ...p, district: e.target.value }))} placeholder="e.g. Hyderabad" />
-    </div>
-    <div className="leads-enquiries-form-group">
-      <label>City / Village</label>
-      <input type="text" value={formData.city || ''} onChange={e => setFormData(p => ({ ...p, city: e.target.value }))} placeholder="e.g. Uppal" />
-    </div>
-    <div className="leads-enquiries-form-group">
-      <label>Pincode</label>
-      <input type="text" value={formData.pincode || ''} onChange={e => setFormData(p => ({ ...p, pincode: e.target.value }))} maxLength="6" placeholder="6-digit PIN" />
+    {/* Address Section — 2-column grid to reduce scrolling */}
+    <div className="leads-enquiries-form-section">
+      <h3 className="leads-enquiries-form-section-title">Address Details</h3>
+      <div className="leads-enquiries-form-grid">
+        <div className="leads-enquiries-form-group">
+          <label>State</label>
+          <select value={formData.state || ''} onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}>
+            <option value="">Select State</option>
+            <option value="Andhra Pradesh">Andhra Pradesh</option>
+            <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+            <option value="Assam">Assam</option>
+            <option value="Bihar">Bihar</option>
+            <option value="Chhattisgarh">Chhattisgarh</option>
+            <option value="Goa">Goa</option>
+            <option value="Gujarat">Gujarat</option>
+            <option value="Haryana">Haryana</option>
+            <option value="Himachal Pradesh">Himachal Pradesh</option>
+            <option value="Jharkhand">Jharkhand</option>
+            <option value="Karnataka">Karnataka</option>
+            <option value="Kerala">Kerala</option>
+            <option value="Madhya Pradesh">Madhya Pradesh</option>
+            <option value="Maharashtra">Maharashtra</option>
+            <option value="Manipur">Manipur</option>
+            <option value="Meghalaya">Meghalaya</option>
+            <option value="Mizoram">Mizoram</option>
+            <option value="Nagaland">Nagaland</option>
+            <option value="Odisha">Odisha</option>
+            <option value="Punjab">Punjab</option>
+            <option value="Rajasthan">Rajasthan</option>
+            <option value="Sikkim">Sikkim</option>
+            <option value="Tamil Nadu">Tamil Nadu</option>
+            <option value="Telangana">Telangana</option>
+            <option value="Tripura">Tripura</option>
+            <option value="Uttar Pradesh">Uttar Pradesh</option>
+            <option value="Uttarakhand">Uttarakhand</option>
+            <option value="West Bengal">West Bengal</option>
+            <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+            <option value="Chandigarh">Chandigarh</option>
+            <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+            <option value="Delhi">Delhi</option>
+            <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+            <option value="Ladakh">Ladakh</option>
+            <option value="Lakshadweep">Lakshadweep</option>
+            <option value="Puducherry">Puducherry</option>
+          </select>
+        </div>
+        <div className="leads-enquiries-form-group">
+          <label>District</label>
+          <input type="text" value={formData.district || ''} onChange={e => setFormData(p => ({ ...p, district: e.target.value }))} placeholder="e.g. Hyderabad" />
+        </div>
+        <div className="leads-enquiries-form-group">
+          <label>City / Village</label>
+          <input type="text" value={formData.city || ''} onChange={e => setFormData(p => ({ ...p, city: e.target.value }))} placeholder="e.g. Uppal" />
+        </div>
+        <div className="leads-enquiries-form-group">
+          <label>Pincode</label>
+          <input type="text" value={formData.pincode || ''} onChange={e => setFormData(p => ({ ...p, pincode: e.target.value }))} maxLength="6" placeholder="6-digit PIN" />
+        </div>
+      </div>
     </div>
     <div className="leads-enquiries-form-section">
       <h3 className="leads-enquiries-form-section-title">Lead Details</h3>
@@ -2459,7 +2769,15 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         <div className="leads-enquiries-form-group">
           <label>Lead Source *</label>
           <select required value={formData.source} onChange={e => setFormData(p => ({ ...p, source: e.target.value }))}>
-            <option>Website</option><option>Referral</option><option>Cold Call</option><option>Email</option><option>Others</option>
+            <option>Website</option>
+            <option>Referral</option>
+            <option>Cold Call</option>
+            <option>Email</option>
+            <option>Walk-in</option>
+            <option>Social Media</option>
+            <option>Digital Marketing</option>
+            <option>Campaign</option>
+            <option>Others</option>
           </select>
         </div>
         {formData.source === 'Referral' && (
@@ -2600,6 +2918,71 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           </select>
         </div>
         <small style={{ color: '#6b7280', fontSize: 11 }}>Optional — enter the project capacity if known.</small>
+      </div>
+
+      {/* TC Interested Details (optional, available for pre-filling) */}
+      <div className="leads-enquiries-form-section" style={{ marginTop: 16 }}>
+        <h3 className="leads-enquiries-form-section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          Telecaller Interested Details
+          <span style={{ background: '#f0fdf4', color: '#166534', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
+        </h3>
+        <div className="leads-enquiries-form-grid">
+          <div className="leads-enquiries-form-group">
+            <label>Monthly Bill Amount (₹)</label>
+            <input
+              type="text"
+              value={formData.tcMonthlyBill || ''}
+              onChange={e => setFormData(p => ({ ...p, tcMonthlyBill: e.target.value }))}
+              placeholder="e.g. 2500"
+            />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Existing Contract Load</label>
+            <input
+              type="text"
+              value={formData.tcExistingContractLoad || ''}
+              onChange={e => setFormData(p => ({ ...p, tcExistingContractLoad: e.target.value }))}
+              placeholder="e.g. 5 kW"
+            />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Required Contract Load</label>
+            <input
+              type="text"
+              value={formData.tcRequiredContractLoad || ''}
+              onChange={e => setFormData(p => ({ ...p, tcRequiredContractLoad: e.target.value }))}
+              placeholder="e.g. 10 kW"
+            />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Upload Current Bill (PDF/Image, max 10 MB)</label>
+            <label className="le-bill-upload-label" style={{
+              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+              border: '1.5px dashed ' + (billFile ? '#059669' : '#d1d5db'),
+              borderRadius: 8, padding: '8px 14px',
+              background: billFile ? '#f0fdf4' : '#fafafa',
+              fontSize: 13, color: billFile ? '#059669' : '#6b7280',
+            }}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              <span>{billFile ? billFile.name : 'Choose bill file…'}</span>
+              <input
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
+                style={{ display: 'none' }}
+                onChange={e => setBillFile(e.target.files[0] || null)}
+              />
+            </label>
+            {billFile && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <span style={{ fontSize: 11, color: '#059669' }}>✓ {billFile.name} selected</span>
+                <button type="button" style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setBillFile(null)}>✕ Remove</button>
+              </div>
+            )}
+            <small style={{ color: '#6b7280', fontSize: 11 }}>Upload the customer's current electricity bill (optional, max 10 MB).</small>
+          </div>
+        </div>
       </div>
     </div>
 
