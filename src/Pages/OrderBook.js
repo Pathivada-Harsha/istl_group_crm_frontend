@@ -974,11 +974,14 @@ function OrderBook() {
     const discount = subtotal * (discountPercent / 100);
     const taxable = subtotal - discount;
     const tax = taxable * (taxPercent / 100);
-    return taxable + tax;
+    // Round to 2 decimal places to avoid floating-point drift
+    return Math.round((taxable + tax) * 100) / 100;
   };
 
   const calculateGrandTotal = () => {
-    return formData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    // Sum the already-rounded line totals so grand total always equals sum of displayed line totals
+    const raw = formData.items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+    return Math.round(raw * 100) / 100;
   };
 
   const getStatusClass = (status) => {
@@ -1912,7 +1915,28 @@ function OrderBook() {
                               </td>
                               <td>
                                 {item.isCustomUnit ? (
-                                  <input type="text" className="orderbook-table-input" value={item.customUnit} onChange={(e) => updateItem(index, 'customUnit', e.target.value)} placeholder="Enter custom unit" required />
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <input
+                                      type="text"
+                                      className="orderbook-table-input"
+                                      value={item.customUnit}
+                                      onChange={(e) => updateItem(index, 'customUnit', e.target.value)}
+                                      placeholder="e.g. MWp, kWh"
+                                      autoFocus
+                                      required
+                                      style={{ flex: 1, minWidth: 0 }}
+                                    />
+                                    <button
+                                      type="button"
+                                      title="Back to dropdown"
+                                      onClick={() => updateItem(index, 'unit', 'Nos')}
+                                      style={{
+                                        flexShrink: 0, background: 'none', border: '1px solid #d1d5db',
+                                        borderRadius: 4, cursor: 'pointer', padding: '2px 5px',
+                                        fontSize: 13, color: '#6b7280', lineHeight: 1
+                                      }}
+                                    >\u2715</button>
+                                  </div>
                                 ) : (
                                   <UnitTypeDropdown value={item.unit} onChange={(e) => updateItem(index, 'unit', e.target.value)} className="orderbook-table-input" placeholder="Select Unit" />
                                 )}
@@ -1940,7 +1964,7 @@ function OrderBook() {
 
                     <div className="orderbook-grand-total">
                       <span>Grand Total:</span>
-                      <strong>₹{calculateGrandTotal().toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                      <strong>₹{calculateGrandTotal().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                     </div>
                   </>
                 )}

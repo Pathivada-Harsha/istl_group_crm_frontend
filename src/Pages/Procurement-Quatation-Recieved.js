@@ -16,6 +16,7 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import filterApi from '../services/filterApi';
 import * as XLSX from 'xlsx';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
+import UnitTypeDropdown, { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -507,7 +508,7 @@ const QuotationsReceived = () => {
               ...prev,
               items: data.data.map(item => ({
                 itemName: item.itemName, description: item.specification || item.description || '',
-                quantity: item.quantity || 1, unitPrice: '', taxPercent: item.taxPercent || 18,
+                quantity: item.quantity || '', unitPrice: '', taxPercent: item.taxPercent || 18,
                 orderBookItemId: item.id, included: true,
               })),
             };
@@ -753,7 +754,7 @@ const QuotationsReceived = () => {
     for (let i = 0; i < included.length; i++) {
       const item = included[i];
       if (!item.itemName?.trim()) { showError(`Item ${i + 1}: Name is required`); return; }
-      if (!item.quantity || item.quantity <= 0) { showError(`Item ${i + 1}: Quantity must be > 0`); return; }
+      if (item.quantity === '' || item.quantity === null || item.quantity === undefined) { showError(`Item ${i + 1}: Quantity is required`); return; }
       if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showError(`Item ${i + 1}: Unit price is required`); return; }
     }
     setLoading(true);
@@ -762,8 +763,6 @@ const QuotationsReceived = () => {
       const qd = {
         vendorId: quotationFormData.vendorId || null, vendorName: quotationFormData.vendorName?.trim() || null,
         vendorContact: quotationFormData.vendorContact?.trim() || null,
-        vendorCategory: quotationFormData.vendorCategory?.trim() || null,
-        vendorType: quotationFormData.vendorType?.trim() || null,
         rfqId: quotationFormData.rfqId?.trim() || null,
         validTill: quotationFormData.validTill, groupName: quotationFormData.groupName,
         subGroupName: quotationFormData.subGroupName || null, projectId: quotationFormData.projectId || null,
@@ -776,7 +775,8 @@ const QuotationsReceived = () => {
       if (selectedFile) fd.append('file', selectedFile);
       const url = isEditMode ? `${API_BASE_URL}/quotations/${quotationFormData.id}` : `${API_BASE_URL}/quotations/procurement`;
       const method = isEditMode ? 'PUT' : 'POST';
-      const res = await fetch(url, { credentials: 'include', method, headers: { ...getAuthHeaders() }, body: fd });
+      const { 'Content-Type': _ct, ...multipartHeaders } = getAuthHeaders();
+      const res = await fetch(url, { credentials: 'include', method, headers: multipartHeaders, body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       showSuccess(isEditMode ? 'Quotation updated!' : 'Quotation uploaded!');
       setShowUploadQuotationModal(false); setSelectedFile(null); setFilePreview(null);
@@ -786,7 +786,7 @@ const QuotationsReceived = () => {
     finally { setLoading(false); }
   };
 
-  const handleAddQuotationItem = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', unit: '', quantity: 1, make: '', unitPrice: '', taxPercent: 18, included: true }] }); };
+  const handleAddQuotationItem = () => { if (quotationFormData) setQuotationFormData({ ...quotationFormData, items: [...quotationFormData.items, { itemName: '', description: '', unit: '', quantity: '', make: '', unitPrice: '', taxPercent: 18, included: true }] }); };
   const handleRemoveQuotationItem = (idx) => { if (quotationFormData?.items.length > 1) setQuotationFormData({ ...quotationFormData, items: quotationFormData.items.filter((_, i) => i !== idx) }); };
   const handleUpdateQuotationItem = (idx, field, val) => { if (quotationFormData) { const items = [...quotationFormData.items]; items[idx] = { ...items[idx], [field]: val }; setQuotationFormData({ ...quotationFormData, items }); } };
 
@@ -1501,7 +1501,7 @@ const QuotationsReceived = () => {
                             <th style={{ width: 40 }}>Inc</th>
                             <th style={{ width: 40 }}>S.No</th>
                             <th style={{ minWidth: 200 }}>Description *</th>
-                            <th style={{ width: 90 }}>Unit</th>
+                            <th style={{ minWidth: 140 }}>Unit</th>
                             <th style={{ width: 80 }}>Qty *</th>
                             <th style={{ minWidth: 150 }}>Make</th>
                             <th style={{ width: 120 }}>Rate (₹) *</th>
@@ -1544,12 +1544,37 @@ const QuotationsReceived = () => {
                                   )}
                                   <input type="text" placeholder="Specification (optional)" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} style={{ marginTop: 3, fontSize: 11, color: '#64748b' }} />
                                 </td>
-                                <td><input type="text" placeholder="e.g. Nos, Mtrs, Kgs" value={item.unit || ''} onChange={(e) => handleUpdateQuotationItem(idx, 'unit', e.target.value)} className="table-input text-center" disabled={!inc} /></td>
-                                <td><input type="number" min="1" placeholder="Qty" value={item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', parseFloat(e.target.value) || 1)} className="table-input text-center" disabled={!inc} /></td>
+                                <td>
+                                  <UnitTypeDropdown
+                                    value={item.unit === '' || item.unit == null || COMMON_UNITS.includes(item.unit) ? (item.unit || '') : 'Custom'}
+                                    onChange={(e) => {
+                                      if (e.target.value === 'Custom') {
+                                        handleUpdateQuotationItem(idx, 'unit', '');
+                                      } else {
+                                        handleUpdateQuotationItem(idx, 'unit', e.target.value);
+                                      }
+                                    }}
+                                    className="table-input text-center"
+                                    disabled={!inc}
+                                    placeholder="Select Unit"
+                                  />
+                                  {(item.unit !== '' && item.unit != null && !COMMON_UNITS.includes(item.unit)) && (
+                                    <input
+                                      type="text"
+                                      placeholder="Enter custom unit"
+                                      value={item.unit}
+                                      onChange={(e) => handleUpdateQuotationItem(idx, 'unit', e.target.value)}
+                                      className="table-input text-center"
+                                      disabled={!inc}
+                                      style={{ marginTop: 3, fontSize: 11 }}
+                                    />
+                                  )}
+                                </td>
+                                <td><input type="number" min="0" placeholder="Qty" value={item.quantity === '' || item.quantity == null ? '' : item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))} className="table-input text-center" disabled={!inc} /></td>
                                 <td><input type="text" placeholder="Brand / Make" value={item.make || ''} onChange={(e) => handleUpdateQuotationItem(idx, 'make', e.target.value)} className="table-input" disabled={!inc} /></td>
                                 <td><input type="number" min="0" step="0.01" placeholder="Rate" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
                                 <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(amount) : '-'}</td>
-                                <td className="text-center">{quotationFormData.items.length > 1 && <button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button>}</td>
+                                <td className="text-center"><button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button></td>
                               </tr>
                             );
                           })}

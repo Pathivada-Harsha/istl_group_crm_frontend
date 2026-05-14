@@ -245,7 +245,7 @@ const InvoicesManagementPage = () => {
   // Fetch stats when filters change
   useEffect(() => {
     fetchStats();
-  }, [groupName, subGroupName, projectId]);
+  }, [groupName, subGroupName, projectId, filters.status, filters.search]);
 
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
@@ -355,10 +355,14 @@ const fetchStats = async () => {
   try {
     const params = new URLSearchParams();
 
-    // Scope filters — KPI cards always match the table, no createdBy restriction.
+    // Scope filters
     if (groupName) params.append("groupId", groupName);
     if (subGroupName) params.append("subGroupId", subGroupName);
     if (projectId) params.append("projectId", projectId);
+
+    // Active filters - KPI cards must match exactly what the table shows
+    if (filters.search && filters.search.trim()) params.append("searchTerm", filters.search.trim());
+    if (filters.status && filters.status !== 'all') params.append("status", filters.status);
 
     const response = await fetch(
       `${API_BASE_URL}/invoices/summary?${params.toString()}`,
@@ -374,21 +378,11 @@ const fetchStats = async () => {
       setStats(data);
     } else {
       console.error("Failed to fetch stats");
-      setStats({
-        totalCount: 0,
-        paidCount: 0,
-        pendingCount: 0,
-        totalAmount: 0,
-      });
+      setStats({ totalCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0, paidAmount: 0, pendingAmount: 0 });
     }
   } catch (error) {
     console.error("Failed to fetch stats:", error);
-    setStats({
-      totalCount: 0,
-      paidCount: 0,
-      pendingCount: 0,
-      totalAmount: 0,
-    });
+    setStats({ totalCount: 0, paidCount: 0, pendingCount: 0, totalAmount: 0, paidAmount: 0, pendingAmount: 0 });
   }
 };
 
@@ -1401,21 +1395,21 @@ const fetchStats = async () => {
             <div className="Invoices-page-stat-value">{stats.totalCount || 0}</div>
           </div>
           <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">PAID</div>
-            <div className="Invoices-page-stat-value Invoices-page-stat-success">
-              {stats.paidCount || 0}
-            </div>
-          </div>
-          <div className="Invoices-page-stat-card">
-            <div className="Invoices-page-stat-label">PENDING</div>
-            <div className="Invoices-page-stat-value Invoices-page-stat-warning">
-              {stats.pendingCount || 0}
-            </div>
-          </div>
-          <div className="Invoices-page-stat-card">
             <div className="Invoices-page-stat-label">TOTAL AMOUNT</div>
             <div className="Invoices-page-stat-value">
               {formatCurrency(stats.totalAmount)}
+            </div>
+          </div>
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">PAID AMOUNT</div>
+            <div className="Invoices-page-stat-value Invoices-page-stat-success">
+              {formatCurrency(stats.paidAmount)}
+            </div>
+          </div>
+          <div className="Invoices-page-stat-card">
+            <div className="Invoices-page-stat-label">PENDING AMOUNT</div>
+            <div className="Invoices-page-stat-value Invoices-page-stat-warning">
+              {formatCurrency(stats.pendingAmount)}
             </div>
           </div>
         </div>
@@ -1543,7 +1537,7 @@ const fetchStats = async () => {
         {/* Pagination */}
         <div className="Invoices-page-pagination">
           <div className="Invoices-page-pagination-info">
-            Showing {currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} invoices
+            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} invoices
           </div>
 
           <div className="Invoices-page-pagination-controls-wrapper">

@@ -1530,18 +1530,18 @@ const PurchaseOrders = () => {
               {/* Step 2: Quotation / Order Book */}
               {modalProjectId && (
                 <div className="po-form-section">
-                  {quotations.length > 0 && orderBookItems.length > 0 && (
+                  {quotations.length > 0 && orderBooks.length > 0 && (
                     <>
                       <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Choose Your Option</h3>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
                         <div style={{ padding: '20px', background: '#f0fdf4', border: '2px solid #86efac', borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: '#166534', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Approved Quotation</h4>
-                          <p style={{ fontSize: '13px', color: '#059669', marginBottom: '12px' }}>Select from {quotations.length} approved quotation(s)</p>
+                          <h4 style={{ marginBottom: '8px', color: '#166534', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Quotation</h4>
+                          <p style={{ fontSize: '13px', color: '#059669', marginBottom: '12px' }}>Select from {quotations.length} available quotation(s)</p>
                           {!createPOFormData.quotationId && (
                             <div className="po-form-group" style={{ marginTop: '12px' }}>
                               <select value={createPOFormData.quotationId} onChange={(e) => handleQuotationSelect(e.target.value)} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                                 <option value="">Select Quotation</option>
-                                {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} - {formatCurrency(q.totalValue)}</option>)}
+                                {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} — {q.vendorName || q.vendorContact || 'Unknown Vendor'} {q.totalValue ? `— ${formatCurrency(q.totalValue)}` : ''} [{q.status}]</option>)}
                               </select>
                             </div>
                           )}
@@ -1590,13 +1590,13 @@ const PurchaseOrders = () => {
                       )}
                     </>
                   )}
-                  {quotations.length > 0 && orderBookItems.length === 0 && (
+                  {quotations.length > 0 && orderBooks.length === 0 && (
                     <>
-                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Approved Quotations Available ({quotations.length})</h3>
+                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Quotations Available ({quotations.length})</h3>
                       <div className="po-form-group">
                         <select value={createPOFormData.quotationId} onChange={(e) => handleQuotationSelect(e.target.value)} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                           <option value="">Select Quotation</option>
-                          {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} - {q.category} - {formatCurrency(q.totalValue)}</option>)}
+                          {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} — {q.vendorName || q.vendorContact || 'Unknown Vendor'} {q.totalValue ? `— ${formatCurrency(q.totalValue)}` : ''} [{q.status}]</option>)}
                         </select>
                       </div>
                       {createPOFormData.quotation && (
@@ -1636,7 +1636,7 @@ const PurchaseOrders = () => {
                       )}
                     </div>
                   )}
-                  {!loadingOrderItems && quotations.length === 0 && orderBookItems.length === 0 && (
+                  {!loadingOrderItems && quotations.length === 0 && orderBooks.length === 0 && (
                     <div style={{ padding: '20px', background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '8px', textAlign: 'center' }}>
                       <h4 style={{ marginBottom: '10px', color: '#991b1b', fontSize: '16px' }}>❌ No Data Available</h4>
                       <p style={{ fontSize: '14px', color: '#991b1b' }}>No quotations or order book items found.</p>

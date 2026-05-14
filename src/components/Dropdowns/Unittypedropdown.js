@@ -17,6 +17,8 @@ const COMMON_UNITS = [
   'Kg', 'Kgs', 'Grams', 'Tons', 'MT', 'Quintal', 'Lbs',
   // Electrical
   'Watt', 'KW', 'KVA', 'Amp', 'Volt',
+  // Solar / Power
+  'MW', 'MWp', 'kW', 'kWp', 'kWh', 'MWh', 'kVAh', 'MVA', 'kVA',
   // Set/Bundle
   'Set', 'Sets', 'Kit', 'Kits', 'Bundle', 'Lot', 'Box', 'Boxes', 'Carton', 'Bag', 'Bags',
   // Time

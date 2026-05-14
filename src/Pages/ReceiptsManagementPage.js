@@ -133,6 +133,7 @@ const ReceiptsManagementPage = () => {
   const [totalPages, setTotalPages] = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [editReceiptFormData, setEditReceiptFormData] = useState({ receiptDate: '', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '' });
 
   // ── Edit-receipt project change state ──
@@ -214,7 +215,7 @@ const ReceiptsManagementPage = () => {
     load();
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod, refreshKey]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod]);
 
@@ -674,7 +675,7 @@ const ReceiptsManagementPage = () => {
 
   const handleToggleDeletedReceipts = () => { if (!showDeletedReceipts) fetchDeletedReceipts(); setShowDeletedReceipts(!showDeletedReceipts); };
 
-  const fetchReceipts = () => { /* data is fetched reactively by the useEffect above */ };
+  const fetchReceipts = () => { setRefreshKey(prev => prev + 1); };
 
 
 

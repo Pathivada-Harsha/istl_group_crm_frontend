@@ -177,9 +177,8 @@ const VendorManagement = () => {
 
   // ─── Fetch on filter / sort / page change ──────────────────────────────────
   useEffect(() => {
-    // Fetch global stats once on mount
     fetchStats();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, filters.groupName, filters.subGroupName, filters.status, filters.category, filters.search]);
 
   useEffect(() => {
     fetchVendors();
@@ -380,8 +379,17 @@ const VendorManagement = () => {
 
   const fetchStats = async () => {
     try {
-      // Stats are always global — not filtered by group so KPIs reflect all accessible vendors
-      const response = await fetch(`${API_BASE_URL}/vendors/stats`, {
+      const params = new URLSearchParams();
+      const activeGroup    = filters.groupName    || groupName    || null;
+      const activeSubGroup = filters.subGroupName || subGroupName || null;
+      const activeProject  = projectId || null;
+      if (activeGroup)    params.append('groupName',    activeGroup);
+      if (activeSubGroup) params.append('subGroupName', activeSubGroup);
+      if (activeProject)  params.append('projectId',    activeProject);
+      if (filters.status   && filters.status   !== 'all') params.append('status',   filters.status);
+      if (filters.category && filters.category !== 'all') params.append('category', filters.category);
+      if (filters.search   && filters.search.trim())      params.append('searchTerm', filters.search.trim());
+      const response = await fetch(`${API_BASE_URL}/vendors/stats?${params}`, {
         credentials: 'include', headers: getAuthHeaders()
       });
       if (response.ok) { const data = await response.json(); setStats(data); }

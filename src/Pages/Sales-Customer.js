@@ -1013,10 +1013,12 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       const { orders = [], invoices = [], receipts = [] } = json.data || {};
 
       const totalOrderValue    = orders.reduce((s, o) => s + (parseFloat(o.totalAmount) || 0), 0);
-      const totalBalanceDue    = orders.reduce((s, o) => s + (parseFloat(o.balanceAmount) || 0), 0);
       const totalAdvancePaid   = orders.reduce((s, o) => s + (parseFloat(o.advanceAmount) || 0), 0);
       const totalInvoiced      = invoices.reduce((s, i) => s + (parseFloat(i.totalAmount || i.grandTotal) || 0), 0);
       const totalReceived      = receipts.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+      // Balance Due = Invoiced - Received (if invoices raised), else OrderValue - Received (advance-only)
+      const basis              = totalInvoiced > 0 ? totalInvoiced : totalOrderValue;
+      const totalBalanceDue    = Math.max(0, basis - totalReceived);
       const paidInvoices       = invoices.filter(i => i.status === 'Paid' || i.paymentStatus === 'Paid').length;
       const pendingInvoices    = invoices.filter(i => i.status !== 'Paid' && i.status !== 'Cancelled' && i.paymentStatus !== 'Paid').length;
       const completedOrders    = orders.filter(o => o.status === 'Completed').length;
