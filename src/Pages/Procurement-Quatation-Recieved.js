@@ -165,29 +165,65 @@ const QuotationsReceived = () => {
   }, [columns]);
 
   // ── Data fetching effects ────────────────────────────────────────────────
+  // AbortController + Promise.all: fetches the quotation list and KPI stats
+  // simultaneously with identical filter params. When any filter/page dep
+  // changes, the cleanup aborts both in-flight requests before starting new
+  // ones — eliminating race conditions where a slower earlier response
+  // (e.g. search='A') could arrive after a faster later response and
+  // overwrite correct KPI values with stale data.
   useEffect(() => {
-    const load = async () => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const loadAll = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
-        if (groupName)    params.append('groupName',   groupName);
-        if (subGroupName) params.append('subGroupName', subGroupName);
-        if (projectId)    params.append('projectId',   projectId);
-        if (filters.status !== 'all') params.append('status', filters.status);
-        if (filters.search)           params.append('searchTerm', filters.search);
-        const res = await fetch(`${API_BASE_URL}/quotations/procurement?${params}`, { credentials: 'include', headers: getAuthHeaders() });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setQuotations(data.quotations || []);
-        setTotalPages(data.totalPages || 0);
-        setTotalElements(data.totalElements || 0);
-      } catch { showError('Failed to load quotations'); setQuotations([]); }
-      finally { setLoading(false); }
+        // Quotation list params
+        const quotParams = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
+        if (groupName)    quotParams.append('groupName',    groupName);
+        if (subGroupName) quotParams.append('subGroupName', subGroupName);
+        if (projectId)    quotParams.append('projectId',    projectId);
+        if (filters.status !== 'all') quotParams.append('status',     filters.status);
+        if (filters.search)           quotParams.append('searchTerm', filters.search.trim());
+
+        // Stats params — same filters so KPI cards always match the table
+        const statsParams = new URLSearchParams();
+        if (groupName)    statsParams.append('groupName',    groupName);
+        if (subGroupName) statsParams.append('subGroupName', subGroupName);
+        if (projectId)    statsParams.append('projectId',    projectId);
+        if (filters.status !== 'all') statsParams.append('status',     filters.status);
+        if (filters.search)           statsParams.append('searchTerm', filters.search.trim());
+
+        const [quotRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/quotations/procurement?${quotParams}`, { credentials: 'include', headers: getAuthHeaders(), signal }),
+          fetch(`${API_BASE_URL}/quotations/stats?${statsParams}`,      { credentials: 'include', headers: getAuthHeaders(), signal })
+        ]);
+
+        if (!signal.aborted) {
+          if (quotRes.ok) {
+            const data = await quotRes.json();
+            setQuotations(data.quotations || []);
+            setTotalPages(data.totalPages || 0);
+            setTotalElements(data.totalElements || 0);
+          } else {
+            showError('Failed to load quotations');
+            setQuotations([]);
+          }
+          if (statsRes.ok) setStats(await statsRes.json());
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return; // cancelled by dep change — ignore
+        showError('Failed to load quotations');
+        setQuotations([]);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
     };
-    load();
+
+    loadAll();
+    return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
-  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
 
   // ── Sorting logic ────────────────────────────────────────────────────────
   const sortedQuotations = useMemo(() => {
@@ -375,6 +411,7 @@ const QuotationsReceived = () => {
 
         setImportErrors(errors);
         setImportPreview(parsed);
+        setShowImportModal(true); // auto-open preview modal after file is parsed
       } catch (err) {
         showError('Failed to read file. Please use a valid Excel file.');
       }
@@ -1203,15 +1240,25 @@ const QuotationsReceived = () => {
                 {isEditMode && quotationFormData.quoteNo && <p style={{ fontSize: 14, color: '#64748b', marginTop: 4 }}>Quotation: {quotationFormData.quoteNo}</p>}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Excel Import trigger button — only show when creating */}
+                {/* Download Template + Excel Import — only show when creating */}
                 {!isEditMode && (
-                  <button
-                    onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
-                    title="Import items from Excel"
-                  >
-                    <FileSpreadsheet size={15} /> Import Items from Excel
-                  </button>
+                  <>
+                    <a
+                      href="/templates/BOQ_Quotation_Template.xlsx"
+                      download="BOQ_Quotation_Template.xlsx"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f0fdf4', color: '#16a34a', border: '1.5px solid #86efac', borderRadius: 7, padding: '7px 13px', cursor: 'pointer', fontWeight: 600, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap' }}
+                      title="Download Excel template to fill and import"
+                    >
+                      <Download size={14} /> Download Template
+                    </a>
+                    <button
+                      onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); xlsxFileRef.current?.click(); }}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 15px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                      title="Select an Excel file to import items directly"
+                    >
+                      <FileSpreadsheet size={15} /> Import Items from Excel
+                    </button>
+                  </>
                 )}
                 <button className="procurement-quotation-received-modal-close" onClick={() => { setShowUploadQuotationModal(false); setIsEditMode(false); setVendorDropdownOpen(false); setVendorSearch(''); }}>✕</button>
               </div>
@@ -1470,7 +1517,7 @@ const QuotationsReceived = () => {
                   </h3>
                   <div style={{ display: 'flex', gap: 8 }}>
                     {!isEditMode && (
-                      <button type="button" onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }}
+                      <button type="button" onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); xlsxFileRef.current?.click(); }}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12 }}>
                         <FileSpreadsheet size={13} /> Import from Excel
                       </button>
@@ -1615,6 +1662,10 @@ const QuotationsReceived = () => {
         </div>
       )}
 
+      {/* Hidden file input for Excel import — rendered unconditionally so
+          xlsxFileRef.current is always valid when the user clicks Import Items from Excel */}
+      <input ref={xlsxFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleXlsxFileSelect} style={{ display: 'none' }} />
+
       {/* ── Excel Import Modal ── */}
       {showImportModal && (
         <div className="procurement-quotation-received-modal-overlay">
@@ -1628,39 +1679,21 @@ const QuotationsReceived = () => {
 
             <div className="procurement-quotation-received-upload-form" style={{ padding: '20px 24px' }}>
 
-              {/* Step 1 */}
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ background: '#2563eb', color: '#fff', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>1</div>
-                    <div>
-                      <strong style={{ fontSize: 14, color: '#1e40af', display: 'block' }}>Download Quotation Items Template</strong>
-                      <span style={{ fontSize: 12, color: '#3b82f6' }}>Fill from Row 2 onwards. Do not modify the header row.</span>
-                    </div>
+              {/* File selected info + option to change */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FileSpreadsheet size={20} color="#2563eb" />
+                  <div>
+                    <strong style={{ fontSize: 13, color: '#1e40af', display: 'block' }}>{importFileName || 'Excel file selected'}</strong>
+                    <span style={{ fontSize: 12, color: '#3b82f6' }}>Review the items below before importing into the form</span>
                   </div>
-                  <a
-                    href="/templates/BOQ_Quotation_Template.xlsx"
-                    download="BOQ_Quotation_Template.xlsx"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: 13, whiteSpace: 'nowrap', textDecoration: 'none' }}
-                  >
-                    <Download size={14} /> Download Template
-                  </a>
                 </div>
-              </div>
-
-              {/* Step 2 */}
-              <div style={{ border: '2px dashed #93c5fd', borderRadius: 10, padding: 22, marginBottom: 16, textAlign: 'center', background: '#f8fafc' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, justifyContent: 'center' }}>
-                  <div style={{ background: '#1d4ed8', color: '#fff', width: 26, height: 26, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13, flexShrink: 0 }}>2</div>
-                  <strong style={{ fontSize: 14, color: '#1e40af' }}>Upload Filled Excel File</strong>
-                </div>
-                <Upload size={32} color="#93c5fd" style={{ marginBottom: 10 }} />
-                <p style={{ color: '#64748b', margin: '0 0 14px 0', fontSize: 13 }}>All valid rows will populate the Items table in the quotation form</p>
-                <input ref={xlsxFileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleXlsxFileSelect} style={{ display: 'none' }} />
-                <button onClick={() => xlsxFileRef.current?.click()} style={{ background: '#2563eb', color: '#fff', border: 'none', borderRadius: 6, padding: '9px 22px', cursor: 'pointer', fontWeight: 600, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                  <Upload size={15} /> Browse File
+                <button
+                  onClick={() => { setImportPreview([]); setImportErrors([]); setImportFileName(''); xlsxFileRef.current?.click(); }}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', color: '#2563eb', border: '1.5px solid #93c5fd', borderRadius: 6, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 12, whiteSpace: 'nowrap' }}
+                >
+                  <Upload size={13} /> Choose Different File
                 </button>
-                {importFileName && <p style={{ marginTop: 10, color: '#2563eb', fontWeight: 600, fontSize: 13 }}>📎 {importFileName}</p>}
               </div>
 
               {/* Errors */}

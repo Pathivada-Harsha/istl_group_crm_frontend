@@ -176,13 +176,87 @@ const VendorManagement = () => {
   const [availableUsers, setAvailableUsers] = useState([]);
 
   // ─── Fetch on filter / sort / page change ──────────────────────────────────
+  // ─── Main data loader — AbortController pattern (mirrors Bills-Recieved.js) ──
+  // Both the vendor list and KPI stats are fetched simultaneously via Promise.all
+  // sharing one AbortController signal. When any filter/page/sort dep changes,
+  // React's cleanup cancels the in-flight pair before starting a fresh one.
+  // This eliminates the race-condition where a slow earlier response (e.g. search='T')
+  // could arrive after a faster later response (search='Test Vender From PO') and
+  // silently overwrite the correct KPI values with stale/broader data.
   useEffect(() => {
-    fetchStats();
-  }, [groupName, subGroupName, projectId, filters.groupName, filters.subGroupName, filters.status, filters.category, filters.search]);
+    const controller = new AbortController();
+    const { signal } = controller;
 
-  useEffect(() => {
-    fetchVendors();
-  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig]);
+    const loadAll = async () => {
+      setLoading(true);
+      try {
+        const sortKeyMap = {
+          name: 'name', category: 'category', rating: 'rating',
+          totalOrders: 'totalOrders', totalPurchaseValue: 'totalPurchaseValue',
+          lastPurchaseDate: 'lastPurchaseDate', status: 'status', createdAt: 'createdAt',
+        };
+
+        // Resolve active group/project (same logic used in standalone fetchVendors/fetchStats)
+        const activeGroup    = filters.groupName    || groupName    || null;
+        const activeSubGroup = filters.subGroupName || subGroupName || null;
+        const activeProject  = projectId || null;
+
+        // Build vendor-list query params
+        const vendorParams = new URLSearchParams({
+          page: currentPage, size: pageSize,
+          sortBy: sortKeyMap[sortConfig.key] || 'createdAt',
+          sortDirection: sortConfig.direction.toUpperCase()
+        });
+        if (activeGroup)    vendorParams.append('groupName',    activeGroup);
+        if (activeSubGroup) vendorParams.append('subGroupName', activeSubGroup);
+        if (activeProject)  vendorParams.append('projectId',    activeProject);
+        if (filters.status   !== 'all') vendorParams.append('status',      filters.status);
+        if (filters.category !== 'all') vendorParams.append('category',    filters.category);
+        if (filters.search)              vendorParams.append('searchTerm',  filters.search.trim());
+
+        // Build stats query params (same filters, no pagination/sort)
+        const statsParams = new URLSearchParams();
+        if (activeGroup)    statsParams.append('groupName',    activeGroup);
+        if (activeSubGroup) statsParams.append('subGroupName', activeSubGroup);
+        if (activeProject)  statsParams.append('projectId',    activeProject);
+        if (filters.status   !== 'all') statsParams.append('status',      filters.status);
+        if (filters.category !== 'all') statsParams.append('category',    filters.category);
+        if (filters.search)              statsParams.append('searchTerm',  filters.search.trim());
+
+        // Fire both requests simultaneously; share the same abort signal
+        const [vendorRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/vendors?${vendorParams}`,      { headers: getAuthHeaders(), credentials: 'include', signal }),
+          fetch(`${API_BASE_URL}/vendors/stats?${statsParams}`, { headers: getAuthHeaders(), credentials: 'include', signal })
+        ]);
+
+        if (!signal.aborted) {
+          if (vendorRes.ok) {
+            const data = await vendorRes.json();
+            setVendors(data.vendors || []);
+            setTotalPages(data.totalPages || 0);
+            setTotalElements(data.totalElements || 0);
+          } else {
+            showError('Failed to load vendors');
+            setVendors([]);
+          }
+          if (statsRes.ok) {
+            const data = await statsRes.json();
+            setStats(data);
+          }
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return; // cancelled by dep change — ignore
+        showError('Failed to load vendors');
+        setVendors([]);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    };
+
+    loadAll();
+    return () => controller.abort(); // cancel previous in-flight requests on re-run
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig, groupName, subGroupName, projectId]);
 
   // ─── Column helpers ────────────────────────────────────────────────────────
   const visibleColumns = columns.filter((c) => c.visible);
@@ -358,9 +432,14 @@ const VendorManagement = () => {
         sortBy: sortKeyMap[sortConfig.key] || 'createdAt',
         sortDirection: sortConfig.direction.toUpperCase()
       });
-      // Only filter by group when user explicitly selected one via the filter bar
-      if (filters.groupName) params.append('groupName', filters.groupName);
-      if (filters.subGroupName) params.append('subGroupName', filters.subGroupName);
+      // Use same active group/project resolution as fetchStats so both
+      // the vendor list and the KPI cards always filter by the same scope.
+      const activeGroup    = filters.groupName    || groupName    || null;
+      const activeSubGroup = filters.subGroupName || subGroupName || null;
+      const activeProject  = projectId || null;
+      if (activeGroup)    params.append('groupName',    activeGroup);
+      if (activeSubGroup) params.append('subGroupName', activeSubGroup);
+      if (activeProject)  params.append('projectId',    activeProject);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.search) params.append('searchTerm', filters.search);
@@ -652,16 +731,16 @@ const VendorManagement = () => {
           <input
             type="text" placeholder="Search by name, email, phone, code..."
             className="vendor-management-search" value={filters.search}
-            onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }}
+            onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, search: v })); setCurrentPage(0); }}
           />
           <select className="vendor-management-filter" value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
+            onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, status: v })); setCurrentPage(0); }}>
             <option value="all">All Status</option>
             <option value="Active">Active</option>
             <option value="Inactive">Inactive</option>
           </select>
           <select className="vendor-management-filter" value={filters.category}
-            onChange={(e) => { setFilters({ ...filters, category: e.target.value }); setCurrentPage(0); }}>
+            onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, category: v })); setCurrentPage(0); }}>
             <option value="all">All Categories</option>
             <option value="IT Equipment">IT Equipment</option>
             <option value="Office Furniture">Office Furniture</option>
@@ -1017,7 +1096,7 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone number" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>

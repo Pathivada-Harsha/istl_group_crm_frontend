@@ -238,8 +238,70 @@ const PurchaseOrders = () => {
   const handleDragEnd = () => { setDragOverIndex(null); dragSrcIndex.current = null; };
 
   // ─── Effects ───────────────────────────────────────────────────────────────
-  useEffect(() => { fetchPurchaseOrders(); }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig]);
-  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId]);
+  // AbortController + Promise.all: fetches PO list and KPI stats simultaneously
+  // with identical filter params. Cleanup aborts both in-flight requests when
+  // any filter/page/sort dep changes, eliminating race conditions on rapid typing.
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
+    const loadAll = async () => {
+      setLoading(true);
+      try {
+        const sortKeyMap = { poNumber: 'poNo', vendorName: 'vendorName', orderDate: 'orderDate', totalValue: 'totalValue', paymentStatus: 'paymentStatus', status: 'status' };
+
+        // PO list params
+        const poParams = new URLSearchParams({
+          page: currentPage, size: pageSize,
+          sortBy: sortKeyMap[sortConfig.key] || 'orderDate',
+          sortDirection: sortConfig.direction.toUpperCase()
+        });
+        if (groupName)    poParams.append('groupName',    groupName);
+        if (subGroupName) poParams.append('subGroupName', subGroupName);
+        if (projectId)    poParams.append('projectId',    projectId);
+        if (filters.status        !== 'all') poParams.append('status',        filters.status);
+        if (filters.paymentStatus !== 'all') poParams.append('paymentStatus', filters.paymentStatus);
+        if (filters.search)                  poParams.append('searchTerm',    filters.search.trim());
+
+        // Stats params — identical filters so KPI cards always match the table
+        const statsParams = new URLSearchParams();
+        if (groupName)    statsParams.append('groupName',    groupName);
+        if (subGroupName) statsParams.append('subGroupName', subGroupName);
+        if (projectId)    statsParams.append('projectId',    projectId);
+        if (filters.status        !== 'all') statsParams.append('status',        filters.status);
+        if (filters.paymentStatus !== 'all') statsParams.append('paymentStatus', filters.paymentStatus);
+        if (filters.search)                  statsParams.append('searchTerm',    filters.search.trim());
+
+        const [poRes, statsRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/purchase-orders?${poParams}`,       { credentials: 'include', headers: getAuthHeaders(), signal }),
+          fetch(`${API_BASE_URL}/purchase-orders/stats?${statsParams}`, { credentials: 'include', headers: getAuthHeaders(), signal })
+        ]);
+
+        if (!signal.aborted) {
+          if (poRes.ok) {
+            const data = await poRes.json();
+            setPurchaseOrders(data.purchaseOrders || []);
+            setTotalPages(data.totalPages || 0);
+            setTotalElements(data.totalElements || 0);
+          } else {
+            showError('Failed to load purchase orders');
+            setPurchaseOrders([]);
+          }
+          if (statsRes.ok) setStats(await statsRes.json());
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return; // cancelled by dep change — ignore
+        showError('Failed to load purchase orders');
+        setPurchaseOrders([]);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    };
+
+    loadAll();
+    return () => controller.abort(); // cancel in-flight requests on re-run
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig]);
   useEffect(() => { fetchVendors(); }, []);
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
