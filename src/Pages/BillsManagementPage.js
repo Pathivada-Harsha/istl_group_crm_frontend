@@ -943,10 +943,31 @@ const BillsManagementPage = () => {
 
   // ========== MARK AS PAID ==========
   const handleMarkPaid = (billId) => {
+    // Find the bill object to check its balance
+    const bill = bills.find(b => b.id === billId) || selectedBill;
+    const balance = parseFloat(bill?.balanceAmount || 0);
+
+    if (balance > 0) {
+      // Bill still has a pending balance — cannot mark as paid without recording receipt
+      setConfirmModal({
+        show: true,
+        title: 'Pending Balance Exists',
+        message: `This bill still has a pending balance of ₹${formatCurrency(balance)}. Please record the payment via "Add Payment" with receipt details before marking as fully paid.`,
+        type: 'warning',
+        confirmText: 'Add Payment Instead',
+        onConfirm: () => {
+          setConfirmModal({ show: false });
+          handleAddPayment(bill);
+        }
+      });
+      return;
+    }
+
+    // Balance is already 0 — safe to mark as paid
     setConfirmModal({
       show: true,
       title: 'Mark Bill as Paid',
-      message: 'Mark this bill as fully paid?',
+      message: 'All payments have been recorded. Mark this bill as fully paid?',
       type: 'confirm',
       onConfirm: () => performMarkPaid(billId)
     });
@@ -955,17 +976,11 @@ const BillsManagementPage = () => {
   const performMarkPaid = async (billId) => {
     setConfirmModal({ show: false });
     setLoading(true);
-    
     try {
       const response = await fetch(
         `${API_BASE_URL}/bills/${billId}/mark-paid`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          credentials: "include"
-        }
+        { method: 'POST', headers: getAuthHeaders(), credentials: 'include' }
       );
-
       if (response.ok) {
         showSuccess('Bill marked as paid');
         fetchBills();
@@ -973,7 +988,13 @@ const BillsManagementPage = () => {
         setShowDetailDrawer(false);
       } else {
         const errorData = await response.json();
-        showError(errorData.error || 'Failed to mark bill as paid');
+        const msg = errorData.error || errorData.message || 'Failed to mark bill as paid';
+        // If backend says balance still pending, prompt user to add payment
+        if (msg.toLowerCase().includes('pending balance') || msg.toLowerCase().includes('add payment')) {
+          showError(msg);
+        } else {
+          showError(msg);
+        }
       }
     } catch (error) {
       console.error('Error marking bill as paid:', error);

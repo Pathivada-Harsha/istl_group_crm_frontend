@@ -99,6 +99,7 @@ export default function VendorPaymentsPage() {
   const [totalPages, setTotalPages]   = useState(0);
   const [totalElements, setTotalElements] = useState(0);
   const [pageSize, setPageSize] = useState(10);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // stats
   const [stats, setStats] = useState(null);
@@ -109,6 +110,7 @@ export default function VendorPaymentsPage() {
   const [viewAllocationDetails, setViewAllocationDetails] = useState([]);
   const [loadingViewAllocations, setLoadingViewAllocations] = useState(false);
   const [viewBillDetails, setViewBillDetails]           = useState(null);
+  const [editBillInfo, setEditBillInfo]                  = useState(null);
 
   // create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -186,12 +188,12 @@ export default function VendorPaymentsPage() {
     load();
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.paymentType, filters.search]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.paymentType, filters.search, refreshKey]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search]);
 
-  const fetchAdvances = () => { /* data is fetched reactively by the useEffect above */ };
+  const fetchAdvances = () => { setRefreshKey(prev => prev + 1); };
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -439,12 +441,20 @@ export default function VendorPaymentsPage() {
   // ── edit ──────────────────────────────────────────────────────────────────
   const handleEditClick = async (adv) => {
     setEditingAdvance(adv);
+    setEditBillInfo(null);
     setEditFormData({advanceDate:adv.advanceDate,amount:adv.amount,paymentMode:adv.paymentMode||'Bank Transfer',transactionReference:adv.transactionReference||'',notes:adv.notes||'',});
     setEditProjectGroupName(adv.groupId||'');
     setEditProjectSubGroupName(adv.subGroupId||'');
     setEditProjectId(adv.projectId||'');
     setEditProjectGroups([]); setEditProjectSubs([]); setEditProjectList([]);
     setShowEditModal(true);
+    // For BILL_PAYMENT: fetch the linked bill so we can show bill info and max amount in the edit form
+    if(adv.paymentType==='BILL_PAYMENT' && adv.billId){
+      try {
+        const res = await fetch(`${API_BASE_URL}/bills/${adv.billId}`,{credentials:'include',headers:getAuthHeaders()});
+        if(res.ok) setEditBillInfo(await res.json());
+      } catch{}
+    }
     // Only load project dropdowns for ADVANCE type — BILL_PAYMENT project is locked
     if(adv.paymentType==='ADVANCE'){
       const groups = await filterApi.getAllGroups();
@@ -465,6 +475,16 @@ export default function VendorPaymentsPage() {
 
     const originalAdv = editingAdvance;
     const isBillPayment = originalAdv.paymentType === 'BILL_PAYMENT';
+
+    // Validate max amount for BILL_PAYMENT: new amount cannot exceed bill total
+    // (restored balance = bill balance + old payment amount)
+    if(isBillPayment && editBillInfo){
+      const restoredBalance = parseFloat(editBillInfo.balanceAmount||0) + parseFloat(originalAdv.amount||0);
+      if(editFormData.amount > restoredBalance){
+        showError(`Amount cannot exceed ₹${fmt(restoredBalance)} (bill balance + your existing payment)`);
+        return;
+      }
+    }
 
     // Project change only applies to ADVANCE type
     if(!isBillPayment){
@@ -1234,9 +1254,32 @@ export default function VendorPaymentsPage() {
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>
                       <input type="number" value={editFormData.amount||''} step="0.01"
-                        min={editingAdvance.appliedAmount||0}
+                        min={editingAdvance.paymentType==='BILL_PAYMENT' ? 0.01 : (editingAdvance.appliedAmount||0)}
+                        max={editingAdvance.paymentType==='BILL_PAYMENT' && editBillInfo
+                          ? parseFloat(editBillInfo.totalAmount||0)
+                          : undefined}
                         onChange={e=>setEditFormData(f=>({...f,amount:parseFloat(e.target.value)}))}/>
-                      {parseFloat(editingAdvance.appliedAmount)>0&&<small style={{color:'#92400e'}}>Min: {fmt(editingAdvance.appliedAmount)} (already allocated)</small>}
+                      {editingAdvance.paymentType==='BILL_PAYMENT' && editBillInfo && (
+                        <div style={{marginTop:6,padding:'8px 10px',background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,fontSize:12}}>
+                          <div style={{display:'flex',justifyContent:'space-between',gap:12}}>
+                            <span style={{color:'#0369a1'}}>Bill: <strong>{editBillInfo.billNo}</strong></span>
+                            <span style={{color:'#0369a1'}}>Total: <strong>{fmt(editBillInfo.totalAmount)}</strong></span>
+                          </div>
+                          <div style={{display:'flex',justifyContent:'space-between',gap:12,marginTop:3}}>
+                            <span style={{color:'#15803d'}}>Paid: <strong>{fmt(editBillInfo.paidAmount)}</strong></span>
+                            <span style={{color:parseFloat(editBillInfo.balanceAmount)>0?'#dc2626':'#15803d',fontWeight:600}}>
+                              Balance: {fmt(editBillInfo.balanceAmount)}
+                            </span>
+                          </div>
+                          <div style={{marginTop:4,color:'#64748b',fontSize:11}}>
+                            Max you can enter: <strong>{fmt(parseFloat(editBillInfo.balanceAmount||0) + parseFloat(editingAdvance.amount||0))}</strong>
+                            <span style={{marginLeft:4}}>(current balance + your existing payment)</span>
+                          </div>
+                        </div>
+                      )}
+                      {editingAdvance.paymentType==='ADVANCE' && parseFloat(editingAdvance.appliedAmount)>0 && (
+                        <small style={{color:'#92400e'}}>Min: {fmt(editingAdvance.appliedAmount)} (already allocated)</small>
+                      )}
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Payment Mode *</label>
