@@ -29,7 +29,7 @@ const DEFAULT_COLUMNS = [
   { id: 'status',           label: 'Status',             sortable: true,  visible: true },
   { id: 'group',            label: 'Group',              sortable: false, visible: false },
   { id: 'category',         label: 'Category',           sortable: false, visible: false },
-  { id: 'project',          label: 'Project',            sortable: false, visible: false },
+  { id: 'project',          label: 'Project',            sortable: false, visible: true  },
   { id: 'actions',          label: 'Actions',            sortable: false, visible: true },
 ];
 
@@ -107,6 +107,7 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const poPerms    = pagePermissions?.PURCHASE_ORDERS || [];
@@ -281,6 +282,7 @@ const PurchaseOrders = () => {
           if (poRes.ok) {
             const data = await poRes.json();
             setPurchaseOrders(data.purchaseOrders || []);
+            setProjectNames(data.projectNames || {});
             setTotalPages(data.totalPages || 0);
             setTotalElements(data.totalElements || 0);
           } else {
@@ -686,6 +688,7 @@ const PurchaseOrders = () => {
       if (!r.ok) throw new Error();
       const data = await r.json();
       setPurchaseOrders(data.purchaseOrders || []);
+      setProjectNames(data.projectNames || {});
       setTotalPages(data.totalPages || 0); setTotalElements(data.totalElements || 0);
     } catch { showError('Failed to load purchase orders'); setPurchaseOrders([]); }
     finally { setLoading(false); }
@@ -1079,10 +1082,138 @@ const PurchaseOrders = () => {
         return <td key={col.id}>{po.groupName || '—'}</td>;
       case 'category':
         return <td key={col.id}>{po.vendorCategory || po.category || '—'}</td>;
-      case 'project':
-        return <td key={col.id}>{po.projectId || '—'}</td>;
+      case 'project': {
+        const pName = projectNames[po.projectId];
+        return (
+          <td key={col.id}>
+            {po.projectId ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                  {pName || po.projectId}
+                </span>
+                {pName && (
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                    {po.projectId}
+                  </span>
+                )}
+              </div>
+            ) : <span style={{ color: '#94a3b8' }}>—</span>}
+          </td>
+        );
+      }
       default:
         return <td key={col.id}>—</td>;
+    }
+  };
+
+  // ─── Export all purchase orders to Excel ────────────────────────────────
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportParams = new URLSearchParams({ page: 0, size: 99999, sortBy: 'orderDate', sortDirection: 'DESC' });
+      const activeGroup    = filters.groupName    || groupName    || null;
+      const activeSubGroup = filters.subGroupName || subGroupName || null;
+      const activeProject  = projectId || null;
+      if (activeGroup)    exportParams.append('groupName',    activeGroup);
+      if (activeSubGroup) exportParams.append('subGroupName', activeSubGroup);
+      if (activeProject)  exportParams.append('projectId',    activeProject);
+      if (filters.status        !== 'all') exportParams.append('status',        filters.status);
+      if (filters.paymentStatus !== 'all') exportParams.append('paymentStatus', filters.paymentStatus);
+      if (filters.search)                  exportParams.append('searchTerm',    filters.search.trim());
+
+      const res = await fetch(`${API_BASE_URL}/purchase-orders?${exportParams}`, {
+        headers: getAuthHeaders(), credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Failed to fetch PO data for export');
+      const data = await res.json();
+      const allPOs = data.purchaseOrders || [];
+      const pNames = data.projectNames || {};
+      if (allPOs.length === 0) { showError('No purchase orders found to export.'); return; }
+
+      const EXPORT_COLS = [
+        { key: 'poNo',            label: 'PO Number'              },
+        { key: 'vendorName',      label: 'Vendor Name'            },
+        { key: 'orderDate',       label: 'Order Date'             },
+        { key: 'totalValue',      label: 'Total Value (₹)'        },
+        { key: 'status',          label: 'Status'                 },
+        { key: 'paymentStatus',   label: 'Payment Status'         },
+        { key: 'groupName',       label: 'Group'                  },
+        { key: 'subGroupName',    label: 'Sub Group'              },
+        { key: 'projectName',     label: 'Project Name'           },
+        { key: 'projectId',       label: 'Project ID'             },
+        { key: 'rfqId',           label: 'RFQ ID'                 },
+        { key: 'category',        label: 'Category'               },
+        { key: 'deliveryDate',    label: 'Delivery Date'          },
+        { key: 'paymentTerms',    label: 'Payment Terms'          },
+        { key: 'notes',           label: 'Notes'                  },
+      ];
+
+      const totalCols = EXPORT_COLS.length;
+      const now       = new Date();
+      const dateStr   = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+      const esc       = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      const headerCells = EXPORT_COLS.map(({ label }) =>
+        `<th style="background:#1e3a5f;color:#ffffff;font-weight:bold;font-size:11pt;padding:7px 10px;border:1px solid #334155;white-space:nowrap;text-align:left">${esc(label)}</th>`
+      ).join('');
+
+      const dataRowsHtml = allPOs.map((po, idx) => {
+        const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const cells = EXPORT_COLS.map(({ key }) => {
+          let val = po[key] ?? '';
+          if (key === 'projectName') val = pNames[po.projectId] || '';
+          if (key === 'projectId')   val = po.projectId || '';
+          if ((key === 'orderDate' || key === 'deliveryDate') && val)
+            val = new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          return `<td style="padding:5px 10px;border:1px solid #e2e8f0;background:${bg};font-size:10pt">${esc(val)}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+
+      const html = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+  <x:Name>Purchase Orders</x:Name>
+  <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>
+<table border="1" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif">
+  <tr>
+    <td style="font-weight:bold;font-size:14pt;padding:10px 12px;border:none;background:#ffffff;white-space:nowrap;vertical-align:middle">
+      Purchase Orders
+    </td>
+    <td style="font-weight:bold;font-size:11pt;padding:10px 12px;border:none;background:#ffffff;white-space:nowrap;vertical-align:middle;color:#475569">
+      Downloaded on: ${dateStr}
+    </td>
+    <td colspan="${totalCols - 2}" style="border:none;background:#ffffff"></td>
+  </tr>
+  <tr>${headerCells}</tr>
+  ${dataRowsHtml}
+</table>
+</body></html>`;
+
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=UTF-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `PurchaseOrders_${now.toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showSuccess(`${allPOs.length} purchase order${allPOs.length !== 1 ? 's' : ''} exported successfully`);
+    } catch (err) {
+      console.error('Export error:', err);
+      showError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -1160,7 +1291,9 @@ const PurchaseOrders = () => {
           <button className={`purchase-orders-btn-primary${!canCreate ? ' action-btn-disabled' : ''}`} onClick={() => canCreate && handleOpenCreatePO()} disabled={!canCreate} title={!canCreate ? "🔒 No create permission" : "Create PO"}>
             <Plus size={16} /> Create PO
           </button>
-          <button className="purchase-orders-btn-secondary"><Download size={16} /> Export</button>
+          <button className="purchase-orders-btn-secondary" onClick={handleExport} disabled={exporting}>
+            <Download size={16} /> {exporting ? 'Exporting…' : 'Export'}
+          </button>
         </div>
       </div>
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp,
   DollarSign, IndianRupee, Package, Calendar, Phone, Mail, MapPin,
@@ -41,7 +42,7 @@ const DEFAULT_COLUMNS = [
   { id: 'lastPurchaseDate',   label: 'Last Purchase',        sortable: true,  visible: true  },
   { id: 'status',             label: 'Status',               sortable: true,  visible: true  },
   { id: 'group',              label: 'Group',                sortable: false, visible: false },
-  { id: 'project',            label: 'Project',              sortable: false, visible: false },
+  { id: 'project',            label: 'Project',              sortable: false, visible: true  },
   { id: 'actions',            label: 'Actions',              sortable: false, visible: true  },
 ];
 
@@ -586,6 +587,131 @@ const VendorManagement = () => {
   };
   const getStatusBadgeClass = (status) => status === 'Active' ? 'vendor-badge-active' : 'vendor-badge-inactive';
 
+  // ─── Export all vendors to Excel ─────────────────────────────────────────
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const exportParams = new URLSearchParams({ page: 0, size: 99999, sortBy: 'createdAt', sortDirection: 'DESC' });
+      const activeGroup    = filters.groupName    || groupName    || null;
+      const activeSubGroup = filters.subGroupName || subGroupName || null;
+      const activeProject  = projectId || null;
+      if (activeGroup)    exportParams.append('groupName',    activeGroup);
+      if (activeSubGroup) exportParams.append('subGroupName', activeSubGroup);
+      if (activeProject)  exportParams.append('projectId',    activeProject);
+      if (filters.status   !== 'all') exportParams.append('status',      filters.status);
+      if (filters.category !== 'all') exportParams.append('category',    filters.category);
+      if (filters.search)              exportParams.append('searchTerm', filters.search.trim());
+
+      const res = await fetch(`${API_BASE_URL}/vendors?${exportParams}`, {
+        headers: getAuthHeaders(), credentials: 'include'
+      });
+      if (!res.ok) throw new Error('Failed to fetch vendor data for export');
+      const data = await res.json();
+      const allVendors = data.vendors || [];
+      if (allVendors.length === 0) { showError('No vendors found to export.'); return; }
+
+      const EXPORT_COLS = [
+        { key: 'name',               label: 'Vendor Name'              },
+        { key: 'vendorCode',         label: 'Vendor Code'              },
+        { key: 'contactPerson',      label: 'Contact Person'           },
+        { key: 'email',              label: 'Email'                    },
+        { key: 'phone',              label: 'Phone'                    },
+        { key: 'category',           label: 'Category'                 },
+        { key: 'vendorType',         label: 'Vendor Type'              },
+        { key: 'rating',             label: 'Rating'                   },
+        { key: 'totalOrders',        label: 'Total Orders'             },
+        { key: 'totalPurchaseValue', label: 'Total Purchase Value (₹)' },
+        { key: 'lastPurchaseDate',   label: 'Last Purchase Date'       },
+        { key: 'status',             label: 'Status'                   },
+        { key: 'groupName',          label: 'Group'                    },
+        { key: 'subGroupName',       label: 'Sub Group'                },
+        { key: 'projectName',        label: 'Project Name'             },
+        { key: 'projectId',          label: 'Project ID'               },
+        { key: 'city',               label: 'City'                     },
+        { key: 'state',              label: 'State'                    },
+        { key: 'gstNumber',          label: 'GST Number'               },
+        { key: 'notes',              label: 'Notes'                    },
+      ];
+
+      const totalCols = EXPORT_COLS.length;
+      const now       = new Date();
+      const dateStr   = now.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      // ── Build HTML table (Excel opens .xls HTML tables with full CSS styling) ──
+      const esc = (v) => String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+      const headerCells = EXPORT_COLS.map(({ label }) =>
+        `<th style="background:#1e3a5f;color:#ffffff;font-weight:bold;font-size:11pt;
+          padding:7px 10px;border:1px solid #334155;white-space:nowrap;text-align:left">${esc(label)}</th>`
+      ).join('');
+
+      const dataRowsHtml = allVendors.map((v, idx) => {
+        const bg = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+        const cells = EXPORT_COLS.map(({ key }) => {
+          let val = v[key] ?? '';
+          if (key === 'lastPurchaseDate' && val)
+            val = new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          return `<td style="padding:5px 10px;border:1px solid #e2e8f0;background:${bg};font-size:10pt">${esc(val)}</td>`;
+        }).join('');
+        return `<tr>${cells}</tr>`;
+      }).join('');
+
+      const half = Math.ceil(totalCols / 2);
+
+      const html = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:x="urn:schemas-microsoft-com:office:excel"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="UTF-8">
+  <!--[if gte mso 9]><xml>
+    <x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+      <x:Name>Vendors</x:Name>
+      <x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+    </x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook>
+  </xml><![endif]-->
+</head>
+<body>
+<table border="1" cellpadding="0" cellspacing="0"
+       style="border-collapse:collapse;font-family:Calibri,Arial,sans-serif">
+  <tr>
+    <td style="font-weight:bold;font-size:14pt;padding:10px 12px;
+               border:none;background:#ffffff;white-space:nowrap;vertical-align:middle">
+      Vendor Management
+    </td>
+    <td style="font-weight:bold;font-size:11pt;padding:10px 12px;
+               border:none;background:#ffffff;white-space:nowrap;vertical-align:middle;color:#475569">
+      Downloaded on: ${dateStr}
+    </td>
+    <td colspan="${totalCols - 2}" style="border:none;background:#ffffff"></td>
+  </tr>
+  <tr>${headerCells}</tr>
+  ${dataRowsHtml}
+</table>
+</body></html>`;
+
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=UTF-8' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `Vendors_${now.toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showSuccess(`${allVendors.length} vendor${allVendors.length !== 1 ? 's' : ''} exported successfully`);
+    } catch (err) {
+      console.error('Export error:', err);
+      showError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ─── Render cell by column id ──────────────────────────────────────────────
   const renderCell = (col, vendor) => {
     switch (col.id) {
@@ -655,7 +781,24 @@ const VendorManagement = () => {
       case 'group':
         return <td key={col.id}>{vendor.groupName || 'N/A'}</td>;
       case 'project':
-        return <td key={col.id}>{vendor.projectId || 'N/A'}</td>;
+        return (
+          <td key={col.id}>
+            {vendor.projectId ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                  {vendor.projectName || vendor.projectId}
+                </span>
+                {vendor.projectName && (
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                    {vendor.projectId}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span style={{ color: '#94a3b8' }}>N/A</span>
+            )}
+          </td>
+        );
       default:
         return <td key={col.id}>—</td>;
     }
@@ -695,7 +838,6 @@ const VendorManagement = () => {
     { title: 'Approved Vendors',     value: stats.activeVendors.toString(),             icon: <CheckCircle size={32} />, color: '#22c55e' },
     { title: 'Average Rating',       value: stats.averageRating.toFixed(1) + '/5',      icon: <Star size={32} />,        color: '#f59e0b' },
     { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue),   icon: <IndianRupee size={32} />, color: '#8b5cf6' },
-    { title: 'Pending Quotations',   value: stats.pendingQuotations.toString(),         icon: <FileText size={32} />,    color: '#06b6d4' },
   ] : [];
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -773,8 +915,8 @@ const VendorManagement = () => {
           <button className="vendor-management-btn-primary" onClick={handleAddNewVendor}>
             <Plus size={18} /> Add Vendor
           </button>
-          <button className="vendor-management-btn-secondary">
-            <Download size={18} /> Export
+          <button className="vendor-management-btn-secondary" onClick={handleExport} disabled={exporting}>
+            <Download size={18} /> {exporting ? 'Exporting…' : 'Export'}
           </button>
         </div>
       </div>

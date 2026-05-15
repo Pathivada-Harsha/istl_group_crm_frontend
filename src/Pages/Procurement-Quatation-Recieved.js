@@ -32,7 +32,7 @@ const ALL_QUOTATION_COLUMNS = [
   { id: 'status', label: 'Status', visible: true },
   { id: 'uploadedOn', label: 'Uploaded On', visible: true },
   { id: 'group', label: 'Group', visible: false },
-  { id: 'project', label: 'Project', visible: false },
+  { id: 'project', label: 'Project', visible: true },
   { id: 'actions', label: 'Actions', visible: true, fixed: true },
 ];
 
@@ -84,7 +84,7 @@ const QuotationsReceived = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // ── Column state (drag + visibility) ────────────────────────────────────
-  const COLUMN_VERSION = 'v2'; // bump this whenever ALL_QUOTATION_COLUMNS changes
+  const COLUMN_VERSION = 'v3'; // bumped: project column now visible by default
   const [columns, setColumns] = useState(() => {
     try {
       const saved = localStorage.getItem('quotationColumns');
@@ -892,7 +892,22 @@ const QuotationsReceived = () => {
         </td>
       );
       case 'group': return <td>{q.groupName || '—'}</td>;
-      case 'project': return <td>{q.projectId || '—'}</td>;
+      case 'project': return (
+        <td>
+          {q.projectId ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                {q.projectName || q.projectId}
+              </span>
+              {q.projectName && (
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  {q.projectId}
+                </span>
+              )}
+            </div>
+          ) : <span style={{ color: '#94a3b8' }}>—</span>}
+        </td>
+      );
       default: return <td>—</td>;
     }
   };
