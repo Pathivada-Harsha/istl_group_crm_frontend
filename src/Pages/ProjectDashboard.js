@@ -219,8 +219,189 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
   );
 };
 
+// ─── Capacity / Quantity Block ────────────────────────────────────────────────
+const CapacityBlock = ({ subGroups }) => {
+  const [activeModal, setActiveModal] = React.useState(null);
+
+  const formatQty = (qty, unit) => {
+    const n = Number(qty);
+    if (!unit) return n.toLocaleString('en-IN');
+    const u = unit.toLowerCase();
+    if (u === 'kw' || u === 'kwp') {
+      if (n >= 1000) return `${(n / 1000).toFixed(2)} MW`;
+      return `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} kW`;
+    }
+    if (u === 'mw' || u === 'mwp') return `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} MW`;
+    return `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} ${unit}`;
+  };
+
+  const META = {
+    ccms:           { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', icon: '📦', label: 'CCMS' },
+    mcms:           { bg: '#f0fdf4', border: '#22c55e', text: '#15803d', icon: '🔧', label: 'MCMS' },
+    itms:           { bg: '#fdf4ff', border: '#a855f7', text: '#7e22ce', icon: '🚦', label: 'ITMS' },
+    solar_rooftop:  { bg: '#fffbeb', border: '#f59e0b', text: '#b45309', icon: '☀️', label: 'Solar Rooftop' },
+    solar_ground:   { bg: '#fff7ed', border: '#f97316', text: '#c2410c', icon: '🏭', label: 'Ground Mount' },
+    solar_carports: { bg: '#f0f9ff', border: '#0ea5e9', text: '#0369a1', icon: '🅿️', label: 'Carports' },
+    solar_wind:     { bg: '#ecfdf5', border: '#10b981', text: '#065f46', icon: '💨', label: 'Solar Wind' },
+    default:        { bg: '#f8fafc', border: '#94a3b8', text: '#475569', icon: '📊', label: null },
+  };
+
+  const getMeta = (sg) => {
+    const s = (sg || '').toLowerCase().replace(/[^a-z]/g, '_');
+    if (s.includes('ccms'))    return META.ccms;
+    if (s.includes('mcms'))    return META.mcms;
+    if (s.includes('itms'))    return META.itms;
+    if (s.includes('rooftop')) return META.solar_rooftop;
+    if (s.includes('ground'))  return META.solar_ground;
+    if (s.includes('carport')) return META.solar_carports;
+    if (s.includes('wind'))    return META.solar_wind;
+    return META.default;
+  };
+
+  const isWind = (sg) => (sg || '').toLowerCase().includes('wind');
+
+  const getWindUnits = (sg) => {
+    const all = sg.allUnitTotals || [];
+    const km = all.find(u => u.unit?.toLowerCase() === 'km');
+    const kgTotal = all.filter(u => ['kg','kgs'].includes(u.unit?.toLowerCase()))
+                       .reduce((s, u) => s + Number(u.quantity), 0);
+    return { km, kg: kgTotal > 0 ? { unit: 'Kg', quantity: kgTotal } : null };
+  };
+
+  const n = subGroups.length;
+  const gridCols = n === 1 ? '1fr' : n === 2 ? '1fr 1fr' : n === 3 ? '1fr 1fr 1fr' : n === 4 ? 'repeat(4,1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))';
+
+  return (
+    <>
+      <div className="dashboard-section" style={{ paddingBottom: 8 }}>
+        <h3 className="section-title" style={{ marginBottom: 10 }}>
+          <span style={{ marginRight: 6 }}>⚡</span>Capacity & Quantity
+        </h3>
+        <div style={{ display: 'grid', gridTemplateColumns: gridCols, gap: 8 }}>
+          {subGroups.map((sg, i) => {
+            const m = getMeta(sg.subGroupName);
+            const wind = isWind(sg.subGroupName);
+            const { km, kg } = wind ? getWindUnits(sg) : {};
+            return (
+              <div key={i} onClick={() => setActiveModal(sg)} title="Click to see project breakdown"
+                style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 8,
+                  padding: '8px 12px 7px', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
+                  boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${m.border}44`; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,.04)'; }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                  <span style={{ fontSize: 14 }}>{m.icon}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: m.text, textTransform: 'uppercase', letterSpacing: .5 }}>
+                    {m.label || sg.subGroupName}
+                  </span>
+                </div>
+                {wind && (km || kg) ? (
+                  <div style={{ marginBottom: 5 }}>
+                    {km && <div style={{ fontSize: 17, fontWeight: 800, color: m.text, lineHeight: 1.15 }}>{formatQty(km.quantity, 'Km')}</div>}
+                    {kg && <div style={{ fontSize: 13, fontWeight: 600, color: m.text, opacity: .75, lineHeight: 1.2 }}>{formatQty(kg.quantity, 'Kg')}</div>}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 17, fontWeight: 800, color: m.text, lineHeight: 1.1, marginBottom: 5 }}>
+                    {formatQty(sg.totalQuantity, sg.unit)}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ background: m.border, color: '#fff', borderRadius: 9999, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                    {sg.projectCount} proj{sg.projectCount !== 1 ? 's' : ''}
+                  </span>
+                  <span style={{ fontSize: 9, color: m.border, fontWeight: 600 }}>Details →</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeModal && (() => {
+        const m = getMeta(activeModal.subGroupName);
+        const wind = isWind(activeModal.subGroupName);
+        const windKmTotal = wind ? (activeModal.allUnitTotals || []).find(u => u.unit?.toLowerCase() === 'km') : null;
+        return (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+            onClick={() => setActiveModal(null)}>
+            <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+              onClick={e => e.stopPropagation()}>
+              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: m.bg, borderRadius: '14px 14px 0 0' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Capacity Breakdown</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: m.text, marginTop: 2 }}>{m.icon} {m.label || activeModal.subGroupName}</div>
+                  {wind ? (
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                      {(activeModal.allUnitTotals || []).map((u, i) => (
+                        <span key={i}><strong>{formatQty(u.quantity, u.unit)}</strong></span>
+                      ))}
+                      <span>· <strong>{activeModal.projectCount}</strong> project{activeModal.projectCount !== 1 ? 's' : ''}</span>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                      Total <strong>{formatQty(activeModal.totalQuantity, activeModal.unit)}</strong> · <strong>{activeModal.projectCount}</strong> project{activeModal.projectCount !== 1 ? 's' : ''}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => setActiveModal(null)} style={{ background: '#fff', border: `1px solid ${m.border}`, borderRadius: 7, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: m.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+              </div>
+              <div style={{ padding: '4px 0 8px' }}>
+                {activeModal.projects.map((p, i) => {
+                  const pct = activeModal.totalQuantity > 0 ? (p.quantity / activeModal.totalQuantity) * 100 : 0;
+                  const breakdown = p.unitBreakdown || [];
+                  const windKmEntry = wind ? breakdown.find(u => u.unit?.toLowerCase() === 'km') : null;
+                  const windPct = windKmEntry && windKmTotal && Number(windKmTotal.quantity) > 0
+                    ? (Number(windKmEntry.quantity) / Number(windKmTotal.quantity)) * 100 : pct;
+                  return (
+                    <div key={i} style={{ padding: '12px 22px', borderBottom: i < activeModal.projects.length - 1 ? '1px solid #f8fafc' : 'none' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.orderTitle || p.projectId}
+                          </div>
+                          {p.projectId && <span style={{ fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 3, padding: '1px 5px' }}>{p.projectId}</span>}
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          {wind && windKmEntry ? (
+                            <>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: m.text }}>{formatQty(windKmEntry.quantity, 'Km')}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{windPct.toFixed(1)}% of Km</div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: m.text }}>{formatQty(p.quantity, p.unit)}</div>
+                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{pct.toFixed(1)}%</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      {wind && breakdown.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
+                          {breakdown.map((u, bi) => (
+                            <span key={bi} style={{ fontSize: 11, background: '#f1f5f9', border: `1px solid ${m.border}33`, borderRadius: 5, padding: '2px 7px', color: '#475569', fontWeight: 500 }}>
+                              {formatQty(u.quantity, u.unit)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${wind ? windPct : pct}%`, background: m.border, borderRadius: 99, transition: 'width .4s' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+    </>
+  );
+};
+
 // ─── Aggregated (All / Group / SubGroup) Dashboard ───────────────────────────
-const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
+const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityData }) => {
   const { financial = {}, procurement = {}, projects = [], statusDistribution = [] } = data;
   const breakdownRef = React.useRef(null);
   const scrollToBreakdown = () => breakdownRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -371,6 +552,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading }) => {
           ))}
         </div>
       </div>
+
+      {/* Capacity / Quantity Block */}
+      {capacityData && capacityData.subGroups && capacityData.subGroups.length > 0 && (
+        <CapacityBlock subGroups={capacityData.subGroups} />
+      )}
 
       {/* Financial Overview */}
       <div className="dashboard-section">
@@ -882,6 +1068,8 @@ const ProjectDashboard = () => {
   const [loading, setLoading]           = useState(false);
   const [dashboardData, setDashboardData] = useState(null);   // single-project data
   const [aggData, setAggData]           = useState(null);      // aggregated data
+  const [capacityData, setCapacityData] = useState(null);      // capacity block data
+  const [projectCapacity, setProjectCapacity] = useState(null); // single-project capacity
   const [showSpentModal, setShowSpentModal] = useState(false); // Amount Spent breakdown modal
   const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
   const [showProfitModal, setShowProfitModal] = useState(false); // Profit breakdown modal
@@ -928,15 +1116,58 @@ const ProjectDashboard = () => {
     finally { setLoading(false); }
   }, [groupName, subGroupName]);
 
+  // ── Fetch capacity/quantity summary from order book items ─────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchCapacity = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (groupName)    params.append('groupName',    groupName);
+      if (subGroupName) params.append('subGroupName', subGroupName);
+      const res = await fetch(`${API_BASE_URL}/projects/dashboard/capacity?${params}`, {
+        credentials: 'include', headers: getAuthHeaders(),
+      });
+      if (res.ok) setCapacityData(await res.json());
+      else setCapacityData(null);
+    } catch { setCapacityData(null); }
+  }, [groupName, subGroupName]);
+
   // ── React to filter changes ────────────────────────────────────────────────
   useEffect(() => {
-    if (mode === 'PROJECT') fetchProjectDashboard();
-    else fetchAggregated();
+    if (mode === 'PROJECT') {
+      fetchProjectDashboard();
+      setCapacityData(null);
+      // Fetch capacity for the specific project via subGroupName (derived after dashboard loads)
+      setProjectCapacity(null);
+    }
+    else { setProjectCapacity(null); fetchAggregated(); fetchCapacity(); }
   }, [mode, projectId, groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Fetch capacity for single project using filter context (subGroupName is known from dropdown) ─
+  useEffect(() => {
+    if (!dashboardData?.projectId) return;
+    // subGroupName & groupName are already in scope from useGroupProjectFilters
+    if (!subGroupName) return;
+    const params = new URLSearchParams();
+    if (groupName) params.append('groupName', groupName);
+    params.append('subGroupName', subGroupName);
+    fetch(`${API_BASE_URL}/projects/dashboard/capacity?${params}`, {
+      credentials: 'include', headers: getAuthHeaders(),
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.subGroups?.length) { setProjectCapacity(null); return; }
+        const sgEntry = data.subGroups[0];
+        const proj = sgEntry?.projects?.find(p => p.projectId === dashboardData.projectId);
+        if (proj)       setProjectCapacity({ value: proj.quantity,          unit: proj.unit });
+        else if (sgEntry) setProjectCapacity({ value: sgEntry.totalQuantity, unit: sgEntry.unit });
+        else            setProjectCapacity(null);
+      })
+      .catch(() => setProjectCapacity(null));
+  }, [dashboardData?.projectId, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRefresh = () => {
     if (mode === 'PROJECT') fetchProjectDashboard();
-    else fetchAggregated();
+    else { fetchAggregated(); fetchCapacity(); }
   };
 
   // ── Scope label for aggregated view ────────────────────────────────────────
@@ -985,6 +1216,7 @@ const ProjectDashboard = () => {
             scopeLabel={getScopeLabel()}
             onRefresh={handleRefresh}
             loading={loading}
+            capacityData={capacityData}
           />
         ) : !loading ? (
           <div className="project-dashboard-empty-state">
@@ -1043,6 +1275,13 @@ const ProjectDashboard = () => {
                 [<Calendar size={18} />, 'End Date',              formatDate(dashboardData.endDate)],
                 [<User size={18} />,     'Project Manager',       dashboardData.manager || 'Not Assigned'],
                 [<IndianRupee size={18} />, 'Total Project Value', formatCurrency(dashboardData.budget)],
+                ...(projectCapacity ? [[<span style={{ fontSize: 16 }}>⚡</span>, 'Capacity', (() => {
+                  const n = Number(projectCapacity.value);
+                  const u = (projectCapacity.unit || '').toLowerCase();
+                  if (u === 'kw' || u === 'kwp') return n >= 1000 ? `${(n/1000).toFixed(2)} MW` : `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} kW`;
+                  if (u === 'mw' || u === 'mwp') return `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} MW`;
+                  return `${n % 1 === 0 ? n.toLocaleString('en-IN') : n.toFixed(2)} ${projectCapacity.unit || 'Units'}`;
+                })()]] : []),
               ].map(([icon, label, val], i) => (
                 <div key={i} className="project-detail-item">
                   {icon}
