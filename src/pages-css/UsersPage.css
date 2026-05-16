@@ -364,18 +364,6 @@
   .users-page-table tbody td:first-child { background: #fff; }
   .users-page-table tbody tr:hover td:first-child { background: #f8fafc; }
   .users-page-table tbody tr.users-page-row-inactive td:first-child { background: #fafafa; }
-
-  /* Sticky Actions column */
-  .users-page-table thead th:last-child,
-  .users-page-table tbody td:last-child {
-    position: sticky;
-    right: 0;
-    z-index: 2;
-    background: #f8fafc;
-    box-shadow: -2px 0 6px -2px rgba(0, 0, 0, 0.08);
-  }
-  .users-page-table tbody td:last-child { background: #fff; }
-  .users-page-table tbody tr:hover td:last-child { background: #f8fafc; }
 }
 
 @media (max-width: 900px) {

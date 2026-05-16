@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import '../pages-css/AddNewDropdownItems.css';
@@ -18,6 +18,25 @@ const hdrs = () => ({ 'Content-Type': 'application/json' });
 
 const DropdownAdminPage = () => {
   const [activeTab, setActiveTab] = useState('groups');
+
+  /* ── Refs for height-matching (table card = form card height) ─────── */
+  const formCardRef  = useRef(null);
+  const tableCardRef = useRef(null);
+
+  // After each tab change (and after initial render), read the form card's
+  // rendered height and apply it to the table card so they always match.
+  useEffect(() => {
+    const sync = () => {
+      if (formCardRef.current && tableCardRef.current) {
+        const h = formCardRef.current.offsetHeight;
+        if (h > 0) tableCardRef.current.style.height = h + 'px';
+      }
+    };
+    // Two passes: immediate (layout may not be final) + after a frame
+    sync();
+    const id = requestAnimationFrame(sync);
+    return () => cancelAnimationFrame(id);
+  }, [activeTab]);
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
@@ -29,6 +48,11 @@ const DropdownAdminPage = () => {
   const [search,        setSearch]        = useState('');
   const [searchInput,   setSearchInput]   = useState('');  // debounced
 
+  /* ── Filter states for Sub-Groups and Projects tabs ────────────────── */
+  const [filterGroupId,    setFilterGroupId]    = useState(''); // Sub-Groups tab: filter by parent group
+  const [filterGroupIdProj, setFilterGroupIdProj] = useState(''); // Projects tab: filter by group
+  const [filterSubGroupId, setFilterSubGroupId] = useState(''); // Projects tab: filter by sub-group
+
   /* ── Table rows ────────────────────────────────────────────────── */
   const [rows,    setRows]    = useState([]);
   const [loading, setLoading] = useState(false);
@@ -37,6 +61,12 @@ const DropdownAdminPage = () => {
   const [availableGroups,    setAvailableGroups]    = useState([]);
   const [availableSubGroups, setAvailableSubGroups] = useState([]);
   const [filteredSubs,       setFilteredSubs]       = useState([]);
+
+  /* Derived: sub-groups of the group selected in the Projects tab filter.
+     Must be declared AFTER availableSubGroups to avoid TDZ error. */
+  const filteredSubGroupsForProj = filterGroupIdProj
+    ? availableSubGroups.filter(sg => sg.group?.id === Number(filterGroupIdProj))
+    : availableSubGroups;
 
   /* ── Forms ─────────────────────────────────────────────────────── */
   const [groupForm, setGroupForm] = useState({
@@ -63,6 +93,7 @@ const DropdownAdminPage = () => {
   /* ── Reset on tab switch ───────────────────────────────────────── */
   useEffect(() => {
     setCurrentPage(0); setSearch(''); setSearchInput('');
+    setFilterGroupId(''); setFilterGroupIdProj(''); setFilterSubGroupId('');
     setRows([]); setTotalElements(0); setTotalPages(0);
     loadDropdownData();
   }, [activeTab]);
@@ -74,8 +105,15 @@ const DropdownAdminPage = () => {
       const params = new URLSearchParams({ page: currentPage, size: pageSize, search });
       let url = '';
       if (activeTab === 'groups')    url = `${API}/admin/dropdowns/groups?${params}`;
-      if (activeTab === 'subgroups') url = `${API}/admin/dropdowns/subgroups?${params}`;
-      if (activeTab === 'projects')  url = `${API}/admin/dropdowns/projects?${params}`;
+      if (activeTab === 'subgroups') {
+        if (filterGroupId)    params.append('groupId', filterGroupId);
+        url = `${API}/admin/dropdowns/subgroups?${params}`;
+      }
+      if (activeTab === 'projects') {
+        if (filterGroupIdProj) params.append('groupId',    filterGroupIdProj);
+        if (filterSubGroupId)  params.append('subGroupId', filterSubGroupId);
+        url = `${API}/admin/dropdowns/projects?${params}`;
+      }
 
       const res  = await fetch(url, { credentials: 'include', headers: hdrs() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -86,7 +124,7 @@ const DropdownAdminPage = () => {
       setTotalPages(data.totalPages    ?? 0);
     } catch { showError('Failed to load data'); }
     finally  { setLoading(false); }
-  }, [activeTab, currentPage, pageSize, search]);
+  }, [activeTab, currentPage, pageSize, search, filterGroupId, filterGroupIdProj, filterSubGroupId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -246,7 +284,7 @@ const DropdownAdminPage = () => {
 
         {/* LEFT – Form card */}
         <div className="da-form-panel">
-          <div className="da-form-card">
+          <div className="da-form-card" ref={formCardRef}>
             <div className="da-form-card-hd">
               <span className="da-form-card-title">
                 Add New {activeTab === 'groups' ? 'Group' : activeTab === 'subgroups' ? 'Sub-Group' : 'Project'}
@@ -386,7 +424,7 @@ const DropdownAdminPage = () => {
 
         {/* RIGHT – Table card */}
         <div className="da-table-panel">
-          <div className="da-table-card">
+          <div className="da-table-card" ref={tableCardRef} style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
             {/* Toolbar */}
             <div className="da-toolbar">
@@ -401,6 +439,48 @@ const DropdownAdminPage = () => {
                   </button>
                 )}
               </div>
+
+              {/* Sub-Groups tab — Parent Group filter */}
+              {activeTab === 'subgroups' && (
+                <select
+                  value={filterGroupId}
+                  onChange={e => { setFilterGroupId(e.target.value); setCurrentPage(0); }}
+                  style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 140 }}
+                >
+                  <option value="">All Groups</option>
+                  {availableGroups.map(g => (
+                    <option key={g.id} value={g.id}>{g.groupLabel || g.groupName}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Projects tab — Group + Sub-Group filters */}
+              {activeTab === 'projects' && (
+                <>
+                  <select
+                    value={filterGroupIdProj}
+                    onChange={e => { setFilterGroupIdProj(e.target.value); setFilterSubGroupId(''); setCurrentPage(0); }}
+                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 130 }}
+                  >
+                    <option value="">All Groups</option>
+                    {availableGroups.map(g => (
+                      <option key={g.id} value={g.id}>{g.groupLabel || g.groupName}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={filterSubGroupId}
+                    onChange={e => { setFilterSubGroupId(e.target.value); setCurrentPage(0); }}
+                    disabled={!filterGroupIdProj}
+                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: filterGroupIdProj ? '#fff' : '#f8fafc', color: '#374151', cursor: filterGroupIdProj ? 'pointer' : 'default', minWidth: 140, opacity: filterGroupIdProj ? 1 : 0.6 }}
+                  >
+                    <option value="">{filterGroupIdProj ? 'All Sub-Groups' : 'Select Group First'}</option>
+                    {filteredSubGroupsForProj.map(sg => (
+                      <option key={sg.id} value={sg.id}>{sg.subGroupLabel || sg.subGroupName}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
               <button className="da-btn da-btn-icon" title="Refresh" onClick={loadData}>
                 <FiRefreshCw size={13} className={loading ? 'da-spin' : ''}/>
               </button>
