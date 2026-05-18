@@ -340,6 +340,21 @@
   color: #991b1b;
 }
 
+/* ── Approval workflow statuses ── */
+.Invoices-page-status-pending-approval {
+  background-color: #fff7ed;
+  color: #9a3412;
+  border: 1px solid #fed7aa;
+  font-weight: 600;
+}
+
+.Invoices-page-status-approved {
+  background-color: #d1fae5;
+  color: #064e3b;
+  border: 1px solid #6ee7b7;
+  font-weight: 600;
+}
+
 .Invoices-page-payment-partial {
   background-color: #fef3c7;
   color: #92400e;

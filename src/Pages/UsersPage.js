@@ -522,6 +522,10 @@ const UsersPage = () => {
   const [editManagerOpen, setEditManagerOpen] = useState(false);
   const createManagerRef = React.useRef(null);
   const editManagerRef = React.useRef(null);
+  // Reports-To dropdown: separate user list (not paginated table data)
+  const [dropdownUsers, setDropdownUsers] = useState([]);
+  const [dropdownUsersLoading, setDropdownUsersLoading] = useState(false);
+  const dropdownSearchTimer = useRef(null);
 
   const [toasts, setToasts] = useState([]);
   const [totalUsers, setTotalUsers] = useState(0);
@@ -687,6 +691,34 @@ useEffect(() => {
     finally { setAllUsersForTeamsLoading(false); }
   }, [user?.id]);
 
+  // Fetch up to 200 users for the Reports-To dropdown (not paginated)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const fetchDropdownUsers = useCallback(async () => {
+    if (!user?.id) return;
+    setDropdownUsersLoading(true);
+    try {
+      const res = await fetch(`${API}/users/search/${user.id}?page=1&size=200`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setDropdownUsers((data.userWrapper || []).map(transformUser));
+    } catch { /* silently fail */ }
+    finally { setDropdownUsersLoading(false); }
+  }, [user?.id]);
+
+  // Backend search for Reports-To dropdown (called when user types in search box)
+  const searchDropdownUsers = useCallback(async (term) => {
+    if (!user?.id) return;
+    setDropdownUsersLoading(true);
+    try {
+      const params = new URLSearchParams({ searchTerm: term.trim(), role: 'all', page: 1, size: 200 });
+      const res = await fetch(`${API}/users/search/${user.id}?${params}`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setDropdownUsers((data.userWrapper || []).map(transformUser));
+    } catch { /* silently fail */ }
+    finally { setDropdownUsersLoading(false); }
+  }, [user?.id]);
+
   // Fetch teams list
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const fetchTeams = useCallback(async () => {
@@ -808,6 +840,7 @@ useEffect(() => {
     setPhoneValidation({ isValid: null, message: '' });
     setPasswordStrength({ isValid: null, message: '' });
     setShowPassword(false); setShowConfirmPassword(false);
+    fetchDropdownUsers();
     setShowAddUserModal(true);
   };
 
@@ -888,7 +921,7 @@ useEffect(() => {
     } catch { return []; }
   };
 
-  const handleEditUser = (u) => { setSelectedUser({ ...u }); setShowEditUserModal(true); };
+  const handleEditUser = (u) => { setSelectedUser({ ...u }); fetchDropdownUsers(); setShowEditUserModal(true); };
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
@@ -1917,7 +1950,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     >
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {newUser.managerId
-                          ? (() => { const u = users.find(u => u.id === Number(newUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
+                          ? (() => { const u = dropdownUsers.find(u => u.id === Number(newUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
                           : '-- None --'}
                       </span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -1934,7 +1967,16 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             type="text"
                             placeholder="Search users..."
                             value={createManagerSearch}
-                            onChange={e => setCreateManagerSearch(e.target.value)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setCreateManagerSearch(val);
+                              if (dropdownSearchTimer.current) clearTimeout(dropdownSearchTimer.current);
+                              if (val.trim()) {
+                                dropdownSearchTimer.current = setTimeout(() => searchDropdownUsers(val), 400);
+                              } else {
+                                fetchDropdownUsers();
+                              }
+                            }}
                             onClick={e => e.stopPropagation()}
                             style={{
                               width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
@@ -1943,14 +1985,19 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                           />
                         </div>
                         <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                          {dropdownUsersLoading ? (
+                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <FiLoader size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Loading...
+                            </div>
+                          ) : (
+                            <>
                           <div
                             onClick={() => { setNewUser({ ...newUser, managerId: '' }); setCreateManagerOpen(false); }}
                             style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >-- None --</div>
-                          {users
-                            .filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(createManagerSearch.toLowerCase()))
+                          {dropdownUsers
                             .map(u => (
                               <div
                                 key={u.id}
@@ -1967,8 +2014,10 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
                               </div>
                           ))}
-                          {users.filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(createManagerSearch.toLowerCase())).length === 0 && (
+                          {dropdownUsers.length === 0 && (
                             <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                          )}
+                            </>
                           )}
                         </div>
                       </div>
@@ -2049,7 +2098,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     >
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {selectedUser.managerId
-                          ? (() => { const u = users.find(u => u.id === Number(selectedUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
+                          ? (() => { const u = dropdownUsers.find(u => u.id === Number(selectedUser.managerId)); return u ? `${u.full_name} (${u.role_name})` : '-- None --'; })()
                           : '-- None --'}
                       </span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
@@ -2066,7 +2115,16 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             type="text"
                             placeholder="Search users..."
                             value={editManagerSearch}
-                            onChange={e => setEditManagerSearch(e.target.value)}
+                            onChange={e => {
+                              const val = e.target.value;
+                              setEditManagerSearch(val);
+                              if (dropdownSearchTimer.current) clearTimeout(dropdownSearchTimer.current);
+                              if (val.trim()) {
+                                dropdownSearchTimer.current = setTimeout(() => searchDropdownUsers(val), 400);
+                              } else {
+                                fetchDropdownUsers();
+                              }
+                            }}
                             onClick={e => e.stopPropagation()}
                             style={{
                               width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
@@ -2075,15 +2133,20 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                           />
                         </div>
                         <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                          {dropdownUsersLoading ? (
+                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                              <FiLoader size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Loading...
+                            </div>
+                          ) : (
+                            <>
                           <div
                             onClick={() => { setSelectedUser({ ...selectedUser, managerId: null }); setEditManagerOpen(false); }}
                             style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
                             onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >-- None --</div>
-                          {users
+                          {dropdownUsers
                             .filter(u => u.id !== selectedUser.id)
-                            .filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(editManagerSearch.toLowerCase()))
                             .map(u => (
                               <div
                                 key={u.id}
@@ -2100,8 +2163,10 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
                               </div>
                           ))}
-                          {users.filter(u => u.id !== selectedUser.id).filter(u => `${u.full_name} ${u.role_name}`.toLowerCase().includes(editManagerSearch.toLowerCase())).length === 0 && (
+                          {dropdownUsers.filter(u => u.id !== selectedUser.id).length === 0 && (
                             <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                          )}
+                            </>
                           )}
                         </div>
                       </div>

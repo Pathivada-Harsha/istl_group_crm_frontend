@@ -50,6 +50,39 @@ const formatDate = (d) => d
   : 'N/A';
 const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
 
+/**
+ * Renders a pointer line + label only for slices whose value >= minPct.
+ * Small slices are silently skipped to avoid clutter.
+ */
+const renderPieLabel = (minPct = 5) => ({
+  cx, cy, midAngle, innerRadius, outerRadius, name, value, percent, pct
+}) => {
+  const displayPct = pct !== undefined ? pct : +(percent * 100).toFixed(1);
+  if (displayPct < minPct) return null;
+  const RADIAN = Math.PI / 180;
+  const sin = Math.sin(-RADIAN * midAngle);
+  const cos = Math.cos(-RADIAN * midAngle);
+  const mx = cx + (outerRadius + 22) * cos;
+  const my = cy + (outerRadius + 22) * sin;
+  const ex = mx + (cos >= 0 ? 1 : -1) * 16;
+  const ey = my;
+  const anchor = cos >= 0 ? 'start' : 'end';
+  return (
+    <g>
+      {/* Elbow line */}
+      <path d={`M${cx + outerRadius * cos},${cy + outerRadius * sin}L${mx},${my}L${ex},${ey}`}
+        stroke="#94a3b8" strokeWidth={1.2} fill="none" />
+      {/* Dot */}
+      <circle cx={ex} cy={ey} r={2.5} fill="#94a3b8" />
+      {/* Label text */}
+      <text x={ex + (cos >= 0 ? 5 : -5)} y={ey} textAnchor={anchor}
+        dominantBaseline="central" fontSize={11} fontWeight={600} fill="#1e293b">
+        {displayPct}%
+      </text>
+    </g>
+  );
+};
+
 // ─── Expense Dashboard Block ──────────────────────────────────────────────────
 const ExpenseDashboardSection = ({ expenseData, projectId }) => {
   const [expanded, setExpanded]   = useState(false);
@@ -357,10 +390,17 @@ const CapacityBlock = ({ subGroups }) => {
                     <div key={i} style={{ padding: '12px 22px', borderBottom: i < activeModal.projects.length - 1 ? '1px solid #f8fafc' : 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {p.orderTitle || p.projectId}
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.orderBookNo || p.projectId}
                           </div>
-                          {p.projectId && <span style={{ fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 3, padding: '1px 5px' }}>{p.projectId}</span>}
+                          {p.orderTitle && (
+                            <div style={{ fontSize: 12, color: '#1e293b', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.orderTitle}
+                            </div>
+                          )}
+                          {p.projectId && (
+                            <span style={{ fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 3, padding: '1px 5px', marginTop: 2, display: 'inline-block' }}>{p.projectId}</span>
+                          )}
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           {wind && windKmEntry ? (
@@ -409,6 +449,44 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
   // ── Status filter for the projects breakdown table ─────────────────────────
   const [statusFilter, setStatusFilter] = React.useState('ALL');
   const [statusModal, setStatusModal]   = React.useState(null); // { status, projects[] }
+  const [chartModal, setChartModal]     = React.useState(null); // { type: 'statusPie'|'budgetBar'|'contributionBar'|'contributionPie', title }
+  const [updatingProject, setUpdatingProject] = React.useState(null); // projectUniqueId being updated
+  const [editProgressModal, setEditProgressModal] = React.useState(null); // { project }
+  const [epStatus, setEpStatus] = React.useState('IN_PROGRESS');
+  const [epPct, setEpPct]       = React.useState(0);
+
+  // Sync editable values whenever a project is selected for editing
+  React.useEffect(() => {
+    if (editProgressModal?.project) {
+      setEpStatus(editProgressModal.project.status || 'IN_PROGRESS');
+      setEpPct(autoProgress(editProgressModal.project));
+    }
+  }, [editProgressModal]);
+
+  // ── Smart progress helpers ────────────────────────────────────────────────
+  // Auto-compute progress from financial data when no manual value exists
+  const autoProgress = (p) => {
+    if (p.progressPercentage != null) return Number(p.progressPercentage);
+    const budget = Number(p.budget) || 0;
+    const received = Number(p.received) || 0;
+    if (budget <= 0) return 0;
+    return Math.min(100, Math.round((received / budget) * 100));
+  };
+
+  // PATCH status + progress to backend
+  const updateProjectStatusProgress = async (projectUniqueId, status, progressPercentage) => {
+    setUpdatingProject(projectUniqueId);
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${projectUniqueId}/status-progress`, {
+        method: 'PATCH',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, progressPercentage }),
+      });
+      if (res.ok) onRefresh();
+    } catch (e) { console.error('Failed to update project', e); }
+    finally { setUpdatingProject(null); }
+  };
 
   const filteredProjects = statusFilter === 'ALL'
     ? projects
@@ -481,7 +559,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     </div>
   );
 
-  const statusColor = { Completed: '#22c55e', 'In Progress': '#3b82f6', Planning: '#f59e0b', 'On Hold': '#8b5cf6', Cancelled: '#ef4444' };
+  const statusColor = { 'Not Started': '#64748b', Completed: '#22c55e', 'In Progress': '#3b82f6', Planning: '#f59e0b', 'On Hold': '#8b5cf6', Cancelled: '#ef4444', NOT_STARTED: '#64748b', IN_PROGRESS: '#3b82f6', COMPLETED: '#22c55e', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
 
   // Top projects by budget for chart
   const topByBudget = [...projects]
@@ -519,12 +597,13 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
         <h3 className="section-title"><Briefcase size={20} />Projects Overview</h3>
         <div className="kpi-grid">
           {[
-            { label: 'Total Projects', val: data.totalProjects,      color: '#3b82f6', icon: <Briefcase size={32} />,   statusKey: 'ALL' },
-            { label: 'Completed',      val: data.completedProjects,  color: '#22c55e', icon: <CheckCircle size={32} />, statusKey: 'COMPLETED' },
-            { label: 'In Progress',    val: data.inProgressProjects, color: '#06b6d4', icon: <Activity size={32} />,    statusKey: 'IN_PROGRESS' },
-            { label: 'Planning',       val: data.planningProjects,   color: '#f59e0b', icon: <Target size={32} />,      statusKey: 'PLANNING' },
-            { label: 'On Hold',        val: data.onHoldProjects,     color: '#8b5cf6', icon: <Clock size={32} />,       statusKey: 'ON_HOLD' },
-            { label: 'Cancelled',      val: data.cancelledProjects,  color: '#ef4444', icon: <XCircle size={32} />,     statusKey: 'CANCELLED' },
+            { label: 'Total Projects', val: data.totalProjects,          color: '#3b82f6', icon: <Briefcase size={32} />,   statusKey: 'ALL' },
+            { label: 'Not Started',    val: data.notStartedProjects,  color: '#64748b', icon: <Target size={32} />,      statusKey: 'NOT_STARTED' },
+            { label: 'Planning',       val: data.planningProjects,    color: '#f59e0b', icon: <Target size={32} />,      statusKey: 'PLANNING' },
+            { label: 'In Progress',    val: data.inProgressProjects,  color: '#06b6d4', icon: <Activity size={32} />,    statusKey: 'IN_PROGRESS' },
+            { label: 'Completed',      val: data.completedProjects,   color: '#22c55e', icon: <CheckCircle size={32} />, statusKey: 'COMPLETED' },
+            { label: 'On Hold',        val: data.onHoldProjects,      color: '#8b5cf6', icon: <Clock size={32} />,       statusKey: 'ON_HOLD' },
+            { label: 'Cancelled',      val: data.cancelledProjects,   color: '#ef4444', icon: <XCircle size={32} />,     statusKey: 'CANCELLED' },
           ].filter(k => k.val > 0 || k.label === 'Total Projects').map((k, i) => (
             <div key={i} className="kpi-card" style={{ borderTopColor: k.color, cursor: projects.length > 0 ? 'pointer' : 'default',
               outline: statusFilter === k.statusKey ? `2px solid ${k.color}` : 'none' }}
@@ -669,43 +748,53 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 
       {/* Charts Row */}
       <div className="dashboard-charts-grid">
-        {/* Status Pie */}
+        {/* Status Pie — click to expand */}
         {statusDistribution.length > 0 ? (
-          <div className="chart-card">
-            <div className="chart-header"><h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4></div>
-            <ResponsiveContainer width="100%" height={220}>
-              <RechartsPieChart>
-                <Pie data={statusDistribution} cx="50%" cy="50%" labelLine={false}
-                  label={e => `${e.name} (${e.value})`} outerRadius={90} dataKey="value">
-                  {statusDistribution.map((entry, i) => (
-                    <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend />
-              </RechartsPieChart>
-            </ResponsiveContainer>
+          <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'statusPie' })}>
+            <div className="chart-header">
+              <h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4>
+              <span className="chart-expand-hint">🔍 Click to expand</span>
+            </div>
+            <div style={{ height: 260, position: 'relative' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <RechartsPieChart margin={{ top: 10, bottom: 30, left: 20, right: 20 }}>
+                  <Pie data={statusDistribution} cx="50%" cy="44%" labelLine={false}
+                    label={renderPieLabel(8)} outerRadius={75} dataKey="value">
+                    {statusDistribution.map((entry, i) => (
+                      <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         ) : (
           <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Status Distribution</h4></div><EmptyChart /></div>
         )}
 
-        {/* Top Projects by Budget bar chart */}
+        {/* Top Projects Budget Bar — click to expand */}
         {topByBudget.length > 0 ? (
-          <div className="chart-card">
-            <div className="chart-header"><h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4></div>
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={topByBudget} margin={{ left: 10, right: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
-                <Tooltip formatter={v => formatCurrency(v)} />
-                <Legend />
-                <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
-                <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
-                <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'budgetBar' })}>
+            <div className="chart-header">
+              <h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4>
+              <span className="chart-expand-hint">🔍 Click to expand</span>
+            </div>
+            <div style={{ height: 260 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topByBudget} margin={{ left: 10, right: 10, top: 5, bottom: 30 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" interval={0} />
+                  <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
+                  <Tooltip formatter={v => formatCurrency(v)} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
+                  <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
+                  <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         ) : (
           <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Budget vs Received</h4></div><EmptyChart /></div>
@@ -725,62 +814,68 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           </h3>
           <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             {/* Horizontal Bar chart — budget amounts */}
-            <div className="chart-card">
+            <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'contributionBar' })}>
               <div className="chart-header">
                 <h4 className="chart-title">
                   <BarChart3 size={15} />
                   {data.scope === 'SUBGROUP' ? 'Projects by Order Value (₹)' : data.scope === 'GROUP' ? 'Sub-groups by Order Value (₹)' : 'Groups by Order Value (₹)'}
                 </h4>
+                <span className="chart-expand-hint">🔍 Click to expand</span>
               </div>
-              <ResponsiveContainer width="100%" height={210}>
-                <BarChart data={contributionData} layout="vertical" margin={{ left: 10, right: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={110} />
-                  <Tooltip
-                    formatter={(v, name) => name === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, name]}
-                    labelFormatter={label => label}
-                    contentStyle={{ fontSize: 12 }}
-                  />
-                  <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
-                    {contributionData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              <div style={{ height: Math.max(220, contributionData.length * 36 + 40) }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={contributionData} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
+                    <Tooltip
+                      formatter={(v, name) => name === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, name]}
+                      labelFormatter={label => label}
+                      contentStyle={{ fontSize: 12 }}
+                    />
+                    <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
+                      {contributionData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
             {/* Pie chart — % contribution */}
-            <div className="chart-card">
+            <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'contributionPie' })}>
               <div className="chart-header">
                 <h4 className="chart-title">
                   <PieChart size={15} />
                   {data.scope === 'SUBGROUP' ? 'Project Turnover Share (%)' : data.scope === 'GROUP' ? 'Sub-group Turnover Share (%)' : 'Group Turnover Share (%)'}
                 </h4>
+                <span className="chart-expand-hint">🔍 Click to expand</span>
               </div>
-              <ResponsiveContainer width="100%" height={210}>
-                <RechartsPieChart>
-                  <Pie
-                    data={contributionData}
-                    dataKey="pct"
-                    nameKey="name"
-                    cx="50%" cy="50%"
-                    outerRadius={90}
-                    labelLine={false}
-                    label={({ name, pct }) => `${pct}%`}
-                  >
-                    {contributionData.map((_, i) => (
-                      <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(v, name) => [`${v}%`, name]} />
-                  <Legend
-                    formatter={(value, entry) => `${value} (${entry.payload.pct}%)`}
-                    wrapperStyle={{ fontSize: 12 }}
-                  />
-                </RechartsPieChart>
-              </ResponsiveContainer>
+              <div style={{ height: 300 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RechartsPieChart margin={{ top: 10, bottom: 30, left: 20, right: 20 }}>
+                    <Pie
+                      data={contributionData}
+                      dataKey="pct"
+                      nameKey="name"
+                      cx="50%" cy="44%"
+                      outerRadius={85}
+                      labelLine={false}
+                      label={renderPieLabel(5)}
+                    >
+                      {contributionData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v, name) => [`${v}%`, name]} />
+                    <Legend
+                      formatter={(value, entry) => `${value} (${entry.payload.pct}%)`}
+                      wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
+                    />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>
@@ -798,10 +893,10 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             </h3>
             {/* Status filter pills */}
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {['ALL','COMPLETED','IN_PROGRESS','PLANNING','ON_HOLD','CANCELLED'].filter(s =>
+              {['ALL','NOT_STARTED','PLANNING','IN_PROGRESS','ON_HOLD','COMPLETED','CANCELLED'].filter(s =>
                 s === 'ALL' || projects.some(p => p.status === s || p.status?.replace(/ /g,'_') === s)
               ).map(s => {
-                const colors = { COMPLETED:'#22c55e', IN_PROGRESS:'#06b6d4', PLANNING:'#f59e0b', ON_HOLD:'#8b5cf6', CANCELLED:'#ef4444', ALL:'#3b82f6' };
+                const colors = { NOT_STARTED:'#64748b', COMPLETED:'#22c55e', IN_PROGRESS:'#06b6d4', PLANNING:'#f59e0b', ON_HOLD:'#8b5cf6', CANCELLED:'#ef4444', ALL:'#3b82f6' };
                 const active = statusFilter === s;
                 return (
                   <button key={s} onClick={() => setStatusFilter(s)}
@@ -826,6 +921,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                   <col style={{ minWidth: 200 }} />  {/* Project */}
                   <col style={{ minWidth: 140 }} />  {/* Group/Category */}
                   <col style={{ minWidth: 110 }} />  {/* Status */}
+                  <col style={{ minWidth: 130 }} />  {/* Progress */}
                   <col style={{ minWidth: 120 }} />  {/* Budget */}
                   <col style={{ minWidth: 110 }} />  {/* Billed */}
                   <col style={{ minWidth: 120 }} />  {/* Received */}
@@ -839,6 +935,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     <th className="agg-th-left">Project</th>
                     <th className="agg-th-left">Group / Category</th>
                     <th className="agg-th-left">Status</th>
+                    <th className="agg-th-left">Progress</th>
                     <th className="agg-th-right">Order Value</th>
                     <th className="agg-th-right">Invoice Raised</th>
                     <th className="agg-th-right">Amount Received</th>
@@ -848,7 +945,9 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 </thead>
                 <tbody>
                   {filteredProjects.map((p, i) => {
-                    const statusColors = { COMPLETED: '#22c55e', IN_PROGRESS: '#3b82f6', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
+                    const statusColors = { NOT_STARTED: '#64748b', COMPLETED: '#22c55e', IN_PROGRESS: '#3b82f6', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
+                    const pct = autoProgress(p);
+                    const isUpdating = updatingProject === p.projectId;
                     return (
                       <tr key={i} className={i % 2 === 0 ? 'agg-tr-even' : 'agg-tr-odd'}>
                         <td className="agg-td-left">
@@ -859,11 +958,37 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                           <div className="agg-group-name">{p.groupId || '-'}</div>
                           <div className="agg-subgroup-name">{p.subGroupName || ''}</div>
                         </td>
+                        {/* Clickable status badge — opens inline editor */}
                         <td className="agg-td-left">
-                          <span className="agg-status-badge" style={{
-                            background: (statusColors[p.status] || '#94a3b8') + '22',
-                            color: statusColors[p.status] || '#94a3b8',
-                          }}>{p.status?.replace(/_/g, ' ')}</span>
+                          <button
+                            className="agg-status-badge agg-status-btn"
+                            title="Click to update status"
+                            disabled={isUpdating}
+                            onClick={() => setEditProgressModal({ project: p })}
+                            style={{
+                              background: (statusColors[p.status] || '#94a3b8') + '22',
+                              color: statusColors[p.status] || '#94a3b8',
+                              border: `1.5px solid ${(statusColors[p.status] || '#94a3b8')}55`,
+                              cursor: 'pointer',
+                            }}>
+                            {isUpdating ? '…' : (p.status?.replace(/_/g, ' ') || '—')}
+                          </button>
+                        </td>
+                        {/* Progress bar cell */}
+                        <td className="agg-td-left" style={{ minWidth: 130 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 7, background: '#e2e8f0', borderRadius: 99, overflow: 'hidden' }}>
+                              <div style={{
+                                height: '100%', borderRadius: 99, transition: 'width 0.4s',
+                                width: `${pct}%`,
+                                background: pct >= 100 ? '#22c55e' : pct >= 60 ? '#3b82f6' : pct >= 30 ? '#f59e0b' : '#ef4444'
+                              }} />
+                            </div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', minWidth: 34 }}>{pct}%</span>
+                            {p.progressPercentage == null && (
+                              <span title="Auto-calculated from received amount" style={{ fontSize: 9, color: '#94a3b8' }}>auto</span>
+                            )}
+                          </div>
                         </td>
                         <td className="agg-td-right agg-val-default">{formatCurrency(p.budget)}</td>
                         <td className="agg-td-right agg-val-default">{formatCurrency(p.billed)}</td>
@@ -876,7 +1001,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 </tbody>
                 <tfoot>
                   <tr className="agg-tfoot-row">
-                    <td colSpan={3} className="agg-td-left agg-tfoot-label">TOTAL — {projects.length} projects</td>
+                    <td colSpan={4} className="agg-td-left agg-tfoot-label">TOTAL — {projects.length} projects</td>
                     <td className="agg-td-right">{formatCurrency(financial.totalProjectValue)}</td>
                     <td className="agg-td-right">{formatCurrency(financial.totalBilled)}</td>
                     <td className="agg-td-right agg-val-green">{formatCurrency(financial.totalReceived)}</td>
@@ -891,9 +1016,188 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
       )}
       </div>
 
+      {/* ── Chart Expand Modal ──────────────────────────────────────────────────── */}
+      {chartModal && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(15,23,42,0.72)', backdropFilter:'blur(6px)',
+          zIndex:10300, display:'flex', alignItems:'center', justifyContent:'center', padding:24
+        }} onClick={() => setChartModal(null)}>
+          <div style={{
+            background:'#fff', borderRadius:16, width:'100%', maxWidth:900, maxHeight:'90vh',
+            display:'flex', flexDirection:'column', boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden'
+          }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ padding:'16px 24px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:'#1e293b', display:'flex', alignItems:'center', gap:8 }}>
+                {chartModal.type === 'statusPie' && <><PieChart size={18} /> Project Status Distribution</>}
+                {chartModal.type === 'budgetBar' && <><BarChart3 size={18} /> Top Projects — Budget vs Received</>}
+                {chartModal.type === 'contributionBar' && <><BarChart3 size={18} /> {data.scope === 'SUBGROUP' ? 'Projects' : data.scope === 'GROUP' ? 'Sub-groups' : 'Groups'} by Order Value</>}
+                {chartModal.type === 'contributionPie' && <><PieChart size={18} /> {data.scope === 'SUBGROUP' ? 'Project' : data.scope === 'GROUP' ? 'Sub-group' : 'Group'} Turnover Share (%)</>}
+              </h3>
+              <button onClick={() => setChartModal(null)} style={{ background:'#f1f5f9', border:'none', cursor:'pointer', padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:16 }}>✕</button>
+            </div>
+            {/* Chart body */}
+            <div style={{ flex:1, padding:'20px 24px', overflow:'auto' }}>
+              {chartModal.type === 'statusPie' && statusDistribution.length > 0 && (
+                <ResponsiveContainer width="100%" height={420}>
+                  <RechartsPieChart margin={{ top: 20, bottom: 40, left: 40, right: 40 }}>
+                    <Pie data={statusDistribution} cx="50%" cy="44%" labelLine={false}
+                      label={renderPieLabel(5)} outerRadius={140} dataKey="value">
+                      {statusDistribution.map((entry, i) => (
+                        <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              )}
+              {chartModal.type === 'budgetBar' && (
+                <ResponsiveContainer width="100%" height={380}>
+                  <BarChart data={topByBudget} margin={{ left: 20, right: 20, top: 10, bottom: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
+                    <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
+                    <Tooltip formatter={v => formatCurrency(v)} />
+                    <Legend wrapperStyle={{ fontSize: 13 }} />
+                    <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
+                    <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
+                    <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {chartModal.type === 'contributionBar' && (
+                <ResponsiveContainer width="100%" height={Math.max(320, contributionData.length * 44 + 60)}>
+                  <BarChart data={contributionData} layout="vertical" margin={{ left: 20, right: 40, top: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
+                    <Tooltip formatter={(v, n) => n === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, n]} contentStyle={{ fontSize: 12 }} />
+                    <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
+                      {contributionData.map((d, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+              {chartModal.type === 'contributionPie' && (
+                <ResponsiveContainer width="100%" height={460}>
+                  <RechartsPieChart>
+                    <Pie
+                      data={contributionData} dataKey="pct" nameKey="name"
+                      cx="50%" cy="44%" outerRadius={150} labelLine={false}
+                      label={renderPieLabel(5)}
+                    >
+                      {contributionData.map((_, i) => (
+                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v, name) => [`${v}%`, name]} />
+                    <Legend formatter={(value, entry) => `${value} (${entry.payload.pct}%)`} wrapperStyle={{ fontSize: 13 }} />
+                  </RechartsPieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Status & Progress Modal ──────────────────────────────────────── */}
+      {editProgressModal && (() => {
+        const ep = editProgressModal.project;
+        const statusColors = { NOT_STARTED: '#64748b', COMPLETED: '#22c55e', IN_PROGRESS: '#3b82f6', PLANNING: '#f59e0b', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444' };
+        const handleSave = () => {
+          updateProjectStatusProgress(ep.projectId, epStatus, epPct);
+          setEditProgressModal(null);
+        };
+        // Auto-set to 100 when COMPLETED selected
+        const handleStatusChange = (s) => {
+          setEpStatus(s);
+          if (s === 'COMPLETED') setEpPct(100);
+          if (s === 'PLANNING') setEpPct(0);
+        };
+        return (
+          <div style={{
+            position:'fixed', inset:0, background:'rgba(15,23,42,0.6)', backdropFilter:'blur(4px)',
+            zIndex:10400, display:'flex', alignItems:'center', justifyContent:'center', padding:24
+          }} onClick={() => setEditProgressModal(null)}>
+            <div style={{
+              background:'#fff', borderRadius:16, width:'100%', maxWidth:480,
+              boxShadow:'0 24px 60px rgba(0,0,0,0.22)', overflow:'hidden'
+            }} onClick={e => e.stopPropagation()}>
+              {/* Header */}
+              <div style={{ background: `linear-gradient(135deg, ${statusColors[epStatus] || '#3b82f6'}ee, ${statusColors[epStatus] || '#3b82f6'}bb)`, padding:'16px 20px' }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                  <div>
+                    <div style={{ color:'rgba(255,255,255,0.8)', fontSize:11, fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px' }}>Update Project</div>
+                    <div style={{ color:'#fff', fontWeight:700, fontSize:16, marginTop:2 }}>{ep.projectName}</div>
+                    <div style={{ color:'rgba(255,255,255,0.75)', fontSize:12 }}>{ep.projectId}</div>
+                  </div>
+                  <button onClick={() => setEditProgressModal(null)} style={{ background:'rgba(255,255,255,0.2)', border:'none', cursor:'pointer', color:'#fff', padding:8, borderRadius:8, fontSize:18 }}>✕</button>
+                </div>
+              </div>
+              <div style={{ padding:24 }}>
+                {/* Status selector */}
+                <div style={{ marginBottom:20 }}>
+                  <label style={{ display:'block', fontSize:13, fontWeight:600, color:'#374151', marginBottom:8 }}>Project Status</label>
+                  <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                    {['NOT_STARTED','PLANNING','IN_PROGRESS','ON_HOLD','COMPLETED','CANCELLED'].map(s => (
+                      <button key={s} onClick={() => handleStatusChange(s)} style={{
+                        padding:'6px 14px', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer',
+                        border:`2px solid ${statusColors[s] || '#94a3b8'}`,
+                        background: epStatus === s ? statusColors[s] : 'transparent',
+                        color: epStatus === s ? '#fff' : statusColors[s],
+                        transition:'all 0.15s'
+                      }}>{s.replace(/_/g,' ')}</button>
+                    ))}
+                  </div>
+                </div>
+                {/* Progress slider */}
+                <div style={{ marginBottom:24 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
+                    <label style={{ fontSize:13, fontWeight:600, color:'#374151' }}>Completion Progress</label>
+                    <span style={{ fontSize:20, fontWeight:800, color: statusColors[epStatus] || '#3b82f6' }}>{epPct}%</span>
+                  </div>
+                  <input type="range" min={0} max={100} step={5} value={epPct}
+                    onChange={e => setEpPct(Number(e.target.value))}
+                    style={{ width:'100%', accentColor: statusColors[epStatus] || '#3b82f6' }} />
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:11, color:'#94a3b8', marginTop:4 }}>
+                    <span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span>
+                  </div>
+                  {/* Progress bar preview */}
+                  <div style={{ marginTop:10, height:10, background:'#e2e8f0', borderRadius:99, overflow:'hidden' }}>
+                    <div style={{
+                      height:'100%', borderRadius:99, transition:'width 0.3s',
+                      width:`${epPct}%`,
+                      background: epPct >= 100 ? '#22c55e' : epPct >= 60 ? '#3b82f6' : epPct >= 30 ? '#f59e0b' : '#ef4444'
+                    }} />
+                  </div>
+                  {/* Smart hint */}
+                  <div style={{ marginTop:8, fontSize:11, color:'#6b7280', background:'#f8fafc', padding:'8px 12px', borderRadius:8 }}>
+                    💡 <strong>Auto rules:</strong> COMPLETED → 100% · NOT_STARTED / PLANNING → 0% · IN_PROGRESS → weighted from PO delivery + invoicing + payments
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <button onClick={() => setEditProgressModal(null)} style={{
+                    flex:1, padding:'10px 0', borderRadius:8, border:'1.5px solid #e2e8f0',
+                    background:'#fff', color:'#374151', fontWeight:600, cursor:'pointer', fontSize:14
+                  }}>Cancel</button>
+                  <button onClick={handleSave} style={{
+                    flex:2, padding:'10px 0', borderRadius:8, border:'none',
+                    background: statusColors[epStatus] || '#3b82f6', color:'#fff', fontWeight:700, cursor:'pointer', fontSize:14
+                  }}>Save Changes</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Status Filter Modal ──────────────────────────────────────────────── */}
       {statusModal && (() => {
         const statusMeta = {
+          NOT_STARTED: { color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', light: '#f1f5f9', icon: <Target size={18} />,      label: 'Not Started' },
           COMPLETED:   { color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0', light: '#dcfce7', icon: <CheckCircle size={18} />, label: 'Completed' },
           IN_PROGRESS: { color: '#2563eb', bg: '#eff6ff', border: '#bfdbfe', light: '#dbeafe', icon: <Activity size={18} />,    label: 'In Progress' },
           PLANNING:    { color: '#d97706', bg: '#fffbeb', border: '#fde68a', light: '#fef3c7', icon: <Target size={18} />,      label: 'Planning' },
@@ -1049,15 +1353,49 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 
 // ─── Single-project dashboard helpers ────────────────────────────────────────
 const calculateProgress = (dashboardData) => {
-  if (!dashboardData?.startDate || !dashboardData?.endDate) return 0;
-  const start = new Date(dashboardData.startDate);
-  const end   = new Date(dashboardData.endDate);
-  const now   = new Date();
-  return Math.min(Math.max(((now - start) / (end - start)) * 100, 0), 100).toFixed(1);
+  if (!dashboardData) return 0;
+
+  // Priority 1: manual override stored in DB (set via Edit Status modal)
+  const manual = Number(dashboardData.progressPercentage || 0);
+  if (manual > 0) return Number(manual.toFixed(1));
+
+  const fin  = dashboardData.financialData  || {};
+  const proc = dashboardData.procurementData || {};
+  const budget = Number(dashboardData.budget || fin.totalProjectValue || 0);
+
+  // Priority 2: weighted formula across 4 signals
+  // Financial collection 40% — actual cash received vs budget
+  const billingPct   = Number(fin.billingPercentage   || 0);           // already a %
+  // PO delivery      30% — delivered POs vs total non-cancelled POs
+  const totalPOs     = Number(proc.totalPOs     || 0);
+  const deliveredPOs = Number(proc.deliveredPOs || 0);
+  const cancelledPOs = Number(proc.cancelledPOs || 0);
+  const activePOs    = Math.max(1, totalPOs - cancelledPOs);
+  const deliveryPct  = totalPOs > 0 ? Math.min(100, (deliveredPOs / activePOs) * 100) : 0;
+  // Invoicing        20% — total invoiced vs budget (billing coverage)
+  const totalInvoiced = Number(fin.amountToBeReceived || 0);
+  const invoicingPct  = budget > 0 ? Math.min(100, (totalInvoiced / budget) * 100) : 0;
+  // PO commitment    10% — budget utilization (committed spend vs budget)
+  const commitPct    = Math.min(100, Number(fin.budgetUtilizationPercent || 0));
+
+  const weighted = (billingPct  * 0.40)
+                 + (deliveryPct * 0.30)
+                 + (invoicingPct* 0.20)
+                 + (commitPct   * 0.10);
+
+  // Priority 3: timeline fallback only when truly zero activity
+  if (weighted === 0 && dashboardData.startDate && dashboardData.endDate) {
+    const start   = new Date(dashboardData.startDate);
+    const end     = new Date(dashboardData.endDate);
+    const elapsed = ((new Date() - start) / (end - start)) * 100;
+    return Math.min(Math.max(elapsed, 0), 5).toFixed(1); // cap 5% — just shows "started"
+  }
+
+  return Math.min(100, weighted).toFixed(1);
 };
 const getStatusColor = (s) => ({
-  PLANNING: '#3b82f6', IN_PROGRESS: '#22c55e', COMPLETED: '#8b5cf6',
-  ON_HOLD: '#f59e0b', CANCELLED: '#ef4444',
+  NOT_STARTED: '#64748b', PLANNING: '#f59e0b', IN_PROGRESS: '#3b82f6',
+  COMPLETED: '#22c55e', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444',
 }[s] || '#94a3b8');
 
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
