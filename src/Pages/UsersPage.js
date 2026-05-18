@@ -554,7 +554,7 @@ const UsersPage = () => {
   useEffect(() => {
     fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" })
       .then(r => r.json())
-      .then(data => setDynamicMenuItems(Array.isArray(data) ? data : []))
+      .then(data => setDynamicMenuItems((Array.isArray(data) ? data : []).sort((a, b) => a.name.localeCompare(b.name))))
       .catch(() => { });
   }, []);
 
@@ -565,7 +565,7 @@ const UsersPage = () => {
     const handleMenuItemsChanged = () => {
       fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" })
         .then(r => r.json())
-        .then(data => setDynamicMenuItems(Array.isArray(data) ? data : []))
+        .then(data => setDynamicMenuItems((Array.isArray(data) ? data : []).sort((a, b) => a.name.localeCompare(b.name))))
         .catch(() => { });
     };
     window.addEventListener('menuItemsChanged', handleMenuItemsChanged);
@@ -589,7 +589,7 @@ useEffect(() => {
           module: p.name.includes('.')
             ? p.name.split('.').slice(0, -1).join('.')  // handles "quotations.sales.view" → "quotations.sales"
             : 'general',
-        }))
+        })).sort((a, b) => a.name.localeCompare(b.name))
       ))
       .catch(() => { });
   }, []);
@@ -1073,7 +1073,10 @@ const handleEditMenuPermissions = async (u) => {
   const groupPermissionsByModule = (perms) => {
     const grouped = {};
     perms.forEach(p => { if (!grouped[p.module]) grouped[p.module] = []; grouped[p.module].push(p); });
-    return grouped;
+    // Sort perms within each group alphabetically
+    Object.keys(grouped).forEach(k => grouped[k].sort((a, b) => a.name.localeCompare(b.name)));
+    // Return a new object with keys sorted alphabetically
+    return Object.fromEntries(Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)));
   };
 
   // Permissions the selected user currently has — used in Edit modal
