@@ -1480,11 +1480,77 @@ const PurchaseOrders = () => {
                         <Download size={14} /> Download
                       </button>
                     </div>
+                    {/* Allow replacing the file directly from the drawer for any PO status */}
+                    {canEdit && (
+                      <div className="po-file-upload-row" style={{ marginTop: 10 }}>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          id="drawer-po-file-input"
+                          style={{ display: 'none' }}
+                          onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            if (file.size > 10 * 1024 * 1024) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+                            const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
+                            if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+                            setPoFileUploading(true);
+                            try {
+                              const fd = new FormData();
+                              fd.append('file', file);
+                              const r = await fetch(`${API_BASE_URL}/purchase-orders/${selectedPO.id}/upload-file`, {
+                                method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: fd
+                              });
+                              if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Upload failed'); }
+                              showSuccess('PO document replaced successfully!');
+                              handleViewPO(selectedPO); // refresh drawer
+                            } catch (err) { showError(err.message || 'Failed to upload PO file'); }
+                            finally { setPoFileUploading(false); e.target.value = ''; }
+                          }}
+                        />
+                        <label htmlFor="drawer-po-file-input" className="po-file-choose-btn" style={{ cursor: poFileUploading ? 'not-allowed' : 'pointer', opacity: poFileUploading ? 0.6 : 1 }}>
+                          <Upload size={13} /> {poFileUploading ? 'Uploading…' : 'Replace File'}
+                        </label>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="po-doc-section po-doc-empty">
                     <File size={15} style={{ color: '#9ca3af' }} />
                     <span style={{ color: '#9ca3af', fontSize: 13 }}>No PO document attached</span>
+                    {/* Allow uploading directly from the drawer for any PO status */}
+                    {canEdit && (
+                      <div style={{ marginTop: 10 }}>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          id="drawer-po-file-input-new"
+                          style={{ display: 'none' }}
+                          onChange={async (e) => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            if (file.size > 10 * 1024 * 1024) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+                            const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
+                            if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+                            setPoFileUploading(true);
+                            try {
+                              const fd = new FormData();
+                              fd.append('file', file);
+                              const r = await fetch(`${API_BASE_URL}/purchase-orders/${selectedPO.id}/upload-file`, {
+                                method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: fd
+                              });
+                              if (!r.ok) { const err = await r.json(); throw new Error(err.error || 'Upload failed'); }
+                              showSuccess('PO document uploaded successfully!');
+                              handleViewPO(selectedPO); // refresh drawer
+                            } catch (err) { showError(err.message || 'Failed to upload PO file'); }
+                            finally { setPoFileUploading(false); e.target.value = ''; }
+                          }}
+                        />
+                        <label htmlFor="drawer-po-file-input-new" className="po-file-choose-btn" style={{ cursor: poFileUploading ? 'not-allowed' : 'pointer', opacity: poFileUploading ? 0.6 : 1 }}>
+                          <Upload size={13} /> {poFileUploading ? 'Uploading…' : 'Upload PO Document'}
+                        </label>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

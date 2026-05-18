@@ -1,6 +1,6 @@
 // Old Invoices page
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check } from 'lucide-react';
+import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check, CheckCircle, Clock } from 'lucide-react';
 import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -21,6 +21,14 @@ const InvoicesManagementPage = () => {
   const [invoices, setInvoices] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
+
+  // ── Role helpers ───────────────────────────────────────────────────────────
+  // Accounts team: any role starting with ACCOUNTS_ (ACCOUNTS_EXECUTIVE, ACCOUNTS_MANAGER …)
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  // Privileged roles bypass the approval workflow (can create directly as DRAFT/SENT)
+  const isPrivileged = isAccountsRole
+    || user?.role === 'ADMIN'
+    || user?.role === 'SUPERADMIN';
   const invoicesPerms = pagePermissions?.INVOICES || [];
   const canView   = invoicesPerms.includes('VIEW')   || isAccountsExecutive;
   const canCreate = invoicesPerms.includes('CREATE') || isAccountsExecutive;
@@ -71,6 +79,13 @@ const InvoicesManagementPage = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  // ── Approve modal (accounts team only) ────────────────────────────────────
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveInvoice, setApproveInvoice] = useState(null);
+  const [approveFile, setApproveFile] = useState(null);
+  const [approveNotes, setApproveNotes] = useState('');
+  const [approveTallyNumber, setApproveTallyNumber] = useState('');
+  const [approveLoading, setApproveLoading] = useState(false);
   // ── Edit-mode invoice project change state ──
   const [invoicePendingProject, setInvoicePendingProject] = useState(null);
   const [showInvoiceProjectWarning, setShowInvoiceProjectWarning] = useState(false);
@@ -1024,6 +1039,72 @@ const fetchStats = async () => {
     }
   };
 
+  // ── Accounts team: open approve modal ────────────────────────────────────
+  const handleOpenApproveModal = (invoice) => {
+    setApproveInvoice(invoice);
+    setApproveFile(null);
+    setApproveNotes('');
+    setApproveTallyNumber(invoice.invoiceNumber || '');
+    setShowApproveModal(true);
+  };
+
+  // ── Accounts team: submit approval with file ──────────────────────────────
+  const handleApproveSubmit = async () => {
+    if (!approveFile) { showError('Please select the invoice file to upload'); return; }
+    setApproveLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', approveFile);
+      formData.append('notes', approveNotes);
+      if (approveTallyNumber.trim()) {
+        formData.append('tallyNumber', approveTallyNumber.trim());
+      }
+      const authHeaders = getAuthHeaders();
+      delete authHeaders['Content-Type'];
+      const response = await fetch(`${API_BASE_URL}/invoices/${approveInvoice.id}/approve`, {
+        credentials: 'include',
+        method: 'POST',
+        headers: authHeaders,
+        body: formData,
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: 'Failed to approve invoice' }));
+        throw new Error(err.message || 'Failed to approve invoice');
+      }
+      showSuccess(`Invoice ${approveInvoice.invoiceNo} approved successfully!`);
+      setShowApproveModal(false);
+      setApproveInvoice(null);
+      await fetchInvoices();
+      fetchStats();
+    } catch (error) {
+      showError(error.message || 'Failed to approve invoice');
+    } finally {
+      setApproveLoading(false);
+    }
+  };
+
+  // ── Download attachment uploaded by accounts team ─────────────────────────
+  const handleDownloadAttachment = async (invoice) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/download-attachment`, {
+        credentials: 'include',
+        headers: { ...getAuthHeaders() },
+      });
+      if (!response.ok) throw new Error('Attachment not found');
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get('content-disposition') || '';
+      const match = contentDisposition.match(/filename[^;=\n]*=([^;\n]*)/);
+      const fileName = match ? match[1].replace(/['"]/g, '') : `Invoice-${invoice.invoiceNo}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      showError('Could not download attachment: ' + error.message);
+    }
+  };
+
   /**
    * Record payment
    */
@@ -1152,9 +1233,12 @@ const fetchStats = async () => {
       'SENT': 'Invoices-page-status-sent',
       'PAID': 'Invoices-page-status-paid',
       'PARTIALLY_PAID': 'Invoices-page-payment-partial',
-      'CANCELLED': 'Invoices-page-status-cancelled'
+      'CANCELLED': 'Invoices-page-status-cancelled',
+      'PENDING APPROVAL': 'Invoices-page-status-pending-approval',
+      'PENDING_APPROVAL': 'Invoices-page-status-pending-approval',
+      'APPROVED': 'Invoices-page-status-approved',
     };
-    return statusMap[status] || '';
+    return statusMap[status?.toUpperCase?.() || status] || statusMap[status] || '';
   };
 
   const getStatusDisplayName = (status) => {
@@ -1163,7 +1247,11 @@ const fetchStats = async () => {
       'SENT': 'Sent',
       'PAID': 'Paid',
       'PARTIALLY_PAID': 'Partially Paid',
-      'CANCELLED': 'Cancelled'
+      'PARTIALLY PAID': 'Partially Paid',
+      'CANCELLED': 'Cancelled',
+      'PENDING APPROVAL': 'Pending Approval',
+      'PENDING_APPROVAL': 'Pending Approval',
+      'APPROVED': 'Approved',
     };
     return statusMap[status] || status;
   };
@@ -1293,6 +1381,8 @@ const fetchStats = async () => {
             <option value="all">All Status</option>
             <option value="DRAFT">Draft</option>
             <option value="SENT">Sent</option>
+            <option value="PENDING_APPROVAL">Pending Approval</option>
+            <option value="APPROVED">Approved</option>
             <option value="PAID">Paid</option>
             <option value="PARTIALLY_PAID">Partially Paid</option>
             <option value="CANCELLED">Cancelled</option>
@@ -1496,15 +1586,29 @@ const fetchStats = async () => {
                         <Edit2 size={16} />
                       </button>
 
-                      {/* Download PDF — requires VIEW permission */}
-                      <button
-                        className={`Invoices-page-action-btn Invoices-page-btn-download${!canView ? ' action-btn-disabled' : ''}`}
-                        onClick={() => canView && handleDownloadPdf(invoice)}
-                        title={canView ? 'Download PDF' : '🔒 No view permission'}
-                        disabled={!canView}
-                      >
-                        <Download size={16} />
-                      </button>
+                      {/* ── Accounts team: Approve button (only on PENDING APPROVAL) ── */}
+                      {isAccountsRole && (invoice.status === 'Pending Approval' || invoice.status === 'PENDING_APPROVAL') && (
+                        <button
+                          className="Invoices-page-action-btn"
+                          style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                          onClick={() => handleOpenApproveModal(invoice)}
+                          title="Approve invoice & upload file"
+                        >
+                          <CheckCircle size={16} />
+                        </button>
+                      )}
+
+                      {/* ── Download attachment — only when accounts team has uploaded a file ── */}
+                      {invoice.hasAttachment === true && (
+                        <button
+                          className="Invoices-page-action-btn"
+                          style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
+                          onClick={() => handleDownloadAttachment(invoice)}
+                          title={`Download approved invoice: ${invoice.attachmentFileName || ''}`}
+                        >
+                          <Download size={16} />
+                        </button>
+                      )}
 
                       {/* Record Payment */}
                       <button
@@ -1695,13 +1799,7 @@ const fetchStats = async () => {
             </div>
 
             <div className="Invoices-page-modal-actions">
-              <button
-                className="Invoices-page-btn-secondary"
-                onClick={() => handleDownloadPdf(selectedInvoice)}
-              >
-                <Download size={16} style={{ marginRight: '8px' }} />
-                Download PDF
-              </button>
+              {/* Download PDF button hidden — functionality coming soon */}
               <button className="Invoices-page-btn-secondary" onClick={() => handleEditInvoice(selectedInvoice)}>
                 Edit Invoice
               </button>
@@ -2105,11 +2203,19 @@ const fetchStats = async () => {
             </div>
 
             <div className="Invoices-page-modal-actions">
-              <button className="Invoices-page-btn-secondary" onClick={() => handleSaveInvoice('DRAFT')}>
-                Save as Draft
-              </button>
-              <button className="Invoices-page-btn-primary" onClick={() => handleSaveInvoice('SENT')}>
-                {editMode ? 'Update Invoice' : 'Create & Send Invoice'}
+              {isPrivileged && (
+                <button className="Invoices-page-btn-secondary" onClick={() => handleSaveInvoice('DRAFT')}>
+                  Save as Draft
+                </button>
+              )}
+              <button className="Invoices-page-btn-primary" onClick={() =>
+                handleSaveInvoice(isPrivileged ? 'SENT' : 'PENDING_APPROVAL')
+              }>
+                {editMode
+                  ? 'Update Invoice'
+                  : isPrivileged
+                    ? 'Create & Send Invoice'
+                    : 'Send for Approval'}
               </button>
             </div>
           </div>
@@ -2228,6 +2334,114 @@ const fetchStats = async () => {
             <div className="Invoices-page-modal-actions">
               <button className="Invoices-page-btn-secondary" onClick={() => setShowPaymentModal(false)}>Cancel</button>
               <button className="Invoices-page-btn-primary" onClick={handleSavePayment}>Record Payment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Approve Invoice Modal (Accounts team only) ───────────────────── */}
+      {showApproveModal && approveInvoice && (
+        <div className="Invoices-page-modal-overlay" onClick={() => setShowApproveModal(false)}>
+          <div className="Invoices-page-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 520 }}>
+            <div className="Invoices-page-modal-header">
+              <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={20} color="#10b981" /> Approve Invoice
+              </h2>
+              <button className="Invoices-page-modal-close" onClick={() => setShowApproveModal(false)}>×</button>
+            </div>
+
+            <div className="Invoices-page-modal-body">
+              {/* Invoice summary */}
+              <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: 8, marginBottom: 20, border: '1px solid #bbf7d0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: '#374151', fontWeight: 600 }}>Invoice No:</span>
+                  <span style={{ fontFamily: 'monospace', color: '#065f46', fontWeight: 700 }}>{approveInvoice.invoiceNo}</span>
+                </div>
+                {approveInvoice.invoiceNumber && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ color: '#374151', fontWeight: 600 }}>Tally Ref:</span>
+                    <span style={{ fontFamily: 'monospace' }}>{approveInvoice.invoiceNumber}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ color: '#374151', fontWeight: 600 }}>Customer:</span>
+                  <span>{approveInvoice.customerName || '—'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#374151', fontWeight: 600 }}>Total Amount:</span>
+                  <span style={{ fontWeight: 700, color: '#065f46' }}>
+                    ₹{parseFloat(approveInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* File upload */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
+                  Upload Invoice File <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx"
+                  onChange={e => setApproveFile(e.target.files[0] || null)}
+                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}
+                />
+                {approveFile && (
+                  <div style={{ marginTop: 6, fontSize: 12, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <CheckCircle size={13} /> {approveFile.name} ({(approveFile.size / 1024).toFixed(1)} KB)
+                  </div>
+                )}
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  Accepted: PDF, JPG, PNG, DOC, DOCX, XLSX
+                </p>
+              </div>
+
+              {/* Tally Invoice Number */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
+                  Tally Invoice Number <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={approveTallyNumber}
+                  onChange={e => setApproveTallyNumber(e.target.value)}
+                  placeholder="e.g. TAL/2026/001"
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box', fontFamily: 'monospace' }}
+                />
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                  This will be saved as the Tally reference number on the invoice.
+                </p>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
+                  Approval Notes <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={approveNotes}
+                  onChange={e => setApproveNotes(e.target.value)}
+                  placeholder="Add any notes for the approval..."
+                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div className="Invoices-page-modal-actions">
+              <button className="Invoices-page-btn-secondary" onClick={() => setShowApproveModal(false)}>
+                Cancel
+              </button>
+              <button
+                className="Invoices-page-btn-primary"
+                onClick={handleApproveSubmit}
+                disabled={approveLoading || !approveFile}
+                style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                {approveLoading
+                  ? 'Approving...'
+                  : <><CheckCircle size={15} /> Approve & Upload</>}
+              </button>
             </div>
           </div>
         </div>

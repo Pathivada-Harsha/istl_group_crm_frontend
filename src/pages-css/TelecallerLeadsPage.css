@@ -778,3 +778,15 @@
   flex-shrink: 0;
 }
 @keyframes tcBillSpin { to { transform: rotate(360deg); } }
+/* ── Edit modal section divider ────────────────────────────────────────────── */
+.tc-edit-section-divider {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 700;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 10px 0 4px;
+  border-top: 1.5px solid #f1f5f9;
+  margin-top: 6px;
+}

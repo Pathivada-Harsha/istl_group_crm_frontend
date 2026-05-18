@@ -131,8 +131,40 @@ export default function TelecallerLeadsPage() {
     name:"",email:"",phone:"",source:"",priority:"",enquiry:"",
     state:"",district:"",city:"",pincode:"",subsidyRequired:"",
     referralName:"",referralPhone:"",capacity:"",capacityUnit:"kW",
+    groupName:"",subGroupName:"",solarScheme:"",
   });
   const [editSaving, setEditSaving] = useState(false);
+
+  // Group / Category / Scheme state for edit modal
+  const [editGroups,    setEditGroups]    = useState([]);
+  const [editSubGroups, setEditSubGroups] = useState([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Safely coerce API response to a plain string array regardless of shape
+  // The leads-groups / leads-subgroups endpoints return [{value, label}] objects
+  const toStringArray = (data) => {
+    const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    return arr.map(item =>
+      typeof item === 'string' ? item : (item?.value || item?.name || item?.groupName || item?.subGroupName || '')
+    ).filter(Boolean);
+  };
+
+  const fetchEditGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const data = await api.get("/filters/leads-groups");
+      setEditGroups(toStringArray(data));
+    } catch { setEditGroups([]); }
+    finally { setLoadingGroups(false); }
+  };
+
+  const fetchEditSubGroups = async (group) => {
+    if (!group) { setEditSubGroups([]); return; }
+    try {
+      const data = await api.get(`/filters/leads-subgroups?groupName=${encodeURIComponent(group)}`);
+      setEditSubGroups(toStringArray(data));
+    } catch { setEditSubGroups([]); }
+  };
 
   // INTERESTED extra fields
   const [intLocation, setIntLocation] = useState("");
@@ -150,6 +182,8 @@ export default function TelecallerLeadsPage() {
   const [intBillFile, setIntBillFile] = useState(null);
   const [intBillUploading, setIntBillUploading] = useState(false);
   const [billPreview, setBillPreview] = useState(null); // { url, name, type }
+  const [intSolarScheme,    setIntSolarScheme]    = useState("");
+  const [intSubsidyRequired,setIntSubsidyRequired]= useState("");
 
   // ── Date params builder ────────────────────────────────────────────────────
   const buildDateParams = () => {
@@ -313,6 +347,8 @@ export default function TelecallerLeadsPage() {
       setIntExistingContractLoad(lead.tcExistingContractLoad||"");
       setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
       setIntBillFile(null);
+      setIntSolarScheme(lead.solarScheme||"");
+      setIntSubsidyRequired(lead.subsidyRequired||"");
       setDragFromCol(fromCol);
       setStatusModal(true);
       return;
@@ -405,6 +441,8 @@ export default function TelecallerLeadsPage() {
     setIntExistingContractLoad(lead.tcExistingContractLoad||"");
     setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
     setIntBillFile(null);
+    setIntSolarScheme(lead.solarScheme||"");
+    setIntSubsidyRequired(lead.subsidyRequired||"");
     // Pre-fill discussion if re-opening an INTERESTED lead
     setDiscussion(lead.tcDiscussionNote||"");
     setStatusModal(true);
@@ -446,6 +484,8 @@ export default function TelecallerLeadsPage() {
           tcMonthlyBill: intMonthlyBill.trim()||null,
           tcExistingContractLoad: intExistingContractLoad.trim()||null,
           tcRequiredContractLoad: intRequiredContractLoad.trim()||null,
+          solarScheme: intSolarScheme||null,
+          subsidyRequired: intSubsidyRequired||null,
         }),
       });
       // Upload bill file if selected (works for any status update, not just first INTERESTED)
@@ -499,8 +539,11 @@ export default function TelecallerLeadsPage() {
       enquiry:lead.enquiry||"", state:lead.state||"", district:lead.district||"",
       city:lead.city||"", pincode:lead.pincode||"", subsidyRequired:lead.subsidyRequired||"",
       referralName:lead.referralName||"", referralPhone:lead.referralPhone||"",
-      capacity:lead.capacity||"", capacityUnit:lead.capacityUnit||"kW"
+      capacity:lead.capacity||"", capacityUnit:lead.capacityUnit||"kW",
+      groupName:lead.groupName||"", subGroupName:lead.subGroupName||"", solarScheme:lead.solarScheme||"",
     });
+    fetchEditGroups();
+    if (lead.groupName) fetchEditSubGroups(lead.groupName);
     setEditModal(true);
   };
 
@@ -899,7 +942,84 @@ export default function TelecallerLeadsPage() {
               <div className="tc-edit-field tc-edit-field--full"><label>Enquiry</label>
                 <textarea rows={4} value={editForm.enquiry} onChange={e=>setEditForm(f=>({...f,enquiry:e.target.value}))}/>
               </div>
-              <div className="tc-edit-note">ℹ️ Group, Category, and Solar Scheme are managed by the admin.</div>
+              {/* ── Group / Category / Scheme ── */}
+              <div className="tc-edit-section-divider">📂 Group &amp; Scheme</div>
+              <div className="tc-edit-field">
+                <label>Group</label>
+                <select value={editForm.groupName} onChange={e => {
+                  const g = e.target.value;
+                  setEditForm(f => ({ ...f, groupName: g, subGroupName: "", solarScheme: "" }));
+                  fetchEditSubGroups(g);
+                }}>
+                  <option value="">— Select Group —</option>
+                  {loadingGroups
+                    ? <option disabled>Loading…</option>
+                    : (() => {
+                        const all = editGroups.includes(editForm.groupName) || !editForm.groupName
+                          ? editGroups
+                          : [editForm.groupName, ...editGroups];
+                        return all.map(g => <option key={g} value={g}>{g}</option>);
+                      })()
+                  }
+                </select>
+              </div>
+              {(editSubGroups.length > 0 || editForm.subGroupName) && (
+                <div className="tc-edit-field">
+                  <label>Category</label>
+                  <select value={editForm.subGroupName} onChange={e =>
+                    setEditForm(f => ({ ...f, subGroupName: e.target.value, solarScheme: "" }))
+                  }>
+                    <option value="">— Select Category —</option>
+                    {(() => {
+                      const all = editSubGroups.includes(editForm.subGroupName) || !editForm.subGroupName
+                        ? editSubGroups
+                        : [editForm.subGroupName, ...editSubGroups];
+                      return all.map(sg => <option key={sg} value={sg}>{sg.replace(/_/g," ")}</option>);
+                    })()}
+                  </select>
+                </div>
+              )}
+              {(editForm.subGroupName === "Solar_Rooftop" || editForm.subGroupName === "Solar_ground_mounted") && (
+                <div className="tc-edit-field">
+                  <label>Solar Scheme</label>
+                  <select value={editForm.solarScheme} onChange={e =>
+                    setEditForm(f => ({ ...f, solarScheme: e.target.value, subsidyRequired: "" }))
+                  }>
+                    <option value="">— Select Scheme —</option>
+                    {editForm.subGroupName === "Solar_Rooftop" && <>
+                      <option value="PM_Surya_Ghar">PM Surya Ghar</option>
+                      <option value="PM_Kusum">PM Kusum</option>
+                      <option value="State_Subsidy">State Subsidy</option>
+                      <option value="Net_Metering_Only">Net Metering Only</option>
+                      <option value="No_Scheme">No Scheme</option>
+                      <option value="Others">Others</option>
+                    </>}
+                    {editForm.subGroupName === "Solar_ground_mounted" && <>
+                      <option value="PM_Kusum">PM Kusum</option>
+                      <option value="No_Scheme">No Scheme</option>
+                    </>}
+                  </select>
+                </div>
+              )}
+              {editForm.solarScheme === "PM_Surya_Ghar" && (
+                <div className="tc-edit-field">
+                  <label>Subsidy Required?</label>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {["Yes","No"].map(opt => (
+                      <button key={opt} type="button"
+                        onClick={() => setEditForm(f => ({ ...f, subsidyRequired: f.subsidyRequired === opt ? "" : opt }))}
+                        style={{
+                          flex:1, padding:"8px 0", borderRadius:8, fontWeight:600, fontSize:13, cursor:"pointer",
+                          border: editForm.subsidyRequired === opt ? "none" : "1.5px solid #e2e8f0",
+                          background: editForm.subsidyRequired === opt ? (opt==="Yes" ? "#059669" : "#dc2626") : "#fff",
+                          color: editForm.subsidyRequired === opt ? "#fff" : "#374151",
+                        }}>
+                        {opt === "Yes" ? "✅ Yes, wants subsidy" : "❌ No subsidy needed"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
               <button className="tc-btn-primary" disabled={editSaving} onClick={submitEdit}>{editSaving?"Saving…":"Save Changes"}</button>
@@ -1055,6 +1175,51 @@ export default function TelecallerLeadsPage() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Solar Scheme + Subsidy — shown when subgroup is rooftop or ground-mounted */}
+                  {(selected.subGroupName === "Solar_Rooftop" || selected.subGroupName === "Solar_ground_mounted" || intSolarScheme) && (
+                    <div className="tc-reason-field tc-field--full">
+                      <label>Solar Scheme</label>
+                      <select className="tc-styled-input" value={intSolarScheme} onChange={e => {
+                        setIntSolarScheme(e.target.value);
+                        setIntSubsidyRequired("");
+                      }}>
+                        <option value="">— Select Scheme —</option>
+                        {(selected.subGroupName === "Solar_Rooftop" || (!selected.subGroupName && intSolarScheme)) && <>
+                          <option value="PM_Surya_Ghar">PM Surya Ghar</option>
+                          <option value="PM_Kusum">PM Kusum</option>
+                          <option value="State_Subsidy">State Subsidy</option>
+                          <option value="Net_Metering_Only">Net Metering Only</option>
+                          <option value="No_Scheme">No Scheme</option>
+                          <option value="Others">Others</option>
+                        </>}
+                        {selected.subGroupName === "Solar_ground_mounted" && <>
+                          <option value="PM_Kusum">PM Kusum</option>
+                          <option value="No_Scheme">No Scheme</option>
+                        </>}
+                      </select>
+                    </div>
+                  )}
+                  {intSolarScheme === "PM_Surya_Ghar" && (
+                    <div className="tc-reason-field tc-field--full">
+                      <label>Subsidy Required?</label>
+                      <div style={{display:"flex",gap:8}}>
+                        {["Yes","No"].map(opt => (
+                          <button key={opt} type="button"
+                            onClick={() => setIntSubsidyRequired(r => r === opt ? "" : opt)}
+                            style={{
+                              flex:1, padding:"8px 0", borderRadius:8, fontWeight:600,
+                              fontSize:13, cursor:"pointer",
+                              border: intSubsidyRequired === opt ? "none" : "1.5px solid #e2e8f0",
+                              background: intSubsidyRequired === opt ? (opt==="Yes" ? "#059669" : "#dc2626") : "#fff",
+                              color: intSubsidyRequired === opt ? "#fff" : "#374151",
+                            }}>
+                            {opt === "Yes" ? "✅ Yes, wants subsidy" : "❌ No subsidy needed"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Add-ons */}
                   <div className="tc-reason-field tc-field--full">
