@@ -128,7 +128,30 @@ export default function NewRolePermissions() {
   // Delete confirm modal state
   const [deleteModal, setDeleteModal] = useState({ open: false, menuId: null, menuName: '' });
 
+  // ── Pagination state for Permission & Menu Item tables ────────────────────
+  const [permPage, setPermPage] = useState(0);
+  const [permPageSize, setPermPageSize] = useState(10);
+  const [menuPage, setMenuPage] = useState(0);
+  const [menuPageSize, setMenuPageSize] = useState(10);
+
+  // ── Search state for Permission & Menu Item tables ─────────────────────────
+  const [permSearch, setPermSearch] = useState('');
+  const [menuSearch, setMenuSearch] = useState('');
+
+  // Derived filtered arrays — computed from state, not stored separately
+  const filteredPermissions = permissions.filter(p =>
+    p.name.toLowerCase().includes(permSearch.toLowerCase().trim())
+  );
+  const filteredMenuItems = menuItems.filter(item =>
+    formatMenuName(item.name).toLowerCase().includes(menuSearch.toLowerCase().trim())
+  );
+
   useEffect(() => { loadData(); loadHierarchy(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset pagination when switching tabs or when search changes
+  useEffect(() => { setPermPage(0); setMenuPage(0); }, [createTab]);
+  useEffect(() => { setPermPage(0); }, [permSearch]);
+  useEffect(() => { setMenuPage(0); }, [menuSearch]);
 
   const loadData = async () => {
     try {
@@ -137,7 +160,9 @@ export default function NewRolePermissions() {
         fetch(`${API}/permissions/getAllPermissions`, { credentials: "include" }).then(res => res.json()),
         fetch(`${API}/menu-permissions/getAllMenuItems`, { credentials: "include" }).then(res => res.json()),
       ]);
-      setRoles(r); setPermissions(p); setMenuItems(m);
+      setRoles(r);
+      setPermissions([...p].sort((a, b) => a.name.localeCompare(b.name)));
+      setMenuItems([...m].sort((a, b) => a.name.localeCompare(b.name)));
     } catch { addToast("Failed to load data", "error"); }
   };
 
@@ -237,7 +262,7 @@ export default function NewRolePermissions() {
       .then(r => r.json())
       .then(data => setMenuPerms((Array.isArray(data) ? data : []).map(m => ({
         menuId: m.menuId, menuName: m.menuName, hasPermission: Boolean(m.hasPermission)
-      }))))
+      })).sort((a, b) => a.menuName.localeCompare(b.menuName))))
       .catch(() => addToast("Failed to load menu permissions", "error"))
       .finally(() => setLoadingMenu(false));
   };
@@ -431,6 +456,39 @@ export default function NewRolePermissions() {
       loadData();
     } catch { addToast('Network error', 'error'); }
     setPermLoading(false);
+  };
+
+  // ── Reusable Table Pagination Component ──────────────────────────────────
+  const TablePagination = ({ currentPage, setCurrentPage, pageSize, setPageSize, total, label }) => {
+    const totalPages = Math.ceil(total / pageSize) || 1;
+    const from = total === 0 ? 0 : currentPage * pageSize + 1;
+    const to   = Math.min((currentPage + 1) * pageSize, total);
+    return (
+      <div className="rp-pagination-wrap">
+        <div className="rp-pagination-info">
+          Showing <strong>{from}–{to}</strong> of <strong>{total}</strong> {label}
+          <select className="rp-page-size-select" value={pageSize}
+            onChange={e => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}>
+            {[5, 10, 20, 50].map(s => <option key={s} value={s}>{s} per page</option>)}
+          </select>
+        </div>
+        <div className="rp-pagination">
+          <button className="rp-page-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0} title="First">«</button>
+          <button className="rp-page-btn" onClick={() => setCurrentPage(p => p - 1)} disabled={currentPage === 0} title="Previous">‹</button>
+          {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+            const pageNum = currentPage < 3 ? i : currentPage + i - 2;
+            if (pageNum >= totalPages) return null;
+            return (
+              <button key={pageNum}
+                className={`rp-page-btn${pageNum === currentPage ? ' rp-page-btn--active' : ''}`}
+                onClick={() => setCurrentPage(pageNum)}>{pageNum + 1}</button>
+            );
+          })}
+          <button className="rp-page-btn" onClick={() => setCurrentPage(p => p + 1)} disabled={currentPage >= totalPages - 1} title="Next">›</button>
+          <button className="rp-page-btn" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1} title="Last">»</button>
+        </div>
+      </div>
+    );
   };
 
   // ── Reusable Hierarchy Chart ──────────────────────────────────────────────
@@ -851,8 +909,10 @@ export default function NewRolePermissions() {
         {/* ── FIX #3: Perm table full width ── */}
         {createTab === "perm" && (
           <div className="rp-panels">
+            {/* Table header row */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 10, flexShrink: 0,
               padding: '12px 20px', background: '#f8fafc',
               borderBottom: '2px solid #e2e8f0', borderRadius: '10px 10px 0 0',
             }}>
@@ -862,33 +922,60 @@ export default function NewRolePermissions() {
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>All Page Permissions</span>
-                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>{permissions.length}</span>
+                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                  {filteredPermissions.length}{permSearch.trim() ? ` / ${permissions.length}` : ''}
+                </span>
               </div>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>Edit to rename · Delete removes from all roles</span>
+              {/* Search bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', maxWidth: 340 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                    <circle cx="11" cy="11" r="8" stroke="#94a3b8" strokeWidth="2" />
+                    <path d="M21 21l-4.35-4.35" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fff', color: '#0f172a', boxSizing: 'border-box' }}
+                    placeholder="Search by permission name…"
+                    value={permSearch}
+                    onChange={e => setPermSearch(e.target.value)}
+                    onFocus={e => e.target.style.borderColor = '#6366f1'}
+                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  />
+                  {permSearch && (
+                    <button onClick={() => setPermSearch('')}
+                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
+                  )}
+                </div>
+              </div>
+              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Edit to rename · Delete removes from all roles</span>
             </div>
-            <div className="rp-panel" style={{ borderRadius: '0 0 10px 10px', padding: 0, overflow: 'hidden' }}>
-              <div style={{ overflowY: 'auto', maxHeight: 550 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="rp-table-outer">
+              <div className="rp-table-scroll">
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 2 }}>
+                    <tr style={{ background: '#f8fafc' }}>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 50 }}>#</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Permission Name</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 80 }}>Module</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 110 }}>Module</th>
                       <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 160 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {permissions.length === 0 && (
-                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No permissions found</td></tr>
+                    {filteredPermissions.length === 0 && (
+                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                        {permSearch.trim() ? `No permissions match "${permSearch}"` : 'No permissions found'}
+                      </td></tr>
                     )}
-                    {permissions.map((perm, idx) => {
+                    {filteredPermissions.slice(permPage * permPageSize, (permPage + 1) * permPageSize).map((perm, idx) => {
                       const module = perm.name.includes('.') ? perm.name.split('.')[0] : 'general';
                       const isEditing = editingPermId === perm.id;
+                      const globalIdx = permPage * permPageSize + idx + 1;
                       return (
                         <tr key={perm.id} style={{ borderBottom: '1px solid #f1f5f9' }}
                           onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
-                          <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{idx + 1}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{globalIdx}</td>
                           <td style={{ padding: '12px 16px' }}>
                             {isEditing ? (
                               <input style={{ padding: '6px 10px', border: '1.5px solid #6366f1', borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 300 }}
@@ -923,6 +1010,13 @@ export default function NewRolePermissions() {
                   </tbody>
                 </table>
               </div>
+              {filteredPermissions.length > permPageSize && (
+                <TablePagination
+                  currentPage={permPage} setCurrentPage={setPermPage}
+                  pageSize={permPageSize} setPageSize={setPermPageSize}
+                  total={filteredPermissions.length} label="permissions"
+                />
+              )}
             </div>
           </div>
         )}
@@ -943,7 +1037,7 @@ export default function NewRolePermissions() {
                   </div>
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'min(340px, 100%) 1fr', gap: 20, marginBottom: 24 }} className="rp-hier-grid">
                 <HierarchyForm />
                 <HierarchyChart />
               </div>
@@ -954,23 +1048,49 @@ export default function NewRolePermissions() {
         {/* ── Menu Items table — full width ── */}
         {createTab === "menuitem" && (
           <div className="rp-panels">
+            {/* Table header row */}
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              flexWrap: 'wrap', gap: 10, flexShrink: 0,
               padding: '12px 20px', background: '#f8fafc',
               borderBottom: '2px solid #e2e8f0', borderRadius: '10px 10px 0 0',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h10" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" /></svg>
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>All Menu Items</span>
-                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>{menuItems.length}</span>
+                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                  {filteredMenuItems.length}{menuSearch.trim() ? ` / ${menuItems.length}` : ''}
+                </span>
               </div>
-              <span style={{ fontSize: 11, color: '#94a3b8' }}>Click Edit to rename · Delete removes all linked permissions</span>
+              {/* Search bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 220px', maxWidth: 340 }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                    style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+                    <circle cx="11" cy="11" r="8" stroke="#94a3b8" strokeWidth="2" />
+                    <path d="M21 21l-4.35-4.35" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fff', color: '#0f172a', boxSizing: 'border-box' }}
+                    placeholder="Search by display name…"
+                    value={menuSearch}
+                    onChange={e => setMenuSearch(e.target.value)}
+                    onFocus={e => e.target.style.borderColor = '#6366f1'}
+                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
+                  />
+                  {menuSearch && (
+                    <button onClick={() => setMenuSearch('')}
+                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
+                  )}
+                </div>
+              </div>
+              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Click Edit to rename · Delete removes all linked permissions</span>
             </div>
-            <div className="rp-panel" style={{ borderRadius: '0 0 10px 10px', padding: 0, overflow: 'hidden' }}>
-              <div style={{ overflowY: 'auto', maxHeight: 550 }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="rp-table-outer">
+              <div className="rp-table-scroll">
+                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 2 }}>
+                    <tr style={{ background: '#f8fafc' }}>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 60 }}>S.No</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Display Name</th>
                       <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>DB Key (stored in database)</th>
@@ -978,15 +1098,17 @@ export default function NewRolePermissions() {
                     </tr>
                   </thead>
                   <tbody>
-                    {menuItems.length === 0 && (
-                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No menu items found</td></tr>
+                    {filteredMenuItems.length === 0 && (
+                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                        {menuSearch.trim() ? `No menu items match "${menuSearch}"` : 'No menu items found'}
+                      </td></tr>
                     )}
-                    {menuItems.map((item, idx) => (
+                    {filteredMenuItems.slice(menuPage * menuPageSize, (menuPage + 1) * menuPageSize).map((item, idx) => (
                       <tr key={item.id}
                         style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
                         onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                         onMouseLeave={e => e.currentTarget.style.background = ''}>
-                        <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{idx + 1}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{menuPage * menuPageSize + idx + 1}</td>
                         <td style={{ padding: '12px 16px' }}>
                           <span style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{formatMenuName(item.name)}</span>
                         </td>
@@ -1035,6 +1157,13 @@ export default function NewRolePermissions() {
                   </tbody>
                 </table>
               </div>
+              {filteredMenuItems.length > menuPageSize && (
+                <TablePagination
+                  currentPage={menuPage} setCurrentPage={setMenuPage}
+                  pageSize={menuPageSize} setPageSize={setMenuPageSize}
+                  total={filteredMenuItems.length} label="menu items"
+                />
+              )}
             </div>
           </div>
         )}
@@ -1103,7 +1232,7 @@ export default function NewRolePermissions() {
                             <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>{selectedPermIds.length} / {permissions.length} selected</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                            {Object.entries(grouped).map(([group, perms], groupIdx) => {
+                            {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([group, perms], groupIdx) => {
                               const allGroupOn = perms.every(p => selectedPermIds.includes(p.id));
                               const someGroupOn = perms.some(p => selectedPermIds.includes(p.id));
                               const groupCount = perms.filter(p => selectedPermIds.includes(p.id)).length;

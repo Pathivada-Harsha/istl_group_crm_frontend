@@ -546,6 +546,30 @@
   min-height: 0;
 }
 
+/* ── Table panels (perm / menuitem tabs) — matches ProjectCostExpense pattern ── */
+.rp-table-outer {
+  background: #fff;
+  border-radius: 0 0 10px 10px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-top: none;
+}
+
+.rp-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.rp-table-scroll::-webkit-scrollbar       { width: 5px; height: 5px; }
+.rp-table-scroll::-webkit-scrollbar-track { background: #f1f5f9; }
+.rp-table-scroll::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+.rp-table-scroll::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
 .rp-panel::-webkit-scrollbar { width: 4px; }
 .rp-panel::-webkit-scrollbar-track { background: transparent; }
 .rp-panel::-webkit-scrollbar-thumb { background: var(--rp-border-2); border-radius: 4px; }
@@ -906,6 +930,67 @@
 .rp-toast__close:hover { color: var(--rp-text-1); }
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+/* TABLE PAGINATION                                                          */
+/* ══════════════════════════════════════════════════════════════════════════ */
+.rp-pagination-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.rp-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.rp-page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #374151;
+  background: #fff;
+  cursor: pointer;
+  outline: none;
+}
+.rp-page-size-select:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99,102,241,0.1); }
+
+.rp-pagination {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.rp-page-btn {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #fff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.rp-page-btn:hover:not(:disabled) { background: #eff6ff; border-color: #bfdbfe; color: #2563eb; }
+.rp-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.rp-page-btn--active { background: #2563eb !important; border-color: #2563eb !important; color: #fff !important; font-weight: 700; box-shadow: 0 2px 6px rgba(37,99,235,0.25); }
+
+/* ══════════════════════════════════════════════════════════════════════════ */
 /* RESPONSIVE                                                                */
 /* ══════════════════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
@@ -919,6 +1004,20 @@
   .rp-role-list { flex-direction: row; flex-wrap: wrap; gap: 4px; }
   .rp-role-item { width: auto; }
   .rp-main { min-height: 0; }
+  .rp-hier-grid { grid-template-columns: 1fr !important; }
+  .rp-panels > div[style*="grid-template-columns: 340px"] {
+    grid-template-columns: 1fr !important;
+  }
+  .rp-create-tabs { flex-wrap: wrap; gap: 6px; }
+  .rp-ctab { flex: 1 1 auto; min-width: 130px; justify-content: center; }
+  .rp-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+}
+
+@media (max-width: 768px) {
+  .rp-panels { padding: 0 12px 12px; }
+  .rp-pagination-wrap { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .rp-pagination { flex-wrap: wrap; }
+  .rp-page-btn { min-width: 28px; height: 28px; font-size: 11px; }
 }
 
 @media (max-width: 600px) {
@@ -929,9 +1028,21 @@
   .rp-toast-stack { right: 12px; left: 12px; top: 12px; }
   .rp-toast { min-width: unset; max-width: 100%; }
   .rp-panel { padding: 16px; }
-  .rp-panel-tabs { padding: 12px 16px 0; }
+  .rp-panel-tabs { padding: 12px 16px 0; flex-wrap: wrap; gap: 6px; }
   .rp-create-section { padding: 14px 16px; }
   .rp-header { padding: 16px; }
+  .rp-ctab { font-size: 11px; padding: 6px 10px; }
+  .rp-pagination-info { font-size: 11px; }
+  .rp-sidebar__stats { flex-wrap: wrap; gap: 8px; }
+  .rp-stat { min-width: 60px; }
+}
+
+@media (max-width: 480px) {
+  .rp-menu-grid { grid-template-columns: 1fr; }
+  .rp-panels { padding: 0 8px 8px; }
+  .rp-create-section { padding: 12px; }
+  .rp-header { padding: 12px; }
+  .rp-main { padding: 0; }
 }
 
 /* ── Light theme overrides ───────────────────────────────────────────────── */

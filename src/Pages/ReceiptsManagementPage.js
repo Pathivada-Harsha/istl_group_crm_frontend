@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Eye, Edit2, Trash2, Download, DollarSign, Settings, GripVertical, RefreshCw, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown, Link2 } from 'lucide-react';
+import { Eye, Edit2, Trash2, Download, Settings, GripVertical, RefreshCw, Upload, FileSpreadsheet, ChevronUp, ChevronDown, ChevronsUpDown, Link2 } from 'lucide-react';
+import { FaIndianRupeeSign } from 'react-icons/fa6';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
 import '../pages-css/ReceiptsManagementPage.css';
@@ -72,12 +73,13 @@ const ReceiptsManagementPage = () => {
   const [receipts, setReceipts] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
-  const receiptPerms = pagePermissions?.INVOICES || pagePermissions?.RECEIPTS || [];
-  const canView    = receiptPerms.includes('VIEW')   || isAccountsExecutive;
-  const canCreate  = receiptPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit    = receiptPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete  = receiptPerms.includes('DELETE') && !isAccountsExecutive;
-  const isViewOnly = canView && !canCreate && !canEdit && !canDelete;
+  const receiptPerms = pagePermissions?.INVOICE_RECEIPTS || pagePermissions?.INVOICES || pagePermissions?.RECEIPTS || [];
+  const canView     = receiptPerms.includes('VIEW')     || isAccountsExecutive;
+  const canCreate   = receiptPerms.includes('CREATE')   || isAccountsExecutive;
+  const canEdit     = receiptPerms.includes('EDIT')     || isAccountsExecutive;
+  const canDelete   = receiptPerms.includes('DELETE')   && !isAccountsExecutive;
+  const canAdjust   = receiptPerms.includes('ADJUST')   || isAccountsExecutive;
+  const canDownload = receiptPerms.includes('DOWNLOAD') || isAccountsExecutive;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -1004,19 +1006,19 @@ const ReceiptsManagementPage = () => {
             {/* Adjust Advance */}
             {receipt.unappliedAmount > 0 && receipt.receiptType === 'ADVANCE' && (
               <button
-                className={`receipt-action-btn btn-adjust${!canEdit ? ' action-btn-disabled' : ''}`}
-                onClick={() => canEdit && handleEditReceipt(receipt)}
-                title={canEdit ? 'Adjust Advance' : '🔒 No edit permission'}
-                disabled={!canEdit}
-              ><DollarSign size={16} /></button>
+                className={`receipt-action-btn btn-adjust${!canAdjust ? ' action-btn-disabled' : ''}`}
+                onClick={() => canAdjust && handleEditReceipt(receipt)}
+                title={canAdjust ? 'Adjust Advance' : '🔒 No adjust permission'}
+                disabled={!canAdjust}
+              ><FaIndianRupeeSign size={15} /></button>
             )}
 
             {/* Download — requires view */}
             <button
-              className={`receipt-action-btn btn-download${!canView ? ' action-btn-disabled' : ''}`}
-              onClick={() => canView && console.log('Download receipt', receipt.id)}
-              title={canView ? 'Download' : '🔒 No view permission'}
-              disabled={!canView}
+              className={`receipt-action-btn btn-download${!canDownload ? ' action-btn-disabled' : ''}`}
+              onClick={() => canDownload && console.log('Download receipt', receipt.id)}
+              title={canDownload ? 'Download' : '🔒 No download permission'}
+              disabled={!canDownload}
             ><Download size={16} /></button>
 
             {/* Delete — always shown, disabled if no permission */}
@@ -1092,14 +1094,6 @@ const ReceiptsManagementPage = () => {
           >+ Record New Receipt</button>
         </div>
       </div>
-
-      {/* Permission notice for view-only users */}
-      {isViewOnly && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, fontSize:12, color:'#92400e', fontWeight:500, marginBottom:12 }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-          You have view-only access. Contact your administrator to request Create, Edit, or Delete permissions.
-        </div>
-      )}
 
       {/* Column Manager */}
       {showColumnManager && (
