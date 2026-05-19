@@ -5,7 +5,7 @@ import {
   DollarSign, IndianRupee, Package, Calendar, Phone, Mail, MapPin,
   ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag,
   Briefcase, Truck, ChevronUp, ChevronDown, ChevronsUpDown, Columns,
-  GripVertical, Check, Trash2
+  GripVertical, Check, Trash2, Shield, Upload, AlertCircle, BadgeCheck
 } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
@@ -17,6 +17,19 @@ import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal.js';
 import vendorApi from '../services/vendorApi';
 import filterApi from '../services/filterApi';
+
+// ─── KYC Document Definitions ──────────────────────────────────────────────
+const KYC_DOCUMENTS = [
+  { id: 'gst_certificate',          label: 'GST Registration Certificate', description: 'Valid GSTIN certificate issued by GST department',                                      required: true,  icon: '🏛️', numberLabel: 'GSTIN Number',       numberPlaceholder: 'e.g. 22AAAAA0000A1Z5',         nameLabel: 'Registered Business Name', namePlaceholder: 'Name as on GST certificate' },
+  { id: 'pan_card',                 label: 'PAN Card',                     description: 'Permanent Account Number card of the company / proprietor',                             required: true,  icon: '💳', numberLabel: 'PAN Number',          numberPlaceholder: 'e.g. ABCDE1234F',              nameLabel: 'Name on PAN',              namePlaceholder: 'Name as on PAN card' },
+  { id: 'incorporation_certificate',label: 'Certificate of Incorporation', description: 'MCA certificate (Pvt Ltd / LLP) or Shop Act licence for proprietorships',               required: true,  icon: '📋', numberLabel: 'CIN / Registration No.',numberPlaceholder: 'e.g. U12345MH2020PTC123456',   nameLabel: 'Company / Entity Name',    namePlaceholder: 'Registered company name' },
+  { id: 'cancelled_cheque',         label: 'Cancelled Cheque / Bank Letter',description: 'Proof of bank account — cancelled cheque or bank letterhead with account details',     required: true,  icon: '🏦', numberLabel: 'Bank Account Number',  numberPlaceholder: 'Enter account number',         nameLabel: 'Account Holder Name',      namePlaceholder: 'Name on bank account' },
+  { id: 'address_proof',            label: 'Business Address Proof',       description: 'Electricity bill / rent agreement / property tax receipt (not older than 3 months)',    required: true,  icon: '📍', numberLabel: 'Document / Bill Number',numberPlaceholder: 'e.g. Bill No. / Ref. No.',     nameLabel: 'Address',                  namePlaceholder: 'Full registered address' },
+  { id: 'msme_certificate',         label: 'MSME / Udyam Registration',    description: 'Udyam registration certificate for MSME benefits (if applicable)',                     required: false, icon: '🏭' },
+  { id: 'trade_licence',            label: 'Trade Licence / Prof. Tax',    description: 'Municipal trade licence or professional tax registration certificate',                  required: false, icon: '📜' },
+  { id: 'iso_certificate',          label: 'ISO / Quality Certifications', description: 'ISO 9001, ISO 14001 or any other quality / compliance certifications',                 required: false, icon: '🏅' },
+];
+const REQUIRED_DOCS = KYC_DOCUMENTS.filter(d => d.required).map(d => d.id);
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -124,6 +137,438 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
   );
 };
 
+
+// ─── PO Status colours ────────────────────────────────────────────────────────
+const PO_STATUS_COLORS = {
+  Draft: '#94a3b8', Approved: '#3b82f6', Ordered: '#8b5cf6',
+  'In-Transit': '#f59e0b', Delivered: '#22c55e', Cancelled: '#ef4444'
+};
+const PO_STATUS_STEPS = ['Draft', 'Approved', 'Ordered', 'In-Transit', 'Delivered'];
+
+// ─── KYC Document Card ────────────────────────────────────────────────────────
+// ─── KYC Mandatory Doc Card (grid card with inputs + file upload) ─────────────
+const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
+  const fileRef     = React.useRef(null);
+  const isUploaded  = !!(uploaded?.fileName || uploaded?.fileUrl);
+  const isUploading = !!uploaded?.uploading;
+
+  if (!doc.required) {
+    // ── Optional: compact horizontal row ──────────────────────────────────────
+    return (
+      <div className={`vd-kyc-opt-row${isUploaded ? ' vd-kyc-opt-row--done' : ''}`}>
+        <span className="vd-kyc-opt-icon">{doc.icon}</span>
+        <div className="vd-kyc-opt-info">
+          <span className="vd-kyc-opt-label">{doc.label}</span>
+          <span className="vd-kyc-opt-desc">{doc.description}</span>
+        </div>
+        <div className="vd-kyc-opt-actions">
+          {isUploaded ? (
+            <>
+              <span className="vd-kyc-chip"><CheckCircle size={12} /> Uploaded</span>
+              {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="vd-kyc-view-btn">View</a>}
+              <button className="vd-kyc-replace-btn" onClick={() => fileRef.current?.click()} disabled={isUploading}><Upload size={12} /> Replace</button>
+            </>
+          ) : (
+            <button className={`vd-kyc-upload-btn${isUploading ? ' vd-kyc-upload-btn--loading' : ''}`}
+              onClick={() => !isUploading && fileRef.current?.click()} disabled={isUploading}>
+              {isUploading ? <><span className="vd-kyc-spin" /> Uploading…</> : <><Upload size={13} /> Upload</>}
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+            onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
+        </div>
+      </div>
+    );
+  }
+
+  // ── Mandatory: grid card with number + name inputs + file drop zone ─────────
+  const docNumber = uploaded?.docNumber || '';
+  const docName   = uploaded?.docName   || '';
+  const uploadedAt = uploaded?.uploadedAt
+    ? new Date(uploaded.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : null;
+
+  return (
+    <div className={`vd-kyc-grid-card${isUploaded ? ' vd-kyc-grid-card--done' : ''}`}>
+      {/* Card header */}
+      <div className="vd-kyc-gc-head">
+        <span className="vd-kyc-gc-icon">{doc.icon}</span>
+        <div className="vd-kyc-gc-title-wrap">
+          <span className="vd-kyc-gc-title">{doc.label}</span>
+          <span className="vd-kyc-tag vd-kyc-tag--req">Required</span>
+        </div>
+        {isUploaded && <CheckCircle size={16} className="vd-kyc-gc-check" />}
+      </div>
+
+      <p className="vd-kyc-gc-desc">{doc.description}</p>
+
+      {/* Inputs */}
+      <div className="vd-kyc-gc-inputs">
+        <div className="vd-kyc-gc-field">
+          <label className="vd-kyc-gc-label">{doc.numberLabel || 'Document Number'}</label>
+          <input
+            className="vd-kyc-gc-input"
+            type="text"
+            placeholder={doc.numberPlaceholder || 'e.g. GSTIN / PAN / Reg. No.'}
+            value={docNumber}
+            onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
+          />
+        </div>
+        <div className="vd-kyc-gc-field">
+          <label className="vd-kyc-gc-label">{doc.nameLabel || 'Registered Name'}</label>
+          <input
+            className="vd-kyc-gc-input"
+            type="text"
+            placeholder={doc.namePlaceholder || 'Name as on document'}
+            value={docName}
+            onChange={e => onMetaChange(doc.id, 'docName', e.target.value)}
+          />
+        </div>
+      </div>
+
+      {/* File upload zone */}
+      <div
+        className={`vd-kyc-drop-zone${isUploaded ? ' vd-kyc-drop-zone--done' : ''}`}
+        onClick={() => !isUploading && fileRef.current?.click()}
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onUpload(doc.id, f); }}
+      >
+        {isUploading ? (
+          <><span className="vd-kyc-spin vd-kyc-spin--dark" /><span className="vd-kyc-dz-text">Uploading…</span></>
+        ) : isUploaded ? (
+          <>
+            <CheckCircle size={18} style={{ color: '#16a34a' }} />
+            <span className="vd-kyc-dz-filename">{uploaded.fileName || 'Uploaded'}</span>
+            {uploadedAt && <span className="vd-kyc-dz-date">{uploadedAt}</span>}
+          </>
+        ) : (
+          <>
+            <Upload size={18} style={{ color: '#94a3b8' }} />
+            <span className="vd-kyc-dz-text">Click or drag file to upload</span>
+            <span className="vd-kyc-dz-hint">PDF, JPG, PNG — max 10 MB</span>
+          </>
+        )}
+        <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+          onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
+      </div>
+
+      {/* Footer actions */}
+      {isUploaded && (
+        <div className="vd-kyc-gc-footer">
+          {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="vd-kyc-view-btn">View File</a>}
+          <button className="vd-kyc-replace-btn" onClick={() => fileRef.current?.click()} disabled={isUploading}><Upload size={11} /> Replace</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Vendor Detail Page ───────────────────────────────────────────────────────
+const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete, getAuthHeaders, showSuccess, showError }) => {
+  const [activeTab, setActiveTab]           = useState(() => localStorage.getItem('vendor_detail_tab') || 'overview');
+  const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [loadingPOs, setLoadingPOs]         = useState(false);
+  const [kycDocs, setKycDocs]               = useState({});
+  const [kycLoading, setKycLoading]         = useState(false);
+
+  const isVerified    = REQUIRED_DOCS.every(id => kycDocs[id]?.fileName || kycDocs[id]?.fileUrl);
+  const uploadedCount = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl).length;
+  const pct           = Math.round((uploadedCount / KYC_DOCUMENTS.length) * 100);
+
+  const fmtCur = (amount) => {
+    if (!amount && amount !== 0) return '₹0';
+    const n = typeof amount === 'string' ? parseFloat(amount) : Number(amount);
+    if (isNaN(n)) return '₹0';
+    if (n >= 1_00_00_000) return `₹${(n / 1_00_00_000).toFixed(2)} Cr`;
+    if (n >= 1_00_000)    return `₹${(n / 1_00_000).toFixed(2)} L`;
+    if (n >= 1_000)       return `₹${(n / 1_000).toFixed(1)}K`;
+    return `₹${n.toLocaleString('en-IN')}`;
+  };
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+  const renderStars = (rating) => {
+    if (!rating) return <span style={{ color: '#9ca3af', fontSize: 12 }}>Not rated</span>;
+    return <div style={{ display: 'flex', gap: 2 }}>{[1,2,3,4,5].map(s => <Star key={s} size={13} fill={s <= rating ? '#f59e0b' : 'none'} stroke={s <= rating ? '#f59e0b' : '#d1d5db'} />)}</div>;
+  };
+
+  useEffect(() => {
+    // Fetch POs
+    setLoadingPOs(true);
+    fetch(`${API_BASE_URL}/purchase-orders/vendor/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setPurchaseOrders(data))
+      .catch(() => setPurchaseOrders([]))
+      .finally(() => setLoadingPOs(false));
+    // KYC fetch disabled until backend endpoints are ready
+    setKycLoading(false);
+  }, [vendor.id]);
+
+  // TODO: connect to backend once /vendors/:id/kyc/upload endpoint is ready
+  const handleKycUpload = (docId, file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { showError('File too large. Max 10 MB.'); return; }
+    const docLabel = KYC_DOCUMENTS.find(d => d.id === docId)?.label || docId;
+    // Store file locally in state until backend is ready
+    setKycDocs(prev => ({ ...prev, [docId]: { fileName: file.name, fileUrl: null, uploadedAt: new Date().toISOString(), uploading: false } }));
+    showSuccess(`${docLabel} selected. Will be uploaded once backend is ready.`);
+  };
+
+  const handleMetaChange = (docId, field, value) => {
+    setKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], [field]: value } }));
+  };
+
+  const changeTab = (t) => { setActiveTab(t); localStorage.setItem('vendor_detail_tab', t); };
+  const statusColor = vendor.status === 'Active' ? '#16a34a' : '#dc2626';
+  const statusBg    = vendor.status === 'Active' ? '#dcfce7' : '#fee2e2';
+
+  return (
+    <div className="vd-page">
+      {/* Top Bar */}
+      <div className="vd-topbar">
+        <button className="vd-back-btn" onClick={onBack}>
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+          Back to Vendors
+        </button>
+        <div className="vd-breadcrumb">
+          <span style={{ cursor: 'pointer', color: '#6b7280' }} onClick={onBack}>Vendors</span>
+          <span style={{ margin: '0 6px', color: '#d1d5db' }}>/</span>
+          <span style={{ color: '#111827', fontWeight: 500 }}>{vendor.vendorCode || vendor.name}</span>
+        </div>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {canEdit && <button className="vd-btn vd-btn--primary" onClick={() => onEdit(vendor)}><Edit2 size={14} /> Edit Vendor</button>}
+          {canDelete && vendor.status === 'Active' && <button className="vd-btn vd-btn--danger" onClick={() => onDelete(vendor.id, vendor.name)}><Trash2 size={14} /> Delete</button>}
+        </div>
+      </div>
+
+      {/* Hero */}
+      <div className="vd-hero">
+        <div className="vd-hero-left">
+          <div className="vd-avatar">{vendor.name?.[0]?.toUpperCase() || 'V'}</div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h2 className="vd-hero-name">{vendor.name}</h2>
+              {isVerified && <span className="vd-verified-badge"><BadgeCheck size={14} /> KYC Verified</span>}
+            </div>
+            <div className="vd-hero-code">{vendor.vendorCode}</div>
+          </div>
+        </div>
+        <div className="vd-hero-chips">
+          <span className="vd-chip" style={{ color: statusColor, background: statusBg, border: `1px solid ${statusColor}40` }}>{vendor.status}</span>
+          {vendor.category  && <span className="vd-chip" style={{ color: '#7c3aed', background: '#ede9fe', border: '1px solid #ddd6fe' }}>{vendor.category}</span>}
+          {vendor.vendorType && <span className="vd-chip" style={{ color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd' }}>{vendor.vendorType}</span>}
+          {renderStars(vendor.rating)}
+        </div>
+        <div className="vd-hero-actions">
+          <button className="vd-btn vd-btn--secondary" onClick={() => changeTab('kyc')}>
+            <Shield size={14} /> KYC
+            {isVerified ? <CheckCircle size={13} style={{ color: '#16a34a' }} /> : <AlertCircle size={13} style={{ color: '#f59e0b' }} />}
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Strip */}
+      <div className="vd-kpi-strip">
+        {[
+          { Icon: ShoppingCart, label: 'Total Orders',   value: vendor.totalOrders || 0 },
+          { Icon: IndianRupee,  label: 'Purchase Value', value: fmtCur(vendor.totalPurchaseValue) },
+          { Icon: Calendar,     label: 'Last Purchase',  value: fmtDate(vendor.lastPurchaseDate) },
+          { Icon: IndianRupee,  label: 'Last Amount',    value: fmtCur(vendor.lastPurchaseAmount) },
+        ].map(({ Icon, label, value }) => (
+          <div key={label} className="vd-kpi-item">
+            <Icon size={18} className="vd-kpi-icon" />
+            <div><div className="vd-kpi-value">{value}</div><div className="vd-kpi-label">{label}</div></div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="vd-tabs">
+        {[
+          { k: 'overview', l: 'Overview' },
+          { k: 'orders',   l: `Purchase Orders${purchaseOrders.length ? ` (${purchaseOrders.length})` : ''}` },
+          { k: 'kyc',      l: 'KYC Documents' },
+        ].map(t => (
+          <button key={t.k} className={`vd-tab${activeTab === t.k ? ' active' : ''}`} onClick={() => changeTab(t.k)}>
+            {t.l}
+            {t.k === 'kyc' && (isVerified
+              ? <CheckCircle size={12} style={{ color: '#16a34a', marginLeft: 4 }} />
+              : <AlertCircle  size={12} style={{ color: '#f59e0b', marginLeft: 4 }} />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Overview ── */}
+      {activeTab === 'overview' && (
+        <div className="vd-tab-body">
+          <div className="vd-info-grid">
+            <div className="vd-info-card">
+              <h4 className="vd-card-title">Contact Information</h4>
+              <div className="vd-field-list">
+                {[
+                  [Mail,      'Email',          vendor.email],
+                  [Phone,     'Phone',          vendor.phone],
+                  [User,      'Contact Person', vendor.contactPerson],
+                  [Building2, 'Website',        vendor.website],
+                  [FileText,  'GST Number',     vendor.gstNumber],
+                ].map(([Icon, label, val]) => (
+                  <div className="vd-field-row" key={label}>
+                    <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                    <span className="vd-field-val">{val || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="vd-info-card">
+              <h4 className="vd-card-title">Business Details</h4>
+              <div className="vd-field-list">
+                {[
+                  [Building2, 'Vendor Code',  vendor.vendorCode],
+                  [Tag,       'Category',     vendor.category],
+                  [Briefcase, 'Vendor Type',  vendor.vendorType],
+                  [CheckCircle, 'Status',     vendor.status],
+                  [Star,      'Rating',       renderStars(vendor.rating)],
+                ].map(([Icon, label, val]) => (
+                  <div className="vd-field-row" key={label}>
+                    <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                    <span className="vd-field-val">{val || '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {(vendor.address || vendor.city || vendor.state) && (
+              <div className="vd-info-card">
+                <h4 className="vd-card-title">Address</h4>
+                <div className="vd-field-list">
+                  {[
+                    [MapPin, 'Address', vendor.address],
+                    [MapPin, 'City',    vendor.city],
+                    [MapPin, 'State',   vendor.state],
+                    [MapPin, 'Pincode', vendor.pincode],
+                  ].filter(([,,v]) => v).map(([Icon, label, val]) => (
+                    <div className="vd-field-row" key={label}>
+                      <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                      <span className="vd-field-val">{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {(vendor.groupName || vendor.projectName) && (
+              <div className="vd-info-card">
+                <h4 className="vd-card-title">Project Assignment</h4>
+                <div className="vd-field-list">
+                  {[
+                    [Building2, 'Group',    vendor.groupName],
+                    [Tag,       'Category', vendor.subGroupName],
+                    [FileText,  'Project',  vendor.projectName || vendor.projectId],
+                  ].filter(([,,v]) => v).map(([Icon, label, val]) => (
+                    <div className="vd-field-row" key={label}>
+                      <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                      <span className="vd-field-val">{val}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {vendor.notes && (
+              <div className="vd-info-card" style={{ gridColumn: '1 / -1' }}>
+                <h4 className="vd-card-title">Notes</h4>
+                <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: 0 }}>{vendor.notes}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Purchase Orders ── */}
+      {activeTab === 'orders' && (
+        <div className="vd-tab-body">
+          {loadingPOs ? (
+            <div className="vd-empty">Loading orders…</div>
+          ) : purchaseOrders.length === 0 ? (
+            <div className="vd-empty">
+              <ShoppingCart size={36} style={{ color: '#d1d5db', marginBottom: 8 }} />
+              <p>No purchase orders found for this vendor.</p>
+            </div>
+          ) : (
+            <div className="vd-po-list">
+              {purchaseOrders.map(po => {
+                const cur = PO_STATUS_STEPS.indexOf(po.status);
+                return (
+                  <div key={po.id} className="vd-po-card">
+                    <div className="vd-po-head">
+                      <div>
+                        <span className="vd-po-no">{po.poNo}</span>
+                        <span className="vd-po-badge" style={{ color: PO_STATUS_COLORS[po.status] || '#64748b', background: (PO_STATUS_COLORS[po.status] || '#64748b') + '18', border: `1px solid ${(PO_STATUS_COLORS[po.status] || '#64748b')}40` }}>{po.status}</span>
+                      </div>
+                      <span className="vd-po-value">{fmtCur(po.totalValue)}</span>
+                    </div>
+                    {/* Mini timeline */}
+                    <div className="vd-po-timeline">
+                      {PO_STATUS_STEPS.map((step, i) => (
+                        <div key={step} className={`vd-tl-step${i <= cur ? ' done' : ''}`}>
+                          <div className="vd-tl-dot" style={{ background: i <= cur ? PO_STATUS_COLORS[step] : '#e2e8f0' }} />
+                          <span className="vd-tl-label">{step}</span>
+                          {i < PO_STATUS_STEPS.length - 1 && <div className="vd-tl-line" style={{ background: i < cur ? PO_STATUS_COLORS[step] : '#e2e8f0' }} />}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="vd-po-meta">
+                      <span><Calendar size={13} /> {fmtDate(po.orderDate)}</span>
+                      <span><Truck size={13} /> Expected: {fmtDate(po.expectedDelivery)}</span>
+                      <span><Package size={13} /> {po.totalItemsOrdered} items · {po.totalItemsDelivered} delivered</span>
+                    </div>
+                    {po.notes && <div className="vd-po-notes"><FileText size={13} />{po.notes}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── KYC Documents ── */}
+      {activeTab === 'kyc' && (
+        <div className="vd-tab-body">
+          <div className={`vd-kyc-banner${isVerified ? ' vd-kyc-banner--ok' : ' vd-kyc-banner--pending'}`}>
+            <div className="vd-kyc-banner-icon">{isVerified ? <BadgeCheck size={28} /> : <AlertCircle size={28} />}</div>
+            <div className="vd-kyc-banner-body">
+              <div className="vd-kyc-banner-title">{isVerified ? 'Vendor KYC Verified' : 'KYC Verification Pending'}</div>
+              <div className="vd-kyc-banner-sub">
+                {isVerified
+                  ? 'All mandatory documents submitted. This vendor is fully verified.'
+                  : `${REQUIRED_DOCS.filter(id => !kycDocs[id]?.fileName && !kycDocs[id]?.fileUrl).length} mandatory document(s) still required.`}
+              </div>
+            </div>
+            <div className="vd-kyc-banner-pill">{uploadedCount} / {KYC_DOCUMENTS.length} uploaded</div>
+          </div>
+          <div className="vd-kyc-progress-wrap">
+            <div className="vd-kyc-progress-bar" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="vd-kyc-section-label"><Shield size={13} /> Mandatory Documents
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7280' }}>{REQUIRED_DOCS.filter(id => kycDocs[id]?.fileName || kycDocs[id]?.fileUrl).length} / {REQUIRED_DOCS.length} uploaded</span>
+          </div>
+          {kycLoading ? <div className="vd-empty">Loading KYC documents…</div> : (
+            <div className="vd-kyc-grid">
+              {KYC_DOCUMENTS.filter(d => d.required).map(doc => (
+                <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+              ))}
+            </div>
+          )}
+          <div className="vd-kyc-section-label" style={{ marginTop: 28 }}><FileText size={13} /> Optional Documents
+            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7280' }}>{KYC_DOCUMENTS.filter(d => !d.required && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {KYC_DOCUMENTS.filter(d => !d.required).length} uploaded</span>
+          </div>
+          <div className="vd-kyc-opt-list">
+            {KYC_DOCUMENTS.filter(d => !d.required).map(doc => (
+              <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
@@ -138,6 +583,9 @@ const VendorManagement = () => {
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
+  const [detailVendor, setDetailVendor] = useState(() => {
+    try { const s = localStorage.getItem('vendor_detail_vendor'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
 
   // ── Column state ──
   const [columns, setColumns] = useState(DEFAULT_COLUMNS);
@@ -165,6 +613,9 @@ const VendorManagement = () => {
   const [showDetailDrawer, setShowDetailDrawer] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState(null);
   const [vendorPurchaseOrders, setVendorPurchaseOrders] = useState([]);
+  const [drawerActiveTab, setDrawerActiveTab] = useState('details');
+  const [kycDocs, setKycDocs] = useState({});
+  const [kycLoading, setKycLoading] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editFormData, setEditFormData] = useState(null);
   const [stats, setStats] = useState(null);
@@ -494,18 +945,20 @@ const VendorManagement = () => {
   };
 
   const handleViewVendor = async (vendor) => {
+    if (!canView) return;
     setLoading(true);
     try {
       const vendorResponse = await fetch(`${API_BASE_URL}/vendors/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
       if (!vendorResponse.ok) throw new Error('Failed to fetch vendor details');
       const vendorData = await vendorResponse.json();
-      setSelectedVendor(vendorData);
-      const posResponse = await fetch(`${API_BASE_URL}/purchase-orders/vendor/${vendor.id}`, { credentials: 'include', headers: getAuthHeaders() });
-      setVendorPurchaseOrders(posResponse.ok ? await posResponse.json() : []);
-      setShowDetailDrawer(true);
+      setDetailVendor(vendorData);
+      localStorage.setItem('vendor_detail_vendor', JSON.stringify(vendorData));
+      localStorage.removeItem('vendor_detail_tab');
     } catch (error) { showError('Failed to load vendor details'); }
     finally { setLoading(false); }
   };
+
+  // KYC functions kept in VendorDetailPage component — not needed here
 
   const handleEditVendor = (vendor) => {
     const cat   = (vendor.category   || '').trim();
@@ -560,7 +1013,7 @@ const VendorManagement = () => {
       showSuccess('Vendor updated successfully!');
       setShowEditModal(false);
       fetchVendors(); fetchStats();
-      if (showDetailDrawer && selectedVendor?.id === editFormData.id) handleViewVendor({ id: editFormData.id });
+      if (detailVendor?.id === editFormData.id) { const res = await fetch(`${API_BASE_URL}/vendors/${editFormData.id}`, { credentials: 'include', headers: getAuthHeaders() }); if (res.ok) { const d = await res.json(); setDetailVendor(d); localStorage.setItem('vendor_detail_vendor', JSON.stringify(d)); } }
     } catch (error) { showError('Failed to update vendor'); }
     finally { setLoading(false); }
   };
@@ -579,7 +1032,7 @@ const VendorManagement = () => {
       });
       if (!response.ok) throw new Error('Failed to delete vendor');
       showSuccess('Vendor deleted successfully');
-      setShowDetailDrawer(false); fetchVendors(); fetchStats();
+      setDetailVendor(null); localStorage.removeItem('vendor_detail_vendor'); fetchVendors(); fetchStats();
     } catch (error) { showError('Failed to delete vendor'); }
     finally { setLoading(false); }
   };
@@ -752,7 +1205,10 @@ const VendorManagement = () => {
         return (
           <td key={col.id} className="vendor-name-cell">
             <div className="vendor-name-info">
-              <span className="vendor-name">{vendor.name}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="vendor-name">{vendor.name}</span>
+                {/* KYC badge will show once backend is ready */}
+              </div>
               {vendor.vendorCode && <span className="vendor-code">{vendor.vendorCode}</span>}
             </div>
           </td>
@@ -788,23 +1244,23 @@ const VendorManagement = () => {
         );
       case 'actions':
         return (
-          <td key={col.id}>
+          <td key={col.id} onClick={e => e.stopPropagation()}>
             <div className="vendor-management-actions-cell">
               <button
                 className={`vendor-management-action-btn${!canView ? ' action-btn-disabled' : ''}`}
-                onClick={() => canView && handleViewVendor(vendor)}
+                onClick={(e) => { e.stopPropagation(); canView && handleViewVendor(vendor); }}
                 title={canView ? 'View Details' : '🔒 No view permission'}
                 disabled={!canView}
               ><Eye size={16} /></button>
               <button
                 className={`vendor-management-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
-                onClick={() => canEdit && handleEditVendor(vendor)}
+                onClick={(e) => { e.stopPropagation(); canEdit && handleEditVendor(vendor); }}
                 title={canEdit ? 'Edit Vendor' : '🔒 No edit permission'}
                 disabled={!canEdit}
               ><Edit2 size={16} /></button>
               <button
                 className={`vendor-management-action-btn vendor-management-action-btn--danger${!canDelete ? ' action-btn-disabled' : ''}`}
-                onClick={() => canDelete && handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name)}
+                onClick={(e) => { e.stopPropagation(); canDelete && handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name); }}
                 title={canDelete ? 'Delete Vendor' : '🔒 No delete permission'}
                 disabled={!canDelete}
               ><Trash2 size={16} /></button>
@@ -872,6 +1328,63 @@ const VendorManagement = () => {
     { title: 'Average Rating',       value: stats.averageRating.toFixed(1) + '/5',      icon: <Star size={32} />,        color: '#f59e0b' },
     { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue),   icon: <IndianRupee size={32} />, color: '#8b5cf6' },
   ] : [];
+
+  // ─── Handle edit from detail page ─────────────────────────────────────────
+  const handleEditFromDetail = (vendor) => {
+    setDetailVendor(null);
+    localStorage.removeItem('vendor_detail_vendor');
+    handleEditVendor(vendor);
+  };
+
+  const handleDeleteFromDetail = (vendorId, vendorName) => {
+    setDetailVendor(null);
+    localStorage.removeItem('vendor_detail_vendor');
+    handleDeleteVendor(vendorId, vendorName);
+  };
+
+  // ─── Detail page view ──────────────────────────────────────────────────────
+  if (detailVendor) {
+    return (
+      <div className="vendor-management-container">
+        {loading && <CrmPreloader text="Loading..." />}
+        <ToastContainer toasts={toasts} removeToast={removeToast} />
+        <ConfirmationModal
+          show={confirmModal.show}
+          type="alert"
+          title="Delete Vendor"
+          message={`Are you sure you want to delete "${confirmModal.vendorName}"?\nThis action cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={confirmDeleteVendor}
+          onCancel={() => setConfirmModal({ show: false, vendorId: null, vendorName: '' })}
+        />
+        <VendorDetailPage
+          vendor={detailVendor}
+          onBack={() => { setDetailVendor(null); localStorage.removeItem('vendor_detail_vendor'); localStorage.removeItem('vendor_detail_tab'); }}
+          onEdit={handleEditFromDetail}
+          onDelete={handleDeleteFromDetail}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          getAuthHeaders={getAuthHeaders}
+          showSuccess={showSuccess}
+          showError={showError}
+        />
+        {showEditModal && editFormData && (
+          <div className="vendor-management-modal-overlay">
+            <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+              <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
+                <h2>Edit Vendor</h2>
+                <button className="vendor-management-modal-close" onClick={() => setShowEditModal(false)}>✕</button>
+              </div>
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+                {/* Edit form inline — reuse existing edit form fields */}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
@@ -1000,7 +1513,7 @@ const VendorManagement = () => {
                 </tr>
               ) : (
                 vendors.map((vendor) => (
-                  <tr key={vendor.id} className="vendor-management-table-row">
+                  <tr key={vendor.id} className="vendor-management-table-row" onClick={() => canView && handleViewVendor(vendor)} style={{ cursor: canView ? "pointer" : "default" }}>
                     {visibleColumns.map((col) => renderCell(col, vendor))}
                   </tr>
                 ))
@@ -1039,108 +1552,6 @@ const VendorManagement = () => {
         </div>
       </div>
 
-      {/* ─── Detail Drawer (unchanged) ──────────────────────────────────────── */}
-      {showDetailDrawer && selectedVendor && (
-        <div className="vendor-management-drawer-overlay">
-          <div className="vendor-management-drawer" onClick={(e) => e.stopPropagation()}>
-            <div className="vendor-management-drawer-header">
-              <div>
-                <h2>{selectedVendor.name}</h2>
-                <p className="vendor-management-drawer-subtitle">{selectedVendor.vendorCode}</p>
-              </div>
-              <button className="vendor-management-drawer-close" onClick={() => setShowDetailDrawer(false)}>✕</button>
-            </div>
-            <div className="vendor-management-drawer-content">
-              <div className="vendor-management-drawer-section">
-                <h3>Vendor Information</h3>
-                <div className="vendor-info-grid">
-                  {[
-                    [Building2, 'Vendor Code', selectedVendor.vendorCode],
-                    [User,      'Contact Person', selectedVendor.contactPerson],
-                    [Mail,      'Email', selectedVendor.email],
-                    [Phone,     'Phone', selectedVendor.phone],
-                    [FileText,  'GST Number', selectedVendor.gstNumber],
-                    [Tag,       'Category', selectedVendor.category],
-                    [Briefcase, 'Vendor Type', selectedVendor.vendorType],
-                  ].map(([Icon, label, val]) => (
-                    <div key={label} className="vendor-info-item">
-                      <Icon size={18} />
-                      <div><span className="info-label">{label}</span><span className="info-value">{val || 'N/A'}</span></div>
-                    </div>
-                  ))}
-                  <div className="vendor-info-item">
-                    <MapPin size={18} />
-                    <div>
-                      <span className="info-label">Address</span>
-                      <span className="info-value">
-                        {selectedVendor.address ? `${selectedVendor.address}, ${selectedVendor.city}, ${selectedVendor.state} ${selectedVendor.pincode}` : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="vendor-info-item">
-                    <Star size={18} />
-                    <div><span className="info-label">Rating</span>{renderStarRating(selectedVendor.rating)}</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="vendor-management-drawer-section">
-                <h3>Purchase Statistics</h3>
-                <div className="vendor-stats-grid">
-                  {[
-                    [ShoppingCart,  selectedVendor.totalOrders || 0,                        'Total Orders'],
-                    [IndianRupee,   formatCurrency(selectedVendor.totalPurchaseValue),       'Total Purchase Value'],
-                    [Calendar,      formatDate(selectedVendor.lastPurchaseDate),             'Last Purchase'],
-                    [IndianRupee,   formatCurrency(selectedVendor.lastPurchaseAmount),       'Last Purchase Amount'],
-                  ].map(([Icon, val, label]) => (
-                    <div key={label} className="vendor-stat-card">
-                      <Icon size={24} />
-                      <div><div className="stat-value">{val}</div><div className="stat-label">{label}</div></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="vendor-management-drawer-section">
-                <h3>Purchase History ({vendorPurchaseOrders.length} Orders)</h3>
-                {vendorPurchaseOrders.length === 0 ? (
-                  <p className="empty-state">No purchase orders found</p>
-                ) : (
-                  <div className="purchase-history-list">
-                    {vendorPurchaseOrders.map((po) => (
-                      <div key={po.id} className="purchase-history-item">
-                        <div className="po-item-header">
-                          <div>
-                            <span className="po-number">{po.poNo}</span>
-                            <span className={`vendor-management-badge ${getStatusBadgeClass(po.status)}`}>{po.status}</span>
-                          </div>
-                          <span className="po-value">{formatCurrency(po.totalValue)}</span>
-                        </div>
-                        <POTimeline po={po} />
-                        <div className="po-item-details">
-                          <span><Calendar size={14} /> Order: {formatDate(po.orderDate)}</span>
-                          <span><Truck size={14} /> Expected: {formatDate(po.expectedDelivery)}</span>
-                          <span><Package size={14} /> {po.totalItemsOrdered} items ({po.totalItemsDelivered} delivered)</span>
-                        </div>
-                        {po.notes && (
-                          <div className="po-notes"><FileText size={14} /><span>{po.notes}</span></div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="vendor-management-drawer-actions">
-                <button className="vendor-management-btn-primary" onClick={() => handleEditVendor(selectedVendor)}>Edit Vendor</button>
-                {selectedVendor.status === 'Active' && canDelete && (
-                  <button className="vendor-management-btn-danger" onClick={() => handleDeleteVendor(selectedVendor.id, selectedVendor.vendorName || selectedVendor.name)}>Delete</button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ─── Edit Modal (unchanged) ──────────────────────────────────────────── */}
       {showEditModal && editFormData && (
