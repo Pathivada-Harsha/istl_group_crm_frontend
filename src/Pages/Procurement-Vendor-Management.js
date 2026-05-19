@@ -20,6 +20,9 @@ import filterApi from '../services/filterApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+const VENDOR_CATEGORIES = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies', 'Services'];
+const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider'];
+
 const INDIAN_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
   'Goa','Gujarat','Haryana','Himachal Pradesh','Jharkhand','Karnataka',
@@ -166,6 +169,10 @@ const VendorManagement = () => {
   const [editFormData, setEditFormData] = useState(null);
   const [stats, setStats] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+
+  // "Other" custom inputs for category and vendor type — shared between create & edit modals
+  const [customCategory, setCustomCategory]     = useState('');
+  const [customVendorType, setCustomVendorType] = useState('');
 
   const [modalGroups, setModalGroups] = useState([]);
   const [modalSubGroups, setModalSubGroups] = useState([]);
@@ -393,6 +400,8 @@ const VendorManagement = () => {
       address: '', city: '', state: '', pincode: '', rating: 0, status: 'Active',
       groupName: '', subGroupName: '', projectId: '', vendorType: '', category: '', notes: '', assignedTo: ''
     });
+    setCustomCategory('');
+    setCustomVendorType('');
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     fetchModalGroups();
@@ -403,7 +412,9 @@ const VendorManagement = () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
     if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
     if (!editFormData.category) { showError('Category is required'); return; }
+    if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
     if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
+    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
     // Email is optional — validate format only if provided
     if (editFormData.email?.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -412,7 +423,13 @@ const VendorManagement = () => {
 
     setLoading(true);
     try {
-      await vendorApi.createVendor(editFormData);
+      const payload = {
+        ...editFormData,
+        email:      editFormData.email?.trim() || null,
+        category:   editFormData.category   === 'Other' ? customCategory.trim()   : editFormData.category,
+        vendorType: editFormData.vendorType === 'Other' ? customVendorType.trim() : editFormData.vendorType,
+      };
+      await vendorApi.createVendor(payload);
       showSuccess('Vendor created successfully!');
       setShowCreateModal(false);
       fetchVendors(); fetchStats();
@@ -491,13 +508,22 @@ const VendorManagement = () => {
   };
 
   const handleEditVendor = (vendor) => {
+    const cat   = (vendor.category   || '').trim();
+    const vtype = (vendor.vendorType || '').trim();
+    // If the saved value isn't in our known list, treat it as a custom "Other" entry
+    const catIsCustom   = cat   && !VENDOR_CATEGORIES.includes(cat);
+    const vtypeIsCustom = vtype && !VENDOR_TYPES.includes(vtype);
+    setCustomCategory(catIsCustom ? cat : '');
+    setCustomVendorType(vtypeIsCustom ? vtype : '');
     setEditFormData({
       id: vendor.id, name: vendor.name || '', contactPerson: vendor.contactPerson || '',
       email: vendor.email || '', phone: vendor.phone || '', website: vendor.website || '',
       gstNumber: vendor.gstNumber || '', address: vendor.address || '', city: vendor.city || '',
       state: vendor.state || '', pincode: vendor.pincode || '', rating: vendor.rating || 0,
-      status: vendor.status || 'Active', vendorType: vendor.vendorType || '',
-      category: vendor.category || '', notes: vendor.notes || '', assignedTo: vendor.assignedTo || '',
+      status: vendor.status || 'Active',
+      vendorType: vtypeIsCustom ? 'Other' : vtype,
+      category:   catIsCustom   ? 'Other' : cat,
+      notes: vendor.notes || '', assignedTo: vendor.assignedTo || '',
       groupName: vendor.groupName || '', subGroupName: vendor.subGroupName || '', projectId: vendor.projectId || ''
     });
     setModalGroupName(vendor.groupName || '');
@@ -515,13 +541,20 @@ const VendorManagement = () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
     if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
     if (!editFormData.category) { showError('Category is required'); return; }
+    if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
     if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
+    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
     setLoading(true);
     try {
+      const payload = {
+        ...editFormData,
+        category:   editFormData.category   === 'Other' ? customCategory.trim()   : editFormData.category,
+        vendorType: editFormData.vendorType === 'Other' ? customVendorType.trim() : editFormData.vendorType,
+      };
       const response = await fetch(`${API_BASE_URL}/vendors/${editFormData.id}`, {
         credentials: 'include', method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(editFormData)
+        body: JSON.stringify(payload)
       });
       if (!response.ok) throw new Error('Failed to update vendor');
       showSuccess('Vendor updated successfully!');
@@ -1126,26 +1159,38 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })} placeholder="Enter phone number" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>
                     <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}>
                       <option value="">Select category</option>
-                      <option value="IT Equipment">IT Equipment</option>
-                      <option value="Office Furniture">Office Furniture</option>
-                      <option value="Manufacturing">Manufacturing</option>
-                      <option value="Office Supplies">Office Supplies</option>
-                      <option value="Services">Services</option>
+                      {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      {/* Show current value as option if it's not in the standard list */}
+                      {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && (
+                        <option value={editFormData.category}>{editFormData.category}</option>
+                      )}
+                      <option value="Other">Other (enter manually)</option>
                     </select>
+                    {editFormData.category === 'Other' && (
+                      <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)}
+                        placeholder="Enter category name" style={{ marginTop: 6 }} />
+                    )}
                   </div>
                   <div className="vendor-form-group"><label>Vendor Type *</label>
                     <select value={editFormData.vendorType} onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
                       <option value="">Select type</option>
-                      <option value="Manufacturer">Manufacturer</option>
-                      <option value="Distributor">Distributor</option>
-                      <option value="Service Provider">Service Provider</option>
+                      {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      {/* Show current value as option if it's not in the standard list */}
+                      {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && (
+                        <option value={editFormData.vendorType}>{editFormData.vendorType}</option>
+                      )}
+                      <option value="Other">Other (enter manually)</option>
                     </select>
+                    {editFormData.vendorType === 'Other' && (
+                      <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)}
+                        placeholder="Enter vendor type" style={{ marginTop: 6 }} />
+                    )}
                   </div>
                 </div>
                 <div className="vendor-form-row">
@@ -1244,20 +1289,32 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Category *</label>
                     <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}>
                       <option value="">Select category</option>
-                      <option value="IT Equipment">IT Equipment</option>
-                      <option value="Office Furniture">Office Furniture</option>
-                      <option value="Manufacturing">Manufacturing</option>
-                      <option value="Office Supplies">Office Supplies</option>
-                      <option value="Services">Services</option>
+                      {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                      {/* Show current value as option if it's not in the standard list */}
+                      {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && (
+                        <option value={editFormData.category}>{editFormData.category}</option>
+                      )}
+                      <option value="Other">Other (enter manually)</option>
                     </select>
+                    {editFormData.category === 'Other' && (
+                      <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)}
+                        placeholder="Enter category name" style={{ marginTop: 6 }} />
+                    )}
                   </div>
                   <div className="vendor-form-group"><label>Vendor Type *</label>
                     <select value={editFormData.vendorType} onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
                       <option value="">Select type</option>
-                      <option value="Manufacturer">Manufacturer</option>
-                      <option value="Distributor">Distributor</option>
-                      <option value="Service Provider">Service Provider</option>
+                      {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                      {/* Show current value as option if it's not in the standard list */}
+                      {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && (
+                        <option value={editFormData.vendorType}>{editFormData.vendorType}</option>
+                      )}
+                      <option value="Other">Other (enter manually)</option>
                     </select>
+                    {editFormData.vendorType === 'Other' && (
+                      <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)}
+                        placeholder="Enter vendor type" style={{ marginTop: 6 }} />
+                    )}
                   </div>
                 </div>
               </div>
