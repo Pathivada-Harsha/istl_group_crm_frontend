@@ -20,16 +20,17 @@ import filterApi from '../services/filterApi';
 
 // ─── KYC Document Definitions ──────────────────────────────────────────────
 const KYC_DOCUMENTS = [
-  { id: 'gst_certificate',          label: 'GST Registration Certificate', description: 'Valid GSTIN certificate issued by GST department',                                      required: true,  icon: '🏛️', numberLabel: 'GSTIN Number',       numberPlaceholder: 'e.g. 22AAAAA0000A1Z5',         nameLabel: 'Registered Business Name', namePlaceholder: 'Name as on GST certificate' },
-  { id: 'pan_card',                 label: 'PAN Card',                     description: 'Permanent Account Number card of the company / proprietor',                             required: true,  icon: '💳', numberLabel: 'PAN Number',          numberPlaceholder: 'e.g. ABCDE1234F',              nameLabel: 'Name on PAN',              namePlaceholder: 'Name as on PAN card' },
-  { id: 'incorporation_certificate',label: 'Certificate of Incorporation', description: 'MCA certificate (Pvt Ltd / LLP) or Shop Act licence for proprietorships',               required: true,  icon: '📋', numberLabel: 'CIN / Registration No.',numberPlaceholder: 'e.g. U12345MH2020PTC123456',   nameLabel: 'Company / Entity Name',    namePlaceholder: 'Registered company name' },
-  { id: 'cancelled_cheque',         label: 'Cancelled Cheque / Bank Letter',description: 'Proof of bank account — cancelled cheque or bank letterhead with account details',     required: true,  icon: '🏦', numberLabel: 'Bank Account Number',  numberPlaceholder: 'Enter account number',         nameLabel: 'Account Holder Name',      namePlaceholder: 'Name on bank account' },
-  { id: 'address_proof',            label: 'Business Address Proof',       description: 'Electricity bill / rent agreement / property tax receipt (not older than 3 months)',    required: true,  icon: '📍', numberLabel: 'Document / Bill Number',numberPlaceholder: 'e.g. Bill No. / Ref. No.',     nameLabel: 'Address',                  namePlaceholder: 'Full registered address' },
-  { id: 'msme_certificate',         label: 'MSME / Udyam Registration',    description: 'Udyam registration certificate for MSME benefits (if applicable)',                     required: false, icon: '🏭' },
-  { id: 'trade_licence',            label: 'Trade Licence / Prof. Tax',    description: 'Municipal trade licence or professional tax registration certificate',                  required: false, icon: '📜' },
-  { id: 'iso_certificate',          label: 'ISO / Quality Certifications', description: 'ISO 9001, ISO 14001 or any other quality / compliance certifications',                 required: false, icon: '🏅' },
+  { id: 'gst_certificate',          label: 'GST Certificate',             icon: '🏛️', group: 'main',       numberLabel: 'GSTIN Number',          numberPlaceholder: 'e.g. 22AAAAA0000A1Z5'       },
+  { id: 'pan_card',                 label: 'PAN Card',                    icon: '💳', group: 'main',       numberLabel: 'PAN Number',             numberPlaceholder: 'e.g. ABCDE1234F'            },
+  { id: 'incorporation_certificate',label: 'Certificate of Incorporation',icon: '📋', group: 'main',       numberLabel: 'CIN / Registration No.', numberPlaceholder: 'e.g. U12345MH2020PTC123456' },
+  { id: 'cancelled_cheque',         label: 'Cancelled Cheque / Bank',     icon: '🏦', group: 'main',       numberLabel: 'Bank Account Number',    numberPlaceholder: 'Enter account number'        },
+  { id: 'msme_certificate',         label: 'MSME / Udyam Registration',   icon: '🏭', group: 'additional', numberLabel: 'Udyam / MSME Number',    numberPlaceholder: 'e.g. UDYAM-XX-00-0000000'   },
+  { id: 'trade_licence',            label: 'Trade Licence',               icon: '📜', group: 'additional', numberLabel: 'Licence Number',          numberPlaceholder: 'Enter licence number'        },
+  { id: 'iso_certificate',          label: 'ISO / Quality Certificate',   icon: '🏅', group: 'additional', numberLabel: 'Certificate Number',      numberPlaceholder: 'e.g. ISO9001-XXXXX'         },
 ];
-const REQUIRED_DOCS = KYC_DOCUMENTS.filter(d => d.required).map(d => d.id);
+const MAIN_DOCS       = KYC_DOCUMENTS.filter(d => d.group === 'main');
+const ADDITIONAL_DOCS = KYC_DOCUMENTS.filter(d => d.group === 'additional');
+const REQUIRED_DOCS   = []; // kept for compat
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -161,117 +162,167 @@ const PO_STATUS_COLORS = {
 const PO_STATUS_STEPS = ['Draft', 'Approved', 'Ordered', 'In-Transit', 'Delivered'];
 
 // ─── KYC Document Card ────────────────────────────────────────────────────────
-// ─── KYC Mandatory Doc Card (grid card with inputs + file upload) ─────────────
+// ─── KYC Document Row — table-row style like items table ─────────────────────
 const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
   const fileRef     = React.useRef(null);
+  const docNumber   = uploaded?.docNumber || '';
   const isUploaded  = !!(uploaded?.fileName || uploaded?.fileUrl);
   const isUploading = !!uploaded?.uploading;
-
-  if (!doc.required) {
-    // ── Optional: compact horizontal row ──────────────────────────────────────
-    return (
-      <div className={`vd-kyc-opt-row${isUploaded ? ' vd-kyc-opt-row--done' : ''}`}>
-        <span className="vd-kyc-opt-icon">{doc.icon}</span>
-        <div className="vd-kyc-opt-info">
-          <span className="vd-kyc-opt-label">{doc.label}</span>
-          <span className="vd-kyc-opt-desc">{doc.description}</span>
-        </div>
-        <div className="vd-kyc-opt-actions">
-          {isUploaded ? (
-            <>
-              <span className="vd-kyc-chip"><CheckCircle size={12} /> Uploaded</span>
-              {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="vd-kyc-view-btn">View</a>}
-              <button className="vd-kyc-replace-btn" onClick={() => fileRef.current?.click()} disabled={isUploading}><Upload size={12} /> Replace</button>
-            </>
-          ) : (
-            <button className={`vd-kyc-upload-btn${isUploading ? ' vd-kyc-upload-btn--loading' : ''}`}
-              onClick={() => !isUploading && fileRef.current?.click()} disabled={isUploading}>
-              {isUploading ? <><span className="vd-kyc-spin" /> Uploading…</> : <><Upload size={13} /> Upload</>}
-            </button>
-          )}
-          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
-            onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
-        </div>
-      </div>
-    );
-  }
-
-  // ── Mandatory: grid card with number + name inputs + file drop zone ─────────
-  const docNumber = uploaded?.docNumber || '';
-  const docName   = uploaded?.docName   || '';
-  const uploadedAt = uploaded?.uploadedAt
-    ? new Date(uploaded.uploadedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
-    : null;
+  const fileRequired = docNumber.trim().length > 0;
+  const isComplete   = fileRequired && isUploaded;
 
   return (
-    <div className={`vd-kyc-grid-card${isUploaded ? ' vd-kyc-grid-card--done' : ''}`}>
-      {/* Card header */}
-      <div className="vd-kyc-gc-head">
-        <span className="vd-kyc-gc-icon">{doc.icon}</span>
-        <div className="vd-kyc-gc-title-wrap">
-          <span className="vd-kyc-gc-title">{doc.label}</span>
-          <span className="vd-kyc-tag vd-kyc-tag--req">Required</span>
-        </div>
-        {isUploaded && <CheckCircle size={16} className="vd-kyc-gc-check" />}
+    <tr className={`kyc-row${isComplete ? ' kyc-row--done' : fileRequired && !isUploaded ? ' kyc-row--warn' : ''}`}>
+      {/* Status dot */}
+      <td className="kyc-row-status">
+        {isComplete
+          ? <CheckCircle size={15} style={{ color: '#16a34a' }} />
+          : fileRequired
+            ? <AlertCircle size={15} style={{ color: '#f59e0b' }} />
+            : <div className="kyc-row-dot" />
+        }
+      </td>
+
+      {/* Doc name + icon */}
+      <td className="kyc-row-name">
+        <span className="kyc-row-icon">{doc.icon}</span>
+        <span className="kyc-row-label">{doc.label}</span>
+      </td>
+
+      {/* Number input */}
+      <td className="kyc-row-num">
+        <input
+          className="kyc-row-input"
+          type="text"
+          placeholder={doc.numberPlaceholder || 'Enter number'}
+          value={docNumber}
+          onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
+        />
+      </td>
+
+      {/* File upload cell */}
+      <td className="kyc-row-file">
+        {isUploaded ? (
+          <div className="kyc-row-file-done">
+            <CheckCircle size={12} style={{ color: '#16a34a', flexShrink: 0 }} />
+            <span className="kyc-row-filename">{uploaded.fileName || 'Uploaded'}</span>
+            {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="kyc-row-view">View</a>}
+            <button className="kyc-row-replace" onClick={() => fileRef.current?.click()} disabled={isUploading}>
+              <Upload size={11} /> Replace
+            </button>
+          </div>
+        ) : (
+          <button
+            className={`kyc-row-upload-btn${fileRequired ? ' kyc-row-upload-btn--req' : ''}${isUploading ? ' kyc-row-upload-btn--loading' : ''}`}
+            onClick={() => !isUploading && fileRef.current?.click()}
+            disabled={isUploading}
+          >
+            {isUploading
+              ? <><span className="vd-kyc-spin" /> Uploading…</>
+              : fileRequired
+                ? <><Upload size={12} /> Upload (Required)</>
+                : <><Upload size={12} /> Upload</>
+            }
+          </button>
+        )}
+        <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+          onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
+      </td>
+    </tr>
+  );
+};
+
+// ─── KYC Additional Document Card (card style, 3-col grid) ──────────────────
+const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
+  const fileRef     = React.useRef(null);
+  const docNumber   = uploaded?.docNumber || '';
+  const isUploaded  = !!(uploaded?.fileName || uploaded?.fileUrl);
+  const isUploading = !!uploaded?.uploading;
+  const fileRequired = docNumber.trim().length > 0;
+  const isComplete   = fileRequired && isUploaded;
+
+  const cardStyle = {
+    display: 'flex', flexDirection: 'column', gap: 10,
+    padding: 16,
+    border: `1.5px solid ${isComplete ? '#86efac' : fileRequired && !isUploaded ? '#fcd34d' : '#e2e8f0'}`,
+    borderRadius: 10,
+    background: isComplete ? '#f0fdf4' : fileRequired && !isUploaded ? '#fffbeb' : '#fff',
+    transition: 'border-color .18s, box-shadow .18s',
+  };
+  const dropStyle = {
+    display: 'flex', alignItems: 'center', gap: 8,
+    padding: '8px 12px',
+    border: `1.5px ${isUploaded ? 'solid' : 'dashed'} ${isUploaded ? '#86efac' : fileRequired ? '#f59e0b' : '#cbd5e1'}`,
+    borderRadius: 7,
+    background: isUploaded ? '#f0fdf4' : fileRequired ? '#fffbeb' : 'transparent',
+    cursor: isUploading ? 'not-allowed' : 'pointer',
+    minHeight: 38,
+  };
+
+  return (
+    <div style={cardStyle}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ fontSize: 22, lineHeight: 1 }}>{doc.icon}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', flex: 1 }}>{doc.label}</span>
+        {isComplete && <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />}
+        {fileRequired && !isUploaded && <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />}
       </div>
 
-      <p className="vd-kyc-gc-desc">{doc.description}</p>
+      {/* Number input */}
+      <input
+        style={{
+          padding: '7px 10px', border: `1px solid ${isComplete ? '#bbf7d0' : '#e2e8f0'}`,
+          borderRadius: 6, fontSize: 12.5, color: '#1e293b',
+          background: isComplete ? '#f0fdf4' : '#fff', width: '100%', boxSizing: 'border-box',
+          outline: 'none',
+        }}
+        type="text"
+        placeholder={doc.numberPlaceholder || 'Enter document number'}
+        value={docNumber}
+        onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
+        onFocus={e => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,.1)'; }}
+        onBlur={e => { e.target.style.borderColor = isComplete ? '#bbf7d0' : '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
+      />
 
-      {/* Inputs */}
-      <div className="vd-kyc-gc-inputs">
-        <div className="vd-kyc-gc-field">
-          <label className="vd-kyc-gc-label">{doc.numberLabel || 'Document Number'}</label>
-          <input
-            className="vd-kyc-gc-input"
-            type="text"
-            placeholder={doc.numberPlaceholder || 'e.g. GSTIN / PAN / Reg. No.'}
-            value={docNumber}
-            onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
-          />
-        </div>
-        <div className="vd-kyc-gc-field">
-          <label className="vd-kyc-gc-label">{doc.nameLabel || 'Registered Name'}</label>
-          <input
-            className="vd-kyc-gc-input"
-            type="text"
-            placeholder={doc.namePlaceholder || 'Name as on document'}
-            value={docName}
-            onChange={e => onMetaChange(doc.id, 'docName', e.target.value)}
-          />
-        </div>
-      </div>
-
-      {/* File upload zone */}
-      <div
-        className={`vd-kyc-drop-zone${isUploaded ? ' vd-kyc-drop-zone--done' : ''}`}
+      {/* Drop zone */}
+      <div style={dropStyle}
         onClick={() => !isUploading && fileRef.current?.click()}
         onDragOver={e => e.preventDefault()}
         onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onUpload(doc.id, f); }}
       >
-        {isUploading ? (
-          <><span className="vd-kyc-spin vd-kyc-spin--dark" /><span className="vd-kyc-dz-text">Uploading…</span></>
-        ) : isUploaded ? (
+        {isUploaded ? (
           <>
-            <CheckCircle size={18} style={{ color: '#16a34a' }} />
-            <span className="vd-kyc-dz-filename">{uploaded.fileName || 'Uploaded'}</span>
-            {uploadedAt && <span className="vd-kyc-dz-date">{uploadedAt}</span>}
+            <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: '#15803d', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {uploaded.fileName || 'Uploaded'}
+            </span>
           </>
         ) : (
           <>
-            <Upload size={18} style={{ color: '#94a3b8' }} />
-            <span className="vd-kyc-dz-text">Click or drag file to upload</span>
-            <span className="vd-kyc-dz-hint">PDF, JPG, PNG — max 10 MB</span>
+            <Upload size={14} style={{ color: fileRequired ? '#f59e0b' : '#94a3b8', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: fileRequired ? '#b45309' : '#64748b', fontWeight: fileRequired ? 600 : 400 }}>
+              {fileRequired ? 'Upload file (required)' : 'Click or drag to upload'}
+            </span>
           </>
         )}
         <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
           onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
       </div>
 
-      {/* Footer actions */}
+      {/* Post-upload actions */}
       {isUploaded && (
-        <div className="vd-kyc-gc-footer">
-          {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="vd-kyc-view-btn">View File</a>}
-          <button className="vd-kyc-replace-btn" onClick={() => fileRef.current?.click()} disabled={isUploading}><Upload size={11} /> Replace</button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          {uploaded.fileUrl && (
+            <a href={uploaded.fileUrl} target="_blank" rel="noreferrer"
+              style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'underline' }}>
+              View
+            </a>
+          )}
+          <button onClick={() => fileRef.current?.click()} disabled={isUploading}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 9px', fontSize: 11, fontWeight: 500, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, cursor: 'pointer' }}>
+            <Upload size={10} /> Replace
+          </button>
         </div>
       )}
     </div>
@@ -286,9 +337,12 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
   const [kycDocs, setKycDocs]               = useState({});
   const [kycLoading, setKycLoading]         = useState(false);
 
-  const isVerified    = REQUIRED_DOCS.every(id => kycDocs[id]?.fileName || kycDocs[id]?.fileUrl);
-  const uploadedCount = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl).length;
-  const pct           = Math.round((uploadedCount / KYC_DOCUMENTS.length) * 100);
+  // Verified = at least one doc entered AND every doc with a number also has a file
+  const docsWithNumber = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.docNumber?.trim());
+  const isVerified     = docsWithNumber.length > 0 && docsWithNumber.every(d => kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl);
+  const uploadedCount  = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl).length;
+  const completeCount  = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.docNumber?.trim() && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length;
+  const pct            = Math.round((completeCount / KYC_DOCUMENTS.length) * 100);
 
   const fmtCur = (amount) => {
     if (!amount && amount !== 0) return '₹0';
@@ -545,37 +599,72 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
       {/* ── KYC Documents ── */}
       {activeTab === 'kyc' && (
         <div className="vd-tab-body">
-          <div className={`vd-kyc-banner${isVerified ? ' vd-kyc-banner--ok' : ' vd-kyc-banner--pending'}`}>
-            <div className="vd-kyc-banner-icon">{isVerified ? <BadgeCheck size={28} /> : <AlertCircle size={28} />}</div>
+          {/* Status Banner */}
+          <div className={`vd-kyc-banner${isVerified ? ' vd-kyc-banner--ok' : docsWithNumber.length > 0 ? ' vd-kyc-banner--pending' : ' vd-kyc-banner--empty'}`}>
+            <div className="vd-kyc-banner-icon">
+              {isVerified ? <BadgeCheck size={26} /> : docsWithNumber.length > 0 ? <AlertCircle size={26} /> : <Shield size={26} />}
+            </div>
             <div className="vd-kyc-banner-body">
-              <div className="vd-kyc-banner-title">{isVerified ? 'Vendor KYC Verified' : 'KYC Verification Pending'}</div>
+              <div className="vd-kyc-banner-title">
+                {isVerified ? 'KYC Verified' : docsWithNumber.length > 0 ? 'Documents Incomplete' : 'No KYC Documents Added'}
+              </div>
               <div className="vd-kyc-banner-sub">
                 {isVerified
-                  ? 'All mandatory documents submitted. This vendor is fully verified.'
-                  : `${REQUIRED_DOCS.filter(id => !kycDocs[id]?.fileName && !kycDocs[id]?.fileUrl).length} mandatory document(s) still required.`}
+                  ? 'All entered document numbers have supporting files.'
+                  : docsWithNumber.length > 0
+                    ? `${docsWithNumber.filter(d => !kycDocs[d.id]?.fileName && !kycDocs[d.id]?.fileUrl).length} document(s) need a file upload.`
+                    : 'Enter a document number in any card below to begin KYC verification.'}
               </div>
             </div>
-            <div className="vd-kyc-banner-pill">{uploadedCount} / {KYC_DOCUMENTS.length} uploaded</div>
+            <div className="vd-kyc-banner-pill">{completeCount} / {KYC_DOCUMENTS.length} complete</div>
           </div>
-          <div className="vd-kyc-progress-wrap">
-            <div className="vd-kyc-progress-bar" style={{ width: `${pct}%` }} />
-          </div>
-          <div className="vd-kyc-section-label"><Shield size={13} /> Mandatory Documents
-            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7280' }}>{REQUIRED_DOCS.filter(id => kycDocs[id]?.fileName || kycDocs[id]?.fileUrl).length} / {REQUIRED_DOCS.length} uploaded</span>
-          </div>
-          {kycLoading ? <div className="vd-empty">Loading KYC documents…</div> : (
-            <div className="vd-kyc-grid">
-              {KYC_DOCUMENTS.filter(d => d.required).map(doc => (
-                <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
-              ))}
+
+          {/* Progress bar */}
+          {completeCount > 0 && (
+            <div className="vd-kyc-progress-wrap">
+              <div className="vd-kyc-progress-bar" style={{ width: `${pct}%` }} />
             </div>
           )}
-          <div className="vd-kyc-section-label" style={{ marginTop: 28 }}><FileText size={13} /> Optional Documents
-            <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 400, color: '#6b7280' }}>{KYC_DOCUMENTS.filter(d => !d.required && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {KYC_DOCUMENTS.filter(d => !d.required).length} uploaded</span>
+
+          {/* ── Main KYC documents — table rows ── */}
+          <div className="kyc-section-hd">
+            <Shield size={13} />
+            <span>KYC Documents</span>
+            <span className="kyc-section-count">
+              {MAIN_DOCS.filter(d => kycDocs[d.id]?.docNumber?.trim() && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {MAIN_DOCS.length} complete
+            </span>
           </div>
-          <div className="vd-kyc-opt-list">
-            {KYC_DOCUMENTS.filter(d => !d.required).map(doc => (
-              <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+          {kycLoading ? <div className="vd-empty">Loading…</div> : (
+            <div className="kyc-table-wrap">
+              <table className="kyc-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 28 }}></th>
+                    <th>Document</th>
+                    <th style={{ minWidth: 200 }}>Document Number</th>
+                    <th style={{ minWidth: 240 }}>File</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {MAIN_DOCS.map(doc => (
+                    <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Additional documents — styled cards ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 24, marginBottom: 8 }}>
+            <FileText size={13} style={{ color: '#475569' }} />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Additional Documents</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>
+              {ADDITIONAL_DOCS.filter(d => kycDocs[d.id]?.docNumber?.trim() && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {ADDITIONAL_DOCS.map(doc => (
+              <KycAddCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
             ))}
           </div>
         </div>
@@ -635,6 +724,8 @@ const VendorManagement = () => {
   const [editFormData, setEditFormData] = useState(null);
   const [stats, setStats] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createStep, setCreateStep] = useState(1); // 1 = Vendor Info, 2 = KYC
+  const [createKycDocs, setCreateKycDocs] = useState({});
 
   // "Other" custom inputs for category and vendor type — shared between create & edit modals
   const [customCategory, setCustomCategory]     = useState('');
@@ -871,6 +962,8 @@ const VendorManagement = () => {
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     fetchModalGroups();
+    setCreateStep(1);
+    setCreateKycDocs({});
     setShowCreateModal(true);
   };
 
@@ -1670,134 +1763,237 @@ const VendorManagement = () => {
       )}
 
       {/* ─── Create Modal (unchanged) ────────────────────────────────────────── */}
-      {showCreateModal && editFormData && (
+      {showCreateModal && editFormData && (() => {
+        // KYC validation for step 2
+        const createDocsWithNumber = KYC_DOCUMENTS.filter(d => createKycDocs[d.id]?.docNumber?.trim());
+        const missingFiles = createDocsWithNumber.filter(d => !createKycDocs[d.id]?.fileName && !createKycDocs[d.id]?.fileUrl);
+        const handleCreateKycUpload = (docId, file) => {
+          if (!file) return;
+          if (file.size > 10 * 1024 * 1024) { showError('File too large. Max 10 MB.'); return; }
+          setCreateKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], fileName: file.name, fileUrl: null, uploadedAt: new Date().toISOString(), uploading: false } }));
+        };
+        const handleCreateMetaChange = (docId, field, value) => {
+          setCreateKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], [field]: value } }));
+        };
+        const handleNextStep = () => {
+          if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
+          if (!editFormData.phone?.trim()) { showError('Phone number is required'); return; }
+          if (!editFormData.category) { showError('Category is required'); return; }
+          if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
+          if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
+          if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
+          setCreateStep(2);
+        };
+        return (
         <div className="vendor-management-modal-overlay">
-          <div className="vendor-management-edit-modal" onClick={(e) => e.stopPropagation()} style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+          <div className="vendor-management-edit-modal" onClick={e => e.stopPropagation()}
+            style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh', width: createStep === 2 ? 860 : undefined }}>
+
+            {/* Header */}
             <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
-              <h2>Add New Vendor</h2>
+              <div>
+                <h2>{createStep === 1 ? 'Add New Vendor' : 'KYC Documents'}</h2>
+                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Step {createStep} of 2 — {createStep === 1 ? 'Vendor Information' : 'KYC Details (optional)'}</p>
+              </div>
               <button className="vendor-management-modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
             </div>
-            <div className="vendor-management-edit-form" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-              <div className="vendor-form-section">
-                <h3>Project Assignment</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Group</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group"><label>Category / Sub-Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                      <option value="">{!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Category'}</option>
-                      {modalSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
-                    </select>
-                  </div>
-                </div>
-                <div className="vendor-form-group"><label>Project (Optional)</label>
-                  <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                    <option value="">{!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project (Optional)'}</option>
-                    {modalProjects.map(p => <option key={p.id} value={p.id}>{p.name} - {p.location}</option>)}
-                  </select>
-                </div>
+
+            {/* Stepper */}
+            <div className="vc-stepper">
+              <div className={`vc-step ${createStep >= 1 ? 'vc-step--active' : ''} ${createStep > 1 ? 'vc-step--done' : ''}`}>
+                <div className="vc-step-dot">{createStep > 1 ? <CheckCircle size={14} /> : '1'}</div>
+                <span className="vc-step-label">Vendor Info</span>
               </div>
-              <div className="vendor-form-section">
-                <h3>Basic Information</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Vendor Name *</label><input type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} placeholder="Enter vendor name" /></div>
-                  <div className="vendor-form-group"><label>Contact Person</label><input type="text" value={editFormData.contactPerson} onChange={(e) => setEditFormData({ ...editFormData, contactPerson: e.target.value })} placeholder="Enter contact person" /></div>
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
-                </div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Category *</label>
-                    <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}>
-                      <option value="">Select category</option>
-                      {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      {/* Show current value as option if it's not in the standard list */}
-                      {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && (
-                        <option value={editFormData.category}>{editFormData.category}</option>
-                      )}
-                      <option value="Other">Other (enter manually)</option>
-                    </select>
-                    {editFormData.category === 'Other' && (
-                      <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)}
-                        placeholder="Enter category name" style={{ marginTop: 6 }} />
-                    )}
-                  </div>
-                  <div className="vendor-form-group"><label>Vendor Type *</label>
-                    <select value={editFormData.vendorType} onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
-                      <option value="">Select type</option>
-                      {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                      {/* Show current value as option if it's not in the standard list */}
-                      {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && (
-                        <option value={editFormData.vendorType}>{editFormData.vendorType}</option>
-                      )}
-                      <option value="Other">Other (enter manually)</option>
-                    </select>
-                    {editFormData.vendorType === 'Other' && (
-                      <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)}
-                        placeholder="Enter vendor type" style={{ marginTop: 6 }} />
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="vendor-form-section">
-                <h3>Contact Information</h3>
-                <div className="vendor-form-group"><label>Website</label><input type="url" value={editFormData.website} onChange={(e) => setEditFormData({ ...editFormData, website: e.target.value })} placeholder="https://www.example.com" /></div>
-                <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
-                  <div className="vendor-form-group"><label>State</label>
-                    <select value={editFormData.state || ''} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}>
-                      <option value="">Select State</option>
-                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
-                  <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
-                </div>
-                <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>
-              </div>
-              <div className="vendor-form-section">
-                <h3>Additional Details</h3>
-                <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>Rating</label>
-                    <select value={editFormData.rating} onChange={(e) => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}>
-                      <option value="0">Not Rated</option>
-                      <option value="1">⭐ 1 Star</option>
-                      <option value="2">⭐⭐ 2 Stars</option>
-                      <option value="3">⭐⭐⭐ 3 Stars</option>
-                      <option value="4">⭐⭐⭐⭐ 4 Stars</option>
-                      <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
-                    </select>
-                  </div>
-                  <div className="vendor-form-group"><label>Status</label>
-                    <select value={editFormData.status} onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}>
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
-                  </div>
-                </div>
-                {availableUsers.length > 0 && (
-                  <div className="vendor-form-group"><label>Assign To</label>
-                    <select value={editFormData.assignedTo} onChange={(e) => setEditFormData({ ...editFormData, assignedTo: e.target.value })}>
-                      <option value="">Select user</option>
-                      {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                )}
-                <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>
+              <div className="vc-step-line" />
+              <div className={`vc-step ${createStep >= 2 ? 'vc-step--active' : ''}`}>
+                <div className="vc-step-dot">2</div>
+                <span className="vc-step-label">KYC Documents</span>
               </div>
             </div>
-            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
-              <button className="vendor-management-btn-primary" onClick={handleCreateVendor}>Create Vendor</button>
-              <button className="vendor-management-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+
+            {/* ── Step 1: Vendor Info ── */}
+            {createStep === 1 && (
+              <div className="vendor-management-edit-form" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+                <div className="vendor-form-section">
+                  <h3>Project Assignment</h3>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>Group</label>
+                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
+                        <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
+                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="vendor-form-group"><label>Category / Sub-Group</label>
+                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
+                        <option value="">{!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Category'}</option>
+                        {modalSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="vendor-form-group"><label>Project (Optional)</label>
+                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
+                      <option value="">{!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project (Optional)'}</option>
+                      {modalProjects.map(p => <option key={p.id} value={p.id}>{p.name} - {p.location}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="vendor-form-section">
+                  <h3>Basic Information</h3>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>Vendor Name *</label><input type="text" value={editFormData.name} onChange={e => setEditFormData({ ...editFormData, name: e.target.value })} placeholder="Enter vendor name" /></div>
+                    <div className="vendor-form-group"><label>Contact Person</label><input type="text" value={editFormData.contactPerson} onChange={e => setEditFormData({ ...editFormData, contactPerson: e.target.value })} placeholder="Enter contact person" /></div>
+                  </div>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={e => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
+                    <div className="vendor-form-group"><label>Phone *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="10-digit phone number" /></div>
+                  </div>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>Category *</label>
+                      <select value={editFormData.category} onChange={e => setEditFormData({ ...editFormData, category: e.target.value })}>
+                        <option value="">Select category</option>
+                        {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && <option value={editFormData.category}>{editFormData.category}</option>}
+                        <option value="Other">Other (enter manually)</option>
+                      </select>
+                      {editFormData.category === 'Other' && <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)} placeholder="Enter category name" style={{ marginTop: 6 }} />}
+                    </div>
+                    <div className="vendor-form-group"><label>Vendor Type *</label>
+                      <select value={editFormData.vendorType} onChange={e => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
+                        <option value="">Select type</option>
+                        {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                        {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && <option value={editFormData.vendorType}>{editFormData.vendorType}</option>}
+                        <option value="Other">Other (enter manually)</option>
+                      </select>
+                      {editFormData.vendorType === 'Other' && <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter vendor type" style={{ marginTop: 6 }} />}
+                    </div>
+                  </div>
+                </div>
+                <div className="vendor-form-section">
+                  <h3>Contact & Address</h3>
+                  <div className="vendor-form-group"><label>Website</label><input type="url" value={editFormData.website} onChange={e => setEditFormData({ ...editFormData, website: e.target.value })} placeholder="https://www.example.com" /></div>
+                  <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={e => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
+                    <div className="vendor-form-group"><label>State</label>
+                      <select value={editFormData.state || ''} onChange={e => setEditFormData({ ...editFormData, state: e.target.value })}>
+                        <option value="">Select State</option>
+                        {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+                    <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={e => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
+                  </div>
+                  <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={e => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>
+                </div>
+                <div className="vendor-form-section">
+                  <h3>Additional Details</h3>
+                  <div className="vendor-form-row">
+                    <div className="vendor-form-group"><label>Rating</label>
+                      <select value={editFormData.rating} onChange={e => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}>
+                        <option value="0">Not Rated</option>
+                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{'⭐'.repeat(n)} {n} Star{n>1?'s':''}</option>)}
+                      </select>
+                    </div>
+                    <div className="vendor-form-group"><label>Status</label>
+                      <select value={editFormData.status} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    </div>
+                  </div>
+                  {availableUsers.length > 0 && (
+                    <div className="vendor-form-group"><label>Assign To</label>
+                      <select value={editFormData.assignedTo} onChange={e => setEditFormData({ ...editFormData, assignedTo: e.target.value })}>
+                        <option value="">Select user</option>
+                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={e => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>
+                </div>
+              </div>
+            )}
+
+            {/* ── Step 2: KYC ── */}
+            {createStep === 2 && (
+              <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, lineHeight: 1.5 }}>
+                  All KYC fields are optional. If you enter a document number, uploading the file becomes required before saving.
+                </p>
+                {missingFiles.length > 0 && (
+                  <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <AlertCircle size={14} />
+                    {missingFiles.length} document(s) have a number but no file uploaded.
+                  </div>
+                )}
+                {/* Main docs — table */}
+                <div className="kyc-section-hd">
+                  <Shield size={13} /><span>KYC Documents</span>
+                  <span className="kyc-section-count">{MAIN_DOCS.filter(d => createKycDocs[d.id]?.docNumber?.trim() && (createKycDocs[d.id]?.fileName || createKycDocs[d.id]?.fileUrl)).length} / {MAIN_DOCS.length} complete</span>
+                </div>
+                <div className="kyc-table-wrap">
+                  <table className="kyc-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: 28 }}></th>
+                        <th>Document</th>
+                        <th style={{ minWidth: 200 }}>Document Number</th>
+                        <th style={{ minWidth: 240 }}>File</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MAIN_DOCS.map(doc => (
+                        <KycDocCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Additional docs — cards */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 20, marginBottom: 8 }}>
+                  <FileText size={13} style={{ color: '#475569' }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Additional Documents</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{ADDITIONAL_DOCS.filter(d => createKycDocs[d.id]?.docNumber?.trim() && (createKycDocs[d.id]?.fileName || createKycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                  {ADDITIONAL_DOCS.map(doc => (
+                    <KycAddCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} />
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Footer */}
+            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px', justifyContent: 'space-between' }}>
+              <div>
+                {createStep === 2 && (
+                  <button className="vendor-management-btn-secondary" onClick={() => setCreateStep(1)}>← Back</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {createStep === 1 ? (
+                  <>
+                    <button className="vendor-management-btn-primary" onClick={handleNextStep}>Next: KYC →</button>
+                    <button className="vendor-management-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      className="vendor-management-btn-primary"
+                      onClick={handleCreateVendor}
+                      disabled={missingFiles.length > 0}
+                      title={missingFiles.length > 0 ? 'Upload files for all entered document numbers' : ''}
+                    >
+                      Create Vendor
+                    </button>
+                    <button className="vendor-management-btn-secondary" onClick={() => setShowCreateModal(false)}>Cancel</button>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };
