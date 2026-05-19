@@ -109,6 +109,20 @@ const ColumnsPicker = ({ columns, onToggle, onClose }) => {
 };
 
 // ─── Draggable TH ────────────────────────────────────────────────────────────
+const COL_WIDTHS = {
+  name:               { minWidth: 160 },
+  contact:            { minWidth: 180 },
+  category:           { minWidth: 120 },
+  rating:             { minWidth: 100 },
+  totalOrders:        { minWidth: 110 },
+  totalPurchaseValue: { minWidth: 150 },
+  lastPurchaseDate:   { minWidth: 130 },
+  status:             { minWidth: 90  },
+  group:              { minWidth: 120 },
+  project:            { minWidth: 200 },
+  actions:            { minWidth: 90  },
+};
+
 const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, sortConfig, onSort, children }) => {
   return (
     <th
@@ -117,6 +131,7 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={(e) => onDrop(e, index)}
       onDragEnd={onDragEnd}
+      style={COL_WIDTHS[col.id] ? { minWidth: COL_WIDTHS[col.id].minWidth } : undefined}
       className={`
         vendor-management-table__th
         ${isDragOver ? 'vendor-management-table__th--drag-over' : ''}
@@ -1271,14 +1286,14 @@ const VendorManagement = () => {
         return <td key={col.id}>{vendor.groupName || 'N/A'}</td>;
       case 'project':
         return (
-          <td key={col.id}>
+          <td key={col.id} style={{ minWidth: 200 }}>
             {vendor.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
                   {vendor.projectName || vendor.projectId}
                 </span>
                 {vendor.projectName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
                     {vendor.projectId}
                   </span>
                 )}

@@ -1846,6 +1846,10 @@ button:disabled:hover {
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: calc(100vh - 80px); /* leave room for outer nav */
 }
 
 /* ── Top bar ──────────────────────────────────────────────────────────── */
@@ -1857,6 +1861,7 @@ button:disabled:hover {
   background: #f9fafb;
   border-bottom: 1px solid #e5e7eb;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .vd-back-btn {
@@ -1916,6 +1921,7 @@ button:disabled:hover {
   padding: 18px 20px;
   border-bottom: 1px solid #e5e7eb;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .vd-hero-left {
@@ -1999,6 +2005,7 @@ button:disabled:hover {
   border-bottom: 1px solid #e5e7eb;
   background: #f9fafb;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .vd-kpi-item {
@@ -2034,6 +2041,7 @@ button:disabled:hover {
   padding: 0 16px;
   background: #fafafa;
   flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .vd-tab {
@@ -2058,7 +2066,9 @@ button:disabled:hover {
 /* ── Tab body ─────────────────────────────────────────────────────────── */
 .vd-tab-body {
   padding: 20px;
-  min-height: 300px;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0; /* required for flex child to scroll */
 }
 
 /* ── Info grid ────────────────────────────────────────────────────────── */
@@ -2534,7 +2544,7 @@ button:disabled:hover {
   .vd-kpi-item:last-child { border-bottom: none; }
   .vd-info-grid { grid-template-columns: 1fr; }
   .vd-info-card--wide { grid-column: auto; }
-  .vd-tab-body { padding: 14px; }
+  .vd-tab-body { padding: 14px; overflow-y: auto; }
   .vd-kyc-card { flex-wrap: wrap; }
   .vd-kyc-actions { flex-direction: row; flex-wrap: wrap; padding: 10px 14px; border-top: 1px solid #f1f5f9; width: 100%; justify-content: flex-start; }
   .vd-po-meta { flex-direction: column; gap: 5px; }

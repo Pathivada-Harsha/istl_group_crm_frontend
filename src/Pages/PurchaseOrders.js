@@ -78,6 +78,17 @@ const ColumnsPicker = ({ columns, onToggle, onClose }) => {
 };
 
 // ─── Draggable TH ─────────────────────────────────────────────────────────────
+const PO_COL_WIDTHS = {
+  poNo:          140,
+  project:       200,
+  vendor:        160,
+  status:        110,
+  paymentStatus: 130,
+  totalValue:    130,
+  orderDate:     120,
+  actions:        90,
+};
+
 const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, sortConfig, onSort }) => (
   <th
     draggable={col.id !== 'actions'}
@@ -85,6 +96,7 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
     onDragOver={(e) => onDragOver(e, index)}
     onDrop={(e) => onDrop(e, index)}
     onDragEnd={onDragEnd}
+    style={PO_COL_WIDTHS[col.id] ? { minWidth: PO_COL_WIDTHS[col.id] } : undefined}
     className={[
       'po-th',
       isDragOver ? 'po-th--drag-over' : '',
@@ -1085,14 +1097,14 @@ const PurchaseOrders = () => {
       case 'project': {
         const pName = projectNames[po.projectId];
         return (
-          <td key={col.id}>
+          <td key={col.id} style={{ minWidth: 200 }}>
             {po.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
                   {pName || po.projectId}
                 </span>
                 {pName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
                     {po.projectId}
                   </span>
                 )}

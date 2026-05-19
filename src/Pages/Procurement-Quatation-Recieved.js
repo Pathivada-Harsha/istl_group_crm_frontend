@@ -893,14 +893,14 @@ const QuotationsReceived = () => {
       );
       case 'group': return <td>{q.groupName || '—'}</td>;
       case 'project': return (
-        <td>
+        <td style={{ minWidth: 200 }}>
           {q.projectId ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
                 {q.projectName || q.projectId}
               </span>
               {q.projectName && (
-                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
                   {q.projectId}
                 </span>
               )}
@@ -1030,6 +1030,7 @@ const QuotationsReceived = () => {
                         background: dragOverColIndex === index ? "#dbeafe" : undefined,
                         transition: "background 0.15s",
                         whiteSpace: "nowrap",
+                        minWidth: col.id === 'project' ? 200 : col.id === 'vendor' ? 160 : col.id === 'rfqId' ? 130 : undefined,
                       }}
                     >
                       {!col.fixed && (
