@@ -58,12 +58,17 @@ const StatusBadge = ({ s }) => (
 const ProjectCostExpenseManagement = () => {
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user } = useAuth();
+  const { user, isAccountsExecutive } = useAuth();
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
   // ── Role-based access ──────────────────────────────────────────────────────
-  const userRole = (user?.role || localStorage.getItem('userRole') || '').toLowerCase();
-  const canApprove = ['superadmin', 'super_admin', 'admin', 'accounts', 'account'].some(r => userRole.includes(r));
+  const userRole      = (user?.role || localStorage.getItem('userRole') || '').toLowerCase();
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  const isSuperAdmin   = user?.role === 'SUPERADMIN' || userRole.includes('super_admin');
+  const isAdmin        = user?.role === 'ADMIN';
+  // Full access: superadmin, admin, any ACCOUNTS_* role, or isAccountsExecutive from auth context
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
+  const canApprove     = isFullAccess;
 
   const [expenses, setExpenses] = useState([]);
   const [stats, setStats] = useState(null);
@@ -76,8 +81,9 @@ const ProjectCostExpenseManagement = () => {
   const [pageSize, setPageSize] = useState(10);
 
   const [filters, setFilters] = useState({
-    search: '', category: 'all', status: 'all', paymentMode: 'all', dateFrom: '', dateTo: '',
+    search: '', category: 'all', status: 'all', paymentMode: 'all', dateFrom: '', dateTo: '', expenseType: 'all',
   });
+  const [activeKpi, setActiveKpi] = useState(null); // tracks which KPI card is active
   const [sortBy, setSortBy] = useState('tripDate');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -115,6 +121,13 @@ const ProjectCostExpenseManagement = () => {
 
 
   const [availableUsers, setAvailableUsers] = useState([]);
+  // ── Paid By searchable dropdown state ────────────────────────────────────────
+  const [paidByOpen,     setPaidByOpen]     = useState(false);   // create modal
+  const [paidBySearch,   setPaidBySearch]   = useState('');
+  const [editPaidByOpen, setEditPaidByOpen] = useState(false);   // edit modal
+  const [editPaidBySearch, setEditPaidBySearch] = useState('');
+  const paidByRef     = React.useRef(null);
+  const editPaidByRef = React.useRef(null);
 
   // ── Auth Headers ─────────────────────────────────────────────────────────────
   const getAuthHeaders = () => ({
@@ -229,10 +242,54 @@ const ProjectCostExpenseManagement = () => {
   };
 
   // ── Modal dropdown handlers — ADVANCE ────────────────────────────────────────
-  // ── Fetch users ───────────────────────────────────────────────────────────────
+  // ── Fetch users for Paid By ───────────────────────────────────────────────────
+  // The backend /filters/leads-users reads User-Role from the request header.
+  // SUPERADMIN/ADMIN → returns all users.
+  // ACCOUNTS_* roles → normally scoped, so we override User-Role header to SUPERADMIN
+  //                    so the backend returns all users for the Paid By dropdown.
   useEffect(() => {
-    filterApi.getLeadsUsers().then(setAvailableUsers).catch(() => { });
-  }, []);
+    if (!user?.id) return;
+
+    const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+    const isPrivileged   = isAccountsRole
+      || user?.role === 'ADMIN'
+      || user?.role === 'SUPERADMIN';
+
+    const fetchPaidByUsers = async () => {
+      try {
+        // For privileged / accounts roles: call leads-users with SUPERADMIN role header
+        // so backend returns the full user list (not scoped to team/createdBy).
+        const headers = {
+          'Content-Type': 'application/json',
+          'User-Id':     String(user.id),
+          'X-User-Id':   String(user.id),
+          'User-Role':   isPrivileged ? 'SUPERADMIN' : (user.role || ''),
+          'X-User-Role': isPrivileged ? 'SUPERADMIN' : (user.role || ''),
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        };
+
+        const res = await fetch(`${API_BASE_URL}/filters/leads-users`, {
+          credentials: 'include',
+          headers,
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const list = Array.isArray(data)
+            ? data.map(u => ({ id: u.id, name: u.name || u.full_name || '', role: u.role || '' }))
+            : [];
+          setAvailableUsers(list);
+        } else {
+          setAvailableUsers([]);
+        }
+      } catch {
+        setAvailableUsers([]);
+      }
+    };
+
+    fetchPaidByUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, user?.role]);
 
   // ── Data fetchers ─────────────────────────────────────────────────────────────
 // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,7 +297,17 @@ const ProjectCostExpenseManagement = () => {
     fetchExpenses();
     fetchStats();
   }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, pageSize,
-    filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, sortBy, sortDir]);
+    filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, filters.expenseType, sortBy, sortDir]);
+
+  // Close paid-by dropdown on outside click
+  useEffect(() => {
+    const handler = (e) => {
+      if (paidByRef.current && !paidByRef.current.contains(e.target)) setPaidByOpen(false);
+      if (editPaidByRef.current && !editPaidByRef.current.contains(e.target)) setEditPaidByOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const fetchExpenses = async () => {
     setLoading(true);
@@ -252,9 +319,12 @@ const ProjectCostExpenseManagement = () => {
       if (filters.search) params.append('search', filters.search);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.category !== 'all') params.append('category', filters.category);
-      if (filters.paymentMode !== 'all') params.append('paymentMode', filters.paymentMode);
+      if (filters.paymentMode  !== 'all') params.append('paymentMode',  filters.paymentMode);
+      if (filters.expenseType  !== 'all') params.append('expenseType',  filters.expenseType);
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.append('dateTo', filters.dateTo);
+      // Super admin / admin / accounts team see ALL data
+      if (!isFullAccess && user?.id) params.append('createdBy', user.id);
 
       const response = await fetch(`${API_BASE_URL}/project-expenses?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
@@ -273,9 +343,20 @@ const ProjectCostExpenseManagement = () => {
   const fetchStats = async () => {
     try {
       const params = new URLSearchParams();
-      if (projectId) params.append('projectId', projectId);
-      if (groupName) params.append('groupName', groupName);
+      // Scope by group/project selection
+      if (projectId)    params.append('projectId',    projectId);
+      if (groupName)    params.append('groupName',    groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
+      // Apply same filters as the table so KPI cards match exactly what is shown
+      if (filters.status      !== 'all') params.append('status',      filters.status);
+      if (filters.category    !== 'all') params.append('category',    filters.category);
+      if (filters.paymentMode !== 'all') params.append('paymentMode', filters.paymentMode);
+      if (filters.expenseType !== 'all') params.append('expenseType', filters.expenseType);
+      if (filters.dateFrom)              params.append('dateFrom',    filters.dateFrom);
+      if (filters.dateTo)                params.append('dateTo',      filters.dateTo);
+      if (filters.search)                params.append('search',      filters.search);
+      // Non-full-access users: scope stats to own records only
+      if (!isFullAccess && user?.id) params.append('createdBy', user.id);
       const response = await fetch(`${API_BASE_URL}/project-expenses/stats?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });
@@ -664,14 +745,28 @@ const ProjectCostExpenseManagement = () => {
   };
 
   // ── KPI cards ─────────────────────────────────────────────────────────────────
+  // Each card carries a `filterPatch` — the exact filter values to apply when clicked.
+  // Clicking again (same card) clears the filter back to 'all'.
   const kpiData = stats ? [
-    { title: 'Total Expenses', value: fmt(stats.totalExpenses), icon: <IndianRupee size={32} />, color: '#ef4444' },
-    { title: 'Approved', value: fmt(stats.approvedExpenses), icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Pending Approval', value: fmt(stats.pendingExpenses), icon: <Clock size={32} />, color: '#f59e0b' },
-    { title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />, color: '#3b82f6' },
-    { title: 'Total Commission', value: fmt(stats.totalCommission), icon: <Users size={32} />, color: '#8b5cf6' },
-    { title: 'Total Advances', value: fmt(stats.totalAdvances), icon: <Receipt size={32} />, color: '#06b6d4' },
+    { id: 'total',      title: 'Total Expenses',     value: fmt(stats.totalExpenses),    icon: <IndianRupee size={32} />, color: '#ef4444', filterPatch: null },
+    { id: 'approved',   title: 'Approved',            value: fmt(stats.approvedExpenses), icon: <CheckCircle size={32} />, color: '#22c55e', filterPatch: { status: 'Approved', category: 'all' } },
+    { id: 'pending',    title: 'Pending Approval',    value: fmt(stats.pendingExpenses),  icon: <Clock size={32} />,       color: '#f59e0b', filterPatch: { status: 'Pending',  category: 'all' } },
+    { id: 'travel',     title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,    color: '#3b82f6', filterPatch: { category: 'Travel', status: 'all' } },
+    { id: 'commission', title: 'Total Commission',    value: fmt(stats.totalCommission),  icon: <Users size={32} />,       color: '#8b5cf6', filterPatch: { category: 'Commission', status: 'all' } },
+    { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <Receipt size={32} />,     color: '#06b6d4', filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
   ] : [];
+
+  const handleKpiClick = (kpi) => {
+    if (activeKpi === kpi.id || !kpi.filterPatch) {
+      // clicking same card or "Total" → clear all KPI filters
+      setActiveKpi(null);
+      setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all' }));
+    } else {
+      setActiveKpi(kpi.id);
+      setFilters(prev => ({ ...prev, ...kpi.filterPatch }));
+    }
+    setCurrentPage(0);
+  };
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
   return (
@@ -717,12 +812,12 @@ const ProjectCostExpenseManagement = () => {
             onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }}
           />
           <select className="exp-mgmt-filter" value={filters.category}
-            onChange={(e) => { setFilters({ ...filters, category: e.target.value }); setCurrentPage(0); }}>
+            onChange={(e) => { setFilters({ ...filters, category: e.target.value }); setCurrentPage(0); setActiveKpi(null); }}>
             <option value="all">All Categories</option>
             {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
           </select>
           <select className="exp-mgmt-filter" value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); }}>
+            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); setActiveKpi(null); }}>
             <option value="all">All Status</option>
             {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
           </select>
@@ -776,17 +871,43 @@ const ProjectCostExpenseManagement = () => {
 
       {/* ── KPI Cards ───────────────────────────────────────────────────────── */}
       {stats && (
-        <div className="exp-mgmt-kpi-grid">
-          {kpiData.map((kpi, index) => (
-            <div key={index} className="exp-mgmt-kpi-card" style={{ borderTopColor: kpi.color }}>
-              <div className="exp-mgmt-kpi-icon" style={{ color: kpi.color }}>{kpi.icon}</div>
-              <div className="exp-mgmt-kpi-content">
-                <div className="exp-mgmt-kpi-value">{kpi.value}</div>
-                <div className="exp-mgmt-kpi-label">{kpi.title}</div>
-              </div>
+        <>
+          <div className="exp-mgmt-kpi-grid">
+            {kpiData.map((kpi) => {
+              const isActive = activeKpi === kpi.id;
+              return (
+                <div
+                  key={kpi.id}
+                  className={`exp-mgmt-kpi-card${isActive ? ' exp-mgmt-kpi-card--active' : ''}${kpi.filterPatch ? ' exp-mgmt-kpi-card--clickable' : ''}`}
+                  style={{ borderTopColor: kpi.color, boxShadow: isActive ? `0 0 0 2px ${kpi.color}` : undefined, cursor: kpi.filterPatch ? 'pointer' : 'default' }}
+                  onClick={() => handleKpiClick(kpi)}
+                  title={kpi.filterPatch ? `Click to filter: ${kpi.title}` : undefined}
+                >
+                  <div className="exp-mgmt-kpi-icon" style={{ color: kpi.color }}>{kpi.icon}</div>
+                  <div className="exp-mgmt-kpi-content">
+                    <div className="exp-mgmt-kpi-value">{kpi.value}</div>
+                    <div className="exp-mgmt-kpi-label">{kpi.title}</div>
+                    {isActive && (
+                      <div style={{ fontSize: 10, marginTop: 3, color: kpi.color, fontWeight: 700 }}>● Filtering</div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {/* Active KPI filter indicator with clear button */}
+          {activeKpi && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, fontSize: 12, color: '#1d4ed8', marginBottom: 4 }}>
+              <CheckCircle size={13} />
+              <span>Filtering by: <strong>{kpiData.find(k => k.id === activeKpi)?.title}</strong></span>
+              <button
+                onClick={() => { setActiveKpi(null); setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all' })); setCurrentPage(0); }}
+                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: 5, cursor: 'pointer' }}>
+                <X size={11} /> Clear
+              </button>
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
 
       {/* ── Employee Breakdown ───────────────────────────────────────────────── */}
@@ -988,16 +1109,72 @@ const ProjectCostExpenseManagement = () => {
                       <input type="date" value={expenseFormData.tripDate}
                         onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
                     </div>
-                    <div className="exp-field">
+                    <div className="exp-field" style={{ position: 'relative' }} ref={paidByRef}>
                       <label>Paid By</label>
-                      <select value={expenseFormData.paidByUserId}
-                        onChange={e => {
-                          const u = availableUsers.find(u => String(u.id) === e.target.value);
-                          setExpenseFormData(p => ({ ...p, paidByUserId: e.target.value, paidByName: u?.name || '' }));
+                      <div
+                        onClick={() => { setPaidByOpen(o => !o); setPaidBySearch(''); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px',
+                          cursor: 'pointer', background: '#fff', fontSize: 13,
+                          color: expenseFormData.paidByUserId ? '#111827' : '#9ca3af', minHeight: 38,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                          {expenseFormData.paidByUserId ? (() => {
+                            const u = availableUsers.find(u => String(u.id) === String(expenseFormData.paidByUserId));
+                            return u ? (
+                              <>
+                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {(u.name || '?')[0].toUpperCase()}
+                                </div>
+                                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                              </>
+                            ) : <span>Select user</span>;
+                          })() : <span>Select user</span>}
+                        </div>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                      {paidByOpen && (
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
+                          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                          boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
                         }}>
-                        <option value="">Select user</option>
-                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
+                          <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                            <input autoFocus type="text" placeholder="Search users..."
+                              value={paidBySearch} onChange={e => setPaidBySearch(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                          </div>
+                          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                            <div onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: '', paidByName: '' })); setPaidByOpen(false); }}
+                              style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >— None —</div>
+                            {availableUsers.filter(u => !paidBySearch || (u.name || '').toLowerCase().includes(paidBySearch.toLowerCase())).map(u => (
+                              <div key={u.id}
+                                onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: String(u.id), paidByName: u.name || '' })); setPaidByOpen(false); }}
+                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent'}
+                              >
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {(u.name || '?')[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 500, color: '#111827' }}>{u.name}</div>
+                                  {u.role && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{u.role}</div>}
+                                </div>
+                              </div>
+                            ))}
+                            {availableUsers.filter(u => !paidBySearch || (u.name || '').toLowerCase().includes(paidBySearch.toLowerCase())).length === 0 && (
+                              <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="exp-field">
                       <label>Purpose / Description</label>
@@ -1281,16 +1458,72 @@ const ProjectCostExpenseManagement = () => {
                       <input type="date" value={expenseFormData.tripDate}
                         onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
                     </div>
-                    <div className="exp-field">
+                    <div className="exp-field" style={{ position: 'relative' }} ref={editPaidByRef}>
                       <label>Paid By</label>
-                      <select value={expenseFormData.paidByUserId}
-                        onChange={e => {
-                          const u = availableUsers.find(u => String(u.id) === e.target.value);
-                          setExpenseFormData(p => ({ ...p, paidByUserId: e.target.value, paidByName: u?.name || '' }));
+                      <div
+                        onClick={() => { setEditPaidByOpen(o => !o); setEditPaidBySearch(''); }}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px',
+                          cursor: 'pointer', background: '#fff', fontSize: 13,
+                          color: expenseFormData.paidByUserId ? '#111827' : '#9ca3af', minHeight: 38,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
+                          {expenseFormData.paidByUserId ? (() => {
+                            const u = availableUsers.find(u => String(u.id) === String(expenseFormData.paidByUserId));
+                            return u ? (
+                              <>
+                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {(u.name || '?')[0].toUpperCase()}
+                                </div>
+                                <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                              </>
+                            ) : <span>Select user</span>;
+                          })() : <span>Select user</span>}
+                        </div>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                      </div>
+                      {editPaidByOpen && (
+                        <div style={{
+                          position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
+                          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                          boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
                         }}>
-                        <option value="">Select user</option>
-                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
+                          <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                            <input autoFocus type="text" placeholder="Search users..."
+                              value={editPaidBySearch} onChange={e => setEditPaidBySearch(e.target.value)}
+                              onClick={e => e.stopPropagation()}
+                              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                          </div>
+                          <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                            <div onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: '', paidByName: '' })); setEditPaidByOpen(false); }}
+                              style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >— None —</div>
+                            {availableUsers.filter(u => !editPaidBySearch || (u.name || '').toLowerCase().includes(editPaidBySearch.toLowerCase())).map(u => (
+                              <div key={u.id}
+                                onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: String(u.id), paidByName: u.name || '' })); setEditPaidByOpen(false); }}
+                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent' }}
+                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent'}
+                              >
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {(u.name || '?')[0].toUpperCase()}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 500, color: '#111827' }}>{u.name}</div>
+                                  {u.role && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{u.role}</div>}
+                                </div>
+                              </div>
+                            ))}
+                            {availableUsers.filter(u => !editPaidBySearch || (u.name || '').toLowerCase().includes(editPaidBySearch.toLowerCase())).length === 0 && (
+                              <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div className="exp-field">
                       <label>Status</label>

@@ -2976,3 +2976,16 @@
   .exp-mgmt-table-container { margin: 0 6px 12px !important; }
   .exp-act-btn { width: 28px; height: 28px; }
 }
+/* ── KPI card clickable + active states ─────────────────────────────── */
+.exp-mgmt-kpi-card--clickable { cursor: pointer; }
+.exp-mgmt-kpi-card--clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(0,0,0,.12);
+}
+.exp-mgmt-kpi-card--active {
+  transform: translateY(-2px);
+  outline: 2px solid currentColor;
+}
+.exp-mgmt-kpi-card--active .exp-mgmt-kpi-value {
+  font-weight: 800;
+}
