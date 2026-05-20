@@ -83,6 +83,228 @@ const mockTasks = (user) => {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
+   REUSABLE PICKERS
+══════════════════════════════════════════════════════════════════════════ */
+const _MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+/* TimePicker */
+const TimePicker = ({ value, onChange }) => {
+  const [show, setShow] = useState(false);
+  const [temp, setTemp] = useState('');
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setShow(false); setTemp(''); } };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const fmt = t => { if (!t) return 'Select time'; const [h,m]=t.split(':'); const hr=parseInt(h,10); return `${hr%12===0?12:hr%12}:${m} ${hr>=12?'PM':'AM'}`; };
+  return (
+    <div ref={ref} style={{position:'relative'}}>
+      <button type="button" className="tm-time-trigger" onClick={() => { setTemp(value||''); setShow(p=>!p); }}>
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/></svg>
+        {fmt(value)}
+      </button>
+      {show && (
+        <div className="tm-time-popover">
+          <span className="tm-time-label">Pick a time</span>
+          <input type="time" autoFocus className="tm-time-input" value={temp} onChange={e=>setTemp(e.target.value)}/>
+          <div className="tm-time-actions">
+            <button type="button" className="tm-time-cancel" onClick={()=>{setShow(false);setTemp('');}}>Cancel</button>
+            <button type="button" className="tm-time-save" onClick={()=>{onChange(temp);setShow(false);setTemp('');}}>Save</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* DatePicker — date only */
+const DatePicker = ({ value, onChange, placeholder='Select date' }) => {
+  const [show, setShow] = useState(false);
+  const [calMo, setCalMo] = useState(() => value?parseInt(value.slice(5,7))-1:new Date().getMonth());
+  const [calYr, setCalYr] = useState(() => value?parseInt(value.slice(0,4)):new Date().getFullYear());
+  const [showYrDP, setShowYrDP] = useState(false);
+  const [pos,   setPos]   = useState({top:0,left:0,width:260});
+  const trRef = useRef(null), dpRef = useRef(null);
+  useEffect(() => {
+    const h = e => { if (trRef.current&&!trRef.current.contains(e.target)&&dpRef.current&&!dpRef.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const open = () => {
+    if (value){setCalMo(parseInt(value.slice(5,7))-1);setCalYr(parseInt(value.slice(0,4)));}
+    if (trRef.current){const r=trRef.current.getBoundingClientRect();const dH=310;const up=window.innerHeight-r.bottom<dH&&r.top>dH;setPos({top:up?r.top-dH-4:r.bottom+4,left:r.left,width:Math.max(r.width,260)});}
+    setShow(true);
+  };
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const fmtD=d=>{if(!d)return null;const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  return (
+    <>
+      <button ref={trRef} type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>setShow(false):open}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span className="tm-dtp-ph">{placeholder}</span>}
+        {value?<span className="tm-dtp-x" onClick={e=>{e.stopPropagation();onChange('');}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+      </button>
+      {show&&(
+        <div ref={dpRef} className="tm-dtp-dropdown" style={{position:'fixed',top:pos.top,left:pos.left,width:pos.width,zIndex:9999}}>
+          <div className="tm-dtp-cal-head">
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="tm-dtp-month" onClick={()=>setShowYrDP(p=>!p)}>{_MONTHS[calMo]} <span className="tm-yr-num">{calYr}</span></button>
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYrDP?(
+            <div className="tm-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`tm-yr-cell${yr===calYr?' tm-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYrDP(false);}}>{yr}</div>;})}</div>
+          ):(
+          <div className="tm-dtp-grid">
+            {_DAYS.map(d=><div key={d} className="tm-cal-dl">{d}</div>)}
+            {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="tm-cal-cell tm-cal-empty"/>)}
+            {Array.from({length:DIM}).map((_,i)=>{const dy=i+1;const ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;let cls='tm-cal-cell';if(ds===value)cls+=' tm-dtp-sel';else if(ds===tod)cls+=' tm-cal-today';return<div key={ds} className={cls} onClick={()=>{onChange(ds);setShow(false);}}>{dy}</div>;})}
+          </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+/* DateTimePicker — date + time, z-index:9999 above modal */
+const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) => {
+  const [show,   setShow]   = useState(false);
+  const [pos,    setPos]    = useState({top:0,left:0,width:300});
+  const [tmpD,   setTmpD]   = useState('');
+  const [tmpT,   setTmpT]   = useState('');
+  const [calMo,  setCalMo]  = useState(new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(new Date().getFullYear());
+  const [showYrDT, setShowYrDT] = useState(false);
+  const wRef=useRef(null), tRef=useRef(null), timer=useRef(null), prevH=useRef('');
+  const open = () => {
+    setTmpD(value?value.slice(0,10):''); setTmpT(value?value.slice(11,16):'');
+    prevH.current=value?value.slice(11,16):'';
+    if(value){setCalMo(parseInt(value.slice(5,7))-1);setCalYr(parseInt(value.slice(0,4)));}
+    if(wRef.current){const r=wRef.current.getBoundingClientRect();const dH=420;const up=window.innerHeight-r.bottom<dH&&r.top>dH;setPos({top:up?r.top-dH-4:r.bottom+4,left:r.left,width:Math.max(r.width,300)});}
+    setShow(true);
+  };
+  useEffect(()=>{
+    const h=e=>{if(wRef.current&&!wRef.current.contains(e.target)){clearTimeout(timer.current);setShow(false);}};
+    if(show)document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const fmtDisp=()=>{if(!value)return null;const[d,t]=value.split('T');if(!d)return null;const[y,mo,dy]=d.split('-');const ts=t?(()=>{const[h,m]=t.split(':');const hr=parseInt(h,10);return`${hr%12===0?12:hr%12}:${String(m).padStart(2,'0')} ${hr>=12?'PM':'AM'}`})():'';return{date:`${dy}-${mo}-${y}`,time:ts};};
+  const disp=fmtDisp();
+  return (
+    <div ref={wRef}>
+      <button type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>{clearTimeout(timer.current);setShow(false);}:open}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {disp?(<span className="tm-dtp-val"><span className="tm-dtp-date">{disp.date}</span>{disp.time&&<span className="tm-dtp-time">{disp.time}</span>}</span>):(<span className="tm-dtp-ph">{placeholder}</span>)}
+        {value?<span className="tm-dtp-x" onClick={e=>{e.stopPropagation();onChange('');setShow(false);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+      </button>
+      {show&&(
+        <div className="tm-dtp-dropdown" style={{position:'fixed',top:pos.top,left:pos.left,width:pos.width,zIndex:9999}}>
+          <div className="tm-dtp-cal-head">
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="tm-dtp-month" onClick={()=>setShowYrDT(p=>!p)}>{_MONTHS[calMo]} <span className="tm-yr-num">{calYr}</span></button>
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYrDT?(
+            <div className="tm-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`tm-yr-cell${yr===calYr?' tm-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYrDT(false);}}>{yr}</div>;})}</div>
+          ):(
+          <div className="tm-dtp-grid">
+            {_DAYS.map(d=><div key={d} className="tm-cal-dl">{d}</div>)}
+            {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="tm-cal-cell tm-cal-empty"/>)}
+            {Array.from({length:DIM}).map((_,i)=>{const dy=i+1;const ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;let cls='tm-cal-cell';if(ds===tmpD)cls+=' tm-dtp-sel';else if(ds===tod)cls+=' tm-cal-today';return<div key={ds} className={cls} onClick={()=>setTmpD(ds)}>{dy}</div>;})}
+          </div>
+          )}
+          <div className="tm-dtp-time-row" style={{cursor:'pointer'}} onClick={()=>{if(tRef.current){try{tRef.current.showPicker();}catch(_){tRef.current.focus();}}}}>
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{color:'#6366f1',flexShrink:0}}><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/></svg>
+            <span className="tm-dtp-time-lbl">Time</span>
+            <input ref={tRef} type="time" className="tm-dtp-time-inp" value={tmpT} style={{cursor:'pointer'}}
+              onClick={e=>{e.stopPropagation();try{e.target.showPicker();}catch(_){}}}
+              onChange={e=>{const nv=e.target.value;const[nH]=nv.split(':');const[pH]=(prevH.current||':').split(':');setTmpT(nv);prevH.current=nv;if(!tmpD||!nv)return;if(nH!==pH){clearTimeout(timer.current);}else{clearTimeout(timer.current);timer.current=setTimeout(()=>{onChange(tmpD+'T'+nv);setShow(false);},800);}}}/>
+          </div>
+          <div className="tm-dtp-footer">
+            <div className="tm-dtp-chips">
+              <span className={`tm-cal-chip${tmpD?' tm-cal-chip--set':''}`}>{tmpD?(()=>{const[y,m,d]=tmpD.split('-');return`${d}-${m}-${y}`;})():'Date —'}</span>
+              {tmpT&&<><svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg><span className="tm-cal-chip tm-cal-chip--set">{(()=>{const[h,m]=tmpT.split(':');const hr=parseInt(h,10);return`${hr%12===0?12:hr%12}:${String(m).padStart(2,'0')} ${hr>=12?'PM':'AM'}`})()}</span></>}
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'center',width:'100%'}}>
+              <button type="button" className="tm-cal-clear" onClick={()=>{clearTimeout(timer.current);setShow(false);}}>Cancel</button>
+              <button type="button" className="tm-cal-apply" onClick={()=>{onChange(tmpD?tmpD+'T'+(tmpT||'00:00'):'');setShow(false);}} disabled={!tmpD}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* DateRangeFilter — replaces From/To native date inputs in filter bar */
+const DateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,  setShow]  = useState(false);
+  const [from,  setFrom]  = useState(null);
+  const [to,    setTo]    = useState(null);
+  const [hover, setHover] = useState(null);
+  const [calMo, setCalMo] = useState(new Date().getMonth());
+  const [calYr, setCalYr] = useState(new Date().getFullYear());
+  const [showYrDR, setShowYrDR] = useState(false);
+  const ref = useRef(null);
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setShow(false);};
+    if(show)document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const inRange=d=>{const hi=to||(from&&hover?hover:null);if(!from||!hi)return false;const[a,b]=from<=hi?[from,hi]:[hi,from];return d>a&&d<b;};
+  const clickDay=d=>{if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d);};
+  const fmtC=d=>{if(!d)return'';const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button type="button" className={`tm-cal-trigger${show?' tm-cal-trigger--open':''}${appliedFrom?' tm-cal-trigger--applied':''}`} onClick={()=>setShow(p=>!p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span className={appliedFrom?'tm-cal-val':'tm-cal-ph'}>{appliedFrom?fmtC(appliedFrom):'dd-mm-yyyy'}</span>
+        <span className="tm-cal-sep">—</span>
+        <span className={appliedTo&&appliedTo!==appliedFrom?'tm-cal-val':'tm-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmtC(appliedTo):'dd-mm-yyyy'}</span>
+        {appliedFrom&&<span className="tm-cal-x" onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {show&&(
+        <div className="tm-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
+          <div className="tm-dtp-cal-head">
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="tm-dtp-month" onClick={()=>setShowYrDR(p=>!p)}>{_MONTHS[calMo]} <span className="tm-yr-num">{calYr}</span></button>
+            <button type="button" className="tm-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYrDR ? (
+            <div className="tm-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`tm-yr-cell${yr===calYr?' tm-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYrDR(false);}}>{yr}</div>;})}</div>
+          ) : (
+          <div className="tm-dtp-grid">
+            {_DAYS.map(d=><div key={d} className="tm-cal-dl">{d}</div>)}
+            {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="tm-cal-cell tm-cal-empty"/>)}
+            {Array.from({length:DIM}).map((_,i)=>{const dy=i+1;const ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;const dow=(FD+i)%7;let cls='tm-cal-cell';if(ds===from)cls+=' tm-cal-from';else if(ds===to)cls+=' tm-cal-to';else if(inRange(ds)){cls+=' tm-cal-in-range';if(dow===0)cls+=' tm-cal-rr-s';if(dow===6)cls+=' tm-cal-rr-e';}if(ds===tod&&ds!==from&&ds!==to)cls+=' tm-cal-today';return<div key={ds} className={cls} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)}>{dy}</div>;})}
+          </div>
+          )}
+          <div className="tm-dtp-footer">
+            <div className="tm-dtp-chips">
+              <span className={`tm-cal-chip${from?' tm-cal-chip--set':''}`}>{from?fmtC(from):'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+              <span className={`tm-cal-chip${to?' tm-cal-chip--set':''}`}>{to?fmtC(to):'To —'}</span>
+            </div>
+            <div style={{display:'flex',gap:6,justifyContent:'center',width:'100%'}}>
+              {(from||appliedFrom)&&<button type="button" className="tm-cal-clear" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}}>Clear</button>}
+              <button type="button" className="tm-cal-clear" onClick={()=>setShow(false)}>Cancel</button>
+              <button type="button" className="tm-cal-apply" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
    WORK ENTRY MODAL (formerly DailyLogModal)
    — rich description, time tracking, status change
 ══════════════════════════════════════════════════════════════════════════ */
@@ -217,11 +439,11 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div className="tm-frow tm-frow3" style={{marginBottom:12}}>
             <div className="tm-fg">
               <label>Start Time</label>
-              <input type="time" className="tm-inp" value={form.startTime} onChange={e => set('startTime', e.target.value)} />
+              <TimePicker value={form.startTime} onChange={v => set('startTime', v)} />
             </div>
             <div className="tm-fg">
               <label>End Time</label>
-              <input type="time" className="tm-inp" value={form.endTime} onChange={e => set('endTime', e.target.value)} />
+              <TimePicker value={form.endTime} onChange={v => set('endTime', v)} />
             </div>
             <div className="tm-fg">
               <label>Hours Spent <span className="tm-hint">(auto-calc)</span></label>
@@ -408,11 +630,11 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
                       </div>
                       <div className="tm-fg" style={{width:90,margin:0}}>
                         <label>Start</label>
-                        <input type="time" className="tm-inp" value={e.startTime} onChange={ev => setField(i,'startTime',ev.target.value)} />
+                        <TimePicker value={e.startTime} onChange={v => setField(i,'startTime',v)} />
                       </div>
                       <div className="tm-fg" style={{width:90,margin:0}}>
                         <label>End</label>
-                        <input type="time" className="tm-inp" value={e.endTime} onChange={ev => setField(i,'endTime',ev.target.value)} />
+                        <TimePicker value={e.endTime} onChange={v => setField(i,'endTime',v)} />
                       </div>
                       <div className="tm-fg" style={{width:90,margin:0}}>
                         <label>Hours</label>
@@ -556,8 +778,8 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
                 {/* FIX #2: Date + time fields */}
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 80px',gap:8,marginBottom:8}}>
                   <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>📅 Date</label><input type="date" className="tm-inp" value={e.logDate||todayStr()} onChange={ev => setField(e.id,'logDate',ev.target.value)} /></div>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 Start</label><input type="time" className="tm-inp" value={e.startTime||''} onChange={ev => setField(e.id,'startTime',ev.target.value)} /></div>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 End</label><input type="time" className="tm-inp" value={e.endTime||''} onChange={ev => setField(e.id,'endTime',ev.target.value)} /></div>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 Start</label><TimePicker value={e.startTime||''} onChange={v => setField(e.id,'startTime',v)} /></div>
+                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 End</label><TimePicker value={e.endTime||''} onChange={v => setField(e.id,'endTime',v)} /></div>
                   <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>⏱ Hrs</label><input type="number" className="tm-inp" min="0" step="0.5" placeholder="hrs" value={e.hours} onChange={ev => setField(e.id,'hours',ev.target.value)} /></div>
                 </div>
 
@@ -669,17 +891,17 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
             </div>
             <div className="tm-fg">
               <label>Due Date <span className="tm-req">*</span></label>
-              <input type="date" className="tm-inp" value={form.dueDate} onChange={e => set('dueDate', e.target.value)} />
+              <DatePicker value={form.dueDate} onChange={v => set('dueDate', v)} placeholder="Select due date" />
             </div>
           </div>
           <div className="tm-frow">
             <div className="tm-fg">
               <label>Start Date & Time</label>
-              <input type="datetime-local" className="tm-inp" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
+              <DateTimePicker value={form.startDate} onChange={v => set('startDate', v)} placeholder="Select start date & time" />
             </div>
             <div className="tm-fg">
               <label>End Date & Time <span className="tm-hint">(auto-calc hours)</span></label>
-              <input type="datetime-local" className="tm-inp" value={form.endDate} onChange={e => set('endDate', e.target.value)} />
+              <DateTimePicker value={form.endDate} onChange={v => set('endDate', v)} placeholder="Select end date & time" />
             </div>
           </div>
           <div className="tm-fg">
@@ -2063,15 +2285,11 @@ export default function TaskManagement() {
           <div className="tm-filters-bar">
             <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
             {/* Date range for board view — calls backend */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>From</span>
-              <input type="date" className="tm-filter-sel" value={taskDateFrom} onChange={e => setTaskDateFrom(e.target.value)} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>To</span>
-              <input type="date" className="tm-filter-sel" value={taskDateTo} onChange={e => setTaskDateTo(e.target.value)} />
-              {(taskDateFrom || taskDateTo) && (
-                <button className="tm-btn tm-ghost tm-sm" onClick={() => { setTaskDateFrom(''); setTaskDateTo(''); }}>✕ Clear</button>
-              )}
-            </div>
+            <DateRangeFilter
+              appliedFrom={taskDateFrom} appliedTo={taskDateTo}
+              onApply={(f,t)=>{setTaskDateFrom(f);setTaskDateTo(t);}}
+              onClear={()=>{setTaskDateFrom('');setTaskDateTo('');}}
+            />
             {isSA && <select className="tm-filter-sel" value={empFilter} onChange={e => setEmpFilter(e.target.value)}><option value="All">All Members</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>}
             <span className="tm-fcount">{totalTasks} tasks</span>
           </div>
@@ -2086,15 +2304,11 @@ export default function TaskManagement() {
           <div className="tm-filters-bar">
             <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks, projects, code…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
             {/* Date range — available to ALL users, triggers backend call */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>From</span>
-              <input type="date" className="tm-filter-sel" value={taskDateFrom} onChange={e => setTaskDateFrom(e.target.value)} />
-              <span style={{ fontSize: 12, fontWeight: 600, color: '#64748b' }}>To</span>
-              <input type="date" className="tm-filter-sel" value={taskDateTo} onChange={e => setTaskDateTo(e.target.value)} />
-              {(taskDateFrom || taskDateTo) && (
-                <button className="tm-btn tm-ghost tm-sm" onClick={() => { setTaskDateFrom(''); setTaskDateTo(''); }}>✕ Clear</button>
-              )}
-            </div>
+            <DateRangeFilter
+              appliedFrom={taskDateFrom} appliedTo={taskDateTo}
+              onApply={(f,t)=>{setTaskDateFrom(f);setTaskDateTo(t);}}
+              onClear={()=>{setTaskDateFrom('');setTaskDateTo('');}}
+            />
             <div className="tm-fg-row">
               <select className="tm-filter-sel" value={stFilter} onChange={e => setStFilter(e.target.value)}><option value="All">All Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
               <select className="tm-filter-sel" value={priFilter} onChange={e => setPriFilter(e.target.value)}><option value="All">All Priority</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select>

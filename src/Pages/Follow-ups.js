@@ -1,5 +1,5 @@
 // ClientDashboardFollowUps.js
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import "../pages-css/Follow-ups.css";
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -10,6 +10,127 @@ import ToastContainer from './../components/Notification_Toast/ToastContainer.js
 import CrmPreloader from "../components/preLoader.js";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+/* ── DatePicker — same calendar style as Task Management ─────────────────── */
+const _FU_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _FU_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const FollowUpDatePicker = ({ value, onChange, minDate, placeholder = 'Select date', required }) => {
+  const [show, setShow]   = useState(false);
+  const [calMo, setCalMo] = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr, setCalYr] = useState(() => value ? parseInt(value.slice(0,4))   : new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const [pos,   setPos]   = useState({ top:0, left:0, width:260 });
+  const trRef = useRef(null);
+  const dpRef = useRef(null);
+
+  useEffect(() => {
+    const h = e => {
+      if (trRef.current && !trRef.current.contains(e.target) &&
+          dpRef.current && !dpRef.current.contains(e.target)) setShow(false);
+    };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const openPicker = () => {
+    if (value) { setCalMo(parseInt(value.slice(5,7))-1); setCalYr(parseInt(value.slice(0,4))); }
+    if (trRef.current) {
+      const r = trRef.current.getBoundingClientRect();
+      const dH = 310;
+      const openUp = window.innerHeight - r.bottom < dH && r.top > dH;
+      setPos({ top: openUp ? r.top - dH - 4 : r.bottom + 4, left: r.left, width: Math.max(r.width, 260) });
+    }
+    setShow(true);
+  };
+
+  const DIM   = new Date(calYr, calMo+1, 0).getDate();
+  const FD    = new Date(calYr, calMo, 1).getDay();
+  const today = new Date().toISOString().slice(0, 10);
+  const fmtD  = d => { if (!d) return null; const [y,m,dy] = d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <>
+      <button
+        ref={trRef}
+        type="button"
+        className={`fu-datepicker-trigger${show ? ' fu-datepicker--open' : ''}${value ? ' fu-datepicker--set' : ''}`}
+        onClick={show ? () => setShow(false) : openPicker}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ flexShrink:0, color: value ? '#3b82f6' : '#94a3b8' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        {value
+          ? <span style={{ flex:1, fontSize:14, fontWeight:500, color:'#0f172a' }}>{fmtD(value)}</span>
+          : <span style={{ flex:1, fontSize:14, color:'#94a3b8' }}>{placeholder}</span>}
+        {value
+          ? <span className="fu-dp-x" onClick={e => { e.stopPropagation(); onChange({ target: { name: '', value: '' } }); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </span>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style={{ marginLeft:'auto', color:'#94a3b8', transform: show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+            </svg>
+        }
+      </button>
+
+      {show && (
+        <div ref={dpRef} className="fu-datepicker-dropdown"
+          style={{ position:'fixed', top:pos.top, left:pos.left, width:pos.width, zIndex:9999 }}>
+          <div className="fu-dp-head">
+            <button type="button" className="fu-dp-nav"
+              onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="fu-dp-month" onClick={() => setShowYr(p => !p)}>
+              {_FU_MONTHS[calMo]} <span className="fu-dp-yr">{calYr}</span>
+            </button>
+            <button type="button" className="fu-dp-nav"
+              onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          {showYr ? (
+            <div className="fu-yr-grid">
+              {Array.from({length:18},(_,i)=>{
+                const yr=new Date().getFullYear()-5+i;
+                return <div key={yr} className={`fu-yr-cell${yr===calYr?' fu-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYr(false);}}>{yr}</div>;
+              })}
+            </div>
+          ) : (
+          <div className="fu-dp-grid">
+            {_FU_DAYS.map(d => <div key={d} className="fu-dp-dl">{d}</div>)}
+            {Array.from({ length: FD }).map((_,i) => <div key={`e${i}`} className="fu-dp-cell fu-dp-empty"/>)}
+            {Array.from({ length: DIM }).map((_,i) => {
+              const dy  = i + 1;
+              const ds  = `${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+              const dis = minDate && ds < minDate;
+              let cls   = 'fu-dp-cell';
+              if (dis)        cls += ' fu-dp-disabled';
+              else if (ds === value) cls += ' fu-dp-sel';
+              else if (ds === today) cls += ' fu-dp-today';
+              return (
+                <div key={ds} className={cls}
+                  onClick={() => { if (dis) return; onChange({ target: { name: 'scheduledDate', value: ds } }); setShow(false); }}>
+                  {dy}
+                </div>
+              );
+            })}
+          </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
 
 export default function ClientDashboardFollowUps() {
   const { user } = useAuth();
@@ -43,6 +164,30 @@ export default function ClientDashboardFollowUps() {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Date range calendar filter
+  const [fromDate,    setFromDate]    = useState(null);
+  const [toDate,      setToDate]      = useState(null);
+  const [hoverDate,   setHoverDate]   = useState(null);
+  const [appliedFrom, setAppliedFrom] = useState(null);
+  const [appliedTo,   setAppliedTo]   = useState(null);
+  const [calMonth,    setCalMonth]    = useState(new Date().getMonth());
+  const [calYear,     setCalYear]     = useState(new Date().getFullYear());
+  const [showYrCal,   setShowYrCal]   = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const calendarRef = useRef(null);
+
+  // Time picker state — Add modal
+  const [showAddTimePicker, setShowAddTimePicker] = useState(false);
+  const [tempAddTime, setTempAddTime] = useState('');
+  const addTimeRef = useRef(null);
+  const addTimeInputRef = useRef(null);
+
+  // Time picker state — Edit modal
+  const [showEditTimePicker, setShowEditTimePicker] = useState(false);
+  const [tempEditTime, setTempEditTime] = useState('');
+  const editTimeRef = useRef(null);
+  const editTimeInputRef = useRef(null);
 
   // KPI States
   const [kpis, setKpis] = useState({
@@ -88,7 +233,7 @@ export default function ClientDashboardFollowUps() {
 
   useEffect(() => {
     applyFilters();
-  }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm]);
+  }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm, appliedFrom, appliedTo]);
 
   // Group/subgroup filtering is handled server-side (backend SQL).
   // applyFilters only handles the UI-level dropdowns (status, priority, type, assignedTo, source, search).
@@ -119,6 +264,41 @@ export default function ClientDashboardFollowUps() {
   useEffect(() => {
     fetchFollowUps();
   }, [groupName, subGroupName]);
+
+  // Close Add time picker when clicking outside
+  useEffect(() => {
+    const handler = e => {
+      if (addTimeRef.current && !addTimeRef.current.contains(e.target)) {
+        setShowAddTimePicker(false);
+        setTempAddTime('');
+      }
+    };
+    if (showAddTimePicker) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showAddTimePicker]);
+
+  // Close Edit time picker when clicking outside
+  useEffect(() => {
+    const handler = e => {
+      if (editTimeRef.current && !editTimeRef.current.contains(e.target)) {
+        setShowEditTimePicker(false);
+        setTempEditTime('');
+      }
+    };
+    if (showEditTimePicker) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showEditTimePicker]);
+
+  // Close calendar dropdown when clicking outside
+  useEffect(() => {
+    const handler = e => {
+      if (calendarRef.current && !calendarRef.current.contains(e.target)) {
+        setShowCalendar(false);
+      }
+    };
+    if (showCalendar) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showCalendar]);
 
   const fetchFollowUps = async (grp = groupName, subGrp = subGroupName) => {
     setLoading(true);
@@ -314,6 +494,17 @@ export default function ClientDashboardFollowUps() {
       );
     }
 
+    if (appliedFrom) {
+      const from = new Date(appliedFrom);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(appliedTo || appliedFrom);
+      to.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(f => {
+        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
+        return !isNaN(d.getTime()) && d >= from && d <= to;
+      });
+    }
+
     setFilteredFollowUps(filtered);
     setCurrentPage(1);
   };
@@ -340,6 +531,73 @@ export default function ClientDashboardFollowUps() {
     }).length;
 
     setKpis({ total, pending, completed, overdue, today: todayCount });
+  };
+
+  // ── Calendar helpers ────────────────────────────────────────────────────────
+  const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+  const calDaysInMonth  = new Date(calYear, calMonth + 1, 0).getDate();
+  const calFirstDay     = new Date(calYear, calMonth, 1).getDay();
+  const todayStr        = new Date().toISOString().split('T')[0];
+
+  const calPrevMonth = () => {
+    if (calMonth === 0) { setCalMonth(11); setCalYear(y => y - 1); }
+    else setCalMonth(m => m - 1);
+  };
+  const calNextMonth = () => {
+    if (calMonth === 11) { setCalMonth(0);  setCalYear(y => y + 1); }
+    else setCalMonth(m => m + 1);
+  };
+
+  const handleCalDayClick = (dateStr) => {
+    if (!fromDate || (fromDate && toDate)) {
+      setFromDate(dateStr);
+      setToDate(null);
+    } else {
+      if (dateStr < fromDate) { setFromDate(dateStr); setToDate(null); }
+      else if (dateStr === fromDate) { setFromDate(null); setToDate(null); }
+      else setToDate(dateStr);
+    }
+  };
+
+  const calIsFrom    = d => d === fromDate;
+  const calIsTo      = d => d === toDate;
+  const calInRange   = d => {
+    const lo = fromDate, hi = toDate || (fromDate && hoverDate ? hoverDate : null);
+    if (!lo || !hi) return false;
+    const [a, b] = lo <= hi ? [lo, hi] : [hi, lo];
+    return d > a && d < b;
+  };
+
+  const handleCalApply = () => {
+    if (!fromDate) return;
+    setAppliedFrom(fromDate);
+    setAppliedTo(toDate || fromDate);
+    setShowCalendar(false);
+  };
+
+  const handleCalClear = () => {
+    setFromDate(null);
+    setToDate(null);
+    setHoverDate(null);
+    setAppliedFrom(null);
+    setAppliedTo(null);
+    setShowCalendar(false);
+  };
+
+  const fmtCalDate = d => {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return `${day}-${m}-${y}`;
+  };
+  // ────────────────────────────────────────────────────────────────────────────
+
+  const fmtTimeDisplay = t => {
+    if (!t) return 'Select time';
+    const [h, m] = t.split(':');
+    const hour = parseInt(h, 10);
+    return `${hour % 12 === 0 ? 12 : hour % 12}:${m} ${hour >= 12 ? 'PM' : 'AM'}`;
   };
 
   const resetAddForm = () => {
@@ -801,6 +1059,8 @@ export default function ClientDashboardFollowUps() {
 
       {/* Action Bar */}
       <div className="followups-action-bar">
+
+        {/* Search */}
         <div className="followups-search-wrapper">
           <svg className="followups-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -814,44 +1074,169 @@ export default function ClientDashboardFollowUps() {
           />
         </div>
 
-        <div className="followups-filters">
-          <select className="followups-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-            <option value="All">All Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-            <option value="Rescheduled">Rescheduled</option>
-          </select>
+        {/* Filter bar row */}
 
-          <select className="followups-filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
-            <option value="All">All Priority</option>
-            <option value="High">High</option>
-            <option value="Medium">Medium</option>
-            <option value="Low">Low</option>
-          </select>
+          {/* Date range trigger + dropdown */}
+          <div className="fu-cal-wrapper" ref={calendarRef}>
+            <button
+              type="button"
+              className={`fu-cal-trigger ${showCalendar ? 'fu-cal-trigger--open' : ''} ${appliedFrom ? 'fu-cal-trigger--applied' : ''}`}
+              onClick={() => setShowCalendar(p => !p)}
+            >
+              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
+              <span className={appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
+                {appliedFrom ? fmtCalDate(appliedFrom) : 'dd-mm-yyyy'}
+              </span>
+              <span className="fu-cal-sep">—</span>
+              <span className={appliedTo && appliedTo !== appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
+                {appliedTo && appliedTo !== appliedFrom ? fmtCalDate(appliedTo) : 'dd-mm-yyyy'}
+              </span>
+              {appliedFrom && (
+                <span
+                  className="fu-cal-x"
+                  onClick={e => { e.stopPropagation(); handleCalClear(); }}
+                  title="Clear date filter"
+                >
+                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                  </svg>
+                </span>
+              )}
+              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                style={{ marginLeft: 'auto', color: '#94a3b8', flexShrink: 0, transform: showCalendar ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+              </svg>
+            </button>
 
-          <select className="followups-filter-select" value={assignedToFilter} onChange={(e) => setAssignedToFilter(e.target.value)}>
-            <option value="All">All Assigned</option>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
+            {/* Dropdown calendar */}
+            {showCalendar && (
+              <div className="fu-cal-dropdown">
+                <div className="fu-cal-head">
+                  <button className="fu-cal-nav-btn" onClick={calPrevMonth}>
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+                  </button>
+                  <button type="button" className="fu-cal-month-label fu-cal-month-btn" onClick={() => setShowYrCal(p => !p)}>
+                    {CAL_MONTHS[calMonth]} <span className="fu-cal-yr-num">{calYear}</span>
+                  </button>
+                  <button className="fu-cal-nav-btn" onClick={calNextMonth}>
+                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
 
-        <button
-          className="followups-btn followups-btn-primary"
-          onClick={() => {
-            resetAddForm();
-            setShowAddModal(true);
-          }}
-        >
-          <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Add Follow-up
-        </button>
+                {showYrCal ? (
+                  <div className="fu-inline-yr-grid">
+                    {Array.from({length:18},(_,i)=>{
+                      const yr = new Date().getFullYear()-5+i;
+                      return (
+                        <div key={yr}
+                          className={`fu-inline-yr-cell${yr===calYear?' fu-inline-yr-sel':''}`}
+                          onClick={()=>{setCalYear(yr);setShowYrCal(false);}}>
+                          {yr}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                <div className="fu-cal-grid">
+                  {CAL_DAYS.map(d => (
+                    <div key={d} className="fu-cal-day-label">{d}</div>
+                  ))}
+                  {Array.from({ length: calFirstDay }).map((_, i) => (
+                    <div key={`e${i}`} className="fu-cal-cell fu-cal-empty" />
+                  ))}
+                  {Array.from({ length: calDaysInMonth }).map((_, i) => {
+                    const day     = i + 1;
+                    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                    const dow     = (calFirstDay + i) % 7;
+                    const isFrom  = calIsFrom(dateStr);
+                    const isTo    = calIsTo(dateStr);
+                    const inRange = calInRange(dateStr);
+                    const isToday = dateStr === todayStr;
+
+                    let cls = 'fu-cal-cell';
+                    if (isFrom)        cls += ' fu-cal-from';
+                    else if (isTo)     cls += ' fu-cal-to';
+                    else if (inRange) {
+                      cls += ' fu-cal-in-range';
+                      if (dow === 0) cls += ' fu-cal-rr-start';
+                      if (dow === 6) cls += ' fu-cal-rr-end';
+                    }
+                    if (isToday && !isFrom && !isTo) cls += ' fu-cal-today';
+
+                    return (
+                      <div
+                        key={dateStr}
+                        className={cls}
+                        onClick={() => handleCalDayClick(dateStr)}
+                        onMouseEnter={() => fromDate && !toDate && setHoverDate(dateStr)}
+                        onMouseLeave={() => setHoverDate(null)}
+                      >
+                        {day}
+                      </div>
+                    );
+                  })}
+                </div>
+                )}
+
+                <div className="fu-cal-footer">
+                  <div className="fu-cal-range-chips">
+                    <span className={`fu-cal-chip ${fromDate ? 'fu-cal-chip--set' : ''}`}>
+                      {fromDate ? fmtCalDate(fromDate) : 'From —'}
+                    </span>
+                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+                    <span className={`fu-cal-chip ${toDate ? 'fu-cal-chip--set' : ''}`}>
+                      {toDate ? fmtCalDate(toDate) : 'To —'}
+                    </span>
+                  </div>
+                  <div className="fu-cal-footer-actions">
+                    {(fromDate || appliedFrom) && (
+                      <button className="fu-cal-clear-btn" onClick={handleCalClear}>Clear</button>
+                    )}
+                    <button className="fu-cal-apply-btn" onClick={handleCalApply} disabled={!fromDate}>
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Existing filters */}
+          <div className="followups-filters">
+            <select className="followups-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="All">All Status</option>
+              <option value="Pending">Pending</option>
+              <option value="Completed">Completed</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Rescheduled">Rescheduled</option>
+            </select>
+            <select className="followups-filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
+              <option value="All">All Priority</option>
+              <option value="High">High</option>
+              <option value="Medium">Medium</option>
+              <option value="Low">Low</option>
+            </select>
+            <select className="followups-filter-select" value={assignedToFilter} onChange={(e) => setAssignedToFilter(e.target.value)}>
+              <option value="All">All Assigned</option>
+              {users.map(u => (
+                <option key={u.id} value={u.id}>{u.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            className="followups-btn followups-btn-primary"
+            onClick={() => { resetAddForm(); setShowAddModal(true); }}
+          >
+            <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            </svg>
+            Add Follow-up
+          </button>
+
       </div>
-
 
       {/* Table */}
       <div className="followups-table-card">
@@ -1279,24 +1664,57 @@ export default function ClientDashboardFollowUps() {
 
                   <div className="followup-form-group">
                     <label>Scheduled Date *</label>
-                    <input
-                      type="date"
-                      name="scheduledDate"
+                    <FollowUpDatePicker
                       value={addForm.scheduledDate}
                       onChange={handleAddFormChange}
+                      minDate={new Date().toISOString().split('T')[0]}
+                      placeholder="Select date"
                       required
-                      min={new Date().toISOString().split('T')[0]}
                     />
                   </div>
 
-                  <div className="followup-form-group">
+                  <div className="followup-form-group" ref={addTimeRef} style={{ position: 'relative' }}>
                     <label>Scheduled Time</label>
-                    <input
-                      type="time"
-                      name="scheduledTime"
-                      value={addForm.scheduledTime}
-                      onChange={handleAddFormChange}
-                    />
+                    <button
+                      type="button"
+                      className="followup-time-trigger"
+                      onClick={() => { setTempAddTime(addForm.scheduledTime || ''); setShowAddTimePicker(p => !p); }}
+                    >
+                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/>
+                      </svg>
+                      {fmtTimeDisplay(addForm.scheduledTime)}
+                    </button>
+
+                    {showAddTimePicker && (
+                      <div className="followup-time-popover">
+                        <span className="followup-time-popover-label" style={{cursor:"pointer"}} onClick={()=>{try{addTimeInputRef.current.showPicker();}catch(_){addTimeInputRef.current.focus();}}}>Pick a time</span>
+                        <input
+                          type="time"
+                          ref={addTimeInputRef}
+                          autoFocus
+                          className="followup-time-input"
+                          value={tempAddTime}
+                          onChange={e => setTempAddTime(e.target.value)}
+                          onClick={e => { try { e.target.showPicker(); } catch(_) {} }}
+                        />
+                        <div className="followup-time-popover-actions">
+                          <button type="button" className="followup-time-btn-cancel"
+                            onClick={() => { setShowAddTimePicker(false); setTempAddTime(''); }}>
+                            Cancel
+                          </button>
+                          <button type="button" className="followup-time-btn-save"
+                            onClick={() => {
+                              setAddForm(prev => ({ ...prev, scheduledTime: tempAddTime }));
+                              setShowAddTimePicker(false);
+                              setTempAddTime('');
+                            }}>
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="followup-form-group">
@@ -1423,23 +1841,57 @@ export default function ClientDashboardFollowUps() {
 
                   <div className="followup-form-group">
                     <label>Scheduled Date *</label>
-                    <input
-                      type="date"
-                      name="scheduledDate"
+                    <FollowUpDatePicker
                       value={editForm.scheduledDate}
                       onChange={handleEditFormChange}
+                      minDate={new Date().toISOString().split('T')[0]}
+                      placeholder="Select date"
                       required
                     />
                   </div>
 
-                  <div className="followup-form-group">
+                  <div className="followup-form-group" ref={editTimeRef} style={{ position: 'relative' }}>
                     <label>Scheduled Time</label>
-                    <input
-                      type="time"
-                      name="scheduledTime"
-                      value={editForm.scheduledTime}
-                      onChange={handleEditFormChange}
-                    />
+                    <button
+                      type="button"
+                      className="followup-time-trigger"
+                      onClick={() => { setTempEditTime(editForm.scheduledTime || ''); setShowEditTimePicker(p => !p); }}
+                    >
+                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10" strokeWidth="2"/>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/>
+                      </svg>
+                      {fmtTimeDisplay(editForm.scheduledTime)}
+                    </button>
+
+                    {showEditTimePicker && (
+                      <div className="followup-time-popover">
+                        <span className="followup-time-popover-label" style={{cursor:"pointer"}} onClick={()=>{try{editTimeInputRef.current.showPicker();}catch(_){editTimeInputRef.current.focus();}}}>Pick a time</span>
+                        <input
+                          type="time"
+                          ref={editTimeInputRef}
+                          autoFocus
+                          className="followup-time-input"
+                          value={tempEditTime}
+                          onChange={e => setTempEditTime(e.target.value)}
+                          onClick={e => { try { e.target.showPicker(); } catch(_) {} }}
+                        />
+                        <div className="followup-time-popover-actions">
+                          <button type="button" className="followup-time-btn-cancel"
+                            onClick={() => { setShowEditTimePicker(false); setTempEditTime(''); }}>
+                            Cancel
+                          </button>
+                          <button type="button" className="followup-time-btn-save"
+                            onClick={() => {
+                              setEditForm(prev => ({ ...prev, scheduledTime: tempEditTime }));
+                              setShowEditTimePicker(false);
+                              setTempEditTime('');
+                            }}>
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="followup-form-group">
