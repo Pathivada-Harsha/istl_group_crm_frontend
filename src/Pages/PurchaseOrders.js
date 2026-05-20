@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  Search, Filter, Download, Plus, X, Edit2, Eye, Package, Truck,
-  CheckCircle, IndianRupee, Clock, Columns, FileText, TrendingUp,
-  DollarSign, AlertCircle, Trash2, Upload, ExternalLink, File,
+  Download, Plus, X, Edit2, Eye, Truck,
+  CheckCircle, IndianRupee, Columns, FileText,
+  Trash2, Upload, ExternalLink, File,
   ChevronUp, ChevronDown, ChevronsUpDown, GripVertical, Check
 } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
@@ -122,12 +122,19 @@ const PurchaseOrders = () => {
   const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  const isSuperAdmin   = user?.role === 'SUPERADMIN';
+  const isAdmin        = user?.role === 'ADMIN';
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
   const poPerms    = pagePermissions?.PURCHASE_ORDERS || [];
-  const canView    = poPerms.includes('VIEW')    || isAccountsExecutive;
-  const canCreate  = poPerms.includes('CREATE')  || isAccountsExecutive;
-  const canEdit    = poPerms.includes('EDIT')    || isAccountsExecutive;
-  const canDelete  = poPerms.includes('DELETE')  && !isAccountsExecutive;
-  const canApprove = poPerms.includes('APPROVE') || isAccountsExecutive;
+  const hasPerms   = poPerms.length > 0;
+  // If no permissions set yet, full-access roles get everything.
+  // DELETE is NOT restricted by isAccountsExecutive — it follows the permission flag only.
+  const canView    = !hasPerms ? isFullAccess : poPerms.includes('VIEW')    || isFullAccess;
+  const canCreate  = !hasPerms ? isFullAccess : poPerms.includes('CREATE')  || isFullAccess;
+  const canEdit    = !hasPerms ? isFullAccess : poPerms.includes('EDIT')    || isFullAccess;
+  const canDelete  = !hasPerms ? (isSuperAdmin || isAdmin) : poPerms.includes('DELETE');
+  const canApprove = !hasPerms ? isFullAccess : poPerms.includes('APPROVE') || isFullAccess;
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
@@ -201,7 +208,7 @@ const PurchaseOrders = () => {
   const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
 
   // ── Edit-mode project change state ──
-  const [pendingProjectChange, setPendingProjectChange] = useState(null); // { groupName, subGroupName, projectId }
+  const [_pendingProjectChange, setPendingProjectChange] = useState(null); // { groupName, subGroupName, projectId }
   const [showProjectChangeWarning, setShowProjectChangeWarning] = useState(false);
 
   // ─── Column helpers ────────────────────────────────────────────────────────
@@ -316,6 +323,7 @@ const PurchaseOrders = () => {
     return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchVendors(); }, []);
 
   // ─── Auth ──────────────────────────────────────────────────────────────────
@@ -766,8 +774,8 @@ const PurchaseOrders = () => {
         quotationId: poData.quotationId || '', quotation: null,
         vendorId: poData.vendorId || null, vendorName: poData.vendorName || '', vendorContact: poData.vendorContact || '',
         groupName: poData.groupName || '', subGroupName: poData.subGroupName || '', projectId: poData.projectId || '',
-        orderDate: poData.orderDate ? new Date(poData.orderDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        expectedDelivery: poData.expectedDelivery ? new Date(poData.expectedDelivery).toISOString().split('T')[0] : '',
+        orderDate: poData.orderDate ? String(poData.orderDate).slice(0, 10) : new Date().toISOString().split('T')[0],
+        expectedDelivery: poData.expectedDelivery ? String(poData.expectedDelivery).slice(0, 10) : '',
         paymentTerms: poData.paymentTerms || '', shippingAddress: poData.deliveryAddress || '',
         notes: poData.notes || '', status: poData.status || 'Draft', items
       });
@@ -1003,6 +1011,12 @@ const PurchaseOrders = () => {
   const formatCurrency = (amount) => !amount ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
+    // Parse date parts directly to avoid UTC→IST timezone shift (which causes -1 day in IST)
+    const s = String(dateStr);
+    if (s.length >= 10 && s[4] === '-') {
+      const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+      return new Date(y, m - 1, d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
     return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
   };
   const getStatusBadgeClass = (status) => ({ Draft: 'po-badge-draft', Approved: 'po-badge-approved', Ordered: 'po-badge-ordered', 'In-Transit': 'po-badge-transit', Delivered: 'po-badge-delivered', Cancelled: 'po-badge-cancelled' }[status] || '');
@@ -1178,8 +1192,15 @@ const PurchaseOrders = () => {
           let val = po[key] ?? '';
           if (key === 'projectName') val = pNames[po.projectId] || '';
           if (key === 'projectId')   val = po.projectId || '';
-          if ((key === 'orderDate' || key === 'deliveryDate') && val)
-            val = new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+          if ((key === 'orderDate' || key === 'deliveryDate') && val) {
+            const s = String(val);
+            if (s.length >= 10 && s[4] === '-') {
+              const [y, m, d] = s.slice(0, 10).split('-').map(Number);
+              val = new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            } else {
+              val = new Date(val).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+            }
+          }
           return `<td style="padding:5px 10px;border:1px solid #e2e8f0;background:${bg};font-size:10pt">${esc(val)}</td>`;
         }).join('');
         return `<tr>${cells}</tr>`;

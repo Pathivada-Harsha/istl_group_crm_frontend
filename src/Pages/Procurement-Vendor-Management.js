@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as XLSX from 'xlsx';
 import {
-  Search, Filter, Download, Plus, X, Edit2, Eye, Star, TrendingUp,
+  Search, Filter, Download, Plus, X, Edit2, Eye, ExternalLink, Star, TrendingUp,
   DollarSign, IndianRupee, Package, Calendar, Phone, Mail, MapPin,
   ShoppingCart, FileText, CheckCircle, Clock, Building2, User, Tag,
   Briefcase, Truck, ChevronUp, ChevronDown, ChevronsUpDown, Columns,
@@ -163,130 +163,153 @@ const PO_STATUS_STEPS = ['Draft', 'Approved', 'Ordered', 'In-Transit', 'Delivere
 
 // ─── KYC Document Card ────────────────────────────────────────────────────────
 // ─── KYC Document Row — table-row style like items table ─────────────────────
-const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
-  const fileRef     = React.useRef(null);
-  const docNumber   = uploaded?.docNumber || '';
-  const isUploaded  = !!(uploaded?.fileName || uploaded?.fileUrl);
-  const isUploading = !!uploaded?.uploading;
+const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave }) => {
+  const fileRef      = React.useRef(null);
+  const docNumber    = uploaded?.docNumber  || '';
+  const isUploaded   = !!(uploaded?.fileName || uploaded?.fileUrl);
+  const isUploading  = !!uploaded?.uploading;
+  const isSaving     = !!uploaded?.saving;
+  const isSaved      = !!uploaded?.savedToDb;   // true once backend confirmed
   const fileRequired = docNumber.trim().length > 0;
   const isComplete   = fileRequired && isUploaded;
+  // Can save when: has a local file AND (has docNumber OR file already selected)
+  const canSave      = isUploaded && !isSaved && !isSaving;
+
+  const maxLen = {
+    gst_certificate: 15, pan_card: 10, incorporation_certificate: 21,
+    cancelled_cheque: 18, msme_certificate: 19, trade_licence: 20, iso_certificate: 25
+  }[doc.id] || 30;
+
+  const sanitize = (v) => {
+    if (doc.id === 'gst_certificate') return v.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0, 15);
+    if (doc.id === 'pan_card')        return v.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0, 10);
+    if (doc.id === 'cancelled_cheque')return v.replace(/[^0-9]/g,'').slice(0, 18);
+    return v;
+  };
 
   return (
-    <tr className={`kyc-row${isComplete ? ' kyc-row--done' : fileRequired && !isUploaded ? ' kyc-row--warn' : ''}`}>
-      {/* Status dot */}
+    <tr className={`kyc-row${isSaved ? ' kyc-row--done' : isComplete ? ' kyc-row--ready' : fileRequired && !isUploaded ? ' kyc-row--warn' : ''}`}>
+      {/* Status */}
       <td className="kyc-row-status">
-        {isComplete
-          ? <CheckCircle size={15} style={{ color: '#16a34a' }} />
-          : fileRequired
-            ? <AlertCircle size={15} style={{ color: '#f59e0b' }} />
-            : <div className="kyc-row-dot" />
-        }
+        {isSaved    ? <CheckCircle size={15} style={{ color: '#16a34a' }} />
+          : isComplete ? <CheckCircle size={15} style={{ color: '#3b82f6' }} />
+          : fileRequired ? <AlertCircle size={15} style={{ color: '#f59e0b' }} />
+          : <div className="kyc-row-dot" />}
       </td>
 
-      {/* Doc name + icon */}
+      {/* Doc name */}
       <td className="kyc-row-name">
         <span className="kyc-row-icon">{doc.icon}</span>
         <span className="kyc-row-label">{doc.label}</span>
       </td>
 
-      {/* Number input */}
+      {/* Number input — always visible */}
       <td className="kyc-row-num">
         <input
           className="kyc-row-input"
           type="text"
           placeholder={doc.numberPlaceholder || 'Enter number'}
           value={docNumber}
-          onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
+          maxLength={maxLen}
+          onChange={e => onMetaChange(doc.id, 'docNumber', sanitize(e.target.value))}
         />
       </td>
 
-      {/* File upload cell */}
+      {/* File + Save cell */}
       <td className="kyc-row-file">
-        {isUploaded ? (
-          <div className="kyc-row-file-done">
-            <CheckCircle size={12} style={{ color: '#16a34a', flexShrink: 0 }} />
-            <span className="kyc-row-filename">{uploaded.fileName || 'Uploaded'}</span>
-            {uploaded.fileUrl && <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="kyc-row-view">View</a>}
-            <button className="kyc-row-replace" onClick={() => fileRef.current?.click()} disabled={isUploading}>
-              <Upload size={11} /> Replace
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {isUploaded ? (
+            <>
+              <CheckCircle size={12} style={{ color: isSaved ? '#16a34a' : '#3b82f6', flexShrink: 0 }} />
+              <span className="kyc-row-filename">{uploaded.fileName || 'File selected'}</span>
+              <button className="kyc-row-view-btn" onClick={() => onViewFile && onViewFile(doc, uploaded)} title="Preview">
+                <Eye size={11} /> View
+              </button>
+              {uploaded.fileUrl && (
+                <a href={uploaded.fileUrl} target="_blank" rel="noreferrer" className="kyc-row-view" title="Open in new tab">↗</a>
+              )}
+              <button className="kyc-row-replace" onClick={() => fileRef.current?.click()} disabled={isUploading || isSaving}>
+                <Upload size={11} /> Replace
+              </button>
+            </>
+          ) : (
+            <button
+              className={`kyc-row-upload-btn${fileRequired ? ' kyc-row-upload-btn--req' : ''}${isUploading ? ' kyc-row-upload-btn--loading' : ''}`}
+              onClick={() => !isUploading && fileRef.current?.click()}
+              disabled={isUploading}
+            >
+              {isUploading ? <><span className="vd-kyc-spin" /> Uploading…</>
+                : fileRequired ? <><Upload size={12} /> Upload (Required)</>
+                : <><Upload size={12} /> Upload</>}
             </button>
-          </div>
+          )}
+          <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
+            onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
+        </div>
+      </td>
+
+      {/* Save button cell */}
+      <td className="kyc-row-save">
+        {isSaved ? (
+          <span className="kyc-save-done"><CheckCircle size={13} /> Saved</span>
         ) : (
           <button
-            className={`kyc-row-upload-btn${fileRequired ? ' kyc-row-upload-btn--req' : ''}${isUploading ? ' kyc-row-upload-btn--loading' : ''}`}
-            onClick={() => !isUploading && fileRef.current?.click()}
-            disabled={isUploading}
+            className={`kyc-save-btn${canSave ? ' kyc-save-btn--active' : ''}`}
+            onClick={() => canSave && onSave && onSave(doc.id)}
+            disabled={!canSave || isSaving}
+            title={!isUploaded ? 'Select a file first' : !canSave ? 'Already saved' : 'Save to database'}
           >
-            {isUploading
-              ? <><span className="vd-kyc-spin" /> Uploading…</>
-              : fileRequired
-                ? <><Upload size={12} /> Upload (Required)</>
-                : <><Upload size={12} /> Upload</>
-            }
+            {isSaving ? <><span className="vd-kyc-spin vd-kyc-spin--dark" /> Saving…</> : <><Check size={12} /> Save</>}
           </button>
         )}
-        <input ref={fileRef} type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: 'none' }}
-          onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
       </td>
     </tr>
   );
 };
 
 // ─── KYC Additional Document Card (card style, 3-col grid) ──────────────────
-const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
-  const fileRef     = React.useRef(null);
-  const docNumber   = uploaded?.docNumber || '';
-  const isUploaded  = !!(uploaded?.fileName || uploaded?.fileUrl);
-  const isUploading = !!uploaded?.uploading;
+const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave }) => {
+  const fileRef      = React.useRef(null);
+  const docNumber    = uploaded?.docNumber  || '';
+  const isUploaded   = !!(uploaded?.fileName || uploaded?.fileUrl);
+  const isUploading  = !!uploaded?.uploading;
+  const isSaving     = !!uploaded?.saving;
+  const isSaved      = !!uploaded?.savedToDb;
   const fileRequired = docNumber.trim().length > 0;
-  const isComplete   = fileRequired && isUploaded;
+  const isComplete   = isSaved && isUploaded;
+  const canSave      = isUploaded && !isSaved && !isSaving;
 
-  const cardStyle = {
-    display: 'flex', flexDirection: 'column', gap: 10,
-    padding: 16,
-    border: `1.5px solid ${isComplete ? '#86efac' : fileRequired && !isUploaded ? '#fcd34d' : '#e2e8f0'}`,
-    borderRadius: 10,
-    background: isComplete ? '#f0fdf4' : fileRequired && !isUploaded ? '#fffbeb' : '#fff',
-    transition: 'border-color .18s, box-shadow .18s',
-  };
-  const dropStyle = {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '8px 12px',
-    border: `1.5px ${isUploaded ? 'solid' : 'dashed'} ${isUploaded ? '#86efac' : fileRequired ? '#f59e0b' : '#cbd5e1'}`,
-    borderRadius: 7,
-    background: isUploaded ? '#f0fdf4' : fileRequired ? '#fffbeb' : 'transparent',
-    cursor: isUploading ? 'not-allowed' : 'pointer',
-    minHeight: 38,
-  };
+  const borderColor = isComplete ? '#86efac' : canSave ? '#93c5fd' : fileRequired && !isUploaded ? '#fcd34d' : '#e2e8f0';
+  const bgColor     = isComplete ? '#f0fdf4' : canSave ? '#eff6ff' : fileRequired && !isUploaded ? '#fffbeb' : '#fff';
 
   return (
-    <div style={cardStyle}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, border: `1.5px solid ${borderColor}`, borderRadius: 10, background: bgColor, transition: 'border-color .18s' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 22, lineHeight: 1 }}>{doc.icon}</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', flex: 1 }}>{doc.label}</span>
-        {isComplete && <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />}
-        {fileRequired && !isUploaded && <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />}
+        {isComplete
+          ? <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+          : fileRequired && !isUploaded
+            ? <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+            : null}
       </div>
 
-      {/* Number input */}
+      {/* Number input — always visible */}
       <input
-        style={{
-          padding: '7px 10px', border: `1px solid ${isComplete ? '#bbf7d0' : '#e2e8f0'}`,
-          borderRadius: 6, fontSize: 12.5, color: '#1e293b',
-          background: isComplete ? '#f0fdf4' : '#fff', width: '100%', boxSizing: 'border-box',
-          outline: 'none',
-        }}
+        style={{ padding: '7px 10px', border: `1px solid ${isComplete ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 6, fontSize: 12.5, color: '#1e293b', background: isComplete ? '#f0fdf4' : '#fff', width: '100%', boxSizing: 'border-box', outline: 'none' }}
         type="text"
         placeholder={doc.numberPlaceholder || 'Enter document number'}
         value={docNumber}
+        maxLength={doc.id === 'msme_certificate' ? 19 : doc.id === 'trade_licence' ? 20 : doc.id === 'iso_certificate' ? 25 : 30}
         onChange={e => onMetaChange(doc.id, 'docNumber', e.target.value)}
         onFocus={e => { e.target.style.borderColor = '#3b82f6'; e.target.style.boxShadow = '0 0 0 3px rgba(59,130,246,.1)'; }}
         onBlur={e => { e.target.style.borderColor = isComplete ? '#bbf7d0' : '#e2e8f0'; e.target.style.boxShadow = 'none'; }}
       />
 
-      {/* Drop zone */}
-      <div style={dropStyle}
+      {/* Drop zone / file status */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: `1.5px ${isUploaded ? 'solid' : 'dashed'} ${isUploaded ? '#86efac' : fileRequired ? '#f59e0b' : '#cbd5e1'}`, borderRadius: 7, background: isUploaded ? '#f0fdf4' : fileRequired ? '#fffbeb' : 'transparent', cursor: isUploading ? 'not-allowed' : 'pointer', minHeight: 38 }}
         onClick={() => !isUploading && fileRef.current?.click()}
         onDragOver={e => e.preventDefault()}
         onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onUpload(doc.id, f); }}
@@ -295,7 +318,7 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
           <>
             <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
             <span style={{ fontSize: 11.5, fontWeight: 600, color: '#15803d', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {uploaded.fileName || 'Uploaded'}
+              {uploaded.fileName || 'File selected'}
             </span>
           </>
         ) : (
@@ -310,19 +333,31 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange }) => {
           onChange={e => { if (e.target.files[0]) { onUpload(doc.id, e.target.files[0]); e.target.value = ''; } }} />
       </div>
 
-      {/* Post-upload actions */}
+      {/* Actions row — View, Replace, Save */}
       {isUploaded && (
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          {uploaded.fileUrl && (
-            <a href={uploaded.fileUrl} target="_blank" rel="noreferrer"
-              style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'underline' }}>
-              View
-            </a>
-          )}
-          <button onClick={() => fileRef.current?.click()} disabled={isUploading}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 9px', fontSize: 11, fontWeight: 500, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, cursor: 'pointer' }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button onClick={() => onViewFile && onViewFile(doc, uploaded)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer' }}>
+            <Eye size={11} /> View
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={isUploading || isSaving}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 9px', fontSize: 11, fontWeight: 500, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, cursor: 'pointer' }}>
             <Upload size={10} /> Replace
           </button>
+          <div style={{ marginLeft: 'auto' }}>
+            {isSaved ? (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#16a34a' }}>
+                <CheckCircle size={13} /> Saved
+              </span>
+            ) : (
+              <button
+                onClick={() => canSave && onSave && onSave(doc.id)}
+                disabled={!canSave || isSaving}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', background: canSave ? '#2563eb' : '#e2e8f0', color: canSave ? '#fff' : '#94a3b8', transition: 'all .15s' }}>
+                {isSaving ? <><span className="vd-kyc-spin" style={{ borderTopColor: '#fff' }} /> Saving…</> : <><Check size={12} /> Save</>}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -336,6 +371,12 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
   const [loadingPOs, setLoadingPOs]         = useState(false);
   const [kycDocs, setKycDocs]               = useState({});
   const [kycLoading, setKycLoading]         = useState(false);
+  // KYC file viewer modal state (same pattern as OrderBook)
+  const [kycViewerOpen,    setKycViewerOpen]    = useState(false);
+  const [kycViewerDoc,     setKycViewerDoc]     = useState(null);   // { doc, uploaded }
+  const [kycViewerUrl,     setKycViewerUrl]     = useState('');
+  const [kycViewerLoading, setKycViewerLoading] = useState(false);
+  const kycBlobRef = React.useRef(null);
 
   // Verified = at least one doc entered AND every doc with a number also has a file
   const docsWithNumber = KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.docNumber?.trim());
@@ -367,22 +408,145 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
       .then(data => setPurchaseOrders(data))
       .catch(() => setPurchaseOrders([]))
       .finally(() => setLoadingPOs(false));
-    // KYC fetch disabled until backend endpoints are ready
-    setKycLoading(false);
+    // Fetch KYC docs from backend
+    setKycLoading(true);
+    fetch(`${API_BASE_URL}/vendors/${vendor.id}/kyc`, { credentials: 'include', headers: getAuthHeaders() })
+      .then(r => r.ok ? r.json() : {})
+      .then(raw => {
+        const marked = {};
+        Object.entries(raw || {}).forEach(([k, v]) => { marked[k] = { ...v, savedToDb: true }; });
+        setKycDocs(marked);
+      })
+      .catch(() => setKycDocs({}))
+      .finally(() => setKycLoading(false));
   }, [vendor.id]);
 
-  // TODO: connect to backend once /vendors/:id/kyc/upload endpoint is ready
+  // ── Step 1: user picks a file → store locally (for immediate preview) ──────
   const handleKycUpload = (docId, file) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { showError('File too large. Max 10 MB.'); return; }
+    setKycDocs(prev => ({
+      ...prev,
+      [docId]: {
+        ...prev[docId],       // preserves docNumber and savedToDb flag
+        fileName:   file.name,
+        fileObject: file,     // raw File object for local preview before saving
+        fileUrl:    null,     // set by backend after save
+        uploadedAt: new Date().toISOString(),
+        uploading:  false,
+        savedToDb:  false,    // needs explicit Save to persist
+      }
+    }));
+    showSuccess(`File selected. Click Save to store it in the database.`);
+  };
+
+  // ── Step 2: user clicks Save → POST multipart to backend ─────────────────
+  const handleSaveKycDoc = async (docId) => {
+    const docData = kycDocs[docId];
+    if (!docData?.fileObject) { showError('No file selected to save.'); return; }
+
     const docLabel = KYC_DOCUMENTS.find(d => d.id === docId)?.label || docId;
-    // Store file locally in state until backend is ready
-    setKycDocs(prev => ({ ...prev, [docId]: { fileName: file.name, fileUrl: null, uploadedAt: new Date().toISOString(), uploading: false } }));
-    showSuccess(`${docLabel} selected. Will be uploaded once backend is ready.`);
+    setKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], saving: true } }));
+
+    try {
+      const form = new FormData();
+      form.append('file',      docData.fileObject);
+      form.append('docType',   docId);
+      if (docData.docNumber?.trim()) form.append('docNumber', docData.docNumber.trim());
+
+      const res = await fetch(`${API_BASE_URL}/vendors/${vendor.id}/kyc/upload`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          ...getAuthHeaders(),
+          // Note: do NOT set Content-Type — browser sets multipart boundary automatically
+        },
+        body: form,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      setKycDocs(prev => ({
+        ...prev,
+        [docId]: {
+          ...prev[docId],
+          fileUrl:   data.fileUrl || null,
+          saving:    false,
+          savedToDb: true,
+          fileObject: null,   // no longer needed — backend has it
+        }
+      }));
+      showSuccess(`${docLabel} saved successfully.`);
+    } catch (err) {
+      showError(`Failed to save ${docLabel}: ${err.message}`);
+      setKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], saving: false } }));
+    }
   };
 
   const handleMetaChange = (docId, field, value) => {
     setKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], [field]: value } }));
+  };
+
+  // ── KYC file viewer — uses local File object or fetches from backend ──────────
+  const handleViewKycFile = async (doc, uploaded) => {
+    if (!uploaded?.fileName && !uploaded?.fileObject && !uploaded?.fileUrl) return;
+    // Revoke previous blob URL
+    if (kycBlobRef.current) { URL.revokeObjectURL(kycBlobRef.current); kycBlobRef.current = null; }
+    setKycViewerDoc({ doc, uploaded });
+    setKycViewerUrl('');
+    setKycViewerLoading(true);
+    setKycViewerOpen(true);
+    try {
+      let blobUrl;
+      if (uploaded.fileObject instanceof File) {
+        // Backend not connected yet — use the raw File object directly (no fetch needed)
+        blobUrl = URL.createObjectURL(uploaded.fileObject);
+      } else if (uploaded.fileUrl) {
+        // Backend connected — fetch via authenticated request
+        const url = uploaded.fileUrl.startsWith('http')
+          ? uploaded.fileUrl
+          : `${API_BASE_URL}${uploaded.fileUrl}`;
+        const res = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+      } else {
+        throw new Error('No file available to preview');
+      }
+      kycBlobRef.current = blobUrl;
+      setKycViewerUrl(blobUrl);
+    } catch (err) {
+      showError('Could not load the file preview.');
+      setKycViewerOpen(false);
+    } finally {
+      setKycViewerLoading(false);
+    }
+  };
+
+  const handleDownloadKycFile = async (doc, uploaded) => {
+    if (!uploaded?.fileObject && !uploaded?.fileUrl) return;
+    try {
+      let blobUrl;
+      if (uploaded.fileObject instanceof File) {
+        // Local file — create blob URL directly from File object
+        blobUrl = URL.createObjectURL(uploaded.fileObject);
+      } else {
+        const url = uploaded.fileUrl.startsWith('http') ? uploaded.fileUrl : `${API_BASE_URL}${uploaded.fileUrl}`;
+        const res = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
+        if (!res.ok) throw new Error('Download failed');
+        blobUrl = URL.createObjectURL(await res.blob());
+      }
+      const a    = document.createElement('a');
+      a.href     = blobUrl;
+      a.download = uploaded.fileName || 'document';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch { showError('Download failed. Please try again.'); }
   };
 
   const changeTab = (t) => { setActiveTab(t); localStorage.setItem('vendor_detail_tab', t); };
@@ -545,6 +709,51 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                 <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: 0 }}>{vendor.notes}</p>
               </div>
             )}
+            {/* KYC Numbers summary on Overview tab */}
+            {KYC_DOCUMENTS.some(d => kycDocs[d.id]?.docNumber?.trim() || kycDocs[d.id]?.fileName) && (
+              <div className="vd-info-card" style={{ gridColumn: '1 / -1' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                  <Shield size={13} style={{ color: '#2563eb' }} />
+                  <h4 className="vd-card-title" style={{ margin: 0 }}>KYC Documents</h4>
+                  {KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.savedToDb || kycDocs[d.id]?.fileUrl).length > 0 && (
+                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#16a34a', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 20, padding: '1px 8px' }}>
+                      {KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.savedToDb || kycDocs[d.id]?.fileUrl).length} / {KYC_DOCUMENTS.length} saved
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.docNumber?.trim() || kycDocs[d.id]?.fileName).map(doc => {
+                    const d = kycDocs[doc.id] || {};
+                    const hasFile = !!(d.fileName || d.fileUrl);
+                    return (
+                      <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: d.savedToDb ? '#f0fdf4' : hasFile ? '#eff6ff' : '#f8fafc', borderRadius: 7, border: `1px solid ${d.savedToDb ? '#86efac' : hasFile ? '#bfdbfe' : '#e5e7eb'}` }}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>{doc.icon}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{doc.label}</div>
+                          {d.docNumber && (
+                            <div style={{ fontSize: 11.5, fontFamily: 'monospace', color: '#1e293b', letterSpacing: '.04em', marginTop: 1 }}>{d.docNumber}</div>
+                          )}
+                        </div>
+                        {hasFile && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                            <span style={{ fontSize: 11, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{d.fileName}</span>
+                            <button onClick={() => handleViewKycFile(doc, d)}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer' }}>
+                              <Eye size={11} /> View
+                            </button>
+                          </div>
+                        )}
+                        {d.savedToDb
+                          ? <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} title="Saved to database" />
+                          : hasFile
+                            ? <span style={{ fontSize: 10, fontWeight: 600, color: '#2563eb', background: '#dbeafe', borderRadius: 20, padding: '1px 7px', flexShrink: 0 }}>Unsaved</span>
+                            : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -641,13 +850,14 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                   <tr>
                     <th style={{ width: 28 }}></th>
                     <th>Document</th>
-                    <th style={{ minWidth: 200 }}>Document Number</th>
-                    <th style={{ minWidth: 240 }}>File</th>
+                    <th style={{ minWidth: 190 }}>Document Number</th>
+                    <th style={{ minWidth: 210 }}>File</th>
+                    <th style={{ width: 90 }}>Save</th>
                   </tr>
                 </thead>
                 <tbody>
                   {MAIN_DOCS.map(doc => (
-                    <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+                    <KycDocCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} onViewFile={handleViewKycFile} onSave={handleSaveKycDoc} />
                   ))}
                 </tbody>
               </table>
@@ -664,11 +874,80 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {ADDITIONAL_DOCS.map(doc => (
-              <KycAddCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} />
+              <KycAddCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} onViewFile={handleViewKycFile} onSave={handleSaveKycDoc} />
             ))}
           </div>
         </div>
       )}
+
+      {/* ── KYC File Viewer Modal (blob fetch — same pattern as OrderBook) ── */}
+      {kycViewerOpen && kycViewerDoc && (() => {
+        const { doc, uploaded } = kycViewerDoc;
+        const ext     = (uploaded.fileName || '').split('.').pop().toLowerCase();
+        const isPdf   = ext === 'pdf';
+        const isImage = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
+        return (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onClick={() => { setKycViewerOpen(false); if (kycBlobRef.current) { URL.revokeObjectURL(kycBlobRef.current); kycBlobRef.current = null; } }}>
+            <div style={{ background: '#fff', borderRadius: 12, width: 'min(1000px, 94vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.45)' }}
+              onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 20 }}>{isPdf ? '📄' : isImage ? '🖼️' : '📎'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {uploaded.fileName || doc.label}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{doc.icon} {doc.label}{uploaded.docNumber ? ` · ${uploaded.docNumber}` : ''}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
+                  <button onClick={() => handleDownloadKycFile(doc, uploaded)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+                    <Download size={13} /> Download
+                  </button>
+                  {kycViewerUrl && (
+                    <a href={kycViewerUrl} target="_blank" rel="noreferrer"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>
+                      <ExternalLink size={13} /> Open in Tab
+                    </a>
+                  )}
+                  <button onClick={() => { setKycViewerOpen(false); if (kycBlobRef.current) { URL.revokeObjectURL(kycBlobRef.current); kycBlobRef.current = null; } }}
+                    style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 18, color: '#475569' }}>✕</button>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', background: '#1e1e2e', borderRadius: '0 0 12px 12px' }}>
+                {kycViewerLoading && (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#94a3b8' }}>
+                    <div style={{ width: 40, height: 40, border: '3px solid rgba(124,58,237,.2)', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'vd-spin .8s linear infinite' }} />
+                    <p style={{ fontSize: 14 }}>Loading file…</p>
+                  </div>
+                )}
+                {!kycViewerLoading && isPdf && kycViewerUrl && (
+                  <iframe src={kycViewerUrl} title={uploaded.fileName} style={{ width: '100%', height: '75vh', border: 'none', borderRadius: '0 0 12px 12px' }} />
+                )}
+                {!kycViewerLoading && isImage && kycViewerUrl && (
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, overflow: 'auto' }}>
+                    <img src={kycViewerUrl} alt={uploaded.fileName} style={{ maxWidth: '100%', maxHeight: '70vh', objectFit: 'contain', borderRadius: 4, boxShadow: '0 4px 24px rgba(0,0,0,.4)' }} />
+                  </div>
+                )}
+                {!kycViewerLoading && !isPdf && !isImage && kycViewerUrl && (
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40, color: '#94a3b8' }}>
+                    <span style={{ fontSize: 56, opacity: .5 }}>📎</span>
+                    <p style={{ fontSize: 15 }}>This file type cannot be previewed in the browser.</p>
+                    <button onClick={() => handleDownloadKycFile(doc, uploaded)}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      <Download size={14} /> Download to View
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
@@ -678,12 +957,16 @@ const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
-  const vendorPerms = pagePermissions?.VENDORS || [];
-  const canView     = vendorPerms.includes('VIEW')   || isAccountsExecutive;
-  const canCreate   = vendorPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit     = vendorPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete   = vendorPerms.includes('DELETE') && !isAccountsExecutive;
-  const isViewOnly  = canView && !canCreate && !canEdit && !canDelete;
+  const vendorPerms    = pagePermissions?.VENDORS || [];
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  const isSuperAdmin   = user?.role === 'SUPERADMIN';
+  const isAdmin        = user?.role === 'ADMIN';
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
+  const canView        = vendorPerms.includes('VIEW')   || isFullAccess;
+  const canCreate      = vendorPerms.includes('CREATE') || isFullAccess;
+  const canEdit        = vendorPerms.includes('EDIT')   || isFullAccess;
+  const canDelete      = vendorPerms.includes('DELETE') && !isAccountsExecutive;
+  const isViewOnly     = canView && !canCreate && !canEdit && !canDelete;
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
@@ -726,6 +1009,7 @@ const VendorManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createStep, setCreateStep] = useState(1); // 1 = Vendor Info, 2 = KYC
   const [createKycDocs, setCreateKycDocs] = useState({});
+  const createViewerBlobRef = React.useRef(null); // for create modal KYC file preview
 
   // "Other" custom inputs for category and vendor type — shared between create & edit modals
   const [customCategory, setCustomCategory]     = useState('');
@@ -890,11 +1174,27 @@ const VendorManagement = () => {
     'X-User-Role': user?.role || localStorage.getItem('userRole')
   });
 
-  // ─── API calls (unchanged logic, just sortConfig wired in) ─────────────────
+  // ─── API calls ────────────────────────────────────────────────────────────
+  // For ACCOUNTS_*/ADMIN/SUPERADMIN: override User-Role header → SUPERADMIN
+  // so /filters/leads-users returns ALL users (not team-scoped list).
   const fetchAvailableUsers = async () => {
     try {
-      const users = await filterApi.getLeadsUsers();
-      setAvailableUsers(users);
+      const overrideRole = isFullAccess ? 'SUPERADMIN' : (user?.role || '');
+      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Id':      String(user?.id || ''),
+          'X-User-Id':    String(user?.id || ''),
+          'User-Role':    overrideRole,
+          'X-User-Role':  overrideRole,
+          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAvailableUsers(Array.isArray(data) ? data : []);
+      }
     } catch (error) { console.error('Failed to fetch users:', error); }
   };
 
@@ -1020,6 +1320,8 @@ const VendorManagement = () => {
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.category !== 'all') params.append('category', filters.category);
       if (filters.search) params.append('searchTerm', filters.search);
+      // Full-access roles (admin/accounts_*) see all vendors; others see only their own
+      if (!isFullAccess && user?.id) params.append('createdBy', user.id);
       const response = await fetch(`${API_BASE_URL}/vendors?${params}`, {
         headers: getAuthHeaders(), credentials: 'include'
       });
@@ -1313,9 +1615,13 @@ const VendorManagement = () => {
         return (
           <td key={col.id} className="vendor-name-cell">
             <div className="vendor-name-info">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span className="vendor-name">{vendor.name}</span>
-                {/* KYC badge will show once backend is ready */}
+                {vendor.kycVerified && (
+                  <span className="kyc-verified-badge" title="All 4 KYC documents verified">
+                    <BadgeCheck size={13} /> Verified
+                  </span>
+                )}
               </div>
               {vendor.vendorCode && <span className="vendor-code">{vendor.vendorCode}</span>}
             </div>
@@ -1731,7 +2037,13 @@ const VendorManagement = () => {
                   </div>
                 </div>
                 <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={(e) => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>
+                  <div className="vendor-form-group">
+                    <label>GST Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(15 chars)</span></label>
+                    <input type="text" value={editFormData.gstNumber}
+                      maxLength={15}
+                      onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15); setEditFormData({ ...editFormData, gstNumber: v }); }}
+                      placeholder="e.g. 22AAAAA0000A1Z5" />
+                  </div>
                   <div className="vendor-form-group"><label>Website</label><input type="url" value={editFormData.website || ''} onChange={(e) => setEditFormData({ ...editFormData, website: e.target.value })} placeholder="https://www.example.com" /></div>
                 </div>
               </div>
@@ -1746,7 +2058,12 @@ const VendorManagement = () => {
                       {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
-                  <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={(e) => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
+                  <div className="vendor-form-group">
+                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits)</span></label>
+                    <input type="text" value={editFormData.pincode} maxLength={6}
+                      onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,6); setEditFormData({ ...editFormData, pincode: v }); }}
+                      placeholder="Enter 6-digit pincode" />
+                  </div>
                 </div>
               </div>
               <div className="vendor-form-section">
@@ -1766,14 +2083,52 @@ const VendorManagement = () => {
       {showCreateModal && editFormData && (() => {
         // KYC validation for step 2
         const createDocsWithNumber = KYC_DOCUMENTS.filter(d => createKycDocs[d.id]?.docNumber?.trim());
-        const missingFiles = createDocsWithNumber.filter(d => !createKycDocs[d.id]?.fileName && !createKycDocs[d.id]?.fileUrl);
+        // Missing file = doc has a number but no file selected at all
+        const missingFiles = createDocsWithNumber.filter(d => !createKycDocs[d.id]?.fileName && !createKycDocs[d.id]?.fileUrl && !createKycDocs[d.id]?.fileObject);
         const handleCreateKycUpload = (docId, file) => {
           if (!file) return;
           if (file.size > 10 * 1024 * 1024) { showError('File too large. Max 10 MB.'); return; }
-          setCreateKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], fileName: file.name, fileUrl: null, uploadedAt: new Date().toISOString(), uploading: false } }));
+          setCreateKycDocs(prev => ({
+            ...prev,
+            [docId]: {
+              ...prev[docId],        // preserves docNumber
+              fileName:   file.name,
+              fileObject: file,      // raw File for local preview
+              fileUrl:    null,
+              uploadedAt: new Date().toISOString(),
+              uploading:  false,
+              savedToDb:  false,     // will be saved after vendor creation
+            }
+          }));
         };
+
         const handleCreateMetaChange = (docId, field, value) => {
           setCreateKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], [field]: value } }));
+        };
+
+        // "Save" in create modal = mark ready locally (actual API call happens after vendor is created)
+        const handleCreateKycSave = (docId) => {
+          const d = createKycDocs[docId];
+          if (!d?.fileObject && !d?.fileName) { showError('Select a file first.'); return; }
+          setCreateKycDocs(prev => ({ ...prev, [docId]: { ...prev[docId], savedToDb: true } }));
+          showSuccess(`${KYC_DOCUMENTS.find(k => k.id === docId)?.label} marked — will be saved after vendor creation.`);
+        };
+
+        // View file in create modal using local File object blob URL
+        const handleCreateKycView = async (doc, uploaded) => {
+          if (!uploaded?.fileObject && !uploaded?.fileUrl) return;
+          if (createViewerBlobRef.current) { URL.revokeObjectURL(createViewerBlobRef.current); createViewerBlobRef.current = null; }
+          try {
+            let url;
+            if (uploaded.fileObject instanceof File) {
+              url = URL.createObjectURL(uploaded.fileObject);
+            } else {
+              url = uploaded.fileUrl.startsWith('http') ? uploaded.fileUrl : `${API_BASE_URL}${uploaded.fileUrl}`;
+            }
+            createViewerBlobRef.current = url;
+            // Open in new tab (simplest approach for create modal — no embedded viewer needed)
+            window.open(url, '_blank', 'noopener,noreferrer');
+          } catch { showError('Could not preview the file.'); }
         };
         const handleNextStep = () => {
           if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
@@ -1880,9 +2235,19 @@ const VendorManagement = () => {
                         {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
-                    <div className="vendor-form-group"><label>Pincode</label><input type="text" value={editFormData.pincode} onChange={e => setEditFormData({ ...editFormData, pincode: e.target.value })} placeholder="Enter pincode" /></div>
+                    <div className="vendor-form-group">
+                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits)</span></label>
+                      <input type="text" value={editFormData.pincode} maxLength={6}
+                        onChange={e => { const v = e.target.value.replace(/[^0-9]/g,'').slice(0,6); setEditFormData({ ...editFormData, pincode: v }); }}
+                        placeholder="Enter 6-digit pincode" />
+                    </div>
                   </div>
-                  <div className="vendor-form-group"><label>GST Number</label><input type="text" value={editFormData.gstNumber} onChange={e => setEditFormData({ ...editFormData, gstNumber: e.target.value })} placeholder="Enter GST number" /></div>
+                  <div className="vendor-form-group">
+                    <label>GST Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(15 chars)</span></label>
+                    <input type="text" value={editFormData.gstNumber} maxLength={15}
+                      onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,15); setEditFormData({ ...editFormData, gstNumber: v }); }}
+                      placeholder="e.g. 22AAAAA0000A1Z5" />
+                  </div>
                 </div>
                 <div className="vendor-form-section">
                   <h3>Additional Details</h3>
@@ -1936,13 +2301,14 @@ const VendorManagement = () => {
                       <tr>
                         <th style={{ width: 28 }}></th>
                         <th>Document</th>
-                        <th style={{ minWidth: 200 }}>Document Number</th>
-                        <th style={{ minWidth: 240 }}>File</th>
+                        <th style={{ minWidth: 190 }}>Document Number</th>
+                        <th style={{ minWidth: 210 }}>File</th>
+                        <th style={{ width: 90 }}>Save</th>
                       </tr>
                     </thead>
                     <tbody>
                       {MAIN_DOCS.map(doc => (
-                        <KycDocCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} />
+                        <KycDocCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} onSave={handleCreateKycSave} onViewFile={handleCreateKycView} />
                       ))}
                     </tbody>
                   </table>
@@ -1956,7 +2322,7 @@ const VendorManagement = () => {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                   {ADDITIONAL_DOCS.map(doc => (
-                    <KycAddCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} />
+                    <KycAddCard key={doc.id} doc={doc} uploaded={createKycDocs[doc.id]} onUpload={handleCreateKycUpload} onMetaChange={handleCreateMetaChange} onSave={handleCreateKycSave} onViewFile={handleCreateKycView} />
                   ))}
                 </div>
               </div>

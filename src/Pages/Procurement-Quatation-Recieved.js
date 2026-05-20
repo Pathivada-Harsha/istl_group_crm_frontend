@@ -146,14 +146,19 @@ const QuotationsReceived = () => {
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
 
   // Real permission checks from pagePermissions
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  const isSuperAdmin   = user?.role === 'SUPERADMIN';
+  const isAdmin        = user?.role === 'ADMIN';
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
   const quotPerms  = pagePermissions?.PROCUREMENT_QUOTATIONS || [];
   // Fallback: if no perms configured yet, allow access (existing behaviour)
   const hasPerms   = quotPerms.length > 0;
-  const canView    = !hasPerms || quotPerms.includes('VIEW')    || isAccountsExecutive;
-  const canCreate  = !hasPerms || quotPerms.includes('CREATE')  || isAccountsExecutive;
-  const canEdit    = !hasPerms || quotPerms.includes('EDIT')    || isAccountsExecutive;
-  const canApprove = !hasPerms || quotPerms.includes('APPROVE') || isAccountsExecutive;
-  const canDelete  = (!hasPerms || quotPerms.includes('DELETE')) && !isAccountsExecutive;
+  const canView    = !hasPerms || quotPerms.includes('VIEW')    || isFullAccess;
+  const canCreate  = !hasPerms || quotPerms.includes('CREATE')  || isFullAccess;
+  const canEdit    = !hasPerms || quotPerms.includes('EDIT')    || isFullAccess;
+  const canApprove = !hasPerms || quotPerms.includes('APPROVE') || isFullAccess;
+  // DELETE: follows permission flag only — not blocked by isAccountsExecutive
+  const canDelete  = !hasPerms || quotPerms.includes('DELETE');
 
   // ── Confirm modal state ──────────────────────────────────────────────────
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
