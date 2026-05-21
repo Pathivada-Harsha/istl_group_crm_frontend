@@ -166,6 +166,12 @@ const BillsManagementPage = () => {
     fetchKPIs();
   }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search]);
 
+  // Reset to page 1 whenever any external filter (group/project) changes
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, currentPage: 0 }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, groupName, subGroupName]);
+
   // Fetch MODAL dropdown data when modal opens
   useEffect(() => {
     if (showCreateEditModal) {
@@ -325,13 +331,15 @@ const BillsManagementPage = () => {
             items: billItems
           }));
 
-          showSuccess(`✅ Loaded ${billItems.length} items. Enter delivered quantities.`);
+          const pendingCount = billItems.filter(i => (i.pendingQty || 0) > 0).length;
+          if (pendingCount === 0) {
+            showSuccess(`Loaded ${billItems.length} items (all fully delivered — enter quantities to bill again if needed).`);
+          } else {
+            showSuccess(`✅ Loaded ${billItems.length} items. Enter delivered quantities.`);
+          }
         } else {
-          showError('All PO items already delivered. You can still add manual items.');
-          setFormData(prev => ({
-            ...prev,
-            items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }]
-          }));
+          // No items on this PO at all
+          showError('No items found for this PO.');
         }
       }
     } catch (error) {
@@ -633,13 +641,19 @@ const BillsManagementPage = () => {
         await fetchModalPurchaseOrders(bill.vendorId);
       }
       
-      let enrichedItems = bill.items && bill.items.length > 0 ? [...bill.items] : [{
-        itemName: '',
-        description: '',
-        quantity: 1,
-        unitPrice: 0,
-        taxPercent: 18
-      }];
+      let enrichedItems = bill.items && bill.items.length > 0
+        ? bill.items.map(it => ({
+            ...it,
+            // For rows saved before the item_name migration, fall back to description
+            itemName: it.itemName || (it.poItemId ? '' : it.description) || '',
+          }))
+        : [{
+            itemName: '',
+            description: '',
+            quantity: 1,
+            unitPrice: 0,
+            taxPercent: 18
+          }];
       
       if (bill.poId && bill.items && bill.items.length > 0) {
         try {
@@ -654,13 +668,17 @@ const BillsManagementPage = () => {
           if (response.ok) {
             const data = await response.json();
             
-            if (data.success && data.items) {
+            if (data.success && data.items && data.items.length > 0) {
               enrichedItems = bill.items.map(billItem => {
                 if (billItem.poItemId) {
                   const poItem = data.items.find(pi => pi.id === billItem.poItemId);
                   if (poItem) {
                     return {
                       ...billItem,
+                      // Always pull name/description from the live PO item — the stored
+                      // bill_items.item_name may be blank for rows created before the migration.
+                      itemName: poItem.itemName || billItem.itemName || '',
+                      description: poItem.description || billItem.description || '',
                       orderedQty: poItem.orderedQty,
                       deliveredQty: poItem.deliveredQty,
                       pendingQty: poItem.pendingQty,
@@ -673,6 +691,8 @@ const BillsManagementPage = () => {
                 return billItem;
               });
             }
+            // If data.items is empty (shouldn't happen with includeAll=true, but just in case),
+            // enrichedItems stays as-is from the bill detail fetch — items are still shown.
           }
         } catch (error) {
           console.error('Failed to fetch PO items for edit:', error);
@@ -1247,7 +1267,10 @@ const BillsManagementPage = () => {
             placeholder="Search by Bill Ref ID, Bill ID, Vendor Name..."
             className="procurement-bills-received-search"
             value={filters.search}
-            onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            onChange={(e) => {
+              setFilters({ ...filters, search: e.target.value });
+              setPagination(prev => ({ ...prev, currentPage: 0 }));
+            }}
             onKeyPress={(e) => e.key === 'Enter' && fetchBills()}
           />
 
