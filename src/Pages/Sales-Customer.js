@@ -36,12 +36,12 @@ const INDIAN_STATES = [
 
 // ── All Columns Definition ────────────────────────────────────────────────────
 const ALL_COLUMNS = [
-  { key: 'sno',     label: 'S.No',    sortable: false, required: true  },
+  { key: 'sno',      label: 'S.No',     sortable: false, required: true  },
   { key: 'group',    label: 'Group',    sortable: true,  required: false },
   { key: 'company',  label: 'Company',  sortable: true,  required: false },
   { key: 'name',     label: 'Name',     sortable: true,  required: true  },
-  { key: 'phone',    label: 'Phone',    sortable: true,  required: false },
-  { key: 'email',    label: 'Email',    sortable: true,  required: false },
+  { key: 'contact',  label: 'Contact',  sortable: false, required: false },
+  { key: 'createdAt',label: 'Date',     sortable: true,  required: false },
   { key: 'status',   label: 'Status',   sortable: true,  required: false },
   { key: 'city',     label: 'City',     sortable: true,  required: false },
   { key: 'actions',  label: 'Actions',  sortable: false, required: true  },
@@ -1949,6 +1949,8 @@ const CustomerDatabase = () => {
         status:       selectedStatus !== 'All' ? selectedStatus : null,
         fromDate:     dateFrom || null,
         toDate:       dateTo   || null,
+        sortBy:        (dateFrom || dateTo) ? 'createdAt' : null,
+        sortDirection: (dateFrom || dateTo) ? 'asc'       : null,
         page,
         size: rowsPerPage,
       };
@@ -2182,8 +2184,26 @@ useEffect(() => {
       case 'group':   return <span className={`cust-badge badge-${getGroupColor(customer.groupName)}`}>{customer.groupName || 'Others'}</span>;
       case 'company': return customer.companyName || 'N/A';
       case 'name':    return <span className="cust-font-medium">{customer.name || 'N/A'}</span>;
-      case 'phone':   return customer.phone || 'N/A';
-      case 'email':   return customer.email || 'N/A';
+      case 'contact': return (
+        <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:0 }}>
+          {customer.email
+            ? <span style={{ fontSize:12, color:'#1e293b', display:'flex', alignItems:'center', gap:4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:'#6366f1' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>{customer.email}</span>
+              </span>
+            : null}
+          {customer.phone
+            ? <span style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:'#10b981' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                {customer.phone}
+              </span>
+            : null}
+          {!customer.email && !customer.phone ? <span style={{ color:'#9ca3af' }}>N/A</span> : null}
+        </div>
+      );
+      case 'createdAt': return customer.createdAt
+        ? (() => { const d = new Date(customer.createdAt); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()
+        : <span style={{ color:'#9ca3af' }}>—</span>;
       case 'city':    return customer.city || '-';
       case 'status':  return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
       case 'actions': return (

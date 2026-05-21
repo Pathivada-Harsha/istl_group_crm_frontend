@@ -1120,8 +1120,8 @@ const ProjectCostExpenseManagement = () => {
           <PCEDateRangeFilter
             appliedFrom={filters.dateFrom}
             appliedTo={filters.dateTo}
-            onApply={(f,t)=>{ setFilters({...filters, dateFrom:f, dateTo:t}); setCurrentPage(0); }}
-            onClear={()=>{ setFilters({...filters, dateFrom:'', dateTo:''}); setCurrentPage(0); }}
+            onApply={(f,t)=>{ setFilters({...filters, dateFrom:f, dateTo:t}); setCurrentPage(0); setSortDir('asc'); }}
+            onClear={()=>{ setFilters({...filters, dateFrom:'', dateTo:''}); setCurrentPage(0); setSortDir('desc'); }}
           />
         </div>
         <div className="exp-mgmt-actions">

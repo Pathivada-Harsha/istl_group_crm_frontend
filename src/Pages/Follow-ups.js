@@ -503,6 +503,12 @@ export default function ClientDashboardFollowUps() {
         const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
         return !isNaN(d.getTime()) && d >= from && d <= to;
       });
+      // Sort ascending by scheduledAt when date filter is active
+      filtered.sort((a, b) => {
+        const da = new Date(String(a.scheduledAt || '').replace(' ', 'T'));
+        const db = new Date(String(b.scheduledAt || '').replace(' ', 'T'));
+        return da - db;
+      });
     }
 
     setFilteredFollowUps(filtered);

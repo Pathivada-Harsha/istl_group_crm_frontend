@@ -122,24 +122,23 @@ const LeadFollowupsOverviewSnippet = ({ leadId, onGoToFollowups }) => {
 };
 // ─── All Columns ──────────────────────────────────────────────────────────────
 const ALL_COLUMNS = [
-  { key: 'name', label: 'Client Name', sortable: true, required: true },
-  { key: 'email', label: 'Email', sortable: true, required: false },
-  { key: 'phone', label: 'Phone', sortable: true, required: false },
-  { key: 'groupName', label: 'Group', sortable: true, required: false },
-  { key: 'subGroupName', label: 'Category', sortable: true, required: false },
-  { key: 'capacity', label: 'Capacity', sortable: true, required: false },
-  { key: 'priority', label: 'Priority', sortable: true, required: false },
-  { key: 'status', label: 'Status', sortable: true, required: false },
-  { key: 'source', label: 'Source', sortable: true, required: false },
-  { key: 'assignedToName', label: 'Assigned To', sortable: true, required: false },
-  { key: 'createdAt', label: 'Created At', sortable: true, required: false },
-  { key: 'leadOwner', label: 'Lead Owner', sortable: true, required: false },
-  { key: 'actions', label: 'Actions', sortable: false, required: true },
+  { key: 'name',           label: 'Client Name',  sortable: true,  required: true  },
+  { key: 'contact',        label: 'Contact',       sortable: false, required: false },
+  { key: 'groupName',      label: 'Group',         sortable: true,  required: false },
+  { key: 'subGroupName',   label: 'Category',      sortable: true,  required: false },
+  { key: 'createdAt',      label: 'Date',          sortable: true,  required: false },
+  { key: 'capacity',       label: 'Capacity',      sortable: true,  required: false },
+  { key: 'priority',       label: 'Priority',      sortable: true,  required: false },
+  { key: 'status',         label: 'Status',        sortable: true,  required: false },
+  { key: 'source',         label: 'Source',        sortable: true,  required: false },
+  { key: 'assignedToName', label: 'Assigned To',   sortable: true,  required: false },
+  { key: 'leadOwner',      label: 'Lead Owner',    sortable: true,  required: false },
+  { key: 'actions',        label: 'Actions',       sortable: false, required: true  },
 ];
 
 const DEFAULT_ORDER = ALL_COLUMNS.map(c => c.key);
 const DEFAULT_VISIBLE = ALL_COLUMNS
-  .filter(c => !['source', 'assignedToName', 'createdAt', 'groupName'].includes(c.key))
+  .filter(c => !['source', 'assignedToName', 'groupName'].includes(c.key))
   .map(c => c.key);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1796,14 +1795,16 @@ const isFirstFilterRender = useRef(true);
   setError(null);
   try {
     const filterBody = {
-      searchTerm:   search   || null,
-      status:       status   !== 'All' ? status : null,
-      priority:     priority !== 'All' ? priority : null,
-      source:       source   !== 'All' ? source   : null,
-      groupName:    group    || null,
-      subGroupName: subGroup || null,
-      fromDate:     fromDate || null,
-      toDate:       toDate   || null,
+      searchTerm:    search   || null,
+      status:        status   !== 'All' ? status : null,
+      priority:      priority !== 'All' ? priority : null,
+      source:        source   !== 'All' ? source   : null,
+      groupName:     group    || null,
+      subGroupName:  subGroup || null,
+      fromDate:      fromDate || null,
+      toDate:        toDate   || null,
+      sortBy:        (fromDate || toDate) ? 'createdAt' : null,
+      sortDirection: (fromDate || toDate) ? 'asc'       : null,
     };
 
     const data = await fetchWithHeaders(
@@ -2092,8 +2093,23 @@ useEffect(() => {
     const empty = <span style={{display:'block',textAlign:'center',color:'#9ca3af'}}>—</span>;
     switch (colKey) {
       case 'name': return lead.name ? <span className="leads-enquiries-font-medium">{lead.name}</span> : empty;
-      case 'email': return lead.email || empty;
-      case 'phone': return lead.phone || empty;
+      case 'contact': return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          {lead.email
+            ? <span style={{ fontSize: 12, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: '#6366f1' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{lead.email}</span>
+              </span>
+            : null}
+          {lead.phone
+            ? <span style={{ fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: '#10b981' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+                {lead.phone}
+              </span>
+            : null}
+          {!lead.email && !lead.phone ? empty : null}
+        </div>
+      );
       case 'groupName': return lead.groupName || empty;
       case 'subGroupName': return lead.subGroupName || empty;
       case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : empty;
@@ -2115,7 +2131,7 @@ useEffect(() => {
           </span>
         );
       }
-      case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : empty;
+      case 'createdAt': return lead.createdAt ? (() => { const d = new Date(lead.createdAt); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })() : empty;
       case 'priority': return lead.priority
         ? <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
         : empty;
