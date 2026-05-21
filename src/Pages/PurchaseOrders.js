@@ -2164,11 +2164,9 @@ const PurchaseOrders = () => {
                       <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}><span>📋</span> Purchase Order Items</h3>
                       <p style={{ fontSize: '13px', color: '#64748b' }}>{createPOFormData.quotationId ? 'Select items and adjust quantities' : 'Enter vendor prices for selected items'}</p>
                     </div>
-                    {!isEditMode && (
-                      <button className="purchase-orders-btn-secondary" onClick={() => setShowManualItemForm(!showManualItemForm)} style={{ padding: '8px 16px', fontSize: '14px' }}>
-                        <Plus size={16} /> {showManualItemForm ? 'Cancel' : 'Add Manual Item'}
-                      </button>
-                    )}
+                    <button className="purchase-orders-btn-secondary" onClick={() => setShowManualItemForm(!showManualItemForm)} style={{ padding: '8px 16px', fontSize: '14px' }}>
+                      <Plus size={16} /> {showManualItemForm ? 'Cancel' : 'Add Manual Item'}
+                    </button>
                   </div>
 
                   {showManualItemForm && (

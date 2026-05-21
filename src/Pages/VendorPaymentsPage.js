@@ -364,14 +364,26 @@ export default function VendorPaymentsPage() {
 
   const handleSaveAdvance = async () => {
     if(!formData.vendorId){showError('Please select a vendor');return;}
-    if(formData.amount<=0){showError('Amount must be greater than zero');return;}
+    const parsedAdvAmount = parseFloat(formData.amount);
+    if(!parsedAdvAmount||parsedAdvAmount<=0){showError('Amount must be greater than zero');return;}
     if(formData.paymentType==='BILL_PAYMENT'&&!formData.billId){showError('Please select a bill');return;}
+    // Validate against bill balance for BILL_PAYMENT
+    if(formData.paymentType==='BILL_PAYMENT'&&formData.billId){
+      const selectedBill = unpaidBills.find(b=>b.id===formData.billId);
+      if(selectedBill){
+        const billBalance = parseFloat(selectedBill.balanceAmount||0);
+        if(parsedAdvAmount > billBalance + 0.005){
+          showError(`Amount cannot exceed ${fmtFull(billBalance)}`);
+          return;
+        }
+      }
+    }
     setLoading(true);
     try{
       const res=await fetch(`${API_BASE_URL}/vendor-advances`,{
         credentials:'include',method:'POST',
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
-        body:JSON.stringify({...formData,amount:parseFloat(formData.amount),billId:formData.paymentType==='BILL_PAYMENT'?formData.billId:null})
+        body:JSON.stringify({...formData,amount:parsedAdvAmount,billId:formData.paymentType==='BILL_PAYMENT'?formData.billId:null})
       });
       if(!res.ok){const e=await res.json();throw new Error(e.message||'Failed');}
       showSuccess('Payment recorded successfully!');
@@ -471,7 +483,8 @@ export default function VendorPaymentsPage() {
   };
 
   const handleSaveEdit = async () => {
-    if(editFormData.amount<=0){showError('Amount must be greater than zero');return;}
+    const parsedAmount = parseFloat(editFormData.amount);
+    if(!parsedAmount || parsedAmount<=0){showError('Amount must be greater than zero');return;}
 
     const originalAdv = editingAdvance;
     const isBillPayment = originalAdv.paymentType === 'BILL_PAYMENT';
@@ -480,8 +493,10 @@ export default function VendorPaymentsPage() {
     // (restored balance = bill balance + old payment amount)
     if(isBillPayment && editBillInfo){
       const restoredBalance = parseFloat(editBillInfo.balanceAmount||0) + parseFloat(originalAdv.amount||0);
-      if(editFormData.amount > restoredBalance){
-        showError(`Amount cannot exceed ₹${fmt(restoredBalance)} (bill balance + your existing payment)`);
+      // Use a small epsilon (0.005) to absorb floating-point rounding differences
+      // so a user entering the displayed rounded value doesn't get a false error.
+      if(parsedAmount > restoredBalance + 0.005){
+        showError(`Amount cannot exceed ${fmtFull(restoredBalance)} (bill balance + your existing payment)`);
         return;
       }
     }
@@ -542,7 +557,7 @@ export default function VendorPaymentsPage() {
           projectId: isBillPayment ? originalAdv.projectId : editProjectId,
           groupId:   isBillPayment ? originalAdv.groupId   : editProjectGroupName,
           subGroupId:isBillPayment ? originalAdv.subGroupId: editProjectSubGroupName,
-          amount:parseFloat(editFormData.amount)
+          amount:parsedAmount
         })
       });
       if(!res.ok){const e=await res.json();throw new Error(e.message);}
@@ -589,7 +604,15 @@ export default function VendorPaymentsPage() {
   const resetColumns=()=>{setColumns(ALL_COLUMNS);localStorage.removeItem('vendorPaymentsColumns');localStorage.removeItem('vendorPaymentsColumnsVersion');};
 
   // ── formatters ────────────────────────────────────────────────────────────
-  const fmt  =(n)=>{const v=parseFloat(n)||0;return `₹${v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`};
+  const fmt  =(n)=>{const v=parseFloat(n)||0;return `₹${v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2})}`;};
+  // fmtFull: shows up to 10 significant decimal places, stripping trailing zeros
+  // Used wherever we display a max/limit so the user knows the exact cap.
+  const fmtFull=(n)=>{
+    const v=parseFloat(n)||0;
+    // Format with enough decimals then strip trailing zeros after decimal point
+    const s=v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:10});
+    return `₹${s}`;
+  };
   const fmtD =(d)=>{if(!d)return'';return new Date(d).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric'});};
   const fmtDT=(d)=>{if(!d)return'';return new Date(d).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});};
 
@@ -1014,7 +1037,7 @@ export default function VendorPaymentsPage() {
                           <label key={bill.id} className="invoice-selection-item">
                             <input type="radio" name="selectedBill" value={bill.id}
                               checked={formData.billId===bill.id}
-                              onChange={()=>setFormData(f=>({...f,billId:bill.id,amount:parseFloat(bill.balanceAmount)||0}))}/>
+                              onChange={()=>setFormData(f=>({...f,billId:bill.id,amount:String(parseFloat(bill.balanceAmount)||0)}))}/>
                             <div className="invoice-selection-content">
                               <div className="invoice-selection-header">
                                 <strong>{bill.billNo}</strong>
@@ -1047,7 +1070,7 @@ export default function VendorPaymentsPage() {
                       <input type="number" value={formData.amount} step="0.01" placeholder="0.00"
                         onChange={e=>setFormData(f=>({...f,amount:parseFloat(e.target.value)}))}/>
                       {formData.paymentType==='BILL_PAYMENT'&&formData.billId&&(
-                        <small style={{color:'#64748b'}}>Max: {fmt(unpaidBills.find(b=>b.id===formData.billId)?.balanceAmount||0)}</small>
+                        <small style={{color:'#64748b'}}>Max: {fmtFull(unpaidBills.find(b=>b.id===formData.billId)?.balanceAmount||0)}</small>
                       )}
                     </div>
                     <div className="receipts-page-form-group">
@@ -1258,7 +1281,7 @@ export default function VendorPaymentsPage() {
                         max={editingAdvance.paymentType==='BILL_PAYMENT' && editBillInfo
                           ? parseFloat(editBillInfo.totalAmount||0)
                           : undefined}
-                        onChange={e=>setEditFormData(f=>({...f,amount:parseFloat(e.target.value)}))}/>
+                        onChange={e=>setEditFormData(f=>({...f,amount:e.target.value===''?'':e.target.value}))}/>
                       {editingAdvance.paymentType==='BILL_PAYMENT' && editBillInfo && (
                         <div style={{marginTop:6,padding:'8px 10px',background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,fontSize:12}}>
                           <div style={{display:'flex',justifyContent:'space-between',gap:12}}>
@@ -1272,7 +1295,7 @@ export default function VendorPaymentsPage() {
                             </span>
                           </div>
                           <div style={{marginTop:4,color:'#64748b',fontSize:11}}>
-                            Max you can enter: <strong>{fmt(parseFloat(editBillInfo.balanceAmount||0) + parseFloat(editingAdvance.amount||0))}</strong>
+                            Max you can enter: <strong>{fmtFull(parseFloat(editBillInfo.balanceAmount||0) + parseFloat(editingAdvance.amount||0))}</strong>
                             <span style={{marginLeft:4}}>(current balance + your existing payment)</span>
                           </div>
                         </div>

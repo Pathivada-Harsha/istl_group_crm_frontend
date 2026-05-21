@@ -54,7 +54,7 @@ const BillsManagementPage = () => {
 
   // Column visibility & order (checkbox column and actions are always shown separately)
   const BILLS_COLUMNS = [
-    { key: 'billNo',        label: 'Bill ID' },
+    { key: 'billRefId',     label: 'Bill Ref ID' },
     { key: 'vendorName',    label: 'Vendor Name' },
     { key: 'poNumber',      label: 'Linked PO' },
     { key: 'billDate',      label: 'Bill Date' },
@@ -69,7 +69,7 @@ const BillsManagementPage = () => {
     { key: 'projectId',     label: 'Project' },
   ];
   // Default visible: only the original columns — group/category/project start hidden
-  const DEFAULT_VISIBLE = ['billNo','vendorName','poNumber','billDate','dueDate','totalAmount','paidAmount','balanceAmount','status','uploadedByName'];
+  const DEFAULT_VISIBLE = ['billRefId','vendorName','poNumber','billDate','dueDate','totalAmount','paidAmount','balanceAmount','status','uploadedByName'];
   const [columnOrder, setColumnOrder] = useState(BILLS_COLUMNS.map(c => c.key));
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
   const [showColumnsPanel, setShowColumnsPanel] = useState(false);
@@ -551,6 +551,7 @@ const BillsManagementPage = () => {
       vendorId: '',
       poId: '',
       billNo: '',
+      billRefId: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
       projectId: '',
@@ -585,6 +586,27 @@ const BillsManagementPage = () => {
     setLoading(true);
     
     try {
+      // Always fetch the full bill detail so we get items[], paymentHistory, etc.
+      // The list API returns summary rows without line items.
+      let fullBill = bill;
+      try {
+        const detailRes = await fetch(`${API_BASE_URL}/bills/${bill.id}`, {
+          headers: getAuthHeaders(),
+          credentials: 'include'
+        });
+        if (detailRes.ok) {
+          const detailData = await detailRes.json();
+          if (detailData && detailData.id) {
+            fullBill = detailData;
+          }
+        }
+      } catch (detailErr) {
+        console.warn('Could not fetch full bill detail for edit, falling back to list data:', detailErr);
+      }
+      // Use the enriched bill object from here on
+      bill = fullBill;
+      if (!bill.items) bill.items = [];
+
       setModalGroupName(bill.groupId || '');
       setModalSubGroupName(bill.subGroupId || '');
       setModalProjectId(bill.projectId || '');
@@ -1222,7 +1244,7 @@ const BillsManagementPage = () => {
         <div className="procurement-bills-received-search-filters">
           <input
             type="text"
-            placeholder="Search by Bill ID, Bill No, Vendor Name..."
+            placeholder="Search by Bill Ref ID, Bill ID, Vendor Name..."
             className="procurement-bills-received-search"
             value={filters.search}
             onChange={(e) => setFilters({ ...filters, search: e.target.value })}
@@ -1413,7 +1435,7 @@ const BillsManagementPage = () => {
                       />
                     </td>
                     {orderedVisibleCols.map(key => {
-                      if (key === 'billNo')         return <td key={key} className="procurement-bills-received-table-id">{bill.billNo}</td>;
+                      if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || '—'}</td>;
                       if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName}</td>;
                       if (key === 'poNumber')       return (
                         <td key={key}>
@@ -1716,6 +1738,18 @@ const BillsManagementPage = () => {
                       type="date"
                       value={formData.dueDate}
                       onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="bill-form-row">
+                  <div className="bill-form-field">
+                    <label className="bill-form-label">Bill Ref ID <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>(Vendor's Bill Reference Number)</span></label>
+                    <input
+                      className="bill-form-input"
+                      type="text"
+                      value={formData.billRefId || ''}
+                      onChange={(e) => setFormData({ ...formData, billRefId: e.target.value })}
+                      placeholder="Enter vendor's bill / invoice reference number"
                     />
                   </div>
                 </div>
@@ -2042,6 +2076,10 @@ const BillsManagementPage = () => {
                   <div className="procurement-bills-received-info-item">
                     <label>Due Date:</label>
                     <span>{formatDate(selectedBill.dueDate)}</span>
+                  </div>
+                  <div className="procurement-bills-received-info-item">
+                    <label>Bill Ref ID:</label>
+                    <span>{selectedBill.billRefId || '—'}</span>
                   </div>
                   <div className="procurement-bills-received-info-item">
                     <label>Total Amount:</label>
