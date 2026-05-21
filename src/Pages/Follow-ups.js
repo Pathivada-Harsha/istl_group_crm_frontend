@@ -1244,6 +1244,7 @@ export default function ClientDashboardFollowUps() {
           <table className="followups-table">
             <thead>
               <tr>
+                <th>S.No</th>
                 <th>Source</th>
                 <th>Type</th>
                 <th>Scheduled</th>
@@ -1257,7 +1258,7 @@ export default function ClientDashboardFollowUps() {
             <tbody>
               {currentFollowUps.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="followups-empty-state">
+                  <td colSpan="9" className="followups-empty-state">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                     </svg>
@@ -1265,12 +1266,13 @@ export default function ClientDashboardFollowUps() {
                   </td>
                 </tr>
               ) : (
-                currentFollowUps.map((followup) => (
+                currentFollowUps.map((followup, index) => (
                   <tr key={followup.id}
                     className={isOverdue(followup) ? 'followup-overdue' : ''}
                     onClick={() => handleView(followup)}
                     style={{ cursor: 'pointer' }}
                   >
+                    <td data-label="S.No" style={{ textAlign: 'center', fontWeight: 600, color: '#6b7280', fontSize: 13 }}>{index + 1}</td>
                     <td data-label="Source">
                       <div className="followup-lead-info">
                         {followup.relatedType === 'CUSTOMER' ? (

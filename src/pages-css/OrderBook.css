@@ -1243,3 +1243,52 @@
   vertical-align: middle;
   margin-right: 4px;
 }
+/* ── OBDatePicker trigger button ─────────────────────────────── */
+.ob-dp-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+  transition: border-color .15s;
+}
+.ob-dp-trigger:hover,
+.ob-dp-trigger--open  { border-color: #4f46e5; }
+.ob-dp-trigger--set   { border-color: #c7d2fe; background: #f5f3ff; }
+
+/* ── OBDateRangePicker trigger button ────────────────────────── */
+.ob-date-trigger {
+  padding: 9px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color .15s;
+  height: 38px;
+  box-sizing: border-box;
+}
+.ob-date-trigger:hover,
+.ob-date-trigger--open    { border-color: #4f46e5; }
+.ob-date-trigger--applied { border-color: #c7d2fe; background: #f5f3ff; }
+
+/* ── Equal-height action bar items ──────────────────────────── */
+.orderbook-action-bar,
+.orderbook-search-filters,
+.orderbook-action-buttons {
+  display: flex;
+  align-items: center;
+}
+.orderbook-filter,
+.orderbook-search,
+.ob-date-trigger,
+.orderbook-btn {
+  height: 34px;
+  box-sizing: border-box;
+}

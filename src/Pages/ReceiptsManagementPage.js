@@ -13,6 +13,125 @@ import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+/* ─── Shared helpers (same as Invoices) ─────────────────────────────────────── */
+const _REC_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _REC_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const RecDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  const [show, setShow]     = useState(false);
+  const [calMo, setCalMo]   = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr, setCalYr]   = useState(() => value ? parseInt(value.slice(0,4))   : new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const [pos, setPos]       = useState({ top:0, left:0 });
+  const trigRef = useRef(null), dpRef = useRef(null);
+  useEffect(()=>{
+    const h=e=>{if(trigRef.current&&!trigRef.current.contains(e.target)&&dpRef.current&&!dpRef.current.contains(e.target))setShow(false);};
+    if(show)document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[show]);
+  const open=()=>{
+    if(value){setCalMo(parseInt(value.slice(5,7))-1);setCalYr(parseInt(value.slice(0,4)));}
+    if(trigRef.current){const r=trigRef.current.getBoundingClientRect();const dH=310;const up=window.innerHeight-r.bottom<dH&&r.top>dH;setPos({top:up?r.top-dH-4:r.bottom+4,left:r.left});}
+    setShow(true);
+  };
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const fmtD=d=>{if(!d)return null;const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  return(
+    <>
+      <button ref={trigRef} type="button" onClick={show?()=>setShow(false):open}
+        style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'9px 10px',border:`1px solid ${show?'#4f46e5':'#d1d5db'}`,borderRadius:6,background:value?'#f5f3ff':'#fff',cursor:'pointer',fontSize:13,textAlign:'left'}}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#9ca3af'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span style={{flex:1,color:'#9ca3af'}}>{placeholder}</span>}
+        {value&&<span onClick={e=>{e.stopPropagation();onChange('');}} style={{color:'#9ca3af',cursor:'pointer',lineHeight:1}}>×</span>}
+      </button>
+      {show&&(
+        <div ref={dpRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:14,minWidth:260}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
+            <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_REC_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
+          </div>
+          {showYr?(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4}}>
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+            </div>
+          ):(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
+              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
+              {Array.from({length:DIM}).map((_,i)=>{const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;const isSel=ds===value,isToday=ds===tod;return(<div key={ds} onClick={()=>{onChange(ds);setShow(false);}} style={{textAlign:'center',padding:'6px 0',cursor:'pointer',borderRadius:4,background:isSel?'#4f46e5':'transparent',color:isSel?'#fff':isToday?'#4f46e5':'#1e293b',fontWeight:isSel||isToday?700:400,fontSize:12}}>{dy}</div>);})}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+const RecDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,setShow]=useState(false),[from,setFrom]=useState(null),[to,setTo]=useState(null),[hover,setHover]=useState(null);
+  const [calMo,setCalMo]=useState(new Date().getMonth()),[calYr,setCalYr]=useState(new Date().getFullYear()),[showYr,setShowYr]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setShow(false);};if(show)document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);},[show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const inR=d=>{const hi=to||(from&&hover?hover:null);if(!from||!hi)return false;const[a,b]=from<=hi?[from,hi]:[hi,from];return d>a&&d<b;};
+  const clickDay=d=>{if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d);};
+  const fmt=d=>{if(!d)return'dd-mm-yyyy';const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  return(
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button type="button" onClick={()=>setShow(p=>!p)}
+        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?'#c7d2fe':'#e2e8f0'}`,borderRadius:6,background:appliedFrom?'#f5f3ff':'#fff',cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
+      >
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span style={{fontSize:11,color:'#94a3b8'}}>FROM</span>
+        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?'#1e293b':'#94a3b8'}}>{fmt(appliedFrom)}</span>
+        <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+        <span style={{fontSize:11,color:'#94a3b8'}}>TO</span>
+        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?'#1e293b':'#94a3b8'}}>{fmt(appliedTo)}</span>
+        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:'#94a3b8',cursor:'pointer',lineHeight:1}}>×</span>}
+      </button>
+      {show&&(
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_REC_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
+          </div>
+          {showYr?(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,marginBottom:10}}>
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+            </div>
+          ):(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:8}}>
+              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
+              {Array.from({length:DIM}).map((_,i)=>{
+                const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;
+                let bg='transparent',color='#1e293b',br=4;
+                if(ds===from||ds===to){bg='#4f46e5';color='#fff';}
+                else if(inR(ds)){bg='#e0e7ff';color='#3730a3';if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
+                else if(ds===tod)color='#4f46e5';
+                return(<div key={ds} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)} style={{textAlign:'center',padding:'5px 0',cursor:'pointer',borderRadius:br,background:bg,color,fontSize:12,fontWeight:ds===from||ds===to?700:400}}>{dy}</div>);
+              })}
+            </div>
+          )}
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?'#e0e7ff':'#f1f5f9',color:from?'#3730a3':'#94a3b8',fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
+            <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?'#e0e7ff':'#f1f5f9',color:to?'#3730a3':'#94a3b8',fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
+          </div>
+          <div style={{display:'flex',gap:6,justifyContent:'center'}}>
+            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Clear</button>}
+            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Cancel</button>
+            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?'#4f46e5':'#e2e8f0',color:from?'#fff':'#94a3b8',cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ✅ Inline hook — no separate file needed
@@ -101,7 +220,7 @@ const ReceiptsManagementPage = () => {
   const [dragOverColIndex, setDragOverColIndex] = useState(null);
 
   // Filters
-  const [filters, setFilters] = useState({ search: '', receiptType: 'all', paymentMethod: 'all' });
+  const [filters, setFilters] = useState({ search: '', receiptType: 'all', paymentMethod: 'all', dateFrom: '', dateTo: '' });
 
   const [showEditReceiptModal, setShowEditReceiptModal] = useState(false);
   const [editingReceipt, setEditingReceipt] = useState(null);
@@ -201,6 +320,8 @@ const ReceiptsManagementPage = () => {
         if (filters.receiptType !== 'all') params.append('receiptType', filters.receiptType);
         if (filters.search) params.append('searchTerm', filters.search);
         if (filters.paymentMethod && filters.paymentMethod !== 'all') params.append('paymentMethod', filters.paymentMethod);
+        if (filters.dateFrom) params.append('fromDate', filters.dateFrom);
+        if (filters.dateTo)   params.append('toDate',   filters.dateTo);
         const response = await fetch(`${API_BASE_URL}/invoices/receipts?${params}`, {
           credentials: 'include', headers: getAuthHeaders(), signal: controller.signal
         });
@@ -217,9 +338,9 @@ const ReceiptsManagementPage = () => {
     load();
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod, refreshKey]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod, filters.dateFrom, filters.dateTo, refreshKey]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod]);
+  useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod, filters.dateFrom, filters.dateTo]);
 
   // ---------- Sorting ----------
   const sortedReceipts = React.useMemo(() => {
@@ -691,6 +812,8 @@ const ReceiptsManagementPage = () => {
       if (filters.search && filters.search.trim()) params.append("searchTerm", filters.search.trim());
       if (filters.receiptType && filters.receiptType !== 'all') params.append("receiptType", filters.receiptType);
       if (filters.paymentMethod && filters.paymentMethod !== 'all') params.append("paymentMethod", filters.paymentMethod);
+      if (filters.dateFrom) params.append("fromDate", filters.dateFrom);
+      if (filters.dateTo)   params.append("toDate",   filters.dateTo);
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/summary?${params.toString()}`, { method: "GET", credentials: "include", headers: getAuthHeaders() });
       if (response.ok) setStats(await response.json());
       else setStats({ totalReceipts: 0, totalAmount: 0, appliedAmount: 0, unappliedAmount: 0, advanceReceipts: 0, invoiceReceipts: 0 });
@@ -959,8 +1082,8 @@ const ReceiptsManagementPage = () => {
     if (num >= 1000)     return `₹${(num / 1000).toFixed(1)} K`;
     return `₹${num.toFixed(0)}`;
   };
-  const formatDate = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
-  const formatDateTime = (dateStr) => { if (!dateStr) return ''; return new Date(dateStr).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); };
+  const formatDate = (dateStr) => { if (!dateStr) return ''; const d = new Date(dateStr); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; };
+  const formatDateTime = (dateStr) => { if (!dateStr) return ''; const d = new Date(dateStr); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
   const getReceiptTypeBadgeClass = (type) => ({ 'Advance': 'receipt-type-advance', 'Invoice': 'receipt-type-invoice', 'Other': 'receipt-type-other' }[type] || '');
 
   const renderColumnValue = (column, receipt) => {
@@ -1013,13 +1136,14 @@ const ReceiptsManagementPage = () => {
               ><FaIndianRupeeSign size={15} /></button>
             )}
 
-            {/* Download — requires view */}
+            {/* Download — commented out as requested
             <button
               className={`receipt-action-btn btn-download${!canDownload ? ' action-btn-disabled' : ''}`}
               onClick={() => canDownload && console.log('Download receipt', receipt.id)}
               title={canDownload ? 'Download' : '🔒 No download permission'}
               disabled={!canDownload}
             ><Download size={16} /></button>
+            */}
 
             {/* Delete — always shown, disabled if no permission */}
             <button
@@ -1082,6 +1206,12 @@ const ReceiptsManagementPage = () => {
             <option value="Cheque">Cheque</option>
             <option value="Credit Card">Credit Card</option>
           </select>
+          <RecDateRangePicker
+            appliedFrom={filters.dateFrom}
+            appliedTo={filters.dateTo}
+            onApply={(f, t) => { setFilters({ ...filters, dateFrom: f, dateTo: t }); setCurrentPage(0); }}
+            onClear={() => { setFilters({ ...filters, dateFrom: '', dateTo: '' }); setCurrentPage(0); }}
+          />
         </div>
         <div className="receipts-page-actions">
           <button className="receipts-page-btn-secondary" onClick={handleToggleDeletedReceipts} title="View Deleted Receipts"><Trash2 size={16} style={{ marginRight: '8px' }} />{showDeletedReceipts ? 'Hide Deleted' : 'View Deleted'}</button>
@@ -1148,6 +1278,7 @@ const ReceiptsManagementPage = () => {
           <table className="receipts-page-table">
             <thead>
               <tr>
+                <th style={{ whiteSpace:'nowrap' }}>S.No</th>
                 {visibleColumns.map((column, index) => (
                   <th
                     key={column.id}
@@ -1167,10 +1298,11 @@ const ReceiptsManagementPage = () => {
             </thead>
             <tbody>
               {sortedReceipts.length === 0 ? (
-                <tr><td colSpan={visibleColumns.length} className="empty-state">No receipts found</td></tr>
+                <tr><td colSpan={visibleColumns.length + 1} className="empty-state">No receipts found</td></tr>
               ) : (
-                sortedReceipts.map((receipt) => (
+                sortedReceipts.map((receipt, rowIndex) => (
                   <tr key={receipt.id}>
+                    <td style={{ textAlign:'center', fontWeight:600, color:'#6b7280', fontSize:13 }}>{currentPage * pageSize + rowIndex + 1}</td>
                     {visibleColumns.map(column => (
                       <React.Fragment key={column.id}>{renderColumnValue(column, receipt)}</React.Fragment>
                     ))}
@@ -1576,7 +1708,11 @@ const ReceiptsManagementPage = () => {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Receipt Date *</label>
-                      <input type="date" value={receiptFormData.receiptDate} onChange={(e) => setReceiptFormData({ ...receiptFormData, receiptDate: e.target.value })} />
+                      <RecDatePicker
+                        value={receiptFormData.receiptDate}
+                        onChange={v => setReceiptFormData({ ...receiptFormData, receiptDate: v })}
+                        placeholder="Select receipt date"
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>
@@ -1961,7 +2097,7 @@ const ReceiptsManagementPage = () => {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Receipt Date *</label>
-                      <input type="date" value={editReceiptFormData.receiptDate} onChange={(e) => setEditReceiptFormData({ ...editReceiptFormData, receiptDate: e.target.value })} />
+                      <RecDatePicker value={editReceiptFormData.receiptDate} onChange={v => setEditReceiptFormData({ ...editReceiptFormData, receiptDate: v })} placeholder="Select receipt date" />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>
