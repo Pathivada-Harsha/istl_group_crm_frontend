@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/OrderBook.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
@@ -11,7 +11,200 @@ import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.j
 import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
+
+/* ── OrderBook Date Range Picker (same style as Clients Data) ────────────── */
+const _OB_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _OB_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const OBDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,  setShow]  = useState(false);
+  const [from,  setFrom]  = useState(null);
+  const [to,    setTo]    = useState(null);
+  const [hover, setHover] = useState(null);
+  const [calMo, setCalMo] = useState(new Date().getMonth());
+  const [calYr, setCalYr] = useState(new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const DIM = new Date(calYr, calMo + 1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0, 10);
+
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a, b] = from <= hi ? [from, hi] : [hi, from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return 'dd-mm-yyyy'; const [y, m, dy] = d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        type="button"
+        className={`orderbook-filter ob-date-trigger${show ? ' ob-date-trigger--open' : ''}${appliedFrom ? ' ob-date-trigger--applied' : ''}`}
+        onClick={() => setShow(p => !p)}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
+      >
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span style={{ fontSize: 12, color: appliedFrom ? '#1e293b' : '#94a3b8' }}>FROM</span>
+        <span style={{ fontSize: 12, fontWeight: appliedFrom ? 600 : 400, color: appliedFrom ? '#1e293b' : '#94a3b8' }}>{fmt(appliedFrom)}</span>
+        <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>TO</span>
+        <span style={{ fontSize: 12, fontWeight: appliedTo ? 600 : 400, color: appliedTo ? '#1e293b' : '#94a3b8' }}>{fmt(appliedTo)}</span>
+        {appliedFrom && (
+          <span onClick={e => { e.stopPropagation(); setFrom(null); setTo(null); onClear(); }} style={{ marginLeft: 2, color: '#94a3b8', cursor: 'pointer', lineHeight: 1 }}>
+            <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+          </span>
+        )}
+      </button>
+
+      {show && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 16, minWidth: 280 }}>
+          {/* Month/Year header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <button type="button" onClick={() => { if (calMo === 0) { setCalMo(11); setCalYr(y => y - 1); } else setCalMo(m => m - 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, fontSize: 16 }}>‹</button>
+            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{_OB_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={() => { if (calMo === 11) { setCalMo(0); setCalYr(y => y + 1); } else setCalMo(m => m + 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, fontSize: 16 }}>›</button>
+          </div>
+          {showYr ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4, marginBottom: 10 }}>
+              {Array.from({ length: 16 }, (_, i) => { const yr = new Date().getFullYear() - 4 + i; return (
+                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? '#4f46e5' : 'transparent', color: yr === calYr ? '#fff' : '#1e293b', fontSize: 12 }}>{yr}</div>
+              ); })}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 8 }}>
+              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '2px 0' }}>{d}</div>)}
+              {Array.from({ length: FD }).map((_, i) => <div key={`e${i}`} />)}
+              {Array.from({ length: DIM }).map((_, i) => {
+                const dy = i + 1;
+                const ds = `${calYr}-${String(calMo + 1).padStart(2, '0')}-${String(dy).padStart(2, '0')}`;
+                const dow = (FD + i) % 7;
+                let bg = 'transparent', color = '#1e293b', borderRadius = 4;
+                if (ds === from || ds === to) { bg = '#4f46e5'; color = '#fff'; }
+                else if (inR(ds)) { bg = '#e0e7ff'; color = '#3730a3'; if (dow === 0) borderRadius = '4px 0 0 4px'; if (dow === 6) borderRadius = '0 4px 4px 0'; }
+                else if (ds === tod) { color = '#4f46e5'; }
+                return (
+                  <div key={ds} onClick={() => clickDay(ds)} onMouseEnter={() => from && !to && setHover(ds)} onMouseLeave={() => setHover(null)}
+                    style={{ textAlign: 'center', padding: '5px 0', cursor: 'pointer', borderRadius, background: bg, color, fontSize: 12, fontWeight: ds === from || ds === to ? 700 : 400 }}>{dy}</div>
+                );
+              })}
+            </div>
+          )}
+          {/* Chips */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: from ? '#e0e7ff' : '#f1f5f9', color: from ? '#3730a3' : '#94a3b8', fontWeight: from ? 600 : 400 }}>{from ? fmt(from) : 'From —'}</span>
+            <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: to ? '#e0e7ff' : '#f1f5f9', color: to ? '#3730a3' : '#94a3b8', fontWeight: to ? 600 : 400 }}>{to ? fmt(to) : 'To —'}</span>
+          </div>
+          {/* Buttons */}
+          <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+            {(from || appliedFrom) && <button type="button" onClick={() => { setFrom(null); setTo(null); onClear(); setShow(false); }} style={{ flex: 1, padding: '6px 0', border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#64748b' }}>Clear</button>}
+            <button type="button" onClick={() => setShow(false)} style={{ flex: 1, padding: '6px 0', border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#64748b' }}>Cancel</button>
+            <button type="button" onClick={() => { if (!from) return; onApply(from, to || from); setShow(false); }} disabled={!from} style={{ flex: 1, padding: '6px 0', border: 'none', borderRadius: 6, background: from ? '#4f46e5' : '#e2e8f0', color: from ? '#fff' : '#94a3b8', cursor: from ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/* ── Simple DatePicker (calendar only, no time — same style as TaskManagement) ── */
+const OBDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  const [show, setShow] = useState(false);
+  const [calMo, setCalMo] = useState(() => value ? parseInt(value.slice(5, 7)) - 1 : new Date().getMonth());
+  const [calYr, setCalYr] = useState(() => value ? parseInt(value.slice(0, 4)) : new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const trigRef = useRef(null), dpRef = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (trigRef.current && !trigRef.current.contains(e.target) && dpRef.current && !dpRef.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const open = () => {
+    if (value) { setCalMo(parseInt(value.slice(5, 7)) - 1); setCalYr(parseInt(value.slice(0, 4))); }
+    if (trigRef.current) {
+      const r = trigRef.current.getBoundingClientRect();
+      const dH = 310;
+      const up = window.innerHeight - r.bottom < dH && r.top > dH;
+      setPos({ top: up ? r.top - dH - 4 : r.bottom + 4, left: r.left });
+    }
+    setShow(true);
+  };
+
+  const DIM = new Date(calYr, calMo + 1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0, 10);
+  const fmtD = d => { if (!d) return null; const [y, m, dy] = d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <>
+      <button ref={trigRef} type="button"
+        className={`ob-dp-trigger${show ? ' ob-dp-trigger--open' : ''}${value ? ' ob-dp-trigger--set' : ''}`}
+        onClick={show ? () => setShow(false) : open}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: value ? '#4f46e5' : '#94a3b8' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value
+          ? <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{fmtD(value)}</span>
+          : <span style={{ flex: 1, fontSize: 13, color: '#94a3b8' }}>{placeholder}</span>}
+        {value
+          ? <span onClick={e => { e.stopPropagation(); onChange(''); }} style={{ cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+            </span>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft: 'auto', color: '#94a3b8', transform: show ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+      </button>
+      {show && (
+        <div ref={dpRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 14, minWidth: 260 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <button type="button" onClick={() => { if (calMo === 0) { setCalMo(11); setCalYr(y => y - 1); } else setCalMo(m => m - 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}>‹</button>
+            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{_OB_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={() => { if (calMo === 11) { setCalMo(0); setCalYr(y => y + 1); } else setCalMo(m => m + 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}>›</button>
+          </div>
+          {showYr ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
+              {Array.from({ length: 16 }, (_, i) => { const yr = new Date().getFullYear() - 4 + i; return (
+                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? '#4f46e5' : 'transparent', color: yr === calYr ? '#fff' : '#1e293b', fontSize: 12 }}>{yr}</div>
+              ); })}
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
+              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '2px 0' }}>{d}</div>)}
+              {Array.from({ length: FD }).map((_, i) => <div key={`e${i}`} />)}
+              {Array.from({ length: DIM }).map((_, i) => {
+                const dy = i + 1;
+                const ds = `${calYr}-${String(calMo + 1).padStart(2, '0')}-${String(dy).padStart(2, '0')}`;
+                const isSel = ds === value, isToday = ds === tod;
+                return (
+                  <div key={ds} onClick={() => { onChange(ds); setShow(false); }}
+                    style={{ textAlign: 'center', padding: '6px 0', cursor: 'pointer', borderRadius: 4, background: isSel ? '#4f46e5' : 'transparent', color: isSel ? '#fff' : isToday ? '#4f46e5' : '#1e293b', fontWeight: isSel ? 700 : isToday ? 700 : 400, fontSize: 12 }}>{dy}</div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+const fmtOBDate = d => { if (!d) return '-'; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`; };
 
 function OrderBook() {
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
@@ -47,7 +240,7 @@ function OrderBook() {
 
   // Column order for drag-and-drop
   const [columnOrder, setColumnOrder] = useState([
-    'orderNo','customer','group','subGroup','orderTitle','orderDate',
+    'sno','orderNo','customer','group','subGroup','orderTitle','orderDate',
     'expectedDelivery','poNumber','poDate','totalAmount','advanceAmount',
     'balanceAmount','status','createdBy','actions'
   ]);
@@ -56,6 +249,7 @@ function OrderBook() {
 
   // Column Visibility
   const [visibleColumns, setVisibleColumns] = useState({
+    sno: true,
     orderNo: true,
     customer: true,
     group: true,
@@ -344,9 +538,9 @@ function OrderBook() {
         'Group':            o.groupName || '',
         'Sub Group':        o.subGroupName || '',
         'Order Title':      o.orderTitle || '',
-        'Order Date':       o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '',
+        'Order Date':       o.orderDate ? fmtOBDate(o.orderDate) : '',
         'PO Number':        o.poNumber || '',
-        'PO Date':          o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '',
+        'PO Date':          o.poDate ? fmtOBDate(o.poDate) : '',
         'Status':           o.status || '',
         'Subtotal (₹)':     o.subtotal    ? parseFloat(o.subtotal).toFixed(2)    : '0.00',
         'Tax Amount (₹)':   o.taxAmount   ? parseFloat(o.taxAmount).toFixed(2)   : '0.00',
@@ -1024,6 +1218,7 @@ function OrderBook() {
   };
 
   const columnDefinitions = [
+    { key: 'sno', label: 'S.No' },
     { key: 'orderNo', label: 'Order No' },
     { key: 'customer', label: 'Customer' },
     { key: 'group', label: 'Group' },
@@ -1096,6 +1291,10 @@ function OrderBook() {
   };
 
   const columnMeta = {
+    sno: {
+      label: 'S.No', sortKey: null,
+      render: (o, idx) => <td key="sno" style={{ textAlign: 'center', fontWeight: 600, color: '#6b7280', fontSize: 13 }}>{(currentPage - 1) * rowsPerPage + idx + 1}</td>
+    },
     orderNo:          {
       label: 'Order No', sortKey: 'orderNo',
       render: (o) => <td key="orderNo" className="orderbook-id">{o.orderBookNo}</td>
@@ -1114,10 +1313,10 @@ function OrderBook() {
     group:            { label: 'Group',     sortKey: 'group',     render: (o) => <td key="group">{o.groupName || '-'}</td> },
     subGroup:         { label: 'Sub Group', sortKey: 'subGroup',  render: (o) => <td key="subGroup">{o.subGroupName || '-'}</td> },
     orderTitle:       { label: 'Order Title', sortKey: 'orderTitle', render: (o) => <td key="orderTitle">{o.orderTitle}</td> },
-    orderDate:        { label: 'Order Date', sortKey: 'orderDate', render: (o) => <td key="orderDate">{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td> },
-    expectedDelivery: { label: 'Expected Delivery', sortKey: 'expectedDelivery', render: (o) => <td key="expectedDelivery">{o.expectedDeliveryDate ? new Date(o.expectedDeliveryDate).toLocaleDateString('en-IN') : '-'}</td> },
+    orderDate:        { label: 'Order Date', sortKey: 'orderDate', render: (o) => <td key="orderDate">{fmtOBDate(o.orderDate)}</td> },
+    expectedDelivery: { label: 'Expected Delivery', sortKey: 'expectedDelivery', render: (o) => <td key="expectedDelivery">{fmtOBDate(o.expectedDeliveryDate)}</td> },
     poNumber:         { label: 'PO Number', sortKey: 'poNumber', render: (o) => <td key="poNumber">{o.poNumber || '-'}</td> },
-    poDate:           { label: 'PO Date',   sortKey: 'poDate',   render: (o) => <td key="poDate">{o.poDate ? new Date(o.poDate).toLocaleDateString('en-IN') : '-'}</td> },
+    poDate:           { label: 'PO Date',   sortKey: 'poDate',   render: (o) => <td key="poDate">{fmtOBDate(o.poDate)}</td> },
     totalAmount:      { label: 'Total Amount (₹)', sortKey: 'totalAmount', render: (o) => <td key="totalAmount" className="orderbook-amount">₹{o.totalAmount ? parseFloat(o.totalAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
     advanceAmount:    { label: 'Advance Amount (₹)', sortKey: 'advanceAmount', render: (o) => <td key="advanceAmount" className="orderbook-amount">₹{o.advanceAmount ? parseFloat(o.advanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
     balanceAmount:    { label: 'Balance Amount (₹)', sortKey: 'balanceAmount', render: (o) => <td key="balanceAmount" className="orderbook-amount orderbook-balance">₹{o.balanceAmount ? parseFloat(o.balanceAmount).toLocaleString('en-IN',{minimumFractionDigits:2}) : '0.00'}</td> },
@@ -1175,8 +1374,8 @@ function OrderBook() {
       </div>
 
       {/* Action Bar */}
-      <div className="orderbook-action-bar">
-        <div className="orderbook-search-filters">
+      <div className="orderbook-action-bar" style={{ alignItems: 'center' }}>
+        <div className="orderbook-search-filters" style={{ alignItems: 'center' }}>
           <input
             type="text"
             className="orderbook-search"
@@ -1200,36 +1399,12 @@ function OrderBook() {
             <option value="Cancelled">Cancelled</option>
           </select>
 
-          <div className="orderbook-date-range">
-            <div className="orderbook-date-field">
-              <label>From</label>
-              <input
-                type="date"
-                className="orderbook-filter"
-                value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
-              />
-            </div>
-            <span className="orderbook-date-separator">→</span>
-            <div className="orderbook-date-field">
-              <label>To</label>
-              <input
-                type="date"
-                className="orderbook-filter"
-                value={toDate}
-                onChange={(e) => setToDate(e.target.value)}
-              />
-            </div>
-            {(fromDate || toDate) && (
-              <button
-                className="orderbook-date-clear"
-                onClick={() => { setFromDate(''); setToDate(''); }}
-                title="Clear dates"
-              >
-                ×
-              </button>
-            )}
-          </div>
+          <OBDateRangePicker
+            appliedFrom={fromDate}
+            appliedTo={toDate}
+            onApply={(f, t) => { setFromDate(f); setToDate(t); }}
+            onClear={() => { setFromDate(''); setToDate(''); }}
+          />
         </div>
 
         <div className="orderbook-action-buttons">
@@ -1337,11 +1512,11 @@ function OrderBook() {
                   </td>
                 </tr>
               ) : (
-                sortedOrderBooks.map((order) => (
+                sortedOrderBooks.map((order, idx) => (
                   <tr key={order.id} onClick={() => handleView(order)} style={{ cursor: 'pointer' }}>
                     {columnOrder
                       .filter(key => visibleColumns[key])
-                      .map(key => columnMeta[key].render(order))}
+                      .map(key => columnMeta[key].render(order, idx))}
                   </tr>
                 ))
               )}
@@ -1450,10 +1625,10 @@ function OrderBook() {
                   <div><strong>Customer:</strong> {selectedOrderBook.customerName} ({selectedOrderBook.customerCode})</div>
                   <div><strong>Group:</strong> {selectedOrderBook.groupName || '-'}</div>
                   <div><strong>Sub Group:</strong> {selectedOrderBook.subGroupName || '-'}</div>
-                  <div><strong>Order Date:</strong> {selectedOrderBook.orderDate ? new Date(selectedOrderBook.orderDate).toLocaleDateString('en-IN') : '-'}</div>
-                  <div><strong>Expected Delivery:</strong> {selectedOrderBook.expectedDeliveryDate ? new Date(selectedOrderBook.expectedDeliveryDate).toLocaleDateString('en-IN') : '-'}</div>
+                  <div><strong>Order Date:</strong> {fmtOBDate(selectedOrderBook.orderDate)}</div>
+                  <div><strong>Expected Delivery:</strong> {fmtOBDate(selectedOrderBook.expectedDeliveryDate)}</div>
                   <div><strong>PO Number:</strong> {selectedOrderBook.poNumber || '-'}</div>
-                  <div><strong>PO Date:</strong> {selectedOrderBook.poDate ? new Date(selectedOrderBook.poDate).toLocaleDateString('en-IN') : '-'}</div>
+                  <div><strong>PO Date:</strong> {fmtOBDate(selectedOrderBook.poDate)}</div>
                   <div><strong>Created By:</strong> {selectedOrderBook.createdByName || '-'}</div>
                 </div>
 
@@ -1692,20 +1867,19 @@ function OrderBook() {
 
                   <div className="orderbook-form-group">
                     <label>Order Date *</label>
-                    <input
-                      type="date"
+                    <OBDatePicker
                       value={formData.orderDate}
-                      onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
-                      required
+                      onChange={v => setFormData({ ...formData, orderDate: v })}
+                      placeholder="Select order date"
                     />
                   </div>
 
                   <div className="orderbook-form-group">
                     <label>Expected Delivery Date</label>
-                    <input
-                      type="date"
+                    <OBDatePicker
                       value={formData.expectedDeliveryDate}
-                      onChange={(e) => setFormData({ ...formData, expectedDeliveryDate: e.target.value })}
+                      onChange={v => setFormData({ ...formData, expectedDeliveryDate: v })}
+                      placeholder="Select delivery date"
                     />
                   </div>
 
@@ -1737,10 +1911,10 @@ function OrderBook() {
 
                   <div className="orderbook-form-group">
                     <label>PO Date</label>
-                    <input
-                      type="date"
+                    <OBDatePicker
                       value={formData.poDate}
-                      onChange={(e) => setFormData({ ...formData, poDate: e.target.value })}
+                      onChange={v => setFormData({ ...formData, poDate: v })}
+                      placeholder="Select PO date"
                     />
                   </div>
 
@@ -2005,10 +2179,10 @@ function OrderBook() {
 
               <div className="orderbook-form-group">
                 <label>PO Date</label>
-                <input
-                  type="date"
+                <OBDatePicker
                   value={poUploadData.poDate}
-                  onChange={(e) => setPoUploadData({ ...poUploadData, poDate: e.target.value })}
+                  onChange={v => setPoUploadData({ ...poUploadData, poDate: v })}
+                  placeholder="Select PO date"
                 />
               </div>
 

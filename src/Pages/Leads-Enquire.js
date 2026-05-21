@@ -1507,6 +1507,168 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
 
 // ═══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
+// ── Leads Date Range Filter ──────────────────────────────────────────────────
+const _LD_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _LD_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const LeadsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,   setShow]   = useState(false);
+  const [from,   setFrom]   = useState(null);
+  const [to,     setTo]     = useState(null);
+  const [hover,  setHover]  = useState(null);
+  const [calMo,  setCalMo]  = useState(new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a,b] = from<=hi ? [from,hi] : [hi,from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return ''; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+
+  const handleApply = () => {
+    if (!from) return;
+    onApply(from, to || from);
+    setShow(false);
+  };
+  const handleClear = () => {
+    setFrom(null); setTo(null); setHover(null);
+    onClear();
+    setShow(false);
+  };
+
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button
+        type="button"
+        className={`ld-cal-trigger${show?' ld-cal--open':''}${appliedFrom?' ld-cal--applied':''}`}
+        onClick={() => setShow(p => !p)}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom ? 'ld-cal-val' : 'ld-cal-ph'}>{appliedFrom ? fmt(appliedFrom) : 'dd-mm-yyyy'}</span>
+        <span className="ld-cal-sep">—</span>
+        <span className={appliedTo && appliedTo !== appliedFrom ? 'ld-cal-val' : 'ld-cal-ph'}>
+          {appliedTo && appliedTo !== appliedFrom ? fmt(appliedTo) : 'dd-mm-yyyy'}
+        </span>
+        {appliedFrom && (
+          <span className="ld-cal-x" onClick={e => { e.stopPropagation(); handleClear(); }}>
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </span>
+        )}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0,
+            transform: show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      {show && (
+        <div className="ld-cal-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:9999, width:264 }}>
+          <div className="ld-cal-head">
+            <button type="button" className="ld-cal-nav"
+              onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="ld-cal-month-btn" onClick={() => setShowYr(p => !p)}>
+              {_LD_MONTHS[calMo]} <span className="ld-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="ld-cal-nav"
+              onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+          {showYr ? (
+            <div className="ld-yr-grid">
+              {Array.from({length:16},(_,i) => {
+                const yr = new Date().getFullYear()-4+i;
+                return (
+                  <div key={yr} className={`ld-yr-cell${yr===calYr?' ld-yr-sel':''}`}
+                    onClick={() => { setCalYr(yr); setShowYr(false); }}>
+                    {yr}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="ld-cal-grid">
+              {_LD_DAYS.map(d => <div key={d} className="ld-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="ld-cal-cell ld-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy  = i+1;
+                const ds  = `${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const dow = (FD+i)%7;
+                let cls   = 'ld-cal-cell';
+                if (ds===from)      cls += ' ld-cal-from';
+                else if (ds===to)   cls += ' ld-cal-to';
+                else if (inR(ds)) {
+                  cls += ' ld-cal-in-range';
+                  if (dow===0) cls += ' ld-cal-rr-s';
+                  if (dow===6) cls += ' ld-cal-rr-e';
+                }
+                if (ds===tod && ds!==from && ds!==to) cls += ' ld-cal-today';
+                return (
+                  <div key={ds} className={cls}
+                    onClick={() => clickDay(ds)}
+                    onMouseEnter={() => from && !to && setHover(ds)}
+                    onMouseLeave={() => setHover(null)}>
+                    {dy}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="ld-cal-footer">
+            <div className="ld-cal-chips">
+              <span className={`ld-cal-chip${from?' ld-cal-chip--set':''}`}>{from ? fmt(from) : 'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/>
+              </svg>
+              <span className={`ld-cal-chip${to?' ld-cal-chip--set':''}`}>{to ? fmt(to) : 'To —'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, justifyContent:'center', width:'100%' }}>
+              {(from || appliedFrom) && (
+                <button type="button" className="ld-cal-clear" onClick={handleClear}>Clear</button>
+              )}
+              <button type="button" className="ld-cal-clear" onClick={() => setShow(false)}>Cancel</button>
+              <button type="button" className="ld-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════
 function LeadsEnquiries() {
   //  console.log('🔄 RENDER');
@@ -1927,17 +2089,18 @@ useEffect(() => {
 
   // ── Render cell ──────────────────────────────────────────────────
   const renderCell = (lead, colKey) => {
+    const empty = <span style={{display:'block',textAlign:'center',color:'#9ca3af'}}>—</span>;
     switch (colKey) {
-      case 'name': return <span className="leads-enquiries-font-medium">{lead.name}</span>;
-      case 'email': return lead.email;
-      case 'phone': return lead.phone;
-      case 'groupName': return lead.groupName || '-';
-      case 'subGroupName': return lead.subGroupName || '-';
-      case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : '-';
-      case 'source': return lead.source;
-      case 'assignedToName': return lead.assignedToName || '-';
+      case 'name': return lead.name ? <span className="leads-enquiries-font-medium">{lead.name}</span> : empty;
+      case 'email': return lead.email || empty;
+      case 'phone': return lead.phone || empty;
+      case 'groupName': return lead.groupName || empty;
+      case 'subGroupName': return lead.subGroupName || empty;
+      case 'capacity': return lead.capacity ? `${lead.capacity} ${lead.capacityUnit || 'kW'}` : empty;
+      case 'source': return lead.source || empty;
+      case 'assignedToName': return lead.assignedToName || empty;
       case 'leadOwner': {
-        if (!lead.leadOwner) return <span style={{color:'#9ca3af'}}>—</span>;
+        if (!lead.leadOwner) return empty;
         const ownerUser = users.find(u => u.name === lead.leadOwner);
         const hasPhoto  = ownerUser?.avatar_url === 'db';
         return (
@@ -1952,8 +2115,10 @@ useEffect(() => {
           </span>
         );
       }
-      case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : '-';
-      case 'priority': return <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>;
+      case 'createdAt': return lead.createdAt ? new Date(lead.createdAt).toLocaleDateString() : empty;
+      case 'priority': return lead.priority
+        ? <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
+        : empty;
       case 'status': return (
         <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>
           {getUnifiedStatus(lead)}
@@ -1986,7 +2151,10 @@ useEffect(() => {
           )}
         </div>
       );
-      default: return '-';
+      default: {
+        const val = lead[colKey];
+        return (val !== null && val !== undefined && val !== '') ? val : empty;
+      }
     }
   };
 
@@ -2105,6 +2273,12 @@ useEffect(() => {
                   onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
                 />
               </div>
+              <div className="leads-enquiries-modal-footer">
+                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" form="ld-lead-form" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading}>
+                  {loading ? 'Saving…' : (formData.id ? 'Update Lead' : 'Save Lead')}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2180,55 +2354,20 @@ useEffect(() => {
 
           {/* Date range filter */}
           <div className="leads-date-filter-group">
-            <select
-              className="leads-enquiries-filter-select"
-              value={dateRangeMode}
-              onChange={e => { setDateRangeMode(e.target.value); if (e.target.value === 'all') { setDateFrom(''); setDateTo(''); } }}
-              style={{ minWidth: 120 }}
-            >
-              <option value="all">All Dates</option>
-              <option value="single">Single Day</option>
-              <option value="range">Date Range</option>
-            </select>
-            {dateRangeMode === 'single' && (
-              <input
-                type="date"
-                className="leads-enquiries-filter-select"
-                value={dateFrom}
-                onChange={e => { setDateFrom(e.target.value); setDateTo(e.target.value); }}
-                style={{ minWidth: 140, cursor: 'pointer' }}
-              />
-            )}
-            {dateRangeMode === 'range' && (
-              <>
-                <input
-                  type="date"
-                  className="leads-enquiries-filter-select"
-                  value={dateFrom}
-                  onChange={e => setDateFrom(e.target.value)}
-                  style={{ minWidth: 140, cursor: 'pointer' }}
-                  placeholder="From"
-                />
-                <span style={{ alignSelf: 'center', color: '#6b7280', fontSize: 13, padding: '0 4px' }}>—</span>
-                <input
-                  type="date"
-                  className="leads-enquiries-filter-select"
-                  value={dateTo}
-                  onChange={e => setDateTo(e.target.value)}
-                  min={dateFrom}
-                  style={{ minWidth: 140, cursor: 'pointer' }}
-                  placeholder="To"
-                />
-              </>
-            )}
-            {(dateFrom || dateTo) && (
-              <button
-                className="leads-enquiries-btn leads-enquiries-btn-secondary"
-                style={{ padding: '4px 8px', fontSize: 12, minWidth: 'unset' }}
-                onClick={() => { setDateFrom(''); setDateTo(''); setDateRangeMode('all'); }}
-                title="Clear date filter"
-              >✕</button>
-            )}
+            <LeadsDateRangeFilter
+              appliedFrom={dateFrom}
+              appliedTo={dateTo}
+              onApply={(f, t) => {
+                setDateFrom(f);
+                setDateTo(t);
+                setDateRangeMode(f === t ? 'single' : 'range');
+              }}
+              onClear={() => {
+                setDateFrom('');
+                setDateTo('');
+                setDateRangeMode('all');
+              }}
+            />
           </div>
         </div>
         <div className="leads-enquiries-action-buttons">
@@ -2279,6 +2418,7 @@ useEffect(() => {
             <table className="leads-enquiries-table">
               <thead>
                 <tr>
+                  <th className="ld-sno-th">S.No</th>
                   {orderedVisibleColumns.map((col, idx) => (
                     <DraggableHeaderCell key={col.key} col={col} index={idx} sortColumn={sortColumn} sortDirection={sortDirection} getSortIcon={getSortIcon} handleSort={handleSort}
                       onDragStart={handleColDragStart} onDragOver={handleColDragOver} onDrop={handleColDrop} onDragEnd={handleColDragEnd} isDragOver={dragOverIndex === idx} />
@@ -2287,9 +2427,10 @@ useEffect(() => {
               </thead>
               <tbody>
                 {leads.length === 0 ? (
-                  <tr><td colSpan={orderedVisibleColumns.length} className="text-center py-4">No leads found</td></tr>
-                ) : leads.map(lead => (
+                  <tr><td colSpan={orderedVisibleColumns.length + 1} className="text-center py-4">No leads found</td></tr>
+                ) : leads.map((lead, rowIndex) => (
                   <tr key={lead.id} onClick={() => canView && handleView(lead)} style={{ cursor: canView ? 'pointer' : 'default' }} className="leads-enquiries-clickable-row">
+                    <td className="ld-sno-td">{(currentPage - 1) * rowsPerPage + rowIndex + 1}</td>
                     {orderedVisibleColumns.map(col => (
                       <td key={col.key} data-col={col.key} onClick={col.key === 'actions' ? e => e.stopPropagation() : undefined}>{renderCell(lead, col.key)}</td>
                     ))}
@@ -2391,7 +2532,13 @@ useEffect(() => {
                 onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
               />
             </div>
-          </div>
+          <div className="leads-enquiries-modal-footer">
+                <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" form="ld-lead-form" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading}>
+                  {loading ? 'Saving…' : (formData.id ? 'Update Lead' : 'Save Lead')}
+                </button>
+              </div>
+        </div>
         </div>
       )}
 
@@ -2630,8 +2777,32 @@ function LeadOwnerDropdown({ users, value, onChange }) {
 }
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading }) => (
-  <form onSubmit={onSubmit} className="leads-enquiries-form">
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading }) => {
+  // ── Pincode auto-fill ──────────────────────────────────────────────────────
+  const [pincodeError, setPincodeError] = React.useState('');
+
+  const handlePincodeChange = async (value) => {
+    if (!/^\d*$/.test(value)) return;
+    setFormData(p => ({ ...p, pincode: value }));
+    setPincodeError('');
+    if (value.length !== 6) return;
+    try {
+      const res  = await fetch(`https://api.postalpincode.in/pincode/${value}`);
+      const data = await res.json();
+      if (data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+        const po = data[0].PostOffice[0];
+        setFormData(p => ({ ...p, state: po.State, district: po.District }));
+        setPincodeError('');
+      } else {
+        setPincodeError('Invalid PIN code');
+      }
+    } catch {
+      setPincodeError('Could not fetch PIN details');
+    }
+  };
+
+  return (
+  <form id="ld-lead-form" onSubmit={onSubmit} className="leads-enquiries-form">
     <div className="leads-enquiries-form-section">
       <h3 className="leads-enquiries-form-section-title">Client Information</h3>
       <div className="leads-enquiries-form-grid">
@@ -2714,58 +2885,37 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       <h3 className="leads-enquiries-form-section-title">Address Details</h3>
       <div className="leads-enquiries-form-grid">
         <div className="leads-enquiries-form-group">
+          <label>Pincode</label>
+          <input
+            type="text"
+            value={formData.pincode || ''}
+            onChange={e => handlePincodeChange(e.target.value)}
+            maxLength="6"
+            placeholder="Enter 6-digit PINCODE — auto fills State & District"
+          />
+          {pincodeError && <span style={{fontSize:11, color:'#ef4444', marginTop:2, display:'block'}}>{pincodeError}</span>}
+        </div>
+        <div className="leads-enquiries-form-group">
           <label>State</label>
-          <select value={formData.state || ''} onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}>
-            <option value="">Select State</option>
-            <option value="Andhra Pradesh">Andhra Pradesh</option>
-            <option value="Arunachal Pradesh">Arunachal Pradesh</option>
-            <option value="Assam">Assam</option>
-            <option value="Bihar">Bihar</option>
-            <option value="Chhattisgarh">Chhattisgarh</option>
-            <option value="Goa">Goa</option>
-            <option value="Gujarat">Gujarat</option>
-            <option value="Haryana">Haryana</option>
-            <option value="Himachal Pradesh">Himachal Pradesh</option>
-            <option value="Jharkhand">Jharkhand</option>
-            <option value="Karnataka">Karnataka</option>
-            <option value="Kerala">Kerala</option>
-            <option value="Madhya Pradesh">Madhya Pradesh</option>
-            <option value="Maharashtra">Maharashtra</option>
-            <option value="Manipur">Manipur</option>
-            <option value="Meghalaya">Meghalaya</option>
-            <option value="Mizoram">Mizoram</option>
-            <option value="Nagaland">Nagaland</option>
-            <option value="Odisha">Odisha</option>
-            <option value="Punjab">Punjab</option>
-            <option value="Rajasthan">Rajasthan</option>
-            <option value="Sikkim">Sikkim</option>
-            <option value="Tamil Nadu">Tamil Nadu</option>
-            <option value="Telangana">Telangana</option>
-            <option value="Tripura">Tripura</option>
-            <option value="Uttar Pradesh">Uttar Pradesh</option>
-            <option value="Uttarakhand">Uttarakhand</option>
-            <option value="West Bengal">West Bengal</option>
-            <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
-            <option value="Chandigarh">Chandigarh</option>
-            <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
-            <option value="Delhi">Delhi</option>
-            <option value="Jammu and Kashmir">Jammu and Kashmir</option>
-            <option value="Ladakh">Ladakh</option>
-            <option value="Lakshadweep">Lakshadweep</option>
-            <option value="Puducherry">Puducherry</option>
-          </select>
+          <input
+            type="text"
+            value={formData.state || ''}
+            onChange={e => setFormData(p => ({ ...p, state: e.target.value }))}
+            placeholder="Auto-filled by PINCODE or type manually"
+          />
         </div>
         <div className="leads-enquiries-form-group">
           <label>District</label>
-          <input type="text" value={formData.district || ''} onChange={e => setFormData(p => ({ ...p, district: e.target.value }))} placeholder="e.g. Hyderabad" />
+          <input
+            type="text"
+            value={formData.district || ''}
+            onChange={e => setFormData(p => ({ ...p, district: e.target.value }))}
+            placeholder="Auto-filled by PINCODE or type manually"
+          />
         </div>
         <div className="leads-enquiries-form-group">
           <label>City / Village</label>
           <input type="text" value={formData.city || ''} onChange={e => setFormData(p => ({ ...p, city: e.target.value }))} placeholder="e.g. Uppal" />
-        </div>
-        <div className="leads-enquiries-form-group">
-          <label>Pincode</label>
-          <input type="text" value={formData.pincode || ''} onChange={e => setFormData(p => ({ ...p, pincode: e.target.value }))} maxLength="6" placeholder="6-digit PIN" />
         </div>
       </div>
     </div>
@@ -2992,13 +3142,8 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       </div>
     </div>
 
-    <div className="leads-enquiries-form-actions">
-      <button type="button" className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={onCancel}>Cancel</button>
-      <button type="submit" className="leads-enquiries-btn leads-enquiries-btn-primary" disabled={loading || !!phoneError}>
-        {loading ? 'Saving…' : (formData.id ? 'Update Lead' : 'Save Lead')}
-      </button>
-    </div>
   </form>
-);
+  );
+};
 
 export default LeadsEnquiries;

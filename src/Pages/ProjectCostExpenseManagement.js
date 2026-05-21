@@ -26,18 +26,19 @@ const formatPaymentMode = (mode) => mode === 'Bank_Transfer' ? 'Bank Transfer' :
 const STATUS_OPTIONS = ['Pending', 'Approved', 'Rejected'];
 
 const DEFAULT_COLUMNS = [
-  { key: 'expenseCode', label: 'Code', sortable: true, visible: true },
-  { key: 'tripDate', label: 'Date', sortable: true, visible: true },
-  { key: 'groupInfo', label: 'Group/Project', sortable: false, visible: true },
-  { key: 'expenseItems', label: 'Expense Items', sortable: false, visible: true },
-  { key: 'amount', label: 'Total', sortable: true, visible: true },
-  { key: 'paidByName', label: 'Paid By', sortable: true, visible: true },
-  { key: 'actions', label: 'Actions', sortable: false, visible: true },
+  { key: 'expenseCode',   label: 'Code',             sortable: false,  visible: true },
+  { key: 'tripDate',      label: 'Date',             sortable: true,  visible: true  },
+  { key: 'groupCategory', label: 'Group & Category', sortable: false, visible: true  },
+  { key: 'project',       label: 'Project',          sortable: false, visible: true  },
+  { key: 'expenseItems',  label: 'Expense Items',    sortable: false, visible: true  },
+  { key: 'amount',        label: 'Total',            sortable: true,  visible: true  },
+  { key: 'paidByName',    label: 'Paid By',          sortable: true,  visible: true  },
+  { key: 'actions',       label: 'Actions',          sortable: false, visible: true  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = v => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
+const fmtDate = d => { if (!d) return 'N/A'; const dt = new Date(d); const dd = String(dt.getDate()).padStart(2,'0'); const mm = String(dt.getMonth()+1).padStart(2,'0'); const yyyy = dt.getFullYear(); return `${dd}-${mm}-${yyyy}`; };
 
 const CategoryIcon = ({ cat }) => ({
   'Travel': <Plane size={14} />,
@@ -54,12 +55,243 @@ const StatusBadge = ({ s }) => (
   <span className={`exp-badge badge-${(s || 'pending').toLowerCase()}`}>{s || '—'}</span>
 );
 
+
+// ─── Shared Calendar Constants ─────────────────────────────────────────────
+const _PCE_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _PCE_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+// ─── DatePicker — same calendar style as Task Management ───────────────────
+const PCEDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  const [show,   setShow]   = useState(false);
+  const [calMo,  setCalMo]  = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(() => value ? parseInt(value.slice(0,4))   : new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const [pos,    setPos]    = useState({ top:0, left:0, width:260 });
+  const trRef = useRef(null);
+  const dpRef = useRef(null);
+
+  useEffect(() => {
+    const h = e => {
+      if (trRef.current && !trRef.current.contains(e.target) &&
+          dpRef.current && !dpRef.current.contains(e.target)) setShow(false);
+    };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const openPicker = () => {
+    if (value) { setCalMo(parseInt(value.slice(5,7))-1); setCalYr(parseInt(value.slice(0,4))); }
+    if (trRef.current) {
+      const r = trRef.current.getBoundingClientRect();
+      const dH = 310; const up = window.innerHeight - r.bottom < dH && r.top > dH;
+      setPos({ top: up ? r.top-dH-4 : r.bottom+4, left: r.left, width: Math.max(r.width, 260) });
+    }
+    setShow(true);
+  };
+
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+  const fmt = d => { if (!d) return null; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <>
+      <button ref={trRef} type="button"
+        className={`pce-dp-trigger${show?' pce-dp--open':''}${value?' pce-dp--set':''}`}
+        onClick={show ? () => setShow(false) : openPicker}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{flexShrink:0, color: value?'#2563eb':'#94a3b8'}}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        {value
+          ? <span style={{flex:1, fontSize:13, fontWeight:500, color:'#0f172a'}}>{fmt(value)}</span>
+          : <span className="pce-dp-ph">{placeholder}</span>}
+        {value
+          ? <span className="pce-dp-x" onClick={e=>{e.stopPropagation(); onChange('');}}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </span>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style={{marginLeft:'auto', color:'#94a3b8', transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0}}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+            </svg>
+        }
+      </button>
+      {show && (
+        <div ref={dpRef} className="pce-dp-dropdown"
+          style={{position:'fixed', top:pos.top, left:pos.left, width:pos.width, zIndex:9999}}>
+          <div className="pce-dp-head">
+            <button type="button" className="pce-dp-nav"
+              onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="pce-dp-month-btn" onClick={()=>setShowYr(p=>!p)}>
+              {_PCE_MONTHS[calMo]} <span className="pce-dp-yr">{calYr}</span>
+            </button>
+            <button type="button" className="pce-dp-nav"
+              onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          {showYr ? (
+            <div className="pce-yr-grid">
+              {Array.from({length:16},(_,i)=>{
+                const yr=new Date().getFullYear()-4+i;
+                return <div key={yr} className={`pce-yr-cell${yr===calYr?' pce-yr-sel':''}`}
+                  onClick={()=>{setCalYr(yr);setShowYr(false);}}>{yr}</div>;
+              })}
+            </div>
+          ) : (
+            <div className="pce-dp-grid">
+              {_PCE_DAYS.map(d=><div key={d} className="pce-dp-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="pce-dp-cell pce-dp-empty"/>)}
+              {Array.from({length:DIM}).map((_,i)=>{
+                const dy=i+1;
+                const ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                let cls='pce-dp-cell';
+                if(ds===value) cls+=' pce-dp-sel';
+                else if(ds===tod) cls+=' pce-dp-today';
+                return <div key={ds} className={cls}
+                  onClick={()=>{onChange(ds);setShow(false);}}>{dy}</div>;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+};
+
+// ─── DateRangeFilter — same as Task Management filter bar ──────────────────
+const PCEDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,   setShow]   = useState(false);
+  const [from,   setFrom]   = useState(null);
+  const [to,     setTo]     = useState(null);
+  const [hover,  setHover]  = useState(null);
+  const [calMo,  setCalMo]  = useState(new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(()=>{
+    const h=e=>{if(ref.current&&!ref.current.contains(e.target))setShow(false);};
+    if(show)document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[show]);
+
+  const DIM=new Date(calYr,calMo+1,0).getDate(), FD=new Date(calYr,calMo,1).getDay();
+  const tod=new Date().toISOString().slice(0,10);
+  const inR=d=>{const hi=to||(from&&hover?hover:null);if(!from||!hi)return false;const[a,b]=from<=hi?[from,hi]:[hi,from];return d>a&&d<b;};
+  const clickDay=d=>{if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d);};
+  const fmt=d=>{if(!d)return'';const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+
+  return (
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button type="button"
+        className={`pce-cal-trigger${show?' pce-cal--open':''}${appliedFrom?' pce-cal--applied':''}`}
+        onClick={()=>setShow(p=>!p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom?'pce-cal-val':'pce-cal-ph'}>{appliedFrom?fmt(appliedFrom):'dd-mm-yyyy'}</span>
+        <span className="pce-cal-sep">—</span>
+        <span className={appliedTo&&appliedTo!==appliedFrom?'pce-cal-val':'pce-cal-ph'}>
+          {appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}
+        </span>
+        {appliedFrom&&<span className="pce-cal-x" onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}}>
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      {show && (
+        <div className="pce-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
+          <div className="pce-dp-head">
+            <button type="button" className="pce-dp-nav"
+              onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="pce-dp-month-btn" onClick={()=>setShowYr(p=>!p)}>
+              {_PCE_MONTHS[calMo]} <span className="pce-dp-yr">{calYr}</span>
+            </button>
+            <button type="button" className="pce-dp-nav"
+              onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          {showYr ? (
+            <div className="pce-yr-grid">
+              {Array.from({length:16},(_,i)=>{
+                const yr=new Date().getFullYear()-4+i;
+                return <div key={yr} className={`pce-yr-cell${yr===calYr?' pce-yr-sel':''}`}
+                  onClick={()=>{setCalYr(yr);setShowYr(false);}}>{yr}</div>;
+              })}
+            </div>
+          ) : (
+            <div className="pce-dp-grid">
+              {_PCE_DAYS.map(d=><div key={d} className="pce-dp-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="pce-dp-cell pce-dp-empty"/>)}
+              {Array.from({length:DIM}).map((_,i)=>{
+                const dy=i+1;
+                const ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const dow=(FD+i)%7;
+                let cls='pce-dp-cell';
+                if(ds===from) cls+=' pce-cal-from';
+                else if(ds===to) cls+=' pce-cal-to';
+                else if(inR(ds)){cls+=' pce-cal-in-range';if(dow===0)cls+=' pce-cal-rr-s';if(dow===6)cls+=' pce-cal-rr-e';}
+                if(ds===tod&&ds!==from&&ds!==to) cls+=' pce-dp-today';
+                return <div key={ds} className={cls}
+                  onClick={()=>clickDay(ds)}
+                  onMouseEnter={()=>from&&!to&&setHover(ds)}
+                  onMouseLeave={()=>setHover(null)}>{dy}</div>;
+              })}
+            </div>
+          )}
+          <div className="pce-cal-footer">
+            <div className="pce-cal-chips">
+              <span className={`pce-cal-chip${from?' pce-cal-chip--set':''}`}>{from?fmt(from):'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/>
+              </svg>
+              <span className={`pce-cal-chip${to?' pce-cal-chip--set':''}`}>{to?fmt(to):'To —'}</span>
+            </div>
+            <div style={{display:'flex',gap:6,justifyContent:'center',width:'100%'}}>
+              {(from||appliedFrom)&&<button type="button" className="pce-cal-clear"
+                onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}}>Clear</button>}
+              <button type="button" className="pce-cal-clear" onClick={()=>setShow(false)}>Cancel</button>
+              <button type="button" className="pce-cal-apply"
+                onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}}
+                disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProjectCostExpenseManagement = () => {
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, isAccountsExecutive } = useAuth();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   // ── Role-based access ──────────────────────────────────────────────────────
   const userRole      = (user?.role || localStorage.getItem('userRole') || '').toLowerCase();
@@ -396,15 +628,15 @@ const ProjectCostExpenseManagement = () => {
 
   const handleCreateExpense = async () => {
     const { groupName: grp, subGroupName: sub, tripDate, tripReason, paidByUserId, paidByName, expenseItems } = expenseFormData || {};
-    if (!grp || !sub) { showError('Group and Sub-Group are required'); return; }
-    if (!tripDate) { showError('Date is required'); return; }
-    if (!expenseItems?.length) { showError('Add at least one expense item'); return; }
+    if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
+    if (!tripDate) { showWarning('Date is required'); return; }
+    if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
 
     // Validate every item has a project and amount
     const missingProject = expenseItems.find(i => !i.projectId);
-    if (missingProject) { showError('Every item must have a project assigned'); return; }
+    if (missingProject) { showWarning('Every item must have a project assigned'); return; }
     const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
-    if (missingAmount) { showError('Every item must have a valid amount'); return; }
+    if (missingAmount) { showWarning('Every item must have a valid amount'); return; }
 
     // ── Group items by projectId — one expense record per project ────────────
     const byProject = {};
@@ -545,13 +777,13 @@ const ProjectCostExpenseManagement = () => {
   const handleUpdateExpense = async () => {
     const { id, groupName: grp, subGroupName: sub, tripDate, tripReason,
             paidByUserId, paidByName, expenseItems } = expenseFormData || {};
-    if (!grp || !sub) { showError('Group and Sub-Group are required'); return; }
-    if (!expenseItems?.length) { showError('Add at least one expense item'); return; }
+    if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
+    if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
 
     const missingProject = expenseItems.find(i => !i.projectId);
-    if (missingProject) { showError('Every item must have a project assigned'); return; }
+    if (missingProject) { showWarning('Every item must have a project assigned'); return; }
     const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
-    if (missingAmount) { showError('Every item must have a valid amount'); return; }
+    if (missingAmount) { showWarning('Every item must have a valid amount'); return; }
 
     // Check if all items belong to the SAME project as the original expense
     const allSameProject = expenseItems.every(i => i.projectId === expenseItems[0].projectId);
@@ -701,31 +933,90 @@ const ProjectCostExpenseManagement = () => {
     switch (col.key) {
       case 'expenseCode': return <span className="exp-code">{exp.expenseCode}</span>;
       case 'tripDate': return fmtDate(exp.tripDate);
-      case 'groupInfo': return (
-        <div className="exp-group-cell">
-          {exp.groupName && <span className="grp-name">{exp.groupName}</span>}
-          {exp.subGroupName && <span className="sub-name">{exp.subGroupName}</span>}
-          {exp.projectId && <span className="prj-name">{exp.projectId}</span>}
+      case 'groupCategory': return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+          {exp.groupName
+            ? <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.groupName}</span>
+            : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+          }
+          {exp.subGroupName && (
+            <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.subGroupName}</span>
+          )}
+        </div>
+      );
+      case 'project': return (
+        <div style={{ minWidth: 160 }}>
+          {exp.projectId ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                {exp.projectName || exp.projectId}
+              </span>
+              {exp.projectName && (
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  {exp.projectId}
+                </span>
+              )}
+            </div>
+          ) : (
+            <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+          )}
         </div>
       );
       case 'expenseItems': return (
         <div className="exp-items-chips-cell" style={{ cursor: 'pointer' }}
           onClick={(e) => { e.stopPropagation(); setItemsModalExpense(exp); setShowItemsModal(true); }}>
-          {(exp.expenseItems || []).slice(0, 2).map((item, i) => (
+          {(exp.expenseItems || []).slice(0, 1).map((item, i) => (
             <span key={i} className="exp-item-chip">
               <CategoryIcon cat={item.category} />
               <span className="chip-cat">{item.category}</span>
               <span className="chip-amt">{fmt(item.amount)}</span>
             </span>
           ))}
-          {(exp.expenseItems || []).length > 2 && (
-            <span className="exp-item-chip chip-more">+{(exp.expenseItems || []).length - 2} more</span>
+          {(exp.expenseItems || []).length > 1 && (
+            <span className="exp-item-chip chip-more">+{(exp.expenseItems || []).length - 1} more</span>
           )}
           {(exp.expenseItems || []).length === 0 && <span className="text-muted">—</span>}
         </div>
       );
       case 'amount': return <strong className="exp-amount">{fmt(exp.totalAmount)}</strong>;
-      case 'paidByName': return exp.paidByName || '—';
+      case 'paidByName': {
+        // Collect unique payment modes from all expense items
+        const modes = [...new Set((exp.expenseItems || []).map(i => i.paymentMode).filter(Boolean))];
+        const modeColors = {
+          Cash:          { bg: '#dcfce7', color: '#15803d' },
+          UPI:           { bg: '#ede9fe', color: '#6d28d9' },
+          Card:          { bg: '#dbeafe', color: '#1d4ed8' },
+          Bank_Transfer: { bg: '#e0f2fe', color: '#0369a1' },
+          Cheque:        { bg: '#fef9c3', color: '#92400e' },
+        };
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+            {/* Payment mode badges */}
+            {modes.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                {modes.map(m => {
+                  const c = modeColors[m] || { bg: '#f1f5f9', color: '#475569' };
+                  return (
+                    <span key={m} style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                      padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 700,
+                      background: c.bg, color: c.color, whiteSpace: 'nowrap',
+                    }}>
+                      <CreditCard size={9} />
+                      {formatPaymentMode(m)}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            {/* Person name */}
+            {exp.paidByName
+              ? <span style={{ fontSize: 12, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exp.paidByName}</span>
+              : modes.length === 0 && <span style={{ color: '#9ca3af' }}>—</span>
+            }
+          </div>
+        );
+      }
       case 'actions': return (
         <div className="exp-actions-cell">
           <StatusBadge s={exp.status} />
@@ -826,10 +1117,12 @@ const ProjectCostExpenseManagement = () => {
             <option value="all">All Modes</option>
             {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
           </select>
-          <input type="date" className="exp-mgmt-filter" value={filters.dateFrom}
-            onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })} />
-          <input type="date" className="exp-mgmt-filter" value={filters.dateTo}
-            onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })} />
+          <PCEDateRangeFilter
+            appliedFrom={filters.dateFrom}
+            appliedTo={filters.dateTo}
+            onApply={(f,t)=>{ setFilters({...filters, dateFrom:f, dateTo:t}); setCurrentPage(0); }}
+            onClear={()=>{ setFilters({...filters, dateFrom:'', dateTo:''}); setCurrentPage(0); }}
+          />
         </div>
         <div className="exp-mgmt-actions">
           <button className="exp-mgmt-btn-primary" onClick={handleAddNewExpense}>
@@ -957,6 +1250,7 @@ const ProjectCostExpenseManagement = () => {
             <table className="exp-mgmt-table">
               <thead>
                 <tr>
+                  <th className="exp-sno-th">S.No</th>
                   {columns.filter(c => c.visible).map((col, idx) => (
                     <th key={col.key} draggable
                       className={`${col.sortable ? 'sortable' : ''} ${sortBy === col.key ? 'sorted' : ''}`}
@@ -973,13 +1267,14 @@ const ProjectCostExpenseManagement = () => {
               </thead>
               <tbody>
                 {expenses.length === 0 ? (
-                  <tr><td colSpan={columns.filter(c => c.visible).length} className="exp-empty-state">
+                  <tr><td colSpan={columns.filter(c => c.visible).length + 1} className="exp-empty-state">
                     No expenses found. Adjust your filters or add a new expense.
                   </td></tr>
-                ) : expenses.map(exp => (
+                ) : expenses.map((exp, rowIndex) => (
                   <tr key={exp.id} className="exp-mgmt-table-row"
                     style={{ cursor: 'pointer' }}
                     onClick={() => handleViewExpense(exp)}>
+                    <td className="exp-sno-td">{currentPage * pageSize + rowIndex + 1}</td>
                     {columns.filter(c => c.visible).map(col => (
                       <td
                         key={col.key}
@@ -1106,8 +1401,11 @@ const ProjectCostExpenseManagement = () => {
                   <div className="exp-form-row3">
                     <div className="exp-field">
                       <label>Date *</label>
-                      <input type="date" value={expenseFormData.tripDate}
-                        onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
+                      <PCEDatePicker
+                        value={expenseFormData.tripDate}
+                        onChange={v => setExpenseFormData(p => ({ ...p, tripDate: v }))}
+                        placeholder="Select date"
+                      />
                     </div>
                     <div className="exp-field" style={{ position: 'relative' }} ref={paidByRef}>
                       <label>Paid By</label>
@@ -1455,8 +1753,11 @@ const ProjectCostExpenseManagement = () => {
                   <div className="exp-form-row3">
                     <div className="exp-field">
                       <label>Date *</label>
-                      <input type="date" value={expenseFormData.tripDate}
-                        onChange={e => setExpenseFormData(p => ({ ...p, tripDate: e.target.value }))} />
+                      <PCEDatePicker
+                        value={expenseFormData.tripDate}
+                        onChange={v => setExpenseFormData(p => ({ ...p, tripDate: v }))}
+                        placeholder="Select date"
+                      />
                     </div>
                     <div className="exp-field" style={{ position: 'relative' }} ref={editPaidByRef}>
                       <label>Paid By</label>

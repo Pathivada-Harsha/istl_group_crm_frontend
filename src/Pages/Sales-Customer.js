@@ -36,6 +36,7 @@ const INDIAN_STATES = [
 
 // ── All Columns Definition ────────────────────────────────────────────────────
 const ALL_COLUMNS = [
+  { key: 'sno',     label: 'S.No',    sortable: false, required: true  },
   { key: 'group',    label: 'Group',    sortable: true,  required: false },
   { key: 'company',  label: 'Company',  sortable: true,  required: false },
   { key: 'name',     label: 'Name',     sortable: true,  required: true  },
@@ -1687,6 +1688,149 @@ const getStatusColor = (status) => {
   return colors[status] || 'grey';
 };
 
+// ── Clients Date Range Filter ────────────────────────────────────────────────
+const _CL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _CL_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const ClientsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,   setShow]   = useState(false);
+  const [from,   setFrom]   = useState(null);
+  const [to,     setTo]     = useState(null);
+  const [hover,  setHover]  = useState(null);
+  const [calMo,  setCalMo]  = useState(new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a,b] = from<=hi ? [from,hi] : [hi,from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return ''; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button type="button"
+        className={`cl-cal-trigger${show?' cl-cal--open':''}${appliedFrom?' cl-cal--applied':''}`}
+        onClick={() => setShow(p => !p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom?'cl-cal-val':'cl-cal-ph'}>{appliedFrom?fmt(appliedFrom):'dd-mm-yyyy'}</span>
+        <span className="cl-cal-sep">—</span>
+        <span className={appliedTo&&appliedTo!==appliedFrom?'cl-cal-val':'cl-cal-ph'}>
+          {appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}
+        </span>
+        {appliedFrom && (
+          <span className="cl-cal-x" onClick={e => { e.stopPropagation(); setFrom(null); setTo(null); onClear(); }}>
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </span>
+        )}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      {show && (
+        <div className="cl-cal-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:9999, width:264 }}>
+          <div className="cl-cal-head">
+            <button type="button" className="cl-cal-nav"
+              onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="cl-cal-month-btn" onClick={() => setShowYr(p => !p)}>
+              {_CL_MONTHS[calMo]} <span className="cl-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="cl-cal-nav"
+              onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+          {showYr ? (
+            <div className="cl-yr-grid">
+              {Array.from({length:16},(_,i) => {
+                const yr = new Date().getFullYear()-4+i;
+                return <div key={yr} className={`cl-yr-cell${yr===calYr?' cl-yr-sel':''}`}
+                  onClick={() => { setCalYr(yr); setShowYr(false); }}>{yr}</div>;
+              })}
+            </div>
+          ) : (
+            <div className="cl-cal-grid">
+              {_CL_DAYS.map(d => <div key={d} className="cl-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="cl-cal-cell cl-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy  = i+1;
+                const ds  = `${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const dow = (FD+i)%7;
+                let cls   = 'cl-cal-cell';
+                if (ds===from)      cls += ' cl-cal-from';
+                else if (ds===to)   cls += ' cl-cal-to';
+                else if (inR(ds)) {
+                  cls += ' cl-cal-in-range';
+                  if (dow===0) cls += ' cl-cal-rr-s';
+                  if (dow===6) cls += ' cl-cal-rr-e';
+                }
+                if (ds===tod && ds!==from && ds!==to) cls += ' cl-cal-today';
+                return <div key={ds} className={cls}
+                  onClick={() => clickDay(ds)}
+                  onMouseEnter={() => from && !to && setHover(ds)}
+                  onMouseLeave={() => setHover(null)}>{dy}</div>;
+              })}
+            </div>
+          )}
+
+          <div className="cl-cal-footer">
+            <div className="cl-cal-chips">
+              <span className={`cl-cal-chip${from?' cl-cal-chip--set':''}`}>{from?fmt(from):'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/>
+              </svg>
+              <span className={`cl-cal-chip${to?' cl-cal-chip--set':''}`}>{to?fmt(to):'To —'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, justifyContent:'center', width:'100%' }}>
+              {(from||appliedFrom) && (
+                <button type="button" className="cl-cal-clear"
+                  onClick={() => { setFrom(null); setTo(null); onClear(); setShow(false); }}>Clear</button>
+              )}
+              <button type="button" className="cl-cal-clear" onClick={() => setShow(false)}>Cancel</button>
+              <button type="button" className="cl-cal-apply"
+                onClick={() => { if(!from)return; onApply(from, to||from); setShow(false); }}
+                disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
@@ -1723,6 +1867,8 @@ const CustomerDatabase = () => {
   const [searchTerm,    setSearchTerm]    = useState('');
   const [selectedGroup, setSelectedGroup] = useState('All');
   const [selectedStatus,setSelectedStatus]= useState('All');
+  const [dateFrom,      setDateFrom]       = useState('');
+  const [dateTo,        setDateTo]         = useState('');
   const [rowsPerPage,   setRowsPerPage]   = useState(10);
   const [currentPage,   setCurrentPage]   = useState(1);
   const [totalCustomers,setTotalCustomers]= useState(0);
@@ -1801,6 +1947,8 @@ const CustomerDatabase = () => {
         groupName:    groupName         || (selectedGroup  !== 'All' ? selectedGroup  : null),
         subGroupName: subGroupName      || null,
         status:       selectedStatus !== 'All' ? selectedStatus : null,
+        fromDate:     dateFrom || null,
+        toDate:       dateTo   || null,
         page,
         size: rowsPerPage,
       };
@@ -1856,11 +2004,14 @@ useEffect(() => {
   // Clear any existing timer
   if (filterDebounceTimer.current) clearTimeout(filterDebounceTimer.current);
 
-  const hasFilters = searchTerm.trim() !== ''
-    || selectedGroup !== 'All'
-    || selectedStatus !== 'All'
-    || groupName !== ''
-    || subGroupName !== '';
+const hasFilters =
+  searchTerm.trim() !== '' ||
+  selectedGroup !== 'All' ||
+  selectedStatus !== 'All' ||
+  groupName !== '' ||
+  subGroupName !== '' ||
+  dateFrom !== '' ||
+  dateTo !== '';
 
   if (hasFilters) {
     // Debounce filter changes by 300ms (same as UsersPage uses 1000ms)
@@ -1877,7 +2028,7 @@ useEffect(() => {
   return () => {
     if (filterDebounceTimer.current) clearTimeout(filterDebounceTimer.current);
   };
-}, [canView, searchTerm, selectedGroup, selectedStatus, groupName, subGroupName]);
+}, [canView, searchTerm, selectedGroup, selectedStatus, groupName, subGroupName, dateFrom, dateTo]);
 // eslint-disable-line react-hooks/exhaustive-deps
 
 // Effect 2 — pagination changes → immediate fetch
@@ -2161,6 +2312,12 @@ useEffect(() => {
             <option value="Active">Active</option><option value="Inactive">Inactive</option>
             <option value="Prospect">Prospect</option><option value="Lead">Lead</option>
           </select>
+          <ClientsDateRangeFilter
+            appliedFrom={dateFrom}
+            appliedTo={dateTo}
+            onApply={(f,t) => { setDateFrom(f); setDateTo(t); setCurrentPage(1); }}
+            onClear={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}
+          />
         </div>
         <div className="cust-action-buttons">
           <button className="cust-btn cust-btn-secondary" onClick={exportToCSV}>
@@ -2246,11 +2403,11 @@ useEffect(() => {
               <tbody>
                 {currentItems.length === 0 ? (
                   <tr><td colSpan={orderedVisibleColumns.length} style={{textAlign:'center',padding:'30px',color:'#718096'}}>{loading ? 'Loading...' : 'No customers found'}</td></tr>
-                ) : currentItems.map(customer => (
+                ) : currentItems.map((customer, rowIndex) => (
                   <tr key={customer.id} onClick={() => canView && handleViewCustomer(customer)} style={{cursor: canView ? 'pointer' : 'default'}} className="cust-clickable-row">
                     {orderedVisibleColumns.map(col => (
                       <td key={col.key} style={{textAlign:'center'}} onClick={col.key==='actions' ? e => e.stopPropagation() : undefined}>
-                        {renderCell(customer, col.key)}
+                        {col.key === 'sno' ? <span style={{fontWeight:600,color:'#6b7280',fontSize:13}}>{(currentPage - 1) * rowsPerPage + rowIndex + 1}</span> : renderCell(customer, col.key)}
                       </td>
                     ))}
                   </tr>
@@ -2477,7 +2634,7 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
         </div>
         <div className="cust-form-group">
           <label>GST Number</label>
-          <input type="text" value={formData.gstNumber} onChange={e => setFormData({...formData, gstNumber: e.target.value.toUpperCase()})} placeholder="22AAAAA0000A1Z5"/>
+          <input type="text" value={formData.gstNumber} onChange={e => { const v=e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,""); if(v.length<=15) setFormData({...formData, gstNumber:v}); }} placeholder="22AAAAA0000A1Z5" maxLength="15"/>
         </div>
         <div className="cust-form-group">
           <label>PAN Number</label>
@@ -2488,15 +2645,32 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
           <input type="text" value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})}/>
         </div>
         <div className="cust-form-group">
-          <label>State</label>
-          <select value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})}>
-            <option value="">Select State</option>
-            {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <label>Pincode</label>
+          <input type="text" value={formData.pincode}
+            onChange={async e => {
+              const v = e.target.value.replace(/\D/g,'');
+              if (v.length > 6) return;
+              setFormData(p => ({...p, pincode: v}));
+              if (v.length === 6) {
+                try {
+                  const res  = await fetch(`https://api.postalpincode.in/pincode/${v}`);
+                  const data = await res.json();
+                  if (data[0].Status==='Success' && data[0].PostOffice?.length>0) {
+                    const po = data[0].PostOffice[0];
+                    setFormData(p => ({...p, pincode: v, state: po.State, district: po.District}));
+                  }
+                } catch {}
+              }
+            }}
+            maxLength="6" placeholder="6-digit PICODE — auto fills State & District"/>
         </div>
         <div className="cust-form-group">
-          <label>Pincode</label>
-          <input type="text" value={formData.pincode} onChange={e => { const c=e.target.value.replace(/\D/g,''); if(c.length<=6) setFormData({...formData, pincode:c}); }} maxLength="6" placeholder="6 digit pincode"/>
+          <label>State</label>
+          <input type="text" value={formData.state||''} onChange={e => setFormData({...formData, state: e.target.value})} placeholder="Auto-filled by PINCODE or type manually"/>
+        </div>
+        <div className="cust-form-group">
+          <label>District</label>
+          <input type="text" value={formData.district||''} onChange={e => setFormData({...formData, district: e.target.value})} placeholder="Auto-filled by PINCODE or type manually"/>
         </div>
         <div className="cust-form-group">
           <label>Assign To</label>

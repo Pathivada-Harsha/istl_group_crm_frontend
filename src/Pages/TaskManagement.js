@@ -178,16 +178,15 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
   const [calMo,  setCalMo]  = useState(new Date().getMonth());
   const [calYr,  setCalYr]  = useState(new Date().getFullYear());
   const [showYrDT, setShowYrDT] = useState(false);
-  const wRef=useRef(null), tRef=useRef(null), timer=useRef(null), prevH=useRef('');
+  const wRef=useRef(null), tRef=useRef(null);
   const open = () => {
     setTmpD(value?value.slice(0,10):''); setTmpT(value?value.slice(11,16):'');
-    prevH.current=value?value.slice(11,16):'';
     if(value){setCalMo(parseInt(value.slice(5,7))-1);setCalYr(parseInt(value.slice(0,4)));}
     if(wRef.current){const r=wRef.current.getBoundingClientRect();const dH=420;const up=window.innerHeight-r.bottom<dH&&r.top>dH;setPos({top:up?r.top-dH-4:r.bottom+4,left:r.left,width:Math.max(r.width,300)});}
     setShow(true);
   };
   useEffect(()=>{
-    const h=e=>{if(wRef.current&&!wRef.current.contains(e.target)){clearTimeout(timer.current);setShow(false);}};
+    const h=e=>{if(wRef.current&&!wRef.current.contains(e.target)){setShow(false);}};
     if(show)document.addEventListener('mousedown',h);
     return()=>document.removeEventListener('mousedown',h);
   },[show]);
@@ -196,7 +195,7 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
   const disp=fmtDisp();
   return (
     <div ref={wRef}>
-      <button type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>{clearTimeout(timer.current);setShow(false);}:open}>
+      <button type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>{setShow(false);}:open}>
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         {disp?(<span className="tm-dtp-val"><span className="tm-dtp-date">{disp.date}</span>{disp.time&&<span className="tm-dtp-time">{disp.time}</span>}</span>):(<span className="tm-dtp-ph">{placeholder}</span>)}
         {value?<span className="tm-dtp-x" onClick={e=>{e.stopPropagation();onChange('');setShow(false);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
@@ -223,7 +222,7 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
             <span className="tm-dtp-time-lbl">Time</span>
             <input ref={tRef} type="time" className="tm-dtp-time-inp" value={tmpT} style={{cursor:'pointer'}}
               onClick={e=>{e.stopPropagation();try{e.target.showPicker();}catch(_){}}}
-              onChange={e=>{const nv=e.target.value;const[nH]=nv.split(':');const[pH]=(prevH.current||':').split(':');setTmpT(nv);prevH.current=nv;if(!tmpD||!nv)return;if(nH!==pH){clearTimeout(timer.current);}else{clearTimeout(timer.current);timer.current=setTimeout(()=>{onChange(tmpD+'T'+nv);setShow(false);},800);}}}/>
+              onChange={e=>{const nv=e.target.value;const prev=tmpT;setTmpT(nv);if(nv&&nv.length===5&&prev&&prev.length===5&&nv.split(':')[0]===prev.split(':')[0]){tRef.current&&tRef.current.blur();}}}/>
           </div>
           <div className="tm-dtp-footer">
             <div className="tm-dtp-chips">
@@ -231,7 +230,7 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
               {tmpT&&<><svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg><span className="tm-cal-chip tm-cal-chip--set">{(()=>{const[h,m]=tmpT.split(':');const hr=parseInt(h,10);return`${hr%12===0?12:hr%12}:${String(m).padStart(2,'0')} ${hr>=12?'PM':'AM'}`})()}</span></>}
             </div>
             <div style={{display:'flex',gap:8,justifyContent:'center',width:'100%'}}>
-              <button type="button" className="tm-cal-clear" onClick={()=>{clearTimeout(timer.current);setShow(false);}}>Cancel</button>
+              <button type="button" className="tm-cal-clear" onClick={()=>{setShow(false);}}>Cancel</button>
               <button type="button" className="tm-cal-apply" onClick={()=>{onChange(tmpD?tmpD+'T'+(tmpT||'00:00'):'');setShow(false);}} disabled={!tmpD}>Save</button>
             </div>
           </div>
@@ -1487,7 +1486,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:1000}}>
               <thead>
                 <tr style={{background:'#f8fafc',borderBottom:'2px solid #e2e8f0'}}>
-                  {['Employee','Task','Project','Category','Priority','Status','Progress','Hours','Due','Entries','Last Work Done','Last Date',''].map(h => (
+                  {['S.No','Employee','Task','Project','Category','Priority','Status','Progress','Hours','Due','Entries','Last Work Done','Last Date',''].map(h => (
                     <th key={h} style={{padding:'10px 12px',textAlign:'left',fontSize:11,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'.06em',whiteSpace:'nowrap'}}>{h}</th>
                   ))}
                 </tr>
@@ -1504,6 +1503,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                         onClick={() => onDetail(r._task)}
                         onMouseEnter={e => { if (!expanded) e.currentTarget.style.background='#f8fafc'; }}
                         onMouseLeave={e => { if (!expanded) e.currentTarget.style.background='transparent'; }}>
+                        <td style={{padding:'10px 12px',verticalAlign:'middle',textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{i + 1}</td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
                           <div style={{display:'flex',alignItems:'center',gap:8}}>
                             <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
@@ -2315,7 +2315,7 @@ export default function TaskManagement() {
               <select className="tm-filter-sel" value={catFilter} onChange={e => setCatFilter(e.target.value)}><option value="All">All Categories</option>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
               {isSA && <select className="tm-filter-sel" value={empFilter} onChange={e => setEmpFilter(e.target.value)}><option value="All">All Assignees</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>}
             </div>
-            <span className="tm-fcount">{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span>
+            {/* <span className="tm-fcount">{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span> */}
           </div>
 
           <div className="tm-card">
@@ -2332,18 +2332,19 @@ export default function TaskManagement() {
                   <table className="tm-tbl tm-tbl-fixed">
                     <thead>
                       <tr>
-                        <th>Task</th><th>Project</th><th>Category</th><th>Priority</th><th>Status</th>
+                        <th>S.No</th><th>Task</th><th>Project</th><th>Category</th><th>Priority</th><th>Status</th>
                         <th>Progress</th><th>Start / End</th><th>Hours</th>
                         {isSA && <th>Assignee</th>}<th>Due</th><th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {paged.map(task => {
+                      {paged.map((task, taskIndex) => {
                         const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
                         // Use updates-based sum; fall back to DB field for legacy tasks
                         const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
                         return (
                           <tr key={task.id} className={`tm-tr ${isOD ? 'tm-tr-od' : ''} ${task.status === 'Completed' ? 'tm-tr-done' : ''}`} onClick={() => setDetail(task)}>
+                            <td style={{textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{taskIndex + 1}</td>
                             <td>
                               <div className="tm-task-cell">
                                 <span className="tm-tcode">{task.taskCode}</span>
