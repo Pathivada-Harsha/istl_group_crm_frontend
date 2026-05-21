@@ -697,6 +697,8 @@ function OrderBook() {
       if (subGroupName) params.append('subGroupName', subGroupName);
       if (fromDate) params.append('fromDate', fromDate);
       if (toDate) params.append('toDate', toDate);
+      params.append('sortBy',  (fromDate || toDate) ? 'orderDate' : 'createdAt');
+      params.append('sortDir', (fromDate || toDate) ? 'asc'       : 'desc');
 
       const response = await fetch(`${API_BASE_URL}/order-book/search?${params}`, {
         method: 'POST',
@@ -1402,8 +1404,8 @@ function OrderBook() {
           <OBDateRangePicker
             appliedFrom={fromDate}
             appliedTo={toDate}
-            onApply={(f, t) => { setFromDate(f); setToDate(t); }}
-            onClear={() => { setFromDate(''); setToDate(''); }}
+            onApply={(f, t) => { setFromDate(f); setToDate(t); setSortConfig({ key: 'orderDate', direction: 'asc' }); }}
+            onClear={() => { setFromDate(''); setToDate(''); setSortConfig({ key: null, direction: 'asc' }); }}
           />
         </div>
 

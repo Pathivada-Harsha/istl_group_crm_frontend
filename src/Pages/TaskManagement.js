@@ -1218,6 +1218,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
     if (empId)      params.set('userId',   empId);
     if (from)       params.set('dateFrom', from);
     if (to)         params.set('dateTo',   to);
+    if (from || to) { params.set('sortBy', 'dueDate'); params.set('sortDir', 'asc'); }
     if (taskSearch) params.set('search',   taskSearch);
     setTeamLoading(true);
     setTeamPage(pg);
@@ -1301,6 +1302,15 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
       lastHours:     latest ? (parseFloat(latest.hoursSpent)||0) : 0,
     };
   });
+
+  // Sort rows ascending by dueDate when date filter is active (backend handles cross-page sort)
+  if (dateFrom || dateTo) {
+    rows.sort((a, b) => {
+      const da = a.dueDate && a.dueDate !== '—' ? new Date(a.dueDate) : new Date('9999-12-31');
+      const db = b.dueDate && b.dueDate !== '—' ? new Date(b.dueDate) : new Date('9999-12-31');
+      return da - db;
+    });
+  }
 
   const totalHours = rows.reduce((s, r) => s + r.totalHours, 0);
   const totalEntries = rows.reduce((s, r) => s + r.updateCount, 0);
@@ -2011,6 +2021,7 @@ export default function TaskManagement() {
     if (catFilter !== 'All') params.set('category', catFilter);
     if (taskDateFrom) params.set('dateFrom', taskDateFrom);
     if (taskDateTo)   params.set('dateTo',   taskDateTo);
+    if (taskDateFrom || taskDateTo) { params.set('sortBy', 'dueDate'); params.set('sortDir', 'asc'); }
     return `${API}/tasks?` + params.toString();
   };
 
@@ -2083,7 +2094,14 @@ export default function TaskManagement() {
   }, [search, stFilter, priFilter, catFilter, taskDateFrom, taskDateTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── No client-side filter — backend handles search/filter/pagination ── */
-  const filtered = tasks; // tasks already filtered by backend
+  // tasks already filtered by backend; sort ASC by dueDate when date filter active
+  const filtered = (taskDateFrom || taskDateTo)
+    ? [...tasks].sort((a, b) => {
+        const da = a.dueDate ? new Date(a.dueDate) : new Date('9999-12-31');
+        const db = b.dueDate ? new Date(b.dueDate) : new Date('9999-12-31');
+        return da - db;
+      })
+    : tasks;
 
   const kpis = {
     total:     totalTasks,
@@ -2210,7 +2228,14 @@ export default function TaskManagement() {
   }));
 
   /* ── Pagination — driven by backend totalPages ─────────────────────── */
-  const paged = tasks; // already paginated by backend
+  // already paginated by backend; sort ASC by dueDate when date filter active
+  const paged = (taskDateFrom || taskDateTo)
+    ? [...tasks].sort((a, b) => {
+        const da = a.dueDate ? new Date(a.dueDate) : new Date('9999-12-31');
+        const db = b.dueDate ? new Date(b.dueDate) : new Date('9999-12-31');
+        return da - db;
+      })
+    : tasks;
 
   const goToPage = (pg) => {
     setPage(pg);

@@ -313,7 +313,7 @@ const ReceiptsManagementPage = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'receiptDate', sortDirection: 'DESC' });
+        const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'receiptDate', sortDirection: (filters.dateFrom || filters.dateTo) ? 'ASC' : 'DESC' });
         if (groupName) params.append('groupId', groupName);
         if (subGroupName) params.append('subGroupId', subGroupName);
         if (projectId) params.append('projectId', projectId);

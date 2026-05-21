@@ -466,7 +466,7 @@ const InvoicesManagementPage = () => {
         page: currentPage,
         size: pageSize,
         sortBy: 'invoiceDate',
-        sortDirection: 'DESC'
+        sortDirection: (filters.dateFrom || filters.dateTo) ? 'ASC' : 'DESC'
       });
 
       if (groupName) params.append('groupId', groupName);
@@ -910,7 +910,7 @@ const fetchStats = async () => {
         page: 0,
         size: 9999,
         sortBy: 'invoiceDate',
-        sortDirection: 'DESC'
+        sortDirection: (filters.dateFrom || filters.dateTo) ? 'ASC' : 'DESC'
       });
       if (groupName)                params.append('groupId',    groupName);
       if (subGroupName)             params.append('subGroupId', subGroupName);
