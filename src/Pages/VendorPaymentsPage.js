@@ -193,6 +193,12 @@ export default function VendorPaymentsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search]);
 
+  // Reset to page 1 whenever group/project filters change
+  useEffect(() => {
+    setCurrentPage(0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId]);
+
   const fetchAdvances = () => { setRefreshKey(prev => prev + 1); };
 
   const getAuthHeaders = () => ({
