@@ -2796,25 +2796,41 @@ function LeadOwnerDropdown({ users, value, onChange }) {
 const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading }) => {
   // ── Pincode auto-fill ──────────────────────────────────────────────────────
   const [pincodeError, setPincodeError] = React.useState('');
+  const pincodeDebounceRef              = React.useRef(null);
+  const pincodeAbortRef                 = React.useRef(null);
 
-  const handlePincodeChange = async (value) => {
+  const handlePincodeChange = (value) => {
     if (!/^\d*$/.test(value)) return;
-    setFormData(p => ({ ...p, pincode: value }));
+
+    // Cancel any pending debounce timer and abort any in-flight request
+    if (pincodeDebounceRef.current) clearTimeout(pincodeDebounceRef.current);
+    if (pincodeAbortRef.current)    pincodeAbortRef.current.abort();
+
+    // Always clear error and stale auto-filled values when pin changes
     setPincodeError('');
+    setFormData(p => ({ ...p, pincode: value, state: '', district: '' }));
+
     if (value.length !== 6) return;
-    try {
-      const res  = await fetch(`https://api.postalpincode.in/pincode/${value}`);
-      const data = await res.json();
-      if (data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
-        const po = data[0].PostOffice[0];
-        setFormData(p => ({ ...p, state: po.State, district: po.District }));
-        setPincodeError('');
-      } else {
-        setPincodeError('Invalid PIN code');
+
+    // Debounce: wait 600ms after the user stops typing before calling the API
+    pincodeDebounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      pincodeAbortRef.current = controller;
+      try {
+        const res  = await fetch(`${API_BASE_URL}/pincode/${value}`, { credentials: 'include', signal: controller.signal });
+        if (!res.ok) throw new Error('api_error');
+        const data = await res.json();
+        if (data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          setFormData(p => ({ ...p, state: po.State, district: po.District }));
+          setPincodeError('');
+        } else {
+          setPincodeError('Invalid PIN code');
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') setPincodeError('Could not fetch PIN details');
       }
-    } catch {
-      setPincodeError('Could not fetch PIN details');
-    }
+    }, 600);
   };
 
   return (

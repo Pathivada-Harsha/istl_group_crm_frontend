@@ -2594,7 +2594,47 @@ useEffect(() => {
 };
 
 // ── Customer Form Body (reusable) ─────────────────────────────────────────────
-const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, loading, onCancel, onSubmit, INDIAN_STATES }) => (
+const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, loading, onCancel, onSubmit, INDIAN_STATES }) => {
+  const [pincodeError, setPincodeError] = React.useState('');
+  const pincodeDebounceRef              = React.useRef(null);
+  const pincodeAbortRef                 = React.useRef(null);
+
+  const handlePincodeChange = (value) => {
+    const v = value.replace(/\D/g, '');
+    if (v.length > 6) return;
+
+    // Cancel any pending debounce timer and abort any in-flight request
+    if (pincodeDebounceRef.current) clearTimeout(pincodeDebounceRef.current);
+    if (pincodeAbortRef.current)    pincodeAbortRef.current.abort();
+
+    // Clear error and stale auto-filled values when pin changes
+    setPincodeError('');
+    setFormData(p => ({ ...p, pincode: v, state: '', district: '' }));
+
+    if (v.length !== 6) return;
+
+    // Debounce: wait 600ms after the user stops typing before calling the API
+    pincodeDebounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      pincodeAbortRef.current = controller;
+      try {
+        const res  = await fetch(`${API_BASE_URL}/pincode/${v}`, { credentials: 'include', signal: controller.signal });
+        if (!res.ok) throw new Error('api_error');
+        const data = await res.json();
+        if (data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          setFormData(p => ({ ...p, pincode: v, state: po.State, district: po.District }));
+          setPincodeError('');
+        } else {
+          setPincodeError('Invalid PIN code');
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') setPincodeError('Could not fetch PIN details');
+      }
+    }, 600);
+  };
+
+  return (
   <form onSubmit={onSubmit} className="cust-form">
     <div className="cust-form-section">
       <h3 className="cust-form-section-title">Customer Information</h3>
@@ -2667,22 +2707,9 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
         <div className="cust-form-group">
           <label>Pincode</label>
           <input type="text" value={formData.pincode}
-            onChange={async e => {
-              const v = e.target.value.replace(/\D/g,'');
-              if (v.length > 6) return;
-              setFormData(p => ({...p, pincode: v}));
-              if (v.length === 6) {
-                try {
-                  const res  = await fetch(`https://api.postalpincode.in/pincode/${v}`);
-                  const data = await res.json();
-                  if (data[0].Status==='Success' && data[0].PostOffice?.length>0) {
-                    const po = data[0].PostOffice[0];
-                    setFormData(p => ({...p, pincode: v, state: po.State, district: po.District}));
-                  }
-                } catch {}
-              }
-            }}
-            maxLength="6" placeholder="6-digit PICODE — auto fills State & District"/>
+            onChange={e => handlePincodeChange(e.target.value)}
+            maxLength="6" placeholder="6-digit PINCODE — auto fills State & District"/>
+          {pincodeError && <span style={{fontSize:11, color:'#ef4444', marginTop:2, display:'block'}}>{pincodeError}</span>}
         </div>
         <div className="cust-form-group">
           <label>State</label>
@@ -2712,7 +2739,8 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
       </button>
     </div>
   </form>
-);
+  );
+};
 
 // ─── Customer Pagination Widget ──────────────────────────────────────────────
 const CustPagination = ({ startRecord, endRecord, totalRecords, currentPage, totalPages, rowsPerPage, onPageChange, onRowsPerPageChange }) => {
