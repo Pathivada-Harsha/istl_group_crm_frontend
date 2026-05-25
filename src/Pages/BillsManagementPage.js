@@ -17,6 +17,158 @@ import ConfirmationModal from '../components/ConfirmationModal';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+// ── Date constants ────────────────────────────────────────────────────────────
+const _BR_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _BR_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+// ── BRDatePicker — compact single date (same style as PO Create Modal) ────────
+const BRDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }) => {
+  const [show,    setShow]    = React.useState(false);
+  const [calMo,   setCalMo]   = React.useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr,   setCalYr]   = React.useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
+  const [showYrP, setShowYrP] = React.useState(false);
+  const wrapRef = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const open = () => {
+    if (value) { setCalMo(parseInt(value.slice(5,7))-1); setCalYr(parseInt(value.slice(0,4))); }
+    setShowYrP(false); setShow(true);
+  };
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+  const fmtD = d => { if (!d) return null; const [y,m,dy] = d.split('-'); return `${dy}-${m}-${y}`; };
+  return (
+    <div ref={wrapRef} style={{ position:'relative', width:'100%' }}>
+      <button type="button"
+        className={`po-dtp-trigger${show?' po-dtp--open':''}${value?' po-dtp--set':''}`}
+        onClick={show ? () => setShow(false) : open} style={{ width:'100%' }}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color: value?'#4f46e5':'#94a3b8' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        {value ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:'#0f172a' }}>{fmtD(value)}</span>
+               : <span className="po-dtp-ph">{placeholder}</span>}
+        {value
+          ? <span className="po-dtp-x" onClick={e => { e.stopPropagation(); onChange(''); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+            </span>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+            </svg>}
+      </button>
+      {show && (
+        <div className="po-dtp-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, width:280, zIndex:1050 }}>
+          <div className="po-dtp-cal-head">
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button type="button" className="po-dtp-month" onClick={() => setShowYrP(p => !p)}>
+              {_BR_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          {showYrP ? (
+            <div className="po-yr-grid">
+              {Array.from({length:16},(_,i) => { const yr=new Date().getFullYear()-4+i; return (
+                <div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYrP(false);}}>{yr}</div>
+              );})}</div>
+          ) : (
+            <div className="po-dtp-grid">
+              {_BR_DAYS.map(d => <div key={d} className="po-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy=i+1, ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const isMin = minDate && ds < minDate;
+                let cls='po-cal-cell';
+                if(ds===value) cls+=' po-dtp-sel'; else if(ds===tod) cls+=' po-cal-today';
+                if(isMin) cls+=' po-cal-empty';
+                return <div key={ds} className={cls} onClick={()=>{ if(!isMin){onChange(ds);setShow(false);} }}>{dy}</div>;
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── BRDateRangeFilter — date range picker (same style as PO page filter bar) ──
+const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,  setShow]  = React.useState(false);
+  const [from,  setFrom]  = React.useState(null);
+  const [to,    setTo]    = React.useState(null);
+  const [hover, setHover] = React.useState(null);
+  const [calMo, setCalMo] = React.useState(new Date().getMonth());
+  const [calYr, setCalYr] = React.useState(new Date().getFullYear());
+  const [showYr,setShowYr]= React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(), FD=new Date(calYr,calMo,1).getDay(), tod=new Date().toISOString().slice(0,10);
+  const inR = d => { const hi=to||(from&&hover?hover:null); if(!from||!hi) return false; const[a,b]=from<=hi?[from,hi]:[hi,from]; return d>a&&d<b; };
+  const clickDay = d => { if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d); };
+  const fmt = d => { if(!d) return ''; const[y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+  const handleApply = () => { if(!from) return; onApply(from,to||from); setShow(false); };
+  const handleClear = () => { setFrom(null);setTo(null);setHover(null);onClear();setShow(false); };
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button type="button" className={`po-cal-trigger${show?' po-cal--open':''}${appliedFrom?' po-cal--applied':''}`} onClick={()=>setShow(p=>!p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span className={appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedFrom?fmt(appliedFrom):'dd-mm-yyyy'}</span>
+        <span className="po-cal-sep">—</span>
+        <span className={appliedTo&&appliedTo!==appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}</span>
+        {appliedFrom&&<span className="po-cal-x" onClick={e=>{e.stopPropagation();handleClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {show&&(
+        <div className="po-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
+          <div className="po-cal-head">
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="po-cal-month-btn" onClick={()=>setShowYr(p=>!p)}>{_BR_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span></button>
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYr?(
+            <div className="po-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYr(false);}}>{yr}</div>;})}</div>
+          ):(
+            <div className="po-cal-grid">
+              {_BR_DAYS.map(d=><div key={d} className="po-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i)=>{
+                const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;
+                let cls='po-cal-cell';
+                if(ds===from)cls+=' po-cal-from';else if(ds===to)cls+=' po-cal-to';
+                else if(inR(ds)){cls+=' po-cal-in-range';if(dow===0)cls+=' po-cal-rr-s';if(dow===6)cls+=' po-cal-rr-e';}
+                if(ds===tod&&ds!==from&&ds!==to)cls+=' po-cal-today';
+                return<div key={ds} className={cls} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)}>{dy}</div>;
+              })}
+            </div>
+          )}
+          <div className="po-cal-footer">
+            <div className="po-cal-chips">
+              <span className={`po-cal-chip${from?' po-cal-chip--set':''}`}>{from?fmt(from):'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+              <span className={`po-cal-chip${to?' po-cal-chip--set':''}`}>{to?fmt(to):'To —'}</span>
+            </div>
+            <div style={{display:'flex',gap:6,justifyContent:'center',width:'100%'}}>
+              {(from||appliedFrom)&&<button type="button" className="po-cal-clear" onClick={handleClear}>Clear</button>}
+              <button type="button" className="po-cal-clear" onClick={()=>setShow(false)}>Cancel</button>
+              <button type="button" className="po-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 
 const BillsManagementPage = () => {
   const [bills, setBills] = useState([]);
@@ -41,6 +193,10 @@ const BillsManagementPage = () => {
     search: '',
     paymentStatus: 'all'
   });
+
+  // ── Bill date range filter ────────────────────────────────────────────────
+  const [billDateFrom, setBillDateFrom] = useState('');
+  const [billDateTo,   setBillDateTo]   = useState('');
 
   const [pagination, setPagination] = useState({
     currentPage: 0,
@@ -127,17 +283,20 @@ const BillsManagementPage = () => {
     const load = async () => {
       setLoading(true);
       try {
+        const isDateFiltered = !!(billDateFrom || billDateTo);
         const params = new URLSearchParams({
           page: pagination.currentPage.toString(),
           size: pagination.pageSize.toString(),
           sortBy: 'billDate',
-          sortDirection: 'DESC'
+          sortDirection: isDateFiltered ? 'ASC' : 'DESC'
         });
         if (projectId)    params.append('projectId',  projectId);
         if (groupName)    params.append('groupId',    groupName);
         if (subGroupName) params.append('subGroupId', subGroupName);
         if (filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
         if (filters.search) params.append('search', filters.search);
+        if (billDateFrom) params.append('billDateFrom', billDateFrom);
+        if (billDateTo)   params.append('billDateTo',   billDateTo);
         const response = await fetch(`${API_BASE_URL}/bills?${params}`, {
           headers: getAuthHeaders(), credentials: 'include', signal: controller.signal
         });
@@ -160,11 +319,11 @@ const BillsManagementPage = () => {
     load();
     return () => controller.abort(); // cancel previous in-flight request when deps change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize]);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize, billDateFrom, billDateTo]);
 
   useEffect(() => {
     fetchKPIs();
-  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search]);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, billDateFrom, billDateTo]);
 
   // Reset to page 1 whenever any external filter (group/project) changes
   useEffect(() => {
@@ -218,6 +377,8 @@ const BillsManagementPage = () => {
       // Active filters — so KPIs reflect exactly what's visible in the table
       if (filters.paymentStatus && filters.paymentStatus !== 'all') params.append('status', filters.paymentStatus);
       if (filters.search && filters.search.trim()) params.append('search', filters.search.trim());
+      if (billDateFrom) params.append('billDateFrom', billDateFrom);
+      if (billDateTo)   params.append('billDateTo',   billDateTo);
 
       const response = await fetch(`${API_BASE_URL}/bills/stats?${params}`, {
         headers: getAuthHeaders(),
@@ -1287,6 +1448,16 @@ const BillsManagementPage = () => {
             <option value="Partially Paid">Partially Paid</option>
             <option value="Paid">Paid</option>
           </select>
+          {/* Bill date range filter */}
+          <div className="po-order-date-filter">
+            <span className="po-order-date-label">Bill Date:</span>
+            <BRDateRangeFilter
+              appliedFrom={billDateFrom}
+              appliedTo={billDateTo}
+              onApply={(f, t) => { setBillDateFrom(f); setBillDateTo(t); setPagination(prev => ({ ...prev, currentPage: 0 })); }}
+              onClear={() => { setBillDateFrom(''); setBillDateTo(''); setPagination(prev => ({ ...prev, currentPage: 0 })); }}
+            />
+          </div>
         </div>
 
         <div className="procurement-bills-received-actions">
@@ -1746,21 +1917,19 @@ const BillsManagementPage = () => {
                 <div className="bill-form-row">
                   <div className="bill-form-field">
                     <label className="bill-form-label">Bill Date *</label>
-                    <input
-                      className="bill-form-input"
-                      type="date"
+                    <BRDatePicker
                       value={formData.billDate}
-                      onChange={(e) => setFormData({ ...formData, billDate: e.target.value })}
-                      required
+                      onChange={v => setFormData({ ...formData, billDate: v })}
+                      placeholder="Select bill date"
                     />
                   </div>
                   <div className="bill-form-field">
                     <label className="bill-form-label">Due Date</label>
-                    <input
-                      className="bill-form-input"
-                      type="date"
+                    <BRDatePicker
                       value={formData.dueDate}
-                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      onChange={v => setFormData({ ...formData, dueDate: v })}
+                      placeholder="Select due date"
+                      minDate={formData.billDate}
                     />
                   </div>
                 </div>
@@ -2391,10 +2560,10 @@ const BillsManagementPage = () => {
                 </div>
                 <div className="procurement-bills-received-form-group">
                   <label>Payment Date *</label>
-                  <input
-                    type="date"
+                  <BRDatePicker
                     value={paymentData.paymentDate}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
+                    onChange={v => setPaymentData({ ...paymentData, paymentDate: v })}
+                    placeholder="Select payment date"
                   />
                 </div>
               </div>

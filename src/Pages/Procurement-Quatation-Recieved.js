@@ -22,18 +22,19 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ── Column definitions ───────────────────────────────────────────────────────
 const ALL_QUOTATION_COLUMNS = [
-  { id: 'quotationNo', label: 'Quotation No', visible: true },
-  { id: 'vendorId', label: 'Vendor Name', visible: true },
-  { id: 'rfqId', label: 'RFQ ID', visible: false },
-  { id: 'category', label: 'Category', visible: false },
-  { id: 'quotationValue', label: 'Quotation Value', visible: true },
-  { id: 'validUntil', label: 'Valid Until', visible: true },
-  { id: 'file', label: 'File', visible: false },
-  { id: 'status', label: 'Status', visible: true },
-  { id: 'uploadedOn', label: 'Uploaded On', visible: true },
-  { id: 'group', label: 'Group', visible: false },
-  { id: 'project', label: 'Project', visible: true },
-  { id: 'actions', label: 'Actions', visible: true, fixed: true },
+  { id: 'sNo',           label: 'S.No',           visible: true,  fixed: true  },
+  { id: 'quotationNo',   label: 'Quotation No',   visible: true },
+  { id: 'vendorId',      label: 'Vendor Name',    visible: true },
+  { id: 'quotationValue',label: 'Quotation Value',visible: true },
+  { id: 'uploadedOn',    label: 'Uploaded On',    visible: true },
+  { id: 'rfqId',         label: 'RFQ ID',         visible: false },
+  { id: 'category',      label: 'Category',       visible: false },
+  { id: 'validUntil',    label: 'Valid Until',     visible: true },
+  { id: 'file',          label: 'File',            visible: false },
+  { id: 'status',        label: 'Status',          visible: true },
+  { id: 'group',         label: 'Group',           visible: false },
+  { id: 'project',       label: 'Project',         visible: true },
+  { id: 'actions',       label: 'Actions',         visible: true, fixed: true },
 ];
 
 const SORTABLE_COLUMNS = new Set([
@@ -64,6 +65,221 @@ const CATEGORIES = [
   'Other',
 ];
 
+
+// ── Date picker constants ────────────────────────────────────────────────────
+const _QR_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _QR_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+// ── QRDatePicker — single date picker, compact (same as PO Create Modal) ─────
+const QRDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }) => {
+  const [show,    setShow]    = useState(false);
+  const [calMo,   setCalMo]   = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr,   setCalYr]   = useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
+  const [showYrP, setShowYrP] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const open = () => {
+    if (value) { setCalMo(parseInt(value.slice(5,7))-1); setCalYr(parseInt(value.slice(0,4))); }
+    setShowYrP(false);
+    setShow(true);
+  };
+
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+  const fmtD = d => { if (!d) return null; const [y,m,dy] = d.split('-'); return `${dy}-${m}-${y}`; };
+
+  return (
+    <div ref={wrapRef} style={{ position:'relative', width:'100%' }}>
+      <button type="button"
+        className={`po-dtp-trigger${show?' po-dtp--open':''}${value?' po-dtp--set':''}`}
+        onClick={show ? () => setShow(false) : open}
+        style={{ width:'100%' }}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ flexShrink:0, color: value ? '#4f46e5' : '#94a3b8' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        {value
+          ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:'#0f172a' }}>{fmtD(value)}</span>
+          : <span className="po-dtp-ph">{placeholder}</span>}
+        {value
+          ? <span className="po-dtp-x" onClick={e => { e.stopPropagation(); onChange(''); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </span>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style={{ marginLeft:'auto', color:'#94a3b8', transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+            </svg>}
+      </button>
+      {show && (
+        <div className="po-dtp-dropdown"
+          style={{ position:'absolute', top:'calc(100% + 4px)', left:0, width:280, zIndex:1050 }}>
+          <div className="po-dtp-cal-head">
+            <button type="button" className="po-cal-nav"
+              onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="po-dtp-month" onClick={() => setShowYrP(p => !p)}>
+              {_QR_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="po-cal-nav"
+              onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+          {showYrP ? (
+            <div className="po-yr-grid">
+              {Array.from({length:16},(_,i) => {
+                const yr = new Date().getFullYear()-4+i;
+                return <div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`}
+                  onClick={() => { setCalYr(yr); setShowYrP(false); }}>{yr}</div>;
+              })}
+            </div>
+          ) : (
+            <div className="po-dtp-grid">
+              {_QR_DAYS.map(d => <div key={d} className="po-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy = i+1;
+                const ds = `${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const isMin = minDate && ds < minDate;
+                let cls = 'po-cal-cell';
+                if (ds === value) cls += ' po-dtp-sel';
+                else if (ds === tod) cls += ' po-cal-today';
+                if (isMin) cls += ' po-cal-empty';
+                return (
+                  <div key={ds} className={cls}
+                    onClick={() => { if (!isMin) { onChange(ds); setShow(false); } }}>
+                    {dy}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── QRDateRangeFilter — uploaded date range picker (mirrors PO page) ──────────
+const QRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,  setShow]  = React.useState(false);
+  const [from,  setFrom]  = React.useState(null);
+  const [to,    setTo]    = React.useState(null);
+  const [hover, setHover] = React.useState(null);
+  const [calMo, setCalMo] = React.useState(new Date().getMonth());
+  const [calYr, setCalYr] = React.useState(new Date().getFullYear());
+  const [showYr,setShowYr]= React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a,b] = from<=hi ? [from,hi] : [hi,from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return ''; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+  const handleApply = () => { if (!from) return; onApply(from, to || from); setShow(false); };
+  const handleClear = () => { setFrom(null); setTo(null); setHover(null); onClear(); setShow(false); };
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button type="button"
+        className={`po-cal-trigger${show?' po-cal--open':''}${appliedFrom?' po-cal--applied':''}`}
+        onClick={() => setShow(p => !p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom ? 'po-cal-val' : 'po-cal-ph'}>{appliedFrom ? fmt(appliedFrom) : 'dd-mm-yyyy'}</span>
+        <span className="po-cal-sep">—</span>
+        <span className={appliedTo && appliedTo !== appliedFrom ? 'po-cal-val' : 'po-cal-ph'}>
+          {appliedTo && appliedTo !== appliedFrom ? fmt(appliedTo) : 'dd-mm-yyyy'}
+        </span>
+        {appliedFrom && <span className="po-cal-x" onClick={e => { e.stopPropagation(); handleClear(); }}>
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+        </span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      {show && (
+        <div className="po-cal-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:9999, width:264 }}>
+          <div className="po-cal-head">
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button type="button" className="po-cal-month-btn" onClick={() => setShowYr(p => !p)}>
+              {_QR_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          {showYr ? (
+            <div className="po-yr-grid">
+              {Array.from({length:16},(_,i) => { const yr=new Date().getFullYear()-4+i; return (
+                <div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={() => { setCalYr(yr); setShowYr(false); }}>{yr}</div>
+              );})}
+            </div>
+          ) : (
+            <div className="po-cal-grid">
+              {_QR_DAYS.map(d => <div key={d} className="po-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy=i+1, ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`, dow=(FD+i)%7;
+                let cls='po-cal-cell';
+                if(ds===from) cls+=' po-cal-from'; else if(ds===to) cls+=' po-cal-to';
+                else if(inR(ds)){ cls+=' po-cal-in-range'; if(dow===0) cls+=' po-cal-rr-s'; if(dow===6) cls+=' po-cal-rr-e'; }
+                if(ds===tod && ds!==from && ds!==to) cls+=' po-cal-today';
+                return <div key={ds} className={cls} onClick={() => clickDay(ds)} onMouseEnter={() => from && !to && setHover(ds)} onMouseLeave={() => setHover(null)}>{dy}</div>;
+              })}
+            </div>
+          )}
+          <div className="po-cal-footer">
+            <div className="po-cal-chips">
+              <span className={`po-cal-chip${from?' po-cal-chip--set':''}`}>{from ? fmt(from) : 'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+              <span className={`po-cal-chip${to?' po-cal-chip--set':''}`}>{to ? fmt(to) : 'To —'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, justifyContent:'center', width:'100%' }}>
+              {(from || appliedFrom) && <button type="button" className="po-cal-clear" onClick={handleClear}>Clear</button>}
+              <button type="button" className="po-cal-clear" onClick={() => setShow(false)}>Cancel</button>
+              <button type="button" className="po-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── Main Component ────────────────────────────────────────────────────────────
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -73,6 +289,14 @@ const QuotationsReceived = () => {
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
   const [poFormData, setPOFormData] = useState(null);
   const [filters, setFilters] = useState({ search: '', status: 'all', category: 'all' });
+
+  // ── Uploaded date range filter ────────────────────────────────────────────
+  const [uploadedFrom, setUploadedFrom] = useState('');
+  const [uploadedTo,   setUploadedTo]   = useState('');
+
+  // ── Custom vendor category/type (when "Other" is selected) ───────────────
+  const [customVendorCategory, setCustomVendorCategory] = useState('');
+  const [customVendorType,     setCustomVendorType]     = useState('');
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
@@ -84,7 +308,7 @@ const QuotationsReceived = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // ── Column state (drag + visibility) ────────────────────────────────────
-  const COLUMN_VERSION = 'v3'; // bumped: project column now visible by default
+  const COLUMN_VERSION = 'v4'; // bumped: S.No column + uploadedOn moved to 5th
   const [columns, setColumns] = useState(() => {
     try {
       const saved = localStorage.getItem('quotationColumns');
@@ -183,13 +407,20 @@ const QuotationsReceived = () => {
     const loadAll = async () => {
       setLoading(true);
       try {
-        // Quotation list params
-        const quotParams = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'uploadedAt', sortDirection: 'DESC' });
+        // Quotation list params — force uploadedAt ASC when date filter active
+        const isDateFiltered = !!(uploadedFrom || uploadedTo);
+        const quotParams = new URLSearchParams({
+          page: currentPage, size: pageSize,
+          sortBy: isDateFiltered ? 'uploadedAt' : 'uploadedAt',
+          sortDirection: isDateFiltered ? 'ASC' : 'DESC'
+        });
         if (groupName)    quotParams.append('groupName',    groupName);
         if (subGroupName) quotParams.append('subGroupName', subGroupName);
         if (projectId)    quotParams.append('projectId',    projectId);
         if (filters.status !== 'all') quotParams.append('status',     filters.status);
         if (filters.search)           quotParams.append('searchTerm', filters.search.trim());
+        if (uploadedFrom)             quotParams.append('uploadedFrom', uploadedFrom);
+        if (uploadedTo)               quotParams.append('uploadedTo',   uploadedTo);
 
         // Stats params — same filters so KPI cards always match the table
         const statsParams = new URLSearchParams();
@@ -198,6 +429,8 @@ const QuotationsReceived = () => {
         if (projectId)    statsParams.append('projectId',    projectId);
         if (filters.status !== 'all') statsParams.append('status',     filters.status);
         if (filters.search)           statsParams.append('searchTerm', filters.search.trim());
+        if (uploadedFrom)             statsParams.append('uploadedFrom', uploadedFrom);
+        if (uploadedTo)               statsParams.append('uploadedTo',   uploadedTo);
 
         const [quotRes, statsRes] = await Promise.all([
           fetch(`${API_BASE_URL}/quotations/procurement?${quotParams}`, { credentials: 'include', headers: getAuthHeaders(), signal }),
@@ -228,7 +461,7 @@ const QuotationsReceived = () => {
     loadAll();
     return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search, uploadedFrom, uploadedTo]);
 
   // ── Sorting logic ────────────────────────────────────────────────────────
   const sortedQuotations = useMemo(() => {
@@ -770,6 +1003,7 @@ const QuotationsReceived = () => {
     setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
     setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
     setVendorSearch(''); setVendorDropdownOpen(false);
+    setCustomVendorCategory(''); setCustomVendorType('');
     setModalGroupName(groupName || ''); setModalSubGroupName(subGroupName || ''); setModalProjectId(projectId || '');
     setSelectedFile(null); setFilePreview(null);
     fetchModalGroups();
@@ -783,9 +1017,10 @@ const QuotationsReceived = () => {
     if (!quotationFormData.groupName) { showError('Group is required'); return; }
     if (!quotationFormData.vendorId) {
       if (!quotationFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
-      if (!quotationFormData.vendorContact || quotationFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
-      if (!quotationFormData.vendorCategory) { showError('Vendor category is required'); return; }
-      if (!quotationFormData.vendorType) { showError('Vendor type is required'); return; }
+      const finalCategory = quotationFormData.vendorCategory === 'Other' ? customVendorCategory?.trim() : quotationFormData.vendorCategory;
+      const finalType     = quotationFormData.vendorType     === 'Other' ? customVendorType?.trim()     : quotationFormData.vendorType;
+      if (!finalCategory) { showError('Vendor category is required'); return; }
+      if (!finalType)     { showError('Vendor type is required'); return; }
     }
     if (!quotationFormData.validTill) { showError('Valid until date is required'); return; }
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -802,9 +1037,13 @@ const QuotationsReceived = () => {
     setLoading(true);
     try {
       const fd = new FormData();
+      const resolvedVendorCategory = quotationFormData.vendorCategory === 'Other' ? (customVendorCategory?.trim() || 'Other') : quotationFormData.vendorCategory;
+      const resolvedVendorType     = quotationFormData.vendorType     === 'Other' ? (customVendorType?.trim()     || 'Other') : quotationFormData.vendorType;
       const qd = {
         vendorId: quotationFormData.vendorId || null, vendorName: quotationFormData.vendorName?.trim() || null,
         vendorContact: quotationFormData.vendorContact?.trim() || null,
+        vendorCategory: resolvedVendorCategory || null,
+        vendorType: resolvedVendorType || null,
         rfqId: quotationFormData.rfqId?.trim() || null,
         validTill: quotationFormData.validTill, groupName: quotationFormData.groupName,
         subGroupName: quotationFormData.subGroupName || null, projectId: quotationFormData.projectId || null,
@@ -843,7 +1082,18 @@ const QuotationsReceived = () => {
 
   // ── Utility formatters ───────────────────────────────────────────────────
   const formatCurrency = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
-  const formatDate = (d) => { if (!d) return ''; return new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }); };
+  const formatDate = (d) => {
+    if (!d) return '';
+    const s = String(d);
+    if (s.length >= 10 && s[4] === '-') {
+      const [y, m, dy] = s.slice(0, 10).split('-');
+      return `${dy}-${m}-${y}`;
+    }
+    const dt = new Date(d);
+    const dy = String(dt.getDate()).padStart(2, '0');
+    const mo = String(dt.getMonth() + 1).padStart(2, '0');
+    return `${dy}-${mo}-${dt.getFullYear()}`;
+  };
   const formatFileSize = (b) => { if (!b) return '0 B'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(2) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; };
 
   const getStatusBadgeClass = (s) => ({ 'New': 'procurement-quotation-received-badge-new', 'Under Review': 'procurement-quotation-received-badge-review', 'Shortlisted': 'procurement-quotation-received-badge-shortlisted', 'Approved': 'procurement-quotation-received-badge-approved', 'PO Created': 'procurement-quotation-received-badge-po-created', 'Rejected': 'procurement-quotation-received-badge-rejected', 'Expired': 'procurement-quotation-received-badge-expired' })[s] || '';
@@ -864,8 +1114,9 @@ const QuotationsReceived = () => {
   const visibleColumns = columns.filter(c => c.visible);
 
   // ── Render column cell ───────────────────────────────────────────────────
-  const renderCell = (col, q) => {
+  const renderCell = (col, q, rowIndex = 0) => {
     switch (col.id) {
+      case 'sNo': return <td style={{ textAlign:'center', color:'#64748b', fontSize:13, fontWeight:500, width:50 }}>{currentPage * pageSize + rowIndex + 1}</td>;
       case 'quotationNo': return <td className="procurement-quotation-received-table-id">{q.quoteNo}</td>;
       case 'vendorId': return <td>{q.vendorName || q.vendorId || '—'}</td>;
       case 'rfqId': return <td>{q.rfqId || '—'}</td>;
@@ -956,6 +1207,16 @@ const QuotationsReceived = () => {
             <option value="Rejected">Rejected</option>
             <option value="Expired">Expired</option>
           </select>
+          {/* Uploaded date range filter */}
+          <div className="po-order-date-filter">
+            <span className="po-order-date-label">Uploaded:</span>
+            <QRDateRangeFilter
+              appliedFrom={uploadedFrom}
+              appliedTo={uploadedTo}
+              onApply={(f, t) => { setUploadedFrom(f); setUploadedTo(t); setCurrentPage(0); }}
+              onClear={() => { setUploadedFrom(''); setUploadedTo(''); setCurrentPage(0); }}
+            />
+          </div>
         </div>
 
         <div className="procurement-quotation-received-actions">
@@ -1068,11 +1329,11 @@ const QuotationsReceived = () => {
                     </td>
                   </tr>
                 ) : (
-                  sortedQuotations.map((q) => (
+                  sortedQuotations.map((q, rowIndex) => (
                     <tr key={q.id} className="procurement-quotation-received-table-row">
                       {visibleColumns.map((col) => (
                         <React.Fragment key={col.id}>
-                          {renderCell(col, q)}
+                          {renderCell(col, q, rowIndex)}
                         </React.Fragment>
                       ))}
                     </tr>
@@ -1429,31 +1690,40 @@ const QuotationsReceived = () => {
                         <input type="text" value={quotationFormData.vendorName || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorName: e.target.value })} placeholder="Enter vendor name" />
                       </div>
                       <div className="procurement-quotation-received-form-group">
-                        <label>Contact Number * (10 digits)</label>
+                        <label>Contact Number <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
                         <input type="tel" value={quotationFormData.vendorContact || ''} onChange={(e) => handleNewVendorContactChange(e.target.value)} placeholder="10-digit mobile" maxLength={10} />
-                        {quotationFormData.vendorContact && quotationFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: 12, marginTop: 4, display: 'block' }}>Must be exactly 10 digits</small>}
+                        {quotationFormData.vendorContact && quotationFormData.vendorContact.length > 0 && quotationFormData.vendorContact.length < 10 &&
+                          <small style={{ color: '#dc2626', fontSize: 12, marginTop: 4, display: 'block' }}>Must be exactly 10 digits</small>}
                       </div>
                     </div>
                     <div className="procurement-quotation-received-form-row">
                       <div className="procurement-quotation-received-form-group">
                         <label>Category *</label>
-                        <select value={quotationFormData.vendorCategory || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorCategory: e.target.value })}>
+                        <select value={quotationFormData.vendorCategory || ''} onChange={(e) => { setQuotationFormData({ ...quotationFormData, vendorCategory: e.target.value }); if (e.target.value !== 'Other') setCustomVendorCategory(''); }}>
                           <option value="">Select category</option>
                           <option value="IT Equipment">IT Equipment</option>
                           <option value="Office Furniture">Office Furniture</option>
                           <option value="Manufacturing">Manufacturing</option>
                           <option value="Office Supplies">Office Supplies</option>
                           <option value="Services">Services</option>
+                          <option value="Other">Other</option>
                         </select>
+                        {quotationFormData.vendorCategory === 'Other' && (
+                          <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                        )}
                       </div>
                       <div className="procurement-quotation-received-form-group">
                         <label>Vendor Type *</label>
-                        <select value={quotationFormData.vendorType || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorType: e.target.value })}>
+                        <select value={quotationFormData.vendorType || ''} onChange={(e) => { setQuotationFormData({ ...quotationFormData, vendorType: e.target.value }); if (e.target.value !== 'Other') setCustomVendorType(''); }}>
                           <option value="">Select type</option>
                           <option value="Manufacturer">Manufacturer</option>
                           <option value="Distributor">Distributor</option>
                           <option value="Service Provider">Service Provider</option>
+                          <option value="Other">Other</option>
                         </select>
+                        {quotationFormData.vendorType === 'Other' && (
+                          <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                        )}
                       </div>
                     </div>
                     <div style={{ marginTop: '12px', padding: '12px', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>💡 This vendor will be created when you save the quotation.</div>
@@ -1488,7 +1758,12 @@ const QuotationsReceived = () => {
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Valid Till *</label>
-                    <input type="date" value={quotationFormData.validTill} onChange={(e) => setQuotationFormData({ ...quotationFormData, validTill: e.target.value })} min={new Date().toISOString().split('T')[0]} />
+                    <QRDatePicker
+                      value={quotationFormData.validTill}
+                      onChange={v => setQuotationFormData({ ...quotationFormData, validTill: v })}
+                      placeholder="Select valid till date"
+                      minDate={new Date().toISOString().split('T')[0]}
+                    />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Payment Terms</label>
@@ -1801,8 +2076,23 @@ const QuotationsReceived = () => {
                   <div className="procurement-quotation-received-form-group"><label>RFQ ID</label><input type="text" value={poFormData.rfqId || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
                 </div>
                 <div className="procurement-quotation-received-form-row">
-                  <div className="procurement-quotation-received-form-group"><label>Order Date</label><input type="date" value={poFormData.orderDate} onChange={(e) => setPOFormData({ ...poFormData, orderDate: e.target.value })} /></div>
-                  <div className="procurement-quotation-received-form-group"><label>Expected Delivery *</label><input type="date" value={poFormData.expectedDelivery} onChange={(e) => setPOFormData({ ...poFormData, expectedDelivery: e.target.value })} min={poFormData.orderDate} /></div>
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Order Date</label>
+                    <QRDatePicker
+                      value={poFormData.orderDate}
+                      onChange={v => setPOFormData({ ...poFormData, orderDate: v })}
+                      placeholder="Select order date"
+                    />
+                  </div>
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Expected Delivery *</label>
+                    <QRDatePicker
+                      value={poFormData.expectedDelivery}
+                      onChange={v => setPOFormData({ ...poFormData, expectedDelivery: v })}
+                      placeholder="Select delivery date"
+                      minDate={poFormData.orderDate}
+                    />
+                  </div>
                 </div>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group"><label>Payment Terms</label><input type="text" value={poFormData.paymentTerms} onChange={(e) => setPOFormData({ ...poFormData, paymentTerms: e.target.value })} placeholder="e.g., Net 30" /></div>
