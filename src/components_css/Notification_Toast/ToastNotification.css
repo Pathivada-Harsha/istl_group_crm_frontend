@@ -135,14 +135,19 @@
 /* Warning Toast */
 .toast-warning {
   border-left-color: #f59e0b;
+  background-color: #fffbeb;
 }
 
 .toast-warning .toast-icon-container {
-  color: #f59e0b;
+  color: #d97706;
 }
 
 .toast-warning .toast-title {
   color: #92400e;
+}
+
+.toast-warning .toast-message {
+  color: #78350f;
 }
 
 /* Info Toast */

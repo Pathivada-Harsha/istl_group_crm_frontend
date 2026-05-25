@@ -173,6 +173,7 @@ const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 const BillsManagementPage = () => {
   const [bills, setBills] = useState([]);
   const [selectedBills, setSelectedBills] = useState([]);
+  const [projectNames, setProjectNames] = useState({});
   const [loading, setLoading] = useState(false);
   const [kpis, setKpis] = useState({
     totalBills: 0,
@@ -258,7 +259,7 @@ const BillsManagementPage = () => {
     onConfirm: null
   });
 
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const billsPerms = pagePermissions?.BILLS || [];
   const canView    = billsPerms.includes('VIEW')   || isAccountsExecutive;
@@ -303,6 +304,7 @@ const BillsManagementPage = () => {
         if (response.ok) {
           const data = await response.json();
           setBills(data.bills || []);
+          setProjectNames(data.projectNames || {});
           // Do NOT sync currentPage from API — page is managed locally to ensure filter resets work
           setPagination(prev => ({
             ...prev,
@@ -423,12 +425,16 @@ const BillsManagementPage = () => {
     }
   };
 
-  const fetchModalPurchaseOrders = async (vendorIdOrName = null) => {
+  const fetchModalPurchaseOrders = async (vendorIdOrName = null, overrideGroup = null, overrideSubGroup = null, overrideProject = null) => {
     try {
       const params = new URLSearchParams();
-      if (modalGroupName) params.append('groupName', modalGroupName);
-      if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
-      if (modalProjectId) params.append('projectId', modalProjectId);
+      // Use override values if provided (avoids reading stale state when called from handleEditBill)
+      const grp = overrideGroup    ?? modalGroupName;
+      const sub = overrideSubGroup ?? modalSubGroupName;
+      const prj = overrideProject  ?? modalProjectId;
+      if (grp) params.append('groupName',    grp);
+      if (sub) params.append('subGroupName', sub);
+      if (prj) params.append('projectId',    prj);
 
       if (vendorIdOrName) {
         if (typeof vendorIdOrName === 'number') {
@@ -500,7 +506,7 @@ const BillsManagementPage = () => {
           }
         } else {
           // No items on this PO at all
-          showError('No items found for this PO.');
+          showWarning('No items found for this PO.');
         }
       }
     } catch (error) {
@@ -799,7 +805,7 @@ const BillsManagementPage = () => {
       }
       
       if (bill.vendorId) {
-        await fetchModalPurchaseOrders(bill.vendorId);
+        await fetchModalPurchaseOrders(bill.vendorId, bill.groupId || '', bill.subGroupId || '', bill.projectId || '');
       }
       
       let enrichedItems = bill.items && bill.items.length > 0
@@ -920,15 +926,15 @@ const BillsManagementPage = () => {
   // ========== SAVE BILL ==========
   const handleSaveBill = async () => {
     if (!formData.vendorId || formData.vendorId === '') {
-      showError('Please select a vendor');
+      showWarning('Please select a vendor');
       return;
     }
     if (!formData.billDate) {
-      showError('Please select bill date');
+      showWarning('Please select bill date');
       return;
     }
     if (formData.items.length === 0) {
-      showError('Please add at least one item');
+      showWarning('Please add at least one item');
       return;
     }
 
@@ -937,23 +943,23 @@ const BillsManagementPage = () => {
       
       // Manual items (no PO linked) require an item name
       if (!item.poItemId && (!item.itemName || item.itemName.trim() === '')) {
-        showError(`Item ${i + 1}: Please enter an item name`);
+        showWarning(`Item ${i + 1}: Please enter an item name`);
         return;
       }
 
       if (!item.quantity || item.quantity <= 0) {
-        showError(`Item ${i + 1}: Please enter valid quantity`);
+        showWarning(`Item ${i + 1}: Please enter valid quantity`);
         return;
       }
       
       if (item.unitPrice === undefined || item.unitPrice === null || item.unitPrice < 0) {
-        showError(`Item ${i + 1}: Please enter valid price`);
+        showWarning(`Item ${i + 1}: Please enter valid price`);
         return;
       }
       
       if (editMode && item.poItemId && item.maxBillableQty) {
         if (item.quantity > item.maxBillableQty) {
-          showError(
+          showWarning(
             `Item ${i + 1}: Quantity (${item.quantity}) exceeds maximum allowed (${item.maxBillableQty}). ` +
             `Max = previous qty (${item.originalBillQty || 0}) + pending (${item.pendingQty || 0})`
           );
@@ -1091,12 +1097,12 @@ const BillsManagementPage = () => {
   // Save payment — creates a VendorAdvance (BILL_PAYMENT type), same as Vendor Payments tab
   const handleSavePayment = async () => {
     if (!paymentData.amount) {
-      showError('Please enter a payment amount');
+      showWarning('Please enter a payment amount');
       return;
     }
     const paymentAmount = parseFloat(paymentData.amount);
     if (paymentAmount <= 0 || paymentAmount > parseFloat(selectedBill.balanceAmount || 0)) {
-      showError(`Invalid payment amount. Max: ₹${formatCurrency(selectedBill.balanceAmount)}`);
+      showWarning(`Invalid payment amount. Max: ₹${formatCurrency(selectedBill.balanceAmount)}`);
       return;
     }
 
@@ -1245,9 +1251,16 @@ const BillsManagementPage = () => {
 
   // Format date
   const formatDate = (dateStr) => {
-    if (!dateStr) return 'N/A';
-    const date = new Date(dateStr);
-    return date.toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' });
+    if (!dateStr) return '';
+    const s = String(dateStr);
+    if (s.length >= 10 && s[4] === '-') {
+      const [y, m, d] = s.slice(0, 10).split('-');
+      return `${d}-${m}-${y}`;
+    }
+    const dt = new Date(dateStr);
+    const d  = String(dt.getDate()).padStart(2, '0');
+    const mo = String(dt.getMonth() + 1).padStart(2, '0');
+    return `${d}-${mo}-${dt.getFullYear()}`;
   };
 
   // Add item row
@@ -1290,14 +1303,14 @@ const BillsManagementPage = () => {
     const file = e.target.files[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        showError('File size exceeds 10MB limit');
+        showWarning('File size exceeds 10MB limit');
         e.target.value = null;
         return;
       }
 
       const validTypes = ['application/pdf', 'image/png', 'image/jpeg', 'image/jpg'];
       if (!validTypes.includes(file.type)) {
-        showError('Invalid file type. Only PDF, PNG, JPG allowed');
+        showWarning('Invalid file type. Only PDF, PNG, JPG allowed');
         e.target.value = null;
         return;
       }
@@ -1423,17 +1436,32 @@ const BillsManagementPage = () => {
       {/* Action Bar */}
       <div className="procurement-bills-received-action-bar">
         <div className="procurement-bills-received-search-filters">
-          <input
-            type="text"
-            placeholder="Search by Bill Ref ID, Bill ID, Vendor Name..."
-            className="procurement-bills-received-search"
-            value={filters.search}
-            onChange={(e) => {
-              setFilters({ ...filters, search: e.target.value });
-              setPagination(prev => ({ ...prev, currentPage: 0 }));
-            }}
-            onKeyPress={(e) => e.key === 'Enter' && fetchBills()}
-          />
+          <div style={{ position: 'relative', flex: 1, minWidth: 200, display: 'flex' }}>
+            <input
+              type="text"
+              placeholder="Search by Bill Ref ID, Bill ID, Vendor Name..."
+              className="procurement-bills-received-search"
+              style={{ flex: 1, paddingRight: filters.search ? 34 : 16 }}
+              value={filters.search}
+              onChange={(e) => {
+                setFilters({ ...filters, search: e.target.value });
+                setPagination(prev => ({ ...prev, currentPage: 0 }));
+              }}
+              onKeyPress={(e) => e.key === 'Enter' && fetchBills()}
+            />
+            {filters.search && (
+              <button
+                type="button"
+                onClick={() => { setFilters({ ...filters, search: '' }); setPagination(prev => ({ ...prev, currentPage: 0 })); }}
+                className="search-clear-btn"
+                title="Clear search"
+              >
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
+          </div>
 
           <select
             className="procurement-bills-received-filter"
@@ -1526,50 +1554,44 @@ const BillsManagementPage = () => {
         </div>
       )}
 
-      <div className="procurement-bills-received-kpi-grid">
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <FileText size={28} />
+      <div className="unified-kpi-grid">
+        <div className="unified-kpi-card">
+          <div className="unified-kpi-icon unified-kpi-icon--blue">
+            <FileText size={26} />
           </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">{kpis.totalBills}</div>
-            <div className="procurement-bills-received-kpi-label">Total Bills</div>
-          </div>
-        </div>
-
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <IndianRupee size={28} />
-          </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">
-              {formatCurrency(kpis.totalAmount)}
-            </div>
-            <div className="procurement-bills-received-kpi-label">Total Billed Amount</div>
+          <div className="unified-kpi-content">
+            <div className="unified-kpi-value">{kpis.totalBills}</div>
+            <div className="unified-kpi-label">Total Bills</div>
           </div>
         </div>
 
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <CheckCircle size={28} />
+        <div className="unified-kpi-card">
+          <div className="unified-kpi-icon unified-kpi-icon--purple">
+            <IndianRupee size={26} />
           </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">
-              {formatCurrency(kpis.paidAmount)}
-            </div>
-            <div className="procurement-bills-received-kpi-label">Paid Amount</div>
+          <div className="unified-kpi-content">
+            <div className="unified-kpi-value">{formatCurrency(kpis.totalAmount)}</div>
+            <div className="unified-kpi-label">Total Billed Amount</div>
           </div>
         </div>
 
-        <div className="procurement-bills-received-kpi-card">
-          <div className="procurement-bills-received-kpi-icon">
-            <AlertCircle size={28} />
+        <div className="unified-kpi-card">
+          <div className="unified-kpi-icon unified-kpi-icon--green">
+            <CheckCircle size={26} />
           </div>
-          <div className="procurement-bills-received-kpi-content">
-            <div className="procurement-bills-received-kpi-value">
-              {formatCurrency(kpis.pendingAmount)}
-            </div>
-            <div className="procurement-bills-received-kpi-label">Pending Amount</div>
+          <div className="unified-kpi-content">
+            <div className="unified-kpi-value">{formatCurrency(kpis.paidAmount)}</div>
+            <div className="unified-kpi-label">Paid Amount</div>
+          </div>
+        </div>
+
+        <div className="unified-kpi-card">
+          <div className="unified-kpi-icon unified-kpi-icon--amber">
+            <AlertCircle size={26} />
+          </div>
+          <div className="unified-kpi-content">
+            <div className="unified-kpi-value">{formatCurrency(kpis.pendingAmount)}</div>
+            <div className="unified-kpi-label">Pending Amount</div>
           </div>
         </div>
       </div>
@@ -1581,13 +1603,6 @@ const BillsManagementPage = () => {
           <table className="procurement-bills-received-table">
             <thead>
               <tr>
-                <th>
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAll}
-                    checked={selectedBills.length === bills.length && bills.length > 0}
-                  />
-                </th>
                 {orderedVisibleCols.map(key => (
                   <th
                     key={key}
@@ -1611,7 +1626,7 @@ const BillsManagementPage = () => {
             <tbody>
               {bills.length === 0 ? (
                 <tr>
-                  <td colSpan={orderedVisibleCols.length + 2} style={{ textAlign: 'center', padding: '60px 20px' }}>
+                  <td colSpan={orderedVisibleCols.length + 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
                     <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
                     <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>
                       No bills found. Click "Add New Bill" to create one.
@@ -1621,84 +1636,95 @@ const BillsManagementPage = () => {
               ) : (
                 getSortedBills().map(bill => (
                   <tr key={bill.id} className="procurement-bills-received-table-row">
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedBills.includes(bill.id)}
-                        onChange={() => handleSelectBill(bill.id)}
-                      />
-                    </td>
                     {orderedVisibleCols.map(key => {
-                      if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || '—'}</td>;
-                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName}</td>;
+                      if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
                       if (key === 'poNumber')       return (
                         <td key={key}>
-                          {bill.poNumber
-                            ? <span className="procurement-bills-received-link">{bill.poNumber}</span>
-                            : <span className="procurement-bills-received-no-link">—</span>}
+                          {bill.poRefId || bill.poNumber
+                            ? <span>{bill.poRefId || bill.poNumber}</span>
+                            : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}
                         </td>
                       );
-                      if (key === 'billDate')       return <td key={key}>{formatDate(bill.billDate)}</td>;
-                      if (key === 'dueDate')        return <td key={key}>{formatDate(bill.dueDate)}</td>;
-                      if (key === 'totalAmount')    return <td key={key} className="procurement-bills-received-table-amount">{formatCurrency(bill.totalAmount)}</td>;
-                      if (key === 'paidAmount')     return <td key={key} className="procurement-bills-received-table-paid">{formatCurrency(bill.paidAmount)}</td>;
-                      if (key === 'balanceAmount')  return <td key={key} className="procurement-bills-received-table-balance">{formatCurrency(bill.balanceAmount)}</td>;
+                      if (key === 'billDate')       return <td key={key}>{bill.billDate ? formatDate(bill.billDate) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'dueDate')        return <td key={key}>{bill.dueDate ? formatDate(bill.dueDate) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'totalAmount')    return <td key={key} className="procurement-bills-received-table-amount">{bill.totalAmount != null ? formatCurrency(bill.totalAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'paidAmount')     return <td key={key} className="procurement-bills-received-table-paid">{bill.paidAmount != null ? formatCurrency(bill.paidAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'balanceAmount')  return <td key={key} className="procurement-bills-received-table-balance">{bill.balanceAmount != null ? formatCurrency(bill.balanceAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
                       if (key === 'status')         return (
                         <td key={key}>
-                          <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>
-                            {bill.status}
-                          </span>
+                          {bill.status
+                            ? <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>{bill.status}</span>
+                            : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}
                         </td>
                       );
-                      if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName}</td>;
-                      if (key === 'groupName')      return <td key={key}>{bill.groupName || '—'}</td>;
-                      if (key === 'category')       return <td key={key}>{bill.category || '—'}</td>;
-                      if (key === 'projectId')      return <td key={key}>{bill.projectId || '—'}</td>;
-                      return <td key={key}>—</td>;
+                      if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'groupName')      return <td key={key}>{bill.groupName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'category')       return <td key={key}>{bill.category || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'projectId') {
+                        const pName = projectNames[bill.projectId];
+                        return (
+                          <td key={key} style={{ minWidth: 180 }}>
+                            {bill.projectId ? (
+                              <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                                <span style={{ fontWeight:600, fontSize:12, color:'#1e293b', whiteSpace:'nowrap' }}>
+                                  {pName || bill.projectId}
+                                </span>
+                                {pName && (
+                                  <span style={{ fontSize:11, color:'#64748b', fontWeight:400, whiteSpace:'nowrap' }}>
+                                    {bill.projectId}
+                                  </span>
+                                )}
+                              </div>
+                            ) : <span style={{ color:'#94a3b8', display:'block', textAlign:'center' }}>—</span>}
+                          </td>
+                        );
+                      }
+                      return <td key={key} style={{textAlign:'center',color:'#94a3b8'}}>—</td>;
                     })}
                     <td>
-                      <div className="procurement-bills-received-actions-cell">
+                      <div className="receipt-action-buttons">
                         {/* View */}
                         <button
-                          className={`procurement-bills-received-action-btn${!canView ? ' action-btn-disabled' : ''}`}
+                          className={`receipt-action-btn btn-view${!canView ? ' action-btn-disabled' : ''}`}
                           onClick={() => canView && handleViewBill(bill.id)}
                           title={canView ? 'View Details' : '🔒 No view permission'}
                           disabled={!canView}
-                        ><Eye size={16} /></button>
+                        ><Eye size={15} /></button>
 
                         {/* Edit */}
                         <button
-                          className={`procurement-bills-received-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                          className={`receipt-action-btn btn-edit${!canEdit ? ' action-btn-disabled' : ''}`}
                           onClick={() => canEdit && handleEditBill(bill)}
                           title={canEdit ? 'Edit' : '🔒 No edit permission'}
                           disabled={!canEdit}
-                        ><Edit2 size={16} /></button>
+                        ><Edit2 size={15} /></button>
 
                         {/* Payment & Mark Paid — unpaid bills only */}
                         {bill.status !== 'Paid' && (
                           <>
                             <button
-                              className={`procurement-bills-received-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                              className={`receipt-action-btn btn-adjust${!canEdit ? ' action-btn-disabled' : ''}`}
                               onClick={() => canEdit && handleAddPayment(bill)}
                               title={canEdit ? 'Add Payment' : '🔒 No edit permission'}
                               disabled={!canEdit}
-                            ><CreditCard size={16} /></button>
+                            ><CreditCard size={15} /></button>
                             <button
-                              className={`procurement-bills-received-action-btn${!canApprove ? ' action-btn-disabled' : ''}`}
+                              className={`receipt-action-btn btn-approve${!canApprove ? ' action-btn-disabled' : ''}`}
                               onClick={() => canApprove && handleMarkPaid(bill.id)}
                               title={canApprove ? 'Mark Paid' : '🔒 No approve permission'}
                               disabled={!canApprove}
-                            ><Check size={16} /></button>
+                            ><Check size={15} /></button>
                           </>
                         )}
 
-                        {/* Delete — always shown */}
+                        {/* Delete */}
                         <button
-                          className={`procurement-bills-received-action-btn${!canDelete ? ' action-btn-disabled' : ''}`}
+                          className={`receipt-action-btn btn-delete${!canDelete ? ' action-btn-disabled' : ''}`}
                           onClick={() => canDelete && handleDeleteBill(bill.id)}
                           title={canDelete ? 'Delete' : '🔒 No delete permission'}
                           disabled={!canDelete}
-                        ><Trash2 size={16} /></button>
+                        ><Trash2 size={15} /></button>
                       </div>
                     </td>
                   </tr>

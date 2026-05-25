@@ -2,6 +2,28 @@
 import React from 'react';
 import '../../components_css/Notification_Toast/ToastNotification.css';
 
+// Convert any string to Title Case
+const toTitleCase = (str) => {
+  if (!str) return str;
+  // Words that stay lowercase unless they start the sentence
+  const minor = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','of','in','up','as','is','it']);
+  return str
+    .replace(/[^\s\S]/g, '') // no-op, keeps template values intact
+    .split(' ')
+    .map((word, i) => {
+      if (!word) return word;
+      // Keep numbers, symbols, ₹ values, and PO codes as-is
+      if (/^[\d₹#%€$£]/.test(word)) return word;
+      const lower = word.toLowerCase();
+      // Always capitalise the first word; leave minor words lowercase mid-sentence
+      if (i === 0 || !minor.has(lower)) {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+      }
+      return lower;
+    })
+    .join(' ');
+};
+
 const ToastNotification = ({ type, title, message, onClose }) => {
   const getIcon = () => {
     switch (type) {
@@ -51,8 +73,8 @@ const ToastNotification = ({ type, title, message, onClose }) => {
         {getIcon()}
       </div>
       <div className="toast-content">
-        <div className="toast-title">{getTitle()}</div>
-        <div className="toast-message">{message}</div>
+        <div className="toast-title">{toTitleCase(getTitle())}</div>
+        <div className="toast-message">{toTitleCase(message)}</div>
       </div>
       <button className="toast-close" onClick={onClose} aria-label="Close">
         <svg viewBox="0 0 20 20" fill="currentColor">

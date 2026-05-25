@@ -1,15 +1,38 @@
 /* Invoices and Receipts Tab Navigation */
-/* .invoices-receipts-container {
-  min-height: 100vh;
-  background-color: #f5f7fa;
-} */
 
+.invoices-receipts-container {
+  display: flex;
+  flex-direction: column;
+}
+
+/* position: fixed so it always stays visible regardless of overflow-x: hidden on .app */
 .tab-navigation {
   display: flex;
   gap: 8px;
-  padding: 20px 24px 0 24px;
+  padding: 5px 24px 0 24px;
   background-color: white;
   border-bottom: 2px solid #e2e8f0;
+  position: fixed;
+  top: 64px;           /* exact navbar height from App.css */
+  left: 0;
+  right: 0;
+  z-index: 49;         /* below navbar z-index (50) */
+}
+
+/* Match sidebar widths exactly from App.css */
+@media (min-width: 1024px) {
+  .app.sidebar-expanded .tab-navigation {
+    left: 256px;
+  }
+  .app.sidebar-collapsed .tab-navigation {
+    left: 72px;
+  }
+}
+
+/* Push tab content down so it starts below the fixed tab bar (tab bar height ≈ 67px) */
+.tab-content {
+  background-color: #f5f7fa;
+  padding-top: 67px;
 }
 
 .tab-button {
@@ -44,14 +67,15 @@
   white-space: nowrap;
 }
 
-.tab-content {
-  background-color: #f5f7fa;
-}
-
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1023px) {
   .tab-navigation {
+    left: 0;
     padding: 16px 16px 0 16px;
+  }
+
+  .tab-content {
+    padding-top: 63px;
   }
 
   .tab-button {

@@ -1624,3 +1624,218 @@
     flex-wrap: wrap;
   }
 }
+/* Search bar clear button */
+.search-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color 0.13s, background-color 0.13s;
+}
+.search-clear-btn svg {
+  stroke: #94a3b8;
+  transition: stroke 0.13s;
+}
+.search-clear-btn:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+.search-clear-btn:hover svg {
+  stroke: #ef4444;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PAYMENTS TAB — FULL RESPONSIVE OVERRIDES
+══════════════════════════════════════════════════════════════ */
+
+/* ── 1024px — tablet landscape ─────────────────────────────── */
+@media (max-width: 1024px) {
+  .receipts-page-container {
+    padding: 16px 16px 0 16px;
+  }
+
+  /* Header: stack title + GroupProjectFilter */
+  .page-header-with-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* GroupProjectFilter: full-width stacked selects */
+  .page-header-with-filter .group-project-filter {
+    flex-direction: column;
+    align-items: stretch !important;
+    width: 100%;
+    margin-left: 0 !important;
+    gap: 8px;
+  }
+  .page-header-with-filter .group-project-filter .filter-group {
+    width: 100%;
+    min-width: unset;
+  }
+  .page-header-with-filter .group-project-filter .filter-select {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+  }
+
+  /* Action bar: stack into rows */
+  .receipts-page-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .receipts-page-search-filters {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .receipts-page-search {
+    width: 100%;
+    min-width: unset;
+    padding: 8px 12px;
+    font-size: 14px;
+  }
+
+  .receipts-page-filter {
+    width: 100%;
+    min-width: unset;
+    padding: 8px 12px;
+  }
+
+  /* Date range filter: full width */
+  .po-order-date-filter {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .po-cal-trigger {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Action buttons row */
+  .receipts-page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .receipts-page-actions > * {
+    flex: 1;
+    min-width: 100px;
+    justify-content: center;
+  }
+}
+
+/* ── 768px — tablet portrait ────────────────────────────────── */
+@media (max-width: 768px) {
+  .receipts-page-title {
+    font-size: 20px;
+  }
+
+  /* Stats cards: 2 cols */
+  .receipts-page-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .receipts-page-stat-value {
+    font-size: 18px;
+    word-break: break-all;
+  }
+
+  /* Pagination: stack */
+  .receipts-page-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .receipts-page-pagination-info {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Table: horizontal scroll */
+  .receipts-page-table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .receipts-page-table {
+    min-width: 650px;
+  }
+}
+
+/* ── 480px — large phone ────────────────────────────────────── */
+@media (max-width: 480px) {
+  .receipts-page-container {
+    padding: 10px 10px 0 10px;
+  }
+
+  .receipts-page-title {
+    font-size: 18px;
+  }
+
+  .receipts-page-stats {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .receipts-page-stat-card {
+    padding: 10px 12px;
+  }
+
+  .receipts-page-stat-value {
+    font-size: 16px;
+  }
+
+  .receipts-page-stat-label {
+    font-size: 10px;
+  }
+
+  .receipts-page-actions > * {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Page number buttons: smaller */
+  .page-number {
+    padding: 5px 9px;
+    min-width: 30px;
+    font-size: 12px;
+  }
+
+  /* Column manager: full width */
+  .column-manager-modal {
+    left: 8px;
+    right: 8px;
+    width: auto;
+    max-height: 70vh;
+  }
+}
+
+/* ── 360px — small phone ────────────────────────────────────── */
+@media (max-width: 360px) {
+  .receipts-page-stats {
+    grid-template-columns: 1fr;
+  }
+}
