@@ -50,6 +50,7 @@ const INDIAN_STATES = [
 
 // ─── Column Definitions ───────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
+  { id: 'sNo',               label: 'S.No',                 sortable: false, visible: true,  fixed: true  },
   { id: 'name',               label: 'Vendor Name',          sortable: true,  visible: true  },
   { id: 'contact',            label: 'Contact',              sortable: false, visible: true  },
   { id: 'category',           label: 'Category',             sortable: true,  visible: false },
@@ -94,9 +95,9 @@ const ColumnsPicker = ({ columns, onToggle, onClose }) => {
           <button
             key={col.id}
             className={`columns-picker__item ${col.visible ? 'columns-picker__item--checked' : ''}`}
-            onClick={() => col.id !== 'actions' && onToggle(col.id)}
-            disabled={col.id === 'actions'}
-            title={col.id === 'actions' ? 'Actions column is always visible' : ''}
+            onClick={() => !col.fixed && onToggle(col.id)}
+            disabled={!!col.fixed}
+            title={col.fixed ? `${col.label} column is always visible` : ''}
           >
             <span className="columns-picker__checkbox">
               {col.visible && <Check size={11} />}
@@ -125,9 +126,10 @@ const COL_WIDTHS = {
 };
 
 const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, sortConfig, onSort, children }) => {
+  const isFixed = col.fixed || col.id === 'actions';
   return (
     <th
-      draggable={col.id !== 'actions'}
+      draggable={!isFixed}
       onDragStart={(e) => onDragStart(e, index)}
       onDragOver={(e) => onDragOver(e, index)}
       onDrop={(e) => onDrop(e, index)}
@@ -141,7 +143,7 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
       onClick={() => col.sortable && onSort(col.id)}
     >
       <span className="th-inner">
-        {col.id !== 'actions' && (
+        {!isFixed && (
           <span className="drag-handle" title="Drag to reorder">
             <GripVertical size={13} />
           </span>
@@ -952,6 +954,113 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
   );
 };
 
+// ─── Date Range Filter (mirrors PurchaseOrders page) ──────────────────────────
+const _VM_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _VM_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show, setShow] = React.useState(false);
+  const [from, setFrom] = React.useState(null);
+  const [to,   setTo]   = React.useState(null);
+  const [hover,setHover]= React.useState(null);
+  const [calMo,setCalMo]= React.useState(new Date().getMonth());
+  const [calYr,setCalYr]= React.useState(new Date().getFullYear());
+  const [showYr,setShowYr]=React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a,b] = from<=hi ? [from,hi] : [hi,from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return ''; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+  const handleApply = () => { if (!from) return; onApply(from, to || from); setShow(false); };
+  const handleClear = () => { setFrom(null); setTo(null); setHover(null); onClear(); setShow(false); };
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button type="button"
+        className={`po-cal-trigger${show?' po-cal--open':''}${appliedFrom?' po-cal--applied':''}`}
+        onClick={() => setShow(p => !p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom ? 'po-cal-val' : 'po-cal-ph'}>{appliedFrom ? fmt(appliedFrom) : 'dd-mm-yyyy'}</span>
+        <span className="po-cal-sep">—</span>
+        <span className={appliedTo && appliedTo !== appliedFrom ? 'po-cal-val' : 'po-cal-ph'}>
+          {appliedTo && appliedTo !== appliedFrom ? fmt(appliedTo) : 'dd-mm-yyyy'}
+        </span>
+        {appliedFrom && <span className="po-cal-x" onClick={e => { e.stopPropagation(); handleClear(); }}>
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
+        </span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+      {show && (
+        <div className="po-cal-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:9999, width:264 }}>
+          <div className="po-cal-head">
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <button type="button" className="po-cal-month-btn" onClick={() => setShowYr(p => !p)}>
+              {_VM_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="po-cal-nav" onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+          {showYr ? (
+            <div className="po-yr-grid">
+              {Array.from({length:16},(_,i) => { const yr=new Date().getFullYear()-4+i; return (
+                <div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={() => { setCalYr(yr); setShowYr(false); }}>{yr}</div>
+              );})}</div>
+          ) : (
+            <div className="po-cal-grid">
+              {_VM_DAYS.map(d => <div key={d} className="po-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy=i+1, ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`, dow=(FD+i)%7;
+                let cls='po-cal-cell';
+                if(ds===from) cls+=' po-cal-from'; else if(ds===to) cls+=' po-cal-to';
+                else if(inR(ds)){ cls+=' po-cal-in-range'; if(dow===0) cls+=' po-cal-rr-s'; if(dow===6) cls+=' po-cal-rr-e'; }
+                if(ds===tod && ds!==from && ds!==to) cls+=' po-cal-today';
+                return <div key={ds} className={cls} onClick={() => clickDay(ds)} onMouseEnter={() => from && !to && setHover(ds)} onMouseLeave={() => setHover(null)}>{dy}</div>;
+              })}
+            </div>
+          )}
+          <div className="po-cal-footer">
+            <div className="po-cal-chips">
+              <span className={`po-cal-chip${from?' po-cal-chip--set':''}`}>{from ? fmt(from) : 'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+              <span className={`po-cal-chip${to?' po-cal-chip--set':''}`}>{to ? fmt(to) : 'To —'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, justifyContent:'center', width:'100%' }}>
+              {(from || appliedFrom) && <button type="button" className="po-cal-clear" onClick={handleClear}>Clear</button>}
+              <button type="button" className="po-cal-clear" onClick={() => setShow(false)}>Cancel</button>
+              <button type="button" className="po-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
@@ -990,6 +1099,15 @@ const VendorManagement = () => {
     rating: 'all', status: 'all',
     groupName: '', subGroupName: '',
   });
+
+  // ── Created-At date range filter ──
+  const [createdAtFrom, setCreatedAtFrom] = useState('');
+  const [createdAtTo,   setCreatedAtTo]   = useState('');
+
+  // ── Pincode auto-fill refs (shared between create & edit modals) ──
+  const [pincodeError, setPincodeError]         = useState('');
+  const pincodeDebounceRef                       = useRef(null);
+  const pincodeAbortRef                          = useRef(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
@@ -1045,6 +1163,11 @@ const VendorManagement = () => {
           lastPurchaseDate: 'lastPurchaseDate', status: 'status', createdAt: 'createdAt',
         };
 
+        // When date filter is active → force sort by createdAt ASC so results appear chronologically
+        const isDateFiltered   = !!(createdAtFrom || createdAtTo);
+        const activeSortBy     = isDateFiltered ? 'createdAt' : (sortKeyMap[sortConfig.key] || 'createdAt');
+        const activeSortDir    = isDateFiltered ? 'ASC'       : sortConfig.direction.toUpperCase();
+
         // Resolve active group/project (same logic used in standalone fetchVendors/fetchStats)
         const activeGroup    = filters.groupName    || groupName    || null;
         const activeSubGroup = filters.subGroupName || subGroupName || null;
@@ -1053,8 +1176,8 @@ const VendorManagement = () => {
         // Build vendor-list query params
         const vendorParams = new URLSearchParams({
           page: currentPage, size: pageSize,
-          sortBy: sortKeyMap[sortConfig.key] || 'createdAt',
-          sortDirection: sortConfig.direction.toUpperCase()
+          sortBy:        activeSortBy,
+          sortDirection: activeSortDir
         });
         if (activeGroup)    vendorParams.append('groupName',    activeGroup);
         if (activeSubGroup) vendorParams.append('subGroupName', activeSubGroup);
@@ -1062,6 +1185,8 @@ const VendorManagement = () => {
         if (filters.status   !== 'all') vendorParams.append('status',      filters.status);
         if (filters.category !== 'all') vendorParams.append('category',    filters.category);
         if (filters.search)              vendorParams.append('searchTerm',  filters.search.trim());
+        if (createdAtFrom)               vendorParams.append('createdAtFrom', createdAtFrom);
+        if (createdAtTo)                 vendorParams.append('createdAtTo',   createdAtTo);
 
         // Build stats query params (same filters, no pagination/sort)
         const statsParams = new URLSearchParams();
@@ -1071,6 +1196,8 @@ const VendorManagement = () => {
         if (filters.status   !== 'all') statsParams.append('status',      filters.status);
         if (filters.category !== 'all') statsParams.append('category',    filters.category);
         if (filters.search)              statsParams.append('searchTerm',  filters.search.trim());
+        if (createdAtFrom)               statsParams.append('createdAtFrom', createdAtFrom);
+        if (createdAtTo)                 statsParams.append('createdAtTo',   createdAtTo);
 
         // Fire both requests simultaneously; share the same abort signal
         const [vendorRes, statsRes] = await Promise.all([
@@ -1105,7 +1232,7 @@ const VendorManagement = () => {
     loadAll();
     return () => controller.abort(); // cancel previous in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig, groupName, subGroupName, projectId]);
+  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig, groupName, subGroupName, projectId, createdAtFrom, createdAtTo]);
 
   // ─── Column helpers ────────────────────────────────────────────────────────
   const visibleColumns = columns.filter((c) => c.visible);
@@ -1254,11 +1381,12 @@ const VendorManagement = () => {
   const handleAddNewVendor = () => {
     setEditFormData({
       name: '', contactPerson: '', email: '', phone: '', website: '', gstNumber: '',
-      address: '', city: '', state: '', pincode: '', rating: 0, status: 'Active',
+      address: '', city: '', state: '', district: '', pincode: '', rating: 0, status: 'Active',
       groupName: '', subGroupName: '', projectId: '', vendorType: '', category: '', notes: '', assignedTo: ''
     });
     setCustomCategory('');
     setCustomVendorType('');
+    setPincodeError('');
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     fetchModalGroups();
@@ -1267,9 +1395,36 @@ const VendorManagement = () => {
     setShowCreateModal(true);
   };
 
+  // ── Pincode auto-fill (shared for both create & edit) ──────────────────────
+  const handlePincodeChange = (value, isEdit = false) => {
+    if (!/^\d*$/.test(value)) return;
+    if (pincodeDebounceRef.current) clearTimeout(pincodeDebounceRef.current);
+    if (pincodeAbortRef.current)    pincodeAbortRef.current.abort();
+    setPincodeError('');
+    setEditFormData(prev => ({ ...prev, pincode: value, state: '', district: '' }));
+    if (value.length !== 6) return;
+    pincodeDebounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      pincodeAbortRef.current = controller;
+      try {
+        const res = await fetch(`${API_BASE_URL}/pincode/${value}`, { credentials: 'include', signal: controller.signal });
+        if (!res.ok) throw new Error('api_error');
+        const data = await res.json();
+        if (data[0].Status === 'Success' && data[0].PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          setEditFormData(prev => ({ ...prev, state: po.State, district: po.District }));
+          setPincodeError('');
+        } else {
+          setPincodeError('Invalid PIN code');
+        }
+      } catch (err) {
+        if (err.name !== 'AbortError') setPincodeError('Could not fetch PIN details');
+      }
+    }, 600);
+  };
+
   const handleCreateVendor = async () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-    if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
     if (!editFormData.category) { showError('Category is required'); return; }
     if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
     if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
@@ -1382,13 +1537,14 @@ const VendorManagement = () => {
       id: vendor.id, name: vendor.name || '', contactPerson: vendor.contactPerson || '',
       email: vendor.email || '', phone: vendor.phone || '', website: vendor.website || '',
       gstNumber: vendor.gstNumber || '', address: vendor.address || '', city: vendor.city || '',
-      state: vendor.state || '', pincode: vendor.pincode || '', rating: vendor.rating || 0,
+      state: vendor.state || '', district: vendor.district || '', pincode: vendor.pincode || '', rating: vendor.rating || 0,
       status: vendor.status || 'Active',
       vendorType: vtypeIsCustom ? 'Other' : vtype,
       category:   catIsCustom   ? 'Other' : cat,
       notes: vendor.notes || '', assignedTo: vendor.assignedTo || '',
       groupName: vendor.groupName || '', subGroupName: vendor.subGroupName || '', projectId: vendor.projectId || ''
     });
+    setPincodeError('');
     setModalGroupName(vendor.groupName || '');
     setModalSubGroupName(vendor.subGroupName || '');
     setModalProjectId(vendor.projectId || '');
@@ -1402,7 +1558,6 @@ const VendorManagement = () => {
 
   const handleUpdateVendor = async () => {
     if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-    if (!editFormData.phone?.trim()) { showError('Phone / Contact number is required'); return; }
     if (!editFormData.category) { showError('Category is required'); return; }
     if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
     if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
@@ -1500,6 +1655,8 @@ const VendorManagement = () => {
       if (filters.status   !== 'all') exportParams.append('status',      filters.status);
       if (filters.category !== 'all') exportParams.append('category',    filters.category);
       if (filters.search)              exportParams.append('searchTerm', filters.search.trim());
+      if (createdAtFrom)               exportParams.append('createdAtFrom', createdAtFrom);
+      if (createdAtTo)                 exportParams.append('createdAtTo',   createdAtTo);
 
       const res = await fetch(`${API_BASE_URL}/vendors?${exportParams}`, {
         headers: getAuthHeaders(), credentials: 'include'
@@ -1528,6 +1685,7 @@ const VendorManagement = () => {
         { key: 'projectId',          label: 'Project ID'               },
         { key: 'city',               label: 'City'                     },
         { key: 'state',              label: 'State'                    },
+        { key: 'district',           label: 'District'                 },
         { key: 'gstNumber',          label: 'GST Number'               },
         { key: 'notes',              label: 'Notes'                    },
       ];
@@ -1609,8 +1767,14 @@ const VendorManagement = () => {
   };
 
   // ─── Render cell by column id ──────────────────────────────────────────────
-  const renderCell = (col, vendor) => {
+  const renderCell = (col, vendor, rowIndex = 0) => {
     switch (col.id) {
+      case 'sNo':
+        return (
+          <td key={col.id} style={{ textAlign:'center', color:'#64748b', fontSize:13, fontWeight:500, width:50 }}>
+            {currentPage * pageSize + rowIndex + 1}
+          </td>
+        );
       case 'name':
         return (
           <td key={col.id} className="vendor-name-cell">
@@ -1850,6 +2014,16 @@ const VendorManagement = () => {
             <option value="Office Supplies">Office Supplies</option>
             <option value="Services">Services</option>
           </select>
+          {/* Created Date range filter */}
+          <div className="po-order-date-filter">
+            <span className="po-order-date-label">Created:</span>
+            <PODateRangeFilter
+              appliedFrom={createdAtFrom}
+              appliedTo={createdAtTo}
+              onApply={(f, t) => { setCreatedAtFrom(f); setCreatedAtTo(t); setCurrentPage(0); }}
+              onClear={() => { setCreatedAtFrom(''); setCreatedAtTo(''); setCurrentPage(0); }}
+            />
+          </div>
         </div>
         <div className="vendor-management-actions">
           {/* ── Columns Picker Button ── */}
@@ -1926,9 +2100,9 @@ const VendorManagement = () => {
                   </td>
                 </tr>
               ) : (
-                vendors.map((vendor) => (
+                vendors.map((vendor, rowIndex) => (
                   <tr key={vendor.id} className="vendor-management-table-row" onClick={() => canView && handleViewVendor(vendor)} style={{ cursor: canView ? "pointer" : "default" }}>
-                    {visibleColumns.map((col) => renderCell(col, vendor))}
+                    {visibleColumns.map((col) => renderCell(col, vendor, rowIndex))}
                   </tr>
                 ))
               )}
@@ -1984,7 +2158,7 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone / Contact Number *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>
@@ -2051,19 +2225,24 @@ const VendorManagement = () => {
                 <h3>Address</h3>
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
-                  <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
-                  <div className="vendor-form-group"><label>State</label>
-                    <select value={editFormData.state || ''} onChange={(e) => setEditFormData({ ...editFormData, state: e.target.value })}>
-                      <option value="">Select State</option>
-                      {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                  </div>
                   <div className="vendor-form-group">
-                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits)</span></label>
-                    <input type="text" value={editFormData.pincode} maxLength={6}
-                      onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,6); setEditFormData({ ...editFormData, pincode: v }); }}
+                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                    <input type="text" value={editFormData.pincode || ''} maxLength={6}
+                      onChange={e => handlePincodeChange(e.target.value)}
                       placeholder="Enter 6-digit pincode" />
+                    {pincodeError && <span style={{fontSize:11,color:'#ef4444',marginTop:2,display:'block'}}>{pincodeError}</span>}
                   </div>
+                  <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                    <input type="text" value={editFormData.state || ''} readOnly
+                      style={{background:'#f8fafc',cursor:'default'}}
+                      placeholder="Auto-filled from pincode" />
+                  </div>
+                  <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                    <input type="text" value={editFormData.district || ''} readOnly
+                      style={{background:'#f8fafc',cursor:'default'}}
+                      placeholder="Auto-filled from pincode" />
+                  </div>
+                  <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
                 </div>
               </div>
               <div className="vendor-form-section">
@@ -2132,7 +2311,6 @@ const VendorManagement = () => {
         };
         const handleNextStep = () => {
           if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-          if (!editFormData.phone?.trim()) { showError('Phone number is required'); return; }
           if (!editFormData.category) { showError('Category is required'); return; }
           if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
           if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
@@ -2200,7 +2378,7 @@ const VendorManagement = () => {
                   </div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={e => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                    <div className="vendor-form-group"><label>Phone *</label><input type="tel" value={editFormData.phone} maxLength={10} onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="10-digit phone number" /></div>
+                    <div className="vendor-form-group"><label>Phone <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="10-digit phone number" /></div>
                   </div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Category *</label>
@@ -2224,23 +2402,28 @@ const VendorManagement = () => {
                   </div>
                 </div>
                 <div className="vendor-form-section">
-                  <h3>Contact & Address</h3>
+                  <h3>Contact &amp; Address</h3>
                   <div className="vendor-form-group"><label>Website</label><input type="url" value={editFormData.website} onChange={e => setEditFormData({ ...editFormData, website: e.target.value })} placeholder="https://www.example.com" /></div>
                   <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                   <div className="vendor-form-row">
-                    <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={e => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
-                    <div className="vendor-form-group"><label>State</label>
-                      <select value={editFormData.state || ''} onChange={e => setEditFormData({ ...editFormData, state: e.target.value })}>
-                        <option value="">Select State</option>
-                        {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    </div>
                     <div className="vendor-form-group">
-                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits)</span></label>
-                      <input type="text" value={editFormData.pincode} maxLength={6}
-                        onChange={e => { const v = e.target.value.replace(/[^0-9]/g,'').slice(0,6); setEditFormData({ ...editFormData, pincode: v }); }}
+                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                      <input type="text" value={editFormData.pincode || ''} maxLength={6}
+                        onChange={e => handlePincodeChange(e.target.value)}
                         placeholder="Enter 6-digit pincode" />
+                      {pincodeError && <span style={{fontSize:11,color:'#ef4444',marginTop:2,display:'block'}}>{pincodeError}</span>}
                     </div>
+                    <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                      <input type="text" value={editFormData.state || ''} readOnly
+                        style={{background:'#f8fafc',cursor:'default'}}
+                        placeholder="Auto-filled from pincode" />
+                    </div>
+                    <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                      <input type="text" value={editFormData.district || ''} readOnly
+                        style={{background:'#f8fafc',cursor:'default'}}
+                        placeholder="Auto-filled from pincode" />
+                    </div>
+                    <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={e => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
                   </div>
                   <div className="vendor-form-group">
                     <label>GST Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(15 chars)</span></label>

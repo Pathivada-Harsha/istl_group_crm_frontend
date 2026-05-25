@@ -280,6 +280,7 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
 
 // ─── Column Definitions ───────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
+  { id: 'sNo',              label: 'S.No',               sortable: false, visible: true,  fixed: true  },
   { id: 'poRefId',          label: 'PO REF ID',          sortable: false, visible: true  },
   { id: 'vendorId',         label: 'Vendor ID',          sortable: false, visible: true },
   { id: 'vendorName',       label: 'Vendor Name',        sortable: true,  visible: true },
@@ -323,9 +324,9 @@ const ColumnsPicker = ({ columns, onToggle, onClose }) => {
           <button
             key={col.id}
             className={`po-columns-picker__item ${col.visible ? 'po-columns-picker__item--checked' : ''}`}
-            onClick={() => col.id !== 'actions' && onToggle(col.id)}
-            disabled={col.id === 'actions'}
-            title={col.id === 'actions' ? 'Actions column is always visible' : ''}
+            onClick={() => !col.fixed && onToggle(col.id)}
+            disabled={!!col.fixed}
+            title={col.fixed ? `${col.label} column is always visible` : ''}
           >
             <span className="po-columns-picker__checkbox">
               {col.visible && <Check size={11} />}
@@ -350,32 +351,35 @@ const PO_COL_WIDTHS = {
   actions:        90,
 };
 
-const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, sortConfig, onSort }) => (
-  <th
-    draggable={col.id !== 'actions'}
-    onDragStart={(e) => onDragStart(e, index)}
-    onDragOver={(e) => onDragOver(e, index)}
-    onDrop={(e) => onDrop(e, index)}
-    onDragEnd={onDragEnd}
-    style={PO_COL_WIDTHS[col.id] ? { minWidth: PO_COL_WIDTHS[col.id] } : undefined}
-    className={[
-      'po-th',
-      isDragOver ? 'po-th--drag-over' : '',
-      col.sortable ? 'po-th--sortable' : '',
-    ].filter(Boolean).join(' ')}
-    onClick={() => col.sortable && onSort(col.id)}
-  >
-    <span className="po-th__inner">
-      {col.id !== 'actions' && (
-        <span className="po-drag-handle" title="Drag to reorder">
-          <GripVertical size={13} />
-        </span>
-      )}
-      <span className="po-th__label">{col.label}</span>
-      {col.sortable && <SortIcon columnId={col.id} sortConfig={sortConfig} />}
-    </span>
-  </th>
-);
+const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, isDragOver, sortConfig, onSort }) => {
+  const isFixed = col.fixed || col.id === 'actions';
+  return (
+    <th
+      draggable={!isFixed}
+      onDragStart={(e) => onDragStart(e, index)}
+      onDragOver={(e) => onDragOver(e, index)}
+      onDrop={(e) => onDrop(e, index)}
+      onDragEnd={onDragEnd}
+      style={PO_COL_WIDTHS[col.id] ? { minWidth: PO_COL_WIDTHS[col.id] } : undefined}
+      className={[
+        'po-th',
+        isDragOver ? 'po-th--drag-over' : '',
+        col.sortable ? 'po-th--sortable' : '',
+      ].filter(Boolean).join(' ')}
+      onClick={() => col.sortable && onSort(col.id)}
+    >
+      <span className="po-th__inner">
+        {!isFixed && (
+          <span className="po-drag-handle" title="Drag to reorder">
+            <GripVertical size={13} />
+          </span>
+        )}
+        <span className="po-th__label">{col.label}</span>
+        {col.sortable && <SortIcon columnId={col.id} sortConfig={sortConfig} />}
+      </span>
+    </th>
+  );
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PurchaseOrders = () => {
@@ -461,11 +465,13 @@ const PurchaseOrders = () => {
   // visible even if the user removes all items — prevents collapsing back to step 1.
   const [itemsStepUnlocked, setItemsStepUnlocked] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
+  const [customVendorCategory, setCustomVendorCategory] = useState('');
+  const [customVendorType,     setCustomVendorType]     = useState('');
   const [createPOFormData, setCreatePOFormData] = useState({
     quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '',
     groupName: '', subGroupName: '', projectId: '',
     orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '',
-    paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft'
+    paymentTerms: '', shippingAddress: '', notes: '', poRefId: '', items: [], status: 'Draft'
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
   const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
@@ -1054,7 +1060,7 @@ const PurchaseOrders = () => {
         orderDate: poData.orderDate ? String(poData.orderDate).slice(0, 10) : new Date().toISOString().split('T')[0],
         expectedDelivery: poData.expectedDelivery ? String(poData.expectedDelivery).slice(0, 10) : '',
         paymentTerms: poData.paymentTerms || '', shippingAddress: poData.deliveryAddress || '',
-        notes: poData.notes || '', status: poData.status || 'Draft', items
+        notes: poData.notes || '', poRefId: poData.poRefId || '', status: poData.status || 'Draft', items
       });
       setShowNewVendorForm(false); setShowCreatePOModal(true);
     } catch { showError('Failed to load purchase order details'); }
@@ -1120,6 +1126,7 @@ const PurchaseOrders = () => {
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]); setOrderBookItems([]);
+    setCustomVendorCategory(''); setCustomVendorType('');
     setItemsStepUnlocked(false);
     fetchModalGroups(); fetchVendors(); setShowCreatePOModal(true);
   };
@@ -1129,6 +1136,7 @@ const PurchaseOrders = () => {
     setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     setQuotations([]); setOrderBookItems([]); setShowNewVendorForm(false); setShowManualItemForm(false);
+    setCustomVendorCategory(''); setCustomVendorType('');
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setItemsStepUnlocked(false);
@@ -1216,9 +1224,10 @@ const PurchaseOrders = () => {
     if (!createPOFormData.vendorId && !showNewVendorForm) { showError('Please select a vendor or add a new vendor'); return; }
     if (showNewVendorForm) {
       if (!createPOFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
-      if (!createPOFormData.vendorContact || createPOFormData.vendorContact.length !== 10) { showError('Please enter a valid 10-digit contact number'); return; }
-      if (!createPOFormData.vendorCategory) { showError('Vendor category is required'); return; }
-      if (!createPOFormData.vendorType) { showError('Vendor type is required'); return; }
+      const resolvedCategory = createPOFormData.vendorCategory === 'Other' ? customVendorCategory?.trim() : createPOFormData.vendorCategory;
+      const resolvedType     = createPOFormData.vendorType     === 'Other' ? customVendorType?.trim()     : createPOFormData.vendorType;
+      if (!resolvedCategory) { showError('Vendor category is required'); return; }
+      if (!resolvedType)     { showError('Vendor type is required'); return; }
     }
     const selectedItems = createPOFormData.items.filter(i => i.selected);
     if (selectedItems.length === 0) { showError('Please select at least one item'); return; }
@@ -1237,13 +1246,13 @@ const PurchaseOrders = () => {
         vendorId: createPOFormData.vendorId || null,
         vendorName: showNewVendorForm ? createPOFormData.vendorName : null,
         vendorContact: createPOFormData.vendorContact || null,
-        vendorCategory: showNewVendorForm ? createPOFormData.vendorCategory : null,
-        vendorType: showNewVendorForm ? createPOFormData.vendorType : null,
+        vendorCategory: showNewVendorForm ? (createPOFormData.vendorCategory === 'Other' ? (customVendorCategory?.trim() || 'Other') : createPOFormData.vendorCategory) : null,
+        vendorType: showNewVendorForm ? (createPOFormData.vendorType === 'Other' ? (customVendorType?.trim() || 'Other') : createPOFormData.vendorType) : null,
         rfqId: createPOFormData.quotation?.rfqId || null,
         groupName: modalGroupName, subGroupName: modalSubGroupName || null, projectId: modalProjectId || null,
         orderDate: createPOFormData.orderDate, expectedDelivery: createPOFormData.expectedDelivery,
         paymentTerms: createPOFormData.paymentTerms, shippingAddress: createPOFormData.shippingAddress,
-        notes: createPOFormData.notes, items: poItems, status: createPOFormData.status || 'Draft', paymentStatus: 'Pending'
+        notes: createPOFormData.notes, poRefId: createPOFormData.poRefId || null, items: poItems, status: createPOFormData.status || 'Draft', paymentStatus: 'Pending'
       };
       let response;
       if (isEditMode && editingPOId) {
@@ -1267,7 +1276,7 @@ const PurchaseOrders = () => {
       if (poFileUpload && savedId) {
         await handleUploadPOFile(savedId);
       }
-      showSuccess(`PO ${result.poNo || result.data?.poNo} ${isEditMode ? 'updated' : 'created'} successfully!`);
+      showSuccess(`PO ${result.poRefId || result.data?.poRefId || result.poNo || result.data?.poNo} ${isEditMode ? 'updated' : 'created'} successfully!`);
       handleCloseCreatePOModal(); fetchPurchaseOrders(); fetchStats();
     } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
     finally { setLoading(false); }
@@ -1306,11 +1315,15 @@ const PurchaseOrders = () => {
   };
 
   // ─── Render cell by column id ──────────────────────────────────────────────
-  const renderCell = (col, po) => {
+  const renderCell = (col, po, rowIndex = 0) => {
     const progress = calculateDeliveryProgress(po);
     switch (col.id) {
+      case 'sNo':
+        return <td key={col.id} style={{ textAlign:'center', color:'#64748b', fontSize:13, fontWeight:500, width:50 }}>{currentPage * pageSize + rowIndex + 1}</td>;
       case 'poNumber':
-        return <td key={col.id} className="purchase-orders-table-id">{po.poNo}</td>;
+        return <td key={col.id} className="purchase-orders-table-id">{po.poRefId || po.poNo}</td>;
+      case 'poRefId':
+        return <td key={col.id}>{po.poRefId || '—'}</td>;
       case 'vendorId':
         return <td key={col.id}><button className="vendor-link" onClick={() => handleViewVendorPOs(po.vendorId)}>{po.vendorName || `Vendor #${po.vendorId}`}</button></td>;
       case 'vendorName':
@@ -1584,8 +1597,8 @@ const PurchaseOrders = () => {
             <option value="Paid">Paid</option>
           </select>
           {/* Order Date range filter — like Leads page */}
-          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-            <span style={{ fontSize:12, color:'#64748b', whiteSpace:'nowrap', fontWeight:500 }}>Order Date:</span>
+          <div className="po-order-date-filter">
+            <span className="po-order-date-label">Order Date:</span>
             <PODateRangeFilter
               appliedFrom={orderDateFrom}
               appliedTo={orderDateTo}
@@ -1667,9 +1680,9 @@ const PurchaseOrders = () => {
               {purchaseOrders.length === 0 ? (
                 <tr><td colSpan={visibleColumns.length} className="empty-state">No purchase orders found</td></tr>
               ) : (
-                purchaseOrders.map((po) => (
+                purchaseOrders.map((po, rowIndex) => (
                   <tr key={po.id} className="purchase-orders-table-row">
-                    {visibleColumns.map((col) => renderCell(col, po))}
+                    {visibleColumns.map((col) => renderCell(col, po, rowIndex))}
                   </tr>
                 ))
               )}
@@ -1708,7 +1721,7 @@ const PurchaseOrders = () => {
           <div className="purchase-orders-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="purchase-orders-drawer-header">
               <div>
-                <h2>{selectedPO.poNo}</h2>
+                <h2>{selectedPO.poRefId || selectedPO.poNo}</h2>
                 <p className="purchase-orders-drawer-subtitle">
                   {selectedPO.vendorName || (selectedPO.vendorId ? `Vendor #${selectedPO.vendorId}` : 'No vendor')}
                   {selectedPO.vendorContact ? ` · ${selectedPO.vendorContact}` : ''}
@@ -2339,29 +2352,37 @@ const PurchaseOrders = () => {
                               <input type="text" value={createPOFormData.vendorName || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorName: e.target.value }))} placeholder="Enter vendor company name" style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
                             </div>
                             <div className="po-form-group">
-                              <label>Contact Number * (10 digits)</label>
+                              <label>Contact Number <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
                               <input type="tel" value={createPOFormData.vendorContact || ''} onChange={(e) => handleNewVendorContactChange(e.target.value)} placeholder="Enter 10-digit mobile" maxLength={10} style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
-                              {createPOFormData.vendorContact && createPOFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>⚠️ Must be 10 digits ({createPOFormData.vendorContact.length}/10)</small>}
+                              {createPOFormData.vendorContact && createPOFormData.vendorContact.length > 0 && createPOFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>⚠️ Must be 10 digits ({createPOFormData.vendorContact.length}/10)</small>}
                             </div>
                             <div className="po-form-group">
                               <label>Category *</label>
-                              <select value={createPOFormData.vendorCategory || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorCategory: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                              <select value={createPOFormData.vendorCategory || ''} onChange={(e) => { setCreatePOFormData(prev => ({ ...prev, vendorCategory: e.target.value })); if (e.target.value !== 'Other') setCustomVendorCategory(''); }} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                                 <option value="">Select category</option>
                                 <option value="IT Equipment">IT Equipment</option>
                                 <option value="Office Furniture">Office Furniture</option>
                                 <option value="Manufacturing">Manufacturing</option>
                                 <option value="Office Supplies">Office Supplies</option>
                                 <option value="Services">Services</option>
+                                <option value="Other">Other</option>
                               </select>
+                              {createPOFormData.vendorCategory === 'Other' && (
+                                <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                              )}
                             </div>
                             <div className="po-form-group">
                               <label>Vendor Type *</label>
-                              <select value={createPOFormData.vendorType || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorType: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
+                              <select value={createPOFormData.vendorType || ''} onChange={(e) => { setCreatePOFormData(prev => ({ ...prev, vendorType: e.target.value })); if (e.target.value !== 'Other') setCustomVendorType(''); }} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
                                 <option value="">Select type</option>
                                 <option value="Manufacturer">Manufacturer</option>
                                 <option value="Distributor">Distributor</option>
                                 <option value="Service Provider">Service Provider</option>
+                                <option value="Other">Other</option>
                               </select>
+                              {createPOFormData.vendorType === 'Other' && (
+                                <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                              )}
                             </div>
                           </div>
                           <div style={{ marginTop: '12px', padding: '12px', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>💡 This vendor will be created immediately when you submit the PO.</div>
@@ -2410,6 +2431,19 @@ const PurchaseOrders = () => {
                     <div className="po-form-group">
                       <label>Shipping Address</label>
                       <input type="text" value={createPOFormData.shippingAddress} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, shippingAddress: e.target.value }))} placeholder="Enter delivery address" style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
+                    </div>
+                  </div>
+                  <div className="po-form-row">
+                    <div className="po-form-group">
+                      <label>PO REF ID <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                      <input
+                        type="text"
+                        value={createPOFormData.poRefId || ''}
+                        onChange={(e) => setCreatePOFormData(prev => ({ ...prev, poRefId: e.target.value }))}
+                        placeholder="e.g. REF-2026-001 (leave blank if not applicable)"
+                        style={{ width: '100%', padding: '10px', fontSize: '14px' }}
+                        maxLength={100}
+                      />
                     </div>
                   </div>
                   <div className="po-form-row">

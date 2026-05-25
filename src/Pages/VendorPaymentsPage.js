@@ -16,6 +16,105 @@ import '../pages-css/BillsVendorPayments.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
+// ── Date constants ────────────────────────────────────────────────────────────
+const _VP_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _VP_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+// ── VPDatePicker — compact single date (same style as PO Create Modal) ────────
+const VPDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  const [show,    setShow]    = React.useState(false);
+  const [calMo,   setCalMo]   = React.useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
+  const [calYr,   setCalYr]   = React.useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
+  const [showYrP, setShowYrP] = React.useState(false);
+  const wrapRef = React.useRef(null);
+  React.useEffect(() => {
+    const h = e => { if (wrapRef.current && !wrapRef.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+  const open = () => { if(value){setCalMo(parseInt(value.slice(5,7))-1);setCalYr(parseInt(value.slice(0,4)));} setShowYrP(false); setShow(true); };
+  const DIM=new Date(calYr,calMo+1,0).getDate(), FD=new Date(calYr,calMo,1).getDay(), tod=new Date().toISOString().slice(0,10);
+  const fmtD=d=>{ if(!d) return null; const[y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+  return (
+    <div ref={wrapRef} style={{position:'relative',width:'100%'}}>
+      <button type="button" className={`po-dtp-trigger${show?' po-dtp--open':''}${value?' po-dtp--set':''}`} onClick={show?()=>setShow(false):open} style={{width:'100%'}}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span className="po-dtp-ph">{placeholder}</span>}
+        {value?<span className="po-dtp-x" onClick={e=>{e.stopPropagation();onChange('');}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+      </button>
+      {show&&(
+        <div className="po-dtp-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,width:280,zIndex:1050}}>
+          <div className="po-dtp-cal-head">
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="po-dtp-month" onClick={()=>setShowYrP(p=>!p)}>{_VP_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span></button>
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYrP?(<div className="po-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYrP(false);}}>{yr}</div>;})}</div>):(
+          <div className="po-dtp-grid">
+            {_VP_DAYS.map(d=><div key={d} className="po-cal-dl">{d}</div>)}
+            {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+            {Array.from({length:DIM}).map((_,i)=>{const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;let cls='po-cal-cell';if(ds===value)cls+=' po-dtp-sel';else if(ds===tod)cls+=' po-cal-today';return<div key={ds} className={cls} onClick={()=>{onChange(ds);setShow(false);}}>{dy}</div>;})}
+          </div>)}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ── VPDateRangeFilter — date range picker (same style as PO page filter bar) ──
+const VPDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,setShow]=React.useState(false),[from,setFrom]=React.useState(null),[to,setTo]=React.useState(null),[hover,setHover]=React.useState(null);
+  const [calMo,setCalMo]=React.useState(new Date().getMonth()),[calYr,setCalYr]=React.useState(new Date().getFullYear()),[showYr,setShowYr]=React.useState(false);
+  const ref=React.useRef(null);
+  React.useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setShow(false);}; if(show)document.addEventListener('mousedown',h); return()=>document.removeEventListener('mousedown',h);},[show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const inR=d=>{const hi=to||(from&&hover?hover:null);if(!from||!hi)return false;const[a,b]=from<=hi?[from,hi]:[hi,from];return d>a&&d<b;};
+  const clickDay=d=>{if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d);};
+  const fmt=d=>{if(!d)return'';const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  const handleApply=()=>{if(!from)return;onApply(from,to||from);setShow(false);};
+  const handleClear=()=>{setFrom(null);setTo(null);setHover(null);onClear();setShow(false);};
+  return(
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button type="button" className={`po-cal-trigger${show?' po-cal--open':''}${appliedFrom?' po-cal--applied':''}`} onClick={()=>setShow(p=>!p)}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span className={appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedFrom?fmt(appliedFrom):'dd-mm-yyyy'}</span>
+        <span className="po-cal-sep">—</span>
+        <span className={appliedTo&&appliedTo!==appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}</span>
+        {appliedFrom&&<span className="po-cal-x" onClick={e=>{e.stopPropagation();handleClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {show&&(
+        <div className="po-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
+          <div className="po-cal-head">
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg></button>
+            <button type="button" className="po-cal-month-btn" onClick={()=>setShowYr(p=>!p)}>{_VP_MONTHS[calMo]} <span className="po-cal-yr-num">{calYr}</span></button>
+            <button type="button" className="po-cal-nav" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg></button>
+          </div>
+          {showYr?(<div className="po-yr-grid">{Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return<div key={yr} className={`po-yr-cell${yr===calYr?' po-yr-sel':''}`} onClick={()=>{setCalYr(yr);setShowYr(false);}}>{yr}</div>;})}</div>):(
+          <div className="po-cal-grid">
+            {_VP_DAYS.map(d=><div key={d} className="po-cal-dl">{d}</div>)}
+            {Array.from({length:FD}).map((_,i)=><div key={`e${i}`} className="po-cal-cell po-cal-empty"/>)}
+            {Array.from({length:DIM}).map((_,i)=>{const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;let cls='po-cal-cell';if(ds===from)cls+=' po-cal-from';else if(ds===to)cls+=' po-cal-to';else if(inR(ds)){cls+=' po-cal-in-range';if(dow===0)cls+=' po-cal-rr-s';if(dow===6)cls+=' po-cal-rr-e';}if(ds===tod&&ds!==from&&ds!==to)cls+=' po-cal-today';return<div key={ds} className={cls} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)}>{dy}</div>;})}
+          </div>)}
+          <div className="po-cal-footer">
+            <div className="po-cal-chips">
+              <span className={`po-cal-chip${from?' po-cal-chip--set':''}`}>{from?fmt(from):'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+              <span className={`po-cal-chip${to?' po-cal-chip--set':''}`}>{to?fmt(to):'To —'}</span>
+            </div>
+            <div style={{display:'flex',gap:6,justifyContent:'center',width:'100%'}}>
+              {(from||appliedFrom)&&<button type="button" className="po-cal-clear" onClick={handleClear}>Clear</button>}
+              <button type="button" className="po-cal-clear" onClick={()=>setShow(false)}>Cancel</button>
+              <button type="button" className="po-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ── inline confirmation hook ──────────────────────────────────────────────────
 const useConfirmationModal = () => {
   const [confirmModal, setConfirmModal] = useState({
@@ -94,6 +193,10 @@ export default function VendorPaymentsPage() {
   // filters
   const [filters, setFilters] = useState({ search:'', paymentType:'all' });
 
+  // ── Payment date range filter ─────────────────────────────────────────────
+  const [paymentDateFrom, setPaymentDateFrom] = useState('');
+  const [paymentDateTo,   setPaymentDateTo]   = useState('');
+
   // pagination
   const [currentPage, setCurrentPage] = useState(0);
   const [totalPages, setTotalPages]   = useState(0);
@@ -167,12 +270,15 @@ export default function VendorPaymentsPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const p = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'advanceDate', sortDirection: 'DESC' });
+        const isDateFiltered = !!(paymentDateFrom || paymentDateTo);
+        const p = new URLSearchParams({ page: currentPage, size: pageSize, sortBy: 'advanceDate', sortDirection: isDateFiltered ? 'ASC' : 'DESC' });
         if (groupName)    p.append('groupId',    groupName);
         if (subGroupName) p.append('subGroupId', subGroupName);
         if (projectId)    p.append('projectId',  projectId);
         if (filters.paymentType !== 'all') p.append('paymentType', filters.paymentType);
         if (filters.search) p.append('searchTerm', filters.search);
+        if (paymentDateFrom) p.append('paymentDateFrom', paymentDateFrom);
+        if (paymentDateTo)   p.append('paymentDateTo',   paymentDateTo);
         const res = await fetch(`${API_BASE_URL}/vendor-advances?${p}`, {
           credentials: 'include', headers: getAuthHeaders(), signal: controller.signal
         });
@@ -188,10 +294,10 @@ export default function VendorPaymentsPage() {
     load();
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.paymentType, filters.search, refreshKey]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.paymentType, filters.search, refreshKey, paymentDateFrom, paymentDateTo]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search]);
+  useEffect(()=>{ fetchStats(); },[groupName,subGroupName,projectId,filters.paymentType,filters.search,paymentDateFrom,paymentDateTo]);
 
   // Reset to page 1 whenever group/project filters change
   useEffect(() => {
@@ -255,6 +361,8 @@ export default function VendorPaymentsPage() {
       // Active filters — so KPIs reflect exactly what's visible in the table
       if(filters.paymentType && filters.paymentType!=='all') p.append('paymentType', filters.paymentType);
       if(filters.search && filters.search.trim()) p.append('searchTerm', filters.search.trim());
+      if(paymentDateFrom) p.append('paymentDateFrom', paymentDateFrom);
+      if(paymentDateTo)   p.append('paymentDateTo',   paymentDateTo);
       const res=await fetch(`${API_BASE_URL}/vendor-advances/summary?${p}`,{credentials:'include',headers:getAuthHeaders()});
       if(res.ok) setStats(await res.json());
     } catch {}
@@ -684,6 +792,16 @@ export default function VendorPaymentsPage() {
             <option value="ADVANCE">Advance</option>
             <option value="BILL_PAYMENT">Bill Payment</option>
           </select>
+          {/* Payment date range filter */}
+          <div className="po-order-date-filter">
+            <span className="po-order-date-label">Payment Date:</span>
+            <VPDateRangeFilter
+              appliedFrom={paymentDateFrom}
+              appliedTo={paymentDateTo}
+              onApply={(f,t)=>{ setPaymentDateFrom(f); setPaymentDateTo(t); setCurrentPage(0); }}
+              onClear={()=>{ setPaymentDateFrom(''); setPaymentDateTo(''); setCurrentPage(0); }}
+            />
+          </div>
         </div>
         <div className="receipts-page-actions">
           <button className="receipts-page-btn-secondary" onClick={()=>{if(!showDeleted)fetchDeletedList();setShowDeleted(!showDeleted);}}>
@@ -1069,7 +1187,7 @@ export default function VendorPaymentsPage() {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Payment Date *</label>
-                      <input type="date" value={formData.advanceDate} onChange={e=>setFormData(f=>({...f,advanceDate:e.target.value}))}/>
+                      <VPDatePicker value={formData.advanceDate} onChange={v=>setFormData(f=>({...f,advanceDate:v}))} placeholder="Select payment date"/>
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>
@@ -1278,7 +1396,7 @@ export default function VendorPaymentsPage() {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Payment Date *</label>
-                      <input type="date" value={editFormData.advanceDate||''} onChange={e=>setEditFormData(f=>({...f,advanceDate:e.target.value}))}/>
+                      <VPDatePicker value={editFormData.advanceDate||''} onChange={v=>setEditFormData(f=>({...f,advanceDate:v}))} placeholder="Select payment date"/>
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>

@@ -1419,3 +1419,46 @@
     min-width: 700px;
   }
 }
+/* ── TM-style single date picker (QRDatePicker) ─────────────────────────── */
+.tm-dtp-trigger{display:flex;align-items:center;gap:7px;width:100%;padding:9px 11px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit;text-align:left;min-height:40px;box-sizing:border-box;}
+.tm-dtp-trigger:hover{border-color:#94a3b8;}.tm-dtp--open{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.1);}.tm-dtp--set{border-color:#4f46e5;background:#eef2ff;}
+.tm-dtp-ph{color:#94a3b8;font-size:13px;flex:1;}
+.tm-dtp-x{display:flex;align-items:center;padding:2px;border-radius:4px;color:#94a3b8;transition:color .13s,background .13s;}.tm-dtp-x:hover{color:#ef4444;background:#fee2e2;}
+.tm-dtp-dropdown{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 12px 32px rgba(15,23,42,.18);overflow:hidden;}
+.tm-dtp-cal-head{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+.tm-dtp-month,.tm-dtp-month:hover{background:none;border:none;font-size:13px;font-weight:600;color:#0f172a;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .13s;font-family:inherit;display:flex;align-items:center;gap:4px;}
+.tm-dtp-month:hover{background:#dbeafe;color:#1e40af;}
+.tm-cal-nav{background:none;border:1px solid #e2e8f0;border-radius:6px;padding:3px 6px;cursor:pointer;color:#64748b;display:flex;align-items:center;transition:background .13s;}.tm-cal-nav:hover{background:#f1f5f9;}
+.tm-dtp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:9px 7px 5px;}
+.tm-cal-dl{font-size:10px;font-weight:600;color:#94a3b8;text-align:center;padding:2px 0 4px;text-transform:uppercase;letter-spacing:.3px;}
+.tm-cal-cell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:11px;color:#475569;border-radius:5px;cursor:pointer;position:relative;transition:background .1s;user-select:none;}
+.tm-cal-cell:hover:not(.tm-cal-empty):not(.tm-dtp-sel){background:#f1f5f9;}
+.tm-cal-empty{cursor:default;pointer-events:none;color:#cbd5e1;}
+.tm-cal-today{font-weight:700;color:#4f46e5;}.tm-cal-today::after{content:'';position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:#4f46e5;}
+.tm-dtp-sel{background:#4f46e5!important;color:#fff!important;border-radius:5px;font-weight:600;}
+.tm-yr-num{color:#4f46e5;font-weight:700;}
+.tm-yr-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:3px;padding:8px 8px 6px;}
+.tm-yr-cell{text-align:center;padding:6px 2px;border-radius:6px;font-size:12px;font-weight:500;color:#475569;cursor:pointer;transition:background .13s,color .13s;user-select:none;}
+.tm-yr-cell:hover{background:#dbeafe;color:#1e40af;}
+.tm-yr-sel{background:#4f46e5!important;color:#fff!important;font-weight:700;}
+
+/* ── PO-style compact date picker (QRDatePicker) ─────────────────────────── */
+.po-dtp-trigger{display:flex;align-items:center;gap:7px;width:100%;padding:10px 11px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:13px;cursor:pointer;transition:border-color .15s,box-shadow .15s;font-family:inherit;text-align:left;min-height:42px;box-sizing:border-box;}
+.po-dtp-trigger:hover{border-color:#94a3b8;}
+.po-dtp--open{border-color:#4f46e5;box-shadow:0 0 0 3px rgba(79,70,229,.1);}
+.po-dtp--set{border-color:#4f46e5;background:#eef2ff;}
+.po-dtp-ph{color:#94a3b8;font-size:13px;flex:1;}
+.po-dtp-x{display:flex;align-items:center;padding:2px;border-radius:4px;color:#94a3b8;transition:color .13s,background .13s;}
+.po-dtp-x:hover{color:#ef4444;background:#fee2e2;}
+.po-dtp-dropdown{background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 8px 24px rgba(15,23,42,.14);overflow:hidden;animation:qrDtpIn .13s ease-out;}
+@keyframes qrDtpIn{from{opacity:0;transform:translateY(-5px);}to{opacity:1;transform:translateY(0);}}
+.po-dtp-cal-head{display:flex;align-items:center;justify-content:space-between;padding:9px 11px;background:#f8fafc;border-bottom:1px solid #e2e8f0;}
+.po-dtp-month{background:none;border:none;font-size:13px;font-weight:600;color:#0f172a;cursor:pointer;padding:4px 8px;border-radius:20px;transition:background .13s;display:flex;align-items:center;gap:4px;font-family:inherit;}
+.po-dtp-month:hover{background:#dbeafe;color:#1e40af;}
+.po-dtp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;padding:8px 7px 6px;}
+
+/* Allow calendar dropdown to overflow form containers */
+.procurement-quotation-received-form-section,
+.procurement-quotation-received-form-row,
+.procurement-quotation-received-form-group { overflow: visible !important; }
+.procurement-quotation-received-form-group { position: relative; }
