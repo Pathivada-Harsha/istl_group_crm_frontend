@@ -1825,19 +1825,19 @@ const VendorManagement = () => {
           <td key={col.id} onClick={e => e.stopPropagation()}>
             <div className="vendor-management-actions-cell">
               <button
-                className={`vendor-management-action-btn${!canView ? ' action-btn-disabled' : ''}`}
+                className={`vendor-management-action-btn vendor-management-action-view${!canView ? ' action-btn-disabled' : ''}`}
                 onClick={(e) => { e.stopPropagation(); canView && handleViewVendor(vendor); }}
                 title={canView ? 'View Details' : '🔒 No view permission'}
                 disabled={!canView}
               ><Eye size={16} /></button>
               <button
-                className={`vendor-management-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                className={`vendor-management-action-btn vendor-management-action-edit${!canEdit ? ' action-btn-disabled' : ''}`}
                 onClick={(e) => { e.stopPropagation(); canEdit && handleEditVendor(vendor); }}
                 title={canEdit ? 'Edit Vendor' : '🔒 No edit permission'}
                 disabled={!canEdit}
               ><Edit2 size={16} /></button>
               <button
-                className={`vendor-management-action-btn vendor-management-action-btn--danger${!canDelete ? ' action-btn-disabled' : ''}`}
+                className={`vendor-management-action-btn vendor-management-action-delete${!canDelete ? ' action-btn-disabled' : ''}`}
                 onClick={(e) => { e.stopPropagation(); canDelete && handleDeleteVendor(vendor.id, vendor.vendorName || vendor.name); }}
                 title={canDelete ? 'Delete Vendor' : '🔒 No delete permission'}
                 disabled={!canDelete}
@@ -1852,11 +1852,11 @@ const VendorManagement = () => {
           <td key={col.id} style={{ minWidth: 200 }}>
             {vendor.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
                   {vendor.projectName || vendor.projectId}
                 </span>
                 {vendor.projectName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
                     {vendor.projectId}
                   </span>
                 )}
@@ -2151,6 +2151,29 @@ const VendorManagement = () => {
             </div>
             <div className="vendor-management-edit-form" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div className="vendor-form-section">
+                <h3>Project Assignment</h3>
+                <div className="vendor-form-row">
+                  <div className="vendor-form-group"><label>Group</label>
+                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
+                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
+                      {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="vendor-form-group"><label>Category / Sub-Group</label>
+                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
+                      <option value="">{!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Category'}</option>
+                      {modalSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div className="vendor-form-group"><label>Project <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(Optional)</span></label>
+                  <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
+                    <option value="">{!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project (Optional)'}</option>
+                    {modalProjects.map(p => <option key={p.id} value={p.id}>{p.name} - {p.location}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="vendor-form-section">
                 <h3>Basic Information</h3>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Vendor Name *</label><input type="text" value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} placeholder="Enter vendor name" /></div>
@@ -2226,7 +2249,7 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group">
-                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}></span></label>
                     <input type="text" value={editFormData.pincode || ''} maxLength={6}
                       onChange={e => handlePincodeChange(e.target.value)}
                       placeholder="Enter 6-digit pincode" />
@@ -2407,7 +2430,7 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group">
-                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}></span></label>
                       <input type="text" value={editFormData.pincode || ''} maxLength={6}
                         onChange={e => handlePincodeChange(e.target.value)}
                         placeholder="Enter 6-digit pincode" />

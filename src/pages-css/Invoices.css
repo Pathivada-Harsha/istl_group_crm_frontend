@@ -382,61 +382,34 @@
 }
 
 .Invoices-page-action-btn {
-  padding: 4px 8px;
+  padding: 5px;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  background: transparent;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.Invoices-page-btn-view {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
+.Invoices-page-btn-view  { color: #4d7ce0; }
+.Invoices-page-btn-view:hover  { background-color: #dbeafe; }
 
-.Invoices-page-btn-view:hover {
-  background-color: #bfdbfe;
-}
+.Invoices-page-btn-edit  { color: #059669; }
+.Invoices-page-btn-edit:hover  { background-color: #d1fae5; }
 
-.Invoices-page-btn-edit {
-  background-color: #fef3c7;
-  color: #92400e;
-}
+.Invoices-page-btn-download { color: #059669; }
+.Invoices-page-btn-download:hover { background-color: #d1fae5; }
 
-.Invoices-page-btn-edit:hover {
-  background-color: #fde68a;
-}
+.Invoices-page-btn-payment { color: #059669; }
+.Invoices-page-btn-payment:hover { background-color: #d1fae5; }
 
-.Invoices-page-btn-download {
-  background-color: #d1fae5;
-  color: #065f46;
-}
+.Invoices-page-btn-approve { color: #f59e0b; }
+.Invoices-page-btn-approve:hover { background-color: #fef3c7; }
 
-.Invoices-page-btn-download:hover {
-  background-color: #a7f3d0;
-}
-
-.Invoices-page-btn-payment {
-  background-color: #d1fae5;
-  color: #065f46;
-}
-
-.Invoices-page-btn-payment:hover {
-  background-color: #a7f3d0;
-}
-
-.Invoices-page-btn-delete {
-  background-color: #fee2e2;
-  color: #991b1b;
-}
-
-.Invoices-page-btn-delete:hover {
-  background-color: #fecaca;
-}
+.Invoices-page-btn-delete { color: #dc2626; }
+.Invoices-page-btn-delete:hover { background-color: #fee2e2; }
 
 /* Compact Pagination */
 .Invoices-page-pagination {

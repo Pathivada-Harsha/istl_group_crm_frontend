@@ -442,10 +442,10 @@
 }
 .orderbook-icon-btn svg { font-size: 13px; }
 .orderbook-icon-btn:hover { transform: translateY(-1px); }
-.ob-view   { color:#5685eb; } .ob-view:hover   { background:rgba(37,99,235,0.1); }
-.ob-edit   { color:#16a34a; } .ob-edit:hover   { background:rgba(22,163,74,0.1); }
-.ob-upload { color:#7c3aed; } .ob-upload:hover { background:rgba(124,58,237,0.1); }
-.ob-delete { color:#dc2626; } .ob-delete:hover { background:rgba(220,38,38,0.1); }
+.ob-view   { color: #4d7ce0; } .ob-view:hover   { background: #dbeafe; }
+.ob-edit   { color: #059669; } .ob-edit:hover   { background: #d1fae5; }
+.ob-upload { color: #7c3aed; } .ob-upload:hover { background: #ede9fe; }
+.ob-delete { color: #dc2626; } .ob-delete:hover { background: #fee2e2; }
 
 /* Empty state */
 .orderbook-empty-state {

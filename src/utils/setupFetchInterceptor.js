@@ -1,3 +1,16 @@
+const SIDEBAR_KEY_PREFIX = 'sidebar_state_';
+
+function clearAllSidebarState() {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(SIDEBAR_KEY_PREFIX)) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch { /* ignore */ }
+}
+
 let originalFetch = null;
 
 export const setupFetchInterceptor = () => {
@@ -14,17 +27,20 @@ export const setupFetchInterceptor = () => {
 
     const response = await originalFetch(url, options);
 
-    // ✅ Skip login/logout endpoints — don't intercept auth calls
-    const isAuthCall = url.includes('/login/userLogin') || 
-                       url.includes('/login/logout') ||
-                       url.includes('/login/ping') ||
-                       url.includes('/login/forgot-password/');
+    const isAuthCall =
+      url.includes('/login/userLogin') ||
+      url.includes('/login/logout') ||
+      url.includes('/login/ping') ||
+      url.includes('/login/forgot-password/');
 
     if (isBackendCall && !isAuthCall && response.status === 401) {
-      console.warn("Session expired - redirecting to login");
+      console.warn('Session expired - redirecting to login');
 
-      // ✅ Use the CORRECT storage key that AuthContext uses
+      // Clear auth data
       localStorage.removeItem('bd_portal_user');
+
+      // Clear sidebar accordion state so the next user starts clean
+      clearAllSidebarState();
 
       window.dispatchEvent(new Event('session-expired'));
       window.location.href = '/login';

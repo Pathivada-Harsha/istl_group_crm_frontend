@@ -138,7 +138,7 @@ export default function ClientDashboardFollowUps() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
 
   const [followUps, setFollowUps] = useState([]);
-  const [filteredFollowUps, setFilteredFollowUps] = useState([]);
+  // filteredFollowUps and kpis are derived via useMemo below — no useState needed
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -189,14 +189,7 @@ export default function ClientDashboardFollowUps() {
   const editTimeRef = useRef(null);
   const editTimeInputRef = useRef(null);
 
-  // KPI States
-  const [kpis, setKpis] = useState({
-    total: 0,
-    pending: 0,
-    completed: 0,
-    overdue: 0,
-    today: 0
-  });
+  // kpis derived via useMemo below
 
   // Add Form state
   const [addForm, setAddForm] = useState({
@@ -231,16 +224,66 @@ export default function ClientDashboardFollowUps() {
     fetchGroups();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
+  // ── Derived state — one useMemo replaces two cascading useEffects ────────
+  // Old: followUps change → applyFilters useEffect → setFilteredFollowUps (render)
+  //      → calculateKPIs useEffect → setKpis (render) — 4 renders total
+  // New: useMemo fires synchronously during render, zero extra setState, zero extra renders
+  const { filteredFollowUps, kpis } = React.useMemo(() => {
+    let filtered = followUps;
+
+    if (statusFilter !== 'All')     filtered = filtered.filter(f => f.status === statusFilter);
+    if (priorityFilter !== 'All')   filtered = filtered.filter(f => f.priority === priorityFilter);
+    if (typeFilter !== 'All')       filtered = filtered.filter(f => f.followupType === typeFilter);
+    if (assignedToFilter !== 'All') filtered = filtered.filter(f => f.assignedTo === parseInt(assignedToFilter));
+
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(f =>
+        (f.notes && f.notes.toLowerCase().includes(term)) ||
+        (f.outcome && f.outcome.toLowerCase().includes(term)) ||
+        (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
+        (f.customerCode && f.customerCode.toLowerCase().includes(term)) ||
+        (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
+        (f.createdByName && f.createdByName.toLowerCase().includes(term)) ||
+        (f.followupType && f.followupType.toLowerCase().includes(term)) ||
+        (f.groupName && f.groupName.toLowerCase().includes(term))
+      );
+    }
+
+    if (appliedFrom) {
+      const from = new Date(appliedFrom); from.setHours(0, 0, 0, 0);
+      const to   = new Date(appliedTo || appliedFrom); to.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(f => {
+        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
+        return !isNaN(d.getTime()) && d >= from && d <= to;
+      });
+      filtered = [...filtered].sort((a, b) =>
+        new Date(String(a.scheduledAt || '').replace(' ', 'T')) -
+        new Date(String(b.scheduledAt || '').replace(' ', 'T'))
+      );
+    }
+
+    // KPIs in same pass — no second useEffect needed
+    const now   = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const kpis = {
+      total:     filtered.length,
+      pending:   filtered.filter(f => f.status === 'Pending').length,
+      completed: filtered.filter(f => f.status === 'Completed').length,
+      overdue:   filtered.filter(f => {
+        if (f.status !== 'Pending') return false;
+        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
+        return !isNaN(d.getTime()) && d < now;
+      }).length,
+      today: filtered.filter(f => {
+        if (f.status !== 'Pending') return false;
+        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
+        if (isNaN(d.getTime())) return false;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() === today.getTime();
+      }).length,
+    };
+    return { filteredFollowUps: filtered, kpis };
   }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm, appliedFrom, appliedTo]);
-
-  // Group/subgroup filtering is handled server-side (backend SQL).
-  // applyFilters only handles the UI-level dropdowns (status, priority, type, assignedTo, source, search).
-
-  useEffect(() => {
-    calculateKPIs();
-  }, [filteredFollowUps]);
 
   // Fetch leads when modal group/subgroup changes
   useEffect(() => {
@@ -259,10 +302,9 @@ export default function ClientDashboardFollowUps() {
     }
   }, [addForm.modalSubGroupName]);
 
-  // Re-fetch from backend whenever group/subgroup selection changes.
-  // Backend applies the group filter in SQL — no client-side filtering needed.
+  // Re-fetch when group/subgroup filter changes
   useEffect(() => {
-    fetchFollowUps();
+    fetchFollowUps(groupName, subGroupName);
   }, [groupName, subGroupName]);
 
   // Close Add time picker when clicking outside
@@ -303,17 +345,10 @@ export default function ClientDashboardFollowUps() {
   const fetchFollowUps = async (grp = groupName, subGrp = subGroupName) => {
     setLoading(true);
     try {
-      // Build query params — only include non-empty values so backend treats absent params as "no filter"
       const params = new URLSearchParams();
       if (grp)    params.append('groupName',    grp);
       if (subGrp) params.append('subGroupName', subGrp);
-
       const qs = params.toString() ? `?${params.toString()}` : '';
-
-      // Always call /my-followups — backend decides what "mine" means per role:
-      //   SUPERADMIN / ADMIN  → all matching records (no userId restriction)
-      //   Everyone else       → only records where assigned_to = me OR created_by = me
-      // groupName / subGroupName params are applied in SQL on the backend.
       const response = await fetch(`${API_BASE_URL}/followups/my-followups${qs}`, {
         credentials: "include",
         headers: {
@@ -322,13 +357,9 @@ export default function ClientDashboardFollowUps() {
           'User-Role': user.role
         }
       });
-
       if (!response.ok) throw new Error('Failed to fetch follow-ups');
-
       const data = await response.json();
-      if (data.success) {
-        setFollowUps(data.data || []);
-      }
+      if (data.success) setFollowUps(data.data || []);
     } catch (err) {
       showError(err.message || 'Error fetching follow-ups');
     } finally {
@@ -456,87 +487,6 @@ export default function ClientDashboardFollowUps() {
       console.error('Error fetching leads:', err);
       setLeads([]);
     }
-  };
-
-  const applyFilters = () => {
-    let filtered = [...followUps];
-
-    // Group/subgroup filters are applied server-side on fetch.
-    // Here we only handle the UI dropdown filters.
-
-    if (statusFilter !== 'All') {
-      filtered = filtered.filter(f => f.status === statusFilter);
-    }
-
-    if (priorityFilter !== 'All') {
-      filtered = filtered.filter(f => f.priority === priorityFilter);
-    }
-
-    if (typeFilter !== 'All') {
-      filtered = filtered.filter(f => f.followupType === typeFilter);
-    }
-
-    if (assignedToFilter !== 'All') {
-      filtered = filtered.filter(f => f.assignedTo === parseInt(assignedToFilter));
-    }
-
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(f =>
-        (f.notes && f.notes.toLowerCase().includes(term)) ||
-        (f.outcome && f.outcome.toLowerCase().includes(term)) ||
-        (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
-        (f.customerCode && f.customerCode.toLowerCase().includes(term)) ||
-        (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
-        (f.createdByName && f.createdByName.toLowerCase().includes(term)) ||
-        (f.followupType && f.followupType.toLowerCase().includes(term)) ||
-        (f.groupName && f.groupName.toLowerCase().includes(term))
-      );
-    }
-
-    if (appliedFrom) {
-      const from = new Date(appliedFrom);
-      from.setHours(0, 0, 0, 0);
-      const to = new Date(appliedTo || appliedFrom);
-      to.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(f => {
-        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
-        return !isNaN(d.getTime()) && d >= from && d <= to;
-      });
-      // Sort ascending by scheduledAt when date filter is active
-      filtered.sort((a, b) => {
-        const da = new Date(String(a.scheduledAt || '').replace(' ', 'T'));
-        const db = new Date(String(b.scheduledAt || '').replace(' ', 'T'));
-        return da - db;
-      });
-    }
-
-    setFilteredFollowUps(filtered);
-    setCurrentPage(1);
-  };
-
-  const calculateKPIs = () => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const total = filteredFollowUps.length;
-    const pending = filteredFollowUps.filter(f => f.status === 'Pending').length;
-    const completed = filteredFollowUps.filter(f => f.status === 'Completed').length;
-
-    const overdue = filteredFollowUps.filter(f => {
-      if (f.status !== 'Pending') return false;
-      const scheduledDate = new Date(f.scheduledAt);
-      return scheduledDate < now;
-    }).length;
-
-    const todayCount = filteredFollowUps.filter(f => {
-      if (f.status !== 'Pending') return false;
-      const scheduledDate = new Date(f.scheduledAt);
-      const scheduleDay = new Date(scheduledDate.getFullYear(), scheduledDate.getMonth(), scheduledDate.getDate());
-      return scheduleDay.getTime() === today.getTime();
-    }).length;
-
-    setKpis({ total, pending, completed, overdue, today: todayCount });
   };
 
   // ── Calendar helpers ────────────────────────────────────────────────────────
@@ -973,6 +923,14 @@ export default function ClientDashboardFollowUps() {
   };
 
   // Pagination
+  // Reset to page 1 whenever the filtered set changes (filter/search applied)
+  const prevFilterKeyRef = React.useRef('');
+  const filterKey = `${statusFilter}|${priorityFilter}|${typeFilter}|${assignedToFilter}|${searchTerm}|${appliedFrom}|${appliedTo}|${groupName}|${subGroupName}`;
+  if (prevFilterKeyRef.current !== filterKey) {
+    prevFilterKeyRef.current = filterKey;
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
   const totalPages = Math.ceil(filteredFollowUps.length / rowsPerPage);
   const startIndex = (currentPage - 1) * rowsPerPage;
   const endIndex = startIndex + rowsPerPage;
@@ -993,11 +951,13 @@ export default function ClientDashboardFollowUps() {
       {/* Header with Group Filter */}
       <div className="followups-header page-header-with-filter">
         <h1>Follow-ups Management</h1>
-        <GroupCategoryFilter
-          groupValue={groupName}
-          subGroupValue={subGroupName}
-          onChange={updateFilters}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <GroupCategoryFilter
+            groupValue={groupName}
+            subGroupValue={subGroupName}
+            onChange={updateFilters}
+          />
+        </div>
       </div>
 
       {/* KPI Cards */}

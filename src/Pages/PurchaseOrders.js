@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import '../pages-css/PurchaseOrders.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -811,7 +812,34 @@ const PurchaseOrders = () => {
     setSelectedOrderBookId(obId);
     setOrderBookItems([]);
     setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: [] }));
-    if (obId) await fetchOrderBookItems(obId);
+    setItemsStepUnlocked(false);
+    if (!obId) return;
+    await fetchOrderBookItems(obId);
+    // Auto-load items immediately — no button needed (mirrors quotation select behaviour)
+    // We read fresh items from the fetch inside a setState callback to avoid stale closure
+    setOrderBookItems(freshItems => {
+      if (freshItems.length === 0) return freshItems;
+      const mapped = freshItems.map((item, index) => {
+        const totalQty     = parseFloat(item.quantity) || 0;
+        const allocatedQty = parseFloat(item.allocatedQty) || 0;
+        const remainingQty = Math.max(0, totalQty - allocatedQty);
+        return {
+          id: `orderbook-${index}`,
+          orderBookItemId: item.id,
+          itemName: item.itemName,
+          itemDescription: item.specification || item.description || '',
+          quotedQuantity: totalQty,
+          allocatedQty,
+          remainingQty,
+          quantity: remainingQty,
+          unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0,
+          selected: remainingQty > 0,
+        };
+      });
+      setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: mapped }));
+      setItemsStepUnlocked(true);
+      return freshItems;
+    });
   };
   const handleVendorTypeChange = (type) => {
     setShowNewVendorForm(type === 'new'); setVendorDropdownOpen(false); setVendorSearch('');
@@ -1406,11 +1434,11 @@ const PurchaseOrders = () => {
           <td key={col.id} style={{ minWidth: 200 }}>
             {po.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
                   {pName || po.projectId}
                 </span>
                 {pName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
                     {po.projectId}
                   </span>
                 )}
@@ -2071,24 +2099,33 @@ const PurchaseOrders = () => {
                 <div className="po-form-row">
                   <div className="po-form-group">
                     <label>Group *</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {modalGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalGroupName}
+                      options={modalGroups}
+                      placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}
+                      disabled={modalDropdownLoading.groups}
+                      onChange={(v) => handleModalGroupChange({ target: { value: v } })}
+                    />
                   </div>
                   <div className="po-form-group">
                     <label>Sub Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                      <option value="">{modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}</option>
-                      {modalSubGroups.map((s, i) => <option key={s.value || i} value={s.value}>{s.label}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalSubGroupName}
+                      options={modalSubGroups}
+                      placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub Group'}
+                      disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                      onChange={(v) => handleModalSubGroupChange({ target: { value: v } })}
+                    />
                   </div>
                   <div className="po-form-group">
                     <label>Project *</label>
-                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                      <option value="">{modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}</option>
-                      {modalProjects.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalProjectId}
+                      options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
+                      placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}
+                      disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                      onChange={(v) => handleModalProjectChange({ target: { value: v } })}
+                    />
                   </div>
                 </div>
                 {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>🔄 Loading quotations and order books...</div>}
@@ -2136,11 +2173,13 @@ const PurchaseOrders = () => {
                           <h4 style={{ marginBottom: '8px', color: '#166534', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Quotation</h4>
                           <p style={{ fontSize: '13px', color: '#059669', marginBottom: '12px' }}>Select from {quotations.length} available quotation(s)</p>
                           {!createPOFormData.quotationId && (
-                            <div className="po-form-group" style={{ marginTop: '12px' }}>
-                              <select value={createPOFormData.quotationId} onChange={(e) => handleQuotationSelect(e.target.value)} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                                <option value="">Select Quotation</option>
-                                {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} — {q.vendorName || q.vendorContact || 'Unknown Vendor'} {q.totalValue ? `— ${formatCurrency(q.totalValue)}` : ''} [{q.status}]</option>)}
-                              </select>
+                            <div className="po-form-group po-form-group--dropdown-up" style={{ marginTop: '12px' }}>
+                              <FilterSelect
+                                value={createPOFormData.quotationId}
+                                options={quotations.map(q => ({ value: q.id, label: `${q.quoteNo} — ${q.vendorName || q.vendorContact || 'Unknown Vendor'}${q.totalValue ? ` — ${formatCurrency(q.totalValue)}` : ''} [${q.status}]` }))}
+                                placeholder="Select Quotation"
+                                onChange={(v) => handleQuotationSelect(v)}
+                              />
                             </div>
                           )}
                           {createPOFormData.quotationId && (
@@ -2152,25 +2191,30 @@ const PurchaseOrders = () => {
                         </div>
                         <div style={{ padding: '20px', background: '#eff6ff', border: '2px solid #93c5fd', borderRadius: '8px' }}>
                           <h4 style={{ marginBottom: '8px', color: '#1e40af', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> Option 2: Load from Order Book</h4>
-                          <div className="po-form-group" style={{ marginTop: '8px' }}>
-                            <select value={selectedOrderBookId} onChange={handleOrderBookSelect} style={{ width: '100%', padding: '8px', fontSize: '13px', borderRadius: '6px', border: '1px solid #93c5fd' }}>
-                              <option value="">-- Select Order Book --</option>
-                              {orderBooks.map(ob => (
-                                <option key={ob.id} value={ob.id}>
-                                  {ob.poNumber || ob.orderBookNo} — {ob.orderTitle ? (ob.orderTitle.length > 30 ? ob.orderTitle.substring(0, 30) + '...' : ob.orderTitle) : 'No Title'}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          {loadingOrderItems && <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '6px' }}>🔄 Loading...</div>}
-                          {selectedOrderBookId && orderBookItems.length > 0 && (createPOFormData.items.length === 0 || createPOFormData.quotationId) && (
-                            <button className="purchase-orders-btn-primary" onClick={handleSkipQuotationLoadOrderBook} style={{ width: '100%', padding: '10px', fontSize: '13px', background: '#3b82f6', marginTop: '8px' }}>
-                              📋 Load {orderBookItems.length} Items
-                            </button>
-                          )}
-                          {createPOFormData.items.length > 0 && !createPOFormData.quotationId && (
-                            <div style={{ padding: '10px', background: 'white', borderRadius: '6px', border: '1px solid #93c5fd', marginTop: '8px' }}>
-                              <div style={{ fontSize: '13px', color: '#1e40af' }}>✓ {createPOFormData.items.length} items loaded</div>
+                          {createPOFormData.items.length > 0 && !createPOFormData.quotationId ? (
+                            <div style={{ marginTop: '8px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ fontSize: '13px', color: '#1e40af', fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
+                              <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>Clear</button>
+                            </div>
+                          ) : (
+                            <div className="po-ob-dropdown-wrap" style={{ marginTop: '8px' }}>
+                              <div className="po-ob-filterselect-wrap">
+                                <FilterSelect
+                                  value={selectedOrderBookId}
+                                  options={orderBooks.map(ob => ({ value: ob.id, label: `${ob.poNumber || ob.orderBookNo} — ${ob.orderTitle || 'No Title'}` }))}
+                                  placeholder="— Select an Order Book —"
+                                  onChange={async (v) => { await handleOrderBookSelect({ target: { value: v } }); }}
+                                />
+                                {selectedOrderBookId && (
+                                  <button type="button" className="po-ob-clear-btn po-ob-clear-btn--fs" onClick={() => { setSelectedOrderBookId(''); setOrderBookItems([]); }} title="Clear selection">✕</button>
+                                )}
+                              </div>
+                              {loadingOrderItems && (
+                                <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '6px', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
+                              )}
+                              {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
+                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>No items found in this order book.</div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2191,11 +2235,13 @@ const PurchaseOrders = () => {
                   {quotations.length > 0 && orderBooks.length === 0 && (
                     <>
                       <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Quotations Available ({quotations.length})</h3>
-                      <div className="po-form-group">
-                        <select value={createPOFormData.quotationId} onChange={(e) => handleQuotationSelect(e.target.value)} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                          <option value="">Select Quotation</option>
-                          {quotations.map(q => <option key={q.id} value={q.id}>{q.quoteNo} — {q.vendorName || q.vendorContact || 'Unknown Vendor'} {q.totalValue ? `— ${formatCurrency(q.totalValue)}` : ''} [{q.status}]</option>)}
-                        </select>
+                      <div className="po-form-group po-form-group--dropdown-up">
+                        <FilterSelect
+                          value={createPOFormData.quotationId}
+                          options={quotations.map(q => ({ value: q.id, label: `${q.quoteNo} — ${q.vendorName || q.vendorContact || 'Unknown Vendor'}${q.totalValue ? ` — ${formatCurrency(q.totalValue)}` : ''} [${q.status}]` }))}
+                          placeholder="Select Quotation"
+                          onChange={(v) => handleQuotationSelect(v)}
+                        />
                       </div>
                       {createPOFormData.quotation && (
                         <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '2px solid #86efac' }}>
@@ -2212,25 +2258,32 @@ const PurchaseOrders = () => {
                   {!loadingOrderItems && quotations.length === 0 && orderBooks.length > 0 && (
                     <div style={{ padding: '20px', background: '#fef3c7', border: '2px solid #fbbf24', borderRadius: '8px' }}>
                       <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> No Approved Quotations — Select Order Book</h4>
-                      <div className="po-form-group" style={{ marginTop: '12px' }}>
-                        <label style={{ fontSize: '13px', color: '#92400e', marginBottom: '6px', display: 'block' }}>Select Order Book</label>
-                        <select value={selectedOrderBookId} onChange={handleOrderBookSelect} style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '6px', border: '1px solid #fbbf24' }}>
-                          <option value="">-- Select an Order Book --</option>
-                          {orderBooks.map(ob => (
-                            <option key={ob.id} value={ob.id}>
-                              {ob.poNumber || ob.orderBookNo} — {ob.orderTitle ? (ob.orderTitle.length > 35 ? ob.orderTitle.substring(0, 35) + '...' : ob.orderTitle) : 'No Title'}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {loadingOrderItems && <div style={{ marginTop: '10px', fontSize: '13px', color: '#92400e' }}>🔄 Loading items...</div>}
-                      {selectedOrderBookId && orderBookItems.length > 0 && (
-                        <button className="purchase-orders-btn-primary" onClick={handleLoadOrderBookItems} style={{ width: '100%', padding: '12px', fontSize: '15px', marginTop: '12px' }}>
-                          📋 Load {orderBookItems.length} Items from this Order Book
-                        </button>
-                      )}
-                      {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
-                        <div style={{ marginTop: '10px', fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                      {createPOFormData.items.length > 0 ? (
+                        <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
+                          <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>Clear</button>
+                        </div>
+                      ) : (
+                        <div className="po-ob-dropdown-wrap" style={{ marginTop: '12px' }}>
+                          <label style={{ fontSize: '13px', color: '#92400e', marginBottom: '6px', display: 'block', fontWeight: 600 }}>Select Order Book</label>
+                          <div className="po-ob-filterselect-wrap">
+                            <FilterSelect
+                              value={selectedOrderBookId}
+                              options={orderBooks.map(ob => ({ value: ob.id, label: `${ob.poNumber || ob.orderBookNo} — ${ob.orderTitle || 'No Title'}` }))}
+                              placeholder="— Select an Order Book —"
+                              onChange={async (v) => { await handleOrderBookSelect({ target: { value: v } }); }}
+                            />
+                            {selectedOrderBookId && (
+                              <button type="button" className="po-ob-clear-btn po-ob-clear-btn--fs" onClick={() => { setSelectedOrderBookId(''); setOrderBookItems([]); }} title="Clear selection">✕</button>
+                            )}
+                          </div>
+                          {loadingOrderItems && (
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
+                          )}
+                          {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                          )}
+                        </div>
                       )}
                     </div>
                   )}
@@ -2419,14 +2472,19 @@ const PurchaseOrders = () => {
                   <div className="po-form-row">
                     <div className="po-form-group">
                       <label>Status</label>
-                      <select value={createPOFormData.status || 'Draft'} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, status: e.target.value }))} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                        <option value="Draft">Draft</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Ordered">Ordered</option>
-                        <option value="In-Transit">In-Transit</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Cancelled">Cancelled</option>
-                      </select>
+                      <FilterSelect
+                        value={createPOFormData.status || 'Draft'}
+                        options={[
+                          { value: 'Draft',      label: 'Draft' },
+                          { value: 'Approved',   label: 'Approved' },
+                          { value: 'Ordered',    label: 'Ordered' },
+                          { value: 'In-Transit', label: 'In-Transit' },
+                          { value: 'Delivered',  label: 'Delivered' },
+                          { value: 'Cancelled',  label: 'Cancelled' },
+                        ]}
+                        placeholder="Select Status"
+                        onChange={(v) => setCreatePOFormData(prev => ({ ...prev, status: v }))}
+                      />
                     </div>
                     <div className="po-form-group">
                       <label>Shipping Address</label>

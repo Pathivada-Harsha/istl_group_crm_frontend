@@ -934,12 +934,36 @@
 .leads-enquiries-form-group input,
 .leads-enquiries-form-group select,
 .leads-enquiries-form-group textarea {
-  padding: 7px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
+  padding: 8px 12px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 8px;
   font-size: 13px;
   font-family: 'Poppins', sans-serif;
-  transition: all 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #fff;
+  color: #1e293b;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Select-specific: custom appearance + scroll cap */
+.leads-enquiries-form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+  cursor: pointer;
+  max-height: 42px;
+  overflow-y: auto;
+}
+
+/* Dropdown list scroll — works in Firefox; Chrome uses native */
+.leads-enquiries-form-group select[size],
+.leads-enquiries-form-group select[multiple] {
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .leads-enquiries-form-group input:focus,
@@ -947,7 +971,18 @@
 .leads-enquiries-form-group textarea:focus {
   outline: none;
   border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.leads-enquiries-form-group select:hover:not(:disabled) {
+  border-color: #93c5fd;
+}
+
+.leads-enquiries-form-group select:disabled {
+  background-color: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+  border-color: #e2e8f0;
 }
 
 .leads-enquiries-form-group textarea {

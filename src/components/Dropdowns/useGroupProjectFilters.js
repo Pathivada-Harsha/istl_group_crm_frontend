@@ -1,100 +1,47 @@
-// useGroupProjectFilters.js (SAME HOOK FOR BOTH COMPONENTS)
-import { useState, useEffect } from 'react';
+// useGroupProjectFilters.js
+import { useState, useEffect, useCallback } from 'react';
 
-/**
- * Custom hook to manage Group, SubGroup & Project filters with localStorage sync
- * Compatible with both 2-dropdown and 3-dropdown components
- * This ensures filter selection persists and syncs across all pages
- * 
- * Place this file in: src/components/Dropdowns/useGroupProjectFilters.js
- */
 const useGroupProjectFilters = () => {
-  // Initialize state from localStorage on first render
   const [filters, setFilters] = useState(() => {
     try {
       const saved = localStorage.getItem('groupProjectFilters');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (error) {
-      console.error('Error reading from localStorage:', error);
-    }
-    // Default empty filters
+      if (saved) return JSON.parse(saved);
+    } catch {}
     return { groupName: '', subGroupName: '', projectId: '' };
   });
 
-  // Listen for changes in localStorage (syncs across browser tabs AND components)
+  // Only sync from OTHER tabs (cross-tab sync via native storage event).
+  // Same-tab updates go through setFilters directly — no custom event needed,
+  // which eliminates the double-render that was causing the zigzag.
   useEffect(() => {
     const handleStorageChange = (e) => {
       if (e.key === 'groupProjectFilters' && e.newValue) {
-        try {
-          const newFilters = JSON.parse(e.newValue);
-          setFilters(newFilters);
-        } catch (error) {
-          console.error('Error parsing localStorage data:', error);
-        }
+        try { setFilters(JSON.parse(e.newValue)); } catch {}
       }
     };
-
-    // Listen for custom event (for same-tab updates between components)
-    const handleCustomStorageChange = (e) => {
-      if (e.detail) {
-        setFilters(e.detail);
-      }
-    };
-
-    // This event fires when localStorage is modified in another tab/window
     window.addEventListener('storage', handleStorageChange);
-    
-    // Custom event for same-tab sync between components
-    window.addEventListener('groupProjectFiltersChanged', handleCustomStorageChange);
-
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('groupProjectFiltersChanged', handleCustomStorageChange);
-    };
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
-  // Function to update filters
-  const updateFilters = (newFilters) => {
+  const updateFilters = useCallback((newFilters) => {
+    // Single setFilters call — no custom event dispatch to avoid double render
     setFilters(newFilters);
-    
-    try {
-      localStorage.setItem('groupProjectFilters', JSON.stringify(newFilters));
-      
-      // Dispatch custom event for same-tab sync
-      window.dispatchEvent(new CustomEvent('groupProjectFiltersChanged', { 
-        detail: newFilters 
-      }));
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
-  };
+    try { localStorage.setItem('groupProjectFilters', JSON.stringify(newFilters)); } catch {}
+  }, []);
 
-  // Function to reset/clear filters
-  const resetFilters = () => {
-    const emptyFilters = { groupName: '', subGroupName: '', projectId: '' };
-    setFilters(emptyFilters);
-    
-    try {
-      localStorage.setItem('groupProjectFilters', JSON.stringify(emptyFilters));
-      
-      // Dispatch custom event for same-tab sync
-      window.dispatchEvent(new CustomEvent('groupProjectFiltersChanged', { 
-        detail: emptyFilters 
-      }));
-    } catch (error) {
-      console.error('Error clearing localStorage:', error);
-    }
-  };
+  const resetFilters = useCallback(() => {
+    const empty = { groupName: '', subGroupName: '', projectId: '' };
+    setFilters(empty);
+    try { localStorage.setItem('groupProjectFilters', JSON.stringify(empty)); } catch {}
+  }, []);
 
   return {
-    filters,                          // Complete filter object: { groupName, subGroupName, projectId }
-    groupName: filters.groupName,     // Just the group name
-    subGroupName: filters.subGroupName, // Just the subgroup/category name
-    projectId: filters.projectId,     // Just the project ID
-    updateFilters,                    // Function to update filters
-    resetFilters                      // Function to clear filters
+    filters,
+    groupName:    filters.groupName,
+    subGroupName: filters.subGroupName,
+    projectId:    filters.projectId,
+    updateFilters,
+    resetFilters,
   };
 };
 

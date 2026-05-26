@@ -1036,6 +1036,96 @@
   min-height: 60px;
 }
 
+/* ── Order Book Dropdown — styled, scrollable, with clear btn ── */
+.po-ob-dropdown-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.po-ob-select-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.po-ob-select {
+  width: 100%;
+  padding: 9px 36px 9px 12px;
+  border: 1.5px solid #93c5fd;
+  border-radius: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  background: white;
+  color: #1e293b;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  max-height: 42px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.po-ob-select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+}
+
+/* Amber variant — used in solo order book section */
+.po-ob-select--amber {
+  border-color: #fbbf24;
+}
+.po-ob-select--amber:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.15);
+}
+
+/* Custom chevron arrow */
+.po-ob-select-box::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  margin-top: -4px;
+  pointer-events: none;
+  border: solid #64748b;
+  border-width: 0 2px 2px 0;
+  padding: 3px;
+  transform: rotate(45deg);
+}
+
+.po-ob-clear-btn {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  z-index: 1;
+}
+.po-ob-clear-btn:hover {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.po-ob-load-btn {
+  width: 100%;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 /* Items Table Enhancements */
 .po-items-table tbody tr {
   transition: all 0.2s ease;
@@ -2194,4 +2284,79 @@
     flex-direction: row;
     align-items: center;
   }
+}
+/* ── FilterSelect inside po-form-group — full width, matches form style ── */
+.po-form-group .filter-trigger {
+  width: 100%;
+  height: 40px;
+  font-size: 14px;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+
+.po-form-group .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #cbd5e1;
+}
+
+.po-form-group .filter-trigger--open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
+}
+
+.po-form-group .filter-dropdown-list {
+  width: 100%;
+  min-width: unset;
+}
+
+/* FilterSelect direction is auto-detected in JS — no forced overrides needed */
+@keyframes dropdown-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Order Book FilterSelect wrapper ── */
+.po-ob-filterselect-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.po-ob-filterselect-wrap .filter-trigger {
+  width: 100%;
+  height: 40px;
+  font-size: 13px;
+  border-color: #93c5fd;
+}
+
+.po-ob-filterselect-wrap .filter-trigger--open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.10);
+}
+
+.po-ob-filterselect-wrap .filter-dropdown-list {
+  width: 100%;
+  min-width: unset;
+}
+
+/* Clear btn positioned over the FilterSelect trigger */
+.po-ob-clear-btn--fs {
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: #94a3b8;
+  padding: 2px 4px;
+  border-radius: 4px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s, background 0.15s;
+  z-index: 2;
+}
+.po-ob-clear-btn--fs:hover {
+  color: #dc2626;
+  background: #fee2e2;
 }

@@ -8,8 +8,8 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
-import { FaEye, FaEdit, FaTrash, FaUpload, FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
-import { RiDeleteBin6Line } from "react-icons/ri";
+import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
+import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
 /* ── OrderBook Date Range Picker (same style as Clients Data) ────────────── */
@@ -1336,10 +1336,10 @@ function OrderBook() {
       render: (o) => (
         <td key="actions">
           <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
-            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View"><FaEye /></button>
-            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit"><FaEdit /></button>
+            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View"><Eye size={14} /></button>
+            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit"><Edit2 size={14} /></button>
             <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
-            {canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><RiDeleteBin6Line /></button>}
+            {canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><Trash2 size={14} /></button>}
           </div>
         </td>
       )
@@ -1663,7 +1663,7 @@ function OrderBook() {
                           onClick={() => handleViewFile(selectedOrderBook.id, selectedOrderBook.poFileName)}
                           title="Open file in viewer"
                         >
-                          <FaEye /> View
+                          <Eye size={14} /> View
                         </button>
                         <button
                           className="ob-attachment-btn ob-attachment-btn-download"
@@ -1953,7 +1953,7 @@ function OrderBook() {
                               className="ob-attachment-btn ob-attachment-btn-view"
                               onClick={() => handleViewFile(selectedOrderBook?.id, existingAttachment.fileName)}
                             >
-                              <FaEye /> View
+                              <Eye size={14} /> View
                             </button>
                           </div>
                         </div>
@@ -2022,7 +2022,7 @@ function OrderBook() {
                       <FaFileDownload /> Download Template
                     </button>
                     <button type="button" className="orderbook-btn orderbook-btn-secondary orderbook-btn-icon" onClick={() => setShowExcelUploadModal(true)} title="Import from Excel">
-                      <FaUpload /> Import Excel
+                      <Upload size={14} /> Import Excel
                     </button>
                     <button type="button" className="orderbook-btn orderbook-btn-secondary" onClick={addItem}>
                       + Add Item
@@ -2129,7 +2129,7 @@ function OrderBook() {
                               <td className="orderbook-table-cell-total">₹{calculateItemTotal(item).toFixed(2)}</td>
                               <td className="orderbook-table-cell-centered">
                                 <button type="button" className="orderbook-table-delete-btn" onClick={() => removeItem(index)} title="Remove item">
-                                  <FaTrash />
+                                  <Trash2 size={11} />
                                 </button>
                               </td>
                             </tr>
@@ -2300,7 +2300,7 @@ function OrderBook() {
                   title="Open in new tab"
                   style={{ pointerEvents: fileViewerUrl ? 'auto' : 'none', opacity: fileViewerUrl ? 1 : 0.5 }}
                 >
-                  <FaEye /> Open
+                  <Eye size={14} /> Open
                 </a>
                 <button className="orderbook-modal-close" onClick={() => closeModal(setShowFileViewerModal)}>×</button>
               </div>

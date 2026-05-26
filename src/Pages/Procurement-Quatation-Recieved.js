@@ -1138,12 +1138,12 @@ const QuotationsReceived = () => {
       case 'actions': return (
         <td>
           <div className="procurement-quotation-received-actions-cell">
-            <button className="procurement-quotation-received-action-btn" onClick={() => handleViewQuotation(q)} title="View"><Eye size={14} /></button>
-            <button className="procurement-quotation-received-action-btn" onClick={() => handleEditQuotation(q)} title="Edit" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Edit2 size={14} /></button>
-            {q.status === 'New' && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Shortlisted')} title="Shortlist"><Star size={14} /></button>}
-            {(q.status === 'Shortlisted' || q.status === 'New') && <button className="procurement-quotation-received-action-btn" onClick={() => handleUpdateStatus(q.id, 'Approved')} title="Approve"><Check size={14} /></button>}
+            <button className="procurement-quotation-received-action-btn action-view" onClick={() => handleViewQuotation(q)} title="View"><Eye size={14} /></button>
+            <button className="procurement-quotation-received-action-btn action-edit" onClick={() => handleEditQuotation(q)} title="Edit" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Edit2 size={14} /></button>
+            {q.status === 'New' && <button className="procurement-quotation-received-action-btn action-shortlist" onClick={() => handleUpdateStatus(q.id, 'Shortlisted')} title="Shortlist"><Star size={14} /></button>}
+            {(q.status === 'Shortlisted' || q.status === 'New') && <button className="procurement-quotation-received-action-btn action-approve" onClick={() => handleUpdateStatus(q.id, 'Approved')} title="Approve"><Check size={14} /></button>}
             {q.status === 'Approved' && <button className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn" onClick={() => handleOpenCreatePOModal(q)} title="Create PO"><ShoppingCart size={14} /></button>}
-{canDelete && <button className="procurement-quotation-received-action-btn" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4, color: '#ef4444' }}><Trash2 size={14} /></button>}
+{canDelete && <button className="procurement-quotation-received-action-btn action-delete" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Trash2 size={14} /></button>}
           </div>
         </td>
       );
@@ -1152,11 +1152,11 @@ const QuotationsReceived = () => {
         <td style={{ minWidth: 200 }}>
           {q.projectId ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 220 }}>
+              <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
                 {q.projectName || q.projectId}
               </span>
               {q.projectName && (
-                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
                   {q.projectId}
                 </span>
               )}

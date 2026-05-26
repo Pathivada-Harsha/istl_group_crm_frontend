@@ -1615,6 +1615,7 @@
   width: 28px; height: 28px;
   border-radius: 6px;
   border: none;
+  background: transparent;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -1623,12 +1624,18 @@
   flex-shrink: 0;
 }
 .exp-act-btn:hover { transform: scale(1.1); }
-.view-btn   { background: #eff6ff; color: var(--exp-primary); }
-.edit-btn   { background: #fff7ed; color: #ea580c; }
-.ok-btn     { background: #dcfce7; color: #16a34a; }
-.rej-btn    { background: #fee2e2; color: var(--exp-danger); }
-.adv-btn    { background: #f3e8ff; color: var(--exp-purple); }
-.del-btn    { background: #fee2e2; color: var(--exp-danger); }
+.view-btn   { color: #4d7ce0; }
+.view-btn:hover { background: #dbeafe; }
+.edit-btn   { color: #ea580c; }
+.edit-btn:hover { background: #fff7ed; }
+.ok-btn     { color: #16a34a; }
+.ok-btn:hover { background: #dcfce7; }
+.rej-btn    { color: var(--exp-danger); }
+.rej-btn:hover { background: #fee2e2; }
+.adv-btn    { color: var(--exp-purple); }
+.adv-btn:hover { background: #f3e8ff; }
+.del-btn    { color: var(--exp-danger); }
+.del-btn:hover { background: #fee2e2; }
 .settle-btn { padding: 3px 8px; width: auto; font-size: 11px; font-weight: 600; }
 
 /* Pagination */
@@ -2693,9 +2700,9 @@
 .exp-btn-reject:hover { background: #fee2e2; }
 
 /* Table approve/reject action buttons */
-.exp-act-btn.approve-btn { background: #f0fdf4; color: #16a34a; border-color: #bbf7d0; }
+.exp-act-btn.approve-btn { background: transparent; color: #16a34a; }
 .exp-act-btn.approve-btn:hover { background: #dcfce7; }
-.exp-act-btn.reject-btn { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
+.exp-act-btn.reject-btn { background: transparent; color: #dc2626; }
 .exp-act-btn.reject-btn:hover { background: #fee2e2; }
 
 
@@ -2748,7 +2755,7 @@
 }
 
 /* ── Record Payment button in actions ─────────────────────────────────────── */
-.exp-act-btn.pay-btn { background: #f5f3ff; color: #7c3aed; border-color: #ddd6fe; }
+.exp-act-btn.pay-btn { background: transparent; color: #7c3aed; }
 .exp-act-btn.pay-btn:hover { background: #ede9fe; }
 
 /* ── Bulk record payment toolbar button ───────────────────────────────────── */

@@ -33,6 +33,7 @@ const DEFAULT_COLUMNS = [
   { key: 'expenseItems',  label: 'Expense Items',    sortable: false, visible: true  },
   { key: 'amount',        label: 'Total',            sortable: true,  visible: true  },
   { key: 'paidByName',    label: 'Paid By',          sortable: true,  visible: true  },
+  { key: 'status',        label: 'Status',           sortable: false, visible: true, mandatory: 1 },
   { key: 'actions',       label: 'Actions',          sortable: false, visible: true  },
 ];
 
@@ -1017,9 +1018,9 @@ const ProjectCostExpenseManagement = () => {
           </div>
         );
       }
+      case 'status': return <StatusBadge s={exp.status} />;
       case 'actions': return (
         <div className="exp-actions-cell">
-          <StatusBadge s={exp.status} />
           <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
           <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
           {canApprove && exp.status === 'Pending' && (
@@ -1044,7 +1045,7 @@ const ProjectCostExpenseManagement = () => {
     { id: 'pending',    title: 'Pending Approval',    value: fmt(stats.pendingExpenses),  icon: <Clock size={32} />,       color: '#f59e0b', filterPatch: { status: 'Pending',  category: 'all' } },
     { id: 'travel',     title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,    color: '#3b82f6', filterPatch: { category: 'Travel', status: 'all' } },
     { id: 'commission', title: 'Total Commission',    value: fmt(stats.totalCommission),  icon: <Users size={32} />,       color: '#8b5cf6', filterPatch: { category: 'Commission', status: 'all' } },
-    { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <Receipt size={32} />,     color: '#06b6d4', filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
+    { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <IndianRupee size={32} />, color: '#06b6d4', filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
   ] : [];
 
   const handleKpiClick = (kpi) => {
@@ -1153,9 +1154,10 @@ const ProjectCostExpenseManagement = () => {
                 onDragEnd={onDragEnd} onDragOver={e => e.preventDefault()}>
                 <GripVertical size={13} className="grip-icon" />
                 <input type="checkbox" checked={col.visible}
-                  onChange={() => setColumns(prev => prev.map((c, i) =>
+                  disabled={!!col.mandatory}
+                  onChange={() => !col.mandatory && setColumns(prev => prev.map((c, i) =>
                     i === idx ? { ...c, visible: !c.visible } : c))} />
-                <span>{col.label}</span>
+                <span>{col.label}{col.mandatory ? <span style={{fontSize:9,marginLeft:4,color:'#94a3b8',fontWeight:600}}>FIXED</span> : ''}</span>
               </div>
             ))}
           </div>

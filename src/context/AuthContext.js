@@ -6,52 +6,55 @@ import React, {
 } from 'react';
 
 const USER_KEY = 'bd_portal_user';
+const SIDEBAR_KEY_PREFIX = 'sidebar_state_';
 
 // ─── ACCOUNTS_EXECUTIVE permission override ───────────────────────────────────
-// Pages the accounts executive can fully use (VIEW + CREATE + EDIT).
-// DELETE and ASSIGN are intentionally excluded — the backend enforces this too.
 const ACCOUNTS_EXECUTIVE_ROLE = 'ACCOUNTS_EXECUTIVE';
-// NOTE: SUPERADMIN and ADMIN page permissions are now fully DB-driven.
-// The backend no longer grants automatic full access — permissions must be
-// explicitly assigned in the permissions management UI for every user.
 
 const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
-  // Finance — core responsibility
   INVOICES:              ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
   BILLS:                 ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
   PAYMENTS:              ['VIEW', 'CREATE', 'EDIT'],
-  // Procurement visibility
   PURCHASE_ORDERS:       ['VIEW', 'CREATE', 'EDIT'],
   ORDER_BOOK:            ['VIEW', 'CREATE', 'EDIT'],
   PROCUREMENT_QUOTATIONS:['VIEW', 'CREATE', 'EDIT', 'APPROVE'],
   VENDORS:               ['VIEW', 'CREATE', 'EDIT'],
-  // Clients / Customers read + edit (no delete)
   CUSTOMERS:             ['VIEW', 'CREATE', 'EDIT'],
-  // Leads — read only for accounts context
   LEADS:                 ['VIEW'],
-  // Reports
   REPORTS:               ['VIEW'],
 };
 
-/**
- * Applies role-specific permission overrides.
- * - ALL roles (including SUPERADMIN/ADMIN): trust the server's pagePermissions entirely.
- *   Permissions are fully DB-driven — the backend no longer auto-grants access.
- * - ACCOUNTS_EXECUTIVE: merges in a hardcoded baseline for finance pages they always need.
- */
 const applyAccountsExecutiveOverride = (role, serverPagePermissions) => {
   const merged = { ...(serverPagePermissions || {}) };
-
   if (role !== ACCOUNTS_EXECUTIVE_ROLE) return merged;
-
   Object.entries(ACCOUNTS_EXECUTIVE_PERMISSIONS).forEach(([page, perms]) => {
-    const existing = merged[page] || [];
-    // Union: keep anything the server already gave + our override list
-    const combined = Array.from(new Set([...existing, ...perms]));
-    merged[page] = combined;
+    merged[page] = Array.from(new Set([...(merged[page] || []), ...perms]));
   });
   return merged;
 };
+
+// ─── Sidebar state cleanup helper ─────────────────────────────────────────────
+/**
+ * Removes ALL sidebar accordion state keys from localStorage.
+ * Called on logout and session expiry so a new user on the same device
+ * always starts with the default collapsed state.
+ *
+ * Keys written by sidebar.js follow the pattern:
+ *   sidebar_state_<userId>   (e.g. sidebar_state_42)
+ *   sidebar_state_anonymous  (fallback when user id not yet resolved)
+ */
+function clearAllSidebarState() {
+  try {
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(SIDEBAR_KEY_PREFIX)) keysToRemove.push(key);
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  } catch { /* localStorage unavailable — nothing to clear */ }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const AuthContext = createContext({
   isAuthenticated: false,
@@ -78,7 +81,6 @@ export const AuthProvider = ({ children }) => {
   const [sessionTimeout, setSessionTimeout] = useState(null);
   const [warningTime, setWarningTime] = useState(null);
   const [loading, setLoading] = useState(true);
-  // Bumped after every avatar upload so Navbar <img> URL changes and re-fetches
   const [avatarTs, setAvatarTs] = useState(() => Date.now());
   const refreshAvatarTs = useCallback(() => setAvatarTs(Date.now()), []);
 
@@ -101,10 +103,8 @@ export const AuthProvider = ({ children }) => {
             setMenuPermissions(userData.menuPermissions);
             setPagePermissions(effectivePagePermissions);
             setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
-
             setSessionTimeout(userData.sessionTimeout || null);
             setWarningTime(userData.warningTime || null);
-
             setIsAuthenticated(true);
           } else {
             localStorage.removeItem(USER_KEY);
@@ -140,10 +140,8 @@ export const AuthProvider = ({ children }) => {
       setMenuPermissions(userData.menuPermissions);
       setPagePermissions(effectivePagePermissions);
       setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
-
       setSessionTimeout(userData.sessionTimeout || null);
       setWarningTime(userData.warningTime || null);
-
       setIsAuthenticated(true);
     } catch (error) {
       console.error('Error during login:', error);
@@ -151,9 +149,7 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Tab/view navigation state keys to clear on logout or session expiry.
-  // Only these specific UI-state keys are removed — auth, columns, page-size
-  // preferences and all other localStorage entries are left untouched.
+  // ── Tab / view navigation state ────────────────────────────────────────────
   const NAV_STATE_KEYS = [
     'leads_detail_lead',
     'leads_detail_tab',
@@ -162,12 +158,16 @@ export const AuthProvider = ({ children }) => {
     'billsPaymentsActiveTab',
   ];
 
-  const clearNavState = () => {
+  const clearNavState = useCallback(() => {
+    // 1. Clear fixed tab/view state keys
     NAV_STATE_KEYS.forEach(key => {
       localStorage.removeItem(key);
       sessionStorage.removeItem(key);
     });
-  };
+
+    // 2. Clear ALL sidebar accordion state (all users, all keys)
+    clearAllSidebarState();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Logout
   const logout = useCallback(() => {
@@ -180,7 +180,7 @@ export const AuthProvider = ({ children }) => {
     setSessionTimeout(null);
     setWarningTime(null);
     setIsAuthenticated(false);
-  }, []);
+  }, [clearNavState]);
 
   // Get stored user (raw)
   const getUser = useCallback(() => {

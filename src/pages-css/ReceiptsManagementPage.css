@@ -380,70 +380,34 @@
 }
 
 .receipt-action-btn {
-  padding: 4px 8px;
+  padding: 5px;
   border: none;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  background: transparent;
   transition: all 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.btn-view {
-  background-color: #dbeafe;
-  color: #1e40af;
-}
+.btn-view  { color: #4d7ce0; }
+.btn-view:hover  { background-color: #dbeafe; }
 
-.btn-view:hover {
-  background-color: #bfdbfe;
-}
+.btn-edit  { color: #059669; }
+.btn-edit:hover  { background-color: #d1fae5; }
 
-.btn-edit {
-  background-color: #fef3c7;
-  color: #92400e;
-}
+.btn-edit-allocation { color: #7c3aed; }
+.btn-edit-allocation:hover { background-color: #ede9fe; }
 
-.btn-edit:hover {
-  background-color: #fde68a;
-}
+.btn-adjust { color: #7c3aed; }
+.btn-adjust:hover { background-color: #ede9fe; }
 
-.btn-edit-allocation {
-  background-color: #ddd6fe;
-  color: #5b21b6;
-}
+.btn-download { color: #059669; }
+.btn-download:hover { background-color: #d1fae5; }
 
-.btn-edit-allocation:hover {
-  background-color: #c4b5fd;
-}
-
-.btn-adjust {
-  background-color: #ddd6fe;
-  color: #5b21b6;
-}
-
-.btn-adjust:hover {
-  background-color: #c4b5fd;
-}
-
-.btn-download {
-  background-color: #d1fae5;
-  color: #065f46;
-}
-
-.btn-download:hover {
-  background-color: #a7f3d0;
-}
-
-.btn-delete {
-  background-color: #fee2e2;
-  color: #991b1b;
-}
-
-.btn-delete:hover {
-  background-color: #fecaca;
-}
+.btn-delete { color: #dc2626; }
+.btn-delete:hover { background-color: #fee2e2; }
 
 .btn-restore {
   background: #16a34a;

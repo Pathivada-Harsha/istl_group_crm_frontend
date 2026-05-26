@@ -1,41 +1,66 @@
-/* Full screen overlay */
+/* ============================================================
+   CRM PRELOADER
+   No backdrop-filter, no card border — clean overlay only.
+   position:fixed on its own composited layer — page scroll
+   position never shifts when it mounts/unmounts.
+   ============================================================ */
+
 .crm-preloader-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.75);
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
+  will-change: opacity;
 }
 
-/* Loader container */
+/* Spinner + text, no card/border */
 .crm-preloader-box {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
-/* Spinner */
 .crm-spinner {
-  width: 42px;
-  height: 42px;
-  border: 4px solid #e5e7eb;
-  border-top-color: #2563eb;
+  width: 38px;
+  height: 38px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #0b63d6;
   border-radius: 50%;
-  animation: crm-spin 0.8s linear infinite;
+  animation: crm-spin 0.75s linear infinite;
 }
 
-/* Text */
 .crm-loading-text {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: #475569;
+  letter-spacing: 0.2px;
 }
 
 @keyframes crm-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
+}
+
+/* ── INLINE variant (filter re-fetch — no page jump) ── */
+.crm-preloader-inline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.crm-preloader-inline .crm-spinner {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+  border-color: #e2e8f0;
+  border-top-color: #0b63d6;
+}
+
+.crm-preloader-inline .crm-loading-text {
+  font-size: 11px;
+  font-weight: 500;
+  color: #0b63d6;
 }

@@ -481,7 +481,31 @@
 }
 
 .vendor-management-action-btn:hover {
-  background-color: #f1f5f9;
+  transform: scale(1.05);
+}
+
+/* ── Colored action buttons (matching Leads-Enquire pattern) ── */
+.vendor-management-action-view {
+  color: #4d7ce0;
+}
+.vendor-management-action-view:hover {
+  background-color: #dbeafe !important;
+  transform: scale(1.05);
+}
+
+.vendor-management-action-edit {
+  color: #059669;
+}
+.vendor-management-action-edit:hover {
+  background-color: #d1fae5 !important;
+  transform: scale(1.05);
+}
+
+.vendor-management-action-delete {
+  color: #dc2626;
+}
+.vendor-management-action-delete:hover {
+  background-color: #fee2e2 !important;
   transform: scale(1.05);
 }
 

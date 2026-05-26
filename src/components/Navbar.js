@@ -190,7 +190,17 @@ function Navbar({ onMenuClick }) {
                 }
               </div>
               <span className="profile-name">{getDisplayName()}</span>
-              <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg
+                className="icon"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                style={{
+                  transition: 'transform 0.2s ease',
+                  transform: showProfileMenu ? 'rotate(180deg)' : 'rotate(0deg)',
+                  flexShrink: 0,
+                }}
+              >
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M19 9l-7 7-7-7" />
               </svg>
