@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -226,7 +227,7 @@ const BillsManagementPage = () => {
     { key: 'projectId',     label: 'Project' },
   ];
   // Default visible: only the original columns — group/category/project start hidden
-  const DEFAULT_VISIBLE = ['billRefId','vendorName','poNumber','billDate','dueDate','totalAmount','paidAmount','balanceAmount','status','uploadedByName'];
+  const DEFAULT_VISIBLE = ['billRefId','vendorName','dueDate','totalAmount','paidAmount','balanceAmount','status','uploadedByName'];
   const [columnOrder, setColumnOrder] = useState(BILLS_COLUMNS.map(c => c.key));
   const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE);
   const [showColumnsPanel, setShowColumnsPanel] = useState(false);
@@ -721,7 +722,12 @@ const BillsManagementPage = () => {
   // ========== CREATE BILL ==========
   const handleCreateBill = () => {
     setEditMode(false);
-    
+
+    // Pre-seed from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
+
     setFormData({
       vendorId: '',
       poId: '',
@@ -729,9 +735,9 @@ const BillsManagementPage = () => {
       billRefId: '',
       billDate: new Date().toISOString().split('T')[0],
       dueDate: '',
-      projectId: '',
-      groupId: '',
-      subGroupId: '',
+      projectId: seedProject,
+      groupId:   seedGroup,
+      subGroupId: seedSubGroup,
       items: [{
         itemName: '',
         description: '',
@@ -742,9 +748,9 @@ const BillsManagementPage = () => {
       notes: ''
     });
 
-    setModalGroupName('');
-    setModalSubGroupName('');
-    setModalProjectId('');
+    setModalGroupName(seedGroup);
+    setModalSubGroupName(seedSubGroup);
+    setModalProjectId(seedProject);
     setModalSubGroups([]);
     setModalProjects([]);
     setModalVendors([]);
@@ -753,6 +759,13 @@ const BillsManagementPage = () => {
     setSelectedFile(null);
     setShowCreateEditModal(true);
     fetchModalGroups();
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup).then(() => {
+        if (seedSubGroup) {
+          fetchModalProjects(seedGroup, seedSubGroup);
+        }
+      });
+    }
   };
 
   // ========== EDIT BILL ==========
@@ -1463,19 +1476,21 @@ const BillsManagementPage = () => {
             )}
           </div>
 
-          <select
-            className="procurement-bills-received-filter"
-            value={filters.paymentStatus}
-            onChange={(e) => {
-              setFilters(prev => ({ ...prev, paymentStatus: e.target.value }));
-              setPagination(prev => ({ ...prev, currentPage: 0 }));
-            }}
-          >
-            <option value="all">All Payment Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Partially Paid">Partially Paid</option>
-            <option value="Paid">Paid</option>
-          </select>
+          <div className="bills-filter-select-wrap">
+            <FilterSelect
+              value={filters.paymentStatus === 'all' ? '' : filters.paymentStatus}
+              options={[
+                { value: 'Pending',        label: 'Pending'        },
+                { value: 'Partially Paid', label: 'Partially Paid' },
+                { value: 'Paid',           label: 'Paid'           },
+              ]}
+              placeholder="All Payment Status"
+              onChange={(v) => {
+                setFilters(prev => ({ ...prev, paymentStatus: v || 'all' }));
+                setPagination(prev => ({ ...prev, currentPage: 0 }));
+              }}
+            />
+          </div>
           {/* Bill date range filter */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Bill Date:</span>
@@ -1835,53 +1850,35 @@ const BillsManagementPage = () => {
                 <div className="bill-form-row">
                   <div className="bill-form-field">
                     <label className="bill-form-label">Group</label>
-                    <select 
-                      className="bill-form-select"
-                      value={modalGroupName} 
-                      onChange={handleModalGroupChange}
-                    >
-                      <option value="">Select Group</option>
-                      {modalGroups.map(group => (
-                        <option key={group.value} value={group.value}>
-                          {group.label}
-                        </option>
-                      ))}
-                    </select>
+                    <FilterSelect
+                      value={modalGroupName}
+                      options={modalGroups}
+                      placeholder="Select Group"
+                      onChange={v => handleModalGroupChange({ target: { value: v || '' } })}
+                    />
                   </div>
 
                   <div className="bill-form-field">
                     <label className="bill-form-label">Sub Group</label>
-                    <select
-                      className="bill-form-select"
+                    <FilterSelect
                       value={modalSubGroupName}
-                      onChange={handleModalSubGroupChange}
+                      options={modalSubGroups}
+                      placeholder={!modalGroupName ? 'Select Group First' : 'Select Sub Group'}
                       disabled={!modalGroupName}
-                    >
-                      <option value="">{!modalGroupName ? 'Select Group First' : 'Select Sub Group'}</option>
-                      {modalSubGroups.map(subGroup => (
-                        <option key={subGroup.value} value={subGroup.value}>
-                          {subGroup.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={v => handleModalSubGroupChange({ target: { value: v || '' } })}
+                    />
                   </div>
                 </div>
 
                 <div className="bill-form-field">
                   <label className="bill-form-label">Project (Optional)</label>
-                  <select
-                    className="bill-form-select"
+                  <FilterSelect
                     value={modalProjectId}
-                    onChange={handleModalProjectChange}
+                    options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))}
+                    placeholder={!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}
                     disabled={!modalSubGroupName}
-                  >
-                    <option value="">{!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}</option>
-                    {modalProjects.map(project => (
-                      <option key={project.id} value={project.id}>
-                        {project.name} - {project.location}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                  />
                 </div>
               </div>
 
@@ -1891,21 +1888,15 @@ const BillsManagementPage = () => {
                 <div className="bill-form-row">
                   <div className="bill-form-field">
                     <label className="bill-form-label">Vendor *</label>
-                    <select
-                      className="bill-form-select"
-                      value={formData.vendorId || ''}
-                      onChange={handleModalVendorChange}
-                      required
-                    >
-                      <option value="">Select Vendor</option>
-                      {modalVendors.map((vendor, index) => (
-                        <option key={vendor.id || index} value={vendor.id}>
-                          {vendor.name}
-                          {vendor.contact && ` - ${vendor.contact}`}
-                          {vendor.source === 'po_vendor' && ' (From PO)'}
-                        </option>
-                      ))}
-                    </select>
+                    <FilterSelect
+                      value={formData.vendorId ? String(formData.vendorId) : ''}
+                      options={modalVendors.map((v, i) => ({
+                        value: String(v.id || i),
+                        label: `${v.name}${v.contact ? ' - ' + v.contact : ''}${v.source === 'po_vendor' ? ' (From PO)' : ''}`
+                      }))}
+                      placeholder="Select Vendor"
+                      onChange={v => handleModalVendorChange({ target: { value: v || '' } })}
+                    />
                     {modalVendors.length === 0 && modalProjectId && (
                       <small className="bill-form-hint-error">
                         No vendors available for selected project. Select project or create a PO first.
@@ -1915,18 +1906,18 @@ const BillsManagementPage = () => {
 
                   <div className="bill-form-field">
                     <label className="bill-form-label">Linked PO (Optional)</label>
-                    <select
-                      className="bill-form-select"
-                      value={formData.poId || ''}
-                      onChange={handleModalPOChange}
-                    >
-                      <option value="">No PO Link</option>
-                      {modalPurchaseOrders.map(po => (
-                        <option key={po.id} value={po.id}>
-                          {po.poNo} - {po.vendorName} - {formatCurrency(po.totalValue)}
-                        </option>
-                      ))}
-                    </select>
+                    <FilterSelect
+                      value={formData.poId ? String(formData.poId) : ''}
+                      options={[
+                        { value: '', label: 'No PO Link' },
+                        ...modalPurchaseOrders.map(po => ({
+                          value: String(po.id),
+                          label: `${po.poNo} - ${po.vendorName} - ${formatCurrency(po.totalValue)}`
+                        }))
+                      ]}
+                      placeholder="No PO Link"
+                      onChange={v => handleModalPOChange({ target: { value: v || '' } })}
+                    />
                     {formData.vendorId && modalPurchaseOrders.length === 0 && (
                       <small className="bill-form-hint">No POs found for selected vendor</small>
                     )}
@@ -2572,17 +2563,19 @@ const BillsManagementPage = () => {
               <div className="procurement-bills-received-form-row">
                 <div className="procurement-bills-received-form-group">
                   <label>Payment Mode *</label>
-                  <select
+                  <FilterSelect
                     value={paymentData.paymentMode}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentMode: e.target.value })}
-                  >
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="UPI">UPI</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="NEFT">NEFT</option>
-                    <option value="RTGS">RTGS</option>
-                    <option value="Cash">Cash</option>
-                  </select>
+                    options={[
+                      { value: 'Bank Transfer', label: 'Bank Transfer' },
+                      { value: 'UPI',           label: 'UPI'           },
+                      { value: 'Cheque',        label: 'Cheque'        },
+                      { value: 'NEFT',          label: 'NEFT'          },
+                      { value: 'RTGS',          label: 'RTGS'          },
+                      { value: 'Cash',          label: 'Cash'          },
+                    ]}
+                    placeholder="Select Payment Mode"
+                    onChange={(v) => setPaymentData({ ...paymentData, paymentMode: v || 'Bank Transfer' })}
+                  />
                 </div>
                 <div className="procurement-bills-received-form-group">
                   <label>Payment Date *</label>

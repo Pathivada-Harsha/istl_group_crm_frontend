@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '../pages-css/OrderBook.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
+import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -1105,6 +1106,13 @@ function OrderBook() {
     setSubGroups([]);
     setAttachmentFile(null);
     setExistingAttachment(null);
+    // Load dropdown data for pre-seeded group/subgroup values
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    if (seedGroup) {
+      fetchSubGroupsForForm(seedGroup);
+      fetchCustomersByGroup(seedGroup, seedSubGroup || '');
+    }
   };
 
   const addItem = () => {
@@ -1386,20 +1394,22 @@ function OrderBook() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
 
-          <select
-            className="orderbook-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="All">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Confirmed">Confirmed</option>
-            <option value="In Production">In Production</option>
-            <option value="Ready for Dispatch">Ready for Dispatch</option>
-            <option value="Dispatched">Dispatched</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
+          <div className="ob-filter-select-wrap">
+            <FilterSelect
+              value={statusFilter === 'All' ? '' : statusFilter}
+              options={[
+                { value: 'Draft',             label: 'Draft'             },
+                { value: 'Confirmed',          label: 'Confirmed'         },
+                { value: 'In Production',      label: 'In Production'     },
+                { value: 'Ready for Dispatch', label: 'Ready for Dispatch'},
+                { value: 'Dispatched',         label: 'Dispatched'        },
+                { value: 'Completed',          label: 'Completed'         },
+                { value: 'Cancelled',          label: 'Cancelled'         },
+              ]}
+              placeholder="All Status"
+              onChange={(v) => setStatusFilter(v || 'All')}
+            />
+          </div>
 
           <OBDateRangePicker
             appliedFrom={fromDate}
@@ -1777,58 +1787,41 @@ function OrderBook() {
                 <div className="orderbook-form-grid">
                   <div className="orderbook-form-group">
                     <label>Group *</label>
-                    <select
+                    <FilterSelect
                       value={formData.groupName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, groupName: e.target.value, subGroupName: '', customerId: '', proposalId: '' });
+                      options={groups.map(g => ({ value: g.value || g.label, label: g.label || g.value }))}
+                      placeholder="Select Group"
+                      onChange={(v) => {
+                        setFormData({ ...formData, groupName: v || '', subGroupName: '', customerId: '', proposalId: '' });
                       }}
-                      required
-                    >
-                      <option value="">Select Group</option>
-                      {groups.map((group, index) => (
-                        <option key={group.value || group.label || index} value={group.value || group.label}>
-                          {group.label || group.value}
-                        </option>
-                      ))}
-                    </select>
+                    />
                   </div>
 
                   <div className="orderbook-form-group">
                     <label>Sub Group</label>
-                    <select
+                    <FilterSelect
                       value={formData.subGroupName}
-                      onChange={(e) => {
-                        setFormData({ ...formData, subGroupName: e.target.value, customerId: '', proposalId: '' });
-                      }}
+                      options={subGroups.map(s => ({ value: s.value || s.label, label: s.label || s.value }))}
+                      placeholder={!formData.groupName ? 'Select Group First' : 'Select Sub Group'}
                       disabled={!formData.groupName}
-                    >
-                      <option value="">Select Sub Group</option>
-                      {subGroups.map((sub, index) => (
-                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
-                          {sub.label || sub.value}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => {
+                        setFormData({ ...formData, subGroupName: v || '', customerId: '', proposalId: '' });
+                      }}
+                    />
                   </div>
 
                   <div className="orderbook-form-group">
                     <label>Customer *</label>
-                    <select
-                      value={formData.customerId}
-                      onChange={(e) => {
-                        setFormData({ ...formData, customerId: e.target.value, proposalId: '' });
-                        fetchProposalsByCustomer(e.target.value);
-                      }}
+                    <FilterSelect
+                      value={formData.customerId ? String(formData.customerId) : ''}
+                      options={customers.map(c => ({ value: String(c.id), label: `${c.name} - ${c.customerCode}` }))}
+                      placeholder={!formData.groupName ? 'Select Group First' : 'Select Customer'}
                       disabled={!formData.groupName}
-                      required
-                    >
-                      <option value="">Select Customer</option>
-                      {customers.map(customer => (
-                        <option key={customer.id} value={customer.id}>
-                          {customer.name} - {customer.customerCode}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => {
+                        setFormData({ ...formData, customerId: v || '', proposalId: '' });
+                        if (v) fetchProposalsByCustomer(v);
+                      }}
+                    />
                     {!formData.groupName && (
                       <small className="orderbook-help-text">Please select a group first</small>
                     )}
@@ -1836,21 +1829,16 @@ function OrderBook() {
 
                   <div className="orderbook-form-group">
                     <label>Proposal (Optional)</label>
-                    <select
-                      value={formData.proposalId}
-                      onChange={(e) => {
-                        setFormData({ ...formData, proposalId: e.target.value });
-                        if (e.target.value) loadProposalItems(e.target.value);
-                      }}
+                    <FilterSelect
+                      value={formData.proposalId ? String(formData.proposalId) : ''}
+                      options={proposals.map(p => ({ value: String(p.id), label: `${p.proposalNo} - ${p.title}` }))}
+                      placeholder={!formData.customerId ? 'Select Customer First' : 'Select Proposal'}
                       disabled={!formData.customerId}
-                    >
-                      <option value="">Select Proposal</option>
-                      {proposals.map(proposal => (
-                        <option key={proposal.id} value={proposal.id}>
-                          {proposal.proposalNo} - {proposal.title}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => {
+                        setFormData({ ...formData, proposalId: v || '' });
+                        if (v) loadProposalItems(v);
+                      }}
+                    />
                     {formData.proposalId && (
                       <small className="orderbook-help-text">Items will be loaded automatically from proposal</small>
                     )}
@@ -1887,18 +1875,20 @@ function OrderBook() {
 
                   <div className="orderbook-form-group">
                     <label>Status</label>
-                    <select
+                    <FilterSelect
                       value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    >
-                      <option value="Draft">Draft</option>
-                      <option value="Confirmed">Confirmed</option>
-                      <option value="In Production">In Production</option>
-                      <option value="Ready for Dispatch">Ready for Dispatch</option>
-                      <option value="Dispatched">Dispatched</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
-                    </select>
+                      options={[
+                        { value: 'Draft',             label: 'Draft'             },
+                        { value: 'Confirmed',          label: 'Confirmed'         },
+                        { value: 'In Production',      label: 'In Production'     },
+                        { value: 'Ready for Dispatch', label: 'Ready for Dispatch'},
+                        { value: 'Dispatched',         label: 'Dispatched'        },
+                        { value: 'Completed',          label: 'Completed'         },
+                        { value: 'Cancelled',          label: 'Cancelled'         },
+                      ]}
+                      placeholder="Select Status"
+                      onChange={(v) => setFormData({ ...formData, status: v || 'Draft' })}
+                    />
                   </div>
 
                   <div className="orderbook-form-group">

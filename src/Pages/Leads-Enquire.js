@@ -9,6 +9,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
+import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
 import { useAuth } from '../hooks/useAuth.js';
 import useToast from '../hooks/useToast.js';
@@ -21,6 +22,9 @@ import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
 import ConfirmationModal from '../components/ConfirmationModal.js';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+// Indian Rupee formatter for amount fields
+const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
 // ─── Default Proposal Template ───────────────────────────────────────────────
 const DEFAULT_PROPOSAL_TEMPLATE = {
@@ -1673,7 +1677,7 @@ function LeadsEnquiries() {
   //  console.log('🔄 RENDER');
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 // ── Guard refs ────────────────────────────────────────────────────
 const initialFetchDone    = useRef(false);
 const isFirstGroupRender  = useRef(true);
@@ -1924,7 +1928,7 @@ useEffect(() => {
 
   // ── CRUD ──────────────────────────────────────────────────────────
   const handleView = async lead => {
-    if (!canView) { showError('No permission'); return; }
+    if (!canView) { showWarning('No permission'); return; }
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/${lead.id}`);
       if (data.success) {
@@ -1964,7 +1968,7 @@ useEffect(() => {
     setPhoneError(''); setShowAddModal(true);
   };
 
-  const handleDelete = lead => { if (!canDelete) { showError('No permission'); return; } setDeleteConfirmation({ id: lead.id, name: lead.name }); };
+  const handleDelete = lead => { if (!canDelete) { showWarning('No permission'); return; } setDeleteConfirmation({ id: lead.id, name: lead.name }); };
 
   const confirmDelete = async () => {
     try {
@@ -1993,8 +1997,8 @@ useEffect(() => {
   const handleSubmit = async e => {
     e.preventDefault();
     if (formData.phone && formData.phone.length !== 10) { setPhoneError('Must be exactly 10 digits'); return; }
-    if (formData.id && !canEdit) { showError('No edit permission'); return; }
-    if (!formData.id && !canCreate) { showError('No create permission'); return; }
+    if (formData.id && !canEdit) { showWarning('No edit permission'); return; }
+    if (!formData.id && !canCreate) { showWarning('No create permission'); return; }
     setLoading(true);
     try {
       const payload = { ...formData };
@@ -2060,10 +2064,13 @@ useEffect(() => {
   };
 
   const resetForm = () => {
+    // Pre-seed group/subgroup from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
     setFormData({
       customerId: null, name: '', email: '', phone: '',
       source: 'Website', priority: 'Medium', status: 'New',
-      assignedTo: null, enquiry: '', groupName: '', subGroupName: '',
+      assignedTo: null, enquiry: '', groupName: seedGroup, subGroupName: seedSubGroup,
       closedLostReason: '', closedByUserId: null, closedByName: '',
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
@@ -2072,6 +2079,8 @@ useEffect(() => {
       leadOwner: '',
       tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
     });
+    // Load subgroups for seeded group so the dropdown is ready
+    if (seedGroup) fetchSubGroupsForForm(seedGroup);
     setPhoneError('');
     setBillFile(null);
   };
@@ -2176,7 +2185,7 @@ useEffect(() => {
 
   // ── Export Excel (ALL filtered data fetched from backend) ─────────────────
   const exportToCSV = async () => {
-    if (!canView) { showError('No permission'); return; }
+    if (!canView) { showWarning('No permission'); return; }
     try {
       setLoading(true);
       const filterBody = {
@@ -2340,33 +2349,9 @@ useEffect(() => {
           <input type="text" placeholder="Search by name, email, phone, or ID…" className="leads-enquiries-search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
         <div className="leads-enquiries-filters">
-          <select className="leads-enquiries-filter-select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="All">All Status</option>
-            <option>New</option>
-            <option>Interested</option>
-            <option>Not Interested</option>
-            <option>Not Responded</option>
-            <option>Contacted</option>
-            <option>In Discussion</option>
-            <option>Proposal Sent</option>
-            <option>Closed Won</option>
-            <option>Closed Lost</option>
-          </select>
-          <select className="leads-enquiries-filter-select" value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}>
-            <option value="All">All Priority</option><option>High</option><option>Medium</option><option>Low</option>
-          </select>
-          <select className="leads-enquiries-filter-select" value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}>
-            <option value="All">All Sources</option>
-            <option>Website</option>
-            <option>Referral</option>
-            <option>Cold Call</option>
-            <option>Email</option>
-            <option>Walk-in</option>
-            <option>Social Media</option>
-            <option>Digital Marketing</option>
-            <option>Campaign</option>
-            <option>Others</option>
-          </select>
+          <FilterSelect value={statusFilter} options={[{value:'All',label:'All Status'},...['New','Interested','Not Interested','Not Responded','Contacted','In Discussion','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>setStatusFilter(v)} />
+          <FilterSelect value={priorityFilter} options={[{value:'All',label:'All Priority'},...['High','Medium','Low'].map(s=>({value:s,label:s}))]} placeholder="All Priority" onChange={v=>setPriorityFilter(v)} />
+          <FilterSelect value={sourceFilter} options={[{value:'All',label:'All Sources'},...['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Others'].map(s=>({value:s,label:s}))]} placeholder="All Sources" onChange={v=>setSourceFilter(v)} />
 
           {/* Date range filter */}
           <div className="leads-date-filter-group">
@@ -2853,42 +2838,24 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
         <div className="leads-enquiries-form-group">
           <label>Group</label>
-          <select value={formData.groupName} onChange={e => setFormData(p => ({ ...p, groupName: e.target.value, subGroupName: '' }))}>
-            <option value="">Select Group</option>
-            {groups.map((g, i) => <option key={g.value || i} value={g.value || g.label}>{g.label || g.value}</option>)}
-          </select>
+          <FilterSelect value={formData.groupName} options={groups.map(g=>({value:g.value||g.label,label:g.label||g.value}))} placeholder="Select Group" onChange={v=>setFormData(p=>({...p,groupName:v,subGroupName:''}))} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Category</label>
-          <select value={formData.subGroupName} onChange={e => setFormData(p => ({ ...p, subGroupName: e.target.value }))} disabled={!formData.groupName}>
-            <option value="">Select Category</option>
-            {subGroups.map((s, i) => <option key={s.value || i} value={s.value || s.label}>{s.label || s.value}</option>)}
-          </select>
+          <FilterSelect value={formData.subGroupName} options={subGroups.map(s=>({value:s.value||s.label,label:s.label||s.value}))} placeholder={!formData.groupName?'Select Group First':'Select Category'} disabled={!formData.groupName} onChange={v=>setFormData(p=>({...p,subGroupName:v}))} />
         </div>
       </div>
     </div>
     {formData.subGroupName === 'Solar_Rooftop' && (
       <div className="leads-enquiries-form-group">
         <label>Solar Scheme</label>
-        <select value={formData.solarScheme || ''} onChange={e => setFormData(p => ({ ...p, solarScheme: e.target.value, subsidyRequired: '' }))}>
-          <option value="">Select Scheme</option>
-          <option value="PM_Surya_Ghar">PM Surya Ghar</option>
-          <option value="PM_Kusum">PM Kusum</option>
-          <option value="State_Subsidy">State Subsidy</option>
-          <option value="Net_Metering_Only">Net Metering Only</option>
-          <option value="No_Scheme">No Scheme</option>
-          <option value="Others">Others</option>
-        </select>
+        <FilterSelect value={formData.solarScheme||''} options={[{value:'PM_Surya_Ghar',label:'PM Surya Ghar'},{value:'PM_Kusum',label:'PM Kusum'},{value:'State_Subsidy',label:'State Subsidy'},{value:'Net_Metering_Only',label:'Net Metering Only'},{value:'No_Scheme',label:'No Scheme'},{value:'Others',label:'Others'}]} placeholder="Select Scheme" onChange={v=>setFormData(p=>({...p,solarScheme:v,subsidyRequired:''}))} />
       </div>
     )}
     {formData.subGroupName === 'Solar_ground_mounted' && (
       <div className="leads-enquiries-form-group">
         <label>Solar Scheme</label>
-        <select value={formData.solarScheme || ''} onChange={e => setFormData(p => ({ ...p, solarScheme: e.target.value, subsidyRequired: '' }))}>
-          <option value="">Select Scheme</option>
-          <option value="PM_Kusum">PM Kusum</option>
-          <option value="No_Scheme">No Scheme</option>
-        </select>
+        <FilterSelect value={formData.solarScheme||''} options={[{value:'PM_Kusum',label:'PM Kusum'},{value:'No_Scheme',label:'No Scheme'}]} placeholder="Select Scheme" onChange={v=>setFormData(p=>({...p,solarScheme:v,subsidyRequired:''}))} />
       </div>
     )}
     {formData.solarScheme === 'PM_Surya_Ghar' && (
@@ -2956,17 +2923,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       <div className="leads-enquiries-form-grid">
         <div className="leads-enquiries-form-group">
           <label>Lead Source *</label>
-          <select required value={formData.source} onChange={e => setFormData(p => ({ ...p, source: e.target.value }))}>
-            <option>Website</option>
-            <option>Referral</option>
-            <option>Cold Call</option>
-            <option>Email</option>
-            <option>Walk-in</option>
-            <option>Social Media</option>
-            <option>Digital Marketing</option>
-            <option>Campaign</option>
-            <option>Others</option>
-          </select>
+          <FilterSelect value={formData.source} options={['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Others'].map(s=>({value:s,label:s}))} placeholder="Select Source" onChange={v=>setFormData(p=>({...p,source:v}))} />
         </div>
         {formData.source === 'Referral' && (
           <>
@@ -2982,41 +2939,15 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         )}
         <div className="leads-enquiries-form-group">
           <label>Priority *</label>
-          <select required value={formData.priority} onChange={e => setFormData(p => ({ ...p, priority: e.target.value }))}>
-            <option>High</option><option>Medium</option><option>Low</option>
-          </select>
+          <FilterSelect value={formData.priority} options={['High','Medium','Low'].map(s=>({value:s,label:s}))} placeholder="Select Priority" onChange={v=>setFormData(p=>({...p,priority:v}))} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Status *</label>
-          <select required value={formData.status} onChange={e => {
-            const newStatus = e.target.value;
-            setFormData(p => ({
-              ...p,
-              status: newStatus,
-              // Auto-fill closedBy with current user when switching to Closed Won
-              ...(newStatus === 'Closed Won' && !p.closedByUserId ? {
-                closedByUserId: currentUser?.id || null,
-                closedByName: currentUser?.name || '',
-              } : {}),
-            }));
-          }}>
-            <option>New</option>
-            <option>Interested</option>
-            <option>Not Interested</option>
-            <option>Not Responded</option>
-            <option>Contacted</option>
-            <option>In Discussion</option>
-            <option>Proposal Sent</option>
-            <option>Closed Won</option>
-            <option>Closed Lost</option>
-          </select>
+          <FilterSelect value={formData.status} options={['New','Interested','Not Interested','Not Responded','Contacted','In Discussion','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>{setFormData(p=>({...p,status:v,...(v==='Closed Won'&&!p.closedByUserId?{closedByUserId:currentUser?.id||null,closedByName:currentUser?.name||''}:{})}));}} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Assign To</label>
-          <select value={formData.assignedTo || ''} onChange={e => setFormData(p => ({ ...p, assignedTo: e.target.value ? Number(e.target.value) : null }))} disabled={!canAssign}>
-            <option value="">Select Member</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          <FilterSelect value={formData.assignedTo?String(formData.assignedTo):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select Member" disabled={!canAssign} onChange={v=>setFormData(p=>({...p,assignedTo:v?Number(v):null}))} />
           {!canAssign && <small style={{ color: '#6b7280', fontSize: 12 }}>No assign permission</small>}
         </div>
       </div>
@@ -3041,16 +2972,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>CLOSED WON</span>
             Closed By *
           </label>
-          <select
-            value={formData.closedByUserId || ''}
-            onChange={e => {
-              const u = users.find(u => String(u.id) === e.target.value);
-              setFormData(p => ({ ...p, closedByUserId: e.target.value ? Number(e.target.value) : null, closedByName: u?.name || '' }));
-            }}
-          >
-            <option value="">Select who closed this lead</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          <FilterSelect value={formData.closedByUserId?String(formData.closedByUserId):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select who closed this lead" onChange={v=>{const u=users.find(u=>String(u.id)===v);setFormData(p=>({...p,closedByUserId:v?Number(v):null,closedByName:u?.name||''}));}} />
           <small style={{ color: '#6b7280', fontSize: 11 }}>Select the person who closed this deal.</small>
         </div>
       )}
@@ -3119,9 +3041,9 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             <label>Monthly Bill Amount (₹)</label>
             <input
               type="text"
-              value={formData.tcMonthlyBill || ''}
-              onChange={e => setFormData(p => ({ ...p, tcMonthlyBill: e.target.value }))}
-              placeholder="e.g. 2500"
+              value={toINR(formData.tcMonthlyBill || '')}
+              onChange={e => setFormData(p => ({ ...p, tcMonthlyBill: e.target.value.replace(/[^0-9]/g,'') }))}
+              placeholder="e.g. 2,500"
             />
           </div>
           <div className="leads-enquiries-form-group">

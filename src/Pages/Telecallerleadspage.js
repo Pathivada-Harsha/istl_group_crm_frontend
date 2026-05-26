@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import api from "./../services/leadsapi.js";
 import "../pages-css/TelecallerLeadsPage.css";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
+
+const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -107,7 +110,7 @@ export default function TelecallerLeadsPage() {
   // ── Drag-and-drop ──────────────────────────────────────────────────────────
   const [dragging, setDragging] = useState(null); // { lead, fromCol }
   const [dragOver, setDragOver] = useState(null);
-  const [dragFromCol, setDragFromCol] = useState(null); // track source col for modal-triggered moves
+  const [dragFromCol, setDragFromCol] = useState(null); // eslint-disable-line no-unused-vars
 
   // ── Modals ─────────────────────────────────────────────────────────────────
   const [selected,    setSelected]    = useState(null);
@@ -652,23 +655,7 @@ export default function TelecallerLeadsPage() {
       {viewMode==="list" && (
         <div className="tc-toolbar">
           <input className="tc-search" placeholder="Search name, email, phone, code…" value={search} onChange={e=>handleListSearch(e.target.value)} />
-          <select
-            className="tc-filter-select"
-            value={filter}
-            onChange={e => applyFilter(e.target.value)}
-            style={{
-              padding:'6px 12px', borderRadius:8, border:'1.5px solid #e2e8f0',
-              fontSize:13, fontFamily:"'Poppins',sans-serif", background:'white',
-              color: STATUS_CONFIG[filter]?.color || '#374151',
-              fontWeight:600, cursor:'pointer'
-            }}
-          >
-            <option value="ALL">📋 All Leads</option>
-            <option value="NEW">🆕 New</option>
-            <option value="INTERESTED">✅ Interested</option>
-            <option value="NOT_INTERESTED">❌ Not Interested</option>
-            <option value="NOT_RESPONDED">⏳ Not Responded</option>
-          </select>
+          <FilterSelect value={filter} options={[{value:'ALL',label:'📋 All Leads'},{value:'NEW',label:'🆕 New'},{value:'INTERESTED',label:'✅ Interested'},{value:'NOT_INTERESTED',label:'❌ Not Interested'},{value:'NOT_RESPONDED',label:'⏳ Not Responded'}]} placeholder="All Leads" onChange={v=>applyFilter(v)} />
         </div>
       )}
 
@@ -914,18 +901,14 @@ export default function TelecallerLeadsPage() {
                   </div>
                 ))}
                 <div className="tc-edit-field"><label>Source</label>
-                  <select value={editForm.source} onChange={e=>setEditForm(f=>({...f,source:e.target.value}))}>
-                    <option value="">Select…</option>{SOURCES.map(s=><option key={s}>{s}</option>)}
-                  </select>
+                  <FilterSelect value={editForm.source} options={SOURCES.map(s=>({value:s,label:s}))} placeholder="Select…" onChange={v=>setEditForm(f=>({...f,source:v}))} />
                 </div>
                 {editForm.source==="Referral"&&<>
                   <div className="tc-edit-field"><label>Referrer Name</label><input value={editForm.referralName} onChange={e=>setEditForm(f=>({...f,referralName:e.target.value}))}/></div>
                   <div className="tc-edit-field"><label>Referrer Phone</label><input value={editForm.referralPhone} onChange={e=>setEditForm(f=>({...f,referralPhone:e.target.value.replace(/\D/g,"").slice(0,10)}))}/></div>
                 </>}
                 <div className="tc-edit-field"><label>Priority</label>
-                  <select value={editForm.priority} onChange={e=>setEditForm(f=>({...f,priority:e.target.value}))}>
-                    {PRIORITIES.map(p=><option key={p}>{p}</option>)}
-                  </select>
+                  <FilterSelect value={editForm.priority} options={PRIORITIES.map(p=>({value:p,label:p}))} placeholder="Select…" onChange={v=>setEditForm(f=>({...f,priority:v}))} />
                 </div>
                 {[["State","state"],["District","district"],["City","city"],["Pincode","pincode"]].map(([lbl,k])=>(
                   <div className="tc-edit-field" key={k}><label>{lbl}</label><input value={editForm[k]} onChange={e=>setEditForm(f=>({...f,[k]:e.target.value}))}/></div>
@@ -946,59 +929,18 @@ export default function TelecallerLeadsPage() {
               <div className="tc-edit-section-divider">📂 Group &amp; Scheme</div>
               <div className="tc-edit-field">
                 <label>Group</label>
-                <select value={editForm.groupName} onChange={e => {
-                  const g = e.target.value;
-                  setEditForm(f => ({ ...f, groupName: g, subGroupName: "", solarScheme: "" }));
-                  fetchEditSubGroups(g);
-                }}>
-                  <option value="">— Select Group —</option>
-                  {loadingGroups
-                    ? <option disabled>Loading…</option>
-                    : (() => {
-                        const all = editGroups.includes(editForm.groupName) || !editForm.groupName
-                          ? editGroups
-                          : [editForm.groupName, ...editGroups];
-                        return all.map(g => <option key={g} value={g}>{g}</option>);
-                      })()
-                  }
-                </select>
+                <FilterSelect value={editForm.groupName} options={(()=>{const all=editGroups.includes(editForm.groupName)||!editForm.groupName?editGroups:[editForm.groupName,...editGroups];return all.map(g=>({value:g,label:g}));})()}  placeholder={loadingGroups?'Loading…':'— Select Group —'} disabled={loadingGroups} onChange={v=>{setEditForm(f=>({...f,groupName:v,subGroupName:'',solarScheme:''}));fetchEditSubGroups(v);}} />
               </div>
               {(editSubGroups.length > 0 || editForm.subGroupName) && (
                 <div className="tc-edit-field">
                   <label>Category</label>
-                  <select value={editForm.subGroupName} onChange={e =>
-                    setEditForm(f => ({ ...f, subGroupName: e.target.value, solarScheme: "" }))
-                  }>
-                    <option value="">— Select Category —</option>
-                    {(() => {
-                      const all = editSubGroups.includes(editForm.subGroupName) || !editForm.subGroupName
-                        ? editSubGroups
-                        : [editForm.subGroupName, ...editSubGroups];
-                      return all.map(sg => <option key={sg} value={sg}>{sg.replace(/_/g," ")}</option>);
-                    })()}
-                  </select>
+                  <FilterSelect value={editForm.subGroupName} options={(()=>{const all=editSubGroups.includes(editForm.subGroupName)||!editForm.subGroupName?editSubGroups:[editForm.subGroupName,...editSubGroups];return all.map(sg=>({value:sg,label:sg.replace(/_/g,' ')}));})()}  placeholder="— Select Category —" onChange={v=>setEditForm(f=>({...f,subGroupName:v,solarScheme:''}))} />
                 </div>
               )}
               {(editForm.subGroupName === "Solar_Rooftop" || editForm.subGroupName === "Solar_ground_mounted") && (
                 <div className="tc-edit-field">
                   <label>Solar Scheme</label>
-                  <select value={editForm.solarScheme} onChange={e =>
-                    setEditForm(f => ({ ...f, solarScheme: e.target.value, subsidyRequired: "" }))
-                  }>
-                    <option value="">— Select Scheme —</option>
-                    {editForm.subGroupName === "Solar_Rooftop" && <>
-                      <option value="PM_Surya_Ghar">PM Surya Ghar</option>
-                      <option value="PM_Kusum">PM Kusum</option>
-                      <option value="State_Subsidy">State Subsidy</option>
-                      <option value="Net_Metering_Only">Net Metering Only</option>
-                      <option value="No_Scheme">No Scheme</option>
-                      <option value="Others">Others</option>
-                    </>}
-                    {editForm.subGroupName === "Solar_ground_mounted" && <>
-                      <option value="PM_Kusum">PM Kusum</option>
-                      <option value="No_Scheme">No Scheme</option>
-                    </>}
-                  </select>
+                  <FilterSelect value={editForm.solarScheme} options={editForm.subGroupName==="Solar_Rooftop"?[{value:'PM_Surya_Ghar',label:'PM Surya Ghar'},{value:'PM_Kusum',label:'PM Kusum'},{value:'State_Subsidy',label:'State Subsidy'},{value:'Net_Metering_Only',label:'Net Metering Only'},{value:'No_Scheme',label:'No Scheme'},{value:'Others',label:'Others'}]:[{value:'PM_Kusum',label:'PM Kusum'},{value:'No_Scheme',label:'No Scheme'}]} placeholder="— Select Scheme —" onChange={v=>setEditForm(f=>({...f,solarScheme:v,subsidyRequired:''}))} />
                 </div>
               )}
               {editForm.solarScheme === "PM_Surya_Ghar" && (
@@ -1139,11 +1081,11 @@ export default function TelecallerLeadsPage() {
                     </div>
                     <div className="tc-reason-field">
                       <label>Quoted Price (₹)</label>
-                      <input className="tc-styled-input" value={intQuotedPrice} onChange={e=>setIntQuotedPrice(e.target.value)} placeholder="e.g. 1,20,000"/>
+                      <input className="tc-styled-input" value={toINR(intQuotedPrice)} onChange={e=>setIntQuotedPrice(e.target.value.replace(/[^0-9]/g,''))} placeholder="e.g. 1,20,000"/>
                     </div>
                     <div className="tc-reason-field">
                       <label>Monthly Bill Amount (₹)</label>
-                      <input className="tc-styled-input" value={intMonthlyBill} onChange={e=>setIntMonthlyBill(e.target.value)} placeholder="e.g. 2500"/>
+                      <input className="tc-styled-input" value={toINR(intMonthlyBill)} onChange={e=>setIntMonthlyBill(e.target.value.replace(/[^0-9]/g,''))} placeholder="e.g. 2,500"/>
                     </div>
                     <div className="tc-reason-field">
                       <label>Existing Contracted Load</label>
@@ -1180,24 +1122,7 @@ export default function TelecallerLeadsPage() {
                   {(selected.subGroupName === "Solar_Rooftop" || selected.subGroupName === "Solar_ground_mounted" || intSolarScheme) && (
                     <div className="tc-reason-field tc-field--full">
                       <label>Solar Scheme</label>
-                      <select className="tc-styled-input" value={intSolarScheme} onChange={e => {
-                        setIntSolarScheme(e.target.value);
-                        setIntSubsidyRequired("");
-                      }}>
-                        <option value="">— Select Scheme —</option>
-                        {(selected.subGroupName === "Solar_Rooftop" || (!selected.subGroupName && intSolarScheme)) && <>
-                          <option value="PM_Surya_Ghar">PM Surya Ghar</option>
-                          <option value="PM_Kusum">PM Kusum</option>
-                          <option value="State_Subsidy">State Subsidy</option>
-                          <option value="Net_Metering_Only">Net Metering Only</option>
-                          <option value="No_Scheme">No Scheme</option>
-                          <option value="Others">Others</option>
-                        </>}
-                        {selected.subGroupName === "Solar_ground_mounted" && <>
-                          <option value="PM_Kusum">PM Kusum</option>
-                          <option value="No_Scheme">No Scheme</option>
-                        </>}
-                      </select>
+                      <FilterSelect value={intSolarScheme} options={selected.subGroupName==="Solar_ground_mounted"?[{value:'PM_Kusum',label:'PM Kusum'},{value:'No_Scheme',label:'No Scheme'}]:[{value:'PM_Surya_Ghar',label:'PM Surya Ghar'},{value:'PM_Kusum',label:'PM Kusum'},{value:'State_Subsidy',label:'State Subsidy'},{value:'Net_Metering_Only',label:'Net Metering Only'},{value:'No_Scheme',label:'No Scheme'},{value:'Others',label:'Others'}]} placeholder="— Select Scheme —" onChange={v=>{setIntSolarScheme(v);setIntSubsidyRequired('');}} />
                     </div>
                   )}
                   {intSolarScheme === "PM_Surya_Ghar" && (
@@ -1435,7 +1360,7 @@ function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, c
 }
 
 function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
-  const sc = STATUS_CONFIG[lead.telecallerStatus] || STATUS_CONFIG.NEW;
+  const sc = STATUS_CONFIG[lead.telecallerStatus] || STATUS_CONFIG.NEW; // eslint-disable-line no-unused-vars
   return (
     <div className={`tc-card ${lead.handedOffToBD?"tc-card--handed-off":""} ${!lead.telecallerStatus||lead.telecallerStatus==="NEW"?"tc-card--new":""}`}
       onClick={onDetail} style={{cursor:"pointer"}}>

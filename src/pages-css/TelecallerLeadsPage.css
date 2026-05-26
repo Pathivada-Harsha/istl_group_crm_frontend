@@ -790,3 +790,29 @@
   border-top: 1.5px solid #f1f5f9;
   margin-top: 6px;
 }
+/* ── FilterSelect inside telecaller edit fields — full width ── */
+.tc-edit-field .filter-trigger,
+.tc-reason-field .filter-trigger {
+  width: 100%;
+  height: 36px;
+  font-size: 12px;
+  border-color: #d1d5db;
+  border-radius: 6px;
+}
+.tc-edit-field .filter-trigger--open,
+.tc-reason-field .filter-trigger--open { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
+.tc-edit-field .filter-dropdown-list,
+.tc-reason-field .filter-dropdown-list { width: 100%; min-width: unset; font-size: 12px; }
+
+/* ── FilterSelect in TC toolbar filter ── */
+.tc-toolbar .filter-trigger {
+  height: 36px;
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  font-weight: 600;
+  min-width: 150px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+}
+.tc-toolbar .filter-trigger--open { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
+.tc-toolbar .filter-dropdown-list { min-width: 180px; font-size: 13px; }

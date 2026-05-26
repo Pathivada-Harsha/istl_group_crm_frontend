@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import '../pages-css/Procurement-Vendor-Management.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -34,8 +35,8 @@ const REQUIRED_DOCS   = []; // kept for compat
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
-const VENDOR_CATEGORIES = ['IT Equipment', 'Office Furniture', 'Manufacturing', 'Office Supplies', 'Services'];
-const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider'];
+const VENDOR_CATEGORIES = ['Manufacturing', 'Supplier', 'Services', 'Electrical', 'Civil & Structural', 'Instrumentation', 'IoT Hardware', 'Logistics & Transport'];
+const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider', 'Contractor', 'System Integrator', 'Trader'];
 
 const INDIAN_STATES = [
   'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh',
@@ -54,10 +55,10 @@ const DEFAULT_COLUMNS = [
   { id: 'name',               label: 'Vendor Name',          sortable: true,  visible: true  },
   { id: 'contact',            label: 'Contact',              sortable: false, visible: true  },
   { id: 'category',           label: 'Category',             sortable: true,  visible: false },
-  { id: 'rating',             label: 'Rating',               sortable: true,  visible: true  },
+  { id: 'rating',             label: 'Rating',               sortable: true,  visible: false },
   { id: 'totalOrders',        label: 'Total Orders',         sortable: true,  visible: true  },
   { id: 'totalPurchaseValue', label: 'Total Purchase Value', sortable: true,  visible: true  },
-  { id: 'lastPurchaseDate',   label: 'Last Purchase',        sortable: true,  visible: true  },
+  { id: 'lastPurchaseDate',   label: 'Last Purchase',        sortable: true,  visible: false },
   { id: 'status',             label: 'Status',               sortable: true,  visible: true  },
   { id: 'group',              label: 'Group',                sortable: false, visible: false },
   { id: 'project',            label: 'Project',              sortable: false, visible: true  },
@@ -874,7 +875,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
               {ADDITIONAL_DOCS.filter(d => kycDocs[d.id]?.docNumber?.trim() && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete
             </span>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div className="kyc-add-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
             {ADDITIONAL_DOCS.map(doc => (
               <KycAddCard key={doc.id} doc={doc} uploaded={kycDocs[doc.id]} onUpload={handleKycUpload} onMetaChange={handleMetaChange} onViewFile={handleViewKycFile} onSave={handleSaveKycDoc} />
             ))}
@@ -1076,7 +1077,7 @@ const VendorManagement = () => {
   const canEdit        = vendorPerms.includes('EDIT')   || isFullAccess;
   const canDelete      = vendorPerms.includes('DELETE') && !isAccountsExecutive;
   const isViewOnly     = canView && !canCreate && !canEdit && !canDelete;
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
   const [detailVendor, setDetailVendor] = useState(() => {
@@ -1379,17 +1380,28 @@ const VendorManagement = () => {
   };
 
   const handleAddNewVendor = () => {
+    // Pre-seed project assignment from the page-level header dropdowns
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
     setEditFormData({
       name: '', contactPerson: '', email: '', phone: '', website: '', gstNumber: '',
       address: '', city: '', state: '', district: '', pincode: '', rating: 0, status: 'Active',
-      groupName: '', subGroupName: '', projectId: '', vendorType: '', category: '', notes: '', assignedTo: ''
+      groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject,
+      vendorType: '', category: '', notes: '', assignedTo: ''
     });
     setCustomCategory('');
     setCustomVendorType('');
     setPincodeError('');
-    setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
+    setModalGroupName(seedGroup);
+    setModalSubGroupName(seedSubGroup);
+    setModalProjectId(seedProject);
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     fetchModalGroups();
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup);
+      if (seedSubGroup) fetchModalProjects(seedGroup, seedSubGroup);
+    }
     setCreateStep(1);
     setCreateKycDocs({});
     setShowCreateModal(true);
@@ -1424,15 +1436,15 @@ const VendorManagement = () => {
   };
 
   const handleCreateVendor = async () => {
-    if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-    if (!editFormData.category) { showError('Category is required'); return; }
-    if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
-    if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
-    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
+    if (!editFormData.name?.trim()) { showWarning('Vendor name is required'); return; }
+    if (!editFormData.category) { showWarning('Category is required'); return; }
+    if (editFormData.category === 'Other' && !customCategory.trim()) { showWarning('Please enter a custom category'); return; }
+    if (!editFormData.vendorType) { showWarning('Vendor type is required'); return; }
+    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showWarning('Please enter a custom vendor type'); return; }
     // Email is optional — validate format only if provided
     if (editFormData.email?.trim()) {
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(editFormData.email)) { showError('Please enter a valid email address'); return; }
+      if (!emailRegex.test(editFormData.email)) { showWarning('Please enter a valid email address'); return; }
     }
 
     setLoading(true);
@@ -1557,11 +1569,11 @@ const VendorManagement = () => {
   };
 
   const handleUpdateVendor = async () => {
-    if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-    if (!editFormData.category) { showError('Category is required'); return; }
-    if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
-    if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
-    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
+    if (!editFormData.name?.trim()) { showWarning('Vendor name is required'); return; }
+    if (!editFormData.category) { showWarning('Category is required'); return; }
+    if (editFormData.category === 'Other' && !customCategory.trim()) { showWarning('Please enter a custom category'); return; }
+    if (!editFormData.vendorType) { showWarning('Vendor type is required'); return; }
+    if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showWarning('Please enter a custom vendor type'); return; }
     setLoading(true);
     try {
       const payload = {
@@ -1999,21 +2011,25 @@ const VendorManagement = () => {
             className="vendor-management-search" value={filters.search}
             onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, search: v })); setCurrentPage(0); }}
           />
-          <select className="vendor-management-filter" value={filters.status}
-            onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, status: v })); setCurrentPage(0); }}>
-            <option value="all">All Status</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-          <select className="vendor-management-filter" value={filters.category}
-            onChange={(e) => { const v = e.target.value; setFilters(prev => ({ ...prev, category: v })); setCurrentPage(0); }}>
-            <option value="all">All Categories</option>
-            <option value="IT Equipment">IT Equipment</option>
-            <option value="Office Furniture">Office Furniture</option>
-            <option value="Manufacturing">Manufacturing</option>
-            <option value="Office Supplies">Office Supplies</option>
-            <option value="Services">Services</option>
-          </select>
+          <div className="vendor-filter-select-wrap">
+            <FilterSelect
+              value={filters.status === 'all' ? '' : filters.status}
+              options={[
+                { value: 'Active',   label: 'Active'   },
+                { value: 'Inactive', label: 'Inactive' },
+              ]}
+              placeholder="All Status"
+              onChange={(v) => { setFilters(prev => ({ ...prev, status: v || 'all' })); setCurrentPage(0); }}
+            />
+          </div>
+          <div className="vendor-filter-select-wrap">
+            <FilterSelect
+              value={filters.category === 'all' ? '' : filters.category}
+              options={VENDOR_CATEGORIES.map(c => ({ value: c, label: c }))}
+              placeholder="All Categories"
+              onChange={(v) => { setFilters(prev => ({ ...prev, category: v || 'all' })); setCurrentPage(0); }}
+            />
+          </div>
           {/* Created Date range filter */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Created:</span>
@@ -2154,23 +2170,14 @@ const VendorManagement = () => {
                 <h3>Project Assignment</h3>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Group</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                      {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                    </select>
+                    <FilterSelect value={modalGroupName} options={modalGroups} placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'} disabled={modalDropdownLoading.groups} onChange={v => handleModalGroupChange({ target: { value: v } })} />
                   </div>
                   <div className="vendor-form-group"><label>Category / Sub-Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                      <option value="">{!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Category'}</option>
-                      {modalSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
-                    </select>
+                    <FilterSelect value={modalSubGroupName} options={modalSubGroups} placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Category'} disabled={!modalGroupName || modalDropdownLoading.subGroups} onChange={v => handleModalSubGroupChange({ target: { value: v } })} />
                   </div>
                 </div>
                 <div className="vendor-form-group"><label>Project <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(Optional)</span></label>
-                  <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                    <option value="">{!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project (Optional)'}</option>
-                    {modalProjects.map(p => <option key={p.id} value={p.id}>{p.name} - {p.location}</option>)}
-                  </select>
+                  <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} />
                 </div>
               </div>
               <div className="vendor-form-section">
@@ -2185,30 +2192,14 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>
-                    <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })}>
-                      <option value="">Select category</option>
-                      {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                      {/* Show current value as option if it's not in the standard list */}
-                      {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && (
-                        <option value={editFormData.category}>{editFormData.category}</option>
-                      )}
-                      <option value="Other">Other (enter manually)</option>
-                    </select>
+                    <FilterSelect value={editFormData.category} options={[...VENDOR_CATEGORIES.map(c => ({ value: c, label: c })), ...(editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) ? [{ value: editFormData.category, label: editFormData.category }] : []), { value: 'Other', label: 'Other (enter manually)' }]} placeholder="Select category" onChange={v => setEditFormData({ ...editFormData, category: v })} />
                     {editFormData.category === 'Other' && (
                       <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)}
                         placeholder="Enter category name" style={{ marginTop: 6 }} />
                     )}
                   </div>
                   <div className="vendor-form-group"><label>Vendor Type *</label>
-                    <select value={editFormData.vendorType} onChange={(e) => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
-                      <option value="">Select type</option>
-                      {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                      {/* Show current value as option if it's not in the standard list */}
-                      {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && (
-                        <option value={editFormData.vendorType}>{editFormData.vendorType}</option>
-                      )}
-                      <option value="Other">Other (enter manually)</option>
-                    </select>
+                    <FilterSelect value={editFormData.vendorType} options={[...VENDOR_TYPES.map(t => ({ value: t, label: t })), ...(editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) ? [{ value: editFormData.vendorType, label: editFormData.vendorType }] : []), { value: 'Other', label: 'Other (enter manually)' }]} placeholder="Select type" onChange={v => setEditFormData({ ...editFormData, vendorType: v })} />
                     {editFormData.vendorType === 'Other' && (
                       <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)}
                         placeholder="Enter vendor type" style={{ marginTop: 6 }} />
@@ -2217,20 +2208,10 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Rating</label>
-                    <select value={editFormData.rating} onChange={(e) => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}>
-                      <option value="0">Not Rated</option>
-                      <option value="1">⭐ 1 Star</option>
-                      <option value="2">⭐⭐ 2 Stars</option>
-                      <option value="3">⭐⭐⭐ 3 Stars</option>
-                      <option value="4">⭐⭐⭐⭐ 4 Stars</option>
-                      <option value="5">⭐⭐⭐⭐⭐ 5 Stars</option>
-                    </select>
+                    <FilterSelect value={String(editFormData.rating)} options={[{value:'0',label:'Not Rated'},{value:'1',label:'⭐ 1 Star'},{value:'2',label:'⭐⭐ 2 Stars'},{value:'3',label:'⭐⭐⭐ 3 Stars'},{value:'4',label:'⭐⭐⭐⭐ 4 Stars'},{value:'5',label:'⭐⭐⭐⭐⭐ 5 Stars'}]} placeholder="Select rating" onChange={v => setEditFormData({ ...editFormData, rating: parseInt(v) })} />
                   </div>
                   <div className="vendor-form-group"><label>Status</label>
-                    <select value={editFormData.status} onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}>
-                      <option value="Active">Active</option>
-                      <option value="Inactive">Inactive</option>
-                    </select>
+                    <FilterSelect value={editFormData.status} options={[{value:'Active',label:'Active'},{value:'Inactive',label:'Inactive'}]} placeholder="Select status" onChange={v => setEditFormData({ ...editFormData, status: v })} />
                   </div>
                 </div>
                 <div className="vendor-form-row">
@@ -2249,7 +2230,7 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group">
-                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}></span></label>
+                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
                     <input type="text" value={editFormData.pincode || ''} maxLength={6}
                       onChange={e => handlePincodeChange(e.target.value)}
                       placeholder="Enter 6-digit pincode" />
@@ -2333,17 +2314,17 @@ const VendorManagement = () => {
           } catch { showError('Could not preview the file.'); }
         };
         const handleNextStep = () => {
-          if (!editFormData.name?.trim()) { showError('Vendor name is required'); return; }
-          if (!editFormData.category) { showError('Category is required'); return; }
-          if (editFormData.category === 'Other' && !customCategory.trim()) { showError('Please enter a custom category'); return; }
-          if (!editFormData.vendorType) { showError('Vendor type is required'); return; }
-          if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showError('Please enter a custom vendor type'); return; }
+          if (!editFormData.name?.trim()) { showWarning('Vendor name is required'); return; }
+          if (!editFormData.category) { showWarning('Category is required'); return; }
+          if (editFormData.category === 'Other' && !customCategory.trim()) { showWarning('Please enter a custom category'); return; }
+          if (!editFormData.vendorType) { showWarning('Vendor type is required'); return; }
+          if (editFormData.vendorType === 'Other' && !customVendorType.trim()) { showWarning('Please enter a custom vendor type'); return; }
           setCreateStep(2);
         };
         return (
         <div className="vendor-management-modal-overlay">
           <div className="vendor-management-edit-modal" onClick={e => e.stopPropagation()}
-            style={{ display: 'flex', flexDirection: 'column', maxHeight: '90vh', width: createStep === 2 ? 860 : undefined }}>
+            style={{ display: 'flex', flexDirection: 'column', maxHeight: '92vh', width: createStep === 2 ? 'min(980px, 96vw)' : undefined }}>
 
             {/* Header */}
             <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
@@ -2374,23 +2355,14 @@ const VendorManagement = () => {
                   <h3>Project Assignment</h3>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Group</label>
-                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                        <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                      </select>
+                      <FilterSelect value={modalGroupName} options={modalGroups} placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'} disabled={modalDropdownLoading.groups} onChange={v => handleModalGroupChange({ target: { value: v } })} />
                     </div>
                     <div className="vendor-form-group"><label>Category / Sub-Group</label>
-                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                        <option value="">{!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Category'}</option>
-                        {modalSubGroups.map(sg => <option key={sg.value} value={sg.value}>{sg.label}</option>)}
-                      </select>
+                      <FilterSelect value={modalSubGroupName} options={modalSubGroups} placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Category'} disabled={!modalGroupName || modalDropdownLoading.subGroups} onChange={v => handleModalSubGroupChange({ target: { value: v } })} />
                     </div>
                   </div>
                   <div className="vendor-form-group"><label>Project (Optional)</label>
-                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                      <option value="">{!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project (Optional)'}</option>
-                      {modalProjects.map(p => <option key={p.id} value={p.id}>{p.name} - {p.location}</option>)}
-                    </select>
+                    <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} />
                   </div>
                 </div>
                 <div className="vendor-form-section">
@@ -2405,21 +2377,11 @@ const VendorManagement = () => {
                   </div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Category *</label>
-                      <select value={editFormData.category} onChange={e => setEditFormData({ ...editFormData, category: e.target.value })}>
-                        <option value="">Select category</option>
-                        {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                        {editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) && <option value={editFormData.category}>{editFormData.category}</option>}
-                        <option value="Other">Other (enter manually)</option>
-                      </select>
+                      <FilterSelect value={editFormData.category} options={[...VENDOR_CATEGORIES.map(c => ({ value: c, label: c })), ...(editFormData.category && editFormData.category !== 'Other' && !VENDOR_CATEGORIES.includes(editFormData.category) ? [{ value: editFormData.category, label: editFormData.category }] : []), { value: 'Other', label: 'Other (enter manually)' }]} placeholder="Select category" onChange={v => setEditFormData({ ...editFormData, category: v })} />
                       {editFormData.category === 'Other' && <input type="text" value={customCategory} onChange={e => setCustomCategory(e.target.value)} placeholder="Enter category name" style={{ marginTop: 6 }} />}
                     </div>
                     <div className="vendor-form-group"><label>Vendor Type *</label>
-                      <select value={editFormData.vendorType} onChange={e => setEditFormData({ ...editFormData, vendorType: e.target.value })}>
-                        <option value="">Select type</option>
-                        {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                        {editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) && <option value={editFormData.vendorType}>{editFormData.vendorType}</option>}
-                        <option value="Other">Other (enter manually)</option>
-                      </select>
+                      <FilterSelect value={editFormData.vendorType} options={[...VENDOR_TYPES.map(t => ({ value: t, label: t })), ...(editFormData.vendorType && editFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(editFormData.vendorType) ? [{ value: editFormData.vendorType, label: editFormData.vendorType }] : []), { value: 'Other', label: 'Other (enter manually)' }]} placeholder="Select type" onChange={v => setEditFormData({ ...editFormData, vendorType: v })} />
                       {editFormData.vendorType === 'Other' && <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter vendor type" style={{ marginTop: 6 }} />}
                     </div>
                   </div>
@@ -2430,7 +2392,7 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group">
-                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}></span></label>
+                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
                       <input type="text" value={editFormData.pincode || ''} maxLength={6}
                         onChange={e => handlePincodeChange(e.target.value)}
                         placeholder="Enter 6-digit pincode" />
@@ -2459,24 +2421,15 @@ const VendorManagement = () => {
                   <h3>Additional Details</h3>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Rating</label>
-                      <select value={editFormData.rating} onChange={e => setEditFormData({ ...editFormData, rating: parseInt(e.target.value) })}>
-                        <option value="0">Not Rated</option>
-                        {[1,2,3,4,5].map(n => <option key={n} value={n}>{'⭐'.repeat(n)} {n} Star{n>1?'s':''}</option>)}
-                      </select>
+                      <FilterSelect value={String(editFormData.rating)} options={[{value:'0',label:'Not Rated'},{value:'1',label:'⭐ 1 Star'},{value:'2',label:'⭐⭐ 2 Stars'},{value:'3',label:'⭐⭐⭐ 3 Stars'},{value:'4',label:'⭐⭐⭐⭐ 4 Stars'},{value:'5',label:'⭐⭐⭐⭐⭐ 5 Stars'}]} placeholder="Select rating" onChange={v => setEditFormData({ ...editFormData, rating: parseInt(v) })} />
                     </div>
                     <div className="vendor-form-group"><label>Status</label>
-                      <select value={editFormData.status} onChange={e => setEditFormData({ ...editFormData, status: e.target.value })}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
+                      <FilterSelect value={editFormData.status} options={[{value:'Active',label:'Active'},{value:'Inactive',label:'Inactive'}]} placeholder="Select status" onChange={v => setEditFormData({ ...editFormData, status: v })} />
                     </div>
                   </div>
                   {availableUsers.length > 0 && (
                     <div className="vendor-form-group"><label>Assign To</label>
-                      <select value={editFormData.assignedTo} onChange={e => setEditFormData({ ...editFormData, assignedTo: e.target.value })}>
-                        <option value="">Select user</option>
-                        {availableUsers.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                      </select>
+                      <FilterSelect value={editFormData.assignedTo} options={availableUsers.map(u => ({ value: u.id, label: u.name }))} placeholder="Select user" onChange={v => setEditFormData({ ...editFormData, assignedTo: v })} />
                     </div>
                   )}
                   <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={e => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>

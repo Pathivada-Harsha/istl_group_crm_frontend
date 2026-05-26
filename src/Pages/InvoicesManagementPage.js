@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check, CheckCircle, Clock } from 'lucide-react';
 import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -181,7 +182,7 @@ const InvoicesManagementPage = () => {
   const canDelete = invoicesPerms.includes('DELETE') && !isAccountsExecutive;
   const canSend   = invoicesPerms.includes('SEND')   || isAccountsExecutive;
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete;
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
   const [loading, setLoading] = useState(false);
   const [paymentHistory, setPaymentHistory] = useState([]);
@@ -352,7 +353,7 @@ const InvoicesManagementPage = () => {
   };
 
   const handleLoadOrderBookItems = () => {
-    if (orderBookItems.length === 0) { showError('No order book items available'); return; }
+    if (orderBookItems.length === 0) { showWarning('No order book items available'); return; }
     const loaded = orderBookItems.map(item => {
       const totalQty = parseFloat(item.quantity) || 0;
       const allocatedQty = parseFloat(item.invoicedQty) || 0;  // qty already invoiced
@@ -369,7 +370,7 @@ const InvoicesManagementPage = () => {
         allocatedQty
       };
     }).filter(it => it.maxQty > 0);
-    if (loaded.length === 0) { showError('All order book items are fully invoiced already'); return; }
+    if (loaded.length === 0) { showWarning('All order book items are fully invoiced already'); return; }
     setFormData(prev => ({ ...prev, items: loaded }));
     showSuccess(`Loaded ${loaded.length} item${loaded.length !== 1 ? 's' : ''} from order book`);
   };
@@ -794,11 +795,15 @@ const fetchStats = async () => {
    * Create new invoice
    */
   const handleCreateNew = () => {
+    // Pre-seed from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
     setFormData({
       customerId: null,
-      projectId: '',
-      groupId: '',
-      subGroupId: '',
+      projectId: seedProject,
+      groupId:   seedGroup,
+      subGroupId: seedSubGroup,
       invoiceNumber: '',
       invoiceDate: new Date().toISOString().split('T')[0],
       dueDate: '',
@@ -806,11 +811,17 @@ const fetchStats = async () => {
       status: 'DRAFT'
     });
     setCustomerData(null);
-    setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
+    setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
     setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setEditMode(false);
-
     fetchModalGroups();
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup);
+      if (seedSubGroup) {
+        fetchModalProjects(seedGroup, seedSubGroup);
+        if (seedProject) fetchCustomerByProject(seedProject);
+      }
+    }
     setShowCreateModal(true);
   };
 
@@ -1200,7 +1211,7 @@ const fetchStats = async () => {
 
   // ── Accounts team: submit approval with file ──────────────────────────────
   const handleApproveSubmit = async () => {
-    if (!approveFile) { showError('Please select the invoice file to upload'); return; }
+    if (!approveFile) { showWarning('Please select the invoice file to upload'); return; }
     setApproveLoading(true);
     try {
       const formData = new FormData();
@@ -1331,7 +1342,7 @@ const fetchStats = async () => {
    * Delete invoice
    */
   const handleDeleteInvoice = (id) => {
-    if (!canDelete) { showError('No permission to delete invoices'); return; }
+    if (!canDelete) { showWarning('No permission to delete invoices'); return; }
     setConfirmModal({
       show: true, title: 'Delete Invoice',
       message: 'Are you sure you want to delete this invoice? This action cannot be undone.',
@@ -1520,23 +1531,22 @@ const fetchStats = async () => {
             }}
           />
 
-          <select
-            className="Invoices-page-filter"
-            value={filters.status}
-            onChange={(e) => {
-              setFilters({ ...filters, status: e.target.value });
-              setCurrentPage(0);
-            }}
-          >
-            <option value="all">All Status</option>
-            <option value="DRAFT">Draft</option>
-            <option value="SENT">Sent</option>
-            <option value="PENDING_APPROVAL">Pending Approval</option>
-            <option value="APPROVED">Approved</option>
-            <option value="PAID">Paid</option>
-            <option value="PARTIALLY_PAID">Partially Paid</option>
-            <option value="CANCELLED">Cancelled</option>
-          </select>
+          <div className="inv-filter-select-wrap">
+            <FilterSelect
+              value={filters.status === 'all' ? '' : filters.status}
+              options={[
+                { value: 'DRAFT',            label: 'Draft'            },
+                { value: 'SENT',             label: 'Sent'             },
+                { value: 'PENDING_APPROVAL', label: 'Pending Approval' },
+                { value: 'APPROVED',         label: 'Approved'         },
+                { value: 'PAID',             label: 'Paid'             },
+                { value: 'PARTIALLY_PAID',   label: 'Partially Paid'   },
+                { value: 'CANCELLED',        label: 'Cancelled'        },
+              ]}
+              placeholder="All Status"
+              onChange={(v) => { setFilters({ ...filters, status: v || 'all' }); setCurrentPage(0); }}
+            />
+          </div>
 
           <InvDateRangePicker
             appliedFrom={filters.dateFrom}
@@ -1989,56 +1999,35 @@ const fetchStats = async () => {
                   <div className="Invoices-page-form-grid">
                     <div className="Invoices-page-form-group">
                       <label>Group *</label>
-                      <select
+                      <FilterSelect
                         value={modalGroupName}
-                        onChange={handleModalGroupChange}
+                        options={modalGroups}
+                        placeholder={modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
                         disabled={modalDropdownLoading.groups}
-                      >
-                        <option value="">
-                          {modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
-                        </option>
-                        {modalGroups.map((group, index) => (
-                          <option key={group.value || index} value={group.value}>
-                            {group.label}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={v => handleModalGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
 
                     <div className="Invoices-page-form-group">
                       <label>Sub Group</label>
-                      <select
+                      <FilterSelect
                         value={modalSubGroupName}
-                        onChange={handleModalSubGroupChange}
+                        options={modalSubGroups}
+                        placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
                         disabled={!modalGroupName || modalDropdownLoading.subGroups}
-                      >
-                        <option value="">
-                          {modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
-                        </option>
-                        {modalSubGroups.map((subGroup, index) => (
-                          <option key={subGroup.value || index} value={subGroup.value}>
-                            {subGroup.label}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={v => handleModalSubGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
 
                     <div className="Invoices-page-form-group">
                       <label>Project *</label>
-                      <select
+                      <FilterSelect
                         value={modalProjectId}
-                        onChange={handleModalProjectChange}
+                        options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
+                        placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
                         disabled={!modalSubGroupName || modalDropdownLoading.projects}
-                      >
-                        <option value="">
-                          {modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
-                        </option>
-                        {modalProjects.map((project, index) => (
-                          <option key={project.id || index} value={project.id}>
-                            {project.name}
-                          </option>
-                        ))}
-                      </select>
+                        onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                      />
                     </div>
 
 
@@ -2459,13 +2448,18 @@ const fetchStats = async () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                   <div className="Invoices-page-form-group">
                     <label>Payment Method *</label>
-                    <select value={paymentData.method} onChange={(e) => setPaymentData({ ...paymentData, method: e.target.value })}>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                      <option value="UPI">UPI</option>
-                      <option value="Cash">Cash</option>
-                      <option value="Cheque">Cheque</option>
-                      <option value="Credit Card">Credit Card</option>
-                    </select>
+                    <FilterSelect
+                      value={paymentData.method || 'Bank Transfer'}
+                      options={[
+                        { value: 'Bank Transfer', label: 'Bank Transfer' },
+                        { value: 'UPI',           label: 'UPI'           },
+                        { value: 'Cash',          label: 'Cash'          },
+                        { value: 'Cheque',        label: 'Cheque'        },
+                        { value: 'Credit Card',   label: 'Credit Card'   },
+                      ]}
+                      placeholder="Select Method"
+                      onChange={v => setPaymentData({ ...paymentData, method: v || 'Bank Transfer' })}
+                    />
                   </div>
                   <div className="Invoices-page-form-group">
                     <label>Transaction Reference</label>

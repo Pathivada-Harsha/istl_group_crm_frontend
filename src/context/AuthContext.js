@@ -154,6 +154,8 @@ export const AuthProvider = ({ children }) => {
     'leads_detail_lead',
     'leads_detail_tab',
     'leads_view_mode',
+    'cust_detail_customer',
+    'cust_detail_tab',
     'invoicesReceiptsActiveTab',
     'billsPaymentsActiveTab',
   ];

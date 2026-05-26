@@ -1270,3 +1270,46 @@
 .Invoices-page-permission-notice svg {
   flex-shrink: 0;
 }
+/* ── FilterSelect in Invoices filter bar ─────────────────────────────────── */
+.inv-filter-select-wrap {
+  flex-shrink: 0;
+}
+.inv-filter-select-wrap .filter-trigger {
+  width: 160px;
+  height: 36px;
+  font-size: 12px;
+  padding: 0 28px 0 10px;
+}
+.inv-filter-select-wrap .filter-trigger__text--placeholder {
+  font-size: 11px;
+}
+.inv-filter-select-wrap .filter-dropdown-list {
+  min-width: 170px;
+  font-size: 12px;
+}
+.inv-filter-select-wrap .filter-dropdown-item {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+/* ── FilterSelect inside invoice modal form groups ───────────────────────── */
+.Invoices-page-form-group .filter-trigger {
+  width: 100%;
+  height: 38px;
+  font-size: 13px;
+  font-family: inherit;
+  border-radius: 6px;
+}
+.Invoices-page-form-group .filter-trigger__text--placeholder {
+  font-size: 12px;
+  font-style: italic;
+  color: #94a3b8;
+}
+.Invoices-page-form-group .filter-dropdown-list {
+  min-width: unset;
+  font-size: 13px;
+}
+.Invoices-page-form-group .filter-dropdown-item {
+  font-size: 13px;
+  padding: 8px 12px;
+}

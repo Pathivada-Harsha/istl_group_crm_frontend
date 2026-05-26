@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import GroupProjectFilter from './../components/Dropdowns/GroupProjectFilter.js';
+import FilterSelect from './../components/Dropdowns/FilterSelect.js';
 import useGroupProjectFilters from './../components/Dropdowns/useGroupProjectFilters.js';
 import { useAuth } from '../hooks/useAuth.js';
 import useToast from '../hooks/useToast';
@@ -461,8 +462,17 @@ export default function VendorPaymentsPage() {
 
   // ── create ────────────────────────────────────────────────────────────────
   const handleCreateNew = () => {
-    setFormData({vendorId:'',billId:null,paymentType:'ADVANCE',advanceDate:new Date().toISOString().split('T')[0],amount:0,paymentMode:'Bank Transfer',transactionReference:'',notes:'',projectId:'',groupId:'',subGroupId:''});
-    setModalGroupName('');setModalSubGroupName('');setModalProjectId('');
+    // Pre-seed from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
+    setFormData({vendorId:'',billId:null,paymentType:'ADVANCE',advanceDate:new Date().toISOString().split('T')[0],amount:0,paymentMode:'Bank Transfer',transactionReference:'',notes:'',projectId:seedProject,groupId:seedGroup,subGroupId:seedSubGroup});
+    setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup).then ? fetchModalSubGroups(seedGroup) : Promise.resolve();
+      if (seedSubGroup) fetchModalProjects(seedGroup, seedSubGroup);
+      if (seedProject) { setVendors([]); fetchVendorsForProject(seedProject, seedGroup, seedSubGroup); }
+    }
     setVendors([]); setUnpaidBills([]);
     fetchModalGroups();
     setShowCreateModal(true);
@@ -600,7 +610,7 @@ export default function VendorPaymentsPage() {
 
   const handleSaveEdit = async () => {
     const parsedAmount = parseFloat(editFormData.amount);
-    if(!parsedAmount || parsedAmount<=0){showError('Amount must be greater than zero');return;}
+    if(!parsedAmount || parsedAmount<=0){showWarning('Amount must be greater than zero');return;}
 
     const originalAdv = editingAdvance;
     const isBillPayment = originalAdv.paymentType === 'BILL_PAYMENT';
@@ -820,12 +830,17 @@ export default function VendorPaymentsPage() {
               </button>
             )}
           </div>
-          <select className="receipts-page-filter" value={filters.paymentType}
-            onChange={e=>{setFilters(f=>({...f,paymentType:e.target.value}));setCurrentPage(0);}}>
-            <option value="all">All Types</option>
-            <option value="ADVANCE">Advance</option>
-            <option value="BILL_PAYMENT">Bill Payment</option>
-          </select>
+          <div className="bills-filter-select-wrap">
+            <FilterSelect
+              value={filters.paymentType === 'all' ? '' : filters.paymentType}
+              options={[
+                { value: 'ADVANCE',      label: 'Advance'      },
+                { value: 'BILL_PAYMENT', label: 'Bill Payment' },
+              ]}
+              placeholder="All Types"
+              onChange={v => { setFilters(f => ({...f, paymentType: v || 'all'})); setCurrentPage(0); }}
+            />
+          </div>
           {/* Payment date range filter */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Payment Date:</span>
@@ -1164,30 +1179,39 @@ export default function VendorPaymentsPage() {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Group</label>
-                      <select value={modalGroupName} onChange={e=>{setModalGroupName(e.target.value);setFormData(f=>({...f,groupId:e.target.value,subGroupId:'',projectId:''}));fetchModalSubGroups(e.target.value);}} disabled={mdlLoading.groups}>
-                        <option value="">{mdlLoading.groups?'Loading...':'Select Group'}</option>
-                        {modalGroups.map((g,i)=><option key={g.value||i} value={g.value}>{g.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalGroupName}
+                        options={modalGroups}
+                        placeholder={mdlLoading.groups ? 'Loading...' : 'Select Group'}
+                        disabled={mdlLoading.groups}
+                        onChange={v => { const g=v||''; setModalGroupName(g); setFormData(f=>({...f,groupId:g,subGroupId:'',projectId:''})); if(g) fetchModalSubGroups(g); }}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Sub Group</label>
-                      <select value={modalSubGroupName} onChange={e=>{setModalSubGroupName(e.target.value);setFormData(f=>({...f,subGroupId:e.target.value,projectId:''}));fetchModalProjects(modalGroupName,e.target.value);}} disabled={!modalGroupName||mdlLoading.subGroups}>
-                        <option value="">{mdlLoading.subGroups?'Loading...':'Select Sub Group'}</option>
-                        {modalSubGroups.map((sg,i)=><option key={sg.value||i} value={sg.value}>{sg.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalSubGroupName}
+                        options={modalSubGroups}
+                        placeholder={!modalGroupName ? 'Select Group First' : mdlLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
+                        disabled={!modalGroupName || mdlLoading.subGroups}
+                        onChange={v => { const sg=v||''; setModalSubGroupName(sg); setFormData(f=>({...f,subGroupId:sg,projectId:''})); if(modalGroupName&&sg) fetchModalProjects(modalGroupName,sg); }}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Project</label>
-                      <select value={modalProjectId} onChange={e=>{
-                        const pid=e.target.value;
-                        setModalProjectId(pid);
-                        setFormData(f=>({...f,projectId:pid,vendorId:'',billId:null}));
-                        setVendors([]); setUnpaidBills([]);
-                        if(pid) fetchVendorsForProject(pid, modalGroupName, modalSubGroupName);
-                      }} disabled={!modalSubGroupName||mdlLoading.projects}>
-                        <option value="">{mdlLoading.projects?'Loading...':'Select Project'}</option>
-                        {modalProjects.map((p,i)=><option key={p.id||i} value={p.id}>{p.name}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalProjectId}
+                        options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
+                        placeholder={!modalSubGroupName ? 'Select Sub Group First' : mdlLoading.projects ? 'Loading...' : 'Select Project'}
+                        disabled={!modalSubGroupName || mdlLoading.projects}
+                        onChange={v => {
+                          const pid = v || '';
+                          setModalProjectId(pid);
+                          setFormData(f=>({...f, projectId:pid, vendorId:'', billId:null}));
+                          setVendors([]); setUnpaidBills([]);
+                          if (pid) fetchVendorsForProject(pid, modalGroupName, modalSubGroupName);
+                        }}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Vendor *</label>
@@ -1258,14 +1282,19 @@ export default function VendorPaymentsPage() {
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Payment Mode *</label>
-                      <select value={formData.paymentMode} onChange={e=>setFormData(f=>({...f,paymentMode:e.target.value}))}>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="NEFT">NEFT</option>
-                        <option value="RTGS">RTGS</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Cash">Cash</option>
-                      </select>
+                      <FilterSelect
+                        value={formData.paymentMode || 'Bank Transfer'}
+                        options={[
+                          { value: 'Bank Transfer', label: 'Bank Transfer' },
+                          { value: 'NEFT',          label: 'NEFT'          },
+                          { value: 'RTGS',          label: 'RTGS'          },
+                          { value: 'UPI',           label: 'UPI'           },
+                          { value: 'Cheque',        label: 'Cheque'        },
+                          { value: 'Cash',          label: 'Cash'          },
+                        ]}
+                        placeholder="Select Payment Mode"
+                        onChange={v => setFormData(f => ({...f, paymentMode: v || 'Bank Transfer'}))}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Transaction Reference</label>
@@ -1489,14 +1518,19 @@ export default function VendorPaymentsPage() {
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Payment Mode *</label>
-                      <select value={editFormData.paymentMode||'Bank Transfer'} onChange={e=>setEditFormData(f=>({...f,paymentMode:e.target.value}))}>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="NEFT">NEFT</option>
-                        <option value="RTGS">RTGS</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Cash">Cash</option>
-                      </select>
+                      <FilterSelect
+                        value={editFormData.paymentMode || 'Bank Transfer'}
+                        options={[
+                          { value: 'Bank Transfer', label: 'Bank Transfer' },
+                          { value: 'NEFT',          label: 'NEFT'          },
+                          { value: 'RTGS',          label: 'RTGS'          },
+                          { value: 'UPI',           label: 'UPI'           },
+                          { value: 'Cheque',        label: 'Cheque'        },
+                          { value: 'Cash',          label: 'Cash'          },
+                        ]}
+                        placeholder="Select Payment Mode"
+                        onChange={v => setEditFormData(f => ({...f, paymentMode: v || 'Bank Transfer'}))}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Transaction Reference</label>

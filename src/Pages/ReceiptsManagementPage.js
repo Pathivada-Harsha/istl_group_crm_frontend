@@ -5,6 +5,7 @@ import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
 import '../pages-css/ReceiptsManagementPage.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -199,7 +200,7 @@ const ReceiptsManagementPage = () => {
   const canDelete   = receiptPerms.includes('DELETE')   && !isAccountsExecutive;
   const canAdjust   = receiptPerms.includes('ADJUST')   || isAccountsExecutive;
   const canDownload = receiptPerms.includes('DOWNLOAD') || isAccountsExecutive;
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
 
   // ✅ Confirmation modal hook
@@ -468,7 +469,7 @@ const ReceiptsManagementPage = () => {
         const headerRowIdx = data.findIndex(row =>
           row.some(cell => typeof cell === 'string' && (cell.toLowerCase().includes('receipt date') || cell.toLowerCase().includes('amount')))
         );
-        if (headerRowIdx === -1) { showError('Invalid template format. Please use the provided template.'); return; }
+        if (headerRowIdx === -1) { showWarning('Invalid template format. Please use the provided template.'); return; }
         const rows = data.slice(headerRowIdx + 1).filter(row => row[0] !== '' && row[0] != null);
         const errors = [];
         const parsed = rows.map((row, i) => {
@@ -508,9 +509,9 @@ const ReceiptsManagementPage = () => {
   };
 
   const handleConfirmImport = async () => {
-    if (importErrors.length > 0) { showError('Please fix errors before importing'); return; }
-    if (importPreview.length === 0) { showError('No valid rows to import'); return; }
-    if (!receiptFormData.customerId) { showError('Please select a Project/Customer before importing — the import needs a customer to link each receipt to.'); return; }
+    if (importErrors.length > 0) { showWarning('Please fix errors before importing'); return; }
+    if (importPreview.length === 0) { showWarning('No valid rows to import'); return; }
+    if (!receiptFormData.customerId) { showWarning('Please select a Project/Customer before importing — the import needs a customer to link each receipt to.'); return; }
 
     setBulkImportProgress({ current: 0, total: importPreview.length, results: [] });
     setBulkImportDone(false);
@@ -625,8 +626,8 @@ const ReceiptsManagementPage = () => {
   };
 
   const handleSaveEditedAllocation = async () => {
-    if (!selectedAllocationToEdit?.newInvoiceId) { showError('Please select a new invoice'); return; }
-    if (!selectedAllocationToEdit?.newAmount || selectedAllocationToEdit.newAmount <= 0) { showError('Please enter a valid amount'); return; }
+    if (!selectedAllocationToEdit?.newInvoiceId) { showWarning('Please select a new invoice'); return; }
+    if (!selectedAllocationToEdit?.newAmount || selectedAllocationToEdit.newAmount <= 0) { showWarning('Please enter a valid amount'); return; }
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/${editingAllocation.id}/allocations/edit`, {
@@ -689,13 +690,13 @@ const ReceiptsManagementPage = () => {
   };
 
   const handleSaveEditedReceipt = async () => {
-    if (editReceiptFormData.amount <= 0) { showError('Amount must be greater than zero'); return; }
+    if (editReceiptFormData.amount <= 0) { showWarning('Amount must be greater than zero'); return; }
 
     const isInvoicePayment = editingReceipt.receiptType === 'INVOICE_PAYMENT';
 
     if (!isInvoicePayment) {
-      if (!editReceiptGroupName) { showError('Please select a group'); return; }
-      if (!editReceiptProjectId) { showError('Please select a project'); return; }
+      if (!editReceiptGroupName) { showWarning('Please select a group'); return; }
+      if (!editReceiptProjectId) { showWarning('Please select a project'); return; }
     }
 
     const projectChanged = !isInvoicePayment && (
@@ -918,8 +919,8 @@ const ReceiptsManagementPage = () => {
     setEditReceiptProjectId(e.target.value);
   };
   const handleApplyEditReceiptProject = () => {
-    if (!editReceiptGroupName) { showError('Please select a group'); return; }
-    if (!editReceiptProjectId) { showError('Please select a project'); return; }
+    if (!editReceiptGroupName) { showWarning('Please select a group'); return; }
+    if (!editReceiptProjectId) { showWarning('Please select a project'); return; }
     // Apply new project to the receipt being edited (will be sent on save)
     setEditingReceipt(prev => ({
       ...prev,
@@ -949,9 +950,23 @@ const ReceiptsManagementPage = () => {
   };
 
   const handleCreateNew = () => {
-    setReceiptFormData({ customerId: null, projectId: '', groupId: '', subGroupId: '', receiptDate: new Date().toISOString().split('T')[0], receiptType: 'advance', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', invoiceId: null });
-    setCustomerData(null); setModalGroupName(''); setModalSubGroupName(''); setModalProjectId(''); setEditMode(false); setInvoicesForCustomer([]);
-    fetchModalGroups(); setShowCreateModal(true);
+    // Pre-seed from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
+    setReceiptFormData({ customerId: null, projectId: seedProject, groupId: seedGroup, subGroupId: seedSubGroup, receiptDate: new Date().toISOString().split('T')[0], receiptType: 'advance', amount: 0, paymentMethod: 'Bank Transfer', transactionReference: '', notes: '', invoiceId: null });
+    setCustomerData(null);
+    setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
+    setEditMode(false); setInvoicesForCustomer([]);
+    fetchModalGroups();
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup);
+      if (seedSubGroup) {
+        fetchModalProjects(seedGroup, seedSubGroup);
+        if (seedProject) fetchCustomerByProject(seedProject);
+      }
+    }
+    setShowCreateModal(true);
   };
 
   // ✅ UPDATED: handleViewReceipt fetches allocations for ADVANCE and invoice details for INVOICE_PAYMENT
@@ -1017,7 +1032,7 @@ const ReceiptsManagementPage = () => {
   const handleSaveReceipt = async () => {
     if (!receiptFormData.customerId) { showError('Please select a project to identify the customer'); return; }
     if (receiptFormData.receiptType === 'invoice' && !receiptFormData.invoiceId) { showError('Please select an invoice'); return; }
-    if (receiptFormData.amount <= 0) { showError('Amount must be greater than zero'); return; }
+    if (receiptFormData.amount <= 0) { showWarning('Amount must be greater than zero'); return; }
     setLoading(true);
     try {
       const receiptData = { ...receiptFormData, receiptType: receiptFormData.receiptType === 'advance' ? 'ADVANCE' : 'INVOICE_PAYMENT', amount: parseFloat(receiptFormData.amount), invoiceId: receiptFormData.receiptType === 'invoice' ? receiptFormData.invoiceId : null };
@@ -1193,19 +1208,31 @@ const ReceiptsManagementPage = () => {
       <div className="receipts-page-action-bar">
         <div className="receipts-page-search-filters">
           <input type="text" className="receipts-page-search" placeholder="Search by Receipt No, Customer Name..." value={filters.search} onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }} />
-          <select className="receipts-page-filter" value={filters.receiptType} onChange={(e) => { setFilters({ ...filters, receiptType: e.target.value }); setCurrentPage(0); }}>
-            <option value="all">All Types</option>
-            <option value="ADVANCE">Advance</option>
-            <option value="INVOICE_PAYMENT">Invoice Payment</option>
-          </select>
-          <select className="receipts-page-filter" value={filters.paymentMethod} onChange={(e) => { setFilters({ ...filters, paymentMethod: e.target.value }); setCurrentPage(0); }}>
-            <option value="all">All Payment Methods</option>
-            <option value="Bank Transfer">Bank Transfer</option>
-            <option value="UPI">UPI</option>
-            <option value="Cash">Cash</option>
-            <option value="Cheque">Cheque</option>
-            <option value="Credit Card">Credit Card</option>
-          </select>
+          <div className="rec-filter-select-wrap">
+            <FilterSelect
+              value={filters.receiptType === 'all' ? '' : filters.receiptType}
+              options={[
+                { value: 'ADVANCE',         label: 'Advance'         },
+                { value: 'INVOICE_PAYMENT', label: 'Invoice Payment' },
+              ]}
+              placeholder="All Types"
+              onChange={v => { setFilters({ ...filters, receiptType: v || 'all' }); setCurrentPage(0); }}
+            />
+          </div>
+          <div className="rec-filter-select-wrap">
+            <FilterSelect
+              value={filters.paymentMethod === 'all' ? '' : filters.paymentMethod}
+              options={[
+                { value: 'Bank Transfer', label: 'Bank Transfer' },
+                { value: 'UPI',           label: 'UPI'           },
+                { value: 'Cash',          label: 'Cash'          },
+                { value: 'Cheque',        label: 'Cheque'        },
+                { value: 'Credit Card',   label: 'Credit Card'   },
+              ]}
+              placeholder="All Payment Methods"
+              onChange={v => { setFilters({ ...filters, paymentMethod: v || 'all' }); setCurrentPage(0); }}
+            />
+          </div>
           <RecDateRangePicker
             appliedFrom={filters.dateFrom}
             appliedTo={filters.dateTo}
@@ -1644,24 +1671,33 @@ const ReceiptsManagementPage = () => {
                   <div className="receipts-page-form-grid">
                     <div className="receipts-page-form-group">
                       <label>Group *</label>
-                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                        <option value="">{modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}</option>
-                        {modalGroups.map((group, index) => <option key={group.value || index} value={group.value}>{group.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalGroupName}
+                        options={modalGroups}
+                        placeholder={modalDropdownLoading.groups ? 'Loading...' : 'Select Group'}
+                        disabled={modalDropdownLoading.groups}
+                        onChange={v => handleModalGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Sub Group</label>
-                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                        <option value="">{modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}</option>
-                        {modalSubGroups.map((sg, index) => <option key={sg.value || index} value={sg.value}>{sg.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalSubGroupName}
+                        options={modalSubGroups}
+                        placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading...' : 'Select Sub Group'}
+                        disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                        onChange={v => handleModalSubGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Project *</label>
-                      <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                        <option value="">{modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}</option>
-                        {modalProjects.map((project, index) => <option key={project.id || index} value={project.id}>{project.name}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalProjectId}
+                        options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
+                        placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
+                        disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                        onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1723,13 +1759,18 @@ const ReceiptsManagementPage = () => {
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Payment Method *</label>
-                      <select value={receiptFormData.paymentMethod} onChange={(e) => setReceiptFormData({ ...receiptFormData, paymentMethod: e.target.value })}>
-                        <option value="Bank Transfer">Bank Transfer</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Cheque">Cheque</option>
-                        <option value="Credit Card">Credit Card</option>
-                      </select>
+                      <FilterSelect
+                        value={receiptFormData.paymentMethod || 'Bank Transfer'}
+                        options={[
+                        { value: 'Bank Transfer', label: 'Bank Transfer' },
+                        { value: 'UPI',           label: 'UPI'           },
+                        { value: 'Cash',          label: 'Cash'          },
+                        { value: 'Cheque',        label: 'Cheque'        },
+                        { value: 'Credit Card',   label: 'Credit Card'   },
+                      ]}
+                        placeholder="Select Method"
+                        onChange={v => setReceiptFormData({ ...receiptFormData, paymentMethod: v || 'Bank Transfer' })}
+                      />
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Transaction Reference</label>
@@ -2019,33 +2060,33 @@ const ReceiptsManagementPage = () => {
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Group *</label>
-                      <select value={editReceiptGroupName}
-                        onChange={handleEditReceiptGroupChange}
+                      <FilterSelect
+                        value={editReceiptGroupName}
+                        options={editReceiptProjectGroups}
+                        placeholder={editReceiptProjectLoading.groups ? 'Loading...' : 'Select Group'}
                         disabled={editReceiptProjectLoading.groups}
-                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white' }}>
-                        <option value="">{editReceiptProjectLoading.groups ? 'Loading groups...' : 'Select Group'}</option>
-                        {editReceiptProjectGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
-                      </select>
+                        onChange={v => handleEditReceiptGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Sub Group</label>
-                      <select value={editReceiptSubGroupName}
-                        onChange={handleEditReceiptSubGroupChange}
+                      <FilterSelect
+                        value={editReceiptSubGroupName}
+                        options={editReceiptProjectSubs}
+                        placeholder={editReceiptProjectLoading.subs ? 'Loading...' : !editReceiptGroupName ? 'Select Group First' : 'Select Sub Group'}
                         disabled={!editReceiptGroupName || editReceiptProjectLoading.subs}
-                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptGroupName ? '#f9fafb' : 'white' }}>
-                        <option value="">{editReceiptProjectLoading.subs ? 'Loading...' : !editReceiptGroupName ? 'Select Group first' : 'Select Sub Group'}</option>
-                        {editReceiptProjectSubs.map((s, i) => <option key={s.value || i} value={s.value}>{s.label}</option>)}
-                      </select>
+                        onChange={v => handleEditReceiptSubGroupChange({ target: { value: v || '' } })}
+                      />
                     </div>
                     <div>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Project *</label>
-                      <select value={editReceiptProjectId}
-                        onChange={handleEditReceiptProjectChange}
+                      <FilterSelect
+                        value={editReceiptProjectId}
+                        options={editReceiptProjectList.map(p => ({ value: p.id, label: p.name }))}
+                        placeholder={editReceiptProjectLoading.projects ? 'Loading...' : !editReceiptSubGroupName ? 'Select Sub Group First' : 'Select Project'}
                         disabled={!editReceiptSubGroupName || editReceiptProjectLoading.projects}
-                        style={{ width: '100%', padding: '8px 10px', fontSize: '13px', border: '1px solid #d1d5db', borderRadius: '6px', background: !editReceiptSubGroupName ? '#f9fafb' : 'white' }}>
-                        <option value="">{editReceiptProjectLoading.projects ? 'Loading...' : !editReceiptSubGroupName ? 'Select Sub Group first' : 'Select Project'}</option>
-                        {editReceiptProjectList.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
-                      </select>
+                        onChange={v => handleEditReceiptProjectChange({ target: { value: v || '' } })}
+                      />
                     </div>
                   </div>
                   {editReceiptProjectId && editReceiptProjectId !== (editingReceipt.projectId || '') && (

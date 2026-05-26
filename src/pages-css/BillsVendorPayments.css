@@ -632,3 +632,37 @@
   background-color: #16a34a;
   color: #ffffff;
 }
+/* ── FilterSelect in Vendor Payments filter bar ─────────────────────────── */
+.bills-filter-select-wrap {
+  flex-shrink: 0;
+}
+.bills-filter-select-wrap .filter-trigger {
+  width: 148px;
+  height: 36px;
+  font-size: 12px;
+  padding: 0 28px 0 10px;
+}
+.bills-filter-select-wrap .filter-trigger__text--placeholder {
+  font-size: 11px;
+}
+.bills-filter-select-wrap .filter-dropdown-list {
+  min-width: 148px;
+  font-size: 12px;
+}
+.bills-filter-select-wrap .filter-dropdown-item {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+
+/* ── FilterSelect inside vendor payment form groups (modals) ─────────────── */
+.receipts-page-form-group .filter-trigger {
+  width: 100%;
+  height: 38px;
+  font-size: 13px;
+  font-family: inherit;
+  border-radius: 6px;
+}
+.receipts-page-form-group .filter-dropdown-list {
+  min-width: unset;
+  font-size: 13px;
+}

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import '../pages-css/Procurement-Quatation-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -23,11 +24,11 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 // ── Column definitions ───────────────────────────────────────────────────────
 const ALL_QUOTATION_COLUMNS = [
   { id: 'sNo',           label: 'S.No',           visible: true,  fixed: true  },
-  { id: 'quotationNo',   label: 'Quotation No',   visible: true },
+  { id: 'rfqId',         label: 'RFQ ID',         visible: true },
+  { id: 'quotationNo',   label: 'Quotation No',   visible: false },
   { id: 'vendorId',      label: 'Vendor Name',    visible: true },
   { id: 'quotationValue',label: 'Quotation Value',visible: true },
   { id: 'uploadedOn',    label: 'Uploaded On',    visible: true },
-  { id: 'rfqId',         label: 'RFQ ID',         visible: false },
   { id: 'category',      label: 'Category',       visible: false },
   { id: 'validUntil',    label: 'Valid Until',     visible: true },
   { id: 'file',          label: 'File',            visible: false },
@@ -64,6 +65,10 @@ const CATEGORIES = [
   'Consultant',
   'Other',
 ];
+
+// ── Shared with Vendor Management page ──────────────────────────────────────
+const VENDOR_CATEGORIES = ['Manufacturing', 'Supplier', 'Services', 'Electrical', 'Civil & Structural', 'Instrumentation', 'IoT Hardware', 'Logistics & Transport'];
+const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider', 'Contractor', 'System Integrator', 'Trader'];
 
 
 // ── Date picker constants ────────────────────────────────────────────────────
@@ -284,7 +289,7 @@ const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
   const [poFormData, setPOFormData] = useState(null);
@@ -300,6 +305,7 @@ const QuotationsReceived = () => {
   const [orderBookItems, setOrderBookItems] = useState([]);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
+  const [focusedField, setFocusedField] = useState(null); // tracks 'qty-N' or 'rate-N'
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(0);
@@ -308,7 +314,7 @@ const QuotationsReceived = () => {
   const [pageSize, setPageSize] = useState(10);
 
   // ── Column state (drag + visibility) ────────────────────────────────────
-  const COLUMN_VERSION = 'v4'; // bumped: S.No column + uploadedOn moved to 5th
+  const COLUMN_VERSION = 'v6'; // bumped: RFQ ID moved to 2nd column after S.No
   const [columns, setColumns] = useState(() => {
     try {
       const saved = localStorage.getItem('quotationColumns');
@@ -566,7 +572,7 @@ const QuotationsReceived = () => {
             (cell.toLowerCase().includes('description') || cell.toLowerCase().includes('item name')))
         );
         if (headerRowIdx === -1) {
-          showError('Invalid template. Please use the provided BOQ quotation template.');
+          showWarning('Invalid template. Please use the provided BOQ quotation template.');
           return;
         }
 
@@ -658,8 +664,8 @@ const QuotationsReceived = () => {
   };
 
   const handleConfirmImport = () => {
-    if (importErrors.length > 0) { showError('Fix errors before importing'); return; }
-    if (importPreview.length === 0) { showError('No valid rows to import'); return; }
+    if (importErrors.length > 0) { showWarning('Fix errors before importing'); return; }
+    if (importPreview.length === 0) { showWarning('No valid rows to import'); return; }
 
     // Merge imported items into existing form data
     setQuotationFormData(prev => ({
@@ -853,9 +859,9 @@ const QuotationsReceived = () => {
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) { setSelectedFile(null); setFilePreview(null); return; }
-    if (file.size > 5 * 1024 * 1024) { showError('File size exceeds 5MB'); e.target.value = ''; setSelectedFile(null); return; }
+    if (file.size > 5 * 1024 * 1024) { showWarning('File size exceeds 5MB'); e.target.value = ''; setSelectedFile(null); return; }
     const allowed = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!allowed.includes(file.type)) { showError('Only PDF and image files are allowed'); e.target.value = ''; setSelectedFile(null); return; }
+    if (!allowed.includes(file.type)) { showWarning('Only PDF and image files are allowed'); e.target.value = ''; setSelectedFile(null); return; }
     setSelectedFile(file);
     if (file.type.startsWith('image/')) { const r = new FileReader(); r.onloadend = () => setFilePreview(r.result); r.readAsDataURL(file); }
     else setFilePreview(null);
@@ -885,7 +891,7 @@ const QuotationsReceived = () => {
     const items = [...poFormData.items];
     const item = items[index];
     const qty = parseFloat(quantity) || 0;
-    if (qty > item.quotedQuantity) { showError(`Cannot exceed quoted qty of ${item.quotedQuantity}`); return; }
+    if (qty > item.quotedQuantity) { showWarning(`Cannot exceed quoted qty of ${item.quotedQuantity}`); return; }
     item.selectedQuantity = qty;
     item.lineTotal = qty * item.unitPrice * (1 + item.taxPercent / 100);
     setPOFormData({ ...poFormData, items });
@@ -899,8 +905,8 @@ const QuotationsReceived = () => {
   };
 
   const handleCreatePOFromQuotation = async () => {
-    if (!poFormData.expectedDelivery) { showError('Expected delivery date is required'); return; }
-    if (!poFormData.items.some(i => i.selectedQuantity > 0)) { showError('Select quantity for at least one item'); return; }
+    if (!poFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
+    if (!poFormData.items.some(i => i.selectedQuantity > 0)) { showWarning('Select quantity for at least one item'); return; }
     // Permission check handled by canCreate guard on the button
     setLoading(true);
     try {
@@ -979,7 +985,7 @@ const QuotationsReceived = () => {
   };
 
   const handleDeleteQuotation = (quotationId) => {
-    if (!canDelete) { showError('No permission to delete quotations'); return; }
+    if (!canDelete) { showWarning('No permission to delete quotations'); return; }
     setConfirmModal({
       show: true, title: 'Delete Quotation',
       message: 'Are you sure you want to delete this quotation? This action cannot be undone.',
@@ -1014,25 +1020,25 @@ const QuotationsReceived = () => {
   };
 
   const handleSaveQuotation = async () => {
-    if (!quotationFormData.groupName) { showError('Group is required'); return; }
+    if (!quotationFormData.groupName) { showWarning('Group is required'); return; }
     if (!quotationFormData.vendorId) {
-      if (!quotationFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
+      if (!quotationFormData.vendorName?.trim()) { showWarning('Vendor name is required'); return; }
       const finalCategory = quotationFormData.vendorCategory === 'Other' ? customVendorCategory?.trim() : quotationFormData.vendorCategory;
       const finalType     = quotationFormData.vendorType     === 'Other' ? customVendorType?.trim()     : quotationFormData.vendorType;
-      if (!finalCategory) { showError('Vendor category is required'); return; }
-      if (!finalType)     { showError('Vendor type is required'); return; }
+      if (!finalCategory) { showWarning('Vendor category is required'); return; }
+      if (!finalType)     { showWarning('Vendor type is required'); return; }
     }
-    if (!quotationFormData.validTill) { showError('Valid until date is required'); return; }
+    if (!quotationFormData.validTill) { showWarning('Valid until date is required'); return; }
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const vtd = new Date(quotationFormData.validTill); vtd.setHours(0, 0, 0, 0);
-    if (vtd < today) { showError('Valid until date cannot be in the past'); return; }
+    if (vtd < today) { showWarning('Valid until date cannot be in the past'); return; }
     const included = quotationFormData.items.filter(i => i.included !== false);
-    if (included.length === 0) { showError('Please include at least one item'); return; }
+    if (included.length === 0) { showWarning('Please include at least one item'); return; }
     for (let i = 0; i < included.length; i++) {
       const item = included[i];
-      if (!item.itemName?.trim()) { showError(`Item ${i + 1}: Name is required`); return; }
-      if (item.quantity === '' || item.quantity === null || item.quantity === undefined) { showError(`Item ${i + 1}: Quantity is required`); return; }
-      if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showError(`Item ${i + 1}: Unit price is required`); return; }
+      if (!item.itemName?.trim()) { showWarning(`Item ${i + 1}: Name is required`); return; }
+      if (item.quantity === '' || item.quantity === null || item.quantity === undefined) { showWarning(`Item ${i + 1}: Quantity is required`); return; }
+      if (item.unitPrice === '' || item.unitPrice === null || item.unitPrice === undefined || item.unitPrice < 0) { showWarning(`Item ${i + 1}: Unit price is required`); return; }
     }
     setLoading(true);
     try {
@@ -1082,6 +1088,7 @@ const QuotationsReceived = () => {
 
   // ── Utility formatters ───────────────────────────────────────────────────
   const formatCurrency = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
+  const formatQty = (val) => { const n = typeof val === 'number' ? val : parseFloat(val); if (isNaN(n)) return val; return n % 1 === 0 ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { maximumFractionDigits: 3 }); };
   const formatDate = (d) => {
     if (!d) return '';
     const s = String(d);
@@ -1196,17 +1203,21 @@ const QuotationsReceived = () => {
         <div className="procurement-quotation-received-search-filters">
           <input type="text" placeholder="Search by Quotation No, RFQ ID, Vendor Name…" className="procurement-quotation-received-search" value={filters.search}
             onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(0); }} />
-          <select className="procurement-quotation-received-filter" value={filters.status}
-            onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value })); setCurrentPage(0); }}>
-            <option value="all">All Status</option>
-            <option value="New">New</option>
-            <option value="Under Review">Under Review</option>
-            <option value="Shortlisted">Shortlisted</option>
-            <option value="Approved">Approved</option>
-            <option value="PO Created">PO Created</option>
-            <option value="Rejected">Rejected</option>
-            <option value="Expired">Expired</option>
-          </select>
+          <div className="qr-filter-select-wrap">
+            <FilterSelect
+              value={filters.status === 'all' ? '' : filters.status}
+              options={[
+                { value: 'New',          label: 'New'          },
+                { value: 'Under Review', label: 'Under Review' },
+                { value: 'Shortlisted',  label: 'Shortlisted'  },
+                { value: 'Approved',     label: 'Approved'     },
+                { value: 'PO Created',   label: 'PO Created'   },
+                { value: 'Rejected',     label: 'Rejected'     },
+                { value: 'Expired',      label: 'Expired'      },
+              ]}
+              placeholder="All Status"
+              onChange={(v) => { setFilters(prev => ({ ...prev, status: v || 'all' })); setCurrentPage(0); }}
+            /></div>
           {/* Uploaded date range filter */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Uploaded:</span>
@@ -1466,7 +1477,7 @@ const QuotationsReceived = () => {
                           return (
                             <tr key={item.id || idx}>
                               <td>{item.lineNo || idx + 1}</td><td>{item.itemName}</td><td>{item.description || '—'}</td>
-                              <td className="text-right">{qty}</td><td className="text-right">{formatCurrency(price)}</td>
+                              <td className="text-right">{formatQty(qty)}</td><td className="text-right">{formatCurrency(price)}</td>
                               <td className="text-center">{tax}%</td><td className="text-right" style={{ fontWeight: 600 }}>{formatCurrency(total)}</td>
                             </tr>
                           );
@@ -1699,28 +1710,32 @@ const QuotationsReceived = () => {
                     <div className="procurement-quotation-received-form-row">
                       <div className="procurement-quotation-received-form-group">
                         <label>Category *</label>
-                        <select value={quotationFormData.vendorCategory || ''} onChange={(e) => { setQuotationFormData({ ...quotationFormData, vendorCategory: e.target.value }); if (e.target.value !== 'Other') setCustomVendorCategory(''); }}>
-                          <option value="">Select category</option>
-                          <option value="IT Equipment">IT Equipment</option>
-                          <option value="Office Furniture">Office Furniture</option>
-                          <option value="Manufacturing">Manufacturing</option>
-                          <option value="Office Supplies">Office Supplies</option>
-                          <option value="Services">Services</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        <FilterSelect
+                          value={quotationFormData.vendorCategory || ''}
+                          options={[
+                            ...VENDOR_CATEGORIES.map(c => ({ value: c, label: c })),
+                            ...(quotationFormData.vendorCategory && quotationFormData.vendorCategory !== 'Other' && !VENDOR_CATEGORIES.includes(quotationFormData.vendorCategory) ? [{ value: quotationFormData.vendorCategory, label: quotationFormData.vendorCategory }] : []),
+                            { value: 'Other', label: 'Other (enter manually)' },
+                          ]}
+                          placeholder="Select category"
+                          onChange={v => { setQuotationFormData({ ...quotationFormData, vendorCategory: v }); if (v !== 'Other') setCustomVendorCategory(''); }}
+                        />
                         {quotationFormData.vendorCategory === 'Other' && (
                           <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                         )}
                       </div>
                       <div className="procurement-quotation-received-form-group">
                         <label>Vendor Type *</label>
-                        <select value={quotationFormData.vendorType || ''} onChange={(e) => { setQuotationFormData({ ...quotationFormData, vendorType: e.target.value }); if (e.target.value !== 'Other') setCustomVendorType(''); }}>
-                          <option value="">Select type</option>
-                          <option value="Manufacturer">Manufacturer</option>
-                          <option value="Distributor">Distributor</option>
-                          <option value="Service Provider">Service Provider</option>
-                          <option value="Other">Other</option>
-                        </select>
+                        <FilterSelect
+                          value={quotationFormData.vendorType || ''}
+                          options={[
+                            ...VENDOR_TYPES.map(t => ({ value: t, label: t })),
+                            ...(quotationFormData.vendorType && quotationFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(quotationFormData.vendorType) ? [{ value: quotationFormData.vendorType, label: quotationFormData.vendorType }] : []),
+                            { value: 'Other', label: 'Other (enter manually)' },
+                          ]}
+                          placeholder="Select type"
+                          onChange={v => { setQuotationFormData({ ...quotationFormData, vendorType: v }); if (v !== 'Other') setCustomVendorType(''); }}
+                        />
                         {quotationFormData.vendorType === 'Other' && (
                           <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
                         )}
@@ -1739,20 +1754,32 @@ const QuotationsReceived = () => {
                     <label>RFQ ID</label>
                     <input type="text" value={quotationFormData.rfqId} onChange={(e) => setQuotationFormData({ ...quotationFormData, rfqId: e.target.value })} placeholder="e.g., RFQ-2024-001" />
                   </div>
+                  {/* Category removed — not needed in this context
                   <div className="procurement-quotation-received-form-group">
-                    <label>Category *</label>
-                    <select value={quotationFormData.category} onChange={(e) => setQuotationFormData({ ...quotationFormData, category: e.target.value })}>
-                      {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <label>Category</label>
+                    <FilterSelect
+                      value={quotationFormData.category}
+                      options={CATEGORIES.map(c => ({ value: c, label: c }))}
+                      placeholder="Select category"
+                      onChange={v => setQuotationFormData({ ...quotationFormData, category: v })}
+                    />
                   </div>
+                  */}
                   <div className="procurement-quotation-received-form-group">
                     <label>Status *</label>
-                    <select value={quotationFormData.status} onChange={(e) => setQuotationFormData({ ...quotationFormData, status: e.target.value })}>
-                      <option value="New">New</option><option value="Under Review">Under Review</option>
-                      <option value="Shortlisted">Shortlisted</option><option value="Approved">Approved</option>
-                      <option value="Rejected">Rejected</option>
-                      {isEditMode && quotationFormData.status === 'PO Created' && <option value="PO Created">PO Created</option>}
-                    </select>
+                    <FilterSelect
+                      value={quotationFormData.status}
+                      options={[
+                        { value: 'New',          label: 'New'          },
+                        { value: 'Under Review', label: 'Under Review' },
+                        { value: 'Shortlisted',  label: 'Shortlisted'  },
+                        { value: 'Approved',     label: 'Approved'     },
+                        { value: 'Rejected',     label: 'Rejected'     },
+                        ...(isEditMode && quotationFormData.status === 'PO Created' ? [{ value: 'PO Created', label: 'PO Created' }] : []),
+                      ]}
+                      placeholder="Select status"
+                      onChange={v => setQuotationFormData({ ...quotationFormData, status: v })}
+                    />
                   </div>
                 </div>
                 <div className="procurement-quotation-received-form-row">
@@ -1888,19 +1915,21 @@ const QuotationsReceived = () => {
                                   <input type="text" placeholder="Specification (optional)" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} style={{ marginTop: 3, fontSize: 11, color: '#64748b' }} />
                                 </td>
                                 <td>
-                                  <UnitTypeDropdown
-                                    value={item.unit === '' || item.unit == null || COMMON_UNITS.includes(item.unit) ? (item.unit || '') : 'Custom'}
-                                    onChange={(e) => {
-                                      if (e.target.value === 'Custom') {
-                                        handleUpdateQuotationItem(idx, 'unit', '');
-                                      } else {
-                                        handleUpdateQuotationItem(idx, 'unit', e.target.value);
-                                      }
-                                    }}
-                                    className="table-input text-center"
-                                    disabled={!inc}
-                                    placeholder="Select Unit"
-                                  />
+                                  <div className="qr-unit-select-wrap">
+                                    <FilterSelect
+                                      value={item.unit === '' || item.unit == null || COMMON_UNITS.includes(item.unit) ? (item.unit || '') : 'Custom'}
+                                      options={[
+                                        ...COMMON_UNITS.map(u => ({ value: u, label: u })),
+                                        { value: 'Custom', label: '✏️ Custom' },
+                                      ]}
+                                      placeholder="Unit"
+                                      disabled={!inc}
+                                      onChange={(val) => {
+                                        if (val === 'Custom') handleUpdateQuotationItem(idx, 'unit', '');
+                                        else handleUpdateQuotationItem(idx, 'unit', val || '');
+                                      }}
+                                    />
+                                  </div>
                                   {(item.unit !== '' && item.unit != null && !COMMON_UNITS.includes(item.unit)) && (
                                     <input
                                       type="text"
@@ -1913,9 +1942,51 @@ const QuotationsReceived = () => {
                                     />
                                   )}
                                 </td>
-                                <td><input type="number" min="0" placeholder="Qty" value={item.quantity === '' || item.quantity == null ? '' : item.quantity} onChange={(e) => handleUpdateQuotationItem(idx, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))} className="table-input text-center" disabled={!inc} /></td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    placeholder="Qty"
+                                    value={focusedField === `qty-${idx}`
+                                      ? (item.quantity === '' || item.quantity == null ? '' : String(item.quantity))
+                                      : (item.quantity === '' || item.quantity == null ? '' : formatQty(item.quantity))
+                                    }
+                                    onFocus={() => setFocusedField(`qty-${idx}`)}
+                                    onBlur={e => {
+                                      setFocusedField(null);
+                                      const raw = e.target.value.replace(/,/g, '');
+                                      handleUpdateQuotationItem(idx, 'quantity', raw === '' ? '' : parseFloat(raw));
+                                    }}
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/,/g, '');
+                                      handleUpdateQuotationItem(idx, 'quantity', raw === '' ? '' : raw);
+                                    }}
+                                    className="table-input text-center"
+                                    disabled={!inc}
+                                  />
+                                </td>
                                 <td><input type="text" placeholder="Brand / Make" value={item.make || ''} onChange={(e) => handleUpdateQuotationItem(idx, 'make', e.target.value)} className="table-input" disabled={!inc} /></td>
-                                <td><input type="number" min="0" step="0.01" placeholder="Rate" value={item.unitPrice} onChange={(e) => handleUpdateQuotationItem(idx, 'unitPrice', e.target.value)} className="table-input text-right" disabled={!inc} /></td>
+                                <td>
+                                  <input
+                                    type="text"
+                                    placeholder="Rate"
+                                    value={focusedField === `rate-${idx}`
+                                      ? (item.unitPrice === '' || item.unitPrice == null ? '' : String(item.unitPrice))
+                                      : (item.unitPrice === '' || item.unitPrice == null ? '' : formatQty(item.unitPrice))
+                                    }
+                                    onFocus={() => setFocusedField(`rate-${idx}`)}
+                                    onBlur={e => {
+                                      setFocusedField(null);
+                                      const raw = e.target.value.replace(/,/g, '');
+                                      handleUpdateQuotationItem(idx, 'unitPrice', raw === '' ? '' : raw);
+                                    }}
+                                    onChange={e => {
+                                      const raw = e.target.value.replace(/,/g, '');
+                                      handleUpdateQuotationItem(idx, 'unitPrice', raw === '' ? '' : raw);
+                                    }}
+                                    className="table-input text-right"
+                                    disabled={!inc}
+                                  />
+                                </td>
                                 <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(amount) : '-'}</td>
                                 <td className="text-center"><button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button></td>
                               </tr>
@@ -2028,7 +2099,7 @@ const QuotationsReceived = () => {
                               <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
                               <td style={{ padding: '7px 11px', fontWeight: 600, maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.itemName}</td>
                               <td style={{ padding: '7px 11px', textAlign: 'center', color: '#64748b' }}>{row.unit || '—'}</td>
-                              <td style={{ padding: '7px 11px', textAlign: 'center' }}>{row.quantity}</td>
+                              <td style={{ padding: '7px 11px', textAlign: 'center' }}>{formatQty(row.quantity)}</td>
                               <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.make || '—'}</td>
                               <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(row.unitPrice)}</td>
                               <td style={{ padding: '7px 11px', textAlign: 'right', fontWeight: 700, color: '#1e293b' }}>{formatCurrency(lt)}</td>
@@ -2110,7 +2181,7 @@ const QuotationsReceived = () => {
                       {poFormData.items.map((item, idx) => (
                         <tr key={idx}>
                           <td>{item.itemName}</td><td>{item.description || '—'}</td>
-                          <td className="text-center" style={{ fontWeight: 600 }}>{item.quotedQuantity}</td>
+                          <td className="text-center" style={{ fontWeight: 600 }}>{formatQty(item.quotedQuantity)}</td>
                           <td><input type="number" min="0" max={item.quotedQuantity} value={item.selectedQuantity} onChange={(e) => handleUpdatePOItemQuantity(idx, e.target.value)} className="table-input text-center" style={{ fontWeight: 600 }} /></td>
                           <td className="text-right">{formatCurrency(item.unitPrice)}</td>
                           <td className="text-center">{item.taxPercent}%</td>

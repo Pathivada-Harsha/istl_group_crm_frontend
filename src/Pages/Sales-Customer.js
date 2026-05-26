@@ -21,8 +21,12 @@ import { FaEye, FaEdit, FaTrash, FaUpload, FaCloudUploadAlt, FaColumns } from 'r
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
 import api from '../services/leadsapi.js';
+import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+// Indian Rupee formatter for amount fields
+const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
 const INDIAN_STATES = [
   'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh',
@@ -352,10 +356,7 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
           </div>
           <div className="orderbook-form-group">
             <label>Status</label>
-            <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-              <option>Draft</option><option>Confirmed</option><option>In Production</option>
-              <option>Ready for Dispatch</option><option>Dispatched</option><option>Completed</option><option>Cancelled</option>
-            </select>
+            <FilterSelect value={formData.status} options={['Draft','Confirmed','In Production','Ready for Dispatch','Dispatched','Completed','Cancelled'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>setFormData({...formData,status:v})} />
           </div>
           <div className="orderbook-form-group">
             <label>PO Number</label>
@@ -367,14 +368,16 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
           </div>
           <div className="orderbook-form-group">
             <label>Advance Amount (₹)</label>
-            <input type="number" step="0.01" value={formData.advanceAmount} onChange={e => setFormData({...formData, advanceAmount: e.target.value})} placeholder="0.00"/>
+            <input type="text" value={toINR(formData.advanceAmount)} onChange={e => setFormData({...formData, advanceAmount: e.target.value.replace(/[^0-9]/g,'')})} placeholder="e.g. 50,000"/>
           </div>
           <div className="orderbook-form-group">
             <label>Proposal (Optional)</label>
-            <select value={formData.proposalId} onChange={e => { setFormData({...formData, proposalId: e.target.value}); if (e.target.value) loadProposalItems(e.target.value); }}>
-              <option value="">Select Proposal</option>
-              {proposals.map(p => <option key={p.id} value={p.id}>{p.proposalNo} - {p.title}</option>)}
-            </select>
+            <FilterSelect
+              value={formData.proposalId}
+              options={proposals.map(p => ({ value: p.id, label: `${p.proposalNo} - ${p.title}` }))}
+              placeholder="Select Proposal"
+              onChange={v => { setFormData({...formData, proposalId: v}); if (v) loadProposalItems(v); }}
+            />
           </div>
           <div className="orderbook-form-group orderbook-form-full">
             <label>Description</label>
@@ -704,18 +707,12 @@ function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCa
           </div>
           <div style={{ width: 130 }}>
             <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Priority</label>
-            <select value={form.priority} onChange={set('priority')}
-              style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}>
-              <option>High</option><option>Medium</option><option>Low</option>
-            </select>
+            <FilterSelect value={form.priority} options={['High','Medium','Low'].map(s=>({value:s,label:s}))} placeholder="Priority" onChange={set('priority')} />
           </div>
         </div>
         <div style={{ marginBottom: 10 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Assign To *</label>
-          <select value={form.assignedTo} onChange={set('assignedTo')} required
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.id === currentUser?.id ? ' (Me)' : ''}</option>)}
-          </select>
+          <FilterSelect value={String(form.assignedTo||'')} options={users.map(u=>({value:String(u.id),label:u.name+(u.id===currentUser?.id?' (Me)':'')}))} placeholder="Assign To" onChange={set('assignedTo')} />
         </div>
         <div style={{ marginBottom: 12 }}>
           <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Notes</label>
@@ -938,21 +935,15 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
             </div>
             <div>
               <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Priority</label>
-              <select value={form.priority} onChange={set('priority')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
-                <option>High</option><option>Medium</option><option>Low</option>
-              </select>
+              <FilterSelect value={form.priority} options={['High','Medium','Low'].map(s=>({value:s,label:s}))} placeholder="Priority" onChange={set('priority')} />
             </div>
             <div>
               <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Status</label>
-              <select value={form.status} onChange={set('status')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
-                <option>Pending</option><option>Completed</option><option>Cancelled</option><option>Rescheduled</option>
-              </select>
+              <FilterSelect value={form.status} options={['Pending','Completed','Cancelled','Rescheduled'].map(s=>({value:s,label:s}))} placeholder="Status" onChange={set('status')} />
             </div>
             <div>
               <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Assign To</label>
-              <select value={form.assignedTo} onChange={set('assignedTo')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13 }}>
-                {users.map(u => <option key={u.id} value={u.id}>{u.name}{u.id===currentUser?.id?' (Me)':''}</option>)}
-              </select>
+              <FilterSelect value={String(form.assignedTo||'')} options={users.map(u=>({value:String(u.id),label:u.name+(u.id===currentUser?.id?' (Me)':'')}))} placeholder="Assign To" onChange={set('assignedTo')} />
             </div>
           </div>
           <div>
@@ -973,7 +964,7 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
 
 // ── Customer Detail Page ──────────────────────────────────────────────────────
 const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError }) => {
-  const [activeTab, setActiveTab]       = useState('overview');
+  const [activeTab, setActiveTab]       = useState(() => localStorage.getItem('cust_detail_tab') || 'overview');
   const [orderBooks, setOrderBooks]     = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [followups, setFollowups]       = useState([]);
@@ -1168,7 +1159,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
           <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>
         </div>
         <div className="ld-hero-actions">
-          <button className="cust-btn cust-btn-secondary" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); setEditingOrder(null); }}>
+          <button className="cust-btn cust-btn-secondary" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); setEditingOrder(null); localStorage.setItem('cust_detail_tab','orderbooks'); }}>
             <svg className="cust-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
             New Order Book
           </button>
@@ -1178,7 +1169,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
       {/* Tabs */}
       <div className="ld-tabs">
         {[{k:'overview',l:'Overview'},{k:'orderbooks',l:'Order Books'},{k:'followups',l:'Follow-ups'}].map(t => (
-          <button key={t.k} className={`ld-tab${activeTab===t.k?' active':''}`} onClick={() => { setActiveTab(t.k); setShowOrderForm(false); setShowOrderView(false); }}>{t.l}</button>
+          <button key={t.k} className={`ld-tab${activeTab===t.k?' active':''}`} onClick={() => { setActiveTab(t.k); setShowOrderForm(false); setShowOrderView(false); localStorage.setItem('cust_detail_tab', t.k); }}>{t.l}</button>
         ))}
       </div>
 
@@ -1254,7 +1245,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                 <div className="orderbook-card" style={{marginBottom:'1rem'}}>
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
                     <h4 className="ld-card-title" style={{margin:0}}>📦 Order Books ({overviewData.orders.length})</h4>
-                    <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => setActiveTab('orderbooks')}>View All →</button>
+                    <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => { setActiveTab('orderbooks'); localStorage.setItem('cust_detail_tab','orderbooks'); }}>View All →</button>
                   </div>
                   <div className="orderbook-table-wrapper">
                     <table className="orderbook-table" style={{fontSize:'12px'}}>
@@ -1359,7 +1350,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                 <div className="ld-empty-state">
                   <div className="ld-empty-icon">📊</div>
                   <p>No financial activity recorded yet for this customer.</p>
-                  <button className="ld-btn ld-btn-pri" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); }}>Create First Order Book</button>
+                  <button className="ld-btn ld-btn-pri" onClick={() => { setActiveTab('orderbooks'); setShowOrderForm(true); localStorage.setItem('cust_detail_tab','orderbooks'); }}>Create First Order Book</button>
                 </div>
               )}
             </div>
@@ -1838,7 +1829,7 @@ const CustomerDatabase = () => {
   // const isFirstRender = useRef(true);
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   // ── Permissions ──────────────────────────────────────────────────
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
@@ -1853,7 +1844,12 @@ const CustomerDatabase = () => {
 
   // ── UI State ──────────────────────────────────────────────────────
   const [viewMode,       setViewMode]       = useState('table');
-  const [detailCustomer, setDetailCustomer] = useState(null);
+  const [detailCustomer, setDetailCustomer] = useState(() => {
+    try {
+      const s = localStorage.getItem('cust_detail_customer');
+      return s ? JSON.parse(s) : null;
+    } catch { return null; }
+  });
   const [loading,        setLoading]        = useState(false);
   const [error,          setError]          = useState(null);
 
@@ -1865,7 +1861,7 @@ const CustomerDatabase = () => {
 
   // ── Filters ───────────────────────────────────────────────────────
   const [searchTerm,    setSearchTerm]    = useState('');
-  const [selectedGroup, setSelectedGroup] = useState('All');
+  const [selectedGroup, _setSelectedGroup] = useState('All'); // eslint-disable-line no-unused-vars
   const [selectedStatus,setSelectedStatus]= useState('All');
   const [dateFrom,      setDateFrom]       = useState('');
   const [dateTo,        setDateTo]         = useState('');
@@ -1893,6 +1889,7 @@ const CustomerDatabase = () => {
   const [quickObForm, setQuickObForm] = useState({ title: '', poNumber: '', poDate: '', deliveryDate: '', totalValue: '', notes: '', status: 'Draft' });
   const [quickObLoading, setQuickObLoading] = useState(false);
 
+  // eslint-disable-next-line no-unused-vars
   const openQuickOb = (e, customer) => {
     e.stopPropagation();
     setQuickObCustomer(customer);
@@ -1902,7 +1899,7 @@ const CustomerDatabase = () => {
   const closeQuickOb = () => { setQuickObCustomer(null); };
 
   const submitQuickOb = async () => {
-    if (!quickObForm.title.trim()) { showError('Order title is required'); return; }
+    if (!quickObForm.title.trim()) { showWarning('Order title is required'); return; }
     setQuickObLoading(true);
     try {
       await fetchWithHeaders(`${API_BASE_URL}/order-book/create`, {
@@ -2097,16 +2094,22 @@ useEffect(() => {
 
   // ── CRUD ──────────────────────────────────────────────────────────
   const handleViewCustomer = async (customer) => {
-    if (!canView) { showError('No view permission'); return; }
+    if (!canView) { showWarning('No view permission'); return; }
     try {
       const data = await fetchWithHeaders(`${API_BASE_URL}/customers/${customer.id}`);
-      if (data.success) setDetailCustomer(data.data);
+      if (data.success) {
+        setDetailCustomer(data.data);
+        localStorage.setItem('cust_detail_customer', JSON.stringify(data.data));
+        localStorage.removeItem('cust_detail_tab');
+      }
     } catch (err) { showError(err.message || 'Error fetching customer details'); }
   };
 
   const handleEdit = (customer) => {
-    if (!canEdit) { showError('No edit permission'); return; }
+    if (!canEdit) { showWarning('No edit permission'); return; }
     setDetailCustomer(null);
+    localStorage.removeItem('cust_detail_customer');
+    localStorage.removeItem('cust_detail_tab');
     setFormData({
       id: customer.id, name: customer.name, companyName: customer.companyName||'',
       groupName: customer.groupName||'', subGroupName: customer.subGroupName||'',
@@ -2122,7 +2125,7 @@ useEffect(() => {
   };
 
   const handleDeleteClick = (customerId, customerName) => {
-    if (!canDelete) { showError('No delete permission'); return; }
+    if (!canDelete) { showWarning('No delete permission'); return; }
     setDeleteCustomerId(customerId); setDeleteCustomerName(customerName); setShowDeleteModal(true);
   };
 
@@ -2142,7 +2145,7 @@ useEffect(() => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (formData.phone.length !== 10) { setPhoneError('Phone must be exactly 10 digits'); return; }
-    if (formData.pan && formData.pan.length !== 10) { showError('PAN must be exactly 10 characters'); return; }
+    if (formData.pan && formData.pan.length !== 10) { showWarning('PAN must be exactly 10 characters'); return; }
     setLoading(true);
     try {
       if (formData.id) {
@@ -2157,7 +2160,12 @@ useEffect(() => {
   };
 
   const resetForm = () => {
-    setFormData({ name:'', companyName:'', groupName:'', subGroupName:'', contactPerson:'', designation:'', email:'', phone:'', altPhone:'', website:'', gstNumber:'', pan:'', address:'', city:'', state:'', pincode:'', status:'Active', assignedTo: null });
+    // Pre-seed group/subgroup from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    setFormData({ name:'', companyName:'', groupName:seedGroup, subGroupName:seedSubGroup, contactPerson:'', designation:'', email:'', phone:'', altPhone:'', website:'', gstNumber:'', pan:'', address:'', city:'', state:'', pincode:'', status:'Active', assignedTo: null });
+    // Load subgroups for seeded group
+    if (seedGroup) fetchSubGroupsForForm(seedGroup);
     setPhoneError('');
   };
 
@@ -2271,7 +2279,11 @@ useEffect(() => {
           customer={detailCustomer}
           currentUser={currentUser}
           permissions={permissions}
-          onBack={() => setDetailCustomer(null)}
+          onBack={() => {
+            setDetailCustomer(null);
+            localStorage.removeItem('cust_detail_customer');
+            localStorage.removeItem('cust_detail_tab');
+          }}
           onEdit={c => { setDetailCustomer(null); handleEdit(c); }}
           showSuccess={showSuccess}
           showError={showError}
@@ -2321,17 +2333,7 @@ useEffect(() => {
           <input type="text" placeholder="Search by name, company, phone, email, GST..." className="cust-search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)}/>
         </div>
         <div className="cust-filters">
-          <select className="cust-filter-select" value={selectedGroup} onChange={e => { setSelectedGroup(e.target.value); setCurrentPage(1); }}>
-            <option value="All">All Groups</option>
-            <option value="CCMS">CCMS</option><option value="Solar">Solar</option>
-            <option value="EPC">EPC</option><option value="IoT">IoT</option>
-            <option value="Hybrid">Hybrid</option><option value="Others">Others</option>
-          </select>
-          <select className="cust-filter-select" value={selectedStatus} onChange={e => { setSelectedStatus(e.target.value); setCurrentPage(1); }}>
-            <option value="All">All Status</option>
-            <option value="Active">Active</option><option value="Inactive">Inactive</option>
-            <option value="Prospect">Prospect</option><option value="Lead">Lead</option>
-          </select>
+          <FilterSelect value={selectedStatus} options={[{value:'All',label:'All Status'},...['Active','Inactive','Prospect','Lead'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>{setSelectedStatus(v);setCurrentPage(1);}} />
           <ClientsDateRangeFilter
             appliedFrom={dateFrom}
             appliedTo={dateTo}
@@ -2345,7 +2347,7 @@ useEffect(() => {
             Export
           </button>
           <button className={`cust-btn cust-btn-primary ${!canCreate?'cust-btn-disabled':''}`}
-            onClick={() => { if(canCreate){ resetForm(); fetchUsers(); setIsAddFormOpen(true); } else showError('No create permission'); }}
+            onClick={() => { if(canCreate){ resetForm(); fetchUsers(); setIsAddFormOpen(true); } else showWarning('No create permission'); }}
             disabled={!canCreate}
           >
             <svg className="cust-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4"/></svg>
@@ -2538,10 +2540,7 @@ useEffect(() => {
                 </div>
                 <div>
                   <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Status</label>
-                  <select className="cust-form-input" value={quickObForm.status} onChange={e => setQuickObForm(f=>({...f,status:e.target.value}))}>
-                    <option>Draft</option><option>Confirmed</option><option>In Production</option>
-                    <option>Ready for Dispatch</option><option>Dispatched</option><option>Completed</option><option>Cancelled</option>
-                  </select>
+                  <FilterSelect value={quickObForm.status} options={['Draft','Confirmed','In Production','Ready for Dispatch','Dispatched','Completed','Cancelled'].map(s=>({value:s,label:s}))} placeholder="Status" onChange={v=>setQuickObForm(f=>({...f,status:v}))} />
                 </div>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
@@ -2556,7 +2555,7 @@ useEffect(() => {
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Total Value (₹)</label>
-                <input type="number" className="cust-form-input" placeholder="0.00" value={quickObForm.totalValue} onChange={e => setQuickObForm(f=>({...f,totalValue:e.target.value}))}/>
+                <input type="text" className="cust-form-input" placeholder="e.g. 5,00,000" value={toINR(quickObForm.totalValue)} onChange={e => setQuickObForm(f=>({...f,totalValue:e.target.value.replace(/[^0-9]/g,'')}))}/>
               </div>
               <div>
                 <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Notes</label>
@@ -2658,23 +2657,15 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
         </div>
         <div className="cust-form-group">
           <label>Group</label>
-          <select value={formData.groupName} onChange={e => setFormData({...formData, groupName: e.target.value, subGroupName:''})}>
-            <option value="">Select Group</option>
-            {groups.map((g,i) => <option key={g.value||i} value={g.value||g.label}>{g.label||g.value}</option>)}
-          </select>
+          <FilterSelect value={formData.groupName} options={groups.map(g=>({value:g.value||g.label,label:g.label||g.value}))} placeholder="Select Group" onChange={v=>setFormData({...formData,groupName:v,subGroupName:''})} />
         </div>
         <div className="cust-form-group">
           <label>Category / Sub-Group</label>
-          <select value={formData.subGroupName} onChange={e => setFormData({...formData, subGroupName: e.target.value})} disabled={!formData.groupName}>
-            <option value="">Select Category</option>
-            {subGroups.map((s,i) => <option key={s.value||i} value={s.value||s.label}>{s.label||s.value}</option>)}
-          </select>
+          <FilterSelect value={formData.subGroupName} options={subGroups.map(s=>({value:s.value||s.label,label:s.label||s.value}))} placeholder={!formData.groupName?'Select Group First':'Select Category'} disabled={!formData.groupName} onChange={v=>setFormData({...formData,subGroupName:v})} />
         </div>
         <div className="cust-form-group">
           <label>Status</label>
-          <select value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-            <option>Active</option><option>Inactive</option><option>Prospect</option><option>Lead</option>
-          </select>
+          <FilterSelect value={formData.status} options={['Active','Inactive','Prospect','Lead'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>setFormData({...formData,status:v})} />
         </div>
         <div className="cust-form-group">
           <label>Contact Person</label>
@@ -2721,10 +2712,7 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
         </div>
         <div className="cust-form-group">
           <label>Assign To</label>
-          <select value={formData.assignedTo||''} onChange={e => setFormData({...formData, assignedTo: e.target.value ? Number(e.target.value) : null})}>
-            <option value="">Select Member</option>
-            {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-          </select>
+          <FilterSelect value={formData.assignedTo?String(formData.assignedTo):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select Member" onChange={v=>setFormData({...formData,assignedTo:v?Number(v):null})} />
         </div>
       </div>
       <div className="cust-form-group">

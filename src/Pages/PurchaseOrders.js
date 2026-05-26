@@ -283,12 +283,11 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
 const DEFAULT_COLUMNS = [
   { id: 'sNo',              label: 'S.No',               sortable: false, visible: true,  fixed: true  },
   { id: 'poRefId',          label: 'PO REF ID',          sortable: false, visible: true  },
-  { id: 'vendorId',         label: 'Vendor ID',          sortable: false, visible: true },
-  { id: 'vendorName',       label: 'Vendor Name',        sortable: true,  visible: true },
+  { id: 'vendor',           label: 'Vendor',             sortable: true,  visible: true },
   { id: 'orderDate',        label: 'Order Date',         sortable: true,  visible: true },
   { id: 'totalValue',       label: 'Total Value',        sortable: true,  visible: true },
   { id: 'deliveryProgress', label: 'Delivery Progress',  sortable: false, visible: true },
-  { id: 'paymentStatus',    label: 'Payment Status',     sortable: true,  visible: true },
+  { id: 'paymentStatus',    label: 'Payment Status',     sortable: true,  visible: false },
   { id: 'status',           label: 'Status',             sortable: true,  visible: true },
   { id: 'group',            label: 'Group',              sortable: false, visible: false },
   { id: 'category',         label: 'Category',           sortable: false, visible: false },
@@ -402,7 +401,7 @@ const PurchaseOrders = () => {
   const canDelete  = !hasPerms ? (isSuperAdmin || isAdmin) : poPerms.includes('DELETE');
   const canApprove = !hasPerms ? isFullAccess : poPerms.includes('APPROVE') || isFullAccess;
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingPOId, setEditingPOId] = useState(null);
@@ -872,13 +871,13 @@ const PurchaseOrders = () => {
   });
 
   const handleSkipQuotationLoadOrderBook = () => {
-    if (orderBookItems.length === 0) { showError('No order book items available'); return; }
+    if (orderBookItems.length === 0) { showWarning('No order book items available'); return; }
     setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: poItems }));
     setItemsStepUnlocked(true);
     showSuccess(`Loaded ${poItems.length} items from order book`);
   };
   const handleLoadOrderBookItems = () => {
-    if (orderBookItems.length === 0) { showError('No order book items available'); return; }
+    if (orderBookItems.length === 0) { showWarning('No order book items available'); return; }
     setCreatePOFormData(prev => ({ ...prev, quotationId: '', quotation: null, items: poItems }));
     setItemsStepUnlocked(true);
     showSuccess(`Loaded ${poItems.length} items from order book for new vendor`);
@@ -929,9 +928,9 @@ const PurchaseOrders = () => {
     showSuccess('Item removed');
   };
   const handleAddManualItem = () => {
-    if (!newItem.itemName?.trim()) { showError('Item name is required'); return; }
-    if (newItem.quantity <= 0) { showError('Quantity must be > 0'); return; }
-    if (newItem.unitPrice <= 0) { showError('Unit price must be > 0'); return; }
+    if (!newItem.itemName?.trim()) { showWarning('Item name is required'); return; }
+    if (newItem.quantity <= 0) { showWarning('Quantity must be > 0'); return; }
+    if (newItem.unitPrice <= 0) { showWarning('Unit price must be > 0'); return; }
     const base = newItem.quantity * newItem.unitPrice;
     const disc = base * (newItem.discount / 100);
     const tax  = (base - disc) * (newItem.gst / 100);
@@ -954,7 +953,7 @@ const PurchaseOrders = () => {
     // Enforce max from quotation OR from orderBook remaining qty
     const maxQty = item.quotedQuantity || item.remainingQty;
     if (maxQty && qty > maxQty) {
-      showError(`Quantity cannot exceed ${maxQty} (${item.remainingQty != null ? 'remaining from order book' : 'quoted quantity'})`);
+      showWarning(`Quantity cannot exceed ${maxQty} (${item.remainingQty != null ? 'remaining from order book' : 'quoted quantity'})`);
       return;
     }
     item.quantity = qty;
@@ -1129,8 +1128,8 @@ const PurchaseOrders = () => {
   };
 
   const handleMarkDelivered = async () => {
-    if (!deliveryFormData || deliveryFormData.newDeliveryQty <= 0) { showError('Please enter a valid delivery quantity'); return; }
-    if (deliveryFormData.newDeliveryQty > deliveryFormData.pendingQty) { showError('Delivery quantity cannot exceed pending quantity'); return; }
+    if (!deliveryFormData || deliveryFormData.newDeliveryQty <= 0) { showWarning('Please enter a valid delivery quantity'); return; }
+    if (deliveryFormData.newDeliveryQty > deliveryFormData.pendingQty) { showWarning('Delivery quantity cannot exceed pending quantity'); return; }
     const confirmed = await showConfirmation({ title: 'Confirm Delivery', message: `Record delivery of ${deliveryFormData.newDeliveryQty} units for ${deliveryFormData.itemName}?`, type: 'confirm', confirmText: 'Confirm Delivery', cancelText: 'Cancel' });
     if (!confirmed) return;
     setLoading(true);
@@ -1150,13 +1149,28 @@ const PurchaseOrders = () => {
 
   const handleOpenCreatePO = () => {
     setIsEditMode(false); setEditingPOId(null);
-    setModalGroupName(''); setModalSubGroupName(''); setModalProjectId('');
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
+    // Pre-seed project assignment from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
+    setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]); setOrderBookItems([]);
     setCustomVendorCategory(''); setCustomVendorType('');
     setItemsStepUnlocked(false);
     fetchModalGroups(); fetchVendors(); setShowCreatePOModal(true);
+    // Load cascading dropdowns for seeded values
+    if (seedGroup) {
+      fetchModalSubGroups(seedGroup);
+      if (seedSubGroup) {
+        fetchModalProjects(seedGroup, seedSubGroup);
+        if (seedProject) {
+          fetchFilteredQuotations(seedGroup, seedSubGroup, seedProject);
+          fetchVendors(seedGroup, seedSubGroup, seedProject);
+        }
+      }
+    }
   };
 
   const handleCloseCreatePOModal = () => {
@@ -1179,9 +1193,9 @@ const PurchaseOrders = () => {
     const file = e.target.files[0];
     if (!file) return;
     const MAX = 10 * 1024 * 1024; // 10 MB
-    if (file.size > MAX) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+    if (file.size > MAX) { showWarning('File size must not exceed 10 MB'); e.target.value = ''; return; }
     const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
-    if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+    if (!allowed.includes(file.type)) { showWarning('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
     setPoFileUpload(file);
   };
 
@@ -1248,20 +1262,20 @@ const PurchaseOrders = () => {
   };
 
   const handleCreatePO = async () => {
-    if (!modalGroupName) { showError('Please select a group'); return; }
-    if (!createPOFormData.vendorId && !showNewVendorForm) { showError('Please select a vendor or add a new vendor'); return; }
+    if (!modalGroupName) { showWarning('Please select a group'); return; }
+    if (!createPOFormData.vendorId && !showNewVendorForm) { showWarning('Please select a vendor or add a new vendor'); return; }
     if (showNewVendorForm) {
-      if (!createPOFormData.vendorName?.trim()) { showError('Vendor name is required'); return; }
+      if (!createPOFormData.vendorName?.trim()) { showWarning('Vendor name is required'); return; }
       const resolvedCategory = createPOFormData.vendorCategory === 'Other' ? customVendorCategory?.trim() : createPOFormData.vendorCategory;
       const resolvedType     = createPOFormData.vendorType     === 'Other' ? customVendorType?.trim()     : createPOFormData.vendorType;
-      if (!resolvedCategory) { showError('Vendor category is required'); return; }
-      if (!resolvedType)     { showError('Vendor type is required'); return; }
+      if (!resolvedCategory) { showWarning('Vendor category is required'); return; }
+      if (!resolvedType)     { showWarning('Vendor type is required'); return; }
     }
     const selectedItems = createPOFormData.items.filter(i => i.selected);
-    if (selectedItems.length === 0) { showError('Please select at least one item'); return; }
-    if (!selectedItems.every(i => i.quantity && parseFloat(i.quantity) > 0)) { showError('All selected items must have quantity > 0'); return; }
-    if (selectedItems.some(i => !i.unitPrice || parseFloat(i.unitPrice) === 0)) { showError('Please enter unit price for all selected items'); return; }
-    if (!createPOFormData.expectedDelivery) { showError('Expected delivery date is required'); return; }
+    if (selectedItems.length === 0) { showWarning('Please select at least one item'); return; }
+    if (!selectedItems.every(i => i.quantity && parseFloat(i.quantity) > 0)) { showWarning('All selected items must have quantity > 0'); return; }
+    if (selectedItems.some(i => !i.unitPrice || parseFloat(i.unitPrice) === 0)) { showWarning('Please enter unit price for all selected items'); return; }
+    if (!createPOFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
     setLoading(true);
     try {
       const poItems = selectedItems.map(({ itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
@@ -1323,6 +1337,7 @@ const PurchaseOrders = () => {
 
   // ─── Formatters ────────────────────────────────────────────────────────────
   const formatCurrency = (amount) => !amount ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
+  const formatQty = (val) => { const n = typeof val === 'number' ? val : parseFloat(val); if (isNaN(n)) return val ?? ''; return n % 1 === 0 ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { maximumFractionDigits: 3 }); };
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const s = String(dateStr);
@@ -1352,10 +1367,13 @@ const PurchaseOrders = () => {
         return <td key={col.id} className="purchase-orders-table-id">{po.poRefId || po.poNo}</td>;
       case 'poRefId':
         return <td key={col.id}>{po.poRefId || '—'}</td>;
-      case 'vendorId':
-        return <td key={col.id}><button className="vendor-link" onClick={() => handleViewVendorPOs(po.vendorId)}>{po.vendorName || `Vendor #${po.vendorId}`}</button></td>;
-      case 'vendorName':
-        return <td key={col.id}>{po.vendorName || (po.vendorId ? `Vendor #${po.vendorId}` : '—')}</td>;
+      case 'vendor':
+        return (
+          <td key={col.id}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{po.vendorName || '—'}</div>
+            {po.vendorCode && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{po.vendorCode}</div>}
+          </td>
+        );
       case 'orderDate':
         return <td key={col.id}>{formatDate(po.orderDate)}</td>;
       case 'totalValue':
@@ -1479,7 +1497,7 @@ const PurchaseOrders = () => {
       const data = await res.json();
       const allPOs = data.purchaseOrders || [];
       const pNames = data.projectNames || {};
-      if (allPOs.length === 0) { showError('No purchase orders found to export.'); return; }
+      if (allPOs.length === 0) { showWarning('No purchase orders found to export.'); return; }
 
       const EXPORT_COLS = [
         { key: 'poNo',            label: 'PO Number'              },
@@ -1605,25 +1623,35 @@ const PurchaseOrders = () => {
       {/* Action Bar */}
       <div className="purchase-orders-action-bar">
         <div className="purchase-orders-search-filters">
-          <input type="text" placeholder="Search by PO Number, RFQ ID, Vendor Name..." className="purchase-orders-search" value={filters.search}
+          <input type="text" placeholder="Search by PO No, PO Ref ID, RFQ ID, Vendor Name..." className="purchase-orders-search" value={filters.search}
             onChange={(e) => { setFilters(prev => ({ ...prev, search: e.target.value })); setCurrentPage(0); }} />
-          <select className="purchase-orders-filter" value={filters.status}
-            onChange={(e) => { setFilters(prev => ({ ...prev, status: e.target.value })); setCurrentPage(0); }}>
-            <option value="all">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Approved">Approved</option>
-            <option value="Ordered">Ordered</option>
-            <option value="In-Transit">In Transit</option>
-            <option value="Delivered">Delivered</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-          <select className="purchase-orders-filter" value={filters.paymentStatus}
-            onChange={(e) => { setFilters(prev => ({ ...prev, paymentStatus: e.target.value })); setCurrentPage(0); }}>
-            <option value="all">All Payment Status</option>
-            <option value="Pending">Pending</option>
-            <option value="Partially Paid">Partially Paid</option>
-            <option value="Paid">Paid</option>
-          </select>
+          <div className="po-filter-select-wrap">
+            <FilterSelect
+              value={filters.status === 'all' ? '' : filters.status}
+              options={[
+                { value: 'Draft',      label: 'Draft'      },
+                { value: 'Approved',   label: 'Approved'   },
+                { value: 'Ordered',    label: 'Ordered'    },
+                { value: 'In-Transit', label: 'In Transit' },
+                { value: 'Delivered',  label: 'Delivered'  },
+                { value: 'Cancelled',  label: 'Cancelled'  },
+              ]}
+              placeholder="All Status"
+              onChange={(v) => { setFilters(prev => ({ ...prev, status: v || 'all' })); setCurrentPage(0); }}
+            />
+          </div>
+          <div className="po-filter-select-wrap">
+            <FilterSelect
+              value={filters.paymentStatus === 'all' ? '' : filters.paymentStatus}
+              options={[
+                { value: 'Pending',        label: 'Pending'        },
+                { value: 'Partially Paid', label: 'Partially Paid' },
+                { value: 'Paid',           label: 'Paid'           },
+              ]}
+              placeholder="All Payment Status"
+              onChange={(v) => { setFilters(prev => ({ ...prev, paymentStatus: v || 'all' })); setCurrentPage(0); }}
+            />
+          </div>
           {/* Order Date range filter — like Leads page */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Order Date:</span>
@@ -1856,9 +1884,9 @@ const PurchaseOrders = () => {
                           onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
-                            if (file.size > 10 * 1024 * 1024) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+                            if (file.size > 10 * 1024 * 1024) { showWarning('File size must not exceed 10 MB'); e.target.value = ''; return; }
                             const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
-                            if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+                            if (!allowed.includes(file.type)) { showWarning('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
                             setPoFileUploading(true);
                             try {
                               const fd = new FormData();
@@ -1894,9 +1922,9 @@ const PurchaseOrders = () => {
                           onChange={async (e) => {
                             const file = e.target.files[0];
                             if (!file) return;
-                            if (file.size > 10 * 1024 * 1024) { showError('File size must not exceed 10 MB'); e.target.value = ''; return; }
+                            if (file.size > 10 * 1024 * 1024) { showWarning('File size must not exceed 10 MB'); e.target.value = ''; return; }
                             const allowed = ['application/pdf', 'image/png', 'image/jpg', 'image/jpeg'];
-                            if (!allowed.includes(file.type)) { showError('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
+                            if (!allowed.includes(file.type)) { showWarning('Only PDF, PNG, JPG files are allowed'); e.target.value = ''; return; }
                             setPoFileUploading(true);
                             try {
                               const fd = new FormData();
@@ -1954,10 +1982,10 @@ const PurchaseOrders = () => {
                           <div style={{fontWeight:500}}>{item.itemName}</div>
                           {item.description && <div style={{fontSize:11,color:'#6b7280',marginTop:2}}>{item.description}</div>}
                         </td>
-                        <td>{item.quantity}</td>
-                        <td className="delivered-qty">{item.deliveredQty ?? 0}</td>
+                        <td>{formatQty(item.quantity)}</td>
+                        <td className="delivered-qty">{formatQty(item.deliveredQty ?? 0)}</td>
                         <td className="pending-qty" style={{color: (item.pendingQty ?? 0) > 0 ? '#dc2626' : '#374151'}}>
-                          {item.pendingQty ?? 0}
+                          {formatQty(item.pendingQty ?? 0)}
                         </td>
                         <td>{formatCurrency(item.unitPrice)}</td>
                         <td>{item.taxPercent != null ? `${item.taxPercent}%` : '—'}</td>

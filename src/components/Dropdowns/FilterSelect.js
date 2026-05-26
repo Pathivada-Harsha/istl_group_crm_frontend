@@ -102,14 +102,16 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
       }}
       role="listbox"
     >
-      {/* Placeholder row */}
+      {/* Placeholder row — always shown so user can always clear the selection.
+           When no value: shown as the active "empty" label (e.g. "Select Group").
+           When a value is set: shown as a clear/reset option at top of list. */}
       <li
-        className="filter-dropdown-item filter-dropdown-item--placeholder"
+        className={`filter-dropdown-item filter-dropdown-item--placeholder${!value ? ' filter-dropdown-item--placeholder-active' : ''}`}
         onMouseDown={(e) => { e.preventDefault(); handleSelect(''); }}
         role="option"
         aria-selected={!value}
       >
-        {placeholder}
+        {value ? `— Clear selection —` : placeholder}
       </li>
 
       {options.map(opt => {

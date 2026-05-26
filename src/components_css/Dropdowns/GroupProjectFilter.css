@@ -201,7 +201,14 @@
 
 .filter-dropdown-item--placeholder:hover {
   background-color: #f8fafc;
-  color: #94a3b8;
+  color: #64748b;
+}
+
+/* When no value is selected, placeholder is the "active" empty row */
+.filter-dropdown-item--placeholder-active {
+  color: #3b82f6;
+  font-style: normal;
+  font-weight: 500;
 }
 
 /* Error */

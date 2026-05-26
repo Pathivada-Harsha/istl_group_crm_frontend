@@ -90,7 +90,7 @@
 .purchase-orders-action-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   margin-bottom: 20px;
   gap: 12px;
   flex-wrap: wrap;
@@ -98,21 +98,24 @@
 
 .purchase-orders-search-filters {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex: 1 1 0;
   flex-wrap: wrap;
   min-width: 0;
+  align-items: center;
 }
 
 .purchase-orders-search {
   flex: 1 1 220px;
   min-width: 200px;
-  padding: 10px 16px;
-  border: 1px solid #e2e8f0;
+  height: 36px;
+  padding: 0 14px;
+  border: 1.5px solid #e2e8f0;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 13px;
   background-color: white;
   transition: all 0.2s;
+  box-sizing: border-box;
 }
 
 .purchase-orders-search:focus {
@@ -2359,4 +2362,36 @@
 .po-ob-clear-btn--fs:hover {
   color: #dc2626;
   background: #fee2e2;
+}
+/* ── FilterSelect wrappers in PO filter bar ─────────────────────────────── */
+/* ── PO filter bar: Status & Payment Status FilterSelect ──────────────── */
+.po-filter-select-wrap {
+  flex-shrink: 0;
+}
+.po-filter-select-wrap .filter-trigger {
+  width: 136px;
+  height: 36px;
+  font-size: 12px;
+  padding: 0 28px 0 10px;
+}
+.po-filter-select-wrap .filter-trigger__text {
+  font-size: 12px;
+}
+.po-filter-select-wrap .filter-trigger__text--placeholder {
+  font-size: 11px;
+}
+.po-filter-select-wrap .filter-dropdown-list {
+  min-width: 136px;
+  font-size: 12px;
+}
+.po-filter-select-wrap .filter-dropdown-item {
+  font-size: 12px;
+  padding: 7px 12px;
+}
+/* Date filter label aligned with row */
+.po-order-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
 }
