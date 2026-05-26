@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Eye, Edit2, Trash2, Download, DollarSign, IndianRupee, Settings, GripVertical,
-  ChevronUp, ChevronDown, ChevronsUpDown, Link2, RefreshCw
+  ChevronUp, ChevronDown, ChevronsUpDown, Link2, RefreshCw,
+  CreditCard, CheckCircle, AlertCircle
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import GroupProjectFilter from './../components/Dropdowns/GroupProjectFilter.js';
@@ -160,9 +161,10 @@ const SortIcon = ({ columnId, sortConfig }) => {
 
 export default function VendorPaymentsPage() {
   const [advances, setAdvances] = useState([]);
+  const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user } = useAuth();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const { confirmModal, showConfirmation } = useConfirmationModal();
 
@@ -284,7 +286,7 @@ export default function VendorPaymentsPage() {
         });
         if (!res.ok) throw new Error();
         const d = await res.json();
-        setAdvances(d.advances || []); setTotalPages(d.totalPages || 0); setTotalElements(d.totalElements || 0);
+        setAdvances(d.advances || []); setProjectNames(d.projectNames || {}); setTotalPages(d.totalPages || 0); setTotalElements(d.totalElements || 0);
       } catch (error) {
         if (error.name === 'AbortError') return;
         showError('Failed to load payments');
@@ -477,17 +479,17 @@ export default function VendorPaymentsPage() {
   };
 
   const handleSaveAdvance = async () => {
-    if(!formData.vendorId){showError('Please select a vendor');return;}
+    if(!formData.vendorId){showWarning('Please select a vendor');return;}
     const parsedAdvAmount = parseFloat(formData.amount);
-    if(!parsedAdvAmount||parsedAdvAmount<=0){showError('Amount must be greater than zero');return;}
-    if(formData.paymentType==='BILL_PAYMENT'&&!formData.billId){showError('Please select a bill');return;}
+    if(!parsedAdvAmount||parsedAdvAmount<=0){showWarning('Amount must be greater than zero');return;}
+    if(formData.paymentType==='BILL_PAYMENT'&&!formData.billId){showWarning('Please select a bill');return;}
     // Validate against bill balance for BILL_PAYMENT
     if(formData.paymentType==='BILL_PAYMENT'&&formData.billId){
       const selectedBill = unpaidBills.find(b=>b.id===formData.billId);
       if(selectedBill){
         const billBalance = parseFloat(selectedBill.balanceAmount||0);
         if(parsedAdvAmount > billBalance + 0.005){
-          showError(`Amount cannot exceed ${fmtFull(billBalance)}`);
+          showWarning(`Amount cannot exceed ${fmtFull(billBalance)}`);
           return;
         }
       }
@@ -520,9 +522,9 @@ export default function VendorPaymentsPage() {
     if(isNaN(amount)||amount<0) return;
     const bill = unpaidBills.find(b=>b.id===billId);
     if(!bill) return;
-    if(amount>parseFloat(bill.balanceAmount)){showError(`Cannot exceed bill balance of ${fmt(bill.balanceAmount)}`);return;}
+    if(amount>parseFloat(bill.balanceAmount)){showWarning(`Cannot exceed bill balance of ${fmt(bill.balanceAmount)}`);return;}
     const others = adjustData.billAllocations.filter(a=>a.billId!==billId).reduce((s,a)=>s+parseFloat(a.amount||0),0);
-    if(others+amount>adjustData.availableAmount){showError('Exceeds available advance amount');return;}
+    if(others+amount>adjustData.availableAmount){showWarning('Exceeds available advance amount');return;}
     let arr=[...adjustData.billAllocations];
     const idx=arr.findIndex(a=>a.billId===billId);
     if(amount===0){if(idx>=0) arr.splice(idx,1);}
@@ -532,7 +534,7 @@ export default function VendorPaymentsPage() {
 
   const handleSaveAdjustment = async () => {
     const allocations=adjustData.billAllocations.filter(a=>a.amount>0);
-    if(!allocations.length){showError('Please allocate to at least one bill');return;}
+    if(!allocations.length){showWarning('Please allocate to at least one bill');return;}
     setLoading(true);
     try{
       const res=await fetch(`${API_BASE_URL}/vendor-advances/${adjustData.advanceId}/allocate`,{
@@ -610,15 +612,15 @@ export default function VendorPaymentsPage() {
       // Use a small epsilon (0.005) to absorb floating-point rounding differences
       // so a user entering the displayed rounded value doesn't get a false error.
       if(parsedAmount > restoredBalance + 0.005){
-        showError(`Amount cannot exceed ${fmtFull(restoredBalance)} (bill balance + your existing payment)`);
+        showWarning(`Amount cannot exceed ${fmtFull(restoredBalance)} (bill balance + your existing payment)`);
         return;
       }
     }
 
     // Project change only applies to ADVANCE type
     if(!isBillPayment){
-      if(!editProjectGroupName){showError('Please select a group');return;}
-      if(!editProjectId){showError('Please select a project');return;}
+      if(!editProjectGroupName){showWarning('Please select a group');return;}
+      if(!editProjectId){showWarning('Please select a project');return;}
     }
 
     const projectChanged = !isBillPayment && (
@@ -727,26 +729,45 @@ export default function VendorPaymentsPage() {
     const s=v.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:10});
     return `₹${s}`;
   };
-  const fmtD =(d)=>{if(!d)return'';return new Date(d).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric'});};
-  const fmtDT=(d)=>{if(!d)return'';return new Date(d).toLocaleDateString('en-IN',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});};
+  const fmtD =(d)=>{if(!d)return'';const s=String(d);if(s.length>=10&&s[4]==='-'){const[y,m,dy]=s.slice(0,10).split('-');return`${dy}-${m}-${y}`;}const dt=new Date(d);return`${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`;};
+  const fmtDT=(d)=>{if(!d)return'';const s=String(d);let dd,mm,yy;if(s.length>=10&&s[4]==='-'){const[y,m,dy]=s.slice(0,10).split('-');dd=dy;mm=m;yy=y;}else{const dt=new Date(d);dd=String(dt.getDate()).padStart(2,'0');mm=String(dt.getMonth()+1).padStart(2,'0');yy=dt.getFullYear();}const t=new Date(d);return`${dd}-${mm}-${yy} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`;};
 
   const TYPE_BADGE = { 'ADVANCE':'vp-type-advance', 'BILL_PAYMENT':'vp-type-bill' };
 
   // ── render column ─────────────────────────────────────────────────────────
   const renderCell = (col, adv) => {
+    const dash = <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>;
     switch(col.id){
-      case 'advanceNo':   return <td className="vp-advance-no">{adv.advanceNo}</td>;
-      case 'advanceDate': return <td>{fmtD(adv.advanceDate)}</td>;
-      case 'vendor':      return <td>{adv.vendorName}</td>;
+      case 'advanceNo':   return <td className="vp-advance-no">{adv.advanceNo || dash}</td>;
+      case 'advanceDate': return <td>{adv.advanceDate ? fmtD(adv.advanceDate) : dash}</td>;
+      case 'vendor':      return <td>{adv.vendorName || dash}</td>;
       case 'paymentType': return <td><span className={`vp-badge ${TYPE_BADGE[adv.paymentType]||''}`}>{adv.paymentType==='ADVANCE'?'Advance':'Bill Payment'}</span></td>;
-      case 'amount':      return <td className="vp-amount">{fmt(adv.amount)}</td>;
-      case 'applied':     return <td className="text-success">{fmt(adv.appliedAmount)}</td>;
-      case 'unapplied':   return <td className="text-warning">{fmt(adv.unappliedAmount)}</td>;
-      case 'paymentMode': return <td>{adv.paymentMode||'—'}</td>;
-      case 'reference':   return <td>{adv.transactionReference||'—'}</td>;
-      case 'group':       return <td>{adv.groupName||'—'}</td>;
-      case 'category':    return <td>{adv.category||'—'}</td>;
-      case 'project':     return <td>{adv.projectId||'—'}</td>;
+      case 'amount':      return <td className="vp-amount">{adv.amount != null ? fmt(adv.amount) : dash}</td>;
+      case 'applied':     return <td className="text-success">{adv.appliedAmount != null ? fmt(adv.appliedAmount) : dash}</td>;
+      case 'unapplied':   return <td className="text-warning">{adv.unappliedAmount != null ? fmt(adv.unappliedAmount) : dash}</td>;
+      case 'paymentMode': return <td>{adv.paymentMode || dash}</td>;
+      case 'reference':   return <td>{adv.transactionReference || dash}</td>;
+      case 'group':       return <td>{adv.groupName || dash}</td>;
+      case 'category':    return <td>{adv.category || dash}</td>;
+      case 'project': {
+        const pName = projectNames[adv.projectId];
+        return (
+          <td style={{ minWidth: 180 }}>
+            {adv.projectId ? (
+              <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                <span style={{ fontWeight:600, fontSize:12, color:'#1e293b', whiteSpace:'nowrap' }}>
+                  {pName || adv.projectId}
+                </span>
+                {pName && (
+                  <span style={{ fontSize:11, color:'#64748b', fontWeight:400, whiteSpace:'nowrap' }}>
+                    {adv.projectId}
+                  </span>
+                )}
+              </div>
+            ) : dash}
+          </td>
+        );
+      }
       case 'actions':     return (
         <td>
           <div className="receipt-action-buttons">
@@ -784,8 +805,21 @@ export default function VendorPaymentsPage() {
       {/* Action bar */}
       <div className="receipts-page-action-bar">
         <div className="receipts-page-search-filters">
-          <input type="text" className="receipts-page-search" placeholder="Search by Advance No, Vendor Name..."
-            value={filters.search} onChange={e=>{setFilters(f=>({...f,search:e.target.value}));setCurrentPage(0);}}/>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200, display: 'flex' }}>
+            <input type="text" className="receipts-page-search" placeholder="Search by Advance No, Vendor Name..."
+              style={{ flex: 1, paddingRight: filters.search ? 30 : 12 }}
+              value={filters.search} onChange={e=>{setFilters(f=>({...f,search:e.target.value}));setCurrentPage(0);}}/>
+            {filters.search && (
+              <button type="button"
+                onClick={()=>{setFilters(f=>({...f,search:''}));setCurrentPage(0);}}
+                className="search-clear-btn"
+                title="Clear search">
+                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            )}
+          </div>
           <select className="receipts-page-filter" value={filters.paymentType}
             onChange={e=>{setFilters(f=>({...f,paymentType:e.target.value}));setCurrentPage(0);}}>
             <option value="all">All Types</option>
@@ -852,13 +886,37 @@ export default function VendorPaymentsPage() {
         </div>
       )}
 
-      {/* Stats */}
+      {/* Stats — same card structure as Bills tab for consistent dimensions */}
       {stats&&(
-        <div className="receipts-page-stats">
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL PAYMENTS</div><div className="receipts-page-stat-value">{stats.totalAdvances||0}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL AMOUNT</div><div className="receipts-page-stat-value">{fmt(stats.totalAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">APPLIED</div><div className="receipts-page-stat-value receipts-page-stat-success">{fmt(stats.appliedAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">UNAPPLIED</div><div className="receipts-page-stat-value receipts-page-stat-warning">{fmt(stats.unappliedAmount)}</div></div>
+        <div className="unified-kpi-grid">
+          <div className="unified-kpi-card">
+            <div className="unified-kpi-icon unified-kpi-icon--blue"><CreditCard size={26}/></div>
+            <div className="unified-kpi-content">
+              <div className="unified-kpi-value">{stats.totalAdvances||0}</div>
+              <div className="unified-kpi-label">Total Payments</div>
+            </div>
+          </div>
+          <div className="unified-kpi-card">
+            <div className="unified-kpi-icon unified-kpi-icon--purple"><IndianRupee size={26}/></div>
+            <div className="unified-kpi-content">
+              <div className="unified-kpi-value">{fmt(stats.totalAmount)}</div>
+              <div className="unified-kpi-label">Total Amount</div>
+            </div>
+          </div>
+          <div className="unified-kpi-card">
+            <div className="unified-kpi-icon unified-kpi-icon--green"><CheckCircle size={26}/></div>
+            <div className="unified-kpi-content">
+              <div className="unified-kpi-value text-success">{fmt(stats.appliedAmount)}</div>
+              <div className="unified-kpi-label">Applied</div>
+            </div>
+          </div>
+          <div className="unified-kpi-card">
+            <div className="unified-kpi-icon unified-kpi-icon--amber"><AlertCircle size={26}/></div>
+            <div className="unified-kpi-content">
+              <div className="unified-kpi-value text-warning">{fmt(stats.unappliedAmount)}</div>
+              <div className="unified-kpi-label">Unapplied</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -899,23 +957,24 @@ export default function VendorPaymentsPage() {
               <option value="50">50 Rows</option><option value="100">100 Rows</option>
             </select>
           </div>
-          <div className="receipts-page-pagination-controls">
-            <button onClick={()=>setCurrentPage(0)} disabled={currentPage===0} className="receipts-page-pagination-btn">«</button>
-            <button onClick={()=>setCurrentPage(p=>Math.max(p-1,0))} disabled={currentPage===0} className="receipts-page-pagination-btn">Previous</button>
-            {[...Array(Math.min(5,totalPages))].map((_,i)=>{
-              const pn = currentPage<3 ? i : currentPage+i-2;
-              if(pn>=0&&pn<totalPages){
-                return (
-                  <button key={pn} onClick={()=>setCurrentPage(pn)}
-                    className={`receipts-page-pagination-btn${pn===currentPage?' active':''}`}
-                    style={pn===currentPage?{background:'#7c3aed',color:'#fff',borderColor:'#7c3aed',fontWeight:700}:{}}
-                  >{pn+1}</button>
-                );
-              }
-              return null;
-            })}
-            <button onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages-1))} disabled={currentPage>=totalPages-1} className="receipts-page-pagination-btn">Next</button>
-            <button onClick={()=>setCurrentPage(totalPages-1)} disabled={currentPage>=totalPages-1} className="receipts-page-pagination-btn">»</button>
+          <div className="pagination-controls">
+            <button onClick={()=>setCurrentPage(0)} disabled={currentPage===0} className="procurement-bills-received-btn-secondary" title="First Page">«</button>
+            <button onClick={()=>setCurrentPage(p=>Math.max(p-1,0))} disabled={currentPage===0} className="procurement-bills-received-btn-secondary">Previous</button>
+            <span className="page-numbers">
+              {[...Array(Math.min(5,totalPages))].map((_,i)=>{
+                const pn = currentPage<3 ? i : currentPage+i-2;
+                if(pn>=0&&pn<totalPages){
+                  return (
+                    <button key={pn} onClick={()=>setCurrentPage(pn)}
+                      className={`page-number${pn===currentPage?' active':''}`}
+                    >{pn+1}</button>
+                  );
+                }
+                return null;
+              })}
+            </span>
+            <button onClick={()=>setCurrentPage(p=>Math.min(p+1,totalPages-1))} disabled={currentPage>=totalPages-1} className="procurement-bills-received-btn-secondary">Next</button>
+            <button onClick={()=>setCurrentPage(totalPages-1)} disabled={currentPage>=totalPages-1} className="procurement-bills-received-btn-secondary" title="Last Page">»</button>
           </div>
         </div>
       </div>

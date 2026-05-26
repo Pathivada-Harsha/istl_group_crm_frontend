@@ -2,9 +2,15 @@ import React, { useState } from 'react';
 import { FileText, CreditCard } from 'lucide-react';
 import BillsManagementPage from './BillsManagementPage';
 import VendorPaymentsPage from './VendorPaymentsPage';
-import '../pages-css/InvoicesReceiptsPage.css'; // reuse same tab CSS
+import '../pages-css/InvoicesReceiptsPage.css';
+import { useAuth } from '../hooks/useAuth';
 
 const BillsReceiptsPage = () => {
+  const { menuPermissions } = useAuth();
+
+  // Payments tab only visible when user has BILLS_PAYMENTS menu permission
+  const hasPaymentsPermission = menuPermissions.includes('BILLS_PAYMENTS');
+
   const [activeTab, setActiveTab] = useState(
     () => sessionStorage.getItem('billsPaymentsActiveTab') || 'bills'
   );
@@ -14,27 +20,33 @@ const BillsReceiptsPage = () => {
     sessionStorage.setItem('billsPaymentsActiveTab', tab);
   };
 
+  // If stored tab is 'payments' but user lost permission, fall back to bills
+  const resolvedTab = activeTab === 'payments' && !hasPaymentsPermission ? 'bills' : activeTab;
+
   return (
     <div className="invoices-receipts-container">
       <div className="tab-navigation">
         <button
-          className={`tab-button ${activeTab === 'bills' ? 'active' : ''}`}
+          className={`tab-button ${resolvedTab === 'bills' ? 'active' : ''}`}
           onClick={() => handleTabChange('bills')}
         >
           <FileText size={20} />
           <span>Bills</span>
         </button>
-        <button
-          className={`tab-button ${activeTab === 'payments' ? 'active' : ''}`}
-          onClick={() => handleTabChange('payments')}
-        >
-          <CreditCard size={20} />
-          <span>Payments</span>
-        </button>
+
+        {hasPaymentsPermission && (
+          <button
+            className={`tab-button ${resolvedTab === 'payments' ? 'active' : ''}`}
+            onClick={() => handleTabChange('payments')}
+          >
+            <CreditCard size={20} />
+            <span>Payments</span>
+          </button>
+        )}
       </div>
 
       <div className="tab-content">
-        {activeTab === 'bills' ? <BillsManagementPage /> : <VendorPaymentsPage />}
+        {resolvedTab === 'bills' ? <BillsManagementPage /> : <VendorPaymentsPage />}
       </div>
     </div>
   );

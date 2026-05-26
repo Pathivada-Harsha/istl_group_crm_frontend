@@ -1834,3 +1834,233 @@ button:disabled:hover {
   font-weight: 500;
   margin-bottom: 12px;
 }
+/* Search bar clear button */
+.search-clear-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border-radius: 4px;
+  transition: color 0.13s, background-color 0.13s;
+}
+.search-clear-btn svg {
+  stroke: #94a3b8;
+  transition: stroke 0.13s;
+}
+.search-clear-btn:hover {
+  color: #ef4444;
+  background-color: #fee2e2;
+}
+.search-clear-btn:hover svg {
+  stroke: #ef4444;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   BILLS TAB — FULL RESPONSIVE OVERRIDES
+══════════════════════════════════════════════════════════════ */
+
+/* ── 1024px — tablet landscape ─────────────────────────────── */
+@media (max-width: 1024px) {
+  .procurement-bills-received-container {
+    padding: 16px 16px 0 16px;
+  }
+
+  /* Header: stack title + GroupProjectFilter */
+  .page-header-with-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  /* GroupProjectFilter: full-width stacked selects */
+  .page-header-with-filter .group-project-filter {
+    flex-direction: column;
+    align-items: stretch !important;
+    width: 100%;
+    margin-left: 0 !important;
+    gap: 8px;
+  }
+  .page-header-with-filter .group-project-filter .filter-group {
+    width: 100%;
+    min-width: unset;
+  }
+  .page-header-with-filter .group-project-filter .filter-select {
+    width: 100% !important;
+    min-width: unset !important;
+    max-width: 100% !important;
+  }
+
+  /* Action bar: wrap neatly */
+  .procurement-bills-received-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .procurement-bills-received-search-filters {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .procurement-bills-received-search {
+    min-width: 100%;
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+
+  .procurement-bills-received-filter {
+    width: 100%;
+    min-width: unset;
+    padding: 10px 12px;
+  }
+
+  /* Date range filter: full width */
+  .po-order-date-filter {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .po-cal-trigger {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Action buttons: full width */
+  .procurement-bills-received-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .procurement-bills-received-actions > * {
+    flex: 1;
+    min-width: 120px;
+    justify-content: center;
+  }
+}
+
+/* ── 768px — tablet portrait ────────────────────────────────── */
+@media (max-width: 768px) {
+  .procurement-bills-received-title {
+    font-size: 20px;
+  }
+
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .procurement-bills-received-kpi-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .procurement-bills-received-kpi-value {
+    font-size: 16px;
+    word-break: break-all;
+  }
+
+  /* Pagination row: stack */
+  .procurement-bills-received-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .pagination-info {
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: space-between;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  /* Table scroll */
+  .procurement-bills-received-table-scroll-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .procurement-bills-received-table {
+    min-width: 700px;
+  }
+}
+
+/* ── 480px — large phone ────────────────────────────────────── */
+@media (max-width: 480px) {
+  .procurement-bills-received-container {
+    padding: 10px 10px 0 10px;
+  }
+
+  .procurement-bills-received-title {
+    font-size: 18px;
+  }
+
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .procurement-bills-received-kpi-card {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px;
+    gap: 6px;
+  }
+
+  .procurement-bills-received-kpi-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .procurement-bills-received-kpi-value {
+    font-size: 14px;
+  }
+
+  .procurement-bills-received-kpi-label {
+    font-size: 10px;
+  }
+
+  .procurement-bills-received-actions > * {
+    font-size: 13px;
+    padding: 8px 10px;
+  }
+
+  /* Page numbers: smaller */
+  .page-number {
+    padding: 5px 9px;
+    min-width: 30px;
+    font-size: 12px;
+  }
+
+  /* Drawer: full screen */
+  .procurement-bills-received-drawer {
+    width: 100% !important;
+    max-width: 100vw;
+  }
+}
+
+/* ── 360px — small phone ────────────────────────────────────── */
+@media (max-width: 360px) {
+  .procurement-bills-received-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .procurement-bills-received-kpi-card {
+    flex-direction: row;
+    align-items: center;
+  }
+}

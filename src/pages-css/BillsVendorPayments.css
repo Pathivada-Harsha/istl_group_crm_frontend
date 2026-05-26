@@ -34,12 +34,10 @@
   z-index: 5;
 }
 
-/* The base .receipt-action-btn styles already handle:
-   display, width, height, border-radius, cursor, border, icon centering.
-   We only need the colour modifiers here. */
+/* Action buttons: transparent by default, colour fills on hover only */
 
 .receipt-action-btn.btn-view {
-  background-color: #eff6ff;
+  background-color: transparent;
   color: #3b82f6;
 }
 .receipt-action-btn.btn-view:hover {
@@ -48,7 +46,7 @@
 }
 
 .receipt-action-btn.btn-edit {
-  background-color: #fffbeb;
+  background-color: transparent;
   color: #f59e0b;
 }
 .receipt-action-btn.btn-edit:hover {
@@ -57,7 +55,7 @@
 }
 
 .receipt-action-btn.btn-delete {
-  background-color: #fef2f2;
+  background-color: transparent;
   color: #ef4444;
 }
 .receipt-action-btn.btn-delete:hover {
@@ -66,7 +64,7 @@
 }
 
 .receipt-action-btn.btn-adjust {
-  background-color: #f0fdf4;
+  background-color: transparent;
   color: #22c55e;
 }
 .receipt-action-btn.btn-adjust:hover {
@@ -75,7 +73,7 @@
 }
 
 .receipt-action-btn.btn-restore {
-  background-color: #f0fdf4;
+  background-color: transparent;
   color: #16a34a;
   padding: 0 10px;
   width: auto;
@@ -168,4 +166,469 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+/* ══════════════════════════════════════════════════════════════════
+   UNIFIED LAYOUT TOKENS — Bills & Payments tabs
+   Same dimensions on both tabs so switching feels seamless.
+   Both pages import this file (BillsVendorPayments.css).
+══════════════════════════════════════════════════════════════════ */
+
+/* ── Containers ─────────────────────────────────────────────────── */
+.procurement-bills-received-container,
+.receipts-page-container {
+  padding: 24px 24px 0 24px;
+}
+
+/* ── Header block ───────────────────────────────────────────────── */
+.procurement-bills-received-header,
+.receipts-page-breadcrumb {
+  margin-bottom: 4px;
+}
+
+.procurement-bills-received-breadcrumb,
+.receipts-page-breadcrumb {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.procurement-bills-received-title,
+.receipts-page-title {
+  font-size: 26px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+}
+
+/* ── Action bar ─────────────────────────────────────────────────── */
+.procurement-bills-received-action-bar,
+.receipts-page-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.procurement-bills-received-search-filters,
+.receipts-page-search-filters {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Unified input height: 42px (10px top+bottom padding + 14px font + borders) */
+.procurement-bills-received-search,
+.receipts-page-search {
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  box-sizing: border-box;
+}
+
+.procurement-bills-received-search:focus,
+.receipts-page-search:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Unified select/filter height: 42px */
+.procurement-bills-received-filter,
+.receipts-page-filter {
+  height: 42px;
+  padding: 0 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  background: white;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.procurement-bills-received-filter:focus,
+.receipts-page-filter:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
+}
+
+/* Date range filter same height */
+.po-order-date-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+}
+
+.po-cal-trigger {
+  height: 42px !important;
+  box-sizing: border-box;
+  border-radius: 8px !important;
+  font-size: 14px;
+}
+
+/* Actions button group */
+.procurement-bills-received-actions,
+.receipts-page-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+/* Unified primary button: 42px tall */
+.procurement-bills-received-btn-primary,
+.receipts-page-btn-primary {
+  height: 42px;
+  padding: 0 18px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.2s, transform 0.15s;
+}
+.procurement-bills-received-btn-primary:hover,
+.receipts-page-btn-primary:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+/* Unified secondary button: 42px tall */
+.procurement-bills-received-btn-secondary,
+.receipts-page-btn-secondary {
+  height: 42px;
+  padding: 0 16px;
+  background: white;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+.procurement-bills-received-btn-secondary:hover,
+.receipts-page-btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+}
+
+/* ── Unified KPI cards ─────────────────────────────────────────── */
+.unified-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.unified-kpi-card {
+  background: white;
+  padding: 20px 22px;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 96px;
+  transition: box-shadow 0.2s, transform 0.2s;
+  min-width: 0;
+}
+.unified-kpi-card:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}
+
+.unified-kpi-icon {
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+}
+.unified-kpi-icon--blue   { background: #eff6ff; color: #3b82f6; }
+.unified-kpi-icon--purple { background: #f5f3ff; color: #7c3aed; }
+.unified-kpi-icon--green  { background: #f0fdf4; color: #16a34a; }
+.unified-kpi-icon--amber  { background: #fffbeb; color: #d97706; }
+
+.unified-kpi-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.unified-kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
+.unified-kpi-label {
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Unified table ─────────────────────────────────────────────── */
+.procurement-bills-received-table-container,
+.receipts-page-table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.procurement-bills-received-table-scroll-wrapper,
+.receipts-page-table-scroll {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 480px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Unified pagination ────────────────────────────────────────── */
+.procurement-bills-received-pagination,
+.receipts-page-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-top: 1px solid #f1f5f9;
+  background: white;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pagination-info,
+.receipts-page-pagination-info {
+  font-size: 13px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UNIFIED RESPONSIVE BREAKPOINTS
+══════════════════════════════════════════════════════════════════ */
+
+/* ── 1200px ─────────────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .unified-kpi-value { font-size: 16px; }
+}
+
+/* ── 1024px — tablet landscape ─────────────────────────────────── */
+@media (max-width: 1024px) {
+  .procurement-bills-received-container,
+  .receipts-page-container { padding: 16px 16px 0 16px; }
+
+  .page-header-with-filter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .page-header-with-filter .group-project-filter {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100%;
+    gap: 8px;
+  }
+  .page-header-with-filter .group-project-filter .filter-group { width: 100%; min-width: unset; }
+  .page-header-with-filter .group-project-filter .filter-select { width: 100% !important; min-width: unset !important; }
+
+  .procurement-bills-received-action-bar,
+  .receipts-page-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .procurement-bills-received-search-filters,
+  .receipts-page-search-filters {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .procurement-bills-received-search,
+  .receipts-page-search {
+    width: 100%;
+  }
+
+  .procurement-bills-received-filter,
+  .receipts-page-filter {
+    width: 100%;
+  }
+
+  .po-order-date-filter { width: 100%; }
+  .po-cal-trigger { flex: 1 !important; }
+
+  .procurement-bills-received-actions,
+  .receipts-page-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .procurement-bills-received-actions > *,
+  .receipts-page-actions > * {
+    flex: 1;
+    min-width: 110px;
+    justify-content: center;
+  }
+
+  .unified-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+}
+
+/* ── 768px — tablet portrait ────────────────────────────────────── */
+@media (max-width: 768px) {
+  .procurement-bills-received-title,
+  .receipts-page-title { font-size: 20px; }
+
+  .unified-kpi-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .unified-kpi-card  { padding: 14px 16px; min-height: 80px; gap: 12px; }
+  .unified-kpi-icon  { width: 44px; height: 44px; }
+  .unified-kpi-value { font-size: 15px; }
+  .unified-kpi-label { font-size: 11px; }
+
+  .procurement-bills-received-table-scroll-wrapper,
+  .receipts-page-table-scroll { max-height: 400px; }
+
+  .procurement-bills-received-pagination,
+  .receipts-page-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 12px;
+  }
+
+  .pagination-info,
+  .receipts-page-pagination-info { justify-content: space-between; }
+
+  .pagination-controls { justify-content: center; flex-wrap: wrap; }
+}
+
+/* ── 480px — large phone ────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .procurement-bills-received-container,
+  .receipts-page-container { padding: 12px 12px 0 12px; }
+
+  .procurement-bills-received-title,
+  .receipts-page-title { font-size: 18px; margin-bottom: 12px; }
+
+  .unified-kpi-grid  { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .unified-kpi-card  { padding: 12px; min-height: 72px; gap: 10px; }
+  .unified-kpi-icon  { width: 38px; height: 38px; border-radius: 8px; }
+  .unified-kpi-value { font-size: 13px; }
+  .unified-kpi-label { font-size: 10px; }
+
+  .procurement-bills-received-search,
+  .receipts-page-search,
+  .procurement-bills-received-filter,
+  .receipts-page-filter { height: 40px; font-size: 13px; }
+
+  .procurement-bills-received-btn-primary,
+  .receipts-page-btn-primary,
+  .procurement-bills-received-btn-secondary,
+  .receipts-page-btn-secondary { height: 40px; font-size: 13px; padding: 0 14px; }
+
+  .page-number { padding: 5px 8px; min-width: 28px; font-size: 12px; }
+}
+
+/* ── 360px — small phone ────────────────────────────────────────── */
+@media (max-width: 360px) {
+  .unified-kpi-grid { grid-template-columns: 1fr; }
+  .unified-kpi-card { flex-direction: row; }
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   PAGINATION FIX — reset height on pagination nav buttons so they
+   match page-number button height (height:auto from padding).
+══════════════════════════════════════════════════════════════════ */
+.pagination-controls .procurement-bills-received-btn-secondary,
+.pagination-controls .receipts-page-btn-secondary,
+.receipts-page-pagination .procurement-bills-received-btn-secondary,
+.receipts-page-pagination .receipts-page-btn-secondary {
+  height: auto;
+  padding: 7px 13px;
+  font-size: 13px;
+  min-width: unset;
+}
+
+/* Page number buttons — consistent across both tabs */
+.page-numbers {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.page-number {
+  padding: 7px 12px;
+  min-width: 36px;
+  height: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: white;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-number:hover:not(.active) {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.page-number.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+  font-weight: 600;
+}
+
+/* Mark Paid approve button (Bills tab) */
+.receipt-action-btn.btn-approve {
+  background-color: transparent;
+  color: #16a34a;
+}
+.receipt-action-btn.btn-approve:hover {
+  background-color: #16a34a;
+  color: #ffffff;
 }
