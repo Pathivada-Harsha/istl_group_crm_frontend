@@ -122,41 +122,95 @@
 .followups-action-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 20px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
+/* Search — bounded flex, never dominates the row */
 .followups-search-wrapper {
   position: relative;
-  flex: 1;
-  min-width: 250px;
+  flex: 1 1 180px;
+  max-width: 300px;
+  min-width: 160px;
+}
+
+/* Date range — wide enough for full "dd-mm-yyyy — dd-mm-yyyy" text + chevron */
+.followups-action-bar .fu-cal-wrapper {
+  flex-shrink: 0;
+  width: 260px;
+}
+
+/* 3 filter dropdowns — equal fixed width, never too wide */
+.fu-filter-item {
+  width: 155px;
+  flex-shrink: 0;
+}
+.fu-filter-item .filter-trigger {
+  width: 100%;
+}
+
+/* Add button — no shrink */
+.fu-add-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  height: 38px;
+  padding: 0 18px;
 }
 
 .followups-search-icon {
   position: absolute;
-  left: 14px;
+  left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   color: #94a3b8;
   pointer-events: none;
+  flex-shrink: 0;
 }
 
 .followups-search-input {
   width: 100%;
-  padding: 10px 14px 10px 42px;
-  border: 1px solid #e2e8f0;
+  height: 38px;
+  padding: 0 36px 0 36px;
+  border: 1.5px solid #e2e8f0;
   border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: #fff;
+  box-sizing: border-box;
 }
 
 .followups-search-input:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Clear (×) button — only rendered when searchTerm has content */
+.followups-search-clear {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #e2e8f0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #64748b;
+  padding: 0;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+.followups-search-clear:hover {
+  background: #cbd5e1;
+  color: #1e293b;
 }
 
 .followups-filters {
@@ -811,15 +865,35 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 12px 20px;
   border-top: 1px solid #f1f5f9;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
+}
+
+.followups-pagination-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .followups-pagination-info {
-  font-size: 14px;
+  font-size: 13px;
   color: #64748b;
+  white-space: nowrap;
+}
+
+/* Compact rows-per-page wrapper — overrides FilterSelect default 220px width */
+.followups-rows-dropdown {
+  width: 110px;
+  flex-shrink: 0;
+}
+
+.followups-rows-dropdown .filter-trigger {
+  width: 110px;
+  height: 34px;
+  font-size: 13px;
 }
 
 .followups-pagination-controls {
@@ -829,13 +903,12 @@
 }
 
 .followups-rows-select {
-  padding: 8px 12px;
-  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  border: 1.5px solid #e2e8f0;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: 13px;
   background: white;
   cursor: pointer;
-  margin-left:8px;
 }
 
 .followups-pagination-buttons {
@@ -878,24 +951,6 @@
   .followups-kpi-container {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
-
-  .followups-action-bar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .followups-search-wrapper {
-    min-width: 100%;
-  }
-
-  .followups-filters {
-    width: 100%;
-  }
-
-  .followups-filter-select {
-    flex: 1;
-    min-width: auto;
-  }
 }
 
 @media (max-width: 768px) {
@@ -929,11 +984,12 @@
   .followups-pagination {
     flex-direction: column;
     align-items: stretch;
+    gap: 8px;
   }
 
-  .followups-pagination-controls {
-    flex-direction: column;
-    align-items: stretch;
+  .followups-pagination-left {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .followups-pagination-buttons {
@@ -1506,15 +1562,17 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 9px 12px;
-  border: 1px solid #e2e8f0;
+  padding: 0 12px;
+  height: 38px;
+  border: 1.5px solid #e2e8f0;
   border-radius: 8px;
   background: #fff;
-  font-size: 14px;
+  font-size: 13px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
   white-space: nowrap;
-  min-width: 220px;
+  width: 100%;
+  box-sizing: border-box;
   font-family: inherit;
 }
 .fu-cal-trigger:hover {
@@ -1951,3 +2009,348 @@
 }
 .fu-dp-month:hover { background: #dbeafe; color: #1e40af; }
 .fu-dp-yr { color: #2563eb; font-weight: 700; }
+/* ═══════════════════════════════════════════════════════════════
+   STATUS INLINE DROPDOWN
+   ═══════════════════════════════════════════════════════════════ */
+
+.fu-status-dd-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
+/* Make the existing status button flex so chevron aligns */
+.fu-status-dd-wrapper .followup-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fu-status-dd-panel {
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06);
+  padding: 4px;
+  animation: dropdown-in 0.12s ease;
+}
+
+.fu-status-dd-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.1s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.fu-sopt-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Pending */
+.fu-sopt-pending        { color: #b45309; }
+.fu-sopt-pending .fu-sopt-dot { background: #f59e0b; }
+.fu-sopt-pending:hover  { background: #fff7ed; }
+
+/* Completed */
+.fu-sopt-completed      { color: #059669; }
+.fu-sopt-completed .fu-sopt-dot { background: #10b981; }
+.fu-sopt-completed:hover{ background: #ecfdf5; }
+
+/* Cancelled */
+.fu-sopt-cancelled      { color: #be123c; }
+.fu-sopt-cancelled .fu-sopt-dot { background: #f43f5e; }
+.fu-sopt-cancelled:hover{ background: #fff1f2; }
+
+/* Rescheduled */
+.fu-sopt-rescheduled    { color: #7c3aed; }
+.fu-sopt-rescheduled .fu-sopt-dot { background: #8b5cf6; }
+.fu-sopt-rescheduled:hover{ background: #f3e8ff; }
+
+/* Active / currently selected row */
+.fu-sopt-current { font-weight: 700; }
+.fu-sopt-pending.fu-sopt-current     { background: #fff7ed; }
+.fu-sopt-completed.fu-sopt-current   { background: #ecfdf5; }
+.fu-sopt-cancelled.fu-sopt-current   { background: #fff1f2; }
+.fu-sopt-rescheduled.fu-sopt-current { background: #f3e8ff; }
+
+
+/* ═══════════════════════════════════════════════════════════════
+   HOUR / MINUTE TIME PICKER
+   ═══════════════════════════════════════════════════════════════ */
+
+.fu-hm-picker {
+  min-width: 180px;
+  padding: 10px;
+  gap: 8px;
+}
+
+/* AM / PM row */
+.fu-hm-ampm-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+
+.fu-hm-ampm-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 6px;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.fu-hm-ampm-btn.fu-hm-ampm-active {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+}
+
+/* Two-column layout */
+.fu-hm-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.fu-hm-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fu-hm-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 2px;
+}
+
+.fu-hm-col-scroll {
+  max-height: 168px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.fu-hm-col-scroll::-webkit-scrollbar { width: 3px; }
+.fu-hm-col-scroll::-webkit-scrollbar-track { background: transparent; }
+.fu-hm-col-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 4px; }
+
+.fu-hm-divider {
+  font-size: 16px;
+  font-weight: 700;
+  color: #cbd5e1;
+  padding: 0 2px;
+  align-self: center;
+  margin-top: 22px;
+}
+
+.fu-hm-item {
+  width: 100%;
+  padding: 5px 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, color 0.1s;
+  font-family: inherit;
+}
+
+.fu-hm-item:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.fu-hm-item.fu-hm-active {
+  background: #2563eb;
+  color: #fff;
+  font-weight: 700;
+}
+
+
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   MODAL-ONLY wider Group / Sub Group dropdowns
+   Scoped to .followup-modal so it NEVER affects the page header filters
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* The "Select Lead" section has a 2-col grid; make the dropdowns fill it */
+.followup-modal .followup-form-section:first-child .followup-form-group .filter-trigger {
+  width: 100%;
+}
+
+
+
+/* ═══════════════════════════════════════════════════════════════════
+   RESPONSIVE — single-row action bar + header + full page
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── ≤1199px: header stacks; group/category go full-width ─────── */
+@media (max-width: 1199px) {
+  .followups-header.page-header-with-filter {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .followups-header .group-project-filter {
+    width: 100%;
+    margin-left: 0;
+  }
+  /* Make each group/category trigger full width in the header */
+  .followups-header .filter-trigger,
+  .followups-header .filter-loading-bar {
+    width: 100%;
+  }
+  .followups-header .filter-group {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* ── ≤1024px: shrink filter dropdowns a bit ──────────────────────── */
+@media (max-width: 1024px) {
+  .fu-filter-item {
+    width: 138px;
+  }
+  .followups-action-bar .fu-cal-wrapper {
+    width: 190px;
+  }
+  .followups-kpi-container {
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  }
+}
+
+/* ── ≤860px: shrink filter dropdowns further ────────────────────── */
+@media (max-width: 860px) {
+  .fu-filter-item {
+    width: 120px;
+  }
+  .followups-action-bar .fu-cal-wrapper {
+    width: 170px;
+  }
+}
+
+/* ── ≤768px: action bar wraps into 2 rows, each full-width ──────── */
+@media (max-width: 768px) {
+  .followups-page-root {
+    padding: 12px 12px 0 12px;
+  }
+  .followups-header h1 {
+    font-size: 18px;
+  }
+  .followups-header .group-project-filter {
+    flex-direction: column;
+  }
+
+  /* Action bar: let everything wrap naturally */
+  .followups-action-bar {
+    gap: 8px;
+  }
+  .followups-search-wrapper {
+    min-width: unset;
+    max-width: 100%;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+  .followups-action-bar .fu-cal-wrapper {
+    flex: 1;
+    width: auto;
+    min-width: 160px;
+  }
+  .fu-add-btn {
+    width: 100%;
+    justify-content: center;
+    order: 10; /* push to end of wrap */
+  }
+  .fu-filter-item {
+    flex: 1;
+    width: auto;
+    min-width: 120px;
+  }
+
+  /* KPI grid */
+  .followups-kpi-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  /* Pagination stacks */
+  .followups-pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .followups-pagination-left {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .followups-rows-dropdown {
+    width: 100px;
+  }
+  .followups-rows-dropdown .filter-trigger {
+    width: 100px !important;
+  }
+  .followups-pagination-buttons {
+    justify-content: space-between;
+  }
+}
+
+/* ── ≤600px: filter items go full width ────────────────────────── */
+@media (max-width: 600px) {
+  .followups-page-root { padding: 10px 10px 0 10px; }
+  .followups-header h1  { font-size: 16px; }
+
+  .followups-action-bar .fu-cal-wrapper {
+    width: 100%;
+    flex: unset;
+  }
+  .fu-filter-item {
+    flex: 1 1 calc(50% - 4px);
+    min-width: 0;
+  }
+
+  .followups-kpi-container { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .followups-kpi-card      { padding: 12px 14px; }
+  .followups-pagination-btn      { padding: 6px 12px; font-size: 13px; }
+  .followups-pagination-current  { font-size: 13px; }
+}
+
+/* ── ≤480px ──────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .fu-filter-item { flex: 1 1 100%; }
+  .followups-kpi-container { grid-template-columns: 1fr 1fr; gap: 6px; }
+  .followups-kpi-card { padding: 10px 12px; min-height: 70px; }
+  .followups-btn { font-size: 13px; padding: 9px 14px; }
+  .followups-pagination-btn { padding: 5px 10px; font-size: 12px; }
+}
