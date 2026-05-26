@@ -3,6 +3,7 @@ import { FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiSearch, FiRefreshCw, FiUsers,
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/UsersPage.css';
 import CrmPreloader from '../components/preLoader';
+import FilterSelect from '../components/Dropdowns/FilterSelect';
 
 const API = process.env.REACT_APP_API_URL;
 
@@ -490,6 +491,7 @@ const UsersPage = () => {
   const [selectedUserPermissions, setSelectedUserPermissions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loadingText, setLoadingText] = useState('Loading...');
+  const [modalLoading, setModalLoading] = useState(false); // local loader for permission modals — avoids full-page flicker
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRole, setFilterRole] = useState('all');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -740,6 +742,9 @@ useEffect(() => {
       if (!res.ok) throw new Error('Failed to search');
       const data = await res.json();
       setUsers(data.userWrapper.map(transformUser));
+      setTotalUsers(data.totalUsers || 0);
+      setActiveUsers(data.activeUsers || 0);
+      setInactiveUsers(data.inactiveUsers || 0);
       setTotalPages(data.totalPages || 1);
       setTotalElements(data.totalUsers || 0);
       setRoles(data.roles.map(r => ({ id: r, name: r, description: `${r} role` })));
@@ -988,20 +993,20 @@ useEffect(() => {
 };
 
 const handleViewMenuPermissions = async (u) => {
-    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUser(u); setModalLoading(true);
     await refreshMenuItems();
     setSelectedUserMenuPermissions(await fetchUserMenuPermissions(u.id));
-    setShowMenuPermissionsModal(true); setLoading(false);
+    setShowMenuPermissionsModal(true); setModalLoading(false);
 };
 
 const handleEditMenuPermissions = async (u) => {
-    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUser(u); setModalLoading(true);
     await refreshMenuItems();
     const perms = await fetchUserMenuPermissions(u.id);
     const complete = {};
     menuPermissionsList.forEach(m => { complete[m.dbField] = perms[m.dbField] || 0; });
     setSelectedUserMenuPermissions(complete);
-    setShowEditMenuPermissionsModal(true); setLoading(false);
+    setShowEditMenuPermissionsModal(true); setModalLoading(false);
 };
 
   const handleToggleMenuPermission = (dbField) =>
@@ -1027,17 +1032,17 @@ const handleEditMenuPermissions = async (u) => {
   };
 
   const handleViewUserPermissions = async (u) => {
-    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUser(u); setModalLoading(true);
     setSelectedUserPermissions(await fetchUserPagePermissions(u.id));
-    setShowUserPermissionsModal(true); setLoading(false);
+    setShowUserPermissionsModal(true); setModalLoading(false);
   };
 
   const handleEditUserPermissions = async (u) => {
-    setSelectedUser(u); setLoading(true); setLoadingText('Loading...');
+    setSelectedUser(u); setModalLoading(true);
     const perms = await fetchUserPagePermissions(u.id);
     setSelectedUserPermissions(perms);
     setInitialUserPermIds(perms);   // ← store the user's original permission set
-    setShowEditUserPermissionsModal(true); setLoading(false);
+    setShowEditUserPermissionsModal(true); setModalLoading(false);
   };
   const handleToggleUserPermission = (id) =>
     setSelectedUserPermissions(prev =>
@@ -1148,6 +1153,14 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
     <div className="users-page-container">
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {loading && <CrmPreloader text={loadingText} />}
+      {modalLoading && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.25)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:'#fff', borderRadius:12, padding:'20px 28px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 8px 24px rgba(0,0,0,0.15)' }}>
+            <FiLoader size={20} color="#3b82f6" style={{ animation:'spin 0.8s linear infinite' }} />
+            <span style={{ fontSize:14, fontWeight:500, color:'#374151' }}>Loading permissions...</span>
+          </div>
+        </div>
+      )}
 
       <div className="toast-container">
         {toasts.map(t => <Toast key={t.id} message={t.message} type={t.type} onClose={() => removeToast(t.id)} />)}
@@ -1231,11 +1244,14 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 {isSearching ? <FiLoader size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> : <FiSearch size={15} />}
               </span>
             </div>
-            <select className="users-page-filter-select" value={filterRole}
-              onChange={(e) => { setFilterRole(e.target.value); setCurrentPage(1); }}>
-              <option value="all">All Roles</option>
-              {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-            </select>
+            <div className="users-page-role-filter">
+              <FilterSelect
+                value={filterRole === 'all' ? '' : filterRole}
+                options={filteredRoles.map(r => ({ value: r.name, label: r.name }))}
+                placeholder="All Roles"
+                onChange={(v) => { setFilterRole(v || 'all'); setCurrentPage(1); }}
+              />
+            </div>
           </div>
 
           {/* Stats */}
@@ -1307,8 +1323,28 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             }
                           </td>
 
-                          <td><button className="users-page-btn-link" onClick={() => handleViewUserPermissions(u)}>{u.permission_count} permissions</button></td>
-                          <td><button className="users-page-btn-link" onClick={() => handleViewMenuPermissions(u)}>{u.menu_permissions_count} menus</button></td>
+                          <td>
+                            <div className="users-perm-tooltip-wrap">
+                              <span className="users-page-perm-count users-page-perm-count--page" onClick={() => handleViewUserPermissions(u)}>
+                                {u.permission_count} permissions
+                              </span>
+                              <div className="users-perm-tooltip users-perm-tooltip--page">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6-6 3 3-6 6H9v-3z"/></svg>
+                                View &amp; Edit Page Permissions
+                              </div>
+                            </div>
+                          </td>
+                          <td>
+                            <div className="users-perm-tooltip-wrap">
+                              <span className="users-page-perm-count users-page-perm-count--menu" onClick={() => handleViewMenuPermissions(u)}>
+                                {u.menu_permissions_count} menus
+                              </span>
+                              <div className="users-perm-tooltip users-perm-tooltip--menu">
+                                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l6-6 3 3-6 6H9v-3z"/></svg>
+                                View &amp; Edit Menu Permissions
+                              </div>
+                            </div>
+                          </td>
                           <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
                           <td style={{ fontSize: 12, color: '#6b7280' }}>{u.created_at}</td>
                           <td>
@@ -1334,10 +1370,17 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     <div className="pagination-info">
                       Showing {((currentPage - 1) * pageSize) + 1} to {Math.min(currentPage * pageSize, totalElements)} of {totalElements} entries
                       <div className="pagination-row-selector">
-                        <select className="pagination-select" value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}>
-                          <option value={10}>10 Rows</option><option value={20}>20 Rows</option>
-                          <option value={50}>50 Rows</option><option value={100}>100 Rows</option>
-                        </select>
+                        <FilterSelect
+                          value={String(pageSize)}
+                          options={[
+                            { value: '10',  label: '10 Rows' },
+                            { value: '20',  label: '20 Rows' },
+                            { value: '50',  label: '50 Rows' },
+                            { value: '100', label: '100 Rows' },
+                          ]}
+                          placeholder="Rows"
+                          onChange={(v) => { if (v) { setPageSize(Number(v)); setCurrentPage(1); } }}
+                        />
                       </div>
                     </div>
                     <div className="pagination-controls">
@@ -1927,10 +1970,12 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
                     <label>Role <span style={{ color: 'red' }}>*</span></label>
-                    <select required autoComplete="off" value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}>
-                      <option value="">Select Role</option>
-                      {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={newUser.role}
+                      options={filteredRoles.map(r => ({ value: r.name, label: r.name }))}
+                      placeholder="Select Role"
+                      onChange={(v) => setNewUser({ ...newUser, role: v || '' })}
+                    />
                   </div>
                   <div className="users-page-form-group" style={{ display: 'flex', alignItems: 'center', paddingTop: 40 }}>
                     <label className="users-page-checkbox-label" style={{ marginBottom: 0 }}>
@@ -2081,10 +2126,12 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                   <div className="users-page-form-group">
                     <label>Role</label>
-                    <select required value={selectedUser.role_id} onChange={e => setSelectedUser({ ...selectedUser, role_id: e.target.value, role_name: e.target.value })}>
-                      <option value="">Select Role</option>
-                      {filteredRoles.map(r => <option key={r.id} value={r.name}>{r.name}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={selectedUser.role_id || selectedUser.role_name || ''}
+                      options={filteredRoles.map(r => ({ value: r.name, label: r.name }))}
+                      placeholder="Select Role"
+                      onChange={(v) => setSelectedUser({ ...selectedUser, role_id: v || '', role_name: v || '' })}
+                    />
                   </div>
                 </div>
                 <div className="users-page-form-row">
