@@ -1,8 +1,10 @@
 // ClientDashboardFollowUps.js
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import ReactDOM from "react-dom";
 import "../pages-css/Follow-ups.css";
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
+import FilterSelect from './../components/Dropdowns/FilterSelect.js';
 import { FiTrash2, FiEdit } from 'react-icons/fi';
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -135,7 +137,7 @@ const FollowUpDatePicker = ({ value, onChange, minDate, placeholder = 'Select da
 export default function ClientDashboardFollowUps() {
   const { user } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   const [followUps, setFollowUps] = useState([]);
   // filteredFollowUps and kpis are derived via useMemo below — no useState needed
@@ -180,14 +182,26 @@ export default function ClientDashboardFollowUps() {
   // Time picker state — Add modal
   const [showAddTimePicker, setShowAddTimePicker] = useState(false);
   const [tempAddTime, setTempAddTime] = useState('');
+  const [tempAddHour,  setTempAddHour]  = useState(12);
+  const [tempAddMinute,setTempAddMinute]= useState(0);
+  const [tempAddAmPm,  setTempAddAmPm]  = useState('AM');
   const addTimeRef = useRef(null);
   const addTimeInputRef = useRef(null);
 
   // Time picker state — Edit modal
   const [showEditTimePicker, setShowEditTimePicker] = useState(false);
   const [tempEditTime, setTempEditTime] = useState('');
+  const [tempEditHour,  setTempEditHour]  = useState(12);
+  const [tempEditMinute,setTempEditMinute]= useState(0);
+  const [tempEditAmPm,  setTempEditAmPm]  = useState('AM');
   const editTimeRef = useRef(null);
   const editTimeInputRef = useRef(null);
+
+  // Inline status dropdown
+  const [openStatusDropdown, setOpenStatusDropdown] = useState(null);
+  const statusDropdownRef = useRef(null);
+  const statusBtnRef      = useRef(null);   // tracks the live button element
+  const [statusDropdownPos, setStatusDropdownPos] = useState({ top: 0, left: 0, width: 0, openUp: false });
 
   // kpis derived via useMemo below
 
@@ -341,6 +355,44 @@ export default function ClientDashboardFollowUps() {
     if (showCalendar) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showCalendar]);
+
+  // Close status dropdown when clicking outside
+  useEffect(() => {
+    if (!openStatusDropdown) return;
+    const handler = (e) => {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target)) {
+        setOpenStatusDropdown(null);
+        statusBtnRef.current = null;
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [openStatusDropdown]);
+
+  // Recalculate status dropdown position on scroll/resize (keeps it anchored to its row)
+  const calcStatusPos = useCallback(() => {
+    if (!statusBtnRef.current) return;
+    const rect = statusBtnRef.current.getBoundingClientRect();
+    const DROPDOWN_H = 4 * 36 + 8;                      // 4 options × ~36px + padding
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const openUp     = spaceBelow < DROPDOWN_H && rect.top > DROPDOWN_H;
+    setStatusDropdownPos({
+      top:   openUp ? rect.top - DROPDOWN_H - 4 : rect.bottom + 4,
+      left:  rect.left,
+      width: Math.max(rect.width, 148),
+      openUp,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!openStatusDropdown) return;
+    window.addEventListener('scroll', calcStatusPos, true);
+    window.addEventListener('resize', calcStatusPos, true);
+    return () => {
+      window.removeEventListener('scroll', calcStatusPos, true);
+      window.removeEventListener('resize', calcStatusPos, true);
+    };
+  }, [openStatusDropdown, calcStatusPos]);
 
   const fetchFollowUps = async (grp = groupName, subGrp = subGroupName) => {
     setLoading(true);
@@ -549,6 +601,22 @@ export default function ClientDashboardFollowUps() {
   };
   // ────────────────────────────────────────────────────────────────────────────
 
+  // Helper: parse HH:MM (24h) → { hour (1-12), minute, ampm }
+  const parseTimeTo12h = (t) => {
+    if (!t) return { hour: 12, minute: 0, ampm: 'AM' };
+    const [hh, mm] = t.split(':').map(Number);
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const hour = hh % 12 === 0 ? 12 : hh % 12;
+    const minute = Math.round(mm / 5) * 5 % 60;
+    return { hour, minute, ampm };
+  };
+
+  // Helper: build HH:MM string from 12h parts
+  const buildTime24 = (hour, minute, ampm) => {
+    const h24 = ampm === 'AM' ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
+    return `${String(h24).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+  };
+
   const fmtTimeDisplay = t => {
     if (!t) return 'Select time';
     const [h, m] = t.split(':');
@@ -625,12 +693,12 @@ export default function ClientDashboardFollowUps() {
     e.preventDefault();
 
     if (!addForm.scheduledDate) {
-      showError('Please select a date');
+      showWarning('Please select a date');
       return;
     }
 
     if (!addForm.leadId) {
-      showError('Please select a lead');
+      showWarning('Please select a lead');
       return;
     }
 
@@ -695,7 +763,7 @@ export default function ClientDashboardFollowUps() {
     e.preventDefault();
 
     if (!editForm.scheduledDate) {
-      showError('Please select a date');
+      showWarning('Please select a date');
       return;
     }
 
@@ -1033,174 +1101,196 @@ export default function ClientDashboardFollowUps() {
           </svg>
           <input
             type="text"
-            placeholder="Search by lead, customer, notes, assigned to..."
-            className="followups-search-input"
+            placeholder="Search by lead, customer, notes..."
+            className={`followups-search-input${searchTerm ? ' has-value' : ''}`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
-        </div>
-
-        {/* Filter bar row */}
-
-          {/* Date range trigger + dropdown */}
-          <div className="fu-cal-wrapper" ref={calendarRef}>
+          {searchTerm && (
             <button
               type="button"
-              className={`fu-cal-trigger ${showCalendar ? 'fu-cal-trigger--open' : ''} ${appliedFrom ? 'fu-cal-trigger--applied' : ''}`}
-              onClick={() => setShowCalendar(p => !p)}
+              className="followups-search-clear"
+              onClick={() => setSearchTerm('')}
+              title="Clear search"
             >
-              <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
-              <span className={appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
-                {appliedFrom ? fmtCalDate(appliedFrom) : 'dd-mm-yyyy'}
-              </span>
-              <span className="fu-cal-sep">—</span>
-              <span className={appliedTo && appliedTo !== appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
-                {appliedTo && appliedTo !== appliedFrom ? fmtCalDate(appliedTo) : 'dd-mm-yyyy'}
-              </span>
-              {appliedFrom && (
-                <span
-                  className="fu-cal-x"
-                  onClick={e => { e.stopPropagation(); handleCalClear(); }}
-                  title="Clear date filter"
-                >
-                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
-                  </svg>
-                </span>
-              )}
-              <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                style={{ marginLeft: 'auto', color: '#94a3b8', flexShrink: 0, transform: showCalendar ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
               </svg>
             </button>
+          )}
+        </div>
 
-            {/* Dropdown calendar */}
-            {showCalendar && (
-              <div className="fu-cal-dropdown">
-                <div className="fu-cal-head">
-                  <button className="fu-cal-nav-btn" onClick={calPrevMonth}>
-                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
-                  </button>
-                  <button type="button" className="fu-cal-month-label fu-cal-month-btn" onClick={() => setShowYrCal(p => !p)}>
-                    {CAL_MONTHS[calMonth]} <span className="fu-cal-yr-num">{calYear}</span>
-                  </button>
-                  <button className="fu-cal-nav-btn" onClick={calNextMonth}>
-                    <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
-                  </button>
-                </div>
+        {/* Date Range */}
+        <div className="fu-cal-wrapper" ref={calendarRef}>
+          <button
+            type="button"
+            className={`fu-cal-trigger ${showCalendar ? 'fu-cal-trigger--open' : ''} ${appliedFrom ? 'fu-cal-trigger--applied' : ''}`}
+            onClick={() => setShowCalendar(p => !p)}
+          >
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+            </svg>
+            <span className={appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
+              {appliedFrom ? fmtCalDate(appliedFrom) : 'dd-mm-yyyy'}
+            </span>
+            <span className="fu-cal-sep">—</span>
+            <span className={appliedTo && appliedTo !== appliedFrom ? 'fu-cal-val' : 'fu-cal-ph'}>
+              {appliedTo && appliedTo !== appliedFrom ? fmtCalDate(appliedTo) : 'dd-mm-yyyy'}
+            </span>
+            {appliedFrom && (
+              <span
+                className="fu-cal-x"
+                onClick={e => { e.stopPropagation(); handleCalClear(); }}
+                title="Clear date filter"
+              >
+                <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </span>
+            )}
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              style={{ marginLeft: 'auto', color: '#94a3b8', flexShrink: 0, transform: showCalendar ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+            </svg>
+          </button>
 
-                {showYrCal ? (
-                  <div className="fu-inline-yr-grid">
-                    {Array.from({length:18},(_,i)=>{
-                      const yr = new Date().getFullYear()-5+i;
-                      return (
-                        <div key={yr}
-                          className={`fu-inline-yr-cell${yr===calYear?' fu-inline-yr-sel':''}`}
-                          onClick={()=>{setCalYear(yr);setShowYrCal(false);}}>
-                          {yr}
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                <div className="fu-cal-grid">
-                  {CAL_DAYS.map(d => (
-                    <div key={d} className="fu-cal-day-label">{d}</div>
-                  ))}
-                  {Array.from({ length: calFirstDay }).map((_, i) => (
-                    <div key={`e${i}`} className="fu-cal-cell fu-cal-empty" />
-                  ))}
-                  {Array.from({ length: calDaysInMonth }).map((_, i) => {
-                    const day     = i + 1;
-                    const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                    const dow     = (calFirstDay + i) % 7;
-                    const isFrom  = calIsFrom(dateStr);
-                    const isTo    = calIsTo(dateStr);
-                    const inRange = calInRange(dateStr);
-                    const isToday = dateStr === todayStr;
+          {showCalendar && (
+            <div className="fu-cal-dropdown">
+              <div className="fu-cal-head">
+                <button className="fu-cal-nav-btn" onClick={calPrevMonth}>
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button type="button" className="fu-cal-month-label fu-cal-month-btn" onClick={() => setShowYrCal(p => !p)}>
+                  {CAL_MONTHS[calMonth]} <span className="fu-cal-yr-num">{calYear}</span>
+                </button>
+                <button className="fu-cal-nav-btn" onClick={calNextMonth}>
+                  <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
 
-                    let cls = 'fu-cal-cell';
-                    if (isFrom)        cls += ' fu-cal-from';
-                    else if (isTo)     cls += ' fu-cal-to';
-                    else if (inRange) {
-                      cls += ' fu-cal-in-range';
-                      if (dow === 0) cls += ' fu-cal-rr-start';
-                      if (dow === 6) cls += ' fu-cal-rr-end';
-                    }
-                    if (isToday && !isFrom && !isTo) cls += ' fu-cal-today';
-
+              {showYrCal ? (
+                <div className="fu-inline-yr-grid">
+                  {Array.from({length:18},(_,i)=>{
+                    const yr = new Date().getFullYear()-5+i;
                     return (
-                      <div
-                        key={dateStr}
-                        className={cls}
-                        onClick={() => handleCalDayClick(dateStr)}
-                        onMouseEnter={() => fromDate && !toDate && setHoverDate(dateStr)}
-                        onMouseLeave={() => setHoverDate(null)}
-                      >
-                        {day}
+                      <div key={yr}
+                        className={`fu-inline-yr-cell${yr===calYear?' fu-inline-yr-sel':''}`}
+                        onClick={()=>{setCalYear(yr);setShowYrCal(false);}}>
+                        {yr}
                       </div>
                     );
                   })}
                 </div>
-                )}
+              ) : (
+              <div className="fu-cal-grid">
+                {CAL_DAYS.map(d => (
+                  <div key={d} className="fu-cal-day-label">{d}</div>
+                ))}
+                {Array.from({ length: calFirstDay }).map((_, i) => (
+                  <div key={`e${i}`} className="fu-cal-cell fu-cal-empty" />
+                ))}
+                {Array.from({ length: calDaysInMonth }).map((_, i) => {
+                  const day     = i + 1;
+                  const dateStr = `${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                  const dow     = (calFirstDay + i) % 7;
+                  const isFrom  = calIsFrom(dateStr);
+                  const isTo    = calIsTo(dateStr);
+                  const inRange = calInRange(dateStr);
+                  const isToday = dateStr === todayStr;
 
-                <div className="fu-cal-footer">
-                  <div className="fu-cal-range-chips">
-                    <span className={`fu-cal-chip ${fromDate ? 'fu-cal-chip--set' : ''}`}>
-                      {fromDate ? fmtCalDate(fromDate) : 'From —'}
-                    </span>
-                    <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-                    <span className={`fu-cal-chip ${toDate ? 'fu-cal-chip--set' : ''}`}>
-                      {toDate ? fmtCalDate(toDate) : 'To —'}
-                    </span>
-                  </div>
-                  <div className="fu-cal-footer-actions">
-                    {(fromDate || appliedFrom) && (
-                      <button className="fu-cal-clear-btn" onClick={handleCalClear}>Clear</button>
-                    )}
-                    <button className="fu-cal-apply-btn" onClick={handleCalApply} disabled={!fromDate}>
-                      Apply
-                    </button>
-                  </div>
+                  let cls = 'fu-cal-cell';
+                  if (isFrom)        cls += ' fu-cal-from';
+                  else if (isTo)     cls += ' fu-cal-to';
+                  else if (inRange) {
+                    cls += ' fu-cal-in-range';
+                    if (dow === 0) cls += ' fu-cal-rr-start';
+                    if (dow === 6) cls += ' fu-cal-rr-end';
+                  }
+                  if (isToday && !isFrom && !isTo) cls += ' fu-cal-today';
+
+                  return (
+                    <div
+                      key={dateStr}
+                      className={cls}
+                      onClick={() => handleCalDayClick(dateStr)}
+                      onMouseEnter={() => fromDate && !toDate && setHoverDate(dateStr)}
+                      onMouseLeave={() => setHoverDate(null)}
+                    >
+                      {day}
+                    </div>
+                  );
+                })}
+              </div>
+              )}
+
+              <div className="fu-cal-footer">
+                <div className="fu-cal-range-chips">
+                  <span className={`fu-cal-chip ${fromDate ? 'fu-cal-chip--set' : ''}`}>
+                    {fromDate ? fmtCalDate(fromDate) : 'From —'}
+                  </span>
+                  <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+                  <span className={`fu-cal-chip ${toDate ? 'fu-cal-chip--set' : ''}`}>
+                    {toDate ? fmtCalDate(toDate) : 'To —'}
+                  </span>
+                </div>
+                <div className="fu-cal-footer-actions">
+                  {(fromDate || appliedFrom) && (
+                    <button className="fu-cal-clear-btn" onClick={handleCalClear}>Clear</button>
+                  )}
+                  <button className="fu-cal-apply-btn" onClick={handleCalApply} disabled={!fromDate}>
+                    Apply
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
 
-          {/* Existing filters */}
-          <div className="followups-filters">
-            <select className="followups-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="All">All Status</option>
-              <option value="Pending">Pending</option>
-              <option value="Completed">Completed</option>
-              <option value="Cancelled">Cancelled</option>
-              <option value="Rescheduled">Rescheduled</option>
-            </select>
-            <select className="followups-filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
-              <option value="All">All Priority</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-            </select>
-            <select className="followups-filter-select" value={assignedToFilter} onChange={(e) => setAssignedToFilter(e.target.value)}>
-              <option value="All">All Assigned</option>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
-          </div>
+        {/* Status / Priority / Assigned filters */}
+        <div className="fu-filter-item">
+          <FilterSelect
+            value={statusFilter === 'All' ? '' : statusFilter}
+            options={[
+              { value: 'Pending',     label: 'Pending' },
+              { value: 'Completed',   label: 'Completed' },
+              { value: 'Cancelled',   label: 'Cancelled' },
+              { value: 'Rescheduled', label: 'Rescheduled' },
+            ]}
+            placeholder="All Status"
+            onChange={(v) => setStatusFilter(v || 'All')}
+          />
+        </div>
+        <div className="fu-filter-item">
+          <FilterSelect
+            value={priorityFilter === 'All' ? '' : priorityFilter}
+            options={[
+              { value: 'High',   label: 'High' },
+              { value: 'Medium', label: 'Medium' },
+              { value: 'Low',    label: 'Low' },
+            ]}
+            placeholder="All Priority"
+            onChange={(v) => setPriorityFilter(v || 'All')}
+          />
+        </div>
+        <div className="fu-filter-item">
+          <FilterSelect
+            value={assignedToFilter === 'All' ? '' : assignedToFilter}
+            options={users.map(u => ({ value: String(u.id), label: u.name }))}
+            placeholder="All Assigned"
+            onChange={(v) => setAssignedToFilter(v || 'All')}
+          />
+        </div>
 
-          <button
-            className="followups-btn followups-btn-primary"
-            onClick={() => { resetAddForm(); setShowAddModal(true); }}
-          >
-            <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Add Follow-up
-          </button>
+        {/* Add button */}
+        <button
+          className="followups-btn followups-btn-primary fu-add-btn"
+          onClick={() => { resetAddForm(); setShowAddModal(true); }}
+        >
+          <svg className="followups-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Add Follow-up
+        </button>
 
       </div>
 
@@ -1284,16 +1374,81 @@ export default function ClientDashboardFollowUps() {
                       </span>
                     </td>
                     <td data-label="Status">
-                      <button
-                        className={`followup-status-btn status-${getStatusClass(followup.status)}`}
-                        onClick={() => {
-                          const newStatus = followup.status === 'Pending' ? 'Completed' : 'Pending';
-                          handleQuickStatusUpdate(followup, newStatus);
-                        }}
-                        title="Click to toggle status"
-                      >
-                        {followup.status}
-                      </button>
+                      <div className="fu-status-dd-wrapper" ref={openStatusDropdown === followup.id ? statusDropdownRef : null}>
+                        <button
+                          className={`followup-status-btn status-${getStatusClass(followup.status)}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (openStatusDropdown === followup.id) {
+                              setOpenStatusDropdown(null);
+                              statusBtnRef.current = null;
+                            } else {
+                              statusBtnRef.current = e.currentTarget;
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const DROPDOWN_H = 4 * 36 + 8;
+                              const spaceBelow = window.innerHeight - rect.bottom - 8;
+                              const openUp     = spaceBelow < DROPDOWN_H && rect.top > DROPDOWN_H;
+                              setStatusDropdownPos({
+                                top:   openUp ? rect.top - DROPDOWN_H - 4 : rect.bottom + 4,
+                                left:  rect.left,
+                                width: Math.max(rect.width, 148),
+                                openUp,
+                              });
+                              setOpenStatusDropdown(followup.id);
+                            }
+                          }}
+                          title="Click to change status"
+                        >
+                          {followup.status}
+                          <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                            style={{ marginLeft: 4, flexShrink: 0, transition: 'transform 0.2s',
+                              transform: openStatusDropdown === followup.id ? 'rotate(180deg)' : 'none' }}>
+                            <polyline points="6 9 12 15 18 9"/>
+                          </svg>
+                        </button>
+
+                        {openStatusDropdown === followup.id && ReactDOM.createPortal(
+                          <div
+                            ref={statusDropdownRef}
+                            className="fu-status-dd-panel"
+                            style={{
+                              position: 'fixed',
+                              top:  statusDropdownPos.top,
+                              left: statusDropdownPos.left,
+                              minWidth: statusDropdownPos.width,
+                              zIndex: 99999,
+                            }}
+                          >
+                            {[
+                              { value: 'Pending',     label: 'Pending',     cls: 'fu-sopt-pending' },
+                              { value: 'Completed',   label: 'Completed',   cls: 'fu-sopt-completed' },
+                              { value: 'Cancelled',   label: 'Cancelled',   cls: 'fu-sopt-cancelled' },
+                              { value: 'Rescheduled', label: 'Rescheduled', cls: 'fu-sopt-rescheduled' },
+                            ].map(opt => (
+                              <button
+                                key={opt.value}
+                                className={`fu-status-dd-opt ${opt.cls}${followup.status === opt.value ? ' fu-sopt-current' : ''}`}
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleQuickStatusUpdate(followup, opt.value);
+                                  setOpenStatusDropdown(null);
+                                }}
+                              >
+                                <span className="fu-sopt-dot" />
+                                {opt.label}
+                                {followup.status === opt.value && (
+                                  <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                    style={{ marginLeft: 'auto', flexShrink: 0 }} strokeWidth="2.5">
+                                    <polyline points="20 6 9 17 4 12"/>
+                                  </svg>
+                                )}
+                              </button>
+                            ))}
+                          </div>,
+                          document.body
+                        )}
+                      </div>
                     </td>
                     <td data-label="Assigned To">{followup.assignedToName || 'Unassigned'}</td>
                     <td data-label="Notes">
@@ -1338,37 +1493,43 @@ export default function ClientDashboardFollowUps() {
 
         {/* Pagination — unchanged */}
         <div className="followups-pagination">
-
-          <div className="followups-pagination-info">
-            Showing {startIndex + 1} to {Math.min(endIndex, filteredFollowUps.length)} of {filteredFollowUps.length} entries
-             <select className="followups-rows-select" value={rowsPerPage} onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}>
-              <option value={10}>10 Rows</option>
-              <option value={20}>20 Rows</option>
-              <option value={50}>50 Rows</option>
-              <option value={100}>100 Rows</option>
-            </select>
-          </div>
-          <div className="followups-pagination-controls">
-           
-            <div className="followups-pagination-buttons">
-              <button
-                className="followups-pagination-btn"
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <span className="followups-pagination-current">
-                Page {currentPage} of {totalPages || 1}
-              </span>
-              <button
-                className="followups-pagination-btn"
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages || totalPages === 0}
-              >
-                Next
-              </button>
+          <div className="followups-pagination-left">
+            <span className="followups-pagination-info">
+              Showing {startIndex + 1} to {Math.min(endIndex, filteredFollowUps.length)} of {filteredFollowUps.length} entries
+            </span>
+            <div className="followups-rows-dropdown">
+              <FilterSelect
+                value={String(rowsPerPage)}
+                options={[
+                  { value: '10',  label: '10 Rows' },
+                  { value: '20',  label: '20 Rows' },
+                  { value: '50',  label: '50 Rows' },
+                  { value: '100', label: '100 Rows' },
+                ]}
+                placeholder="Rows"
+                onChange={(v) => { if (v) { setRowsPerPage(Number(v)); setCurrentPage(1); } }}
+              />
             </div>
+          </div>
+
+          <div className="followups-pagination-buttons">
+            <button
+              className="followups-pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </button>
+            <span className="followups-pagination-current">
+              Page {currentPage} of {totalPages || 1}
+            </span>
+            <button
+              className="followups-pagination-btn"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>
@@ -1392,36 +1553,23 @@ export default function ClientDashboardFollowUps() {
                 <div className="followup-form-grid">
                   <div className="followup-form-group">
                     <label>Group *</label>
-                    <select
-                      name="modalGroupName"
+                    <FilterSelect
                       value={addForm.modalGroupName}
-                      onChange={handleAddFormChange}
-                      required
-                    >
-                      <option value="">Select Group</option>
-                      {groups.map((group, index) => (
-                        <option key={group.value || group.label || index} value={group.value || group.label}>
-                          {group.label || group.value}
-                        </option>
-                      ))}
-                    </select>
+                      options={groups.map(g => ({ value: g.value || g.label, label: g.label || g.value }))}
+                      placeholder="Select Group"
+                      onChange={(v) => handleAddFormChange({ target: { name: 'modalGroupName', value: v } })}
+                    />
                   </div>
 
                   <div className="followup-form-group">
                     <label>Sub Group</label>
-                    <select
-                      name="modalSubGroupName"
+                    <FilterSelect
                       value={addForm.modalSubGroupName}
-                      onChange={handleAddFormChange}
+                      options={subGroups.map(s => ({ value: s.value || s.label, label: s.label || s.value }))}
+                      placeholder={!addForm.modalGroupName ? 'Select Group First' : 'Select Sub Group'}
                       disabled={!addForm.modalGroupName}
-                    >
-                      <option value="">Select Sub Group</option>
-                      {subGroups.map((sub, index) => (
-                        <option key={sub.value || sub.label || index} value={sub.value || sub.label}>
-                          {sub.label || sub.value}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => handleAddFormChange({ target: { name: 'modalSubGroupName', value: v } })}
+                    />
                   </div>
 
                   <div className="followup-form-group followup-form-full">
@@ -1610,24 +1758,34 @@ export default function ClientDashboardFollowUps() {
                 <div className="followup-form-grid">
                   <div className="followup-form-group">
                     <label>Follow-up Type *</label>
-                    <select name="followupType" value={addForm.followupType} onChange={handleAddFormChange} required>
-                      <option value="Call">Call</option>
-                      <option value="Email">Email</option>
-                      <option value="Meeting">Meeting</option>
-                      <option value="Visit">Site Visit</option>
-                      <option value="Demo">Demo</option>
-                      <option value="Proposal">Send Proposal</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <FilterSelect
+                      value={addForm.followupType}
+                      options={[
+                        { value: 'Call',     label: 'Call' },
+                        { value: 'Email',    label: 'Email' },
+                        { value: 'Meeting',  label: 'Meeting' },
+                        { value: 'Visit',    label: 'Site Visit' },
+                        { value: 'Demo',     label: 'Demo' },
+                        { value: 'Proposal', label: 'Send Proposal' },
+                        { value: 'Other',    label: 'Other' },
+                      ]}
+                      placeholder="Select Type"
+                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'followupType', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
                     <label>Priority *</label>
-                    <select name="priority" value={addForm.priority} onChange={handleAddFormChange} required>
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
+                    <FilterSelect
+                      value={addForm.priority}
+                      options={[
+                        { value: 'High',   label: 'High' },
+                        { value: 'Medium', label: 'Medium' },
+                        { value: 'Low',    label: 'Low' },
+                      ]}
+                      placeholder="Select Priority"
+                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'priority', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
@@ -1646,7 +1804,13 @@ export default function ClientDashboardFollowUps() {
                     <button
                       type="button"
                       className="followup-time-trigger"
-                      onClick={() => { setTempAddTime(addForm.scheduledTime || ''); setShowAddTimePicker(p => !p); }}
+                      onClick={() => {
+                        const { hour, minute, ampm } = parseTimeTo12h(addForm.scheduledTime);
+                        setTempAddHour(hour);
+                        setTempAddMinute(minute);
+                        setTempAddAmPm(ampm);
+                        setShowAddTimePicker(p => !p);
+                      }}
                     >
                       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" strokeWidth="2"/>
@@ -1656,30 +1820,46 @@ export default function ClientDashboardFollowUps() {
                     </button>
 
                     {showAddTimePicker && (
-                      <div className="followup-time-popover">
-                        <span className="followup-time-popover-label" style={{cursor:"pointer"}} onClick={()=>{try{addTimeInputRef.current.showPicker();}catch(_){addTimeInputRef.current.focus();}}}>Pick a time</span>
-                        <input
-                          type="time"
-                          ref={addTimeInputRef}
-                          autoFocus
-                          className="followup-time-input"
-                          value={tempAddTime}
-                          onChange={e => setTempAddTime(e.target.value)}
-                          onClick={e => { try { e.target.showPicker(); } catch(_) {} }}
-                        />
-                        <div className="followup-time-popover-actions">
-                          <button type="button" className="followup-time-btn-cancel"
-                            onClick={() => { setShowAddTimePicker(false); setTempAddTime(''); }}>
-                            Cancel
-                          </button>
-                          <button type="button" className="followup-time-btn-save"
-                            onClick={() => {
-                              setAddForm(prev => ({ ...prev, scheduledTime: tempAddTime }));
-                              setShowAddTimePicker(false);
-                              setTempAddTime('');
-                            }}>
-                            Save
-                          </button>
+                      <div className="followup-time-popover fu-hm-picker">
+                        <div className="fu-hm-ampm-row">
+                          {['AM','PM'].map(ap => (
+                            <button key={ap} type="button"
+                              className={`fu-hm-ampm-btn${tempAddAmPm === ap ? ' fu-hm-ampm-active' : ''}`}
+                              onClick={() => setTempAddAmPm(ap)}>
+                              {ap}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="fu-hm-columns">
+                          <div className="fu-hm-col">
+                            <div className="fu-hm-col-label">Hour</div>
+                            <div className="fu-hm-col-scroll">
+                              {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
+                                <button key={h} type="button"
+                                  className={`fu-hm-item${tempAddHour === h ? ' fu-hm-active' : ''}`}
+                                  onClick={() => setTempAddHour(h)}>
+                                  {String(h).padStart(2,'0')}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="fu-hm-divider">:</div>
+                          <div className="fu-hm-col">
+                            <div className="fu-hm-col-label">Min</div>
+                            <div className="fu-hm-col-scroll">
+                              {[0,5,10,15,20,25,30,35,40,45,50,55].map(m => (
+                                <button key={m} type="button"
+                                  className={`fu-hm-item${tempAddMinute === m ? ' fu-hm-active' : ''}`}
+                                  onClick={() => {
+                                    const timeStr = buildTime24(tempAddHour, m, tempAddAmPm);
+                                    setAddForm(prev => ({ ...prev, scheduledTime: timeStr }));
+                                    setShowAddTimePicker(false);
+                                  }}>
+                                  {String(m).padStart(2,'0')}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1687,26 +1867,30 @@ export default function ClientDashboardFollowUps() {
 
                   <div className="followup-form-group">
                     <label>Assign To *</label>
-                    <select name="assignedTo" value={addForm.assignedTo} onChange={handleAddFormChange} required>
-                      {users.length === 0 && (
-                        <option value={user.id}>{user.name || 'Me'} (Me)</option>
-                      )}
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} {Number(u.id) === Number(user.id) ? '(Me)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <FilterSelect
+                      value={String(addForm.assignedTo || '')}
+                      options={[
+                        ...(users.length === 0 ? [{ value: String(user.id), label: `${user.name || 'Me'} (Me)` }] : []),
+                        ...users.map(u => ({ value: String(u.id), label: `${u.name}${Number(u.id) === Number(user.id) ? ' (Me)' : ''}` }))
+                      ]}
+                      placeholder="Select Assignee"
+                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'assignedTo', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
                     <label>Status</label>
-                    <select name="status" value={addForm.status} onChange={handleAddFormChange}>
-                      <option value="Pending">Pending</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="Rescheduled">Rescheduled</option>
-                    </select>
+                    <FilterSelect
+                      value={addForm.status}
+                      options={[
+                        { value: 'Pending',     label: 'Pending' },
+                        { value: 'Completed',   label: 'Completed' },
+                        { value: 'Cancelled',   label: 'Cancelled' },
+                        { value: 'Rescheduled', label: 'Rescheduled' },
+                      ]}
+                      placeholder="Select Status"
+                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'status', value: v } }); }}
+                    />
                   </div>
                 </div>
 
@@ -1787,24 +1971,34 @@ export default function ClientDashboardFollowUps() {
                 <div className="followup-form-grid">
                   <div className="followup-form-group">
                     <label>Follow-up Type *</label>
-                    <select name="followupType" value={editForm.followupType} onChange={handleEditFormChange} required>
-                      <option value="Call">Call</option>
-                      <option value="Email">Email</option>
-                      <option value="Meeting">Meeting</option>
-                      <option value="Visit">Site Visit</option>
-                      <option value="Demo">Demo</option>
-                      <option value="Proposal">Send Proposal</option>
-                      <option value="Other">Other</option>
-                    </select>
+                    <FilterSelect
+                      value={editForm.followupType}
+                      options={[
+                        { value: 'Call',     label: 'Call' },
+                        { value: 'Email',    label: 'Email' },
+                        { value: 'Meeting',  label: 'Meeting' },
+                        { value: 'Visit',    label: 'Site Visit' },
+                        { value: 'Demo',     label: 'Demo' },
+                        { value: 'Proposal', label: 'Send Proposal' },
+                        { value: 'Other',    label: 'Other' },
+                      ]}
+                      placeholder="Select Type"
+                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'followupType', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
                     <label>Priority *</label>
-                    <select name="priority" value={editForm.priority} onChange={handleEditFormChange} required>
-                      <option value="High">High</option>
-                      <option value="Medium">Medium</option>
-                      <option value="Low">Low</option>
-                    </select>
+                    <FilterSelect
+                      value={editForm.priority}
+                      options={[
+                        { value: 'High',   label: 'High' },
+                        { value: 'Medium', label: 'Medium' },
+                        { value: 'Low',    label: 'Low' },
+                      ]}
+                      placeholder="Select Priority"
+                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'priority', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
@@ -1823,7 +2017,13 @@ export default function ClientDashboardFollowUps() {
                     <button
                       type="button"
                       className="followup-time-trigger"
-                      onClick={() => { setTempEditTime(editForm.scheduledTime || ''); setShowEditTimePicker(p => !p); }}
+                      onClick={() => {
+                        const { hour, minute, ampm } = parseTimeTo12h(editForm.scheduledTime);
+                        setTempEditHour(hour);
+                        setTempEditMinute(minute);
+                        setTempEditAmPm(ampm);
+                        setShowEditTimePicker(p => !p);
+                      }}
                     >
                       <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" strokeWidth="2"/>
@@ -1833,30 +2033,46 @@ export default function ClientDashboardFollowUps() {
                     </button>
 
                     {showEditTimePicker && (
-                      <div className="followup-time-popover">
-                        <span className="followup-time-popover-label" style={{cursor:"pointer"}} onClick={()=>{try{editTimeInputRef.current.showPicker();}catch(_){editTimeInputRef.current.focus();}}}>Pick a time</span>
-                        <input
-                          type="time"
-                          ref={editTimeInputRef}
-                          autoFocus
-                          className="followup-time-input"
-                          value={tempEditTime}
-                          onChange={e => setTempEditTime(e.target.value)}
-                          onClick={e => { try { e.target.showPicker(); } catch(_) {} }}
-                        />
-                        <div className="followup-time-popover-actions">
-                          <button type="button" className="followup-time-btn-cancel"
-                            onClick={() => { setShowEditTimePicker(false); setTempEditTime(''); }}>
-                            Cancel
-                          </button>
-                          <button type="button" className="followup-time-btn-save"
-                            onClick={() => {
-                              setEditForm(prev => ({ ...prev, scheduledTime: tempEditTime }));
-                              setShowEditTimePicker(false);
-                              setTempEditTime('');
-                            }}>
-                            Save
-                          </button>
+                      <div className="followup-time-popover fu-hm-picker">
+                        <div className="fu-hm-ampm-row">
+                          {['AM','PM'].map(ap => (
+                            <button key={ap} type="button"
+                              className={`fu-hm-ampm-btn${tempEditAmPm === ap ? ' fu-hm-ampm-active' : ''}`}
+                              onClick={() => setTempEditAmPm(ap)}>
+                              {ap}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="fu-hm-columns">
+                          <div className="fu-hm-col">
+                            <div className="fu-hm-col-label">Hour</div>
+                            <div className="fu-hm-col-scroll">
+                              {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
+                                <button key={h} type="button"
+                                  className={`fu-hm-item${tempEditHour === h ? ' fu-hm-active' : ''}`}
+                                  onClick={() => setTempEditHour(h)}>
+                                  {String(h).padStart(2,'0')}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="fu-hm-divider">:</div>
+                          <div className="fu-hm-col">
+                            <div className="fu-hm-col-label">Min</div>
+                            <div className="fu-hm-col-scroll">
+                              {[0,5,10,15,20,25,30,35,40,45,50,55].map(m => (
+                                <button key={m} type="button"
+                                  className={`fu-hm-item${tempEditMinute === m ? ' fu-hm-active' : ''}`}
+                                  onClick={() => {
+                                    const timeStr = buildTime24(tempEditHour, m, tempEditAmPm);
+                                    setEditForm(prev => ({ ...prev, scheduledTime: timeStr }));
+                                    setShowEditTimePicker(false);
+                                  }}>
+                                  {String(m).padStart(2,'0')}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1864,26 +2080,30 @@ export default function ClientDashboardFollowUps() {
 
                   <div className="followup-form-group">
                     <label>Assign To *</label>
-                    <select name="assignedTo" value={editForm.assignedTo} onChange={handleEditFormChange} required>
-                      {users.length === 0 && (
-                        <option value={user.id}>{user.name || 'Me'} (Me)</option>
-                      )}
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} {Number(u.id) === Number(user.id) ? '(Me)' : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <FilterSelect
+                      value={String(editForm.assignedTo || '')}
+                      options={[
+                        ...(users.length === 0 ? [{ value: String(user.id), label: `${user.name || 'Me'} (Me)` }] : []),
+                        ...users.map(u => ({ value: String(u.id), label: `${u.name}${Number(u.id) === Number(user.id) ? ' (Me)' : ''}` }))
+                      ]}
+                      placeholder="Select Assignee"
+                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'assignedTo', value: v } }); }}
+                    />
                   </div>
 
                   <div className="followup-form-group">
                     <label>Status *</label>
-                    <select name="status" value={editForm.status} onChange={handleEditFormChange} required>
-                      <option value="Pending">Pending</option>
-                      <option value="Completed">Completed</option>
-                      <option value="Cancelled">Cancelled</option>
-                      <option value="Rescheduled">Rescheduled</option>
-                    </select>
+                    <FilterSelect
+                      value={editForm.status}
+                      options={[
+                        { value: 'Pending',     label: 'Pending' },
+                        { value: 'Completed',   label: 'Completed' },
+                        { value: 'Cancelled',   label: 'Cancelled' },
+                        { value: 'Rescheduled', label: 'Rescheduled' },
+                      ]}
+                      placeholder="Select Status"
+                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'status', value: v } }); }}
+                    />
                   </div>
                 </div>
 
