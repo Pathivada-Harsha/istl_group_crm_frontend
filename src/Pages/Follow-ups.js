@@ -1343,7 +1343,7 @@ export default function ClientDashboardFollowUps() {
                           <>
                             <span style={{ display:'inline-block', padding:'1px 7px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>👤 Lead</span>
                             <strong style={{ display:'block', fontSize:13 }}>{followup.leadCode || 'N/A'}</strong>
-                            {followup.groupName && <span className="followup-group-badge">{followup.groupName}</span>}
+                            {/* {followup.groupName && <span className="followup-group-badge">{followup.groupName}</span>} */}
                           </>
                         )}
                       </div>

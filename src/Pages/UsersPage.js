@@ -1277,7 +1277,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <div className="users-page-table-wrapper">
                   <table className="users-page-table">
                     <thead>
-                      <tr>
+                      <tr >
                         <th>Name</th>
                         <th>Contact</th>
                         <th>Role / Designation</th>

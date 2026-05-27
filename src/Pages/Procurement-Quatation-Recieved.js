@@ -1364,22 +1364,18 @@ const QuotationsReceived = () => {
               {totalElements} quotations
             </span>
 
-            <div className="records-per-page">
-             
-              <select
-                id="pageSize"
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(parseInt(e.target.value));
-                  setCurrentPage(0);
-                }}
-                className="page-size-select"
-              >
-                <option value="10">10 Rows</option>
-                <option value="20">20 Rows</option>
-                <option value="50">50 Rows</option>
-                <option value="100">100 Rows</option>
-              </select>
+            <div className="pce-rows-dropdown">
+              <FilterSelect
+                value={String(pageSize)}
+                options={[
+                  { value: '10',  label: '10 Rows' },
+                  { value: '20',  label: '20 Rows' },
+                  { value: '50',  label: '50 Rows' },
+                  { value: '100', label: '100 Rows' },
+                ]}
+                placeholder="Rows"
+                onChange={(v) => { if (v) { setPageSize(parseInt(v)); setCurrentPage(0); } }}
+              />
             </div>
           </div>
 

@@ -666,3 +666,85 @@
   min-width: unset;
   font-size: 13px;
 }
+/* ── Rows-per-page dropdown — fully standalone styles (sourced from GroupProjectFilter.css) ── */
+.pce-rows-dropdown {
+  display: inline-flex;
+  flex-shrink: 0;
+  position: relative;
+  width: 95px;
+}
+.pce-rows-dropdown > div {
+  width: 95px;
+}
+.pce-rows-dropdown .filter-trigger {
+  width: 95px;
+  min-width: 95px;
+  max-width: 95px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 0 26px 0 10px;
+  display: flex;
+  align-items: center;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  outline: none;
+  user-select: none;
+  position: relative;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.pce-rows-dropdown .filter-trigger:hover:not(.filter-trigger--disabled) {
+  box-shadow: 0 1px 4px rgba(37,99,235,0.10);
+}
+.pce-rows-dropdown .filter-trigger.filter-trigger--open {
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+}
+.pce-rows-dropdown .filter-trigger.filter-trigger--has-value {
+  color: #2563eb;
+  font-weight: 600;
+}
+.pce-rows-dropdown .filter-trigger.filter-trigger--disabled {
+  background-color: #f8fafc;
+  border-color: #e2e8f0;
+  color: #cbd5e1;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+.pce-rows-dropdown .filter-trigger__chevron {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  transition: transform 0.2s, color 0.15s;
+  flex-shrink: 0;
+}
+.pce-rows-dropdown .filter-trigger.filter-trigger--open .filter-trigger__chevron {
+  transform: translateY(-50%) rotate(180deg);
+  color: #2563eb;
+}
+.pce-rows-dropdown .filter-trigger.filter-trigger--has-value .filter-trigger__chevron {
+  color: #2563eb;
+}
+.pce-rows-dropdown .filter-trigger__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.pce-rows-dropdown .filter-trigger__text--placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+  font-style: italic;
+}

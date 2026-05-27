@@ -1,7 +1,7 @@
 /* Project Dashboard Styles */
 
 .project-dashboard-container {
-  padding: 14px;
+  padding: 14px 24px 10px 24px;
   /* background-color: #f5f7fa; */
   /* min-height: 100vh; */
 }
@@ -239,6 +239,11 @@
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
+}
+
+/* Consolidated Financial Overview: exactly 4 cards per row */
+.kpi-grid.kpi-grid-4col {
+  grid-template-columns: repeat(4, 1fr);
 }
 
 .kpi-card {
@@ -640,6 +645,10 @@
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .kpi-grid.kpi-grid-4col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
   .metrics-grid {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -684,6 +693,10 @@
   }
 
   .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi-grid.kpi-grid-4col {
     grid-template-columns: 1fr;
   }
 

@@ -8,6 +8,7 @@ import {
   Receipt, RefreshCw,
 } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter.js';
+import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters.js';
 import { useAuth } from '../hooks/useAuth.js';
 import useToast from '../hooks/useToast';
@@ -39,6 +40,30 @@ const DEFAULT_COLUMNS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = v => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+
+// ── Indian rupee live-format helpers (for amount inputs) ──────────────────────
+// Formats a raw numeric string to Indian comma format while preserving decimals-in-progress
+const toIndianDisplay = (val) => {
+  if (val === '' || val == null) return '';
+  const str = String(val).replace(/,/g, '');
+  const dotIdx = str.indexOf('.');
+  const hasDecimal = dotIdx !== -1;
+  const intPart = hasDecimal ? str.slice(0, dotIdx) : str;
+  const decPart = hasDecimal ? str.slice(dotIdx + 1) : undefined;
+  let formattedInt = '';
+  if (intPart !== '') {
+    const n = parseInt(intPart, 10);
+    formattedInt = isNaN(n) ? intPart : n.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  }
+  return decPart !== undefined ? formattedInt + '.' + decPart : formattedInt;
+};
+// Strips commas and non-numeric chars (except one decimal) for storing raw value
+const fromIndianDisplay = (str) => {
+  const clean = str.replace(/,/g, '').replace(/[^\d.]/g, '');
+  // Ensure at most one decimal point
+  const parts = clean.split('.');
+  return parts.length > 2 ? parts[0] + '.' + parts.slice(1).join('') : clean;
+};
 const fmtDate = d => { if (!d) return 'N/A'; const dt = new Date(d); const dd = String(dt.getDate()).padStart(2,'0'); const mm = String(dt.getMonth()+1).padStart(2,'0'); const yyyy = dt.getFullYear(); return `${dd}-${mm}-${yyyy}`; };
 
 const CategoryIcon = ({ cat }) => ({
@@ -1103,21 +1128,24 @@ const ProjectCostExpenseManagement = () => {
             value={filters.search}
             onChange={(e) => { setFilters({ ...filters, search: e.target.value }); setCurrentPage(0); }}
           />
-          <select className="exp-mgmt-filter" value={filters.category}
-            onChange={(e) => { setFilters({ ...filters, category: e.target.value }); setCurrentPage(0); setActiveKpi(null); }}>
-            <option value="all">All Categories</option>
-            {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-          </select>
-          <select className="exp-mgmt-filter" value={filters.status}
-            onChange={(e) => { setFilters({ ...filters, status: e.target.value }); setCurrentPage(0); setActiveKpi(null); }}>
-            <option value="all">All Status</option>
-            {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-          </select>
-          <select className="exp-mgmt-filter" value={filters.paymentMode}
-            onChange={(e) => { setFilters({ ...filters, paymentMode: e.target.value }); setCurrentPage(0); }}>
-            <option value="all">All Modes</option>
-            {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-          </select>
+          <FilterSelect
+            value={filters.category === 'all' ? '' : filters.category}
+            options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
+            placeholder="All Categories"
+            onChange={(val) => { setFilters({ ...filters, category: val || 'all' }); setCurrentPage(0); setActiveKpi(null); }}
+          />
+          <FilterSelect
+            value={filters.status === 'all' ? '' : filters.status}
+            options={STATUS_OPTIONS.map(s => ({ value: s, label: s }))}
+            placeholder="All Status"
+            onChange={(val) => { setFilters({ ...filters, status: val || 'all' }); setCurrentPage(0); setActiveKpi(null); }}
+          />
+          <FilterSelect
+            value={filters.paymentMode === 'all' ? '' : filters.paymentMode}
+            options={PAYMENT_MODES.map(m => ({ value: m, label: formatPaymentMode(m) }))}
+            placeholder="All Modes"
+            onChange={(val) => { setFilters({ ...filters, paymentMode: val || 'all' }); setCurrentPage(0); }}
+          />
           <PCEDateRangeFilter
             appliedFrom={filters.dateFrom}
             appliedTo={filters.dateTo}
@@ -1300,16 +1328,19 @@ const ProjectCostExpenseManagement = () => {
               <span>
                 Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} expenses
               </span>
-              <select
-                className="page-size-selector"
-                value={pageSize}
-                onChange={handlePageSizeChange}
-              >
-                <option value={10}>10 Rows</option>
-                <option value={20}>20 Rows</option>
-                <option value={50}>50 Rows</option>
-                <option value={100}>100 Rows</option>
-              </select>
+              <div className="pce-rows-dropdown">
+                <FilterSelect
+                  value={String(pageSize)}
+                  options={[
+                    { value: '10',  label: '10 Rows' },
+                    { value: '20',  label: '20 Rows' },
+                    { value: '50',  label: '50 Rows' },
+                    { value: '100', label: '100 Rows' },
+                  ]}
+                  placeholder="Rows"
+                  onChange={(v) => { if (v) { setPageSize(Number(v)); setCurrentPage(0); } }}
+                />
+              </div>
             </div>
             <div className="pagination">
               <button className="page-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>«</button>
@@ -1377,17 +1408,23 @@ const ProjectCostExpenseManagement = () => {
                   <div className="exp-form-row2">
                     <div className="exp-field">
                       <label>Group *</label>
-                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                        <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
-                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalGroupName}
+                        options={modalGroups}
+                        placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}
+                        disabled={modalDropdownLoading.groups}
+                        onChange={(val) => handleModalGroupChange({ target: { value: val } })}
+                      />
                     </div>
                     <div className="exp-field">
                       <label>Sub-Group *</label>
-                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                        <option value="">{!modalGroupName ? 'Select group first' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub-Group'}</option>
-                        {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalSubGroupName}
+                        options={modalSubGroups}
+                        placeholder={!modalGroupName ? 'Select group first' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub-Group'}
+                        disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                        onChange={(val) => handleModalSubGroupChange({ target: { value: val } })}
+                      />
                     </div>
                   </div>
                   {modalSubGroupName && (
@@ -1485,13 +1522,15 @@ const ProjectCostExpenseManagement = () => {
                   <div className="exp-form-row2" style={{marginTop:10}}>
                     <div className="exp-field">
                       <label>Status</label>
-                      <select value={expenseFormData.status || 'Approved'}
-                        onChange={e => setExpenseFormData(p => ({ ...p, status: e.target.value }))}
-                        style={{borderColor: expenseFormData.status === 'Approved' ? '#16a34a' : expenseFormData.status === 'Rejected' ? '#dc2626' : '#f59e0b'}}>
-                        <option value="Approved">✅ Approved</option>
-                        <option value="Pending">⏳ Pending</option>
-                        <option value="Rejected">❌ Rejected</option>
-                      </select>
+                      <FilterSelect
+                        value={expenseFormData.status || 'Approved'}
+                        options={[
+                          { value: 'Approved', label: '✅ Approved' },
+                          { value: 'Pending',  label: '⏳ Pending' },
+                          { value: 'Rejected', label: '❌ Rejected' },
+                        ]}
+                        onChange={(val) => setExpenseFormData(p => ({ ...p, status: val || 'Approved' }))}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1520,11 +1559,11 @@ const ProjectCostExpenseManagement = () => {
                             <div className="exp-item-top-row">
                               <div className="exp-field exp-field-sm">
                                 <label>Category *</label>
-                                <select
+                                <FilterSelect
                                   value={EXPENSE_CATEGORIES.includes(item.category) ? item.category : 'Other'}
-                                  onChange={e => updateItem(item.id, 'category', e.target.value === 'Other' ? '' : e.target.value)}>
-                                  {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                                </select>
+                                  options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
+                                  onChange={(val) => updateItem(item.id, 'category', (!val || val === 'Other') ? '' : val)}
+                                />
                                 {(!EXPENSE_CATEGORIES.slice(0,-1).includes(item.category)) && (
                                   <input
                                     type="text"
@@ -1538,26 +1577,29 @@ const ProjectCostExpenseManagement = () => {
                               </div>
                               <div className="exp-field exp-field-sm">
                                 <label>Amount (₹) *</label>
-                                <input type="number" step="0.01" min="0" placeholder="0.00" value={item.amount}
-                                  onChange={e => updateItem(item.id, 'amount', e.target.value)} />
+                                <input type="text" inputMode="decimal" placeholder="0.00"
+                                  value={toIndianDisplay(item.amount)}
+                                  onChange={e => updateItem(item.id, 'amount', fromIndianDisplay(e.target.value))} />
                               </div>
                               <div className="exp-field exp-field-sm">
                                 <label>Payment Mode</label>
-                                <select value={item.paymentMode} onChange={e => updateItem(item.id, 'paymentMode', e.target.value)}>
-                                  {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-                                </select>
+                                <FilterSelect
+                                  value={item.paymentMode}
+                                  options={PAYMENT_MODES.map(m => ({ value: m, label: formatPaymentMode(m) }))}
+                                  onChange={(val) => updateItem(item.id, 'paymentMode', val || 'UPI')}
+                                />
                               </div>
                               <div className="exp-field exp-field-proj">
                                 <label>Project * <span className="exp-field-hint">(required)</span></label>
-                                <select value={item.projectId}
-                                  onChange={e => updateItem(item.id, 'projectId', e.target.value)}
-                                  disabled={!modalSubGroupName || isLoading}
-                                  style={!item.projectId ? {borderColor:'#ef4444',boxShadow:'0 0 0 2px rgba(239,68,68,.15)'} : {}}>
-                                  <option value="">{isLoading ? 'Loading…' : !modalSubGroupName ? 'Select sub-group first' : '— Select Project *'}</option>
-                                  {projList.map(p => (
-                                    <option key={p.id} value={String(p.id)}>{p.name}{p.location ? ` – ${p.location}` : ''}</option>
-                                  ))}
-                                </select>
+                                <div className={!item.projectId ? 'exp-field-error-wrap' : ''}>
+                                  <FilterSelect
+                                    value={item.projectId}
+                                    options={projList.map(p => ({ value: String(p.id), label: p.name + (p.location ? ` – ${p.location}` : '') }))}
+                                    placeholder={isLoading ? 'Loading…' : !modalSubGroupName ? 'Select sub-group first' : '— Select Project *'}
+                                    disabled={!modalSubGroupName || isLoading}
+                                    onChange={(val) => updateItem(item.id, 'projectId', val)}
+                                  />
+                                </div>
                               </div>
                               {expenseFormData.expenseItems.length > 1 && (
                                 <button className="exp-item-del-btn" onClick={() => removeItem(item.id)} title="Remove item">
@@ -1621,22 +1663,19 @@ const ProjectCostExpenseManagement = () => {
                     <div className="exp-form-row2">
                       <div className="exp-field">
                         <label>Select Advance to Adjust</label>
-                        <select value={expenseFormData.adjustedAdvanceId || ''}
-                          onChange={e => setExpenseFormData(p => ({ ...p, adjustedAdvanceId: e.target.value }))}>
-                          <option value="">— No advance adjustment —</option>
-                          {pendingAdvances.map(a => (
-                            <option key={a.id} value={a.id}>
-                              {a.advanceCode} — {fmt(a.totalAmount)} ({a.projectId || a.groupName}) — {a.status}
-                            </option>
-                          ))}
-                        </select>
+                        <FilterSelect
+                          value={expenseFormData.adjustedAdvanceId || ''}
+                          options={pendingAdvances.map(a => ({ value: a.id, label: `${a.advanceCode} — ${fmt(a.totalAmount)} (${a.projectId || a.groupName}) — ${a.status}` }))}
+                          placeholder="— No advance adjustment —"
+                          onChange={(val) => setExpenseFormData(p => ({ ...p, adjustedAdvanceId: val }))}
+                        />
                       </div>
                       {expenseFormData.adjustedAdvanceId && (
                         <div className="exp-field">
                           <label>Amount to Adjust (₹)</label>
-                          <input type="number" min="0" step="0.01" placeholder="0.00"
-                            value={expenseFormData.advanceAdjustedAmount || ''}
-                            onChange={e => setExpenseFormData(p => ({ ...p, advanceAdjustedAmount: e.target.value }))} />
+                          <input type="text" inputMode="decimal" placeholder="0.00"
+                            value={toIndianDisplay(expenseFormData.advanceAdjustedAmount || '')}
+                            onChange={e => setExpenseFormData(p => ({ ...p, advanceAdjustedAmount: fromIndianDisplay(e.target.value) }))} />
                         </div>
                       )}
                     </div>
@@ -1734,17 +1773,23 @@ const ProjectCostExpenseManagement = () => {
                   <div className="exp-form-row2">
                     <div className="exp-field">
                       <label>Group *</label>
-                      <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                        <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
-                        {modalGroups.map(g => <option key={g.value} value={g.value}>{g.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalGroupName}
+                        options={modalGroups}
+                        placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}
+                        disabled={modalDropdownLoading.groups}
+                        onChange={(val) => handleModalGroupChange({ target: { value: val } })}
+                      />
                     </div>
                     <div className="exp-field">
                       <label>Sub-Group *</label>
-                      <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                        <option value="">{!modalGroupName ? 'Select group first' : 'Select Sub-Group'}</option>
-                        {modalSubGroups.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={modalSubGroupName}
+                        options={modalSubGroups}
+                        placeholder={!modalGroupName ? 'Select group first' : 'Select Sub-Group'}
+                        disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                        onChange={(val) => handleModalSubGroupChange({ target: { value: val } })}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1830,11 +1875,12 @@ const ProjectCostExpenseManagement = () => {
                     </div>
                     <div className="exp-field">
                       <label>Status</label>
-                      <select value={expenseFormData.status}
-                        onChange={e => setExpenseFormData(p => ({ ...p, status: e.target.value }))}
-                        disabled={!canApprove && expenseFormData.status !== 'Pending'}>
-                        {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={expenseFormData.status}
+                        options={STATUS_OPTIONS.map(s => ({ value: s, label: s }))}
+                        disabled={!canApprove && expenseFormData.status !== 'Pending'}
+                        onChange={(val) => setExpenseFormData(p => ({ ...p, status: val || p.status }))}
+                      />
                     </div>
                   </div>
                   <div className="exp-field" style={{marginTop:8}}>
@@ -1861,11 +1907,11 @@ const ProjectCostExpenseManagement = () => {
                             <div className="exp-item-top-row">
                               <div className="exp-field exp-field-sm">
                                 <label>Category *</label>
-                                <select
+                                <FilterSelect
                                   value={EXPENSE_CATEGORIES.includes(item.category) ? item.category : 'Other'}
-                                  onChange={e => updateItem(item.id, 'category', e.target.value === 'Other' ? '' : e.target.value)}>
-                                  {EXPENSE_CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                                </select>
+                                  options={EXPENSE_CATEGORIES.map(c => ({ value: c, label: c }))}
+                                  onChange={(val) => updateItem(item.id, 'category', (!val || val === 'Other') ? '' : val)}
+                                />
                                 {(!EXPENSE_CATEGORIES.slice(0,-1).includes(item.category)) && (
                                   <input
                                     type="text"
@@ -1879,28 +1925,34 @@ const ProjectCostExpenseManagement = () => {
                               </div>
                               <div className="exp-field exp-field-sm">
                                 <label>Amount (₹) *</label>
-                                <input type="number" step="0.01" min="0" value={item.amount}
-                                  onChange={e => updateItem(item.id, 'amount', e.target.value)} />
+                                <input type="text" inputMode="decimal"
+                                  value={toIndianDisplay(item.amount)}
+                                  onChange={e => updateItem(item.id, 'amount', fromIndianDisplay(e.target.value))} />
                               </div>
                               <div className="exp-field exp-field-sm">
                                 <label>Payment Mode</label>
-                                <select value={item.paymentMode} onChange={e => updateItem(item.id, 'paymentMode', e.target.value)}>
-                                  {PAYMENT_MODES.map(m => <option key={m} value={m}>{formatPaymentMode(m)}</option>)}
-                                </select>
+                                <FilterSelect
+                                  value={item.paymentMode}
+                                  options={PAYMENT_MODES.map(m => ({ value: m, label: formatPaymentMode(m) }))}
+                                  onChange={(val) => updateItem(item.id, 'paymentMode', val || 'UPI')}
+                                />
                               </div>
                               <div className="exp-field exp-field-proj">
                                 <label>Project * <span className="exp-field-hint">(required)</span></label>
-                                <select value={item.projectId}
-                                  onChange={e => updateItem(item.id, 'projectId', e.target.value)}
-                                  disabled={isLoading}
-                                  style={!item.projectId ? {borderColor:'#ef4444',boxShadow:'0 0 0 2px rgba(239,68,68,.15)'} : {}}>
-                                  <option value="">{isLoading ? 'Loading…' : '— Select Project *'}</option>
-                                  {projList.map(p => <option key={p.id} value={String(p.id)}>{p.name}</option>)}
-                                  {/* Show current project if not yet in list */}
-                                  {item.projectId && !projList.find(p => String(p.id) === String(item.projectId)) && !isLoading && (
-                                    <option key={item.projectId} value={item.projectId}>Project #{item.projectId} (current)</option>
-                                  )}
-                                </select>
+                                <div className={!item.projectId ? 'exp-field-error-wrap' : ''}>
+                                  <FilterSelect
+                                    value={item.projectId}
+                                    options={[
+                                      ...projList.map(p => ({ value: String(p.id), label: p.name })),
+                                      ...(item.projectId && !projList.find(p => String(p.id) === String(item.projectId)) && !isLoading
+                                        ? [{ value: item.projectId, label: `Project #${item.projectId} (current)` }]
+                                        : [])
+                                    ]}
+                                    placeholder={isLoading ? 'Loading…' : '— Select Project *'}
+                                    disabled={isLoading}
+                                    onChange={(val) => updateItem(item.id, 'projectId', val)}
+                                  />
+                                </div>
                               </div>
                               {expenseFormData.expenseItems.length > 1 && (
                                 <button className="exp-item-del-btn" onClick={() => removeItem(item.id)}><Trash2 size={13} /></button>
