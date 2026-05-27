@@ -202,7 +202,8 @@
 .profile-name {
   font-size: 15px;
   font-weight: 700;
-  color: #0b63d6;      /* BD Portal blue */
+  color: #0b63d6; 
+  text-transform: uppercase;     /* BD Portal blue */
 }
 
 

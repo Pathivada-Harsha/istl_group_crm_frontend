@@ -640,7 +640,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
       {/* Financial Overview */}
       <div className="dashboard-section">
         <h3 className="section-title"><IndianRupee size={20} />Consolidated Financial Overview</h3>
-        <div className="kpi-grid">
+        <div className="kpi-grid kpi-grid-4col">
           {[
             { label: 'Total Project Value',   val: formatCurrency(financial.totalProjectValue),  color: '#3b82f6', icon: <Wallet size={32} />,      sub: 'Sum of all budgets' },
             { label: 'Total Billed',          val: formatCurrency(financial.totalBilled),         color: '#8b5cf6', icon: <FileText size={32} />,    sub: 'All invoices raised' },

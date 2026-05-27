@@ -1276,19 +1276,15 @@
   background: #fff;
 }
 
-.exp-mgmt-filter {
-  padding: 7px 10px;
-  border: 1px solid var(--exp-border);
-  border-radius: var(--exp-radius);
-  font-size: 13px;
-  font-family: var(--exp-font);
-  background: #f8fafc;
-  outline: none;
-  cursor: pointer;
-  transition: border-color .2s;
-  color: var(--exp-text);
+/* exp-mgmt-filter: FilterSelect components in filter bar get auto width */
+.exp-mgmt-search-filters .filter-group {
+  min-width: 0;
 }
-.exp-mgmt-filter:focus { border-color: var(--exp-primary); background: #fff; }
+.exp-mgmt-search-filters .filter-trigger {
+  width: auto;
+  min-width: 130px;
+  max-width: 180px;
+}
 
 /* ─── Buttons ────────────────────────────────────────────────────────────── */
 .exp-mgmt-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -2222,21 +2218,23 @@
   font-weight: 500;
 }
 
-.page-size-selector {
-  padding: 6px 10px;
-  border: 1px solid var(--exp-border);
-  border-radius: 6px;
-  font-size: 13px;
-  background-color: white;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: var(--exp-font);
+/* ── Rows-per-page dropdown — matches Follow-ups page style ── */
+.pce-rows-dropdown {
+  width: 95px !important;
+  flex-shrink: 0;
 }
 
-.page-size-selector:focus {
-  outline: none;
-  border-color: var(--exp-primary);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+.pce-rows-dropdown .filter-group {
+  width: 95px !important;
+  min-width: unset !important;
+}
+
+.pce-rows-dropdown .filter-trigger {
+  width: 95px !important;
+  min-width: unset !important;
+  max-width: 95px !important;
+  height: 34px;
+  font-size: 13px;
 }
 
 /* ─── Responsive overrides ───────────────────────────────────────────────── */
@@ -2252,7 +2250,8 @@
     align-items: stretch;
   }
 
-  .page-size-selector {
+  .pce-rows-dropdown,
+  .pce-rows-dropdown .filter-trigger {
     width: 100%;
   }
 
@@ -2545,6 +2544,7 @@
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59,130,246,.1);
 }
+
 
 /* Items list */
 .exp-items-hint {
@@ -3126,4 +3126,43 @@
   color: #94a3b8;
   font-weight: 500;
   padding: 10px 8px;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   FilterSelect integration — scope overrides for ProjectCostExpenseManagement
+   Makes all FilterSelect dropdowns stretch to fill their .exp-field containers
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Modal fields: FilterSelect fills full width of its parent .exp-field */
+.exp-field .filter-group,
+.exp-field > div[style*="position: relative"],
+.exp-field > div:not([class]) {
+  width: 100%;
+}
+.exp-field .filter-trigger {
+  /* width: 100%; */
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Filter bar: auto-size FilterSelect triggers */
+.exp-mgmt-search-filters .filter-group {
+  min-width: 0;
+}
+.exp-mgmt-search-filters .filter-trigger {
+  width: auto;
+  min-width: 130px;
+  max-width: 180px;
+}
+
+/* Error state: red border on project FilterSelect when no value selected */
+.exp-field-error-wrap .filter-trigger {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239,68,68,0.15) !important;
+}
+
+/* Ensure portal dropdown list z-index beats modal overlay (z-index 9999) */
+.filter-dropdown-list {
+  z-index: 99999 !important;
 }

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
+import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -1297,16 +1298,19 @@ const BillsReceived = () => {
                 {Math.min((pagination.currentPage + 1) * pagination.pageSize, pagination.totalItems)} of{' '}
                 {pagination.totalItems} bills
               </span>
-              <select
-                className="page-size-selector"
-                value={pagination.pageSize}
-                onChange={handlePageSizeChange}
-              >
-                <option value="10">10 Rows</option>
-                <option value="20">20 Rows</option>
-                <option value="50">50 Rows</option>
-                <option value="100">100 Rows</option>
-              </select>
+              <div className="pce-rows-dropdown">
+                <FilterSelect
+                  value={String(pagination.pageSize)}
+                  options={[
+                    { value: '10',  label: '10 Rows' },
+                    { value: '20',  label: '20 Rows' },
+                    { value: '50',  label: '50 Rows' },
+                    { value: '100', label: '100 Rows' },
+                  ]}
+                  placeholder="Rows"
+                  onChange={(v) => { if (v) { setPagination(prev => ({ ...prev, pageSize: parseInt(v), currentPage: 0 })); } }}
+                />
+              </div>
             </div>
 
             <div className="pagination-controls">
