@@ -446,6 +446,18 @@
 .ob-edit   { color: #059669; } .ob-edit:hover   { background: #d1fae5; }
 .ob-upload { color: #7c3aed; } .ob-upload:hover { background: #ede9fe; }
 .ob-delete { color: #dc2626; } .ob-delete:hover { background: #fee2e2; }
+.orderbook-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  pointer-events: auto;
+  transform: none !important;
+}
+.orderbook-icon-btn:disabled:hover { background: transparent; transform: none; }
+.orderbook-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: grayscale(30%);
+}
 
 /* Empty state */
 .orderbook-empty-state {

@@ -210,6 +210,10 @@ const fmtOBDate = d => { if (!d) return '-'; const dt = new Date(d); return `${S
 function OrderBook() {
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
   const obPerms   = pagePermissions?.ORDER_BOOK || [];
+  const canView   = obPerms.includes('VIEW');
+  const canCreate = obPerms.includes('CREATE') && !isAccountsExecutive;
+  const canEdit   = obPerms.includes('EDIT')   && !isAccountsExecutive;
+  const canUpload = obPerms.includes('UPLOAD') && !isAccountsExecutive;
   const canDelete = obPerms.includes('DELETE') && !isAccountsExecutive;
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
@@ -1344,10 +1348,10 @@ function OrderBook() {
       render: (o) => (
         <td key="actions">
           <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
-            <button className="orderbook-icon-btn ob-view"   onClick={() => handleView(o)}          title="View"><Eye size={14} /></button>
-            <button className="orderbook-icon-btn ob-edit"   onClick={() => handleEdit(o)}          title="Edit"><Edit2 size={14} /></button>
-            <button className="orderbook-icon-btn ob-upload" onClick={() => handlePOUploadClick(o)} title="Upload PO"><FaCloudUploadAlt /></button>
-            {canDelete && <button className="orderbook-icon-btn ob-delete" onClick={() => handleDeleteClick(o.id)} title="Delete"><Trash2 size={14} /></button>}
+            <button className="orderbook-icon-btn ob-view"   onClick={() => canView   && handleView(o)}          title={canView   ? "View"      : "No permission to view"}   disabled={!canView}  ><Eye size={14} /></button>
+            <button className="orderbook-icon-btn ob-edit"   onClick={() => canEdit   && handleEdit(o)}          title={canEdit   ? "Edit"      : "No permission to edit"}   disabled={!canEdit}  ><Edit2 size={14} /></button>
+            <button className="orderbook-icon-btn ob-upload" onClick={() => canUpload && handlePOUploadClick(o)} title={canUpload ? "Upload PO" : "No permission to upload"} disabled={!canUpload}><FaCloudUploadAlt /></button>
+            <button className="orderbook-icon-btn ob-delete" onClick={() => canDelete && handleDeleteClick(o.id)} title={canDelete ? "Delete"    : "No permission to delete"} disabled={!canDelete}><Trash2 size={14} /></button>
           </div>
         </td>
       )
@@ -1476,7 +1480,12 @@ function OrderBook() {
             )}
           </div>
 
-          <button className="orderbook-btn orderbook-btn-primary" onClick={handleCreateNew}>
+          <button
+            className="orderbook-btn orderbook-btn-primary"
+            onClick={canCreate ? handleCreateNew : undefined}
+            disabled={!canCreate}
+            title={canCreate ? undefined : "No permission to create order books"}
+          >
             + Create Order Book
           </button>
         </div>
