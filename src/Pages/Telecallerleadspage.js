@@ -1505,7 +1505,14 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
       <div className="tc-card-top">
         <div className="tc-card-name-row">
           <span className="tc-card-name">{lead.name}</span>
-          <span className="tc-priority-dot" style={{background:PRIORITY_COLOR[lead.priority]||"#9ca3af"}} title={`${lead.priority} priority`}/>
+          {(() => {
+            const sc = STATUS_CONFIG[lead.telecallerStatus] || STATUS_CONFIG.NEW;
+            return (
+              <span className="tc-card-status-badge" style={{color: sc.color, background: sc.bg}}>
+                {sc.label}
+              </span>
+            );
+          })()}
         </div>
         <span className="tc-card-code">{lead.leadCode}</span>
         <span className="tc-card-date">📅 {formatDate(lead.createdAt)}</span>

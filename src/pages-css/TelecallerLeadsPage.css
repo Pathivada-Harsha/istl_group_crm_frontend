@@ -117,7 +117,14 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 14px;
+  max-height: calc(100vh - 450px);
+  overflow-y: auto;
+  padding-right: 4px;
 }
+.tc-cards::-webkit-scrollbar { width: 5px; }
+.tc-cards::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 3px; }
+.tc-cards::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+.tc-cards::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
 /* ── List card ───────────────────────────────────────────────────────────── */
 .tc-card {
@@ -135,6 +142,12 @@
 .tc-card-name-row { display: flex; align-items: center; gap: 8px; }
 .tc-card-name { font-weight: 700; font-size: 15px; color: #0f172a; flex: 1; }
 .tc-priority-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.tc-card-status-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 9px; border-radius: 20px;
+  font-size: 11px; font-weight: 600;
+  flex-shrink: 0; white-space: nowrap;
+}
 .tc-card-code { font-size: 11px; color: #94a3b8; font-family: monospace; }
 .tc-card-date { font-size: 11px; color: #94a3b8; margin-left: 6px; }
 .tc-card-contact { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: #475569; }
@@ -511,7 +524,7 @@
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .tc-page { padding: 14px; }
-  .tc-cards { grid-template-columns: 1fr; }
+  .tc-cards { grid-template-columns: 1fr; max-height: calc(100vh - 380px); }
   .tc-pagination-bar { flex-direction: column; align-items: flex-start; }
   .tc-modal-body--grid { grid-template-columns: 1fr; }
   .tc-modal--wide { width: 98vw !important; }
