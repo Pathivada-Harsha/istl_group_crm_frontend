@@ -957,8 +957,9 @@ const PurchaseOrders = () => {
       showWarning(`Quantity cannot exceed ${maxQty} (${item.remainingQty != null ? 'remaining from order book' : 'quoted quantity'})`);
       return;
     }
-    item.quantity = qty;
-    const base = qty * item.unitPrice; const disc = base * (item.discount / 100);
+    // Store raw string to preserve mid-typing decimal (e.g. "10.")
+    item.quantity = quantity;
+    const base = qty * (parseFloat(item.unitPrice) || 0); const disc = base * (item.discount / 100);
     const tax  = (base - disc) * (item.gst / 100);
     item.lineTotal = (base - disc) + tax;
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
@@ -966,9 +967,12 @@ const PurchaseOrders = () => {
   const handleUpdatePOItemPrice = (index, price) => {
     const newItems = [...createPOFormData.items];
     const item = newItems[index];
-    item.unitPrice = price === '' ? '' : parseFloat(price) || 0;
-    if (item.unitPrice !== '') {
-      const base = item.quantity * item.unitPrice; const disc = base * (item.discount / 100);
+    // Store raw string so mid-typing decimals (e.g. "11000.") are preserved in display
+    item.unitPrice = price;
+    const numericPrice = parseFloat(price) || 0;
+    if (price !== '') {
+      const qty = parseFloat(item.quantity) || 0;
+      const base = qty * numericPrice; const disc = base * (item.discount / 100);
       item.lineTotal = (base - disc) + (base - disc) * (item.gst / 100);
     } else { item.lineTotal = 0; }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
@@ -1341,7 +1345,19 @@ const PurchaseOrders = () => {
   // ─── Formatters ────────────────────────────────────────────────────────────
   const formatCurrency = (amount) => !amount ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
   const formatQty = (val) => { const n = typeof val === 'number' ? val : parseFloat(val); if (isNaN(n)) return val ?? ''; return n % 1 === 0 ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { maximumFractionDigits: 3 }); };
-  const formatIndianInput = (val) => { const raw = String(val === '' || val == null ? '' : val).replace(/,/g, ''); if (raw === '' || raw === '0') return ''; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
+  const formatIndianInput = (val) => {
+    const raw = String(val === '' || val == null ? '' : val).replace(/,/g, '');
+    if (raw === '') return '';
+    const hasDot = raw.includes('.');
+    const afterDot = hasDot ? raw.split('.')[1] : '';
+    const intPart = hasDot ? raw.split('.')[0] : raw;
+    // Format only the integer part with Indian commas
+    const intNum = parseInt(intPart, 10);
+    const formattedInt = isNaN(intNum) ? intPart : (intNum === 0 ? (intPart === '' ? '' : '0') : intNum.toLocaleString('en-IN'));
+    if (!hasDot) return formattedInt === '' ? '' : formattedInt;
+    // Always preserve decimal portion exactly as typed (up to 2 digits)
+    return formattedInt + '.' + afterDot.slice(0, 3);
+  };
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const s = String(dateStr);
@@ -1838,7 +1854,7 @@ const PurchaseOrders = () => {
                     <div className="po-detail-item"><span className="po-detail-label">Group:</span><span>{selectedPO.groupName}{selectedPO.subGroupName ? ` / ${selectedPO.subGroupName}` : ''}</span></div>
                   )}
                   {selectedPO.projectId && (
-                    <div className="po-detail-item"><span className="po-detail-label">Project:</span><span>{selectedPO.projectId}</span></div>
+                    <div className="po-detail-item"><span className="po-detail-label">Project:</span><span>{projectNames[selectedPO.projectId] ? `${projectNames[selectedPO.projectId]} (${selectedPO.projectId})` : selectedPO.projectId}</span></div>
                   )}
                   {selectedPO.quotationId && (
                     <div className="po-detail-item"><span className="po-detail-label">Quotation Ref:</span><span>#{selectedPO.quotationId}</span></div>
@@ -1975,6 +1991,16 @@ const PurchaseOrders = () => {
               <div className="purchase-orders-drawer-section">
                 <h3>Order Items</h3>
                 <table className="po-items-table">
+                  <colgroup>
+                    <col style={{ width: '20%' }} />
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '8%' }} />
+                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '6%' }} />
+                    <col style={{ width: '16%' }} />
+                    <col style={{ width: '23%' }} />
+                  </colgroup>
                   <thead>
                     <tr><th>Item Name</th><th>Qty Ordered</th><th>Delivered</th><th>Pending</th><th>Unit Price</th><th>GST%</th><th>Line Total</th><th>Action</th></tr>
                   </thead>
@@ -2014,7 +2040,7 @@ const PurchaseOrders = () => {
                     <tfoot>
                       <tr style={{borderTop:'2px solid #e5e7eb',fontWeight:600}}>
                         <td colSpan={6} style={{textAlign:'right',padding:'8px 10px'}}>Grand Total:</td>
-                        <td style={{padding:'8px 10px'}}>
+                        <td style={{padding:'8px 10px', whiteSpace:'nowrap', overflow:'visible', fontWeight:'700', color:'#059669'}}>
                           {formatCurrency(
                             (selectedPO.items || []).reduce((sum, item) => {
                               const qty      = parseFloat(item.quantity)   || 0;
@@ -2606,8 +2632,8 @@ const PurchaseOrders = () => {
                       <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: '#166534' }}>Add Manual Item</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="text" inputMode="decimal" value={formatIndianInput(newItem.unitPrice)} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d*$/.test(raw)) setNewItem(prev => ({ ...prev, unitPrice: raw === '' ? '' : raw })); }} placeholder="0.00" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="text" inputMode="decimal" value={formatIndianInput(newItem.unitPrice)} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, unitPrice: raw === '' ? '' : raw })); }} placeholder="0.00" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>GST %</label><input type="number" value={newItem.gst} onChange={(e) => setNewItem(prev => ({ ...prev, gst: parseFloat(e.target.value) || 0 }))} min="0" max="100" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
@@ -2681,22 +2707,22 @@ const PurchaseOrders = () => {
                                 {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>{item.quotedQuantity}</td>}
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <input type="text" inputMode="decimal"
-                                    value={(() => { const raw = String(item.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()}
-                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*$/.test(raw)) handleUpdatePOItemQuantity(index, raw); }}
+                                    value={formatIndianInput(item.quantity)}
+                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdatePOItemQuantity(index, raw); }}
                                     disabled={!item.selected}
-                                    style={{ width: '70px', padding: '6px 8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', background: item.selected ? 'white' : '#f1f5f9' }} />
+                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', background: item.selected ? 'white' : '#f1f5f9' }} />
                                 </td>
                                 <td className="po-td" style={{ textAlign: 'right' }}>
                                   <input type="text" inputMode="decimal"
                                     value={formatIndianInput(item.unitPrice)}
-                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d*$/.test(raw)) handleUpdatePOItemPrice(index, raw); }}
+                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdatePOItemPrice(index, raw); }}
                                     disabled={createPOFormData.quotationId || !item.selected}
                                     placeholder="0.00"
-                                    style={{ width: '110px', padding: '6px 8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} />
+                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} />
                                 </td>
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected}
-                                    style={{ width: '80px', padding: '6px 4px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>
+                                    style={{ width: '100%', padding: '6px 4px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>
                                     {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
                                   </select>
                                 </td>
@@ -2709,10 +2735,10 @@ const PurchaseOrders = () => {
                           </tbody>
                           <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
                             <tr>
-                              <td colSpan={createPOFormData.quotationId ? 9 : 8} style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '700', fontSize: '15px' }}>
+                              <td colSpan={createPOFormData.quotationId ? 8 : 7} style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#475569' }}>
                                 Grand Total ({createPOFormData.items.filter(i => i.selected).length} items selected):
                               </td>
-                              <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '700', fontSize: '17px', color: '#059669' }}>{formatCurrency(calculatePOTotal())}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '14px', color: '#059669', whiteSpace: 'nowrap', overflow: 'visible' }}>{formatCurrency(calculatePOTotal())}</td>
                               <td></td>
                             </tr>
                           </tfoot>

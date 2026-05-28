@@ -1089,6 +1089,17 @@ const QuotationsReceived = () => {
   // ── Utility formatters ───────────────────────────────────────────────────
   const formatCurrency = (amt) => { if (!amt && amt !== 0) return '₹0.00'; const n = typeof amt === 'number' ? amt : parseFloat(amt) || 0; return `₹${n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; };
   const formatQty = (val) => { const n = typeof val === 'number' ? val : parseFloat(val); if (isNaN(n)) return val; return n % 1 === 0 ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { maximumFractionDigits: 3 }); };
+  const formatIndianInput = (val) => {
+    const raw = String(val === '' || val == null ? '' : val).replace(/,/g, '');
+    if (raw === '') return '';
+    const hasDot = raw.includes('.');
+    const afterDot = hasDot ? raw.split('.')[1] : '';
+    const intPart = hasDot ? raw.split('.')[0] : raw;
+    const intNum = parseInt(intPart, 10);
+    const formattedInt = isNaN(intNum) ? intPart : (intNum === 0 ? '0' : intNum.toLocaleString('en-IN'));
+    if (!hasDot) return formattedInt;
+    return formattedInt + '.' + afterDot.slice(0, 3);
+  };
   const formatDate = (d) => {
     if (!d) return '';
     const s = String(d);
@@ -1866,17 +1877,28 @@ const QuotationsReceived = () => {
                     )}
                     <div className="procurement-quotation-received-items-table-wrapper">
                       <table className="procurement-quotation-received-items-table">
+                        <colgroup>
+                          <col style={{ width: '40px' }} />
+                          <col style={{ width: '44px' }} />
+                          <col style={{ width: 'auto' }} />
+                          <col style={{ width: '130px' }} />
+                          <col style={{ width: '90px' }} />
+                          <col style={{ width: '130px' }} />
+                          <col style={{ width: '130px' }} />
+                          <col style={{ width: '120px' }} />
+                          <col style={{ width: '48px' }} />
+                        </colgroup>
                         <thead>
                           <tr>
-                            <th style={{ width: 40 }}>Inc</th>
-                            <th style={{ width: 40 }}>S.No</th>
-                            <th style={{ minWidth: 200 }}>Description *</th>
-                            <th style={{ minWidth: 140 }}>Unit</th>
-                            <th style={{ width: 80 }}>Qty *</th>
-                            <th style={{ minWidth: 150 }}>Make</th>
-                            <th style={{ width: 120 }}>Rate (₹) *</th>
-                            <th style={{ width: 120 }}>Amount</th>
-                            <th style={{ width: 50 }}>Del</th>
+                            <th>Inc</th>
+                            <th>S.No</th>
+                            <th>Description *</th>
+                            <th>Unit</th>
+                            <th>Qty *</th>
+                            <th>Make</th>
+                            <th>Rate (₹) *</th>
+                            <th>Amount</th>
+                            <th>Del</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1945,20 +1967,12 @@ const QuotationsReceived = () => {
                                 <td>
                                   <input
                                     type="text"
+                                    inputMode="decimal"
                                     placeholder="Qty"
-                                    value={focusedField === `qty-${idx}`
-                                      ? (item.quantity === '' || item.quantity == null ? '' : String(item.quantity))
-                                      : (item.quantity === '' || item.quantity == null ? '' : formatQty(item.quantity))
-                                    }
-                                    onFocus={() => setFocusedField(`qty-${idx}`)}
-                                    onBlur={e => {
-                                      setFocusedField(null);
-                                      const raw = e.target.value.replace(/,/g, '');
-                                      handleUpdateQuotationItem(idx, 'quantity', raw === '' ? '' : parseFloat(raw));
-                                    }}
+                                    value={formatIndianInput(item.quantity)}
                                     onChange={e => {
                                       const raw = e.target.value.replace(/,/g, '');
-                                      handleUpdateQuotationItem(idx, 'quantity', raw === '' ? '' : raw);
+                                      if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdateQuotationItem(idx, 'quantity', raw);
                                     }}
                                     className="table-input text-center"
                                     disabled={!inc}
@@ -1968,20 +1982,12 @@ const QuotationsReceived = () => {
                                 <td>
                                   <input
                                     type="text"
+                                    inputMode="decimal"
                                     placeholder="Rate"
-                                    value={focusedField === `rate-${idx}`
-                                      ? (item.unitPrice === '' || item.unitPrice == null ? '' : String(item.unitPrice))
-                                      : (item.unitPrice === '' || item.unitPrice == null ? '' : formatQty(item.unitPrice))
-                                    }
-                                    onFocus={() => setFocusedField(`rate-${idx}`)}
-                                    onBlur={e => {
-                                      setFocusedField(null);
-                                      const raw = e.target.value.replace(/,/g, '');
-                                      handleUpdateQuotationItem(idx, 'unitPrice', raw === '' ? '' : raw);
-                                    }}
+                                    value={formatIndianInput(item.unitPrice)}
                                     onChange={e => {
                                       const raw = e.target.value.replace(/,/g, '');
-                                      handleUpdateQuotationItem(idx, 'unitPrice', raw === '' ? '' : raw);
+                                      if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdateQuotationItem(idx, 'unitPrice', raw);
                                     }}
                                     className="table-input text-right"
                                     disabled={!inc}

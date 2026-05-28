@@ -897,7 +897,8 @@
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   overflow: hidden;
-  min-width: 1000px;
+  min-width: 900px;
+  table-layout: fixed;
 }
 
 .procurement-quotation-received-items-table thead {
@@ -913,16 +914,31 @@
   text-transform: uppercase;
   border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
+  overflow: hidden;
 }
 
 .procurement-quotation-received-items-table td {
   padding: 8px;
   border-bottom: 1px solid #f1f5f9;
   color: #334155;
+  vertical-align: middle;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.procurement-quotation-received-items-table tbody tr {
+  height: 56px;
 }
 
 .procurement-quotation-received-items-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+.procurement-quotation-received-items-table .table-input {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .table-input {
