@@ -1038,7 +1038,9 @@ const PurchaseOrders = () => {
 
   const fetchVendors = async () => {
     try {
-      const url = `${API_BASE_URL}/vendors?page=0&size=1000`;
+      // Backend now returns vendors from accessible project POs UNION vendors
+      // created/assigned to this user — so newly created vendors always appear.
+      const url = `${API_BASE_URL}/vendors?page=0&size=1000&sortBy=name&sortDirection=ASC`;
       const r = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
       if (r.ok) { const data = await r.json(); setVendors(data.vendors || []); }
     } catch { setVendors([]); }

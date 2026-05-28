@@ -2184,7 +2184,7 @@ const VendorManagement = () => {
                   </div>
                 </div>
                 <div className="vendor-form-group"><label>Project <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(Optional)</span></label>
-                  <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} searchable={true} />
+                  <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: p.name + (p.location ? ` - ${p.location}` : '') }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} searchable={true} />
                 </div>
               </div>
               <div className="vendor-form-section">
@@ -2369,7 +2369,7 @@ const VendorManagement = () => {
                     </div>
                   </div>
                   <div className="vendor-form-group"><label>Project (Optional)</label>
-                    <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} searchable={true} />
+                    <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: p.name + (p.location ? ` - ${p.location}` : '') }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} searchable={true} />
                   </div>
                 </div>
                 <div className="vendor-form-section">

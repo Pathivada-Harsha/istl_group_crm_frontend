@@ -37,16 +37,23 @@ const DEFAULT_PROPOSAL_TEMPLATE = {
   bomItems: [],
 };
 // Unified status helper - module-level so all components can use it
-// Priority: main lead.status always wins if it is Closed Won / Closed Lost
-// (e.g. NOT_INTERESTED with no follow-up → backend sets status="Closed Lost", show that)
-// Otherwise, if telecaller has set a status, surface it as the display status.
+// Priority rules for the unified display status:
+// 1. Closed Won / Closed Lost always win (terminal states).
+// 2. If BD has progressed the lead (status is NOT a raw TC-mirror value),
+//    show the BD-set status — do NOT let telecaller status override it.
+// 3. Only surface TC status when the main status is still at an early
+//    TC-driven stage (New, Interested, Not Interested, Not Responded).
+const TC_EARLY_STATUSES = new Set(['New', 'Interested', 'Not Interested', 'Not Responded']);
 const getUnifiedStatus = (lead) => {
   if (!lead) return 'New';
   const s  = lead.status || 'New';
   const tc = lead.telecallerStatus;
-  // Closed Won / Closed Lost always take final precedence
+  // Terminal states always win
   if (s === 'Closed Won' || s === 'Closed Lost') return s;
-  // Telecaller statuses surface when main status hasn't moved past "New"
+  // If BD has moved the lead past the early TC stage (Contacted, In Discussion,
+  // Proposal Sent, etc.) always show that BD status — never let TC override it.
+  if (!TC_EARLY_STATUSES.has(s)) return s;
+  // Lead is still in early stage — surface telecaller status if set
   if (tc === 'INTERESTED')     return 'Interested';
   if (tc === 'NOT_INTERESTED') return 'Not Interested';
   if (tc === 'NOT_RESPONDED')  return 'Not Responded';
@@ -664,7 +671,7 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
 };
 
 // ─── Lead Detail Page (full-page view inside leads container) ─────────────────
-const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSuccess, showError }) => {
+const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions, onEdit, showSuccess, showError }) => {
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('leads_detail_tab') || 'overview');
   const [proposals, setProposals] = useState([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
@@ -707,6 +714,22 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
     finally { setLoadingProposals(false); }
   }, [lead.id]);
 
+  // Auto-advance lead status to "Proposal Sent" whenever a proposal is created
+  // or an offline PDF is attached — but only if the lead hasn't already moved
+  // to a later stage (Closed Won / Closed Lost / Proposal Sent already set).
+  const markProposalSent = async () => {
+    const skip = ['Proposal Sent', 'Closed Won', 'Closed Lost'];
+    if (skip.includes(lead.status)) return;
+    try {
+      await fetch(`${API_BASE_URL}/leads/update/${lead.id}`, {
+        method: 'PUT', credentials: 'include',
+        headers,
+        body: JSON.stringify({ ...lead, status: 'Proposal Sent' }),
+      });
+      if (onLeadUpdated) onLeadUpdated();
+    } catch { /* non-blocking — proposal was still saved */ }
+  };
+
   const fetchHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
@@ -747,7 +770,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         body: form,
       });
       const data = await res.json();
-      if (data.success) { showSuccess('Offline proposal uploaded!'); fetchProposals(); }
+      if (data.success) { showSuccess('Offline proposal uploaded!'); fetchProposals(); markProposalSent(); }
       else showError(data.error || 'Upload failed');
     } catch { showError('Upload failed'); }
     finally { setUploadingId(null); }
@@ -795,7 +818,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
       });
       const data = await res.json();
-      if (data.success) { showSuccess('Proposal deleted.'); fetchProposals(); }
+      if (data.success) { showSuccess('Proposal deleted.'); fetchProposals(); if (onLeadUpdated) onLeadUpdated(); }
       else showError(data.error || 'Delete failed');
     } catch { showError('Delete failed'); }
   };
@@ -835,6 +858,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
       showSuccess('Offline proposal uploaded successfully!');
       setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null);
       fetchProposals();
+      markProposalSent();
     } catch (err) {
       // If upload failed after proposal was created, delete the orphan proposal record
       if (newId) {
@@ -1143,7 +1167,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
                 currentUser={currentUser}
                 apiBase={API_BASE_URL}
                 existingProposal={editingProposal}
-                onSaved={() => { setShowProposalForm(false); setEditingProposal(null); showSuccess(editingProposal ? 'Proposal updated!' : 'Proposal created!'); fetchProposals(); }}
+                onSaved={() => { setShowProposalForm(false); setEditingProposal(null); showSuccess(editingProposal ? 'Proposal updated!' : 'Proposal created!'); fetchProposals(); if (!editingProposal) markProposalSent(); else if (onLeadUpdated) onLeadUpdated(); }}
                 onCancel={() => { setShowProposalForm(false); setEditingProposal(null); }}
               />
             </div>
@@ -1324,18 +1348,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
             currentUser={currentUser}
             permissions={permissions}
             onRefreshLead={() => {
-              // re-fetch the lead to update pending followups count in overview
-              fetch(`${API_BASE_URL}/leads/${lead.id}`, {
-                credentials: 'include',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'User-Id': String(currentUser.id),
-                  'User-Role': currentUser.role,
-                }
-              })
-                .then(r => r.json())
-                .then(data => { if (data.success) showSuccess('Follow-up updated'); })
-                .catch(() => { });
+              if (onLeadUpdated) onLeadUpdated();
             }}
           />
         </div>
@@ -1507,7 +1520,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, permissions, onEdit, showSu
         <AddFollowupModal
           lead={lead}
           onClose={() => setFollowupModal(false)}
-          onFollowupCreated={() => { setFollowupModal(false); showSuccess('Follow-up created!'); }}
+          onFollowupCreated={() => { setFollowupModal(false); showSuccess('Follow-up created!'); if (onLeadUpdated) onLeadUpdated(); }}
         />
       )}
 
@@ -2043,6 +2056,12 @@ useEffect(() => {
           const wasClosedWon = data.data?.status === 'Closed Won';
           showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : 'Lead updated successfully');
           setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH', dateFrom, dateTo);
+          // If editing from the detail view, refresh detailLead so it reflects the new status immediately
+          if (detailLead && detailLead.id === formData.id) {
+            fetchWithHeaders(`${API_BASE_URL}/leads/${formData.id}`)
+              .then(d => { if (d.success && d.data) { setDetailLead(d.data); localStorage.setItem('leads_detail_lead', JSON.stringify(d.data)); } })
+              .catch(() => {});
+          }
         }
       } else {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/create`, { method: 'POST', body: JSON.stringify(payload) });
@@ -2288,7 +2307,20 @@ useEffect(() => {
           lead={detailLead}
           currentUser={currentUser}
           permissions={permissions}
-          onBack={() => { setDetailLead(null); localStorage.removeItem('leads_detail_lead'); localStorage.removeItem('leads_detail_tab'); }}
+          onBack={() => {
+            setDetailLead(null);
+            localStorage.removeItem('leads_detail_lead');
+            localStorage.removeItem('leads_detail_tab');
+            fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'BACK_REFRESH', dateFrom, dateTo);
+          }}
+          onLeadUpdated={() => {
+            // Re-fetch the single lead so detail view shows fresh data immediately
+            fetchWithHeaders(`${API_BASE_URL}/leads/${detailLead.id}`)
+              .then(d => { if (d.success && d.data) { setDetailLead(d.data); localStorage.setItem('leads_detail_lead', JSON.stringify(d.data)); } })
+              .catch(() => {});
+            // Also refresh the list in the background
+            fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'LEAD_UPDATED', dateFrom, dateTo);
+          }}
           onEdit={lead => { setDetailLead(null); handleEdit(lead); }}
           showSuccess={showSuccess}
           showError={showError}

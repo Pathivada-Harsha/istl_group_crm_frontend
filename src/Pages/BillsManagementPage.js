@@ -1877,7 +1877,7 @@ const BillsManagementPage = () => {
                   <label className="bill-form-label">Project (Optional)</label>
                   <FilterSelect
                     value={modalProjectId}
-                    options={modalProjects.map(p => ({ value: p.id, label: `${p.name} - ${p.location}` }))}
+                    options={modalProjects.map(p => ({ value: p.id, label: p.name + (p.location ? ` - ${p.location}` : '') }))}
                     placeholder={!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}
                     disabled={!modalSubGroupName}
                     onChange={v => handleModalProjectChange({ target: { value: v || '' } })}

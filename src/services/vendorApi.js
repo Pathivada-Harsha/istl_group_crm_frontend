@@ -152,15 +152,25 @@ class VendorApi {
    * @returns {Object} Headers object
    */
   getHeaders() {
+    // Auth is stored under 'bd_portal_user' as { user: { id, role, ... }, ... }
+    // Reading separate 'userId'/'userRole' keys was wrong — they are never set.
+    let userId = '';
+    let userRole = 'USER';
+    try {
+      const stored = JSON.parse(localStorage.getItem('bd_portal_user') || '{}');
+      const u = stored?.user || stored || {};
+      userId   = String(u.id   || '');
+      userRole = String(u.role || 'USER');
+    } catch { /* ignore parse errors */ }
+
     const token = localStorage.getItem('authToken');
-    const userId = localStorage.getItem('userId');
-    const userRole = localStorage.getItem('userRole');
-    
     return {
       'Content-Type': 'application/json',
       'Authorization': token ? `Bearer ${token}` : '',
-      'X-User-Id': userId || '',
-      'X-User-Role': userRole || 'USER'
+      'X-User-Id':   userId,
+      'X-User-Role': userRole,
+      'User-Id':     userId,
+      'User-Role':   userRole,
     };
   }
   
