@@ -1049,7 +1049,7 @@ const handleEditMenuPermissions = async (u) => {
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]);
 
   const handleSelectAllUserPermissionsInModule = (module) => {
-    const ids = loggedInActualPerms
+    const ids = assignablePagePerms
       .filter(p => p.module === module)
       .map(p => p.id);
     const allSelected = ids.every(id => selectedUserPermissions.includes(id));
@@ -1103,6 +1103,19 @@ const loggedInActualPerms = React.useMemo(() => {
 const loggedInActualPermsGrouped = React.useMemo(
   () => groupPermissionsByModule(loggedInActualPerms),
   [loggedInActualPerms] // eslint-disable-line react-hooks/exhaustive-deps
+);
+
+// SUPERADMIN can assign ALL DB permissions; other roles can only assign their own.
+const assignablePagePerms = React.useMemo(() => {
+  if (user?.role && ['SUPERADMIN', 'SuperAdmin'].includes(user.role)) {
+    return pagePermissionsStructure;
+  }
+  return loggedInActualPerms;
+}, [user?.role, pagePermissionsStructure, loggedInActualPerms]); // eslint-disable-line react-hooks/exhaustive-deps
+
+const assignablePagePermsGrouped = React.useMemo(
+  () => groupPermissionsByModule(assignablePagePerms),
+  [assignablePagePerms] // eslint-disable-line react-hooks/exhaustive-deps
 );
 
 // ── ADD THESE 4 LINES HERE ─────────────────────────────────────────────────
@@ -2406,31 +2419,31 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
                   <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1' }}
-                    checked={loggedInActualPerms.length > 0 && loggedInActualPerms.every(p => selectedUserPermissions.includes(p.id))}
+                    checked={assignablePagePerms.length > 0 && assignablePagePerms.every(p => selectedUserPermissions.includes(p.id))}
                     ref={el => {
                       if (el) el.indeterminate =
-                        loggedInActualPerms.some(p => selectedUserPermissions.includes(p.id)) &&
-                        !loggedInActualPerms.every(p => selectedUserPermissions.includes(p.id));
+                        assignablePagePerms.some(p => selectedUserPermissions.includes(p.id)) &&
+                        !assignablePagePerms.every(p => selectedUserPermissions.includes(p.id));
                     }}
                     onChange={e => {
-                      if (e.target.checked) setSelectedUserPermissions(loggedInActualPerms.map(p => p.id));
+                      if (e.target.checked) setSelectedUserPermissions(assignablePagePerms.map(p => p.id));
                       else setSelectedUserPermissions([]);
                     }}
                   />
                   Select All Permissions
                 </label>
                 <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>
-                  {selectedUserPermissions.length} / {loggedInActualPerms.length} selected
+                  {selectedUserPermissions.length} / {assignablePagePerms.length} selected
                 </span>
               </div>
 
               {/* ── Module rows with inline action chips ── */}
               <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
-                {Object.entries(loggedInActualPermsGrouped).map(([mod, perms], groupIdx) => {
+                {Object.entries(assignablePagePermsGrouped).map(([mod, perms], groupIdx) => {
                   const allGroupOn = perms.every(p => selectedUserPermissions.includes(p.id));
                   const someGroupOn = perms.some(p => selectedUserPermissions.includes(p.id));
                   const groupCount = perms.filter(p => selectedUserPermissions.includes(p.id)).length;
-                  const isLast = groupIdx === Object.entries(loggedInActualPermsGrouped).length - 1;
+                  const isLast = groupIdx === Object.entries(assignablePagePermsGrouped).length - 1;
 
                   return (
                     <div key={mod} style={{ borderBottom: isLast ? 'none' : '1px solid #e2e8f0' }}>
