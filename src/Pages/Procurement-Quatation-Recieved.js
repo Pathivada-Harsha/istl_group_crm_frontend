@@ -1574,10 +1574,14 @@ const QuotationsReceived = () => {
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Project (Optional)</label>
-                    <select value={modalProjectId} onChange={handleModalProjectChange} disabled={!modalSubGroupName || modalDropdownLoading.projects}>
-                      <option value="">{modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}</option>
-                      {modalProjects.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalProjectId}
+                      options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
+                      placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}
+                      disabled={!modalSubGroupName || modalDropdownLoading.projects}
+                      onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                      searchable={true}
+                    />
                   </div>
                 </div>
                 {loadingOrderItems && <div style={{ marginTop: 10, color: '#3b82f6', fontSize: 13 }}>🔄 Loading order book items…</div>}

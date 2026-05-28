@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, X, Calendar, Clock, Users, Tag, Play, Download } from 'lucide-react';
+import FilterSelect from '../Dropdowns/FilterSelect';
 
 const ReportConfig = ({ reportConfig, onConfigChange, onRunReport, isRunning }) => {
   const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -104,14 +105,12 @@ const ReportConfig = ({ reportConfig, onConfigChange, onRunReport, isRunning }) 
 
           <div className="config-form-group">
             <label>Visibility</label>
-            <select
+            <FilterSelect
               value={reportConfig.visibility}
-              onChange={(e) => onConfigChange({ visibility: e.target.value })}
-            >
-              <option value="private">Private</option>
-              <option value="team">Team</option>
-              <option value="global">Global</option>
-            </select>
+              onChange={v => onConfigChange({ visibility: v })}
+              options={[{value:'private',label:'Private'},{value:'team',label:'Team'},{value:'global',label:'Global'}]}
+              placeholder="Select Visibility"
+            />
           </div>
         </div>
 
@@ -147,29 +146,19 @@ const ReportConfig = ({ reportConfig, onConfigChange, onRunReport, isRunning }) 
           <div className="filters-list">
             {reportConfig.filters.map((filter, index) => (
               <div key={index} className="filter-row">
-                <select
-                  className="filter-field"
+                <FilterSelect
                   value={filter.field}
-                  onChange={(e) => handleUpdateFilter(index, { field: e.target.value })}
-                >
-                  {fieldOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={v => handleUpdateFilter(index, { field: v })}
+                  options={fieldOptions}
+                  placeholder="Field"
+                />
 
-                <select
-                  className="filter-operator"
+                <FilterSelect
                   value={filter.operator}
-                  onChange={(e) => handleUpdateFilter(index, { operator: e.target.value })}
-                >
-                  {operatorOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={v => handleUpdateFilter(index, { operator: v })}
+                  options={operatorOptions}
+                  placeholder="Operator"
+                />
 
                 <input
                   type="text"
@@ -259,16 +248,12 @@ const ReportConfig = ({ reportConfig, onConfigChange, onRunReport, isRunning }) 
             <div className="config-modal-body">
               <div className="config-form-group">
                 <label>Frequency</label>
-                <select
+                <FilterSelect
                   value={scheduleConfig.frequency}
-                  onChange={(e) => setScheduleConfig({ ...scheduleConfig, frequency: e.target.value })}
-                >
-                  <option value="once">One Time</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                  <option value="cron">Custom (Cron)</option>
-                </select>
+                  onChange={v => setScheduleConfig({ ...scheduleConfig, frequency: v })}
+                  options={[{value:'once',label:'One Time'},{value:'daily',label:'Daily'},{value:'weekly',label:'Weekly'},{value:'monthly',label:'Monthly'},{value:'cron',label:'Custom (Cron)'}]}
+                  placeholder="Select Frequency"
+                />
               </div>
 
               <div className="config-form-group">
@@ -295,15 +280,12 @@ const ReportConfig = ({ reportConfig, onConfigChange, onRunReport, isRunning }) 
 
               <div className="config-form-group">
                 <label>Export Format</label>
-                <select
+                <FilterSelect
                   value={scheduleConfig.format}
-                  onChange={(e) => setScheduleConfig({ ...scheduleConfig, format: e.target.value })}
-                >
-                  <option value="docx">Word (.docx)</option>
-                  <option value="pdf">PDF</option>
-                  <option value="xlsx">Excel</option>
-                  <option value="csv">CSV</option>
-                </select>
+                  onChange={v => setScheduleConfig({ ...scheduleConfig, format: v })}
+                  options={[{value:'docx',label:'Word (.docx)'},{value:'pdf',label:'PDF'},{value:'xlsx',label:'Excel'},{value:'csv',label:'CSV'}]}
+                  placeholder="Select Format"
+                />
               </div>
             </div>
 

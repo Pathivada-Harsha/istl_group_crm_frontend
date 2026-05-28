@@ -7,6 +7,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
 import '../pages-css/TaskManagement.css';
+import FilterSelect from '../components/Dropdowns/FilterSelect';
 import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2, FiPlus, FiZap, FiClock, FiBriefcase, FiTag, FiArrowRight, FiFileText, FiList, FiAlertTriangle } from 'react-icons/fi';
 
 const API = process.env.REACT_APP_API_URL;
@@ -420,17 +421,11 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div className="tm-frow" style={{marginBottom:12}}>
             <div className="tm-fg">
               <label>Entry Type</label>
-              <select className="tm-sel" value={form.updateType} onChange={e => set('updateType', e.target.value)}>
-                {UPDATE_TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              <FilterSelect value={form.updateType} onChange={v => set('updateType', v)} options={UPDATE_TYPES.map(t=>({value:t,label:t}))} placeholder="Select Type" />
             </div>
             <div className="tm-fg">
               <label>Update Status To</label>
-              <select className="tm-sel" value={form.newStatus}
-                style={{borderColor: isComplete ? '#059669' : undefined, background: isComplete ? '#f0fdf4' : undefined}}
-                onChange={e => { const v = e.target.value; set('newStatus', v); if (v === 'Completed') set('completionPercent', 100); }}>
-                {STATUSES.map(s => <option key={s}>{s}</option>)}
-              </select>
+              <FilterSelect value={form.newStatus} onChange={v => { set('newStatus', v); if(v==='Completed') set('completionPercent',100); }} options={STATUSES.map(s=>({value:s,label:s}))} placeholder="Select Status" />
             </div>
           </div>
 
@@ -616,16 +611,11 @@ const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
                     <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
                       <div className="tm-fg" style={{flex:1,minWidth:130,margin:0}}>
                         <label>Update Type</label>
-                        <select className="tm-sel" value={e.updateType} onChange={ev => setField(i,'updateType',ev.target.value)}>
-                          {UPDATE_TYPES.map(t => <option key={t}>{t}</option>)}
-                        </select>
+                        <FilterSelect value={e.updateType} onChange={v => setField(i,'updateType',v)} options={UPDATE_TYPES.map(t=>({value:t,label:t}))} placeholder="Type" />
                       </div>
                       <div className="tm-fg" style={{flex:1,minWidth:130,margin:0}}>
                         <label>Status</label>
-                        <select className="tm-sel" value={e.newStatus}
-                          onChange={ev => { setField(i,'newStatus',ev.target.value); if(ev.target.value==='Completed') setField(i,'completionPercent',100); }}>
-                          {STATUSES.map(s => <option key={s}>{s}</option>)}
-                        </select>
+                        <FilterSelect value={e.newStatus} onChange={v => { setField(i,'newStatus',v); if(v==='Completed') setField(i,'completionPercent',100); }} options={STATUSES.map(s=>({value:s,label:s}))} placeholder="Status" />
                       </div>
                       <div className="tm-fg" style={{width:90,margin:0}}>
                         <label>Start</label>
@@ -783,14 +773,8 @@ const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
                 </div>
 
                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,alignItems:'start'}}>
-                  <select className="tm-sel" value={e.category} onChange={ev => setField(e.id,'category',ev.target.value)}>
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-                  </select>
-                  <select className="tm-sel" style={{width:'100%',maxWidth:'100%',overflow:'hidden',textOverflow:'ellipsis'}} value={e.projectId} onChange={ev => setField(e.id,'projectId',ev.target.value)}>
-                    <option value="">— No project —</option>
-                    {projects.map(p => <option key={p.projectUniqueId||p.id} value={p.projectUniqueId||p.id}>{p.projectName}</option>)}
-                    <option value="OTHER"><FiTag size={12} style={{marginRight:4}} />Other / Ad-hoc</option>
-                  </select>
+                  <FilterSelect value={e.category} onChange={v => setField(e.id,'category',v)} options={CATEGORIES.map(c=>({value:c,label:c}))} placeholder="Category" />
+                  <FilterSelect value={e.projectId} onChange={v => setField(e.id,'projectId',v)} options={[{value:'',label:'— No project —'}, ...projects.map(p=>({value:p.projectUniqueId||String(p.id),label:p.projectName})), {value:'OTHER',label:'Other / Ad-hoc'}]} placeholder="Project" />
                   {e.projectId === 'OTHER' && (
                     <input className="tm-inp" style={{marginTop:6}} placeholder="Describe context — e.g. Admin, Training, Internal..."
                       value={e.otherProject||''} onChange={ev => setField(e.id,'otherProject',ev.target.value)} />
@@ -878,15 +862,11 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
           <div className="tm-frow tm-frow3">
             <div className="tm-fg">
               <label>Category</label>
-              <select className="tm-sel" value={form.category} onChange={e => set('category', e.target.value)}>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+              <FilterSelect value={form.category} onChange={v => set('category', v)} options={CATEGORIES.map(c=>({value:c,label:c}))} placeholder="Select Category" />
             </div>
             <div className="tm-fg">
               <label>Priority</label>
-              <select className="tm-sel" value={form.priority} onChange={e => set('priority', e.target.value)}>
-                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
-              </select>
+              <FilterSelect value={form.priority} onChange={v => set('priority', v)} options={PRIORITIES.map(p=>({value:p,label:p}))} placeholder="Select Priority" />
             </div>
             <div className="tm-fg">
               <label>Due Date <span className="tm-req">*</span></label>
@@ -905,11 +885,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
           </div>
           <div className="tm-fg">
             <label>Project <span className="tm-hint">({projects.length} available)</span></label>
-            <select className="tm-sel" value={form.projectId} onChange={e => set('projectId', e.target.value)}>
-              <option value="">— No specific project —</option>
-              {projects.map(p => <option key={p.projectUniqueId || p.id} value={p.projectUniqueId || p.id}>{p.projectName}</option>)}
-              <option value="OTHER"><FiTag size={12} style={{marginRight:4}} />Other / Ad-hoc work</option>
-            </select>
+            <FilterSelect value={form.projectId} onChange={v => set('projectId', v)} options={[{value:'',label:'— No specific project —'}, ...projects.map(p=>({value:p.projectUniqueId||String(p.id),label:p.projectName})), {value:'OTHER',label:'Other / Ad-hoc work'}]} placeholder="Select Project" />
           </div>
           {form.projectId === 'OTHER' && (
             <div className="tm-fg">
@@ -921,10 +897,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
             {(isSuperAdmin || isManager) && (
               <div className="tm-fg">
                 <label>Assign To {isManager && !isSuperAdmin ? <span className="tm-hint">— your team only</span> : ''}</label>
-                <select className="tm-sel" value={form.assignedTo} onChange={e => set('assignedTo', e.target.value)}>
-                  <option value={user?.id}>Myself ({user?.name})</option>
-                  {users.filter(u => String(u.id) !== String(user?.id)).map(u => <option key={u.id} value={u.id}>{u.name} ({u.role})</option>)}
-                </select>
+                <FilterSelect value={String(form.assignedTo||'')} onChange={v => set('assignedTo', v)} options={[{value:String(user?.id||''),label:`Myself (${user?.name})`}, ...users.filter(u=>String(u.id)!==String(user?.id)).map(u=>({value:String(u.id),label:`${u.name} (${u.role})`}))]} placeholder="Assign To" />
               </div>
             )}
             <div className="tm-fg">
@@ -934,9 +907,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
             {isEdit && (
               <div className="tm-fg">
                 <label>Status</label>
-                <select className="tm-sel" value={form.status} onChange={e => set('status', e.target.value)}>
-                  {STATUSES.map(s => <option key={s}>{s}</option>)}
-                </select>
+                <FilterSelect value={form.status} onChange={v => set('status', v)} options={STATUSES.map(s=>({value:s,label:s}))} placeholder="Status" />
               </div>
             )}
           </div>
@@ -1907,13 +1878,7 @@ const PaginationBar = ({ page, totalPages, total, pageSize, onPageChange, onSize
       <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:6}}>
           <span style={{fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>Rows per page:</span>
-          <select
-            value={pageSize}
-            onChange={e => onSizeChange && onSizeChange(Number(e.target.value))}
-            style={{fontSize:12,padding:'3px 6px',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',color:'#0f172a',cursor:'pointer'}}
-          >
-            {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
+          <FilterSelect value={String(pageSize)} onChange={v => onSizeChange && onSizeChange(Number(v))} options={PAGE_SIZE_OPTIONS.map(s => ({value:String(s),label:String(s)}))} placeholder="Rows" />
         </div>
         <span className="tm-pgn-info" style={{whiteSpace:'nowrap'}}>
           {total === 0 ? '0 results' : `${from}–${to} of ${total} result${total !== 1 ? 's' : ''}`}
@@ -1954,7 +1919,7 @@ const KpiCard = ({ label, value, icon, accent, iconBg, sub, onClick, active }) =
 ══════════════════════════════════════════════════════════════════════════ */
 export default function TaskManagement() {
   const { user } = useAuth();
-  const { toasts, removeToast, showSuccess } = useToast();
+  const { toasts, removeToast, showSuccess, showWarning } = useToast();
   const isSA = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
   // roleLevel fetched from role_hierarchy table — works for any custom role name
   const [roleLevel, setRoleLevel] = useState(null);
@@ -2001,6 +1966,67 @@ export default function TaskManagement() {
   const [catFilter, setCatFilter] = useState('All');
   const [empFilter, setEmpFilter] = useState('All');
   const [page, setPage]           = useState(1);
+
+  /* ── Column sort ────────────────────────────────────────────────────── */
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
+  const toggleSort = (col) => {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortCol(col); setSortDir('asc'); }
+  };
+
+  /* ── Column visibility & order ──────────────────────────────────────── */
+  const ALL_COLS = [
+    { id: 'sno',      label: 'S.No',       required: true },
+    { id: 'task',     label: 'Task',        required: true },
+    { id: 'project',  label: 'Project',     required: false },
+    { id: 'category', label: 'Category',    required: false },
+    { id: 'priority', label: 'Priority',    required: false },
+    { id: 'status',   label: 'Status',      required: false },
+    { id: 'progress', label: 'Progress',    required: false },
+    { id: 'dates',    label: 'Start / End', required: false },
+    { id: 'hours',    label: 'Hours',       required: false },
+    { id: 'assignee', label: 'Assignee',    required: false },
+    { id: 'due',      label: 'Due',         required: false },
+    { id: 'actions',  label: 'Actions',     required: true },
+  ];
+  const [colOrder, setColOrder] = useState(() => ALL_COLS.map(c => c.id));
+  const [hiddenCols, setHiddenCols] = useState(new Set());
+  const [showColPanel, setShowColPanel] = useState(false);
+  const colPanelRef = useRef(null);
+  const colDragRef  = useRef(null);
+
+  // Close col panel on outside click
+  React.useEffect(() => {
+    if (!showColPanel) return;
+    const h = (e) => { if (colPanelRef.current && !colPanelRef.current.contains(e.target)) setShowColPanel(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [showColPanel]);
+
+  const toggleCol = (id) => setHiddenCols(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
+  // Column drag-reorder handlers
+  const onColDragStart = (id) => { colDragRef.current = id; };
+  const onColDragOver  = (e, id) => { e.preventDefault(); };
+  const onColDrop      = (e, targetId) => {
+    e.preventDefault();
+    const srcId = colDragRef.current;
+    if (!srcId || srcId === targetId) return;
+    setColOrder(prev => {
+      const arr = [...prev];
+      const si = arr.indexOf(srcId);
+      const ti = arr.indexOf(targetId);
+      arr.splice(si, 1);
+      arr.splice(ti, 0, srcId);
+      return arr;
+    });
+    colDragRef.current = null;
+  };
   const PER = 15;
 
   /* ── Fetch ─────────────────────────────────────────────────────────── */
@@ -2102,6 +2128,29 @@ export default function TaskManagement() {
         return da - db;
       })
     : tasks;
+
+  /* ── Client-side sort of filtered rows ─────────────────────────────── */
+  const sortedFiltered = React.useMemo(() => {
+    if (!sortCol) return filtered;
+    return [...filtered].sort((a, b) => {
+      let va, vb;
+      switch (sortCol) {
+        case 'task':     va = a.title?.toLowerCase() || ''; vb = b.title?.toLowerCase() || ''; break;
+        case 'project':  va = (a.projectName || a.otherContext || '').toLowerCase(); vb = (b.projectName || b.otherContext || '').toLowerCase(); break;
+        case 'category': va = a.category?.toLowerCase() || ''; vb = b.category?.toLowerCase() || ''; break;
+        case 'priority': va = ['Low','Medium','High','Critical'].indexOf(a.priority); vb = ['Low','Medium','High','Critical'].indexOf(b.priority); break;
+        case 'status':   va = a.status?.toLowerCase() || ''; vb = b.status?.toLowerCase() || ''; break;
+        case 'progress': va = parseFloat(a.completionPercent) || 0; vb = parseFloat(b.completionPercent) || 0; break;
+        case 'hours':    va = computeHours(a) || 0; vb = computeHours(b) || 0; break;
+        case 'assignee': va = a.assignedToName?.toLowerCase() || ''; vb = b.assignedToName?.toLowerCase() || ''; break;
+        case 'due':      va = a.dueDate || '9999'; vb = b.dueDate || '9999'; break;
+        default: return 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ?  1 : -1;
+      return 0;
+    });
+  }, [filtered, sortCol, sortDir]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const kpis = {
     total:     totalTasks,
@@ -2315,7 +2364,7 @@ export default function TaskManagement() {
               onApply={(f,t)=>{setTaskDateFrom(f);setTaskDateTo(t);}}
               onClear={()=>{setTaskDateFrom('');setTaskDateTo('');}}
             />
-            {isSA && <select className="tm-filter-sel" value={empFilter} onChange={e => setEmpFilter(e.target.value)}><option value="All">All Members</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>}
+            {isSA && <FilterSelect value={empFilter} onChange={v => setEmpFilter(v)} options={[{value:'All',label:'All Members'}, ...users.map(u=>({value:String(u.id),label:u.name}))]} placeholder="All Members" />}
             <span className="tm-fcount">{totalTasks} tasks</span>
           </div>
           <BoardView tasks={filtered} onLog={setLogTask} onDetail={setDetail} onEdit={setEditTask} onStatusChange={statusChange} isSuperAdmin={isSA} />
@@ -2335,12 +2384,48 @@ export default function TaskManagement() {
               onClear={()=>{setTaskDateFrom('');setTaskDateTo('');}}
             />
             <div className="tm-fg-row">
-              <select className="tm-filter-sel" value={stFilter} onChange={e => setStFilter(e.target.value)}><option value="All">All Status</option>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
-              <select className="tm-filter-sel" value={priFilter} onChange={e => setPriFilter(e.target.value)}><option value="All">All Priority</option>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select>
-              <select className="tm-filter-sel" value={catFilter} onChange={e => setCatFilter(e.target.value)}><option value="All">All Categories</option>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
-              {isSA && <select className="tm-filter-sel" value={empFilter} onChange={e => setEmpFilter(e.target.value)}><option value="All">All Assignees</option>{users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>}
+              <FilterSelect value={stFilter} onChange={v => setStFilter(v)} options={[{value:'All',label:'All Status'}, ...STATUSES.map(s=>({value:s,label:s}))]} placeholder="All Status" />
+              <FilterSelect value={priFilter} onChange={v => setPriFilter(v)} options={[{value:'All',label:'All Priority'}, ...PRIORITIES.map(p=>({value:p,label:p}))]} placeholder="All Priority" />
+              <FilterSelect value={catFilter} onChange={v => setCatFilter(v)} options={[{value:'All',label:'All Categories'}, ...CATEGORIES.map(c=>({value:c,label:c}))]} placeholder="All Categories" />
+              {isSA && <FilterSelect value={empFilter} onChange={v => setEmpFilter(v)} options={[{value:'All',label:'All Assignees'}, ...users.map(u=>({value:String(u.id),label:u.name}))]} placeholder="All Assignees" />}
             </div>
-            {/* <span className="tm-fcount">{totalTasks} task{totalTasks !== 1 ? 's' : ''}</span> */}
+            {/* Columns button */}
+            <div style={{position:'relative'}} ref={colPanelRef}>
+              <button className="tm-btn tm-ghost tm-sm" onClick={() => setShowColPanel(v => !v)} title="Show/hide columns" style={{display:'flex',alignItems:'center',gap:5}}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="18"/><rect x="14" y="3" width="7" height="18"/></svg>
+                Columns
+              </button>
+              {showColPanel && (
+                <div className="tm-col-panel">
+                  <div className="tm-col-panel-hdr">
+                    <span>Columns</span>
+                    <span style={{fontSize:10,color:'#94a3b8'}}>drag to reorder</span>
+                  </div>
+                  {colOrder.map(id => {
+                    const col = ALL_COLS.find(c => c.id === id);
+                    if (!col) return null;
+                    // Hide assignee toggle for non-SA
+                    if (col.id === 'assignee' && !isSA) return null;
+                    const isHidden = hiddenCols.has(id);
+                    return (
+                      <div key={id} className="tm-col-item"
+                        draggable={!col.required}
+                        onDragStart={() => onColDragStart(id)}
+                        onDragOver={(e) => onColDragOver(e, id)}
+                        onDrop={(e) => onColDrop(e, id)}>
+                        <span className="tm-col-drag">⠿</span>
+                        <label className="tm-col-label">
+                          <input type="checkbox" checked={!isHidden} disabled={col.required}
+                            onChange={() => !col.required && toggleCol(id)} />
+                          {col.label}
+                        </label>
+                        {col.required && <span style={{fontSize:9,color:'#cbd5e1',marginLeft:'auto'}}>fixed</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="tm-card">
@@ -2353,65 +2438,83 @@ export default function TaskManagement() {
               <div className="tm-empty"><div style={{ fontSize: 36 }}><FiList size={36} color="#94a3b8" /></div><p>No tasks match your filters.</p></div>
             ) : (
               <>
-                <div className="tm-tbl-scroll-wrap">
-                  <table className="tm-tbl tm-tbl-fixed">
-                    <thead>
-                      <tr>
-                        <th>S.No</th><th>Task</th><th>Project</th><th>Category</th><th>Priority</th><th>Status</th>
-                        <th>Progress</th><th>Start / End</th><th>Hours</th>
-                        {isSA && <th>Assignee</th>}<th>Due</th><th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paged.map((task, taskIndex) => {
-                        const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
-                        // Use updates-based sum; fall back to DB field for legacy tasks
-                        const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
-                        return (
-                          <tr key={task.id} className={`tm-tr ${isOD ? 'tm-tr-od' : ''} ${task.status === 'Completed' ? 'tm-tr-done' : ''}`} onClick={() => setDetail(task)}>
-                            <td style={{textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{taskIndex + 1}</td>
-                            <td>
-                              <div className="tm-task-cell">
-                                <span className="tm-tcode">{task.taskCode}</span>
-                                <span className="tm-ttitle">{task.title}</span>
-                                {task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}
-                              </div>
-                            </td>
-                            <td>{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>
-                            <td><span className="tm-chip">📁 {task.category}</span></td>
-                            <td><PBadge p={task.priority} /></td>
-                            <td><SBadge s={task.status} /></td>
-                            <td>
-                              <div className="tm-mini-prog">
-                                <div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? '#059669' : '#3b82f6' }} /></div>
-                                <span>{task.completionPercent || 0}%</span>
-                              </div>
-                            </td>
-                            <td>
-                              <div style={{ fontSize: 11, lineHeight: 1.5 }}>
-                                {task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}
-                                {task.endDate ? <div style={{ color: '#059669' }}>■ {fmtDT(task.endDate)}</div> : null}
-                              </div>
-                            </td>
-                            <td>{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>
-                            {isSA && <td><span className="tm-assignee">{task.assignedToName || '—'}</span></td>}
-                            <td><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>
-                            <td onClick={e => e.stopPropagation()}>
-                              <div className="tm-acts">
-                                <button className="tm-act tm-act-log"    title="Add Work Entry"  onClick={() => setLogTask(task)}><FiClipboard size={15} /></button>
-                                {task.status !== 'Completed' && task.status !== 'Cancelled' && (
-                                  <button className="tm-act tm-act-done" title="Mark Complete"   onClick={() => quickComplete(task)}><FiCheckCircle size={15} /></button>
-                                )}
-                                <button className="tm-act tm-act-edit"   title="Edit"            onClick={() => setEditTask(task)}><FiEdit size={15} /></button>
-                                {isSA && <button className="tm-act tm-act-del" title="Delete"    onClick={() => deleteTask(task.id)}><FiTrash2 size={15} /></button>}
-                              </div>
-                            </td>
+                {(() => {
+                  const visibleCols = colOrder.filter(id => !hiddenCols.has(id) && (id !== 'assignee' || isSA));
+                  const SortIcon = ({ col }) => {
+                    if (sortCol !== col) return <span className="tm-sort-icon tm-sort-idle">↕</span>;
+                    return <span className="tm-sort-icon tm-sort-active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+                  };
+                  const colHeaders = {
+                    sno:      { label: 'S.No',       sortable: false },
+                    task:     { label: 'Task',        sortable: true  },
+                    project:  { label: 'Project',     sortable: true  },
+                    category: { label: 'Category',    sortable: true  },
+                    priority: { label: 'Priority',    sortable: true  },
+                    status:   { label: 'Status',      sortable: true  },
+                    progress: { label: 'Progress',    sortable: true  },
+                    dates:    { label: 'Start / End', sortable: false },
+                    hours:    { label: 'Hours',       sortable: true  },
+                    assignee: { label: 'Assignee',    sortable: true  },
+                    due:      { label: 'Due',         sortable: true  },
+                    actions:  { label: 'Actions',     sortable: false },
+                  };
+                  // client-side page from sortedFiltered
+                  const pagedSorted = sortedFiltered.slice((page-1)*pageSize, page*pageSize);
+                  return (
+                    <div className="tm-tbl-scroll-wrap">
+                      <table className="tm-tbl tm-tbl-fixed">
+                        <thead>
+                          <tr>
+                            {visibleCols.map((id, ci) => {
+                              const h = colHeaders[id];
+                              return (
+                                <th key={id}
+                                  draggable
+                                  onDragStart={() => onColDragStart(id)}
+                                  onDragOver={(e) => onColDragOver(e, id)}
+                                  onDrop={(e) => onColDrop(e, id)}
+                                  onClick={() => h.sortable && toggleSort(id)}
+                                  className={`tm-th-drag ${h.sortable ? 'tm-th-sort' : ''} ${sortCol === id ? 'tm-th-active' : ''}`}
+                                >
+                                  <span className="tm-th-inner">
+                                    <span className="tm-th-grip">⠿</span>
+                                    {h.label}
+                                    {h.sortable && <SortIcon col={id} />}
+                                  </span>
+                                </th>
+                              );
+                            })}
                           </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                        </thead>
+                        <tbody>
+                          {pagedSorted.map((task, taskIndex) => {
+                            const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
+                            const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
+                            const cellMap = {
+                              sno:      <td key="sno" style={{textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
+                              task:     <td key="task"><div className="tm-task-cell"><span className="tm-tcode">{task.taskCode}</span><span className="tm-ttitle">{task.title}</span>{task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}</div></td>,
+                              project:  <td key="project">{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>,
+                              category: <td key="category"><span className="tm-chip">📁 {task.category}</span></td>,
+                              priority: <td key="priority"><PBadge p={task.priority} /></td>,
+                              status:   <td key="status"><SBadge s={task.status} /></td>,
+                              progress: <td key="progress"><div className="tm-mini-prog"><div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? '#059669' : '#3b82f6' }} /></div><span>{task.completionPercent || 0}%</span></div></td>,
+                              dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.5 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: '#059669' }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
+                              hours:    <td key="hours">{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>,
+                              assignee: <td key="assignee"><span className="tm-assignee">{task.assignedToName || '—'}</span></td>,
+                              due:      <td key="due"><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>,
+                              actions:  <td key="actions" onClick={e => e.stopPropagation()}><div className="tm-acts"><button className="tm-act tm-act-log" title="Add Work Entry" onClick={() => setLogTask(task)}><FiClipboard size={15} /></button>{task.status !== 'Completed' && task.status !== 'Cancelled' && (<button className="tm-act tm-act-done" title="Mark Complete" onClick={() => quickComplete(task)}><FiCheckCircle size={15} /></button>)}<button className="tm-act tm-act-edit" title="Edit" onClick={() => setEditTask(task)}><FiEdit size={15} /></button>{isSA && <button className="tm-act tm-act-del" title="Delete" onClick={() => deleteTask(task.id)}><FiTrash2 size={15} /></button>}</div></td>,
+                            };
+                            return (
+                              <tr key={task.id} className={`tm-tr ${isOD ? 'tm-tr-od' : ''} ${task.status === 'Completed' ? 'tm-tr-done' : ''}`} onClick={() => setDetail(task)}>
+                                {visibleCols.map(id => cellMap[id])}
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
                 <PaginationBar page={page} totalPages={totalPages} total={totalTasks} pageSize={pageSize} onPageChange={goToPage} onSizeChange={changePageSize} />
               </>
             )}

@@ -16,7 +16,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
-import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import { FaEye, FaEdit, FaTrash, FaUpload, FaCloudUploadAlt, FaColumns } from 'react-icons/fa';
 import { RiDeleteBin6Line } from "react-icons/ri";
 import * as XLSX from 'xlsx';
@@ -432,7 +432,12 @@ const OrderBookForm = ({ customer, currentUser, onSaved, onCancel, existingOrder
                       <td>
                         {item.isCustomUnit
                           ? <input type="text" className="orderbook-table-input" value={item.customUnit} onChange={e => updateItem(index,'customUnit',e.target.value)} placeholder="Custom unit"/>
-                          : <UnitTypeDropdown value={item.unit} onChange={e => updateItem(index,'unit',e.target.value)} className="orderbook-table-input" placeholder="Unit"/>
+                          : <FilterSelect
+                              value={item.unit}
+                              onChange={v => updateItem(index, 'unit', v)}
+                              options={[...COMMON_UNITS.map(u => ({ value: u, label: u })), { value: 'Custom', label: '✏️ Custom' }]}
+                              placeholder="Unit"
+                            />
                         }
                       </td>
                       <td><input type="number" step="0.01" className="orderbook-table-input orderbook-table-input-number" value={item.unitPrice} onChange={e => updateItem(index,'unitPrice',e.target.value)} placeholder="0.00"/></td>
@@ -2357,7 +2362,7 @@ useEffect(() => {
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'0.5rem' }}>
+      {/* <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'0.5rem' }}>
         {[
           {icon:'👥', bg:'#eff6ff', val:kpiData.totalCustomers,    label:'Total Customers'},
           {icon:'✨', bg:'#fef3c7', val:kpiData.newThisMonth,      label:'New This Month'},
@@ -2372,7 +2377,7 @@ useEffect(() => {
             </div>
           </div>
         ))}
-      </div>
+      </div> */}
 
       {/* View Toggle + Column Controls — all right-aligned */}
       <div style={{ display:'flex', justifyContent:'flex-end', alignItems:'center', gap:'8px', marginBottom:'0.75rem' }}>
@@ -2741,34 +2746,28 @@ const CustPagination = ({ startRecord, endRecord, totalRecords, currentPage, tot
     return pages;
   };
 
+  const tp = totalPages || 1;
   return (
     <div className="leads-enquiries-pagination">
       <div className="leads-enquiries-pagination-info">
-        {totalRecords === 0
-          ? 'No records found'
-          : `Showing ${startRecord}–${endRecord} of ${totalRecords} customers`}
-
-          <select className="leads-enquiries-rows-select" value={rowsPerPage} onChange={e => onRowsPerPageChange(Number(e.target.value))}>
-          <option value={10}>10 Rows</option>
-          <option value={20}>20 Rows</option>
-          <option value={50}>50 Rows</option>
-          <option value={100}>100 Rows</option>
-        </select>
+        {/* <span style={{whiteSpace:'nowrap'}}>Rows per page:</span> */}
+        <span style={{whiteSpace:'nowrap',fontSize:12,color:'#64748b'}}>Rows per page:</span>
+        <FilterSelect value={String(rowsPerPage)} onChange={v => onRowsPerPageChange(Number(v))} options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]} placeholder="Rows" />
+        <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+          {totalRecords === 0 ? 'No records' : `${startRecord}–${endRecord} of ${totalRecords} customers`}
+        </span>
+        <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
+          Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+        </span>
       </div>
-      <div className="leads-enquiries-pagination-controls">
-        
-        <div className="leads-enquiries-pagination-buttons">
-          <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(1)} disabled={currentPage === 1} title="First page">«</button>
-          <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
-          {currentPage > 3 && totalPages > 5 && <span className="leads-enquiries-pagination-ellipsis">…</span>}
-          {getPageNumbers().map(p => (
-            <button key={p} className={`leads-enquiries-pagination-btn${p === currentPage ? ' leads-enquiries-pagination-btn-active' : ''}`} onClick={() => onPageChange(p)}>{p}</button>
-          ))}
-          {currentPage < totalPages - 2 && totalPages > 5 && <span className="leads-enquiries-pagination-ellipsis">…</span>}
-          <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
-          <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(totalPages)} disabled={currentPage === totalPages || totalPages === 0} title="Last page">»</button>
-        </div>
-        <span className="leads-enquiries-pagination-current">Page {currentPage} of {totalPages || 1}</span>
+      <div className="leads-enquiries-pagination-buttons">
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(1)} disabled={currentPage === 1}>«</button>
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>‹</button>
+        {getPageNumbers().map(p => (
+          <button key={p} className={`leads-enquiries-pagination-btn${p === currentPage ? ' leads-enquiries-pagination-btn-active' : ''}`} onClick={() => onPageChange(p)}>{p}</button>
+        ))}
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === tp || tp === 0}>›</button>
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(tp)} disabled={currentPage === tp || tp === 0}>»</button>
       </div>
     </div>
   );

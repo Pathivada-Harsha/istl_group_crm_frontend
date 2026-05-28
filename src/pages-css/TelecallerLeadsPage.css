@@ -26,14 +26,19 @@
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
+/* ── Block 1: Page header ───────────────────────────────────────────────────── */
 .tc-header {
-  display: flex; align-items: center; justify-content: space-between;
-  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+  display: flex; align-items: center;
+  margin-bottom: 14px;
 }
-.tc-title    { font-size: 22px; font-weight: 700; margin: 0; color: #0f172a; }
-.tc-subtitle { font-size: 12px; color: #64748b; margin: 3px 0 0; }
+.tc-title { font-size: 22px; font-weight: 700; margin: 0; color: #0f172a; }
+.tc-subtitle { font-size: 12px; color: #64748b; margin: 0; }
 
-/* ── View Toggle ─────────────────────────────────────────────────────────── */
+/* ── Block 5: View toggle bar (List / Board + lead count) ──────────────────── */
+.tc-view-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
 .tc-view-toggle {
   display: flex; border: 1.5px solid #e2e8f0; border-radius: 8px;
   overflow: hidden; background: white;
@@ -65,35 +70,20 @@
 .tc-stat-value { font-size: 26px; font-weight: 700; line-height: 1; }
 .tc-stat-label { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: .05em; text-align: center; }
 
-/* ── Date filter bar ─────────────────────────────────────────────────────── */
-.tc-date-filter-bar {
+/* ── Block 2: Group & Category bar ────────────────────────────────────────── */
+.tc-group-bar {
   display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
-  background: white; border: 1px solid #e2e8f0; border-radius: 10px;
-  padding: 10px 14px; margin-bottom: 12px;
+  background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
 }
-.tc-date-filter-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
-.tc-date-filter-pills { display: flex; gap: 6px; }
-.tc-date-pill {
-  padding: 4px 12px; border-radius: 20px; border: 1.5px solid #e2e8f0;
-  font-size: 12px; font-weight: 500; font-family: 'Poppins', sans-serif;
-  background: white; color: #64748b; cursor: pointer; transition: all 0.15s;
-}
-.tc-date-pill.active { background: #2563eb; color: white; border-color: #2563eb; }
-.tc-date-pill:hover:not(.active) { border-color: #2563eb; color: #2563eb; }
-.tc-date-inputs { display: flex; align-items: center; gap: 8px; }
-.tc-date-sep { font-size: 12px; color: #94a3b8; }
-.tc-date-active-label {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 12px; color: #2563eb; font-weight: 600;
-  background: #eff6ff; border: 1px solid #bfdbfe;
-  padding: 3px 10px; border-radius: 20px;
-}
-.tc-date-clear { border: none; background: none; color: #2563eb; cursor: pointer; font-size: 14px; padding: 0; }
 
-/* ── Toolbar ─────────────────────────────────────────────────────────────── */
-.tc-toolbar {
-  display: flex; align-items: center; gap: 10px;
-  flex-wrap: wrap; margin-bottom: 16px;
+/* ── Block 3: Search + filters + date range bar ────────────────────────────── */
+.tc-search-filter-bar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  background: white; border: 1px solid #e2e8f0; border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
 }
 .tc-search {
   flex: 1; min-width: 200px; padding: 9px 14px;
@@ -102,6 +92,12 @@
   outline: none; background: white; transition: border-color .2s;
 }
 .tc-search:focus { border-color: #2563eb; }
+.tc-filter-date {
+  display: flex; align-items: center; gap: 8px;
+}
+.tc-filter-date-label {
+  font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap;
+}
 .tc-filter-select {
   padding: 8px 12px; border-radius: 8px; border: 1.5px solid #e2e8f0;
   font-size: 13px; font-family: 'Poppins', sans-serif;
@@ -515,47 +511,6 @@
   .tc-modal--wide { width: 98vw !important; }
 }
 
-/* ── Board search bar ────────────────────────────────────────────────────── */
-.tc-board-search-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: white;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 10px;
-  padding: 9px 14px;
-  margin-bottom: 12px;
-  transition: border-color .15s;
-}
-.tc-board-search-bar:focus-within {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37,99,235,.07);
-}
-.tc-board-search-icon {
-  width: 16px; height: 16px;
-  color: #94a3b8; flex-shrink: 0;
-}
-.tc-board-search-input {
-  flex: 1;
-  border: none;
-  outline: none;
-  font-size: 13px;
-  font-family: 'Poppins', sans-serif;
-  color: #1e293b;
-  background: transparent;
-}
-.tc-board-search-input::placeholder { color: #94a3b8; }
-.tc-board-search-clear {
-  border: none;
-  background: none;
-  color: #94a3b8;
-  cursor: pointer;
-  font-size: 14px;
-  padding: 0;
-  line-height: 1;
-  transition: color .15s;
-}
-.tc-board-search-clear:hover { color: #374151; }
 /* ── Fixed modal layout ─────────────────────────────────────── */
 .tc-modal--fixed-layout {
   display: flex;
@@ -816,3 +771,154 @@
 }
 .tc-toolbar .filter-trigger--open { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.08); }
 .tc-toolbar .filter-dropdown-list { min-width: 180px; font-size: 13px; }
+/* ── Filter Bar (Group/Category/Priority/Source/Date) ─────────────────────── */
+/* tc-filter-bar removed */
+
+/* Filter item wrapper — gives consistent sizing to each dropdown */
+.tc-filter-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 140px;
+}
+
+/* Date filter inline label + calendar */
+.tc-filter-date {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: auto;
+}
+.tc-filter-date-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  white-space: nowrap;
+}
+
+/* Clear all filters button */
+.tc-filter-clear-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1.5px solid #fca5a5;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'Poppins', sans-serif;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+.tc-filter-clear-all:hover {
+  background: #fee2e2;
+  border-color: #f87171;
+}
+
+/* Board card group line */
+.tc-board-card-group {
+  font-size: 11px;
+  color: #6366f1;
+  margin: 3px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Import Leads-Enquire calendar CSS so TcDateRangeFilter renders correctly ─ */
+/* The ld-cal-* classes are defined in Leads-Enquire.css; to avoid duplication   */
+/* we add the ones needed if they aren't already globally available              */
+.ld-cal-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 11px; border-radius: 8px;
+  border: 1.5px solid #e2e8f0; background: #fff;
+  font-size: 12px; font-family: 'Poppins', sans-serif;
+  cursor: pointer; color: #374151; transition: border-color .15s;
+  white-space: nowrap;
+}
+.ld-cal-trigger:hover { border-color: #94a3b8; }
+.ld-cal--open    { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+.ld-cal--applied { border-color: #2563eb; background: #eff6ff; }
+.ld-cal-ph  { color: #94a3b8; font-size: 12px; letter-spacing: .3px; }
+.ld-cal-val { color: #0f172a; font-size: 12px; font-weight: 600; }
+.ld-cal-sep { color: #cbd5e1; font-size: 12px; }
+.ld-cal-x   { display:flex; align-items:center; padding:2px; border-radius:4px; color:#94a3b8; transition:color .13s,background .13s; }
+.ld-cal-x:hover { color:#ef4444; background:#fee2e2; }
+.ld-cal-dropdown {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 12px; user-select: none;
+}
+.ld-cal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.ld-cal-month-btn {
+  font-size: 13px; font-weight: 600; color: #1e293b; border: none;
+  background: none; cursor: pointer; padding: 3px 8px; border-radius: 6px;
+  font-family: inherit; transition: background .13s;
+}
+.ld-cal-month-btn:hover { background: #dbeafe; color: #1e40af; }
+.ld-cal-yr-num { color: #2563eb; font-weight: 700; }
+.ld-cal-nav {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 6px;
+  border: none; background: none; cursor: pointer; color: #64748b;
+  transition: background .13s;
+}
+.ld-cal-nav:hover { background: #f1f5f9; }
+.ld-yr-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px;
+  padding: 4px 0;
+}
+.ld-yr-cell {
+  text-align: center; padding: 5px 2px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; color: #374151;
+  transition: background .13s;
+}
+.ld-yr-cell:hover { background: #f1f5f9; }
+.ld-yr-sel { background: #2563eb; color: #fff; font-weight: 700; }
+.ld-cal-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr);
+  gap: 1px; margin-bottom: 10px;
+}
+.ld-cal-dl {
+  text-align: center; font-size: 10px; font-weight: 600;
+  color: #94a3b8; padding: 4px 0; letter-spacing: .03em;
+}
+.ld-cal-cell {
+  text-align: center; font-size: 12px; padding: 5px 2px;
+  border-radius: 4px; cursor: pointer; color: #374151;
+  transition: background .1s; position: relative;
+}
+.ld-cal-cell:hover:not(.ld-cal-empty):not(.ld-cal-from):not(.ld-cal-to) { background: #f1f5f9; }
+.ld-cal-empty    { cursor: default; pointer-events: none; }
+.ld-cal-today    { font-weight: 700; color: #2563eb; }
+.ld-cal-today::after { content:''; position:absolute; bottom:2px; left:50%; transform:translateX(-50%); width:3px; height:3px; border-radius:50%; background:#2563eb; }
+.ld-cal-from     { background:#1d4ed8; color:#fff; border-radius:5px 0 0 5px; font-weight:600; }
+.ld-cal-to       { background:#1d4ed8; color:#fff; border-radius:0 5px 5px 0; font-weight:600; }
+.ld-cal-from.ld-cal-to { border-radius:5px; }
+.ld-cal-in-range { background:#dbeafe; color:#1e40af; border-radius:0; }
+.ld-cal-rr-s     { border-radius:5px 0 0 5px; }
+.ld-cal-rr-e     { border-radius:0 5px 5px 0; }
+.ld-cal-footer {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 8px; padding-top: 10px; border-top: 1px solid #f1f5f9;
+}
+.ld-cal-chips { display:flex; align-items:center; justify-content:center; gap:6px; width:100%; }
+.ld-cal-chips svg { flex-shrink:0; color:#94a3b8; }
+.ld-cal-chip { font-size:11px; padding:2px 7px; border-radius:5px; border:1px solid #e2e8f0; background:#fff; color:#94a3b8; white-space:nowrap; font-style:italic; }
+.ld-cal-chip--set { background:#eff6ff; border-color:#93c5fd; color:#1e40af; font-style:normal; font-weight:600; }
+.ld-cal-clear { font-size:11px; padding:4px 10px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; color:#64748b; cursor:pointer; font-family:inherit; transition:background .13s; }
+.ld-cal-clear:hover { background:#f1f5f9; }
+.ld-cal-apply { font-size:11px; padding:4px 12px; border:none; border-radius:6px; background:#1d4ed8; color:#fff; cursor:pointer; font-weight:600; font-family:inherit; transition:background .13s; }
+.ld-cal-apply:hover:not(:disabled) { background:#1e40af; }
+.ld-cal-apply:disabled { opacity: 0.5; cursor: default; }
+
+/* Stat card active ring */
+.tc-stat-card--active {
+  transform: translateY(-2px);
+}

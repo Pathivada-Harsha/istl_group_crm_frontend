@@ -301,3 +301,20 @@
 .lfu-list-scroll::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 4px; }
 .lfu-list-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
 .lfu-list-scroll::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+/* ── FilterSelect inside follow-up forms ─────────────────────────────────── */
+.lfu-form-group .filter-trigger {
+  width: 100%;
+  height: 36px;
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1.5px solid #E5E7EB;
+  box-shadow: none;
+}
+.lfu-form-group .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9CA3AF;
+  box-shadow: none;
+}
+.lfu-form-group .filter-trigger--open {
+  border-color: #1B3A6B;
+  box-shadow: 0 0 0 2px rgba(27,58,107,0.10);
+}

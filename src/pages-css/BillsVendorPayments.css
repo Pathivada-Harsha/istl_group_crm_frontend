@@ -176,7 +176,7 @@
 /* ── Containers ─────────────────────────────────────────────────── */
 .procurement-bills-received-container,
 .receipts-page-container {
-  padding: 24px 24px 0 24px;
+  padding: 0px 24px 10px 24px;
 }
 
 /* ── Header block ───────────────────────────────────────────────── */

@@ -80,8 +80,8 @@ const GroupProjectFilter = ({ groupValue, subGroupValue, projectValue, onChange 
         {error.subGroups && <span className="filter-error">{error.subGroups}</span>}
       </div>
 
-      {/* Project */}
-      <div className="filter-group">
+      {/* Project — searchable + wider dropdown */}
+      <div className="filter-group filter-group--project">
         <label className="filter-label">Project</label>
         <FilterSelect
           value={projectValue || ''}
@@ -89,8 +89,9 @@ const GroupProjectFilter = ({ groupValue, subGroupValue, projectValue, onChange 
           placeholder={!subGroupValue ? 'Select Category First' : loading.projects ? 'Loading...' : 'Select Project'}
           disabled={!subGroupValue || loading.projects}
           onChange={(v) => emit({ projectId: v })}
+          searchable={true}
         />
-        {loading.projects && <div className="filter-loading-bar" />}
+        {loading.projects && <div className="filter-loading-bar filter-loading-bar--project" />}
         {error.projects && <span className="filter-error">{error.projects}</span>}
       </div>
     </div>

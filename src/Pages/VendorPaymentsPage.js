@@ -1220,6 +1220,7 @@ export default function VendorPaymentsPage() {
                           setVendors([]); setUnpaidBills([]);
                           if (pid) fetchVendorsForProject(pid, modalGroupName, modalSubGroupName);
                         }}
+                        searchable={true}
                       />
                     </div>
                     <div className="receipts-page-form-group">
@@ -1447,13 +1448,14 @@ export default function VendorPaymentsPage() {
                     </div>
                     <div>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Project *</label>
-                      <select value={editProjectId}
-                        onChange={e=>setEditProjectId(e.target.value)}
-                        disabled={!editProjectSubGroupName||editProjectLoading.projects}
-                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:!editProjectSubGroupName?'#f9fafb':'white'}}>
-                        <option value="">{editProjectLoading.projects?'Loading...':!editProjectSubGroupName?'Select Sub Group first':'Select Project'}</option>
-                        {editProjectList.map((p,i)=><option key={p.id||i} value={p.id}>{p.name}</option>)}
-                      </select>
+                      <FilterSelect
+                        value={editProjectId}
+                        options={editProjectList.map(p => ({ value: p.id, label: p.name }))}
+                        placeholder={editProjectLoading.projects ? 'Loading...' : !editProjectSubGroupName ? 'Select Sub Group first' : 'Select Project'}
+                        disabled={!editProjectSubGroupName || editProjectLoading.projects}
+                        onChange={v => setEditProjectId(v || '')}
+                        searchable={true}
+                      />
                     </div>
                   </div>
                   {(editProjectGroupName!==(editingAdvance.groupId||'')||editProjectSubGroupName!==(editingAdvance.subGroupId||'')||editProjectId!==(editingAdvance.projectId||''))&&parseFloat(editingAdvance.appliedAmount)>0&&(

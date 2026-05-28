@@ -7,7 +7,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
-import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
 import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
@@ -1537,55 +1537,44 @@ function OrderBook() {
         </div>
 
         {/* Pagination */}
-        <div className="orderbook-pagination">
-          <div className="orderbook-pagination-info">
-            {totalItems > 0
-              ? `Showing ${((currentPage - 1) * rowsPerPage) + 1}–${Math.min(currentPage * rowsPerPage, totalItems)} of ${totalItems} entries`
-              : 'No entries to display'}
-            <select
-              value={rowsPerPage}
-              onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-              className="orderbook-rows-select"
-            >
-              <option value={10}>10 Rows</option>
-              <option value={20}>20 Rows</option>
-              <option value={50}>50 Rows</option>
-              <option value={100}>100 Rows</option>
-            </select>
-          </div>
-          <div className="orderbook-pagination-controls">
-            <div className="orderbook-pagination-buttons">
-              {/* First */}
-              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(1)} disabled={currentPage === 1} title="First page">«</button>
-              {/* Previous */}
-              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>Previous</button>
-              {/* Ellipsis left */}
-              {currentPage > 3 && totalPages > 5 && <span className="orderbook-pagination-ellipsis">…</span>}
-              {/* Page number pills */}
-              {(() => {
-                const delta = 2;
-                const left  = Math.max(1, currentPage - delta);
-                const right = Math.min(totalPages, currentPage + delta);
-                const pages = [];
-                for (let i = left; i <= right; i++) pages.push(i);
-                return pages.map(p => (
-                  <button
-                    key={p}
-                    className={`orderbook-pagination-btn${p === currentPage ? ' orderbook-pagination-btn-active' : ''}`}
-                    onClick={() => handlePageChange(p)}
-                  >{p}</button>
-                ));
-              })()}
-              {/* Ellipsis right */}
-              {currentPage < totalPages - 2 && totalPages > 5 && <span className="orderbook-pagination-ellipsis">…</span>}
-              {/* Next */}
-              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
-              {/* Last */}
-              <button className="orderbook-pagination-btn" onClick={() => handlePageChange(totalPages)} disabled={currentPage === totalPages || totalPages === 0} title="Last page">»</button>
+        {(() => {
+          const tp = totalPages || 1;
+          const from = totalItems === 0 ? 0 : (currentPage - 1) * rowsPerPage + 1;
+          const to   = Math.min(currentPage * rowsPerPage, totalItems);
+          const delta = 2;
+          const left  = Math.max(1, currentPage - delta);
+          const right = Math.min(tp, currentPage + delta);
+          const pages = [];
+          for (let i = left; i <= right; i++) pages.push(i);
+          return (
+            <div className="orderbook-pagination">
+              <div className="orderbook-pagination-info">
+                <span style={{whiteSpace:'nowrap'}}>Rows per page:</span>
+                <FilterSelect
+                  value={String(rowsPerPage)}
+                  onChange={v => { setRowsPerPage(Number(v)); setCurrentPage(1); }}
+                  options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
+                  placeholder="Rows"
+                />
+                <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+                  {totalItems === 0 ? 'No entries' : `${from}–${to} of ${totalItems} entries`}
+                </span>
+                <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
+                  Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+                </span>
+              </div>
+              <div className="orderbook-pagination-buttons">
+                <button className="orderbook-pagination-btn" onClick={() => handlePageChange(1)} disabled={currentPage === 1}>«</button>
+                <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1}>‹</button>
+                {pages.map(p => (
+                  <button key={p} className={`orderbook-pagination-btn${p === currentPage ? ' orderbook-pagination-btn-active' : ''}`} onClick={() => handlePageChange(p)}>{p}</button>
+                ))}
+                <button className="orderbook-pagination-btn" onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === tp || tp === 0}>›</button>
+                <button className="orderbook-pagination-btn" onClick={() => handlePageChange(tp)} disabled={currentPage === tp || tp === 0}>»</button>
+              </div>
             </div>
-            <span className="orderbook-pagination-current">Page {currentPage} of {totalPages || 1}</span>
-          </div>
-        </div>
+          );
+        })()}
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -2104,7 +2093,12 @@ function OrderBook() {
                                     >\u2715</button>
                                   </div>
                                 ) : (
-                                  <UnitTypeDropdown value={item.unit} onChange={(e) => updateItem(index, 'unit', e.target.value)} className="orderbook-table-input" placeholder="Select Unit" />
+                                  <FilterSelect
+                                    value={item.unit}
+                                    onChange={v => updateItem(index, 'unit', v)}
+                                    options={[...COMMON_UNITS.map(u => ({ value: u, label: u })), { value: 'Custom', label: '✏️ Custom' }]}
+                                    placeholder="Select Unit"
+                                  />
                                 )}
                               </td>
                               <td>

@@ -1881,6 +1881,7 @@ const BillsManagementPage = () => {
                     placeholder={!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}
                     disabled={!modalSubGroupName}
                     onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                    searchable={true}
                   />
                 </div>
               </div>

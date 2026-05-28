@@ -2,6 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import api from "./../services/leadsapi.js";
 import "../pages-css/TelecallerLeadsPage.css";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
+import GroupCategoryFilter from "../components/Dropdowns/groupCategoryFilter.js";
+import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
 
 const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
@@ -24,7 +26,6 @@ const BOARD_COLUMNS = [
   { key: "NOT_INTERESTED", label: "Not Interested", color: "#dc2626", bg: "#fef2f2", icon: "❌" },
 ];
 
-// A NOT_RESPONDED lead is "resurfaced" if its status was set > 24h ago
 const isResurfaced = (lead) =>
   lead.telecallerStatus === "NOT_RESPONDED" &&
   lead.telecallerStatusUpdatedAt &&
@@ -34,25 +35,20 @@ const PRIORITY_COLOR = { High: "#ef4444", Medium: "#f59e0b", Low: "#10b981" };
 const SOURCES   = ["Website","Referral","Walk-in","Phone","Email","Social Media","Digital Marketing","Campaign","Others"];
 const PRIORITIES = ["High","Medium","Low"];
 
-// Parse backend date strings which come as "dd-MM-yyyy HH:mm" or "dd-MM-yyyy"
-// JS Date() can't parse these directly — we must re-order to ISO first.
 function parseBackendDate(str) {
   if (!str) return null;
-  // Match "dd-MM-yyyy HH:mm" or "dd-MM-yyyy"
   const m = str.match(/^(\d{2})-(\d{2})-(\d{4})(?:\s+(\d{2}:\d{2}))?/);
   if (m) {
-    // Reorder to ISO: "yyyy-MM-ddTHH:mm" or "yyyy-MM-dd"
     const iso = m[4] ? `${m[3]}-${m[2]}-${m[1]}T${m[4]}` : `${m[3]}-${m[2]}-${m[1]}`;
     return new Date(iso);
   }
-  // Fallback: try native parse (handles ISO strings too)
   return new Date(str);
 }
 
 function formatDate(str) {
   if (!str) return "—";
   const d = parseBackendDate(str);
-  if (!d || isNaN(d.getTime())) return str; // return raw if unparseable
+  if (!d || isNaN(d.getTime())) return str;
   return d.toLocaleDateString("en-IN", { day:"2-digit", month:"short", year:"numeric" });
 }
 
@@ -64,9 +60,185 @@ function formatDateTime(str) {
     " " + d.toLocaleTimeString("en-IN", { hour:"2-digit", minute:"2-digit", hour12: true });
 }
 
+// ── Date Range Filter (same calendar component as Leads-Enquire) ─────────────
+const _TC_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _TC_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const TcDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  const [show,   setShow]   = useState(false);
+  const [from,   setFrom]   = useState(null);
+  const [to,     setTo]     = useState(null);
+  const [hover,  setHover]  = useState(null);
+  const [calMo,  setCalMo]  = useState(new Date().getMonth());
+  const [calYr,  setCalYr]  = useState(new Date().getFullYear());
+  const [showYr, setShowYr] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setShow(false); };
+    if (show) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [show]);
+
+  const DIM = new Date(calYr, calMo+1, 0).getDate();
+  const FD  = new Date(calYr, calMo, 1).getDay();
+  const tod = new Date().toISOString().slice(0,10);
+
+  const inR = d => {
+    const hi = to || (from && hover ? hover : null);
+    if (!from || !hi) return false;
+    const [a,b] = from<=hi ? [from,hi] : [hi,from];
+    return d > a && d < b;
+  };
+  const clickDay = d => {
+    if (!from || (from && to)) { setFrom(d); setTo(null); }
+    else if (d < from) { setFrom(d); setTo(null); }
+    else if (d === from) { setFrom(null); setTo(null); }
+    else setTo(d);
+  };
+  const fmt = d => { if (!d) return ''; const [y,m,dy]=d.split('-'); return `${dy}-${m}-${y}`; };
+
+  const handleApply = () => {
+    if (!from) return;
+    onApply(from, to || from);
+    setShow(false);
+  };
+  const handleClear = () => {
+    setFrom(null); setTo(null); setHover(null);
+    onClear();
+    setShow(false);
+  };
+
+  return (
+    <div ref={ref} style={{ position:'relative', display:'inline-flex' }}>
+      <button
+        type="button"
+        className={`ld-cal-trigger${show?' ld-cal--open':''}${appliedFrom?' ld-cal--applied':''}`}
+        onClick={() => setShow(p => !p)}
+      >
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span className={appliedFrom ? 'ld-cal-val' : 'ld-cal-ph'}>{appliedFrom ? fmt(appliedFrom) : 'dd-mm-yyyy'}</span>
+        <span className="ld-cal-sep">—</span>
+        <span className={appliedTo && appliedTo !== appliedFrom ? 'ld-cal-val' : 'ld-cal-ph'}>
+          {appliedTo && appliedTo !== appliedFrom ? fmt(appliedTo) : 'dd-mm-yyyy'}
+        </span>
+        {appliedFrom && (
+          <span className="ld-cal-x" onClick={e => { e.stopPropagation(); handleClear(); }}>
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </span>
+        )}
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0,
+            transform: show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
+        </svg>
+      </button>
+
+      {show && (
+        <div className="ld-cal-dropdown" style={{ position:'absolute', top:'calc(100% + 4px)', left:0, zIndex:9999, width:264 }}>
+          <div className="ld-cal-head">
+            <button type="button" className="ld-cal-nav"
+              onClick={() => { if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7"/>
+              </svg>
+            </button>
+            <button type="button" className="ld-cal-month-btn" onClick={() => setShowYr(p => !p)}>
+              {_TC_MONTHS[calMo]} <span className="ld-cal-yr-num">{calYr}</span>
+            </button>
+            <button type="button" className="ld-cal-nav"
+              onClick={() => { if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1); }}>
+              <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7"/>
+              </svg>
+            </button>
+          </div>
+
+          {showYr ? (
+            <div className="ld-yr-grid">
+              {Array.from({length:16},(_,i) => {
+                const yr = new Date().getFullYear()-4+i;
+                return (
+                  <div key={yr} className={`ld-yr-cell${yr===calYr?' ld-yr-sel':''}`}
+                    onClick={() => { setCalYr(yr); setShowYr(false); }}>
+                    {yr}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="ld-cal-grid">
+              {_TC_DAYS.map(d => <div key={d} className="ld-cal-dl">{d}</div>)}
+              {Array.from({length:FD}).map((_,i) => <div key={`e${i}`} className="ld-cal-cell ld-cal-empty"/>)}
+              {Array.from({length:DIM}).map((_,i) => {
+                const dy  = i+1;
+                const ds  = `${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
+                const dow = (FD+i)%7;
+                let cls   = 'ld-cal-cell';
+                if (ds===from)      cls += ' ld-cal-from';
+                else if (ds===to)   cls += ' ld-cal-to';
+                else if (inR(ds)) {
+                  cls += ' ld-cal-in-range';
+                  if (dow===0) cls += ' ld-cal-rr-s';
+                  if (dow===6) cls += ' ld-cal-rr-e';
+                }
+                if (ds===tod && ds!==from && ds!==to) cls += ' ld-cal-today';
+                return (
+                  <div key={ds} className={cls}
+                    onClick={() => clickDay(ds)}
+                    onMouseEnter={() => from && !to && setHover(ds)}
+                    onMouseLeave={() => setHover(null)}>
+                    {dy}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="ld-cal-footer">
+            <div className="ld-cal-chips">
+              <span className={`ld-cal-chip${from?' ld-cal-chip--set':''}`}>{from ? fmt(from) : 'From —'}</span>
+              <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/>
+              </svg>
+              <span className={`ld-cal-chip${to?' ld-cal-chip--set':''}`}>{to ? fmt(to) : 'To —'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, justifyContent:'center', width:'100%' }}>
+              {(from || appliedFrom) && (
+                <button type="button" className="ld-cal-clear" onClick={handleClear}>Clear</button>
+              )}
+              <button type="button" className="ld-cal-clear" onClick={() => setShow(false)}>Cancel</button>
+              <button type="button" className="ld-cal-apply" onClick={handleApply} disabled={!from}>Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function TelecallerLeadsPage() {
   // ── View mode ──────────────────────────────────────────────────────────────
   const [viewMode, setViewMode] = useState(() => localStorage.getItem("tc_view_mode") || "list");
+
+  // ── Group / Category filter (shared hook — same as Leads-Enquire) ──────────
+  const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
+  const groupNameRef    = useRef(groupName);
+  const subGroupNameRef = useRef(subGroupName);
+  // Keep refs in sync with state
+  useEffect(() => { groupNameRef.current = groupName; }, [groupName]);
+  useEffect(() => { subGroupNameRef.current = subGroupName; }, [subGroupName]);
+
+  // ── Priority / Source filters ──────────────────────────────────────────────
+  const [priorityFilter, setPriorityFilter] = useState("All");
+  const [sourceFilter,   setSourceFilter]   = useState("All");
+  const priorityFilterRef = useRef("All");
+  const sourceFilterRef   = useRef("All");
 
   // ── List-view state ────────────────────────────────────────────────────────
   const [leads,      setLeads]      = useState([]);
@@ -85,30 +257,27 @@ export default function TelecallerLeadsPage() {
   const searchTimer  = useRef(null);
 
   // ── Date filter ────────────────────────────────────────────────────────────
-  const [dateMode,   setDateMode]   = useState("all"); // "all" | "single" | "range"
-  const [dateFrom,   setDateFrom]   = useState("");
-  const [dateTo,     setDateTo]     = useState("");
-  const dateModeRef = useRef("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo,   setDateTo]   = useState("");
   const dateFromRef = useRef("");
   const dateToRef   = useRef("");
 
   // ── Board search ──────────────────────────────────────────────────────────
   const [boardSearch,    setBoardSearch]    = useState("");
   const boardSearchRef   = useRef("");
-  const boardSearchTimer = useRef(null);
 
-  // ── Board-view state (one state per column) ────────────────────────────────
-  const [boardData,  setBoardData]  = useState({ NEW:[], INTERESTED: [], NOT_RESPONDED: [], NOT_INTERESTED: [], ALL:[] });
-  const [boardPages, setBoardPages] = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
-  const [boardTotals,setBoardTotals]= useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
-  const [boardHasMore,setBoardHasMore]=useState({ NEW:true,INTERESTED:true,NOT_RESPONDED:true,NOT_INTERESTED:true,ALL:true});
-  const [boardLoading,setBoardLoading]=useState({ NEW:false,INTERESTED:false,NOT_RESPONDED:false,NOT_INTERESTED:false,ALL:false});
+  // ── Board-view state ───────────────────────────────────────────────────────
+  const [boardData,   setBoardData]   = useState({ NEW:[], INTERESTED: [], NOT_RESPONDED: [], NOT_INTERESTED: [], ALL:[] });
+  const [boardPages,  setBoardPages]  = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
+  const [boardTotals, setBoardTotals] = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
+  const [boardHasMore,setBoardHasMore]= useState({ NEW:true,INTERESTED:true,NOT_RESPONDED:true,NOT_INTERESTED:true,ALL:true});
+  const [boardLoading,setBoardLoading]= useState({ NEW:false,INTERESTED:false,NOT_RESPONDED:false,NOT_INTERESTED:false,ALL:false});
   const BOARD_PAGE_SIZE = 15;
   const boardObservers = useRef({});
   const boardSentinels  = useRef({});
 
   // ── Drag-and-drop ──────────────────────────────────────────────────────────
-  const [dragging, setDragging] = useState(null); // { lead, fromCol }
+  const [dragging, setDragging] = useState(null);
   const [dragOver, setDragOver] = useState(null);
   const [dragFromCol, setDragFromCol] = useState(null); // eslint-disable-line no-unused-vars
 
@@ -138,13 +307,10 @@ export default function TelecallerLeadsPage() {
   });
   const [editSaving, setEditSaving] = useState(false);
 
-  // Group / Category / Scheme state for edit modal
   const [editGroups,    setEditGroups]    = useState([]);
   const [editSubGroups, setEditSubGroups] = useState([]);
   const [loadingGroups, setLoadingGroups] = useState(false);
 
-  // Safely coerce API response to a plain string array regardless of shape
-  // The leads-groups / leads-subgroups endpoints return [{value, label}] objects
   const toStringArray = (data) => {
     const arr = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
     return arr.map(item =>
@@ -178,24 +344,29 @@ export default function TelecallerLeadsPage() {
   const [intOtherComment, setIntOtherComment] = useState("");
   const [intCapacity, setIntCapacity] = useState("");
   const [intCapacityUnit, setIntCapacityUnit] = useState("kW");
-  // New INTERESTED fields
   const [intMonthlyBill, setIntMonthlyBill] = useState("");
   const [intExistingContractLoad, setIntExistingContractLoad] = useState("");
   const [intRequiredContractLoad, setIntRequiredContractLoad] = useState("");
   const [intBillFile, setIntBillFile] = useState(null);
   const [intBillUploading, setIntBillUploading] = useState(false);
-  const [billPreview, setBillPreview] = useState(null); // { url, name, type }
+  const [billPreview, setBillPreview] = useState(null);
   const [intSolarScheme,    setIntSolarScheme]    = useState("");
   const [intSubsidyRequired,setIntSubsidyRequired]= useState("");
 
-  // ── Date params builder ────────────────────────────────────────────────────
-  const buildDateParams = () => {
-    const mode = dateModeRef.current;
-    const from = dateFromRef.current;
-    const to   = dateToRef.current;
-    if (mode === "single" && from) return { assignedFrom: from, assignedTo: from };
-    if (mode === "range"  && from) return { assignedFrom: from, assignedTo: to || from };
-    return {};
+  // ── Build common filter params for all API calls ───────────────────────────
+  const buildFilterParams = () => {
+    const params = {};
+    if (dateFromRef.current) {
+      params.assignedFrom = dateFromRef.current;
+      params.assignedTo   = dateToRef.current || dateFromRef.current;
+    }
+    if (groupNameRef.current)    params.groupName    = groupNameRef.current;
+    if (subGroupNameRef.current) params.subGroupName = subGroupNameRef.current;
+    if (priorityFilterRef.current && priorityFilterRef.current !== "All")
+      params.priority = priorityFilterRef.current;
+    if (sourceFilterRef.current && sourceFilterRef.current !== "All")
+      params.source = sourceFilterRef.current;
+    return params;
   };
 
   // ── List-view fetch ────────────────────────────────────────────────────────
@@ -206,8 +377,12 @@ export default function TelecallerLeadsPage() {
     const resolvedSearch = searchOverride !== undefined ? searchOverride : searchRef.current;
     setLoading(true);
     try {
-      const params = { page: resolvedPage, size: resolvedSize, telecallerStatus: resolvedFilter, ...buildDateParams(),
-        ...(resolvedSearch ? { searchTerm: resolvedSearch } : {}) };
+      const params = {
+        page: resolvedPage, size: resolvedSize,
+        telecallerStatus: resolvedFilter,
+        ...buildFilterParams(),
+        ...(resolvedSearch ? { searchTerm: resolvedSearch } : {}),
+      };
       const data = await api.get("/telecaller/my-leads", { params });
       if (data.success) {
         setLeads(data.data);
@@ -221,21 +396,26 @@ export default function TelecallerLeadsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchStats = useCallback(async () => {
     try {
-      const data = await api.get("/telecaller/dashboard-stats");
+      const params = buildFilterParams();
+      const data = await api.get("/telecaller/dashboard-stats", { params });
       if (data.success) setStats(data.data);
-    } catch {}
-  }, []);
+    } catch {} // eslint-disable-line no-empty
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Board-view fetch (per column, appends for infinite scroll) ─────────────
+  // ── Board-view fetch ───────────────────────────────────────────────────────
   const fetchBoardColumn = useCallback(async (col, pg, append = false) => {
     setBoardLoading(prev => ({ ...prev, [col]: true }));
     try {
-      const params = { page: pg, size: BOARD_PAGE_SIZE, telecallerStatus: col, ...buildDateParams(),
-        ...(boardSearchRef.current ? { searchTerm: boardSearchRef.current } : {}) };
+      const params = {
+        page: pg, size: BOARD_PAGE_SIZE,
+        telecallerStatus: col,
+        ...buildFilterParams(),
+        ...(boardSearchRef.current ? { searchTerm: boardSearchRef.current } : {}),
+      };
       const data = await api.get("/telecaller/my-leads", { params });
       if (data.success) {
         setBoardData(prev => ({
@@ -251,7 +431,7 @@ export default function TelecallerLeadsPage() {
     } finally {
       setBoardLoading(prev => ({ ...prev, [col]: false }));
     }
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetBoard = useCallback(() => {
     BOARD_COLUMNS.forEach(c => fetchBoardColumn(c.key, 0, false));
@@ -278,18 +458,47 @@ export default function TelecallerLeadsPage() {
   useEffect(() => {
     fetchLeads(0, "ALL", 10);
     fetchStats();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (viewMode === "board") resetBoard();
-  }, [viewMode]);
+  }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Drag & Drop handlers ───────────────────────────────────────────────────
+  // ── Re-fetch when group/category changes (from shared hook / sidebar) ──────
+  useEffect(() => {
+    groupNameRef.current    = groupName;
+    subGroupNameRef.current = subGroupName;
+    setPage(0); pageRef.current = 0;
+    if (viewMode === "board") {
+      setTimeout(() => resetBoard(), 0);
+    } else {
+      setTimeout(() => fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current), 0);
+    }
+    setTimeout(() => fetchStats(), 0);
+  }, [groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Re-fetch when priority/source changes ─────────────────────────────────
+  const applyDropdownFilter = (type, value) => {
+    if (type === "priority") {
+      setPriorityFilter(value);
+      priorityFilterRef.current = value;
+    } else {
+      setSourceFilter(value);
+      sourceFilterRef.current = value;
+    }
+    setPage(0); pageRef.current = 0;
+    setTimeout(() => {
+      if (viewMode === "board") resetBoard();
+      else fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current);
+      fetchStats();
+    }, 0);
+  };
+
+  // ── Drag & Drop ────────────────────────────────────────────────────────────
   const onDragStart = (lead, fromCol) => setDragging({ lead, fromCol });
   const onDragOver  = (e, col) => { e.preventDefault(); setDragOver(col); };
   const onDragLeave = () => setDragOver(null);
 
-  // Smart board drop: modals for statuses that need input, direct API for simple moves
   const doBoardMove = async (lead, fromCol, toCol) => {
     setBoardData(prev => ({
       ...prev,
@@ -318,27 +527,16 @@ export default function TelecallerLeadsPage() {
     const { lead, fromCol } = dragging;
     setDragging(null);
 
-    // Only hard-block Closed Won — all other statuses can be changed by telecaller
     if (lead.leadStatus === "Closed Won") {
       showToast("Cannot move a Closed Won lead.", "info"); return;
     }
-
-    // NOT_INTERESTED: open modal for reason (then follow-up modal)
     if (toCol === "NOT_INTERESTED") {
-      setSelected(lead);
-      setNewStatus("NOT_INTERESTED");
-      setReason(""); setDiscussion("");
-      setDragFromCol(fromCol);
-      setStatusModal(true);
-      return;
+      setSelected(lead); setNewStatus("NOT_INTERESTED");
+      setReason(""); setDiscussion(""); setDragFromCol(fromCol); setStatusModal(true); return;
     }
-
-    // INTERESTED: open interested modal (needs discussion + property type)
     if (toCol === "INTERESTED") {
-      setSelected(lead);
-      setNewStatus("INTERESTED");
-      setReason(""); 
-      setDiscussion(lead.tcDiscussionNote||"");
+      setSelected(lead); setNewStatus("INTERESTED");
+      setReason(""); setDiscussion(lead.tcDiscussionNote||"");
       setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
       setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
       setIntPropertyType(lead.tcPropertyType||"");
@@ -352,41 +550,37 @@ export default function TelecallerLeadsPage() {
       setIntBillFile(null);
       setIntSolarScheme(lead.solarScheme||"");
       setIntSubsidyRequired(lead.subsidyRequired||"");
-      setDragFromCol(fromCol);
-      setStatusModal(true);
-      return;
+      setDragFromCol(fromCol); setStatusModal(true); return;
     }
-
-    // NEW / NOT_RESPONDED — direct move, no modal needed
     doBoardMove(lead, fromCol, toCol);
   };
 
-  // ── Apply filter / date filter ─────────────────────────────────────────────
+  // ── Status / date filter helpers ───────────────────────────────────────────
   const applyFilter = (f) => {
     setFilter(f); filterRef.current = f;
     setPage(0);   pageRef.current = 0;
     if (viewMode === "board") {
-      // In board view, KPI clicks don't change the board columns but keep the stat highlight
-      // Board shows all statuses simultaneously — just highlight which stat is active
+      // In board view, status filter affects the ALL column only;
+      // each column already shows its own status — just refresh all.
+      setTimeout(() => resetBoard(), 0);
     } else {
       fetchLeads(0, f, pageSizeRef.current, searchRef.current);
     }
+    setTimeout(() => fetchStats(), 0);
   };
 
-  const applyDateFilter = (mode, from, to) => {
-    setDateMode(mode); dateModeRef.current = mode;
+  const applyDateFilter = (from, to) => {
     setDateFrom(from); dateFromRef.current = from;
     setDateTo(to);     dateToRef.current   = to;
-    // Re-fetch whatever is active
-    if (viewMode === "board") {
-      setTimeout(() => resetBoard(), 0);
-    } else {
-      setPage(0); pageRef.current = 0;
-      setTimeout(() => fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current), 0);
-    }
+    setPage(0); pageRef.current = 0;
+    setTimeout(() => {
+      if (viewMode === "board") resetBoard();
+      else fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current);
+      fetchStats();
+    }, 0);
   };
 
-  const clearDateFilter = () => applyDateFilter("all","","");
+  const clearDateFilter = () => applyDateFilter("", "");
 
   const handlePageSizeChange = (newSize) => {
     setPageSize(newSize); pageSizeRef.current = newSize;
@@ -397,33 +591,37 @@ export default function TelecallerLeadsPage() {
   const switchView = (v) => {
     setViewMode(v);
     localStorage.setItem("tc_view_mode", v);
+    // When switching to board, reload all columns with current filters + search
+    if (v === "board") {
+      setTimeout(() => resetBoard(), 0);
+    } else {
+      // When switching to list, reload with current filters + search
+      setTimeout(() => fetchLeads(0, filterRef.current, pageSizeRef.current, searchRef.current), 0);
+    }
   };
 
-  // List search is backend-driven (searchTerm sent in API call).
-  // No frontend filtering needed — we use `leads` directly.
   const visible = leads;
 
-  // Handle list search with debounce — sends to backend
-  const handleListSearch = (val) => {
+  // Unified search — drives list view OR board view depending on which is active.
+  // boardSearchRef and searchRef are always kept in sync so buildFilterParams
+  // and fetchBoardColumn both pick up the latest value.
+  const handleSearch = (val) => {
     setSearch(val);
-    searchRef.current = val;
+    setBoardSearch(val);
+    searchRef.current      = val;
+    boardSearchRef.current = val;
     if (searchTimer.current) clearTimeout(searchTimer.current);
     setPage(0); pageRef.current = 0;
     searchTimer.current = setTimeout(() => {
-      fetchLeads(0, filterRef.current, pageSizeRef.current, val);
+      if (viewMode === "board") {
+        BOARD_COLUMNS.forEach(c => fetchBoardColumn(c.key, 0, false));
+      } else {
+        fetchLeads(0, filterRef.current, pageSizeRef.current, val);
+      }
     }, 350);
   };
 
-  // Handle board search with debounce — resets all columns
-  const handleBoardSearch = (val) => {
-    setBoardSearch(val);
-    boardSearchRef.current = val;
-    if (boardSearchTimer.current) clearTimeout(boardSearchTimer.current);
-    boardSearchTimer.current = setTimeout(() => {
-      // Reset each column from page 0 with new search
-      BOARD_COLUMNS.forEach(c => fetchBoardColumn(c.key, 0, false));
-    }, 350);
-  };
+
 
   // ── Status modal ───────────────────────────────────────────────────────────
   const openStatusModal = (lead) => {
@@ -431,9 +629,7 @@ export default function TelecallerLeadsPage() {
       showToast("This lead is Closed Won — status cannot be changed.", "info"); return;
     }
     setSelected(lead); setNewStatus(""); setReason(""); setDiscussion("");
-    // Init location as "state||district||city||pincode" from existing lead address
     setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
-    // Pre-fill existing INTERESTED values so telecaller can update them
     setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
     setIntPropertyType(lead.tcPropertyType||"");
     setIntQuotedPrice(lead.tcQuotedPrice||"");
@@ -446,7 +642,6 @@ export default function TelecallerLeadsPage() {
     setIntBillFile(null);
     setIntSolarScheme(lead.solarScheme||"");
     setIntSubsidyRequired(lead.subsidyRequired||"");
-    // Pre-fill discussion if re-opening an INTERESTED lead
     setDiscussion(lead.tcDiscussionNote||"");
     setStatusModal(true);
   };
@@ -464,7 +659,6 @@ export default function TelecallerLeadsPage() {
         setFollowupDate(""); setFollowupTime("09:00"); setFollowupModal(true);
         return;
       }
-      // Parse location parts from "state||district||city||pincode" format
       const locParts = intLocation.split("||");
       const tcState    = locParts[0]||"";
       const tcDistrict = locParts[1]||"";
@@ -476,10 +670,8 @@ export default function TelecallerLeadsPage() {
         telecallerStatus: newStatus, reason: reason.trim(), discussionNote: discussion.trim(),
         ...(newStatus==="INTERESTED" && {
           tcLocation: tcLocStr||null,
-          tcState: tcState||null,
-          tcDistrict: tcDistrict||null,
-          tcCity: tcCity||null,
-          tcPincode: tcPincode||null,
+          tcState: tcState||null, tcDistrict: tcDistrict||null,
+          tcCity: tcCity||null, tcPincode: tcPincode||null,
           tcSiteVisitDate: intSiteDate||null,
           tcPropertyType: intPropertyType||null, tcQuotedPrice: intQuotedPrice.trim()||null,
           tcAddons: intAddons.trim()||null, tcOtherComments: intOtherComment.trim()||null,
@@ -487,17 +679,14 @@ export default function TelecallerLeadsPage() {
           tcMonthlyBill: intMonthlyBill.trim()||null,
           tcExistingContractLoad: intExistingContractLoad.trim()||null,
           tcRequiredContractLoad: intRequiredContractLoad.trim()||null,
-          solarScheme: intSolarScheme||null,
-          subsidyRequired: intSubsidyRequired||null,
+          solarScheme: intSolarScheme||null, subsidyRequired: intSubsidyRequired||null,
         }),
       });
-      // Upload bill file if selected (works for any status update, not just first INTERESTED)
       if (intBillFile) {
         try {
           setIntBillUploading(true);
           const form = new FormData();
           form.append("file", intBillFile);
-          // Use same localStorage pattern as leadsapi.js: key="bd_portal_user", user under .user
           const stored = JSON.parse(localStorage.getItem("bd_portal_user")||"{}");
           const authUser = stored?.user || stored || {};
           const uploadResp = await fetch(`${API_BASE_URL}/telecaller/lead/${selected.id}/upload-bill`, {
@@ -515,13 +704,11 @@ export default function TelecallerLeadsPage() {
         } catch(uploadErr) {
           showToast("Bill upload failed: " + uploadErr.message, "error");
         } finally {
-          setIntBillUploading(false);
-          setIntBillFile(null);
+          setIntBillUploading(false); setIntBillFile(null);
         }
       }
       showToast("Status updated!","success");
-      setStatusModal(false);
-      setDragFromCol(null);
+      setStatusModal(false); setDragFromCol(null);
       if (modalOpen) {
         try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){}
       }
@@ -533,8 +720,6 @@ export default function TelecallerLeadsPage() {
 
   // ── Edit modal ─────────────────────────────────────────────────────────────
   const openEditModal = (lead) => {
-    // Always allow editing basic lead details regardless of status.
-    // The only hard block is if the lead record itself is deleted.
     setSelected(lead);
     setEditForm({
       name:lead.name||"", email:lead.email||"", phone:lead.phone||"",
@@ -564,7 +749,6 @@ export default function TelecallerLeadsPage() {
     finally { setEditSaving(false); }
   };
 
-  // ── Detail modal ───────────────────────────────────────────────────────────
   const openDetail = async (lead) => {
     try {
       const data = await api.get(`/telecaller/lead/${lead.id}`);
@@ -576,10 +760,27 @@ export default function TelecallerLeadsPage() {
     setToast({msg,type}); setTimeout(()=>setToast(null),3500);
   };
 
-  const activeDateLabel = () => {
-    if (dateMode==="single" && dateFrom) return `On ${formatDate(dateFrom)}`;
-    if (dateMode==="range"  && dateFrom) return `${formatDate(dateFrom)} – ${dateTo ? formatDate(dateTo) : "now"}`;
-    return null;
+  // Count active filters for badge
+  const activeFilterCount = [
+    groupName ? 1 : 0,
+    subGroupName ? 1 : 0,
+    priorityFilter !== "All" ? 1 : 0,
+    sourceFilter !== "All" ? 1 : 0,
+    dateFrom ? 1 : 0,
+    filter !== "ALL" ? 1 : 0,
+    search ? 1 : 0,
+  ].reduce((a,b)=>a+b,0);
+
+  const clearAllFilters = () => {
+    updateFilters({ groupName: '', subGroupName: '', projectId: '' });
+    setPriorityFilter("All"); priorityFilterRef.current = "All";
+    setSourceFilter("All");   sourceFilterRef.current   = "All";
+    setFilter("ALL");         filterRef.current         = "ALL";
+    // Clear search too
+    setSearch(""); setBoardSearch("");
+    searchRef.current      = "";
+    boardSearchRef.current = "";
+    clearDateFilter(); // this also re-fetches everything
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -587,32 +788,96 @@ export default function TelecallerLeadsPage() {
     <div className="tc-page">
       {toast && <div className={`tc-toast tc-toast--${toast.type}`}>{toast.msg}</div>}
 
-      {/* Header */}
+      {/* ── Block 1: Page header (title only) ── */}
       <div className="tc-header">
         <div>
           <h1 className="tc-title">My Leads</h1>
-          <p className="tc-subtitle">
-            {viewMode==="board"
-              ? `${Object.values(boardTotals).reduce((a,b)=>a+b,0) > 0
-                  ? BOARD_COLUMNS.reduce((s,c)=>s+boardTotals[c.key],0)
-                  : total} total leads`
-              : `${total} lead${total!==1?"s":""} in this view`}
-          </p>
-        </div>
-        {/* View toggle */}
-        <div className="tc-view-toggle">
-          <button className={`tc-view-btn ${viewMode==="list"?"active":""}`} onClick={()=>switchView("list")}>
-            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
-            List
-          </button>
-          <button className={`tc-view-btn ${viewMode==="board"?"active":""}`} onClick={()=>switchView("board")}>
-            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1" strokeWidth={2}/><rect x="14" y="3" width="7" height="18" rx="1" strokeWidth={2}/></svg>
-            Board
-          </button>
         </div>
       </div>
 
-      {/* Stats bar */}
+      {/* ── Block 2: Group & Category filter ── */}
+      <div className="tc-group-bar">
+        <GroupCategoryFilter
+          groupValue={groupName}
+          subGroupValue={subGroupName}
+          onChange={updateFilters}
+        />
+        {(groupName || subGroupName) && (
+          <button
+            className="tc-filter-clear-all"
+            onClick={() => updateFilters({ groupName: '', subGroupName: '', projectId: '' })}
+          >
+            Clear
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* ── Block 3: Search + filters + date range ── */}
+      <div className="tc-search-filter-bar">
+        {/* Search */}
+        <input
+          className="tc-search"
+          placeholder="Search name, email, phone, code…"
+          value={search}
+          onChange={e => handleSearch(e.target.value)}
+        />
+
+        {/* Status filter */}
+        <FilterSelect
+          value={filter}
+          options={[
+            {value:'ALL',label:'📋 All Leads'},
+            {value:'NEW',label:'🆕 New'},
+            {value:'INTERESTED',label:'✅ Interested'},
+            {value:'NOT_INTERESTED',label:'❌ Not Interested'},
+            {value:'NOT_RESPONDED',label:'⏳ Not Responded'},
+          ]}
+          placeholder="All Leads"
+          onChange={v => applyFilter(v)}
+        />
+
+        {/* Priority */}
+        <FilterSelect
+          value={priorityFilter}
+          options={[{value:'All',label:'All Priority'},...PRIORITIES.map(p=>({value:p,label:p}))]}
+          placeholder="All Priority"
+          onChange={v => applyDropdownFilter("priority", v)}
+        />
+
+        {/* Source */}
+        <FilterSelect
+          value={sourceFilter}
+          options={[{value:'All',label:'All Sources'},...SOURCES.map(s=>({value:s,label:s}))]}
+          placeholder="All Sources"
+          onChange={v => applyDropdownFilter("source", v)}
+        />
+
+        {/* Date Range */}
+        <div className="tc-filter-date">
+          <span className="tc-filter-date-label">Assigned On:</span>
+          <TcDateRangeFilter
+            appliedFrom={dateFrom}
+            appliedTo={dateTo}
+            onApply={(f, t) => applyDateFilter(f, t)}
+            onClear={clearDateFilter}
+          />
+        </div>
+
+        {/* Clear all filters */}
+        {activeFilterCount > 0 && (
+          <button className="tc-filter-clear-all" onClick={clearAllFilters}>
+            Clear All ({activeFilterCount})
+            <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+          </button>
+        )}
+      </div>
+
+      {/* ── Block 4: Stat / summary cards ── */}
       {stats && (
         <div className="tc-stats-bar">
           <StatCard label="All"            value={stats.total}          color="#64748b" active={filter==="ALL"}            onClick={()=>applyFilter("ALL")} />
@@ -626,38 +891,24 @@ export default function TelecallerLeadsPage() {
         </div>
       )}
 
-      {/* Date filter */}
-      <div className="tc-date-filter-bar">
-        <span className="tc-date-filter-label">Assigned On:</span>
-        <div className="tc-date-filter-pills">
-          <button className={`tc-date-pill ${dateMode==="all"?"active":""}`} onClick={clearDateFilter}>All Time</button>
-          <button className={`tc-date-pill ${dateMode==="single"?"active":""}`} onClick={()=>setDateMode("single")}>Single Day</button>
-          <button className={`tc-date-pill ${dateMode==="range"?"active":""}`}  onClick={()=>setDateMode("range")}>Date Range</button>
+      {/* ── Block 5: View toggle bar (List / Board) + lead count ── */}
+      <div className="tc-view-bar">
+        <p className="tc-subtitle">
+          {viewMode==="board"
+            ? `${BOARD_COLUMNS.reduce((s,c)=>s+boardTotals[c.key],0)} total leads`
+            : `${total} lead${total!==1?"s":""} in this view`}
+        </p>
+        <div className="tc-view-toggle">
+          <button className={`tc-view-btn ${viewMode==="list"?"active":""}`} onClick={()=>switchView("list")}>
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16"/></svg>
+            List
+          </button>
+          <button className={`tc-view-btn ${viewMode==="board"?"active":""}`} onClick={()=>switchView("board")}>
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="18" rx="1" strokeWidth={2}/><rect x="14" y="3" width="7" height="18" rx="1" strokeWidth={2}/></svg>
+            Board
+          </button>
         </div>
-        {dateMode==="single" && (
-          <div className="tc-date-inputs">
-            <input type="date" value={dateFrom} onChange={e=>applyDateFilter("single",e.target.value,"")} className="tc-date-input" />
-          </div>
-        )}
-        {dateMode==="range" && (
-          <div className="tc-date-inputs">
-            <input type="date" value={dateFrom} onChange={e=>{ const v=e.target.value; setDateFrom(v); dateFromRef.current=v; if(v && dateTo) applyDateFilter("range",v,dateTo); else if(v) { setDateFrom(v); dateFromRef.current=v; } }} className="tc-date-input" />
-            <span className="tc-date-sep">to</span>
-            <input type="date" value={dateTo} onChange={e=>applyDateFilter("range",dateFrom,e.target.value)} className="tc-date-input" min={dateFrom} />
-          </div>
-        )}
-        {activeDateLabel() && (
-          <span className="tc-date-active-label">{activeDateLabel()} <button className="tc-date-clear" onClick={clearDateFilter}>✕</button></span>
-        )}
       </div>
-
-      {/* Toolbar — list view only */}
-      {viewMode==="list" && (
-        <div className="tc-toolbar">
-          <input className="tc-search" placeholder="Search name, email, phone, code…" value={search} onChange={e=>handleListSearch(e.target.value)} />
-          <FilterSelect value={filter} options={[{value:'ALL',label:'📋 All Leads'},{value:'NEW',label:'🆕 New'},{value:'INTERESTED',label:'✅ Interested'},{value:'NOT_INTERESTED',label:'❌ Not Interested'},{value:'NOT_RESPONDED',label:'⏳ Not Responded'}]} placeholder="All Leads" onChange={v=>applyFilter(v)} />
-        </div>
-      )}
 
       {/* ── LIST VIEW ── */}
       {viewMode==="list" && (
@@ -676,7 +927,6 @@ export default function TelecallerLeadsPage() {
               ))}
             </div>
           )}
-          {/* Pagination */}
           <div className="tc-pagination-bar">
             <div className="tc-pagination-size">
               <span>Rows per page:</span>
@@ -705,21 +955,6 @@ export default function TelecallerLeadsPage() {
       {/* ── BOARD VIEW ── */}
       {viewMode==="board" && (
         <>
-          {/* Board search bar */}
-          <div className="tc-board-search-bar">
-            <svg className="tc-board-search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-            </svg>
-            <input
-              className="tc-board-search-input"
-              placeholder="Search across all columns by name, phone, email or code…"
-              value={boardSearch}
-              onChange={e => handleBoardSearch(e.target.value)}
-            />
-            {boardSearch && (
-              <button className="tc-board-search-clear" onClick={() => handleBoardSearch("")}>✕</button>
-            )}
-          </div>
           <div className="tc-board">
           {BOARD_COLUMNS.map(col=>(
             <div key={col.key}
@@ -727,20 +962,18 @@ export default function TelecallerLeadsPage() {
               onDragOver={e=>onDragOver(e,col.key)}
               onDragLeave={onDragLeave}
               onDrop={e=>onDrop(e,col.key)}>
-              {/* Column header */}
               <div className="tc-board-col-header" style={{borderTopColor:col.color}}>
                 <span className="tc-board-col-icon">{col.icon}</span>
                 <span className="tc-board-col-title" style={{color:col.color}}>{col.label}</span>
                 <span className="tc-board-col-count" style={{background:col.bg,color:col.color}}>{boardTotals[col.key]}</span>
               </div>
-              {/* Cards */}
               <div className="tc-board-col-body">
                 {(() => {
                   const colLeads = col.key === "NOT_RESPONDED"
                     ? [...boardData[col.key]].sort((a,b) => {
                         const ar = isResurfaced(a), br = isResurfaced(b);
                         if (ar === br) return 0;
-                        return ar ? 1 : -1; // resurfaced go to bottom
+                        return ar ? 1 : -1;
                       })
                     : boardData[col.key];
                   const normalLeads    = col.key === "NOT_RESPONDED" ? colLeads.filter(l => !isResurfaced(l)) : colLeads;
@@ -777,7 +1010,6 @@ export default function TelecallerLeadsPage() {
                     </>
                   );
                 })()}
-                {/* Infinite scroll sentinel */}
                 <div ref={el=>{ boardSentinels.current[col.key]=el; }} className="tc-board-sentinel"/>
                 {boardLoading[col.key] && <div className="tc-board-col-loading"><div className="tc-spinner"/>Loading…</div>}
                 {!boardLoading[col.key] && !boardHasMore[col.key] && boardData[col.key].length>0 && (
@@ -811,7 +1043,6 @@ export default function TelecallerLeadsPage() {
                 <DetailRow label="Phone"    value={selected.phone}/>
                 <DetailRow label="Source"   value={selected.source}/>
                 <DetailRow label="Priority" value={selected.priority} style={{color:PRIORITY_COLOR[selected.priority]||"#374151",fontWeight:600}}/>
-                {/* Always show address section with all available fields */}
                 <div className="tc-section-title">Address</div>
                 <DetailRow label="State"    value={selected.state||"—"}/>
                 <DetailRow label="District" value={selected.district||"—"}/>
@@ -827,7 +1058,6 @@ export default function TelecallerLeadsPage() {
                 {selected.telecallerReason && <DetailRow label="Reason" value={selected.telecallerReason}/>}
                 <DetailRow label="Assigned On"  value={formatDateTime(selected.createdAt)}/>
                 <DetailRow label="Last Updated" value={selected.telecallerStatusUpdatedAt||"—"}/>
-                {/* TC Interested Details */}
                 {(selected.tcMonthlyBill||selected.tcExistingContractLoad||selected.tcRequiredContractLoad||selected.tcBillFileName||selected.tcQuotedPrice||selected.tcPropertyType||selected.tcSiteVisitDate||selected.tcLocation) && <>
                   <div className="tc-section-title">Interested Details</div>
                   {selected.tcPropertyType && <DetailRow label="Property Type" value={selected.tcPropertyType}/>}
@@ -838,7 +1068,6 @@ export default function TelecallerLeadsPage() {
                   {selected.tcExistingContractLoad && <DetailRow label="Existing Load" value={selected.tcExistingContractLoad}/>}
                   {selected.tcRequiredContractLoad && <DetailRow label="Required Load" value={selected.tcRequiredContractLoad}/>}
                   {selected.tcAddons && <DetailRow label="Add-ons" value={selected.tcAddons}/>}
-                  {/* Bill file — always show if filename exists regardless of other fields */}
                   {selected.tcBillFileName && (
                     <div className="tc-detail-row">
                       <span className="tc-detail-label">Electricity Bill</span>
@@ -925,7 +1154,6 @@ export default function TelecallerLeadsPage() {
               <div className="tc-edit-field tc-edit-field--full"><label>Enquiry</label>
                 <textarea rows={4} value={editForm.enquiry} onChange={e=>setEditForm(f=>({...f,enquiry:e.target.value}))}/>
               </div>
-              {/* ── Group / Category / Scheme ── */}
               <div className="tc-edit-section-divider">📂 Group &amp; Scheme</div>
               <div className="tc-edit-field">
                 <label>Group</label>
@@ -1005,11 +1233,9 @@ export default function TelecallerLeadsPage() {
 
               {newStatus==="INTERESTED"&&(
                 <div className="tc-interested-fields">
-                  {/* Discussion Summary */}
                   <div className="tc-reason-field tc-field--full"><label>Discussion Summary <span className="tc-req">*</span></label>
                     <textarea rows={3} value={discussion} onChange={e=>setDiscussion(e.target.value)} placeholder="Summarise the discussion with the customer…"/></div>
 
-                  {/* Location — State/District/City/Pincode fields */}
                   <div className="tc-reason-field tc-field--full">
                     <label>Location / Address</label>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 14px",marginTop:6}}>
@@ -1017,63 +1243,26 @@ export default function TelecallerLeadsPage() {
                         <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>State</label>
                         <select className="tc-styled-input"
                           value={intLocation.split("||")[0]||""}
-                          onChange={e=>{
-                            const parts=intLocation.split("||");
-                            parts[0]=e.target.value;
-                            setIntLocation(parts.join("||"));
-                          }}>
+                          onChange={e=>{ const parts=intLocation.split("||"); parts[0]=e.target.value; setIntLocation(parts.join("||")); }}>
                           <option value="">Select State</option>
                           {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map(s=><option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>District</label>
-                        <input className="tc-styled-input"
-                          value={intLocation.split("||")[1]||""}
-                          onChange={e=>{
-                            const parts=intLocation.split("||");
-                            while(parts.length<4) parts.push("");
-                            parts[1]=e.target.value;
-                            setIntLocation(parts.join("||"));
-                          }}
-                          placeholder="e.g. Hyderabad"/>
+                        <input className="tc-styled-input" value={intLocation.split("||")[1]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[1]=e.target.value; setIntLocation(parts.join("||")); }} placeholder="e.g. Hyderabad"/>
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>City / Village</label>
-                        <input className="tc-styled-input"
-                          value={intLocation.split("||")[2]||""}
-                          onChange={e=>{
-                            const parts=intLocation.split("||");
-                            while(parts.length<4) parts.push("");
-                            parts[2]=e.target.value;
-                            setIntLocation(parts.join("||"));
-                          }}
-                          placeholder="e.g. Uppal"/>
+                        <input className="tc-styled-input" value={intLocation.split("||")[2]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[2]=e.target.value; setIntLocation(parts.join("||")); }} placeholder="e.g. Uppal"/>
                       </div>
                       <div>
                         <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>Pincode</label>
-                        <input className="tc-styled-input"
-                          value={intLocation.split("||")[3]||""}
-                          onChange={e=>{
-                            const parts=intLocation.split("||");
-                            while(parts.length<4) parts.push("");
-                            parts[3]=e.target.value.replace(/\D/g,"").slice(0,6);
-                            setIntLocation(parts.join("||"));
-                          }}
-                          placeholder="6-digit PIN" maxLength={6}/>
+                        <input className="tc-styled-input" value={intLocation.split("||")[3]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[3]=e.target.value.replace(/\D/g,"").slice(0,6); setIntLocation(parts.join("||")); }} placeholder="6-digit PIN" maxLength={6}/>
                       </div>
                     </div>
-                    {(!selected.state && !selected.district && !selected.city) && (
-                      <small style={{color:"#f59e0b",fontSize:11,display:"block",marginTop:4}}>⚠️ Address not updated for this lead — please enter manually.</small>
-                    )}
-                    {(selected.state || selected.district || selected.city) && (
-                      <small style={{color:"#6b7280",fontSize:11,display:"block",marginTop:4}}>
-                        Existing: {[selected.city,selected.district,selected.state,selected.pincode].filter(Boolean).join(", ")}
-                      </small>
-                    )}
                   </div>
 
-                  {/* 2-column grid for fields */}
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 16px"}}>
                     <div className="tc-reason-field">
                       <label>Site Visit Date</label>
@@ -1106,7 +1295,6 @@ export default function TelecallerLeadsPage() {
                     </div>
                   </div>
 
-                  {/* Property Type */}
                   <div className="tc-reason-field tc-field--full">
                     <label>Property Type <span className="tc-req">*</span></label>
                     <div className="tc-property-toggle">
@@ -1118,7 +1306,6 @@ export default function TelecallerLeadsPage() {
                     </div>
                   </div>
 
-                  {/* Solar Scheme + Subsidy — shown when subgroup is rooftop or ground-mounted */}
                   {(selected.subGroupName === "Solar_Rooftop" || selected.subGroupName === "Solar_ground_mounted" || intSolarScheme) && (
                     <div className="tc-reason-field tc-field--full">
                       <label>Solar Scheme</label>
@@ -1146,89 +1333,43 @@ export default function TelecallerLeadsPage() {
                     </div>
                   )}
 
-                  {/* Add-ons */}
                   <div className="tc-reason-field tc-field--full">
                     <label>Add-ons</label>
                     <input className="tc-styled-input" value={intAddons} onChange={e=>setIntAddons(e.target.value)} placeholder="e.g. Battery backup, Net metering"/>
                   </div>
-
-                  {/* Other Comments */}
                   <div className="tc-reason-field tc-field--full">
                     <label>Other Comments</label>
                     <textarea rows={2} value={intOtherComment} onChange={e=>setIntOtherComment(e.target.value)} placeholder="Additional notes for BD team…"/>
                   </div>
 
-                  {/* Bill Upload — shows existing bill if present, with option to replace */}
                   <div className="tc-reason-field tc-field--full">
-                    <label>
-                      Electricity Bill
-                      <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}> (optional, max 10 MB)</span>
-                    </label>
-
-                    {/* Show existing bill if one is stored and no new file selected */}
+                    <label>Electricity Bill <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}> (optional, max 10 MB)</span></label>
                     {selected.tcHasBillFile && selected.tcBillFileName && !intBillFile && (
-                      <div style={{
-                        display:"flex",alignItems:"center",justifyContent:"space-between",
-                        gap:8,padding:"8px 12px",marginBottom:8,
-                        background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:8,
-                      }}>
+                      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between", gap:8,padding:"8px 12px",marginBottom:8, background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:8 }}>
                         <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#059669",minWidth:0}}>
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/>
-                          </svg>
-                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {selected.tcBillFileName}
-                          </span>
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.tcBillFileName}</span>
                         </div>
                         <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          <button type="button"
-                            className="tc-bill-btn tc-bill-btn--newtab"
-                            style={{padding:"3px 10px",fontSize:12}}
-                            onClick={()=>setBillPreview({
-                              url:`${API_BASE_URL}/telecaller/lead/${selected.id}/bill`,
-                              name:selected.tcBillFileName,
-                              type:selected.tcBillFileType||"application/octet-stream",
-                            })}>
-                            👁 View
-                          </button>
-                          <label style={{
-                            padding:"3px 10px",fontSize:12,cursor:"pointer",
-                            background:"#eff6ff",color:"#2563eb",
-                            border:"1.5px solid #bfdbfe",borderRadius:7,
-                            display:"inline-flex",alignItems:"center",gap:4,
-                          }}>
+                          <button type="button" className="tc-bill-btn tc-bill-btn--newtab" style={{padding:"3px 10px",fontSize:12}} onClick={()=>setBillPreview({ url:`${API_BASE_URL}/telecaller/lead/${selected.id}/bill`, name:selected.tcBillFileName, type:selected.tcBillFileType||"application/octet-stream" })}>👁 View</button>
+                          <label style={{ padding:"3px 10px",fontSize:12,cursor:"pointer", background:"#eff6ff",color:"#2563eb", border:"1.5px solid #bfdbfe",borderRadius:7, display:"inline-flex",alignItems:"center",gap:4 }}>
                             🔄 Replace
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
-                              style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
                           </label>
                         </div>
                       </div>
                     )}
-
-                    {/* Upload area — show when no existing bill OR a new file is being selected */}
                     {(!selected.tcHasBillFile || intBillFile) && (
-                      <label className="tc-bill-upload" style={{
-                        display:"flex",alignItems:"center",gap:8,cursor:"pointer",
-                        border:"1.5px dashed "+(intBillFile?"#059669":"#d1d5db"),
-                        borderRadius:8,padding:"10px 14px",
-                        background:intBillFile?"#f0fdf4":"#fafafa",
-                        fontSize:13,color:intBillFile?"#059669":"#6b7280",
-                      }}>
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
-                        </svg>
+                      <label className="tc-bill-upload" style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer", border:"1.5px dashed "+(intBillFile?"#059669":"#d1d5db"), borderRadius:8,padding:"10px 14px", background:intBillFile?"#f0fdf4":"#fafafa", fontSize:13,color:intBillFile?"#059669":"#6b7280" }}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                         <span>{intBillFile ? intBillFile.name : "Choose PDF, JPG, or PNG…"}</span>
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*"
-                          style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
                       </label>
                     )}
-
                     {intBillFile && (
                       <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
                         <span style={{fontSize:11,color:"#059669"}}>✓ {intBillFile.name} — will replace existing</span>
-                        <button type="button"
-                          style={{fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}}
-                          onClick={()=>setIntBillFile(null)}>✕ Cancel</button>
+                        <button type="button" style={{fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}} onClick={()=>setIntBillFile(null)}>✕ Cancel</button>
                       </div>
                     )}
                   </div>
@@ -1312,7 +1453,7 @@ export default function TelecallerLeadsPage() {
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────────
+// ── Sub-components ─────────────────────────────────────────────────────────────
 
 function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, colKey, resurfaced }) {
   return (
@@ -1333,21 +1474,18 @@ function BoardCard({ lead, onDragStart, onDragEnd, onDetail, onStatus, onEdit, c
         </div>
       </div>
       <span className="tc-board-card-code">{lead.leadCode}</span>
-      {resurfaced && (
-        <div className="tc-board-resurfaced-tag">⚡ Resurfaced</div>
-      )}
-      <div className="tc-board-card-contact">
-        <span>📞 {lead.phone}</span>
-      </div>
-      {lead.city && (
-        <div className="tc-board-card-loc">📍 {[lead.city, lead.state].filter(Boolean).join(", ")}</div>
+      {resurfaced && <div className="tc-board-resurfaced-tag">⚡ Resurfaced</div>}
+      <div className="tc-board-card-contact"><span>📞 {lead.phone}</span></div>
+      {lead.city && <div className="tc-board-card-loc">📍 {[lead.city, lead.state].filter(Boolean).join(", ")}</div>}
+      {(lead.groupName || lead.subGroupName) && (
+        <div className="tc-board-card-group">
+          🏷 {lead.groupName}{lead.subGroupName ? ` › ${lead.subGroupName.replace(/_/g,' ')}` : ""}
+        </div>
       )}
       <div className="tc-board-card-meta">
         <span className="tc-board-card-date">{formatDate(lead.createdAt)}</span>
         {resurfaced && lead.telecallerStatusUpdatedAt && (
-          <span className="tc-board-resurfaced-since">
-            set {formatDateTime(lead.telecallerStatusUpdatedAt)}
-          </span>
+          <span className="tc-board-resurfaced-since">set {formatDateTime(lead.telecallerStatusUpdatedAt)}</span>
         )}
       </div>
       <div className="tc-board-card-actions" onClick={e => e.stopPropagation()}>
@@ -1396,7 +1534,6 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
   );
 }
 
-// ── Bill Preview Modal ────────────────────────────────────────────────────────
 function TcBillPreviewModal({ url, name, type, onClose }) {
   const [blobUrl, setBlobUrl] = React.useState(null);
   const [loading, setLoading] = React.useState(true);
@@ -1438,15 +1575,11 @@ function TcBillPreviewModal({ url, name, type, onClose }) {
             {blobUrl && (
               <>
                 <a href={blobUrl} target="_blank" rel="noopener noreferrer" className="tc-bill-btn tc-bill-btn--newtab">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                   Open in New Tab
                 </a>
                 <a href={blobUrl} download={name} className="tc-bill-btn tc-bill-btn--download">
-                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   Download
                 </a>
               </>
@@ -1455,32 +1588,11 @@ function TcBillPreviewModal({ url, name, type, onClose }) {
           </div>
         </div>
         <div className="tc-bill-body">
-          {loading && (
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#6b7280"}}>
-              <div className="tc-bill-spinner"/>
-              <span style={{fontSize:14}}>Loading file…</span>
-            </div>
-          )}
-          {error && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#dc2626"}}>
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="40" height="40"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-              <p style={{fontSize:14,margin:0}}>Failed to load: {error}</p>
-            </div>
-          )}
-          {!loading && !error && blobUrl && isPdf && (
-            <iframe src={blobUrl} title={name} width="100%" height="100%" style={{border:"none"}} />
-          )}
-          {!loading && !error && blobUrl && isImage && (
-            <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",padding:16}}>
-              <img src={blobUrl} alt={name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",borderRadius:8}} />
-            </div>
-          )}
-          {!loading && !error && blobUrl && !isPdf && !isImage && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16,color:"#6b7280"}}>
-              <p style={{fontSize:14}}>Preview not available for this file type.</p>
-              <a href={blobUrl} download={name} className="tc-bill-btn tc-bill-btn--download">⬇ Download File</a>
-            </div>
-          )}
+          {loading && <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#6b7280"}}><div className="tc-bill-spinner"/><span style={{fontSize:14}}>Loading file…</span></div>}
+          {error && <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:12,color:"#dc2626"}}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="40" height="40"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg><p style={{fontSize:14,margin:0}}>Failed to load: {error}</p></div>}
+          {!loading && !error && blobUrl && isPdf && <iframe src={blobUrl} title={name} width="100%" height="100%" style={{border:"none"}} />}
+          {!loading && !error && blobUrl && isImage && <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100%",padding:16}}><img src={blobUrl} alt={name} style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain",borderRadius:8}} /></div>}
+          {!loading && !error && blobUrl && !isPdf && !isImage && <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"100%",gap:16,color:"#6b7280"}}><p style={{fontSize:14}}>Preview not available for this file type.</p><a href={blobUrl} download={name} className="tc-bill-btn tc-bill-btn--download">⬇ Download File</a></div>}
         </div>
       </div>
     </div>

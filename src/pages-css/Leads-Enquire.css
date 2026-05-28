@@ -759,62 +759,74 @@
 /* Pagination - More Compact */
 .leads-enquiries-pagination {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
-  border-top: 1px solid #e5e7eb;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid #f1f5f9;
+  background: #fafafa;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .leads-enquiries-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 12px;
-  color: #6b7280;
+  color: #64748b;
+  flex-wrap: wrap;
 }
 
 .leads-enquiries-pagination-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
 }
 
 .leads-enquiries-rows-select {
-  padding: 5px 8px;
-  border: 1px solid #d1d5db;
+  padding: 3px 6px;
+  border: 1px solid #e2e8f0;
   border-radius: 5px;
   font-size: 12px;
   font-family: 'Poppins', sans-serif;
   background-color: white;
   cursor: pointer;
-  margin-left: 8px;
 }
 
 .leads-enquiries-pagination-buttons {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 4px;
 }
 
 .leads-enquiries-pagination-btn {
-  padding: 5px 10px;
-  border: 1px solid #d1d5db;
-  border-radius: 5px;
-  font-size: 12px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
   font-family: 'Poppins', sans-serif;
-  background-color: white;
+  background: #fff;
   color: #374151;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .leads-enquiries-pagination-btn:hover:not(:disabled) {
-  background-color: #f9fafb;
-  border-color: #2563eb;
-  color: #2563eb;
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #0f172a;
 }
 
 .leads-enquiries-pagination-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
@@ -2495,31 +2507,31 @@
 
 /* Active page number pill */
 .leads-enquiries-pagination-btn-active {
-  background-color: #2563eb !important;
-  color: white !important;
-  border-color: #2563eb !important;
-  font-weight: 600;
+  background: #0f172a !important;
+  color: #fff !important;
+  border-color: #0f172a !important;
+  font-weight: 700;
 }
 
 .leads-enquiries-pagination-btn-active:hover {
-  background-color: #1d4ed8 !important;
+  background: #1e293b !important;
 }
 
-/* Ellipsis between page numbers */
 .leads-enquiries-pagination-ellipsis {
   display: inline-flex;
   align-items: center;
-  padding: 0 4px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   font-size: 13px;
-  color: #9ca3af;
+  color: #94a3b8;
   user-select: none;
 }
 
-/* First / Last (« ») buttons — narrower */
 .leads-enquiries-pagination-btn:first-child,
 .leads-enquiries-pagination-btn:last-child {
   min-width: 32px;
-  padding: 5px 6px;
+  padding: 0;
   font-size: 14px;
 }
 /* Telecaller interaction detail block */
@@ -3304,3 +3316,57 @@
 .leads-enquiries-filters .filter-trigger:hover:not(.filter-trigger--disabled) { border-color: #cbd5e1; }
 .leads-enquiries-filters .filter-trigger--open { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,0.10); }
 .leads-enquiries-filters .filter-dropdown-list { min-width: 150px; font-size: 12px; }
+/* ── FilterSelect inside Proposal form (ld-fgroup) ───────────────────────── */
+.ld-fgroup .filter-trigger {
+  width: 100%;
+  height: 34px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  border-radius: 5px;
+  border: 1px solid #d1d5db;
+  box-shadow: none;
+}
+.ld-fgroup .filter-trigger:hover:not(.filter-trigger--disabled) {
+  box-shadow: none;
+}
+.ld-fgroup .filter-trigger--open {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.08);
+}
+
+/* ── FilterSelect inside BOM table cells ─────────────────────────────────── */
+.ld-bom-tbl td .filter-trigger {
+  width: 100%;
+  min-width: 80px;
+  height: 30px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  border-radius: 5px;
+  border: 1px solid #d1d5db;
+  box-shadow: none;
+  padding: 0 26px 0 8px;
+}
+.ld-bom-tbl td .filter-trigger:hover:not(.filter-trigger--disabled) {
+  box-shadow: none;
+  border-color: #9ca3af;
+}
+.ld-bom-tbl td .filter-trigger--open {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.08);
+}
+
+/* ── FilterSelect — rows per page in pagination ─────────────────────────── */
+.leads-enquiries-pagination-info .filter-trigger {
+  height: 26px; font-size: 12px; font-family: 'Poppins', sans-serif;
+  border-radius: 5px; border: 1px solid #e2e8f0;
+  background: #fff; box-shadow: none;
+  min-width: unset; width: auto; padding: 0 24px 0 8px; min-width: 80px;
+}
+.leads-enquiries-pagination-info .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9ca3af; box-shadow: none;
+}
+.leads-enquiries-pagination-info .filter-trigger--open {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.08);
+}
+.leads-enquiries-pagination-info .filter-trigger__chevron { right: 5px; }

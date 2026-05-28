@@ -465,15 +465,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 18px;
   border-top: 1px solid #f1f5f9;
+  background: #fafafa;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
-.orderbook-pagination-info { font-size: 12px; color:#6b7280; display:flex; align-items:center; }
-.orderbook-pagination-controls { display:flex; align-items:center; gap:12px; }
+.orderbook-pagination-info { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.orderbook-pagination-controls { display: flex; align-items: center; gap: 6px; }
 .orderbook-rows-select {
-  padding: 8px;
+  padding: 4px 8px;
   border: 1px solid #e2e8f0;
   border-radius: 5px;
   font-size: 11px;
@@ -482,48 +483,55 @@
   margin-left: 8px;
 }
 .orderbook-pagination-btn {
-  padding:8px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #e2e8f0;
-  background: white;
-  border-radius: 5px;
-  font-size: 11px;
+  background: #fff;
+  border-radius: 7px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  color: #475569;
-  font-weight: 500;
+  color: #374151;
   transition: all 0.15s;
 }
-.orderbook-pagination-btn:hover:not(:disabled) { background:#f8fafc; border-color:#2563eb; color:#2563eb; }
-.orderbook-pagination-btn:disabled { opacity:0.5; cursor:not-allowed; }
-.orderbook-pagination-current { font-size:11px; color:#0f172a; font-weight:500; }
+.orderbook-pagination-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+.orderbook-pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.orderbook-pagination-current { font-size: 11px; color: #0f172a; font-weight: 500; }
 
 /* Page number pills */
 .orderbook-pagination-buttons {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 .orderbook-pagination-btn-active {
-  background-color: #2563eb !important;
-  color: white !important;
-  border-color: #2563eb !important;
-  font-weight: 600;
+  background: #0f172a !important;
+  color: #fff !important;
+  border-color: #0f172a !important;
+  font-weight: 700;
 }
 .orderbook-pagination-btn-active:hover {
-  background-color: #1d4ed8 !important;
+  background: #1e293b !important;
 }
 .orderbook-pagination-ellipsis {
   display: inline-flex;
   align-items: center;
-  padding: 0 4px;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
   font-size: 13px;
-  color: #9ca3af;
+  color: #94a3b8;
   user-select: none;
 }
 /* First / Last narrow buttons */
 .orderbook-pagination-buttons button:first-child,
 .orderbook-pagination-buttons button:last-child {
   min-width: 32px;
-  padding: 5px 6px;
+  padding: 0;
   font-size: 14px;
 }
 
@@ -1335,3 +1343,46 @@
   font-size: 12px;
   padding: 7px 12px;
 }
+/* ── FilterSelect inside Order Items table ───────────────────────────────── */
+.orderbook-items-table td .filter-trigger {
+  width: 100%;
+  min-width: 80px;
+  height: 28px;
+  font-size: 11px;
+  font-family: inherit;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  box-shadow: none;
+  padding: 0 24px 0 6px;
+}
+.orderbook-items-table td .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9ca3af;
+  box-shadow: none;
+}
+.orderbook-items-table td .filter-trigger--open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.08);
+}
+.orderbook-items-table td .filter-trigger--has-value {
+  color: #111827;
+  font-weight: 500;
+}
+.orderbook-items-table td .filter-trigger__chevron {
+  right: 6px;
+}
+
+/* ── FilterSelect — rows per page in pagination ─────────────────────────── */
+.orderbook-pagination-info .filter-trigger {
+  height: 26px; font-size: 11px; font-family: inherit;
+  border-radius: 5px; border: 1px solid #e2e8f0;
+  background: #fff; box-shadow: none;
+  min-width: unset; width: auto; padding: 0 24px 0 8px; min-width: 80px;
+}
+.orderbook-pagination-info .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9ca3af; box-shadow: none;
+}
+.orderbook-pagination-info .filter-trigger--open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.08);
+}
+.orderbook-pagination-info .filter-trigger__chevron { right: 5px; }

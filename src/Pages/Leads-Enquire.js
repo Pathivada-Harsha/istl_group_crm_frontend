@@ -17,7 +17,7 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../components/preLoader.js';
 import LeadTimelineModal from '../components/Leads/LeadTimelineModal.js';
 import AddFollowupModal from '../components/Leads/AddFollowupModal.js';
-import UnitTypeDropdown from '../components/Dropdowns/Unittypedropdown.js';
+import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
 import ConfirmationModal from '../components/ConfirmationModal.js';
@@ -349,9 +349,12 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
             </div>
             <div className="ld-fgroup">
               <label>Status</label>
-              <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value })}>
-                <option>Draft</option><option>Sent</option><option>Approved</option><option>Rejected</option><option>On Hold</option>
-              </select>
+              <FilterSelect
+                value={formData.status}
+                onChange={v => setFormData({ ...formData, status: v })}
+                options={['Draft','Sent','Approved','Rejected','On Hold'].map(s => ({ value: s, label: s }))}
+                placeholder="Select Status"
+              />
             </div>
             <div className="ld-fgroup ld-full">
               <label>Description</label>
@@ -446,11 +449,23 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
                           <td>
                             {customUnitInputs[i] !== undefined
                               ? <input type="text" value={customUnitInputs[i]} onChange={e => { setCustomUnitInputs(p => ({ ...p, [i]: e.target.value })); updBOM(i, 'unit', e.target.value); }} placeholder="Unit" />
-                              : <UnitTypeDropdown value={row.unit || ''} onChange={e => { if (e.target.value === 'Custom') { setCustomUnitInputs(p => ({ ...p, [i]: '' })); updBOM(i, 'unit', ''); } else { const n = { ...customUnitInputs }; delete n[i]; setCustomUnitInputs(n); updBOM(i, 'unit', e.target.value); } }} className="proposal-unit-dropdown" placeholder="Unit" />
+                              : <FilterSelect
+                                  value={row.unit || ''}
+                                  onChange={v => { if (v === 'Custom') { setCustomUnitInputs(p => ({ ...p, [i]: '' })); updBOM(i, 'unit', ''); } else { const n = { ...customUnitInputs }; delete n[i]; setCustomUnitInputs(n); updBOM(i, 'unit', v); } }}
+                                  options={[...COMMON_UNITS.map(u => ({ value: u, label: u })), { value: 'Custom', label: '✏️ Custom' }]}
+                                  placeholder="Unit"
+                                />
                             }
                           </td>
                           <td><input type="number" value={row.rate} onChange={e => updBOM(i, 'rate', e.target.value)} placeholder="0.00" /></td>
-                          <td><select value={row.tax || '18'} onChange={e => updBOM(i, 'tax', e.target.value)}><option value="0">0%</option><option value="5">5%</option><option value="12">12%</option><option value="18">18%</option><option value="28">28%</option></select></td>
+                          <td>
+                            <FilterSelect
+                              value={String(row.tax || '18')}
+                              onChange={v => updBOM(i, 'tax', v)}
+                              options={[{value:'0',label:'0%'},{value:'5',label:'5%'},{value:'12',label:'12%'},{value:'18',label:'18%'},{value:'28',label:'28%'}]}
+                              placeholder="Tax"
+                            />
+                          </td>
                           <td><input type="number" value={row.amount} readOnly style={{ background: '#f9fafb', fontWeight: 600 }} /></td>
                           <td><button className="ld-del-row" onClick={() => rmBOM(i)}>🗑</button></td>
                         </tr>
@@ -2573,74 +2588,34 @@ const ServerPagination = ({
     return pages;
   };
 
+  const tp = totalPages || 1;
   return (
     <div className="leads-enquiries-pagination">
+      {/* Left: rows per page + info */}
       <div className="leads-enquiries-pagination-info">
-        {totalRecords === 0
-          ? 'No records found'
-          : `Showing ${startRecord}–${endRecord} of ${totalRecords} leads`}
-
-           <select
-          className="leads-enquiries-rows-select"
-          value={rowsPerPage}
-          onChange={e => onRowsPerPageChange(Number(e.target.value))}
-        >
-          <option value={10}>10 Rows</option>
-          <option value={20}>20 Rows</option>
-          <option value={50}>50 Rows</option>
-          <option value={100}>100 Rows</option>
-        </select>
-      </div>
-      <div className="leads-enquiries-pagination-controls">
-        {/* Rows per page */}
-       
-
-        <div className="leads-enquiries-pagination-buttons">
-          {/* First + Prev */}
-          <button
-            className="leads-enquiries-pagination-btn"
-            onClick={() => onPageChange(1)}
-            disabled={currentPage === 1}
-            title="First page"
-          >«</button>
-          <button
-            className="leads-enquiries-pagination-btn"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage === 1}
-          >Previous</button>
-
-          {/* Page number pills */}
-          {currentPage > 3 && totalPages > 5 && (
-            <span className="leads-enquiries-pagination-ellipsis">…</span>
-          )}
-          {getPageNumbers().map(p => (
-            <button
-              key={p}
-              className={`leads-enquiries-pagination-btn${p === currentPage ? ' leads-enquiries-pagination-btn-active' : ''}`}
-              onClick={() => onPageChange(p)}
-            >{p}</button>
-          ))}
-          {currentPage < totalPages - 2 && totalPages > 5 && (
-            <span className="leads-enquiries-pagination-ellipsis">…</span>
-          )}
-
-          {/* Next + Last */}
-          <button
-            className="leads-enquiries-pagination-btn"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage === totalPages || totalPages === 0}
-          >Next</button>
-          <button
-            className="leads-enquiries-pagination-btn"
-            onClick={() => onPageChange(totalPages)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            title="Last page"
-          >»</button>
-        </div>
-
-        <span className="leads-enquiries-pagination-current">
-          Page {currentPage} of {totalPages || 1}
+        <span style={{whiteSpace:'nowrap'}}>Rows per page:</span>
+        <FilterSelect
+          value={String(rowsPerPage)}
+          onChange={v => onRowsPerPageChange(Number(v))}
+          options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
+          placeholder="Rows"
+        />
+        <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+          {totalRecords === 0 ? 'No records' : `${startRecord}–${endRecord} of ${totalRecords} leads`}
         </span>
+        <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
+          Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+        </span>
+      </div>
+      {/* Right: page buttons */}
+      <div className="leads-enquiries-pagination-buttons">
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(1)} disabled={currentPage === 1}>«</button>
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage - 1)} disabled={currentPage === 1}>‹</button>
+        {getPageNumbers().map(p => (
+          <button key={p} className={`leads-enquiries-pagination-btn${p === currentPage ? ' leads-enquiries-pagination-btn-active' : ''}`} onClick={() => onPageChange(p)}>{p}</button>
+        ))}
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(currentPage + 1)} disabled={currentPage === tp || tp === 0}>›</button>
+        <button className="leads-enquiries-pagination-btn" onClick={() => onPageChange(tp)} disabled={currentPage === tp || tp === 0}>»</button>
       </div>
     </div>
   );

@@ -1342,17 +1342,31 @@ const ReceiptsManagementPage = () => {
 
         <div className="receipts-page-pagination">
           <div className="receipts-page-pagination-info">
-            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements}
-            <select value={pageSize} onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }} className="receipts-page-pagination-size-select">
-              <option value="10">10 Rows</option><option value="20">20 Rows</option><option value="50">50 Rows</option><option value="100">100 Rows</option>
-            </select>
+            <span style={{whiteSpace:'nowrap'}}>Rows per page:</span>
+            <FilterSelect
+              value={String(pageSize)}
+              onChange={v => { setPageSize(Number(v)); setCurrentPage(0); }}
+              options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
+              placeholder="Rows"
+            />
+            <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+              {totalElements === 0 ? 'No records' : `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, totalElements)} of ${totalElements}`}
+            </span>
+            <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
+              Page <strong style={{color:'#0f172a'}}>{currentPage + 1}</strong> of <strong style={{color:'#0f172a'}}>{totalPages}</strong>
+            </span>
           </div>
-          <div className="receipts-page-pagination-controls-wrapper">
-            <div className="receipts-page-pagination-controls">
-              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0} className="receipts-page-pagination-btn">Previous</button>
-              <span className="receipts-page-pagination-current">Page {currentPage + 1} of {totalPages}</span>
-              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))} disabled={currentPage >= totalPages - 1} className="receipts-page-pagination-btn">Next</button>
-            </div>
+          <div className="receipts-page-pagination-buttons">
+            <button className="receipts-page-pagination-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>«</button>
+            <button className="receipts-page-pagination-btn" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0}>‹</button>
+            {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+              const start = Math.max(0, Math.min(currentPage - 2, totalPages - 5));
+              return start + i;
+            }).map(p => (
+              <button key={p} className={`receipts-page-pagination-btn${p === currentPage ? ' receipts-page-pagination-btn-active' : ''}`} onClick={() => setCurrentPage(p)}>{p + 1}</button>
+            ))}
+            <button className="receipts-page-pagination-btn" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))} disabled={currentPage >= totalPages - 1}>›</button>
+            <button className="receipts-page-pagination-btn" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>»</button>
           </div>
         </div>
       </div>
@@ -1697,6 +1711,7 @@ const ReceiptsManagementPage = () => {
                         placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
                         disabled={!modalSubGroupName || modalDropdownLoading.projects}
                         onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                        searchable={true}
                       />
                     </div>
                   </div>
@@ -2086,6 +2101,7 @@ const ReceiptsManagementPage = () => {
                         placeholder={editReceiptProjectLoading.projects ? 'Loading...' : !editReceiptSubGroupName ? 'Select Sub Group First' : 'Select Project'}
                         disabled={!editReceiptSubGroupName || editReceiptProjectLoading.projects}
                         onChange={v => handleEditReceiptProjectChange({ target: { value: v || '' } })}
+                        searchable={true}
                       />
                     </div>
                   </div>

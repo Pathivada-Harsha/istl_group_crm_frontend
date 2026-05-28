@@ -923,7 +923,7 @@
 .cust-table-wrapper {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: 480px;
+  max-height: 500px;
 }
 
 /* Sticky header inside scroll */
@@ -1058,21 +1058,25 @@
 .cust-card-action-btn svg { width:14px; height:14px; }
 
 /* ── Pagination ────────────────────────────────────────────────── */
-.cust-pagination {
+.cust-pagination,
+.leads-enquiries-pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 12px 18px;
   border-top: 1px solid #f1f5f9;
-  font-size: 13px;
-  color: #6b7280;
+  background: #fafafa;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
-.cust-pagination-controls { display:flex; align-items:center; gap:8px; }
-.cust-pagination-buttons  { display:flex; align-items:center; gap:4px; }
-.cust-pagination-info     { font-size:13px; color:#6b7280; }
-.cust-pagination-current  { font-size:13px; color:#374151; font-weight:500; padding:0 4px; }
+.cust-pagination-controls,
+.leads-enquiries-pagination-controls { display: flex; align-items: center; gap: 6px; }
+.cust-pagination-buttons,
+.leads-enquiries-pagination-buttons  { display: flex; align-items: center; gap: 4px; }
+.cust-pagination-info,
+.leads-enquiries-pagination-info     { font-size: 12px; color: #64748b; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cust-pagination-current,
+.leads-enquiries-pagination-current  { font-size: 12px; color: #374151; font-weight: 500; padding: 0 4px; }
 .cust-rows-select {
   padding: 5px 8px;
   border: 1px solid #e2e8f0;
@@ -1082,18 +1086,43 @@
   cursor: pointer;
   outline: none;
 }
-.cust-pagination-btn {
-  padding: 5px 12px;
+.cust-pagination-btn,
+.leads-enquiries-pagination-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border-radius: 7px;
   background: #fff;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
   color: #374151;
   transition: all 0.15s;
+  white-space: nowrap;
 }
-.cust-pagination-btn:hover:not(:disabled) { background:#f3f4f6; border-color:#cbd5e1; }
-.cust-pagination-btn:disabled { opacity:0.4; cursor:not-allowed; }
+.cust-pagination-btn:hover:not(:disabled),
+.leads-enquiries-pagination-btn:hover:not(:disabled) { background: #f8fafc; border-color: #cbd5e1; color: #0f172a; }
+.cust-pagination-btn:disabled,
+.leads-enquiries-pagination-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Active page pill */
+.leads-enquiries-pagination-btn-active {
+  background: #0f172a !important;
+  color: #fff !important;
+  border-color: #0f172a !important;
+  font-weight: 700;
+}
+.leads-enquiries-pagination-btn-active:hover { background: #1e293b !important; }
+
+/* Ellipsis */
+.leads-enquiries-pagination-ellipsis {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; font-size: 13px; color: #94a3b8; user-select: none;
+}
 
 /* ── Badge ─────────────────────────────────────────────────────── */
 .cust-badge {
@@ -1442,3 +1471,42 @@
     grid-template-columns: 1fr !important;
   }
 }
+/* ── FilterSelect inside Order Book items table ──────────────────────────── */
+.orderbook-items-table td .filter-trigger {
+  width: 100%;
+  min-width: 75px;
+  height: 28px;
+  font-size: 11px;
+  font-family: inherit;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  box-shadow: none;
+  padding: 0 24px 0 6px;
+}
+.orderbook-items-table td .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9ca3af;
+  box-shadow: none;
+}
+.orderbook-items-table td .filter-trigger--open {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.08);
+}
+.orderbook-items-table td .filter-trigger__chevron {
+  right: 6px;
+}
+
+/* ── FilterSelect — rows per page in pagination ─────────────────────────── */
+.leads-enquiries-pagination-info .filter-trigger {
+  height: 26px; font-size: 12px; font-family: inherit;
+  border-radius: 5px; border: 1px solid #e2e8f0;
+  background: #fff; box-shadow: none;
+  min-width: unset; width: auto; padding: 0 24px 0 8px; min-width: 80px;
+}
+.leads-enquiries-pagination-info .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #9ca3af; box-shadow: none;
+}
+.leads-enquiries-pagination-info .filter-trigger--open {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.08);
+}
+.leads-enquiries-pagination-info .filter-trigger__chevron { right: 5px; }

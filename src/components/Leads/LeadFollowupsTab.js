@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import api from "../../services/leadsapi.js";
 import "./LeadFollowupsTab.css";
+import FilterSelect from "../Dropdowns/FilterSelect.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const pad = n => String(n).padStart(2, "0");
@@ -301,13 +302,12 @@ function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel }
           </div>
           <div className="lfu-form-group">
             <label>Conducted by</label>
-            <select value={form.assignedTo} onChange={set("assignedTo")}>
-              {users.map(u => (
-                <option key={u.id} value={u.id}>
-                  {u.name}{u.id === currentUser?.id ? " (Me)" : ""}
-                </option>
-              ))}
-            </select>
+            <FilterSelect
+              value={String(form.assignedTo)}
+              onChange={v => set("assignedTo")({ target: { value: v } })}
+              options={users.map(u => ({ value: String(u.id), label: u.name + (u.id === currentUser?.id ? " (Me)" : "") }))}
+              placeholder="Select User"
+            />
           </div>
         </div>
 
@@ -580,21 +580,23 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
           </div>
           <div className="lfu-form-group">
             <label>Priority</label>
-            <select value={form.priority} onChange={set("priority")}>
-              <option>High</option><option>Medium</option><option>Low</option>
-            </select>
+            <FilterSelect
+              value={form.priority}
+              onChange={v => set("priority")({ target: { value: v } })}
+              options={["High","Medium","Low"].map(p => ({ value: p, label: p }))}
+              placeholder="Select Priority"
+            />
           </div>
         </div>
 
         <div className="lfu-form-group">
           <label>Assign To *</label>
-          <select value={form.assignedTo} onChange={set("assignedTo")} required>
-            {users.map(u => (
-              <option key={u.id} value={u.id}>
-                {u.name}{u.id === currentUser?.id ? " (Me)" : ""}
-              </option>
-            ))}
-          </select>
+          <FilterSelect
+            value={String(form.assignedTo)}
+            onChange={v => set("assignedTo")({ target: { value: v } })}
+            options={users.map(u => ({ value: String(u.id), label: u.name + (u.id === currentUser?.id ? " (Me)" : "") }))}
+            placeholder="Select User"
+          />
         </div>
 
         <div className="lfu-form-group">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   FileText, Download, BarChart2, TrendingUp, Package,
   IndianRupee, RefreshCw, Eye, FileSpreadsheet,
@@ -11,6 +11,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
 import '../pages-css/ProjectReports.css';
+import FilterSelect from '../components/Dropdowns/FilterSelect';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -50,23 +51,114 @@ const KPI = ({ label, value, sub, color = '#2563eb', icon }) => (
   </div>
 );
 
-// ─── Simple bar chart (SVG) ────────────────────────────────────────────────────
-const BarChart = ({ data, height = 140 }) => {
+// ─── useInView hook — fires once when element enters viewport ─────────────────
+const useInView = (threshold = 0.25) => {
+  const ref = useRef(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setInView(true); obs.disconnect(); }
+    }, { threshold });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return [ref, inView];
+};
+
+// ─── Animated bar chart with X/Y axes (SVG) ──────────────────────────────────
+const BarChart = ({ data, height = 220 }) => {
+  const [ref, inView] = useInView(0.15);
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (!inView) return;
+    setProgress(0);
+    let start = null;
+    const duration = 750;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setProgress(1 - Math.pow(1 - p, 3));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [inView]);
+
   if (!data || data.length === 0) return null;
+
+  // Layout constants
+  const PAD_LEFT = 52;  // space for Y axis labels
+  const PAD_BOTTOM = 38; // space for X labels
+  const PAD_TOP = 16;
+  const PAD_RIGHT = 12;
+  const W = 400;
+  const H = height;
+  const chartW = W - PAD_LEFT - PAD_RIGHT;
+  const chartH = H - PAD_TOP - PAD_BOTTOM;
+
   const max = Math.max(...data.map(d => d.value), 1);
-  const w = 100 / data.length;
+  // Nice Y-axis ticks (4 gridlines)
+  const tickCount = 4;
+  const rawStep = max / tickCount;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const niceStep = Math.ceil(rawStep / magnitude) * magnitude;
+  const niceMax = niceStep * tickCount;
+  const yTicks = Array.from({ length: tickCount + 1 }, (_, i) => i * niceStep);
+
+  const barGroupW = chartW / data.length;
+  const barPad = barGroupW * 0.22;
+  const barW = barGroupW - barPad * 2;
+
   return (
-    <svg viewBox={`0 0 100 ${height}`} width="100%" height={height} style={{ display: 'block' }}>
-      {data.map((d, i) => {
-        const barH = (d.value / max) * (height - 24);
-        const x = i * w + w * 0.15;
-        const barW = w * 0.7;
+    <svg ref={ref} viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: 'block', overflow: 'visible' }}>
+      {/* Y gridlines + labels */}
+      {yTicks.map((tick, i) => {
+        const y = PAD_TOP + chartH - (tick / niceMax) * chartH;
         return (
           <g key={i}>
-            <rect x={x} y={height - 20 - barH} width={barW} height={barH}
-              fill={d.color || '#2563eb'} rx="1.5" opacity="0.85" />
-            <text x={x + barW / 2} y={height - 4} textAnchor="middle"
-              fontSize="4.5" fill="#6b7280" fontFamily="inherit">{d.label}</text>
+            <line x1={PAD_LEFT} y1={y} x2={W - PAD_RIGHT} y2={y}
+              stroke={i === 0 ? '#94a3b8' : '#e2e8f0'} strokeWidth={i === 0 ? 1.2 : 0.7} />
+            <text x={PAD_LEFT - 6} y={y + 3.5} textAnchor="end"
+              fontSize="9" fill="#94a3b8" fontFamily="inherit">
+              {fmtShort(tick)}
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Y axis line */}
+      <line x1={PAD_LEFT} y1={PAD_TOP} x2={PAD_LEFT} y2={PAD_TOP + chartH}
+        stroke="#94a3b8" strokeWidth="1.2" />
+
+      {/* Bars + X labels + value labels */}
+      {data.map((d, i) => {
+        const fullH = (d.value / niceMax) * chartH;
+        const barH = fullH * progress;
+        const x = PAD_LEFT + i * barGroupW + barPad;
+        const yBase = PAD_TOP + chartH;
+        const yTop = yBase - barH;
+        return (
+          <g key={i}>
+            {/* Bar shadow */}
+            <rect x={x + 1.5} y={yTop + 2} width={barW} height={barH}
+              fill="rgba(0,0,0,0.06)" rx="3" />
+            {/* Bar */}
+            <rect x={x} y={yTop} width={barW} height={barH}
+              fill={d.color || '#2563eb'} rx="3" opacity="0.90" />
+            {/* Value label on top of bar */}
+            {progress > 0.5 && barH > 14 && (
+              <text x={x + barW / 2} y={yTop - 5} textAnchor="middle"
+                fontSize="9.5" fontWeight="600" fill={d.color || '#2563eb'} fontFamily="inherit"
+                opacity={Math.max(0, (progress - 0.5) * 2)}>
+                {fmtShort(d.value)}
+              </text>
+            )}
+            {/* X axis label */}
+            <text x={x + barW / 2} y={yBase + 14} textAnchor="middle"
+              fontSize="9.5" fill="#374151" fontFamily="inherit" fontWeight="500">
+              {d.label}
+            </text>
             <title>{d.label}: {fmtShort(d.value)}</title>
           </g>
         );
@@ -75,35 +167,100 @@ const BarChart = ({ data, height = 140 }) => {
   );
 };
 
-// ─── Donut chart (SVG) ────────────────────────────────────────────────────────
-const Donut = ({ segments, size = 120 }) => {
-  const r = 38, cx = 60, cy = 60, strokeWidth = 18;
+// ─── Animated donut chart (SVG) ───────────────────────────────────────────────
+const Donut = ({ segments, size = 200 }) => {
+  const [ref, inView] = useInView(0.15);
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (!inView) return;
+    setProgress(0);
+    let start = null;
+    const duration = 900;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      setProgress(1 - Math.pow(1 - p, 3));
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [inView]);
+
+  const r = 58, cx = 80, cy = 80, strokeWidth = 20;
   const circ = 2 * Math.PI * r;
   const total = segments.reduce((s, d) => s + (parseFloat(d.value) || 0), 0) || 1;
   let offset = 0;
   return (
-    <svg width={size} height={size} viewBox="0 0 120 120">
+    <svg ref={ref} width={size} height={size} viewBox="0 0 160 160">
+      {/* Outer ring */}
+      <circle cx={cx} cy={cy} r={r + strokeWidth / 2 + 3} fill="none" stroke="#f1f5f9" strokeWidth="1" />
+      {/* Track */}
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth={strokeWidth} />
       {segments.map((seg, i) => {
-        const dash = (seg.value / total) * circ;
+        const fullDash = (seg.value / total) * circ;
+        const dash = fullDash * progress;
         const gap = circ - dash;
         const el = (
           <circle key={i} cx={cx} cy={cy} r={r} fill="none"
             stroke={seg.color} strokeWidth={strokeWidth}
             strokeDasharray={`${dash} ${gap}`}
-            strokeDashoffset={-offset + circ * 0.25}
-            style={{ transition: 'stroke-dasharray 0.5s' }}>
-            <title>{seg.label}: {fmtShort(seg.value)}</title>
+            strokeDashoffset={(-offset * progress) + circ * 0.25}
+            strokeLinecap="butt">
+            <title>{seg.label}: {fmtShort(seg.value)} ({((seg.value/total)*100).toFixed(1)}%)</title>
           </circle>
         );
-        offset += dash;
+        offset += fullDash;
         return el;
       })}
-      <text x={cx} y={cy - 4} textAnchor="middle" fontSize="9" fontWeight="700" fill="#1e293b">
+      {/* Center total */}
+      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e293b">
         {fmtShort(total)}
       </text>
-      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="6" fill="#64748b">Total</text>
+      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="8.5" fill="#64748b" letterSpacing="0.5">TOTAL</text>
     </svg>
+  );
+};
+
+
+// ─── Chart modal ──────────────────────────────────────────────────────────────
+const ChartModal = ({ title, legend, children, onClose }) => (
+  <div className="pr-chart-modal-overlay" onClick={onClose}>
+    <div className="pr-chart-modal" onClick={e => e.stopPropagation()}>
+      <div className="pr-chart-modal-header">
+        <span className="pr-chart-modal-title">{title}</span>
+        <button className="pr-chart-modal-close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+      <div className="pr-chart-modal-body">{children}</div>
+      {legend && <div className="pr-chart-legend pr-chart-modal-legend">{legend}</div>}
+    </div>
+  </div>
+);
+
+// ─── Chart card with expand button ────────────────────────────────────────────
+const ChartCard = ({ title, legend, className = '', children }) => {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <>
+      <div className={`pr-chart-card ${className}`}>
+        <div className="pr-chart-card-header">
+          <div className="pr-chart-title">{title}</div>
+          <button className="pr-chart-expand-btn" onClick={() => setExpanded(true)} title="Click to expand">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+              <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+            </svg>
+            Expand
+          </button>
+        </div>
+        {children}
+        {legend}
+      </div>
+      {expanded && (
+        <ChartModal title={title} onClose={() => setExpanded(false)}>
+          {children}
+          {legend}
+        </ChartModal>
+      )}
+    </>
   );
 };
 
@@ -112,7 +269,7 @@ const Donut = ({ segments, size = 120 }) => {
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ProjectReports() {
   const { user } = useAuth();
-  const { toasts, removeToast, showSuccess, showError } = useToast();
+  const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   // ── localStorage keys ────────────────────────────────────────────────────────
   // Cache version — bump this whenever the report data structure changes
@@ -232,7 +389,7 @@ export default function ProjectReports() {
 
   // Fetch report
   const fetchReport = async () => {
-    if (!selProject) { showError('Please select a project'); return; }
+    if (!selProject) { showWarning('Please select a project'); return; }
     setLoading(true); setReport(null);
     try {
       const res = await fetch(`${API_BASE_URL}/reports/project/${encodeURIComponent(selProject)}`, {
@@ -1086,51 +1243,12 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     ];
     return (
       <div className="pr-section">
-        <div className="pr-kpi-row">
-          <KPI label="Contract Value" value={fmtShort(ov.totalContractValue)} color="#2563eb" icon={<IndianRupee size={20}/>} />
-          <KPI label="Total Received" value={fmtShort(ov.totalReceived)} color="#059669" icon={<CheckCircle size={20}/>} />
-          <KPI label="Amt to be Received" value={fmtShort(bil.totalPending)} sub="From clients (pending)" color="#f59e0b" icon={<Clock size={20}/>} />
-          <KPI label="Procurement" value={fmtShort(ov.totalProcurement)} color="#d97706" icon={<Package size={20}/>} />
-          <KPI label="Amt to be Paid" value={fmtShort(proc.totalBalance)} sub="To vendors (balance due)" color="#dc2626" icon={<AlertCircle size={20}/>} />
-          <KPI label="Projected Profit" value={fmtShort(ov.projectedProfit)} sub={pct(ov.profitMarginPercent) + ' margin'} color="#7c3aed" icon={<TrendingUp size={20}/>} />
-        </div>
-        <div className="pr-charts-row">
-          <div className="pr-chart-card">
-            <div className="pr-chart-title">Billing Overview</div>
-            <BarChart data={billingData} />
-            <div className="pr-chart-legend">
-              {billingData.map(d => <span key={d.label} style={{color:d.color}}>■ {d.label}: {fmtShort(d.value)}</span>)}
-            </div>
-          </div>
-          <div className="pr-chart-card">
-            <div className="pr-chart-title">Procurement Overview</div>
-            <BarChart data={procData} />
-            <div className="pr-chart-legend">
-              {procData.map(d => <span key={d.label} style={{color:d.color}}>■ {d.label}: {fmtShort(d.value)}</span>)}
-            </div>
-          </div>
-          <div className="pr-chart-card pr-chart-card--donut">
-            <div className="pr-chart-title">Cost Breakdown</div>
-            <div className="pr-donut-wrap">
-              <Donut segments={profitSegs} size={130} />
-              <div className="pr-donut-legend">
-                {profitSegs.map(s => (
-                  <div key={s.label} className="pr-donut-item">
-                    <span style={{background:s.color}} className="pr-donut-dot"/>
-                    <span>{s.label}</span>
-                    <span>{fmtShort(s.value)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-        <div className="pr-info-grid">
+        <div className="pr-info-grid pr-info-grid--top">
           {[
             ['Project ID', ov.projectId], ['Status', ov.status],
             ['Location', ov.location], ['Group › Sub', `${ov.groupName||''}${ov.subGroupName?' › '+ov.subGroupName:''}`],
             ['Start Date', ov.startDate], ['End Date', ov.endDate],
-            ['Contract Value (Budget)', fmt(ov.totalContractValue)], ['Total Invoiced to Client', fmt(ov.totalInvoiced || bil.totalInvoiced)],
+            ['Contract Value', fmt(ov.totalContractValue)], ['Total Invoiced', fmt(ov.totalInvoiced || bil.totalInvoiced)],
             ['Progress', pct(ov.progressPercentage)], ['Budget (Original)', fmt(ov.budget)],
           ].map(([k, v]) => (
             <div key={k} className="pr-info-item">
@@ -1138,6 +1256,52 @@ tbody tr:nth-child(even) td{background:#f9fafb}
               <span className="pr-info-val">{v || '—'}</span>
             </div>
           ))}
+        </div>
+        <div className="pr-kpi-row">
+          <KPI label="Contract Value" value={fmtShort(ov.totalContractValue)} color="#2563eb" icon={<IndianRupee size={18}/>} />
+          <KPI label="Total Received" value={fmtShort(ov.totalReceived)} color="#059669" icon={<CheckCircle size={18}/>} />
+          <KPI label="Amt to be Received" value={fmtShort(bil.totalPending)} sub="From clients (pending)" color="#f59e0b" icon={<Clock size={18}/>} />
+          <KPI label="Procurement" value={fmtShort(ov.totalProcurement)} color="#d97706" icon={<Package size={18}/>} />
+          <KPI label="Amt to be Paid" value={fmtShort(proc.totalBalance)} sub="To vendors (balance due)" color="#dc2626" icon={<AlertCircle size={18}/>} />
+          <KPI label="Projected Profit" value={fmtShort(ov.projectedProfit)} sub={pct(ov.profitMarginPercent) + ' margin'} color="#7c3aed" icon={<TrendingUp size={18}/>} />
+        </div>
+        <div className="pr-charts-row">
+          <ChartCard
+            title="Billing Overview"
+            legend={<div className="pr-chart-legend">{billingData.map(d => <span key={d.label} style={{color:d.color}}>■ {d.label}: {fmtShort(d.value)}</span>)}</div>}
+          >
+            <BarChart data={billingData} />
+          </ChartCard>
+          <ChartCard
+            title="Procurement Overview"
+            legend={<div className="pr-chart-legend">{procData.map(d => <span key={d.label} style={{color:d.color}}>■ {d.label}: {fmtShort(d.value)}</span>)}</div>}
+          >
+            <BarChart data={procData} />
+          </ChartCard>
+          <ChartCard title="Cost Breakdown" className="pr-chart-card--donut">
+            <div className="pr-donut-centered">
+              <Donut segments={profitSegs} size={200} />
+            </div>
+            <div className="pr-donut-rows">
+              {profitSegs.map(s => {
+                const total = profitSegs.reduce((a, x) => a + (parseFloat(x.value)||0), 0) || 1;
+                const pct = ((s.value / total) * 100).toFixed(1);
+                return (
+                  <div key={s.label} className="pr-donut-row-item">
+                    <div className="pr-donut-row-top">
+                      <span className="pr-donut-row-dot" style={{background:s.color}}/>
+                      <span className="pr-donut-row-label">{s.label}</span>
+                      <span className="pr-donut-row-pct" style={{color:s.color}}>{pct}%</span>
+                      <span className="pr-donut-row-val">{fmtShort(s.value)}</span>
+                    </div>
+                    <div className="pr-donut-row-bar-track">
+                      <div className="pr-donut-row-bar-fill" style={{width:`${pct}%`, background:s.color}}/>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </ChartCard>
         </div>
       </div>
     );
@@ -1346,38 +1510,75 @@ tbody tr:nth-child(even) td{background:#f9fafb}
             💡 Net GST = Invoice GST − Vendor GST. Always deducted from profit.
           </div>
         </div>
+      </div>
+    );
+  };
 
-        {(prof.expenses||[]).length > 0 && (
-          <>
-            <h3 className="pr-subtable-title">Project Expenses <small style={{fontWeight:400,color:'#6b7280',fontSize:12}}>(approved expenses shown below; only approved amounts deducted from profit)</small></h3>
-            <div className="pr-table-wrap">
-              <table className="pr-table">
-                <thead><tr><th>Code</th><th>Date</th><th>Category</th><th>Amount</th><th>Paid By</th><th>Status</th></tr></thead>
-                <tbody>
-                  {(prof.expenses||[]).map((r,i) => (
-                    <tr key={i}>
-                      <td className="pr-td-mono">{r.expenseCode}</td>
-                      <td>{r.tripDate}</td><td>{r.category}</td>
-                      <td className="pr-td-num">{fmt(r.amount)}</td>
-                      <td>{r.paidBy}</td>
-                      <td><span className={`pr-badge pr-badge--${r.status?.toLowerCase()}`}>{r.status}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </>
+  const renderExpenses = () => {
+    const prof = report?.profitability || {};
+    const expenses = prof.expenses || [];
+    const totalExpenses = expenses.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    const approved = expenses.filter(r => r.status?.toLowerCase() === 'approved');
+    const pending  = expenses.filter(r => r.status?.toLowerCase() === 'pending');
+    const totalApproved = approved.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
+    return (
+      <div className="pr-section">
+        <div className="pr-kpi-row">
+          <KPI label="Total Expenses" value={fmtShort(totalExpenses)} color="#dc2626" icon={<AlertCircle size={18}/>} />
+          <KPI label="Approved" value={fmtShort(totalApproved)} sub="Deducted from profit" color="#059669" icon={<CheckCircle size={18}/>} />
+          <KPI label="Pending / Other" value={fmtShort(totalExpenses - totalApproved)} sub="Not yet deducted" color="#d97706" icon={<Clock size={18}/>} />
+        </div>
+        <div style={{background:'#fffbeb',border:'1px solid #fde68a',borderRadius:8,padding:'8px 14px',marginBottom:14,fontSize:12,color:'#92400e'}}>
+          ⚠️ Only <strong>Approved</strong> expense amounts are deducted from the project profit. Pending or other statuses are not counted.
+        </div>
+        {expenses.length === 0 ? (
+          <div className="pr-empty">No project expenses recorded.</div>
+        ) : (
+          <div className="pr-table-wrap">
+            <table className="pr-table">
+              <thead><tr>
+                <th>Code</th><th>Date</th><th>Category</th>
+                <th>Amount</th><th>Paid By</th><th>Status</th>
+              </tr></thead>
+              <tbody>
+                {expenses.map((r, i) => (
+                  <tr key={i}>
+                    <td className="pr-td-mono">{r.expenseCode || '—'}</td>
+                    <td>{r.tripDate || '—'}</td>
+                    <td>{r.category || '—'}</td>
+                    <td className="pr-td-num">{fmt(r.amount)}</td>
+                    <td>{r.paidBy || '—'}</td>
+                    <td><span className={`pr-badge pr-badge--${r.status?.toLowerCase()}`}>{r.status}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
     );
   };
 
   const TABS = [
-    { id: 'overview',       label: 'Overview',        icon: <Eye size={15}/> },
+    { id: 'overview',       label: 'Overview',           icon: <Eye size={15}/> },
     { id: 'billing',        label: 'Billing & Receipts', icon: <FileText size={15}/> },
-    { id: 'procurement',    label: 'Procurement',      icon: <Package size={15}/> },
-    { id: 'profitability',  label: 'Profitability',    icon: <TrendingUp size={15}/> },
+    { id: 'procurement',    label: 'Procurement',        icon: <Package size={15}/> },
+    { id: 'expenses',       label: 'Project Expenses',   icon: <AlertCircle size={15}/> },
+    { id: 'profitability',  label: 'Profitability',      icon: <TrendingUp size={15}/> },
   ];
+
+  // ── Sliding tab indicator ────────────────────────────────────────────────────
+  const tabsRef = useRef(null);
+  const [indicator, setIndicator] = React.useState({ left: 0, width: 0 });
+  React.useEffect(() => {
+    const bar = tabsRef.current;
+    if (!bar) return;
+    const activeBtn = bar.querySelector('.pr-tab--active');
+    if (!activeBtn) return;
+    const barRect = bar.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    setIndicator({ left: btnRect.left - barRect.left + bar.scrollLeft, width: btnRect.width });
+  }, [activeTab]);
 
   return (
     <div className="pr-container">
@@ -1399,24 +1600,34 @@ tbody tr:nth-child(even) td{background:#f9fafb}
         <div className="pr-selector-row">
           <div className="pr-selector-group">
             <label>Group *</label>
-            <select value={selGroup} onChange={e => handleGroupChange(e.target.value)} disabled={dropLoading.g}>
-              <option value="">{dropLoading.g ? 'Loading...' : 'Select Group'}</option>
-              {groups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
-            </select>
+            <FilterSelect
+              value={selGroup}
+              onChange={v => handleGroupChange(v)}
+              options={groups.map(g => ({ value: g.value, label: g.label }))}
+              placeholder={dropLoading.g ? 'Loading...' : 'Select Group'}
+              disabled={dropLoading.g}
+            />
           </div>
           <div className="pr-selector-group">
             <label>Sub Group</label>
-            <select value={selSubGroup} onChange={e => handleSubGroupChange(e.target.value)} disabled={!selGroup || dropLoading.sg}>
-              <option value="">{dropLoading.sg ? 'Loading...' : 'Select Sub Group'}</option>
-              {subGroups.map((s, i) => <option key={s.value || i} value={s.value}>{s.label}</option>)}
-            </select>
+            <FilterSelect
+              value={selSubGroup}
+              onChange={v => handleSubGroupChange(v)}
+              options={subGroups.map(s => ({ value: s.value, label: s.label }))}
+              placeholder={dropLoading.sg ? 'Loading...' : 'Select Sub Group'}
+              disabled={!selGroup || dropLoading.sg}
+            />
           </div>
           <div className="pr-selector-group">
             <label>Project *</label>
-            <select value={selProject} onChange={e => { setSelProject(e.target.value); setReport(null); localStorage.removeItem(SK.report); }} disabled={!selSubGroup || dropLoading.p}>
-              <option value="">{dropLoading.p ? 'Loading...' : 'Select Project'}</option>
-              {projects.map((p, i) => <option key={p.id || i} value={p.id}>{p.name}</option>)}
-            </select>
+            <FilterSelect
+              value={selProject ? String(selProject) : ''}
+              onChange={v => { setSelProject(v); setReport(null); localStorage.removeItem(SK.report); }}
+              options={projects.map(p => ({ value: String(p.id), label: p.name }))}
+              placeholder={dropLoading.p ? 'Loading...' : 'Select Project'}
+              disabled={!selSubGroup || dropLoading.p}
+              searchable={true}
+            />
           </div>
           <button className="pr-btn-generate" onClick={fetchReport} disabled={!selProject || loading}>
             <RefreshCw size={15} /> Generate Report
@@ -1444,21 +1655,24 @@ tbody tr:nth-child(even) td{background:#f9fafb}
           </div>
 
           {/* Tabs */}
-          <div className="pr-tabs">
+          <div className="pr-tabs" ref={tabsRef}>
             {TABS.map(t => (
               <button key={t.id} className={`pr-tab ${activeTab === t.id ? 'pr-tab--active' : ''}`}
                 onClick={() => setActiveTab(t.id)}>
                 {t.icon} {t.label}
               </button>
             ))}
+            {/* Sliding indicator */}
+            <span className="pr-tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
           </div>
 
-          {/* Tab content */}
+          {/* Tab content — independently scrollable */}
           <div className="pr-tab-content">
             {activeTab === 'overview'      && renderOverview()}
             {activeTab === 'billing'       && renderBilling()}
             {activeTab === 'procurement'   && renderProcurement()}
             {activeTab === 'profitability' && renderProfitability()}
+            {activeTab === 'expenses'       && renderExpenses()}
           </div>
         </div>
       ) : (

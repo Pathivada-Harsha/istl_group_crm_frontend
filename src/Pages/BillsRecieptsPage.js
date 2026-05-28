@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FileText, CreditCard } from 'lucide-react';
 import BillsManagementPage from './BillsManagementPage';
 import VendorPaymentsPage from './VendorPaymentsPage';
@@ -8,24 +8,35 @@ import { useAuth } from '../hooks/useAuth';
 const BillsReceiptsPage = () => {
   const { menuPermissions } = useAuth();
 
-  // Payments tab only visible when user has BILLS_PAYMENTS menu permission
   const hasPaymentsPermission = menuPermissions.includes('BILLS_PAYMENTS');
 
   const [activeTab, setActiveTab] = useState(
     () => sessionStorage.getItem('billsPaymentsActiveTab') || 'bills'
   );
 
+  const tabsRef = useRef(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     sessionStorage.setItem('billsPaymentsActiveTab', tab);
   };
 
-  // If stored tab is 'payments' but user lost permission, fall back to bills
   const resolvedTab = activeTab === 'payments' && !hasPaymentsPermission ? 'bills' : activeTab;
+
+  useEffect(() => {
+    const bar = tabsRef.current;
+    if (!bar) return;
+    const activeBtn = bar.querySelector('.tab-button.active');
+    if (!activeBtn) return;
+    const barRect = bar.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    setIndicator({ left: btnRect.left - barRect.left + bar.scrollLeft, width: btnRect.width });
+  }, [resolvedTab]);
 
   return (
     <div className="invoices-receipts-container">
-      <div className="tab-navigation">
+      <div className="tab-navigation" ref={tabsRef}>
         <button
           className={`tab-button ${resolvedTab === 'bills' ? 'active' : ''}`}
           onClick={() => handleTabChange('bills')}
@@ -43,6 +54,9 @@ const BillsReceiptsPage = () => {
             <span>Payments</span>
           </button>
         )}
+
+        {/* Sliding indicator */}
+        <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
       </div>
 
       <div className="tab-content">

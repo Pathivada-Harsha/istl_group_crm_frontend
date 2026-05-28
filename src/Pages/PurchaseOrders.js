@@ -475,6 +475,7 @@ const PurchaseOrders = () => {
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
   const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+  const [focusedPriceIndex, setFocusedPriceIndex] = useState(null);
 
   // ── Edit-mode project change state ──
   const [_pendingProjectChange, setPendingProjectChange] = useState(null); // { groupName, subGroupName, projectId }
@@ -1338,6 +1339,7 @@ const PurchaseOrders = () => {
   // ─── Formatters ────────────────────────────────────────────────────────────
   const formatCurrency = (amount) => !amount ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
   const formatQty = (val) => { const n = typeof val === 'number' ? val : parseFloat(val); if (isNaN(n)) return val ?? ''; return n % 1 === 0 ? n.toLocaleString('en-IN') : n.toLocaleString('en-IN', { maximumFractionDigits: 3 }); };
+  const formatIndianInput = (val) => { const raw = String(val === '' || val == null ? '' : val).replace(/,/g, ''); if (raw === '' || raw === '0') return ''; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN', { maximumFractionDigits: 2 }); };
   const formatDate = (dateStr) => {
     if (!dateStr) return '';
     const s = String(dateStr);
@@ -2160,6 +2162,7 @@ const PurchaseOrders = () => {
                       placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}
                       disabled={!modalSubGroupName || modalDropdownLoading.projects}
                       onChange={(v) => handleModalProjectChange({ target: { value: v } })}
+                      searchable={true}
                     />
                   </div>
                 </div>
@@ -2601,8 +2604,8 @@ const PurchaseOrders = () => {
                       <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: '#166534' }}>Add Manual Item</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="number" value={newItem.quantity} onChange={(e) => setNewItem(prev => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))} placeholder="0" min="0" step="0.01" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="number" value={newItem.unitPrice} onChange={(e) => setNewItem(prev => ({ ...prev, unitPrice: parseFloat(e.target.value) || '' }))} placeholder=" " min="0" step="0.01" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="text" inputMode="decimal" value={formatIndianInput(newItem.unitPrice)} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d*$/.test(raw)) setNewItem(prev => ({ ...prev, unitPrice: raw === '' ? '' : raw })); }} placeholder="0.00" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>GST %</label><input type="number" value={newItem.gst} onChange={(e) => setNewItem(prev => ({ ...prev, gst: parseFloat(e.target.value) || 0 }))} min="0" max="100" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
@@ -2616,23 +2619,35 @@ const PurchaseOrders = () => {
                   {createPOFormData.items.length > 0 ? (
                     <>
                       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
-                        <table className="po-items-table" style={{ width: '100%', minWidth: '1100px' }}>
+                        <table className="po-items-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
+                          <colgroup>
+                            <col style={{ width: '46px' }} />
+                            <col style={{ width: 'auto' }} />
+                            <col style={{ width: '130px' }} />
+                            {createPOFormData.quotationId && <col style={{ width: '90px' }} />}
+                            <col style={{ width: '90px' }} />
+                            <col style={{ width: '130px' }} />
+                            <col style={{ width: '90px' }} />
+                            <col style={{ width: '95px' }} />
+                            <col style={{ width: '130px' }} />
+                            <col style={{ width: '56px' }} />
+                          </colgroup>
                           <thead style={{ background: '#f8fafc' }}>
                             <tr>
-                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '60px' }}>
+                              <th className="po-th" style={{ textAlign: 'center' }}>
                                 <input type="checkbox" checked={createPOFormData.items.every(i => i.selected)}
                                   onChange={(e) => setCreatePOFormData(prev => ({ ...prev, items: prev.items.map(item => ({ ...item, selected: e.target.checked })) }))}
-                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }} title="Select/Deselect All" />
+                                  style={{ width: '16px', height: '16px', cursor: 'pointer' }} title="Select/Deselect All" />
                               </th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Item Name</th>
-                              <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600' }}>Description</th>
-                              {createPOFormData.quotationId && <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '100px' }}>Quoted Qty</th>}
-                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '100px' }}>PO Qty *</th>
-                              <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600', width: '130px' }}>Unit Price (₹) *</th>
-                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>GST %</th>
-                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>Discount %</th>
-                              <th style={{ padding: '12px', textAlign: 'right', fontWeight: '600', width: '130px' }}>Line Total</th>
-                              <th style={{ padding: '12px', textAlign: 'center', fontWeight: '600', width: '80px' }}>Action</th>
+                              <th className="po-th" style={{ textAlign: 'left' }}>Item Name</th>
+                              <th className="po-th" style={{ textAlign: 'left' }}>Description</th>
+                              {createPOFormData.quotationId && <th className="po-th" style={{ textAlign: 'center' }}>Quoted Qty</th>}
+                              <th className="po-th" style={{ textAlign: 'center' }}>PO Qty *</th>
+                              <th className="po-th" style={{ textAlign: 'right' }}>Unit Price (₹) *</th>
+                              <th className="po-th" style={{ textAlign: 'center' }}>GST %</th>
+                              <th className="po-th" style={{ textAlign: 'center' }}>Discount %</th>
+                              <th className="po-th" style={{ textAlign: 'right' }}>Line Total</th>
+                              <th className="po-th" style={{ textAlign: 'center' }}>Action</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -2645,59 +2660,88 @@ const PurchaseOrders = () => {
                               const disc     = base * (discount / 100);
                               const computedLineTotal = (base - disc) * (1 + gst / 100);
                               return (
-                              <tr key={index} style={{ borderTop: '1px solid #e2e8f0', opacity: item.selected ? 1 : 0.5, background: item.selected ? 'white' : '#f9fafb' }}>
-                                <td style={{ padding: '12px', textAlign: 'center' }}><input type="checkbox" checked={item.selected} onChange={() => handleToggleItemSelection(index)} style={{ width: '18px', height: '18px', cursor: 'pointer' }} /></td>
-                                <td style={{ padding: '12px', fontWeight: '500' }}>{item.itemName}{item.isManual && <span style={{ marginLeft: '8px', fontSize: '11px', padding: '2px 6px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}{item.remainingQty != null && <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? '#ef4444' : '#22c55e', marginTop: '2px' }}>OB: {item.quotedQuantity} total · {item.allocatedQty || 0} assigned · <strong>{item.remainingQty} remaining</strong></div>}</td>
-                                <td style={{ padding: '12px', fontSize: '13px', color: '#64748b' }}>{item.itemDescription || '—'}</td>
-                                {createPOFormData.quotationId && <td style={{ padding: '12px', textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>{item.quotedQuantity}</td>}
-                                <td style={{ padding: '12px', textAlign: 'center' }}><input type="number" min="0" max={createPOFormData.quotationId ? item.quotedQuantity : (item.remainingQty != null ? item.remainingQty : undefined)} value={item.quantity} onChange={(e) => handleUpdatePOItemQuantity(index, e.target.value)} disabled={!item.selected} style={{ width: '70px', padding: '8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px' }} /></td>
-                                <td style={{ padding: '12px', textAlign: 'right' }}><input type="number" min="0" step="0.01" value={item.unitPrice || ''} onChange={(e) => handleUpdatePOItemPrice(index, e.target.value)} disabled={createPOFormData.quotationId || !item.selected} placeholder="0.00" style={{ width: '110px', padding: '8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} /></td>
-                                <td style={{ padding: '12px', textAlign: 'center' }}><select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected} style={{ width: '90px', padding: '8px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '14px', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>{GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}</select></td>
-                                <td style={{ padding: '12px', textAlign: 'center', fontSize: '14px' }}>{item.discount}%</td>
-                                <td style={{ padding: '12px', textAlign: 'right', fontWeight: '600', color: item.selected ? '#059669' : '#94a3b8', fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
-                                <td style={{ padding: '12px', textAlign: 'center' }}><button className="remove-item-btn" onClick={() => handleRemoveItem(index)} title="Remove item"><Trash2 size={16} /></button></td>
+                              <tr key={index} style={{ borderTop: '1px solid #e2e8f0', opacity: item.selected ? 1 : 0.5, background: item.selected ? 'white' : '#f9fafb', verticalAlign: 'middle' }}>
+                                <td className="po-td" style={{ textAlign: 'center' }}>
+                                  <input type="checkbox" checked={item.selected} onChange={() => handleToggleItemSelection(index)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
+                                </td>
+                                <td className="po-td" style={{ fontWeight: '500' }}>
+                                  <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {item.itemName}
+                                    {item.isManual && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 5px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}
+                                  </div>
+                                  {item.remainingQty != null && (
+                                    <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? '#ef4444' : '#22c55e', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                      OB: {item.quotedQuantity} total · {item.allocatedQty || 0} assigned · <strong>{item.remainingQty} remaining</strong>
+                                    </div>
+                                  )}
+                                </td>
+                                <td className="po-td po-td-clip" style={{ fontSize: '13px', color: '#64748b' }}>{item.itemDescription || '—'}</td>
+                                {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>{item.quotedQuantity}</td>}
+                                <td className="po-td" style={{ textAlign: 'center' }}>
+                                  <input type="text" inputMode="decimal"
+                                    value={(() => { const raw = String(item.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()}
+                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*$/.test(raw)) handleUpdatePOItemQuantity(index, raw); }}
+                                    disabled={!item.selected}
+                                    style={{ width: '70px', padding: '6px 8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', background: item.selected ? 'white' : '#f1f5f9' }} />
+                                </td>
+                                <td className="po-td" style={{ textAlign: 'right' }}>
+                                  <input type="text" inputMode="decimal"
+                                    value={formatIndianInput(item.unitPrice)}
+                                    onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d*$/.test(raw)) handleUpdatePOItemPrice(index, raw); }}
+                                    disabled={createPOFormData.quotationId || !item.selected}
+                                    placeholder="0.00"
+                                    style={{ width: '110px', padding: '6px 8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} />
+                                </td>
+                                <td className="po-td" style={{ textAlign: 'center' }}>
+                                  <select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected}
+                                    style={{ width: '80px', padding: '6px 4px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>
+                                    {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
+                                  </select>
+                                </td>
+                                <td className="po-td" style={{ textAlign: 'center', fontSize: '13px' }}>{item.discount}%</td>
+                                <td className="po-td po-td-clip" style={{ textAlign: 'right', fontWeight: '600', color: item.selected ? '#059669' : '#94a3b8', fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
+                                <td className="po-td" style={{ textAlign: 'center' }}><button className="remove-item-btn" onClick={() => handleRemoveItem(index)} title="Remove item"><Trash2 size={16} /></button></td>
                               </tr>
                               );
                             })}
                           </tbody>
                           <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
                             <tr>
-                              <td colSpan={createPOFormData.quotationId ? 9 : 8} style={{ padding: '16px', textAlign: 'right', fontWeight: '700', fontSize: '16px' }}>
+                              <td colSpan={createPOFormData.quotationId ? 9 : 8} style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '700', fontSize: '15px' }}>
                                 Grand Total ({createPOFormData.items.filter(i => i.selected).length} items selected):
                               </td>
-                              <td style={{ padding: '16px', textAlign: 'right', fontWeight: '700', fontSize: '18px', color: '#059669' }}>{formatCurrency(calculatePOTotal())}</td>
+                              <td style={{ padding: '14px 16px', textAlign: 'right', fontWeight: '700', fontSize: '17px', color: '#059669' }}>{formatCurrency(calculatePOTotal())}</td>
                               <td></td>
                             </tr>
                           </tfoot>
                         </table>
                       </div>
-                      <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: '13px', color: '#64748b' }}>{createPOFormData.items.filter(i => i.selected).length} of {createPOFormData.items.length} items selected</div>
+                      <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: '13px', color: '#64748b' }}>{createPOFormData.items.filter(i => i.selected).length} of {createPOFormData.items.length} items selected</span>
                         {!createPOFormData.quotationId && createPOFormData.items.some(i => i.selected && (!i.unitPrice || i.unitPrice === 0)) && (
-                          <div style={{ padding: '8px 12px', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '6px', fontSize: '13px', color: '#92400e' }}>⚠️ Please enter unit prices for all selected items</div>
+                          <div style={{ padding: '7px 12px', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '6px', fontSize: '13px', color: '#92400e' }}>⚠️ Please enter unit prices for all selected items</div>
                         )}
                       </div>
                     </>
                   ) : (
-                    <div style={{ padding: '60px', textAlign: 'center', background: '#f8fafc', border: '2px dashed #cbd5e0', borderRadius: '8px', color: '#94a3b8' }}>
-                      <div style={{ fontSize: '48px', marginBottom: '12px' }}>📦</div>
-                      <div style={{ fontSize: '16px', fontWeight: '500' }}>No items to display</div>
-                      <div style={{ fontSize: '14px', marginTop: '4px' }}>Select a quotation, load order book items, or add manual items</div>
+                    <div style={{ padding: '48px', textAlign: 'center', background: '#f8fafc', border: '2px dashed #cbd5e0', borderRadius: '8px', color: '#94a3b8' }}>
+                      <div style={{ fontSize: '44px', marginBottom: '10px' }}>📦</div>
+                      <div style={{ fontSize: '15px', fontWeight: '500', color: '#64748b', marginBottom: '4px' }}>No items to display</div>
+                      <div style={{ fontSize: '13px' }}>Select a quotation, load order book items, or add manual items</div>
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="purchase-orders-modal-actions" style={{ borderTop: '2px solid #e2e8f0', paddingTop: '20px', flexShrink: 0, padding: '16px 24px' }}>
+            <div className="purchase-orders-modal-actions">
               <button
-                className="purchase-orders-btn-primary" onClick={handleCreatePO}
+                className="purchase-orders-btn-primary po-btn-submit" onClick={handleCreatePO}
                 disabled={!modalGroupName || createPOFormData.items.filter(i => i.selected).length === 0}
-                style={{ padding: '12px 32px', fontSize: '15px', opacity: (!modalGroupName || createPOFormData.items.filter(i => i.selected).length === 0) ? 0.5 : 1, cursor: (!modalGroupName || createPOFormData.items.filter(i => i.selected).length === 0) ? 'not-allowed' : 'pointer' }}
               >
                 {isEditMode ? '💾 Update Purchase Order' : '✅ Create Purchase Order'}
               </button>
-              <button className="purchase-orders-btn-secondary" onClick={handleCloseCreatePOModal} style={{ padding: '12px 32px', fontSize: '15px' }}>Cancel</button>
+              <button className="purchase-orders-btn-secondary po-btn-cancel" onClick={handleCloseCreatePOModal}>Cancel</button>
             </div>
           </div>
         </div>

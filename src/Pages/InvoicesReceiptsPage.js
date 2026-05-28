@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { FileText, Receipt } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { FileText, IndianRupee } from 'lucide-react';
 import InvoicesManagementPage from './InvoicesManagementPage';
 import ReceiptsManagementPage from './ReceiptsManagementPage';
 import '../pages-css/InvoicesReceiptsPage.css';
@@ -8,26 +8,36 @@ import { useAuth } from '../hooks/useAuth';
 const InvoicesReceiptsPage = () => {
   const { menuPermissions } = useAuth();
 
-  // RECEIPTS tab is only visible when the user has the RECEIPTS menu permission
   const hasReceiptsPermission = menuPermissions.includes('RECEIPTS');
 
-  // ✅ Persist active tab across browser refreshes
   const [activeTab, setActiveTab] = useState(
     () => sessionStorage.getItem('invoicesReceiptsActiveTab') || 'invoices'
   );
+
+  const tabsRef = useRef(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
 
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     sessionStorage.setItem('invoicesReceiptsActiveTab', tab);
   };
 
-  // If the stored tab is 'receipts' but user lost the permission, fall back to invoices
   const resolvedTab = activeTab === 'receipts' && !hasReceiptsPermission ? 'invoices' : activeTab;
+
+  useEffect(() => {
+    const bar = tabsRef.current;
+    if (!bar) return;
+    const activeBtn = bar.querySelector('.tab-button.active');
+    if (!activeBtn) return;
+    const barRect = bar.getBoundingClientRect();
+    const btnRect = activeBtn.getBoundingClientRect();
+    setIndicator({ left: btnRect.left - barRect.left + bar.scrollLeft, width: btnRect.width });
+  }, [resolvedTab]);
 
   return (
     <div className="invoices-receipts-container">
       {/* Tab Navigation */}
-      <div className="tab-navigation">
+      <div className="tab-navigation" ref={tabsRef}>
         <button
           className={`tab-button ${resolvedTab === 'invoices' ? 'active' : ''}`}
           onClick={() => handleTabChange('invoices')}
@@ -41,10 +51,13 @@ const InvoicesReceiptsPage = () => {
             className={`tab-button ${resolvedTab === 'receipts' ? 'active' : ''}`}
             onClick={() => handleTabChange('receipts')}
           >
-            <Receipt size={20} />
+            <IndianRupee size={20} />
             <span>Receipts</span>
           </button>
         )}
+
+        {/* Sliding indicator */}
+        <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
       </div>
 
       {/* Tab Content */}

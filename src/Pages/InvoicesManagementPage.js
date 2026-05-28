@@ -1810,47 +1810,31 @@ const fetchStats = async () => {
         {/* Pagination */}
         <div className="Invoices-page-pagination">
           <div className="Invoices-page-pagination-info">
-            Showing {totalElements === 0 ? 0 : currentPage * pageSize + 1} to {Math.min((currentPage + 1) * pageSize, totalElements)} of {totalElements} invoices
+            <span style={{whiteSpace:'nowrap'}}>Rows per page:</span>
+            <FilterSelect
+              value={String(pageSize)}
+              onChange={v => { setPageSize(Number(v)); setCurrentPage(0); }}
+              options={[{value:'5',label:'5 rows'},{value:'10',label:'10 rows'},{value:'25',label:'25 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
+              placeholder="Rows"
+            />
+            <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+              {totalElements === 0 ? 'No records' : `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, totalElements)} of ${totalElements} invoices`}
+            </span>
+            <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
+              Page <strong style={{color:'#0f172a'}}>{currentPage + 1}</strong> of <strong style={{color:'#0f172a'}}>{totalPages}</strong>
+            </span>
           </div>
-
-          <div className="Invoices-page-pagination-controls-wrapper">
-            <div className="Invoices-page-pagination-size">
-              <label>Rows per page:</label>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
-                  setCurrentPage(0);
-                }}
-                className="Invoices-page-pagination-size-select"
-              >
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="25">25</option>
-                <option value="50">50</option>
-                <option value="100">100</option>
-              </select>
-            </div>
-
-            <div className="Invoices-page-pagination-controls">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))}
-                disabled={currentPage === 0}
-                className="Invoices-page-pagination-btn"
-              >
-                Previous
-              </button>
-              <span className="Invoices-page-pagination-current">
-                Page {currentPage + 1} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))}
-                disabled={currentPage >= totalPages - 1}
-                className="Invoices-page-pagination-btn"
-              >
-                Next
-              </button>
-            </div>
+          <div className="Invoices-page-pagination-buttons">
+            <button className="Invoices-page-pagination-btn" onClick={() => setCurrentPage(0)} disabled={currentPage === 0}>«</button>
+            <button className="Invoices-page-pagination-btn" onClick={() => setCurrentPage(prev => Math.max(prev - 1, 0))} disabled={currentPage === 0}>‹</button>
+            {Array.from({length: Math.min(5, totalPages)}, (_, i) => {
+              const start = Math.max(0, Math.min(currentPage - 2, totalPages - 5));
+              return start + i;
+            }).map(p => (
+              <button key={p} className={`Invoices-page-pagination-btn${p === currentPage ? ' Invoices-page-pagination-btn-active' : ''}`} onClick={() => setCurrentPage(p)}>{p + 1}</button>
+            ))}
+            <button className="Invoices-page-pagination-btn" onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages - 1))} disabled={currentPage >= totalPages - 1}>›</button>
+            <button className="Invoices-page-pagination-btn" onClick={() => setCurrentPage(totalPages - 1)} disabled={currentPage >= totalPages - 1}>»</button>
           </div>
         </div>
       </div>
@@ -2027,6 +2011,7 @@ const fetchStats = async () => {
                         placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading...' : 'Select Project'}
                         disabled={!modalSubGroupName || modalDropdownLoading.projects}
                         onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                        searchable={true}
                       />
                     </div>
 
