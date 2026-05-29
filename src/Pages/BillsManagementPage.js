@@ -404,21 +404,27 @@ const BillsManagementPage = () => {
 
   // ========== MODAL DROPDOWN FUNCTIONS (COMPLETELY INDEPENDENT) ==========
   
-  const fetchModalVendors = async () => {
+  // Dedicated vendor fetch for the bill modal — uses fresh params passed directly
+  // so React state async-update lag never causes stale-value fetches.
+  // Calls GET /bills/modal/vendors (isolated endpoint, won't break any other page).
+  const fetchModalVendors = async (groupN, subGroupN, projectN) => {
+    const g  = groupN    !== undefined ? groupN    : modalGroupName;
+    const sg = subGroupN !== undefined ? subGroupN : modalSubGroupName;
+    const p  = projectN  !== undefined ? projectN  : modalProjectId;
     try {
       const params = new URLSearchParams();
-      if (modalGroupName) params.append('groupName', modalGroupName);
-      if (modalSubGroupName) params.append('subGroupName', modalSubGroupName);
-      if (modalProjectId) params.append('projectId', modalProjectId);
-
-      const response = await fetch(`${API_BASE_URL}/vendors/for-bills?${params}`, {
-        credentials: "include",
+      if (g)  params.append('groupName',    g);
+      if (sg) params.append('subGroupName', sg);
+      if (p)  params.append('projectId',    p);
+      const response = await fetch(`${API_BASE_URL}/bills/modal/vendors?${params}`, {
+        credentials: 'include',
         headers: getAuthHeaders()
       });
-
       if (response.ok) {
         const data = await response.json();
         setModalVendors(data || []);
+      } else {
+        setModalVendors([]);
       }
     } catch (error) {
       console.error('Failed to fetch modal vendors:', error);
@@ -426,34 +432,34 @@ const BillsManagementPage = () => {
     }
   };
 
-  const fetchModalPurchaseOrders = async (vendorIdOrName = null, overrideGroup = null, overrideSubGroup = null, overrideProject = null) => {
+  // Dedicated PO fetch for the bill modal — isolated from the PO listing page.
+  // Calls GET /bills/modal/purchase-orders so changes here never affect other pages.
+  // Accepts all scope params directly to avoid stale React state.
+  const fetchModalPurchaseOrders = async (vendorIdOrName = null, groupN, subGroupN, projectN) => {
+    const g  = groupN    !== undefined ? groupN    : modalGroupName;
+    const sg = subGroupN !== undefined ? subGroupN : modalSubGroupName;
+    const p  = projectN  !== undefined ? projectN  : modalProjectId;
     try {
       const params = new URLSearchParams();
-      // Use override values if provided (avoids reading stale state when called from handleEditBill)
-      const grp = overrideGroup    ?? modalGroupName;
-      const sub = overrideSubGroup ?? modalSubGroupName;
-      const prj = overrideProject  ?? modalProjectId;
-      if (grp) params.append('groupName',    grp);
-      if (sub) params.append('subGroupName', sub);
-      if (prj) params.append('projectId',    prj);
-
+      if (g)  params.append('groupName',    g);
+      if (sg) params.append('subGroupName', sg);
+      if (p)  params.append('projectId',    p);
       if (vendorIdOrName) {
-        if (typeof vendorIdOrName === 'number') {
+        if (typeof vendorIdOrName === 'number' || (typeof vendorIdOrName === 'string' && !vendorIdOrName.startsWith('PO_'))) {
           params.append('vendorId', vendorIdOrName);
         } else if (typeof vendorIdOrName === 'string' && vendorIdOrName.startsWith('PO_')) {
-          const vendorName = vendorIdOrName.replace('PO_', '');
-          params.append('vendorName', vendorName);
+          params.append('vendorName', vendorIdOrName.replace('PO_', ''));
         }
       }
-
-      const response = await fetch(`${API_BASE_URL}/purchase-orders/by-vendor?${params}`, {
-        credentials: "include",
+      const response = await fetch(`${API_BASE_URL}/bills/modal/purchase-orders?${params}`, {
+        credentials: 'include',
         headers: getAuthHeaders()
       });
-
       if (response.ok) {
         const data = await response.json();
         setModalPurchaseOrders(data || []);
+      } else {
+        setModalPurchaseOrders([]);
       }
     } catch (error) {
       console.error('Failed to fetch modal purchase orders:', error);
@@ -560,8 +566,8 @@ const BillsManagementPage = () => {
 
   // ========== MODAL DROPDOWN HANDLERS (COMPLETELY INDEPENDENT) ==========
 
-  const handleModalGroupChange = (e) => {
-    const newGroupName = e.target.value;
+  const handleModalGroupChange = (val) => {
+    const newGroupName = val || '';
     setModalGroupName(newGroupName);
     setModalSubGroupName('');
     setModalProjectId('');
@@ -569,7 +575,6 @@ const BillsManagementPage = () => {
     setModalProjects([]);
     setModalPurchaseOrders([]);
     setModalVendors([]);
-
     setFormData(prev => ({
       ...prev,
       groupId: newGroupName,
@@ -579,20 +584,18 @@ const BillsManagementPage = () => {
       poId: '',
       items: prev.items.filter(item => !item.poItemId)
     }));
-
     if (newGroupName) {
       fetchModalSubGroups(newGroupName);
     }
   };
 
-  const handleModalSubGroupChange = async (e) => {
-    const newSubGroupName = e.target.value;
+  const handleModalSubGroupChange = async (val) => {
+    const newSubGroupName = val || '';
     setModalSubGroupName(newSubGroupName);
     setModalProjectId('');
     setModalProjects([]);
     setModalPurchaseOrders([]);
     setModalVendors([]);
-
     setFormData(prev => ({
       ...prev,
       subGroupId: newSubGroupName,
@@ -601,18 +604,16 @@ const BillsManagementPage = () => {
       poId: '',
       items: prev.items.filter(item => !item.poItemId)
     }));
-
     if (modalGroupName && newSubGroupName) {
       await fetchModalProjects(modalGroupName, newSubGroupName);
     }
   };
 
-  const handleModalProjectChange = async (e) => {
-    const newProjectId = e.target.value;
+  const handleModalProjectChange = async (val) => {
+    const newProjectId = val || '';
     setModalProjectId(newProjectId);
     setModalPurchaseOrders([]);
     setModalVendors([]);
-
     setFormData(prev => ({
       ...prev,
       projectId: newProjectId,
@@ -620,41 +621,37 @@ const BillsManagementPage = () => {
       poId: '',
       items: prev.items.filter(item => !item.poItemId)
     }));
-
     if (newProjectId) {
-      await fetchModalVendors();
+      // Pass fresh value directly — don't rely on modalProjectId state (async update lag)
+      await fetchModalVendors(modalGroupName, modalSubGroupName, newProjectId);
     }
   };
 
-  const handleModalVendorChange = (e) => {
-    const vendorIdOrName = e.target.value;
-
+  const handleModalVendorChange = (val) => {
+    const vendorIdOrName = val || '';
     setFormData(prev => ({
       ...prev,
       vendorId: vendorIdOrName,
       poId: '',
       items: prev.items.filter(item => !item.poItemId)
     }));
-
     setModalPurchaseOrders([]);
-
     if (vendorIdOrName) {
       const vendorId = typeof vendorIdOrName === 'string' && !vendorIdOrName.startsWith('PO_')
         ? parseInt(vendorIdOrName)
         : vendorIdOrName;
-      fetchModalPurchaseOrders(vendorId);
+      // Pass scope directly — fresh values, no async-state lag
+      fetchModalPurchaseOrders(vendorId, modalGroupName, modalSubGroupName, modalProjectId);
     }
   };
 
-  const handleModalPOChange = (e) => {
-    const poId = e.target.value;
-
+  const handleModalPOChange = (val) => {
+    const poId = val || '';
     setFormData(prev => ({
       ...prev,
       poId: poId ? parseInt(poId) : null,
       items: prev.items.filter(item => !item.poItemId)
     }));
-
     if (poId) {
       fetchPOItems(parseInt(poId));
     }
@@ -720,10 +717,10 @@ const BillsManagementPage = () => {
   };
 
   // ========== CREATE BILL ==========
-  const handleCreateBill = () => {
+  const handleCreateBill = async () => {
     setEditMode(false);
 
-    // Pre-seed from page-level header filters
+    // Seed from the page-level header filter values
     const seedGroup    = groupName    || '';
     const seedSubGroup = subGroupName || '';
     const seedProject  = projectId   || '';
@@ -755,17 +752,24 @@ const BillsManagementPage = () => {
     setModalProjects([]);
     setModalVendors([]);
     setModalPurchaseOrders([]);
-
     setSelectedFile(null);
-    setShowCreateEditModal(true);
-    fetchModalGroups();
+
+    // Fetch groups (always needed)
+    await fetchModalGroups();
+
+    // Pre-fetch cascaded data using seeded values directly — no async state lag
     if (seedGroup) {
-      fetchModalSubGroups(seedGroup).then(() => {
-        if (seedSubGroup) {
-          fetchModalProjects(seedGroup, seedSubGroup);
+      await fetchModalSubGroups(seedGroup);
+      if (seedSubGroup) {
+        await fetchModalProjects(seedGroup, seedSubGroup);
+        if (seedProject) {
+          // Pass fresh values directly so the fetch doesn't use stale state
+          await fetchModalVendors(seedGroup, seedSubGroup, seedProject);
         }
-      });
+      }
     }
+
+    setShowCreateEditModal(true);
   };
 
   // ========== EDIT BILL ==========
@@ -814,7 +818,8 @@ const BillsManagementPage = () => {
       }
       
       if (bill.projectId || bill.subGroupId) {
-        await fetchModalVendors();
+        // Pass fresh values directly — setState above is async, locals are reliable
+        await fetchModalVendors(bill.groupId || '', bill.subGroupId || '', bill.projectId || '');
       }
       
       if (bill.vendorId) {
@@ -1857,7 +1862,7 @@ const BillsManagementPage = () => {
                       value={modalGroupName}
                       options={modalGroups}
                       placeholder="Select Group"
-                      onChange={v => handleModalGroupChange({ target: { value: v || '' } })}
+                      onChange={handleModalGroupChange}
                     />
                   </div>
 
@@ -1868,7 +1873,7 @@ const BillsManagementPage = () => {
                       options={modalSubGroups}
                       placeholder={!modalGroupName ? 'Select Group First' : 'Select Sub Group'}
                       disabled={!modalGroupName}
-                      onChange={v => handleModalSubGroupChange({ target: { value: v || '' } })}
+                      onChange={handleModalSubGroupChange}
                     />
                   </div>
                 </div>
@@ -1880,7 +1885,7 @@ const BillsManagementPage = () => {
                     options={modalProjects.map(p => ({ value: p.id, label: p.name + (p.location ? ` - ${p.location}` : '') }))}
                     placeholder={!modalSubGroupName ? 'Select Sub Group First' : 'Select Project (Optional)'}
                     disabled={!modalSubGroupName}
-                    onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                    onChange={handleModalProjectChange}
                     searchable={true}
                   />
                 </div>
@@ -1899,7 +1904,7 @@ const BillsManagementPage = () => {
                         label: `${v.name}${v.contact ? ' - ' + v.contact : ''}${v.source === 'po_vendor' ? ' (From PO)' : ''}`
                       }))}
                       placeholder="Select Vendor"
-                      onChange={v => handleModalVendorChange({ target: { value: v || '' } })}
+                      onChange={handleModalVendorChange}
                     />
                     {modalVendors.length === 0 && modalProjectId && (
                       <small className="bill-form-hint-error">
@@ -1920,7 +1925,7 @@ const BillsManagementPage = () => {
                         }))
                       ]}
                       placeholder="No PO Link"
-                      onChange={v => handleModalPOChange({ target: { value: v || '' } })}
+                      onChange={handleModalPOChange}
                     />
                     {formData.vendorId && modalPurchaseOrders.length === 0 && (
                       <small className="bill-form-hint">No POs found for selected vendor</small>

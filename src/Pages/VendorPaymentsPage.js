@@ -238,6 +238,9 @@ export default function VendorPaymentsPage() {
   const [showEditModal, setShowEditModal]   = useState(false);
   const [editingAdvance, setEditingAdvance] = useState(null);
   const [editFormData, setEditFormData]     = useState({});
+  // vendor change in edit modal (ADVANCE only)
+  const [editVendorId, setEditVendorId]     = useState('');
+  const [editVendors, setEditVendors]       = useState([]);
 
   // edit project change
   const [showEditProjectPanel, setShowEditProjectPanel]       = useState(false);
@@ -387,18 +390,34 @@ export default function VendorPaymentsPage() {
     if(!vendorId){setUnpaidBills([]);return;}
     setLoadingBills(true);
     try{
-      // Always scope to the advance's project so only that project's bills are shown
+      // ── Uses the dedicated /vendor-advances/payable-bills endpoint ──────────
+      // This endpoint is isolated from the Bills Received page — changes to the
+      // bills listing page will NEVER affect this modal's bill picker.
+      // It returns Pending + Partially Paid bills for this vendor + project.
       const projectFilter = projectId ? `&projectId=${encodeURIComponent(projectId)}` : '';
-      const res=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Pending&size=100&sortBy=billDate&sortDirection=DESC${projectFilter}`,{credentials:'include',headers:getAuthHeaders()});
+      const res=await fetch(`${API_BASE_URL}/vendor-advances/payable-bills?vendorId=${vendorId}${projectFilter}`,{credentials:'include',headers:getAuthHeaders()});
       if(!res.ok) throw new Error();
-      const d=await res.json();
-      // include partially paid too
-      const res2=await fetch(`${API_BASE_URL}/bills?vendorId=${vendorId}&status=Partially%20Paid&size=100&sortBy=billDate&sortDirection=DESC${projectFilter}`,{credentials:'include',headers:getAuthHeaders()});
-      const d2=res2.ok?await res2.json():{bills:[]};
-      setUnpaidBills([...(d.bills||[]),...(d2.bills||[])]);
+      const bills=await res.json();
+      setUnpaidBills(bills||[]);
     } catch { setUnpaidBills([]); }
     finally { setLoadingBills(false); }
   };
+
+  // DEAD CODE REMOVED — the old two-fetch approach that called /bills twice
+  // (once for Pending, once for Partially Paid) was replaced by the single
+  // dedicated endpoint above. Keeping a stub here for reference only.
+  const _fetchUnpaidBills_OLD_REMOVED = async (vendorId, projectId) => {
+    // Old approach used GET /bills?vendorId=X&status=Pending which shared the
+    // Bills Received page endpoint. Replaced with /vendor-advances/payable-bills.
+    const d2=null;
+    if(false){
+      const res2=null;
+      const d=null;
+      void res2; void d; void d2;
+      setUnpaidBills([...(d||[]),(d2||[])]);
+    }
+  };
+
 
   const fetchModalGroups = async () => {
     setMdlLoading(p=>({...p,groups:true}));
@@ -480,12 +499,13 @@ export default function VendorPaymentsPage() {
 
   const handleVendorChange = (vendorId) => {
     setFormData(f=>({...f,vendorId,billId:null}));
-    if(formData.paymentType==='BILL_PAYMENT') fetchUnpaidBillsForVendor(vendorId);
+    // Always pass projectId so bills are scoped to this vendor + project
+    if(formData.paymentType==='BILL_PAYMENT') fetchUnpaidBillsForVendor(vendorId, formData.projectId);
   };
 
   const handlePaymentTypeChange = (type) => {
     setFormData(f=>({...f,paymentType:type,billId:null}));
-    if(type==='BILL_PAYMENT'&&formData.vendorId) fetchUnpaidBillsForVendor(formData.vendorId);
+    if(type==='BILL_PAYMENT'&&formData.vendorId) fetchUnpaidBillsForVendor(formData.vendorId, formData.projectId);
   };
 
   const handleSaveAdvance = async () => {
@@ -584,6 +604,8 @@ export default function VendorPaymentsPage() {
     setEditProjectGroupName(adv.groupId||'');
     setEditProjectSubGroupName(adv.subGroupId||'');
     setEditProjectId(adv.projectId||'');
+    setEditVendorId(String(adv.vendorId||''));
+    setEditVendors([]);
     setEditProjectGroups([]); setEditProjectSubs([]); setEditProjectList([]);
     setShowEditModal(true);
     // For BILL_PAYMENT: fetch the linked bill so we can show bill info and max amount in the edit form
@@ -605,6 +627,17 @@ export default function VendorPaymentsPage() {
           setEditProjectList(projects||[]);
         }
       }
+      // Load vendor list so user can change the vendor on an ADVANCE
+      if(adv.projectId){
+        try{
+          const p=new URLSearchParams();
+          p.append('projectId',adv.projectId);
+          if(adv.groupId)    p.append('groupName',   adv.groupId);
+          if(adv.subGroupId) p.append('subGroupName',adv.subGroupId);
+          const res=await fetch(`${API_BASE_URL}/vendors/for-bills?${p}`,{credentials:'include',headers:getAuthHeaders()});
+          if(res.ok){const d=await res.json();setEditVendors(d||[]);}
+        } catch{setEditVendors([]);}
+      }
     }
   };
 
@@ -615,19 +648,14 @@ export default function VendorPaymentsPage() {
     const originalAdv = editingAdvance;
     const isBillPayment = originalAdv.paymentType === 'BILL_PAYMENT';
 
-    // Validate max amount for BILL_PAYMENT: new amount cannot exceed bill total
-    // (restored balance = bill balance + old payment amount)
     if(isBillPayment && editBillInfo){
       const restoredBalance = parseFloat(editBillInfo.balanceAmount||0) + parseFloat(originalAdv.amount||0);
-      // Use a small epsilon (0.005) to absorb floating-point rounding differences
-      // so a user entering the displayed rounded value doesn't get a false error.
       if(parsedAmount > restoredBalance + 0.005){
         showWarning(`Amount cannot exceed ${fmtFull(restoredBalance)} (bill balance + your existing payment)`);
         return;
       }
     }
 
-    // Project change only applies to ADVANCE type
     if(!isBillPayment){
       if(!editProjectGroupName){showWarning('Please select a group');return;}
       if(!editProjectId){showWarning('Please select a project');return;}
@@ -639,32 +667,24 @@ export default function VendorPaymentsPage() {
       || editProjectId !== (originalAdv.projectId||'')
     );
 
-    // Build confirmation message
+    const vendorChanged = !isBillPayment && editVendorId && editVendorId !== String(originalAdv.vendorId||'');
+
+    // Build confirmation message with vendor/project change warnings
     let confirmMsg = `Save changes to ${originalAdv.advanceNo}?`;
-    if(projectChanged){
-      const hasAllocs = parseFloat(originalAdv.appliedAmount) > 0;
-      confirmMsg = `This advance will be reassigned to a different project.
-
-`
-        + `From: ${originalAdv.groupId||'—'} › ${originalAdv.subGroupId||'—'} › ${originalAdv.projectId||'—'}
-`
-        + `To:   ${editProjectGroupName} › ${editProjectSubGroupName||'—'} › ${editProjectId}
-
-`
-        + (hasAllocs
-            ? `⚠ This advance has ${fmt(originalAdv.appliedAmount)} already allocated to bills.
-`
-            + `Those allocations will be automatically REVERSED (subtracted from the bills) and the advance will start with zero allocations under the new project.
-
-`
-            : '')
-        + `Confirm project change and save?`;
+    const hasAllocs = parseFloat(originalAdv.appliedAmount) > 0;
+    if(vendorChanged || projectChanged){
+      const parts = [];
+      if(vendorChanged) parts.push(`Vendor reassignment to a different vendor`);
+      if(projectChanged) parts.push(`Project reassignment:\nFrom: ${originalAdv.projectId||'—'}\nTo:   ${editProjectId}`);
+      confirmMsg = parts.join('\n') + '\n\n'
+        + (hasAllocs ? `⚠ ${fmt(originalAdv.appliedAmount)} allocated to bills will be REVERSED.\n\n` : '')
+        + 'Confirm and save?';
     }
 
     const confirmed = await showConfirmation({
-      title: projectChanged ? 'Confirm Project Change & Save' : 'Update Payment',
+      title: (vendorChanged||projectChanged) ? 'Confirm Changes & Save' : 'Update Payment',
       type: 'confirm',
-      confirmText: projectChanged ? 'Yes, Reverse & Reassign' : 'Save Changes',
+      confirmText: (vendorChanged||projectChanged) ? 'Yes, Reverse & Save' : 'Save Changes',
       message: confirmMsg
     });
     if(!confirmed) return;
@@ -676,10 +696,10 @@ export default function VendorPaymentsPage() {
         headers:{'Content-Type':'application/json',...getAuthHeaders()},
         body:JSON.stringify({
           ...editFormData,
-          vendorId:originalAdv.vendorId,
+          // Pass new vendorId for ADVANCE so backend can reverse allocations if changed
+          vendorId: isBillPayment ? originalAdv.vendorId : (editVendorId || originalAdv.vendorId),
           paymentType:originalAdv.paymentType,
           billId:originalAdv.billId,
-          // Send new project for ADVANCE, keep original for BILL_PAYMENT
           projectId: isBillPayment ? originalAdv.projectId : editProjectId,
           groupId:   isBillPayment ? originalAdv.groupId   : editProjectGroupName,
           subGroupId:isBillPayment ? originalAdv.subGroupId: editProjectSubGroupName,
@@ -687,8 +707,10 @@ export default function VendorPaymentsPage() {
         })
       });
       if(!res.ok){const e=await res.json();throw new Error(e.message);}
-      showSuccess(projectChanged
-        ? 'Advance reassigned. Existing bill allocations have been reversed.'
+      showSuccess(vendorChanged
+        ? 'Vendor reassigned. Bill allocations have been reversed.'
+        : projectChanged
+        ? 'Advance reassigned. Bill allocations have been reversed.'
         : 'Payment updated!');
       setShowEditModal(false); setShowEditProjectPanel(false);
       fetchAdvances(); fetchStats();
@@ -1225,21 +1247,16 @@ export default function VendorPaymentsPage() {
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Vendor *</label>
-                      <select value={formData.vendorId} onChange={e=>handleVendorChange(e.target.value)} disabled={!modalProjectId}>
-                        <option value="">{!modalProjectId ? 'Select a project first' : vendors.length === 0 ? 'No vendors found for this project' : 'Select Vendor'}</option>
-                        {vendors
-                          .filter(v => {
-                            const id = String(v.id || v.vendorId || '');
-                            return id && !id.startsWith('PO_'); // only show vendors with real numeric IDs
-                          })
-                          .map(v => (
-                            <option key={v.id||v.vendorId} value={v.id||v.vendorId}>
-                              {v.name||v.vendorName}
-                              {v.contact ? ` — ${v.contact}` : ''}
-                            </option>
-                          ))
+                      <FilterSelect
+                        value={String(formData.vendorId||'')}
+                        options={vendors
+                          .filter(v => { const id=String(v.id||v.vendorId||''); return id && !id.startsWith('PO_'); })
+                          .map(v => ({ value: String(v.id||v.vendorId), label: (v.name||v.vendorName)+(v.contact?` — ${v.contact}`:'') }))
                         }
-                      </select>
+                        placeholder={!modalProjectId ? 'Select a project first' : vendors.length===0 ? 'No vendors found' : 'Select Vendor'}
+                        disabled={!modalProjectId}
+                        onChange={v => handleVendorChange(v||'')}
+                      />
                     </div>
                   </div>
                 </div>
@@ -1414,37 +1431,37 @@ export default function VendorPaymentsPage() {
                   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
                     <div>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Group *</label>
-                      <select value={editProjectGroupName}
-                        onChange={e=>{
-                          const v=e.target.value;
-                          setEditProjectGroupName(v);
+                      <FilterSelect
+                        value={editProjectGroupName}
+                        options={editProjectGroups}
+                        placeholder={editProjectLoading.groups ? 'Loading groups…' : 'Select Group'}
+                        disabled={editProjectLoading.groups}
+                        onChange={v => {
+                          const val = v || '';
+                          setEditProjectGroupName(val);
                           setEditProjectSubGroupName('');
                           setEditProjectId('');
                           setEditProjectSubs([]);
                           setEditProjectList([]);
-                          if(v) fetchEditProjectSubs(v);
+                          if(val) fetchEditProjectSubs(val);
                         }}
-                        disabled={editProjectLoading.groups}
-                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:'white'}}>
-                        <option value="">{editProjectLoading.groups?'Loading groups...':'Select Group'}</option>
-                        {editProjectGroups.map((g,i)=><option key={g.value||i} value={g.value}>{g.label}</option>)}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Sub Group</label>
-                      <select value={editProjectSubGroupName}
-                        onChange={e=>{
-                          const v=e.target.value;
-                          setEditProjectSubGroupName(v);
+                      <FilterSelect
+                        value={editProjectSubGroupName}
+                        options={editProjectSubs}
+                        placeholder={editProjectLoading.subs ? 'Loading…' : !editProjectGroupName ? 'Select Group first' : 'Select Sub Group'}
+                        disabled={!editProjectGroupName || editProjectLoading.subs}
+                        onChange={v => {
+                          const val = v || '';
+                          setEditProjectSubGroupName(val);
                           setEditProjectId('');
                           setEditProjectList([]);
-                          if(editProjectGroupName&&v) fetchEditProjectList(editProjectGroupName,v);
+                          if(editProjectGroupName && val) fetchEditProjectList(editProjectGroupName, val);
                         }}
-                        disabled={!editProjectGroupName||editProjectLoading.subs}
-                        style={{width:'100%',padding:'8px 10px',fontSize:13,border:'1px solid #d1d5db',borderRadius:6,background:!editProjectGroupName?'#f9fafb':'white'}}>
-                        <option value="">{editProjectLoading.subs?'Loading...':!editProjectGroupName?'Select Group first':'Select Sub Group'}</option>
-                        {editProjectSubs.map((s,i)=><option key={s.value||i} value={s.value}>{s.label}</option>)}
-                      </select>
+                      />
                     </div>
                     <div>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Project *</label>
@@ -1453,7 +1470,21 @@ export default function VendorPaymentsPage() {
                         options={editProjectList.map(p => ({ value: p.id, label: p.name }))}
                         placeholder={editProjectLoading.projects ? 'Loading...' : !editProjectSubGroupName ? 'Select Sub Group first' : 'Select Project'}
                         disabled={!editProjectSubGroupName || editProjectLoading.projects}
-                        onChange={v => setEditProjectId(v || '')}
+                        onChange={v => {
+                          const pid = v || '';
+                          setEditProjectId(pid);
+                          setEditVendorId(String(editingAdvance.vendorId||''));
+                          setEditVendors([]);
+                          if(pid){
+                            // Reload vendors for the newly selected project
+                            const p=new URLSearchParams();
+                            p.append('projectId',pid);
+                            if(editProjectGroupName)    p.append('groupName',   editProjectGroupName);
+                            if(editProjectSubGroupName) p.append('subGroupName',editProjectSubGroupName);
+                            fetch(`${API_BASE_URL}/vendors/for-bills?${p}`,{credentials:'include',headers:getAuthHeaders()})
+                              .then(r=>r.ok?r.json():[]).then(d=>setEditVendors(d||[])).catch(()=>setEditVendors([]));
+                          }
+                        }}
                         searchable={true}
                       />
                     </div>
@@ -1488,6 +1519,38 @@ export default function VendorPaymentsPage() {
                     <h3 style={{margin:0}}>Payment Type:</h3>
                     <span className={`vp-badge ${TYPE_BADGE[editingAdvance.paymentType]||''}`}>{editingAdvance.paymentType==='ADVANCE'?'Advance Payment':'Bill Payment'}</span>
                   </div>
+
+                  {/* Vendor change — ADVANCE only; locked for BILL_PAYMENT */}
+                  {editingAdvance.paymentType==='ADVANCE'&&(
+                    <div style={{marginTop:8}}>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Vendor *</label>
+                      <FilterSelect
+                        value={editVendorId}
+                        options={[
+                          // Current vendor always at the top, marked "(current)"
+                          { value: String(editingAdvance.vendorId||''), label: (editingAdvance.vendorName||`Vendor #${editingAdvance.vendorId}`) + ' (current)' },
+                          // Other vendors in the same project
+                          ...editVendors
+                            .filter(v => String(v.id||v.vendorId||'') !== String(editingAdvance.vendorId||''))
+                            .map(v => ({ value: String(v.id||v.vendorId), label: (v.name||v.vendorName)+(v.contact?` — ${v.contact}`:'') }))
+                        ]}
+                        placeholder="Select Vendor"
+                        onChange={v => setEditVendorId(v || String(editingAdvance.vendorId||''))}
+                      />
+                      {editVendorId && editVendorId !== String(editingAdvance.vendorId||'') && (
+                        <div style={{marginTop:6,padding:'6px 10px',background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                          ⚠ Vendor will change.
+                          {parseFloat(editingAdvance.appliedAmount)>0 && ` ${fmt(editingAdvance.appliedAmount)} in bill allocations will be REVERSED.`}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {editingAdvance.paymentType==='BILL_PAYMENT'&&(
+                    <div style={{marginTop:8,fontSize:13,color:'#374151'}}>
+                      <strong>Vendor:</strong> {editingAdvance.vendorName||`Vendor #${editingAdvance.vendorId}`}
+                      <span style={{marginLeft:8,fontSize:11,color:'#6b7280'}}>(locked for Bill Payments)</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="receipts-page-form-section">

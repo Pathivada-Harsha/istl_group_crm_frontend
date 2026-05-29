@@ -672,22 +672,21 @@ const PurchaseOrders = () => {
   };
 
   // Fetch all order books for a project (for the orderbook dropdown)
-  const fetchOrderBooks = async (pId) => {
+  // Accepts fresh groupN/subGroupN params directly to avoid React async-state lag.
+  const fetchOrderBooks = async (pId, groupN, subGroupN) => {
     if (!pId) { setOrderBooks([]); return; }
+    // Use passed-in values if available, otherwise fall back to current state
+    const g  = groupN    !== undefined ? groupN    : modalGroupName;
+    const sg = subGroupN !== undefined ? subGroupN : modalSubGroupName;
     try {
-      // Pass groupName + subGroupName to filter server-side
-      // projectId is not yet in OrderBookWrapper, so we filter by group/subgroup
-      // which already scopes to the right project context
-      const gName = encodeURIComponent(modalGroupName || '');
-      const sgName = encodeURIComponent(modalSubGroupName || '');
+      const gName  = encodeURIComponent(g  || '');
+      const sgName = encodeURIComponent(sg || '');
       const r = await fetch(
         `${API_BASE_URL}/order-book/getAll?page=0&size=200&groupName=${gName}&subGroupName=${sgName}`,
         { credentials: 'include', headers: getAuthHeaders() }
       );
       if (!r.ok) throw new Error();
       const data = await r.json();
-      // API returns { success, data: [...] }
-      // Filter by projectId if present in response (requires backend OrderBookWrapper.projectId)
       const all = (data.data || data.content || []).filter(ob => !ob.deletedAt && (!ob.projectId || ob.projectId === pId));
       setOrderBooks(all);
     } catch (e) { console.error('fetchOrderBooks error', e); setOrderBooks([]); }
@@ -709,11 +708,9 @@ const PurchaseOrders = () => {
   };
 
   // ─── Modal change handlers ────────────────────────────────────────────────
-  const handleModalGroupChange = (e) => {
-    const v = e.target.value;
+  const handleModalGroupChange = (val) => {
+    const v = val || '';
     if (isEditMode && createPOFormData.items.length > 0) {
-      // In edit mode: immediately update the UI dropdowns so cascading works,
-      // but capture the pending change and show a warning before applying to form data.
       setModalGroupName(v);
       setModalSubGroupName('');
       setModalProjectId('');
@@ -733,8 +730,8 @@ const PurchaseOrders = () => {
     if (v) { fetchModalSubGroups(v); fetchFilteredQuotations(v, null, null); }
     fetchVendors();
   };
-  const handleModalSubGroupChange = (e) => {
-    const v = e.target.value;
+  const handleModalSubGroupChange = (val) => {
+    const v = val || '';
     if (isEditMode && createPOFormData.items.length > 0) {
       setModalSubGroupName(v);
       setModalProjectId('');
@@ -751,8 +748,8 @@ const PurchaseOrders = () => {
     setCreatePOFormData(prev => ({ ...prev, subGroupName: v, projectId: '', items: [] }));
     if (modalGroupName && v) { fetchModalProjects(modalGroupName, v); fetchFilteredQuotations(modalGroupName, v, null); }
   };
-  const handleModalProjectChange = async (e) => {
-    const v = e.target.value;
+  const handleModalProjectChange = async (val) => {
+    const v = val || '';
     if (isEditMode && createPOFormData.items.length > 0) {
       setModalProjectId(v);
       setQuotations([]);
@@ -762,16 +759,18 @@ const PurchaseOrders = () => {
       setPendingProjectChange(prev => ({ ...(prev || { groupName: modalGroupName, subGroupName: modalSubGroupName }), projectId: v }));
       setShowProjectChangeWarning(true);
       if (v) {
+        // Pass fresh values directly — state updates are async
         await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
-        await fetchOrderBooks(v);
+        await fetchOrderBooks(v, modalGroupName, modalSubGroupName);
       }
       return;
     }
     setModalProjectId(v); setQuotations([]); setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
     setCreatePOFormData(prev => ({ ...prev, projectId: v, quotationId: '', quotation: null, items: [] }));
     if (v) {
+      // Pass fresh values directly — state updates are async
       await fetchFilteredQuotations(modalGroupName, modalSubGroupName, v);
-      await fetchOrderBooks(v);
+      await fetchOrderBooks(v, modalGroupName, modalSubGroupName);
       fetchVendors(modalGroupName, modalSubGroupName, v);
     }
   };
@@ -1071,6 +1070,12 @@ const PurchaseOrders = () => {
       await fetchModalGroups();
       if (poData.groupName) await fetchModalSubGroups(poData.groupName);
       if (poData.groupName && poData.subGroupName) await fetchModalProjects(poData.groupName, poData.subGroupName);
+      // Pre-fetch quotations and order books for the existing project so Step 2 is
+      // populated immediately when the edit modal opens — no need to re-select.
+      if (poData.projectId) {
+        await fetchFilteredQuotations(poData.groupName || '', poData.subGroupName || '', poData.projectId);
+        await fetchOrderBooks(poData.projectId, poData.groupName || '', poData.subGroupName || '');
+      }
       await fetchVendors();
       const items = (poData.items || []).map((item, i) => {
         const qty      = parseFloat(item.quantity)   || 0;
@@ -1154,7 +1159,7 @@ const PurchaseOrders = () => {
     finally { setLoading(false); }
   };
 
-  const handleOpenCreatePO = () => {
+  const handleOpenCreatePO = async () => {
     setIsEditMode(false); setEditingPOId(null);
     // Pre-seed project assignment from page-level header filters
     const seedGroup    = groupName    || '';
@@ -1163,21 +1168,27 @@ const PurchaseOrders = () => {
     setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
     setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
-    setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]); setOrderBookItems([]);
+    setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]);
     setCustomVendorCategory(''); setCustomVendorType('');
     setItemsStepUnlocked(false);
-    fetchModalGroups(); fetchVendors(); setShowCreatePOModal(true);
-    // Load cascading dropdowns for seeded values
+    // Fetch groups + vendors (always needed)
+    await fetchModalGroups();
+    fetchVendors();
+    // Pre-fetch cascaded data using fresh seeded values directly — no async state lag.
+    // Open the modal AFTER data is ready so dropdowns are populated immediately.
     if (seedGroup) {
-      fetchModalSubGroups(seedGroup);
+      await fetchModalSubGroups(seedGroup);
       if (seedSubGroup) {
-        fetchModalProjects(seedGroup, seedSubGroup);
+        await fetchModalProjects(seedGroup, seedSubGroup);
         if (seedProject) {
-          fetchFilteredQuotations(seedGroup, seedSubGroup, seedProject);
+          // Pass fresh values directly so fetches don't read stale state
+          await fetchFilteredQuotations(seedGroup, seedSubGroup, seedProject);
+          await fetchOrderBooks(seedProject, seedGroup, seedSubGroup);
           fetchVendors(seedGroup, seedSubGroup, seedProject);
         }
       }
     }
+    setShowCreatePOModal(true);
   };
 
   const handleCloseCreatePOModal = () => {
@@ -2169,7 +2180,7 @@ const PurchaseOrders = () => {
                       options={modalGroups}
                       placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}
                       disabled={modalDropdownLoading.groups}
-                      onChange={(v) => handleModalGroupChange({ target: { value: v } })}
+                      onChange={handleModalGroupChange}
                     />
                   </div>
                   <div className="po-form-group">
@@ -2179,7 +2190,7 @@ const PurchaseOrders = () => {
                       options={modalSubGroups}
                       placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub Group'}
                       disabled={!modalGroupName || modalDropdownLoading.subGroups}
-                      onChange={(v) => handleModalSubGroupChange({ target: { value: v } })}
+                      onChange={handleModalSubGroupChange}
                     />
                   </div>
                   <div className="po-form-group">
@@ -2189,7 +2200,7 @@ const PurchaseOrders = () => {
                       options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
                       placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}
                       disabled={!modalSubGroupName || modalDropdownLoading.projects}
-                      onChange={(v) => handleModalProjectChange({ target: { value: v } })}
+                      onChange={handleModalProjectChange}
                       searchable={true}
                     />
                   </div>

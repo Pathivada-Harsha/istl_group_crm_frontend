@@ -26,13 +26,8 @@
 }
 @keyframes iac-spin { to { transform: translateY(-50%) rotate(360deg); } }
 
-/* Dropdown list */
+/* Dropdown list — position is set inline via fixed coords */
 .iac-dropdown {
-  position: absolute;
-  top: calc(100% + 3px);
-  left: 0;
-  right: 0;
-  z-index: 999;
   background: #fff;
   border: 1px solid #cbd5e1;
   border-radius: 8px;

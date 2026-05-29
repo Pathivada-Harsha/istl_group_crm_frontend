@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import './ItemNameAutocomplete.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -20,8 +21,32 @@ function ItemNameAutocomplete({ value, onChange, onSelect, user, placeholder, re
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [dropdownStyle, setDropdownStyle] = useState({});
   const debounceRef = useRef(null);
   const wrapperRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // ── Compute dropdown position using fixed positioning ─────
+  const updateDropdownPosition = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+    const dropdownHeight = Math.min(260, suggestions.length * 52 + 8);
+
+    // Show above if not enough space below but enough above
+    const showAbove = spaceBelow < dropdownHeight + 8 && spaceAbove > dropdownHeight + 8;
+
+    setDropdownStyle({
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 99999,
+      ...(showAbove
+        ? { bottom: window.innerHeight - rect.top + 3 }
+        : { top: rect.bottom + 3 }),
+    });
+  }, [suggestions.length]);
 
   // ── Close dropdown when clicking outside ──────────────────
   useEffect(() => {
@@ -34,6 +59,18 @@ function ItemNameAutocomplete({ value, onChange, onSelect, user, placeholder, re
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // ── Reposition on scroll / resize while dropdown is open ──
+  useEffect(() => {
+    if (!showDropdown) return;
+    updateDropdownPosition();
+    window.addEventListener('scroll', updateDropdownPosition, true);
+    window.addEventListener('resize', updateDropdownPosition);
+    return () => {
+      window.removeEventListener('scroll', updateDropdownPosition, true);
+      window.removeEventListener('resize', updateDropdownPosition);
+    };
+  }, [showDropdown, updateDropdownPosition]);
 
   // ── Debounced search ──────────────────────────────────────
   const search = useCallback(async (q) => {
@@ -105,25 +142,10 @@ function ItemNameAutocomplete({ value, onChange, onSelect, user, placeholder, re
     setActiveIndex(-1);
   };
 
-  return (
-    <div className="iac-wrapper" ref={wrapperRef}>
-      <input
-        type="text"
-        className={`orderbook-table-input iac-input ${className || ''}`}
-        value={value}
-        onChange={handleInputChange}
-        onKeyDown={handleKeyDown}
-        onFocus={() => value?.length >= 2 && suggestions.length > 0 && setShowDropdown(true)}
-        placeholder={placeholder || 'Item name'}
-        required={required}
-        autoComplete="off"
-      />
-
-      {/* spinner inside input */}
-      {loading && <span className="iac-spinner" />}
-
-      {showDropdown && suggestions.length > 0 && (
-        <ul className="iac-dropdown" role="listbox">
+  // ── Dropdown rendered via portal to escape overflow ───────
+  const dropdown = showDropdown && suggestions.length > 0
+    ? ReactDOM.createPortal(
+        <ul className="iac-dropdown" role="listbox" style={dropdownStyle}>
           {suggestions.map((item, idx) => (
             <li
               key={item.id}
@@ -144,8 +166,30 @@ function ItemNameAutocomplete({ value, onChange, onSelect, user, placeholder, re
               </div>
             </li>
           ))}
-        </ul>
-      )}
+        </ul>,
+        document.body
+      )
+    : null;
+
+  return (
+    <div className="iac-wrapper" ref={wrapperRef}>
+      <input
+        ref={inputRef}
+        type="text"
+        className={`orderbook-table-input iac-input ${className || ''}`}
+        value={value}
+        onChange={handleInputChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => value?.length >= 2 && suggestions.length > 0 && setShowDropdown(true)}
+        placeholder={placeholder || 'Item name'}
+        required={required}
+        autoComplete="off"
+      />
+
+      {/* spinner inside input */}
+      {loading && <span className="iac-spinner" />}
+
+      {dropdown}
     </div>
   );
 }
