@@ -805,23 +805,23 @@ const QuotationsReceived = () => {
   const fetchModalProjects = async (gn, sg) => { if (!gn || !sg) { setModalProjects([]); return; } setModalDropdownLoading(p => ({ ...p, projects: true })); try { setModalProjects(await filterApi.getProjects(gn, sg) || []); } catch { } finally { setModalDropdownLoading(p => ({ ...p, projects: false })); } };
 
   // ── Modal dropdown change handlers ───────────────────────────────────────
-  const handleModalGroupChange = (e) => {
-    const g = e.target.value;
+  const handleModalGroupChange = (val) => {
+    const g = val || '';
     setModalGroupName(g); setModalSubGroupName(''); setModalProjectId('');
     setModalSubGroups([]); setModalProjects([]); setOrderBookItems([]);
     if (quotationFormData) setQuotationFormData({ ...quotationFormData, groupName: g, subGroupName: '', projectId: '', items: quotationFormData.items });
     if (g) { fetchModalSubGroups(g); fetchVendors(g, null); } else setVendors([]);
   };
 
-  const handleModalSubGroupChange = (e) => {
-    const sg = e.target.value;
+  const handleModalSubGroupChange = (val) => {
+    const sg = val || '';
     setModalSubGroupName(sg); setModalProjectId(''); setModalProjects([]); setOrderBookItems([]);
     if (quotationFormData) setQuotationFormData({ ...quotationFormData, subGroupName: sg, projectId: '', items: quotationFormData.items });
     if (modalGroupName && sg) { fetchModalProjects(modalGroupName, sg); fetchVendors(modalGroupName, sg); }
   };
 
-  const handleModalProjectChange = (e) => {
-    const pid = e.target.value;
+  const handleModalProjectChange = (val) => {
+    const pid = val || '';
     setModalProjectId(pid);
     if (quotationFormData) setQuotationFormData({ ...quotationFormData, projectId: pid });
     if (pid && !isEditMode) fetchOrderBookItems(pid);
@@ -965,9 +965,19 @@ const QuotationsReceived = () => {
       setVendorSearch(''); setVendorDropdownOpen(false);
       setModalGroupName(data.groupName || ''); setModalSubGroupName(data.subGroupName || ''); setModalProjectId(data.projectId || '');
       setSelectedFile(null); setFilePreview(null);
-      fetchModalGroups();
+      // Fetch groups + all vendors (always needed)
+      await fetchModalGroups();
       fetchAllVendors();
-      if (data.groupName) { fetchModalSubGroups(data.groupName); fetchVendors(data.groupName, null); if (data.subGroupName) { fetchModalProjects(data.groupName, data.subGroupName); fetchVendors(data.groupName, data.subGroupName); } }
+      // Pre-fetch cascaded data using fresh local values from data — no async state lag.
+      // Open modal AFTER data is ready so dropdowns are populated immediately.
+      if (data.groupName) {
+        await fetchModalSubGroups(data.groupName);
+        fetchVendors(data.groupName, null);
+        if (data.subGroupName) {
+          await fetchModalProjects(data.groupName, data.subGroupName);
+          fetchVendors(data.groupName, data.subGroupName);
+        }
+      }
       setShowUploadQuotationModal(true);
     } catch { showError('Failed to load quotation details'); }
     finally { setLoading(false); }
@@ -1004,18 +1014,34 @@ const QuotationsReceived = () => {
     finally { setLoading(false); }
   };
 
-  const handleUploadQuotation = () => {
+  const handleUploadQuotation = async () => {
     setIsEditMode(false);
-    setQuotationFormData({ rfqId: '', validTill: '', groupName: groupName || '', subGroupName: subGroupName || '', projectId: projectId || '', category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
+    // Seed from page-level header filters
+    const seedGroup    = groupName    || '';
+    const seedSubGroup = subGroupName || '';
+    const seedProject  = projectId   || '';
+    setQuotationFormData({ rfqId: '', validTill: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
     setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
     setVendorSearch(''); setVendorDropdownOpen(false);
     setCustomVendorCategory(''); setCustomVendorType('');
-    setModalGroupName(groupName || ''); setModalSubGroupName(subGroupName || ''); setModalProjectId(projectId || '');
+    setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
     setSelectedFile(null); setFilePreview(null);
-    fetchModalGroups();
+    // Fetch groups and all vendors (always needed)
+    await fetchModalGroups();
     fetchAllVendors();
-    if (groupName) { fetchModalSubGroups(groupName); fetchVendors(groupName, null); if (subGroupName) { fetchModalProjects(groupName, subGroupName); fetchVendors(groupName, subGroupName); } }
-    if (projectId) fetchOrderBookItems(projectId);
+    // Pre-fetch cascaded data with fresh seeded values — no async state lag.
+    // Open the modal AFTER all data is ready so dropdowns populate immediately.
+    if (seedGroup) {
+      await fetchModalSubGroups(seedGroup);
+      fetchVendors(seedGroup, null);
+      if (seedSubGroup) {
+        await fetchModalProjects(seedGroup, seedSubGroup);
+        fetchVendors(seedGroup, seedSubGroup);
+        if (seedProject) {
+          fetchOrderBookItems(seedProject);
+        }
+      }
+    }
     setShowUploadQuotationModal(true);
   };
 
@@ -1571,17 +1597,23 @@ const QuotationsReceived = () => {
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
                     <label>Group *</label>
-                    <select value={modalGroupName} onChange={handleModalGroupChange} disabled={modalDropdownLoading.groups}>
-                      <option value="">{modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}</option>
-                      {modalGroups.map((g, i) => <option key={g.value || i} value={g.value}>{g.label}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalGroupName}
+                      options={modalGroups}
+                      placeholder={modalDropdownLoading.groups ? 'Loading…' : 'Select Group'}
+                      disabled={modalDropdownLoading.groups}
+                      onChange={handleModalGroupChange}
+                    />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Sub Group</label>
-                    <select value={modalSubGroupName} onChange={handleModalSubGroupChange} disabled={!modalGroupName || modalDropdownLoading.subGroups}>
-                      <option value="">{modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub Group'}</option>
-                      {modalSubGroups.map((sg, i) => <option key={sg.value || i} value={sg.value}>{sg.label}</option>)}
-                    </select>
+                    <FilterSelect
+                      value={modalSubGroupName}
+                      options={modalSubGroups}
+                      placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Sub Group'}
+                      disabled={!modalGroupName || modalDropdownLoading.subGroups}
+                      onChange={handleModalSubGroupChange}
+                    />
                   </div>
                   <div className="procurement-quotation-received-form-group">
                     <label>Project (Optional)</label>
@@ -1590,7 +1622,7 @@ const QuotationsReceived = () => {
                       options={modalProjects.map(p => ({ value: p.id, label: p.name }))}
                       placeholder={!modalSubGroupName ? 'Select Sub Group First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project'}
                       disabled={!modalSubGroupName || modalDropdownLoading.projects}
-                      onChange={v => handleModalProjectChange({ target: { value: v || '' } })}
+                      onChange={handleModalProjectChange}
                       searchable={true}
                     />
                   </div>
