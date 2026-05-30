@@ -29,7 +29,7 @@ const TEMPLATES = [
   },
 ];
 
-export default function LeadsExcelPanel({ onImportDone }) {
+export default function LeadsExcelPanel({ onImportDone, currentUser }) {
   const fileRef          = useRef(null);
   const [loading,        setLoading]        = useState(false);
   const [progress,       setProgress]       = useState({ done: 0, total: 0 });
@@ -246,8 +246,15 @@ export default function LeadsExcelPanel({ onImportDone }) {
     setProgress({ done: 0, total: validPayloads.length });
 
     // ── 3. Single bulk-create request → backend handles assignment + email ──
+    // Inject the importer's name as leadOwner for every row that doesn't already have one
+    const importerName = currentUser?.name || '';
+    const finalPayloads = validPayloads.map(p => ({
+      ...p,
+      leadOwner: p.leadOwner || importerName || undefined,
+    }));
+
     try {
-      const res  = await api.post("/leads/bulk-create", validPayloads);
+      const res  = await api.post("/leads/bulk-create", finalPayloads);
       const data = res.data ?? res;
 
       setResult({

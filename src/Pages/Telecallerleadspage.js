@@ -15,13 +15,14 @@ const STATUS_CONFIG = {
   INTERESTED:     { label: "Interested",     color: "#059669", bg: "#ecfdf5" },
   NOT_INTERESTED: { label: "Not Interested", color: "#dc2626", bg: "#fef2f2" },
   NOT_RESPONDED:  { label: "Not Responded",  color: "#d97706", bg: "#fffbeb" },
+  KEEP_IN_VIEW:   { label: "Keep in View",   color: "#7c3aed", bg: "#f5f3ff" },
   ALL:            { label: "All",            color: "#64748b", bg: "#f1f5f9" },
 };
 
 const BOARD_COLUMNS = [
-  { key: "ALL",            label: "All Leads",      color: "#64748b", bg: "#f1f5f9", icon: "📋" },
   { key: "NEW",            label: "New",            color: "#6366f1", bg: "#eef2ff", icon: "🆕" },
   { key: "INTERESTED",     label: "Interested",     color: "#059669", bg: "#ecfdf5", icon: "✅" },
+  { key: "KEEP_IN_VIEW",   label: "Keep in View",   color: "#7c3aed", bg: "#f5f3ff", icon: "👁" },
   { key: "NOT_RESPONDED",  label: "Not Responded",  color: "#d97706", bg: "#fffbeb", icon: "⏳" },
   { key: "NOT_INTERESTED", label: "Not Interested", color: "#dc2626", bg: "#fef2f2", icon: "❌" },
 ];
@@ -267,11 +268,11 @@ export default function TelecallerLeadsPage() {
   const boardSearchRef   = useRef("");
 
   // ── Board-view state ───────────────────────────────────────────────────────
-  const [boardData,   setBoardData]   = useState({ NEW:[], INTERESTED: [], NOT_RESPONDED: [], NOT_INTERESTED: [], ALL:[] });
-  const [boardPages,  setBoardPages]  = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
-  const [boardTotals, setBoardTotals] = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  ALL:0  });
-  const [boardHasMore,setBoardHasMore]= useState({ NEW:true,INTERESTED:true,NOT_RESPONDED:true,NOT_INTERESTED:true,ALL:true});
-  const [boardLoading,setBoardLoading]= useState({ NEW:false,INTERESTED:false,NOT_RESPONDED:false,NOT_INTERESTED:false,ALL:false});
+  const [boardData,   setBoardData]   = useState({ NEW:[], INTERESTED: [], NOT_RESPONDED: [], NOT_INTERESTED: [], KEEP_IN_VIEW: [] });
+  const [boardPages,  setBoardPages]  = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  KEEP_IN_VIEW: 0  });
+  const [boardTotals, setBoardTotals] = useState({ NEW:0,  INTERESTED: 0,  NOT_RESPONDED: 0,  NOT_INTERESTED: 0,  KEEP_IN_VIEW: 0  });
+  const [boardHasMore,setBoardHasMore]= useState({ NEW:true,INTERESTED:true,NOT_RESPONDED:true,NOT_INTERESTED:true,KEEP_IN_VIEW:true});
+  const [boardLoading,setBoardLoading]= useState({ NEW:false,INTERESTED:false,NOT_RESPONDED:false,NOT_INTERESTED:false,KEEP_IN_VIEW:false});
   const BOARD_PAGE_SIZE = 15;
   const boardObservers = useRef({});
   const boardSentinels  = useRef({});
@@ -534,6 +535,11 @@ export default function TelecallerLeadsPage() {
       setSelected(lead); setNewStatus("NOT_INTERESTED");
       setReason(""); setDiscussion(""); setDragFromCol(fromCol); setStatusModal(true); return;
     }
+    if (toCol === "KEEP_IN_VIEW") {
+      setSelected(lead); setNewStatus("KEEP_IN_VIEW");
+      setReason(""); setFollowupDate(""); setFollowupTime("09:00");
+      setDragFromCol(fromCol); setStatusModal(true); return;
+    }
     if (toCol === "INTERESTED") {
       setSelected(lead); setNewStatus("INTERESTED");
       setReason(""); setDiscussion(lead.tcDiscussionNote||"");
@@ -629,6 +635,7 @@ export default function TelecallerLeadsPage() {
       showToast("This lead is Closed Won — status cannot be changed.", "info"); return;
     }
     setSelected(lead); setNewStatus(""); setReason(""); setDiscussion("");
+    setFollowupDate(""); setFollowupTime("09:00"); setFollowupNote("");
     setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
     setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
     setIntPropertyType(lead.tcPropertyType||"");
@@ -651,11 +658,24 @@ export default function TelecallerLeadsPage() {
     if (newStatus==="NOT_INTERESTED" && !reason.trim()) { showToast("Reason required","error"); return; }
     if (newStatus==="INTERESTED" && !discussion.trim()) { showToast("Discussion required","error"); return; }
     if (newStatus==="INTERESTED" && !intPropertyType)   { showToast("Property type required","error"); return; }
+    if (newStatus==="KEEP_IN_VIEW" && !reason.trim())   { showToast("Conversation note required","error"); return; }
     setSaving(true);
     try {
-      if (newStatus==="NOT_INTERESTED"||newStatus==="NOT_RESPONDED") {
+      if (newStatus==="KEEP_IN_VIEW") {
+        if (!followupDate || !followupTime) { showToast("Call back date & time required","error"); return; }
+        // Save status + create followup in one go — no separate modal needed
+        await api.put(`/telecaller/lead/${selected.id}/status`,{telecallerStatus:"KEEP_IN_VIEW",reason:reason.trim(),needsFollowUp:true,kivReminderDate:followupDate});
+        await api.post(`/telecaller/lead/${selected.id}/followup`,{scheduledAt:`${followupDate} ${followupTime}:00`,followupType:"Call",notes:reason.trim()||null,priority:"Medium"});
+        showToast("Keep in View saved — follow-up scheduled for "+new Date(followupDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})+"!","success");
+        setStatusModal(false); setDragFromCol(null);
+        if (modalOpen) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
+        if (viewMode==="board") resetBoard(); else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);
+        fetchStats();
+        return;
+      }
+      if (newStatus==="NOT_RESPONDED") {
         setSaving(false); setStatusModal(false);
-        setPendingFULead({...selected,_pendingStatus:newStatus,_pendingReason:reason.trim()});
+        setPendingFULead({...selected,_pendingStatus:"NOT_RESPONDED",_pendingReason:""});
         setFollowupDate(""); setFollowupTime("09:00"); setFollowupModal(true);
         return;
       }
@@ -832,8 +852,9 @@ export default function TelecallerLeadsPage() {
             {value:'ALL',label:'📋 All Leads'},
             {value:'NEW',label:'🆕 New'},
             {value:'INTERESTED',label:'✅ Interested'},
-            {value:'NOT_INTERESTED',label:'❌ Not Interested'},
             {value:'NOT_RESPONDED',label:'⏳ Not Responded'},
+            {value:'KEEP_IN_VIEW',label:'👁 Keep in View'},
+            {value:'NOT_INTERESTED',label:'❌ Not Interested'},
           ]}
           placeholder="All Leads"
           onChange={v => applyFilter(v)}
@@ -883,8 +904,9 @@ export default function TelecallerLeadsPage() {
           <StatCard label="All"            value={stats.total}          color="#64748b" active={filter==="ALL"}            onClick={()=>applyFilter("ALL")} />
           <StatCard label="New"            value={stats.pending}        color="#6366f1" active={filter==="NEW"}            onClick={()=>applyFilter("NEW")} />
           <StatCard label="Interested"     value={stats.interested}     color="#059669" active={filter==="INTERESTED"}     onClick={()=>applyFilter("INTERESTED")} />
-          <StatCard label="Not Interested" value={stats.notInterested}  color="#dc2626" active={filter==="NOT_INTERESTED"} onClick={()=>applyFilter("NOT_INTERESTED")} />
           <StatCard label="Not Responded"  value={stats.notResponded}   color="#d97706" active={filter==="NOT_RESPONDED"}  onClick={()=>applyFilter("NOT_RESPONDED")} />
+          <StatCard label="Keep in View"   value={stats.keepInView||0}  color="#7c3aed" active={filter==="KEEP_IN_VIEW"}   onClick={()=>applyFilter("KEEP_IN_VIEW")} />
+          <StatCard label="Not Interested" value={stats.notInterested}  color="#dc2626" active={filter==="NOT_INTERESTED"} onClick={()=>applyFilter("NOT_INTERESTED")} />
           {stats.resurfacedToday>0 && (
             <StatCard label="⚡ Re-surfaced" value={stats.resurfacedToday} color="#7c3aed" onClick={()=>applyFilter("NOT_RESPONDED")} urgent />
           )}
@@ -969,40 +991,48 @@ export default function TelecallerLeadsPage() {
               </div>
               <div className="tc-board-col-body">
                 {(() => {
+                  const todayStr = new Date().toISOString().split("T")[0];
+                  const isKivDueToday = (lead) => lead.telecallerStatus==="KEEP_IN_VIEW" && lead.kivReminderDate && lead.kivReminderDate.slice(0,10)<=todayStr;
                   const colLeads = col.key === "NOT_RESPONDED"
-                    ? [...boardData[col.key]].sort((a,b) => {
-                        const ar = isResurfaced(a), br = isResurfaced(b);
-                        if (ar === br) return 0;
-                        return ar ? 1 : -1;
-                      })
+                    ? [...boardData[col.key]].sort((a,b) => { const ar=isResurfaced(a),br=isResurfaced(b); if(ar===br)return 0; return ar?1:-1; })
+                    : col.key === "KEEP_IN_VIEW"
+                    ? [...boardData[col.key]].sort((a,b) => { const ad=isKivDueToday(a),bd=isKivDueToday(b); if(ad===bd)return(a.kivReminderDate||"").localeCompare(b.kivReminderDate||""); return ad?-1:1; })
                     : boardData[col.key];
-                  const normalLeads    = col.key === "NOT_RESPONDED" ? colLeads.filter(l => !isResurfaced(l)) : colLeads;
+                  const kivDueLeads    = col.key === "KEEP_IN_VIEW"  ? colLeads.filter(l =>  isKivDueToday(l)) : [];
+                  const normalLeads    = col.key === "NOT_RESPONDED" ? colLeads.filter(l => !isResurfaced(l)) : col.key === "KEEP_IN_VIEW" ? colLeads.filter(l => !isKivDueToday(l)) : colLeads;
                   const resurfaceLeads = col.key === "NOT_RESPONDED" ? colLeads.filter(l =>  isResurfaced(l)) : [];
                   return (
                     <>
+                      {kivDueLeads.length > 0 && (
+                        <>
+                          <div className="tc-board-resurfaced-divider" style={{background:"#f5f3ff",borderColor:"#c4b5fd",color:"#7c3aed"}}>
+                            <span>🔔 Due Today / Overdue ({kivDueLeads.length})</span>
+                          </div>
+                          {kivDueLeads.map(lead => (
+                            <BoardCard key={lead.id} lead={lead}
+                              onDragStart={onDragStart} onDragEnd={()=>setDragging(null)}
+                              onDetail={()=>openDetail(lead)} onStatus={()=>openStatusModal(lead)} onEdit={()=>openEditModal(lead)}
+                              colKey={col.key} resurfaced={false} kivDue={true}
+                            />
+                          ))}
+                          {normalLeads.length > 0 && <div className="tc-board-resurfaced-divider"><span>Upcoming</span></div>}
+                        </>
+                      )}
                       {normalLeads.map(lead => (
                         <BoardCard key={lead.id} lead={lead}
                           onDragStart={onDragStart} onDragEnd={()=>setDragging(null)}
-                          onDetail={()=>openDetail(lead)}
-                          onStatus={()=>openStatusModal(lead)}
-                          onEdit={()=>openEditModal(lead)}
-                          colKey={col.key}
-                          resurfaced={false}
+                          onDetail={()=>openDetail(lead)} onStatus={()=>openStatusModal(lead)} onEdit={()=>openEditModal(lead)}
+                          colKey={col.key} resurfaced={false}
                         />
                       ))}
                       {resurfaceLeads.length > 0 && (
                         <>
-                          <div className="tc-board-resurfaced-divider">
-                            <span>⚡ Resurfaced ({resurfaceLeads.length})</span>
-                          </div>
+                          <div className="tc-board-resurfaced-divider"><span>⚡ Resurfaced ({resurfaceLeads.length})</span></div>
                           {resurfaceLeads.map(lead => (
                             <BoardCard key={lead.id} lead={lead}
                               onDragStart={onDragStart} onDragEnd={()=>setDragging(null)}
-                              onDetail={()=>openDetail(lead)}
-                              onStatus={()=>openStatusModal(lead)}
-                              onEdit={()=>openEditModal(lead)}
-                              colKey={col.key}
-                              resurfaced={true}
+                              onDetail={()=>openDetail(lead)} onStatus={()=>openStatusModal(lead)} onEdit={()=>openEditModal(lead)}
+                              colKey={col.key} resurfaced={true}
                             />
                           ))}
                         </>
@@ -1055,7 +1085,14 @@ export default function TelecallerLeadsPage() {
                 <DetailRow label="Category"    value={selected.subGroupName}/>
                 <DetailRow label="TC Status"   value={<StatusBadge status={selected.telecallerStatus} leadStatus={selected.leadStatus}/>}/>
                 {selected.capacity && <DetailRow label="Capacity" value={`${selected.capacity} ${selected.capacityUnit||"kW"}`}/>}
-                {selected.telecallerReason && <DetailRow label="Reason" value={selected.telecallerReason}/>}
+                {selected.telecallerReason && <DetailRow label={selected.telecallerStatus==="KEEP_IN_VIEW"?"Conversation Note":"Reason"} value={selected.telecallerReason}/>}
+                {selected.telecallerStatus==="KEEP_IN_VIEW" && selected.kivReminderDate && (
+                  <DetailRow label="Callback Date" value={
+                    <span style={{color:"#7c3aed",fontWeight:600}}>
+                      📅 {new Date(selected.kivReminderDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})}
+                    </span>
+                  }/>
+                )}
                 <DetailRow label="Assigned On"  value={formatDateTime(selected.createdAt)}/>
                 <DetailRow label="Last Updated" value={selected.telecallerStatusUpdatedAt||"—"}/>
                 {(selected.tcMonthlyBill||selected.tcExistingContractLoad||selected.tcRequiredContractLoad||selected.tcBillFileName||selected.tcQuotedPrice||selected.tcPropertyType||selected.tcSiteVisitDate||selected.tcLocation) && <>
@@ -1193,6 +1230,8 @@ export default function TelecallerLeadsPage() {
             </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
               <button className="tc-btn-primary" disabled={editSaving} onClick={submitEdit}>{editSaving?"Saving…":"Save Changes"}</button>
+              <button className="tc-btn-status" style={{background:"#7c3aed",color:"#fff",border:"none"}}
+                onClick={()=>{setEditModal(false);openStatusModal(selected);}}>Update Status</button>
               <button className="tc-btn-secondary" onClick={()=>setEditModal(false)}>Cancel</button>
             </div>
           </div>
@@ -1214,8 +1253,9 @@ export default function TelecallerLeadsPage() {
               <div className="tc-status-options">
                 {[
                   {value:"INTERESTED",    emoji:"✅",label:"Interested",    desc:"Client interested. Goes to BD via round-robin."},
+                  {value:"NOT_RESPONDED", emoji:"⏳",label:"Not Responded", desc:"No response. Resurfaces tomorrow."},
+                  {value:"KEEP_IN_VIEW",  emoji:"👁",label:"Keep in View",  desc:"Client asked to be contacted back after some days."},
                   {value:"NOT_INTERESTED",emoji:"❌",label:"Not Interested",desc:"Not interested. Reason required."},
-                  {value:"NOT_RESPONDED", emoji:"⏳",label:"Not Responded", desc:"No response. Resurfaces tomorrow."}
                 ].map(opt=>(
                   <label key={opt.value} className={`tc-status-option ${newStatus===opt.value?"selected":""}`}
                     style={newStatus===opt.value?{borderColor:STATUS_CONFIG[opt.value].color,background:STATUS_CONFIG[opt.value].bg}:{}}>
@@ -1229,6 +1269,34 @@ export default function TelecallerLeadsPage() {
               {newStatus==="NOT_INTERESTED"&&(
                 <div className="tc-reason-field"><label>Reason <span className="tc-req">*</span></label>
                   <textarea rows={3} placeholder="Why not interested?" value={reason} onChange={e=>setReason(e.target.value)}/></div>
+              )}
+
+              {newStatus==="KEEP_IN_VIEW"&&(
+                <div style={{display:"flex",flexDirection:"column",gap:12,marginTop:8}}>
+                  <div className="tc-reason-field">
+                    <label>Conversation Note <span className="tc-req">*</span></label>
+                    <textarea rows={3} placeholder="Summarise what the client said and why they asked to be contacted later…" value={reason} onChange={e=>setReason(e.target.value)}/>
+                  </div>
+                  <div className="tc-reason-field">
+                    <label>Call back Date &amp; Time <span className="tc-req">*</span></label>
+                    <div className="tc-datetime-row">
+                      <div className="tc-datetime-field"><span className="tc-datetime-icon">📅</span>
+                        <input type="date" className="tc-date-input" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+                      <div className="tc-datetime-field"><span className="tc-datetime-icon">🕐</span>
+                        <input type="time" className="tc-time-input" value={followupTime} onChange={e=>setFollowupTime(e.target.value)}/></div>
+                    </div>
+                    <div className="tc-time-presets">
+                      {["09:00","10:00","11:00","12:00","14:00","15:00","16:00","17:00"].map(t=>(
+                        <button key={t} type="button" className={`tc-time-preset ${followupTime===t?"active":""}`} onClick={()=>setFollowupTime(t)}>{t}</button>
+                      ))}
+                    </div>
+                    {followupDate && (
+                      <div style={{marginTop:8,fontSize:12,color:"#7c3aed",fontWeight:500,display:"flex",alignItems:"center",gap:5}}>
+                        📅 Follow-up will be set for: {new Date(followupDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})} at {followupTime} — created automatically on save.
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
 
               {newStatus==="INTERESTED"&&(
@@ -1379,7 +1447,9 @@ export default function TelecallerLeadsPage() {
               )}
             </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
-              <button className="tc-btn-primary" disabled={!newStatus||saving||intBillUploading} onClick={submitStatus}>
+              <button className="tc-btn-primary"
+                disabled={!newStatus||saving||intBillUploading||(newStatus==="KEEP_IN_VIEW"&&(!followupDate||!followupTime))}
+                onClick={submitStatus}>
                 {saving||intBillUploading ? "Saving…" : "Confirm"}
               </button>
               <button className="tc-btn-secondary" onClick={()=>{setStatusModal(false);setDragFromCol(null);}}>Cancel</button>
@@ -1395,9 +1465,7 @@ export default function TelecallerLeadsPage() {
             <div className="tc-modal-header tc-modal-header--fixed"><h2>📅 Schedule Follow-up?</h2><button className="tc-modal-close" onClick={()=>setFollowupModal(false)}>✕</button></div>
             <div className="tc-modal-body tc-modal-body--scrollable">
               <p style={{margin:"0 0 8px",fontWeight:500}}>{pendingFULead.name} · {pendingFULead.leadCode}</p>
-              <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>
-                Optional. {pendingFULead._pendingStatus==="NOT_INTERESTED"?" If skipped, marked Closed Lost.":" If skipped, resurfaces tomorrow."}
-              </p>
+              <p style={{fontSize:13,color:"#6b7280",margin:"0 0 16px"}}>Optional. If skipped, resurfaces tomorrow.</p>
               <div className="tc-reason-field">
                 <label>Date &amp; Time <span className="tc-req">*</span></label>
                 <div className="tc-datetime-row">
@@ -1413,7 +1481,7 @@ export default function TelecallerLeadsPage() {
                 </div>
               </div>
               <div className="tc-reason-field"><label>Notes</label>
-                <textarea rows={2} value={followupNote} onChange={e=>setFollowupNote(e.target.value)}/></div>
+                <textarea rows={2} value={followupNote} onChange={e=>setFollowupNote(e.target.value)} placeholder="Any additional notes…"/></div>
             </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
               <button className="tc-btn-primary" disabled={!followupDate||!followupTime||followupSaving}
@@ -1431,7 +1499,7 @@ export default function TelecallerLeadsPage() {
                   setFollowupSaving(true);
                   try {
                     await api.put(`/telecaller/lead/${pendingFULead.id}/status`,{telecallerStatus:pendingFULead._pendingStatus,reason:pendingFULead._pendingReason||"",needsFollowUp:false});
-                    showToast(pendingFULead._pendingStatus==="NOT_INTERESTED"?"No follow-up — Closed Lost.":"No follow-up — resurfaces tomorrow.","info");
+                    showToast("No follow-up set — status saved as Not Responded.","info");
                   } catch(err){showToast(err.message||"Failed.","error");}
                   finally{setFollowupSaving(false);setFollowupModal(false);if(viewMode==="board")resetBoard();else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);fetchStats();}
                 }}>{followupSaving?"Saving…":"Skip"}</button>
@@ -1521,6 +1589,13 @@ function LeadCard({ lead, onDetail, onUpdateStatus, onEdit }) {
         <span>📧 {lead.email||"—"}</span>
         <span>📞 {lead.phone}</span>
       </div>
+      {lead.telecallerStatus==="KEEP_IN_VIEW" && lead.kivReminderDate && (
+        <div style={{margin:"4px 0 2px",display:"flex",alignItems:"center",gap:5}}>
+          <span style={{fontSize:11,fontWeight:600,color:"#7c3aed",background:"#f5f3ff",border:"1.5px solid #e9d5ff",borderRadius:20,padding:"2px 10px",display:"inline-flex",alignItems:"center",gap:4}}>
+            👁 KIV · Call back by {new Date(lead.kivReminderDate).toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})}
+          </span>
+        </div>
+      )}
       {(lead.state||lead.city)&&<div className="tc-card-address">📍 {[lead.city,lead.district,lead.state].filter(Boolean).join(", ")}{lead.pincode&&` – ${lead.pincode}`}</div>}
       {lead.groupName&&<div className="tc-card-group">🏷 {lead.groupName}{lead.subGroupName?` › ${lead.subGroupName}`:""}{lead.solarScheme&&<span className="tc-scheme-badge">{lead.solarScheme.replace(/_/g," ")}</span>}</div>}
       <p className="tc-card-enquiry">{lead.enquiry?.slice(0,100)}{lead.enquiry?.length>100?"…":""}</p>
@@ -1609,8 +1684,6 @@ function TcBillPreviewModal({ url, name, type, onClose }) {
 function StatusBadge({ status, leadStatus }) {
   const s = status||"NEW";
   const c = STATUS_CONFIG[s]||STATUS_CONFIG.NEW;
-  if (s==="NOT_INTERESTED"&&leadStatus==="Closed Lost")
-    return <span className="tc-status-badge" style={{color:"#dc2626",background:"#fef2f2"}}>Closed Lost</span>;
   return <span className="tc-status-badge" style={{color:c.color,background:c.bg}}>{c.label}</span>;
 }
 

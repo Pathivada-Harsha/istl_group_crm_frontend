@@ -468,6 +468,16 @@
   color: #374151;
 }
 
+.leads-enquiries-badge-prospect {
+  background-color: #fce7f3;
+  color: #9d174d;
+}
+
+.leads-enquiries-badge-kiv {
+  background-color: #f5f3ff;
+  color: #6d28d9;
+}
+
 /* Action Buttons - More Compact */
 .leads-enquiries-action-buttons-cell {
   display: flex;
@@ -537,9 +547,240 @@
   background-color: #fef3c7;
 }
 
-/* ============================================ */
-/* GRID / CARD VIEW - VERY COMPACT */
-/* ============================================ */
+.leads-enquiries-action-status {
+  color: #2563eb;
+}
+
+.leads-enquiries-action-status:hover {
+  background-color: #dbeafe;
+}
+
+/* ── Quick Status Modal ── */
+.qs-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 16px;
+  animation: qs-fade-in 0.15s ease;
+}
+
+@keyframes qs-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.qs-modal {
+  background: #fff;
+  border-radius: 16px;
+  padding: 28px 30px 24px;
+  width: min(500px, 95vw);
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+  font-family: 'Poppins', sans-serif;
+  animation: qs-pop 0.18s ease;
+}
+
+@keyframes qs-pop {
+  from { transform: scale(0.93); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+.qs-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.qs-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #0f172a;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-modal-header p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: #64748b;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #94a3b8;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.qs-modal-close:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.qs-status-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  margin-bottom: 10px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.qs-status-btn {
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #374151;
+  transition: all 0.15s;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-status-btn:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.qs-status-btn.active {
+  border: 2px solid #2563eb;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.qs-conditional {
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+
+.qs-conditional-won {
+  background: #f0fdf4;
+  border: 1.5px solid #bbf7d0;
+}
+
+.qs-conditional-lost {
+  background: #fff5f5;
+  border: 1.5px solid #fecaca;
+}
+
+.qs-conditional-kiv {
+  background: #eff6ff;
+  border: 1.5px solid #bfdbfe;
+}
+
+.qs-conditional-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-conditional-won .qs-conditional-label  { color: #166534; }
+.qs-conditional-lost .qs-conditional-label { color: #991b1b; }
+.qs-conditional-kiv .qs-conditional-label  { color: #1d4ed8; }
+
+.qs-time-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.qs-time-preset {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  color: #374151;
+  font-family: 'Poppins', sans-serif;
+  transition: all 0.15s;
+}
+
+.qs-time-preset.active,
+.qs-time-preset:hover {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.qs-kiv-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #2563eb;
+  font-weight: 500;
+  font-family: 'Poppins', sans-serif;
+}
+
+.qs-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.qs-btn-cancel {
+  padding: 9px 22px;
+  border-radius: 9px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: background 0.15s;
+}
+
+.qs-btn-cancel:hover { background: #f8fafc; }
+
+.qs-btn-confirm {
+  padding: 9px 22px;
+  border-radius: 9px;
+  border: none;
+  background: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  cursor: pointer;
+  font-family: 'Poppins', sans-serif;
+  transition: background 0.15s;
+}
+
+.qs-btn-confirm:hover:not(:disabled) { background: #1d4ed8; }
+.qs-btn-confirm:disabled { opacity: 0.65; cursor: not-allowed; }
 
 .leads-enquiries-grid-container {
   background-color: white;
@@ -743,6 +984,14 @@
 
 .leads-enquiries-card-action-btn.leads-enquiries-action-proposal:hover {
   background-color: #fef3c7;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-status {
+  color: #2563eb;
+}
+
+.leads-enquiries-card-action-btn.leads-enquiries-action-status:hover {
+  background-color: #dbeafe;
 }
 
 .leads-enquiries-card-action-btn.leads-enquiries-action-edit {

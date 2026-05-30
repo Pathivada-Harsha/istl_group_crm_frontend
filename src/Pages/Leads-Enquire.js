@@ -7,6 +7,7 @@
 // • SERVER-SIDE PAGINATION — page/size/filters are sent to backend on every change
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { GrDocumentUpdate } from 'react-icons/gr';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -43,20 +44,21 @@ const DEFAULT_PROPOSAL_TEMPLATE = {
 //    show the BD-set status — do NOT let telecaller status override it.
 // 3. Only surface TC status when the main status is still at an early
 //    TC-driven stage (New, Interested, Not Interested, Not Responded).
-const TC_EARLY_STATUSES = new Set(['New', 'Interested', 'Not Interested', 'Not Responded']);
+const TC_EARLY_STATUSES = new Set(['New', 'Interested', 'Not Interested', 'Not Responded', 'Keep in View']);
 const getUnifiedStatus = (lead) => {
   if (!lead) return 'New';
   const s  = lead.status || 'New';
   const tc = lead.telecallerStatus;
   // Terminal states always win
   if (s === 'Closed Won' || s === 'Closed Lost') return s;
-  // If BD has moved the lead past the early TC stage (Contacted, In Discussion,
-  // Proposal Sent, etc.) always show that BD status — never let TC override it.
+  // If BD has moved the lead past the early TC stage (Proposal Sent, etc.)
+  // always show that BD status — never let TC override it.
   if (!TC_EARLY_STATUSES.has(s)) return s;
   // Lead is still in early stage — surface telecaller status if set
   if (tc === 'INTERESTED')     return 'Interested';
   if (tc === 'NOT_INTERESTED') return 'Not Interested';
   if (tc === 'NOT_RESPONDED')  return 'Not Responded';
+  if (tc === 'KEEP_IN_VIEW')   return 'Keep in View';
   return s;
 };
 
@@ -262,6 +264,11 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
   const [filteredBomItems, setFilteredBomItems] = useState({});
   const [showBomDropdown, setShowBomDropdown] = useState({});
 
+  // Offline PDF edit state
+  const isOfflineProposal = !!(existingProposal?.offlinePdfPath);
+  const [offlineReplaceFile, setOfflineReplaceFile] = useState(null);
+  const [offlineReplacing, setOfflineReplacing] = useState(false);
+
   const [formData, setFormData] = useState({
     leadId: lead.id,
     title: existingProposal?.title || '',
@@ -317,6 +324,37 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     return { sub: sub.toFixed(2), tax: tax.toFixed(2), grand: grand.toFixed(2) };
   };
 
+  // Save for offline proposal: only update title + totalValue, then optionally replace PDF
+  const handleSaveOffline = async () => {
+    if (!formData.title.trim()) { alert('Please enter a title'); return; }
+    setSaving(true);
+    try {
+      const body = JSON.stringify({ title: formData.title.trim(), totalValue: parseFloat(formData.totalValue) || 0 });
+      const res = await fetch(`${apiBase}/proposals/update/${existingProposal.id}`, {
+        method: 'PUT', headers, credentials: 'include', body,
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Update failed');
+
+      // If a replacement PDF was chosen, upload it too
+      if (offlineReplaceFile) {
+        setOfflineReplacing(true);
+        const form = new FormData();
+        form.append('file', offlineReplaceFile);
+        const upRes = await fetch(`${apiBase}/proposals/${existingProposal.id}/upload-offline`, {
+          method: 'POST', credentials: 'include',
+          headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+          body: form,
+        });
+        const upData = await upRes.json();
+        if (!upData.success) throw new Error(upData.error || 'PDF replace failed');
+      }
+
+      onSaved(data.data || data.message);
+    } catch (e) { alert(e.message || 'Failed to save proposal'); }
+    finally { setSaving(false); setOfflineReplacing(false); }
+  };
+
   const handleSave = async () => {
     if (!formData.title) { alert('Please fill in Title'); return; }
     setSaving(true);
@@ -330,6 +368,53 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     } catch (e) { alert('Failed to save proposal'); }
     finally { setSaving(false); }
   };
+
+  // ── Offline proposal edit: simplified form with only Title, Total Value, Replace PDF ──
+  if (isOfflineProposal) {
+    return (
+      <div className="ld-proposal-form">
+        <div style={{ background: '#faf5ff', border: '1.5px solid #e9d5ff', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 16 }}>📎</span>
+          <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>Offline PDF Proposal</span>
+          <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>— {existingProposal.offlinePdfName || 'uploaded PDF'}</span>
+        </div>
+        <div className="ld-form-grid">
+          <div className="ld-fgroup ld-full">
+            <label>Title *</label>
+            <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} placeholder="Proposal title" />
+          </div>
+          <div className="ld-fgroup">
+            <label>Total Value (₹)</label>
+            <input type="number" value={formData.totalValue} onChange={e => setFormData({ ...formData, totalValue: e.target.value })} placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div className="ld-fgroup">
+            <label>Replace PDF <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+              border: '1.5px dashed ' + (offlineReplaceFile ? '#7c3aed' : '#c4b5fd'),
+              borderRadius: 7, padding: '8px 12px', background: offlineReplaceFile ? '#f5f3ff' : '#faf5ff',
+              fontSize: 13, color: offlineReplaceFile ? '#6d28d9' : '#7c3aed', fontWeight: 500, userSelect: 'none'
+            }}>
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0 }}>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {offlineReplaceFile ? offlineReplaceFile.name : 'Choose new PDF to replace…'}
+              </span>
+              <input type="file" accept=".pdf,application/pdf" onChange={e => setOfflineReplaceFile(e.target.files[0] || null)} style={{ display: 'none' }} />
+            </label>
+            {offlineReplaceFile && <div style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>✓ {offlineReplaceFile.name} — will replace current PDF</div>}
+          </div>
+        </div>
+        <div className="ld-pform-footer">
+          <button className="ld-btn ld-btn-sec" onClick={onCancel}>Cancel</button>
+          <button className="ld-btn ld-btn-pri" onClick={handleSaveOffline} disabled={saving || offlineReplacing}>
+            {saving || offlineReplacing ? 'Saving…' : 'Update Proposal'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const TABS = [
     { k: 'basic', l: 'Basic' }, { k: 'company', l: 'Company' }, { k: 'aboutUs', l: 'About Us' },
@@ -688,6 +773,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const [showOfflinePanel, setShowOfflinePanel] = useState(false);
   const [offlineTitle, setOfflineTitle] = useState('');
   const [offlineFile, setOfflineFile] = useState(null);
+  const [offlineTotalValue, setOfflineTotalValue] = useState('');
   const [offlineUploading, setOfflineUploading] = useState(false);
 
   // ── Lead access: user has direct access if they are the assignee, creator,
@@ -835,7 +921,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       const body = JSON.stringify({
         title: offlineTitle.trim(), leadId: lead.id, status: 'Draft',
         groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
-        totalValue: 0, description: 'Offline proposal uploaded',
+        totalValue: parseFloat(offlineTotalValue) || 0, description: 'Offline proposal uploaded',
       });
       const createRes = await fetch(`${API_BASE_URL}/proposals/create`, {
         method: 'POST', credentials: 'include',
@@ -856,7 +942,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       const upData = await upRes.json();
       if (!upData.success) throw new Error(upData.error || 'PDF upload failed');
       showSuccess('Offline proposal uploaded successfully!');
-      setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null);
+      setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue('');
       fetchProposals();
       markProposalSent();
     } catch (err) {
@@ -875,9 +961,11 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   };
 
   const getStatusClass = s => ({
-    'New': 'leads-enquiries-badge-new', 'Contacted': 'leads-enquiries-badge-contacted', 'In Discussion': 'leads-enquiries-badge-discussion',
-    'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost',
-    'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost', 'Not Responded': 'leads-enquiries-badge-default',
+    'New': 'leads-enquiries-badge-new', 'Proposal Sent': 'leads-enquiries-badge-proposal',
+    'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost',
+    'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost',
+    'Not Responded': 'leads-enquiries-badge-default', 'Prospect': 'leads-enquiries-badge-prospect',
+    'Keep in View': 'leads-enquiries-badge-kiv',
   }[s] || 'leads-enquiries-badge-default');
 
   const getPriorityClass = p => ({ 'High': 'leads-enquiries-badge-high', 'Medium': 'leads-enquiries-badge-medium', 'Low': 'leads-enquiries-badge-low' }[p] || 'leads-enquiries-badge-default');
@@ -1134,6 +1222,25 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             <h4 className="ld-card-title">Enquiry Description</h4>
             <p className="ld-enquiry-text">{lead.enquiry || 'No description provided.'}</p>
           </div>
+          {lead.telecallerStatus === 'KEEP_IN_VIEW' && (lead.telecallerReason || lead.kivReminderDate) && (
+            <div className="ld-enquiry-card" style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff'}}>
+              <h4 className="ld-card-title" style={{color:'#6d28d9'}}>👁 Keep in View Details</h4>
+              {lead.telecallerReason && (
+                <div style={{marginBottom:8}}>
+                  <span style={{fontSize:11,fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'0.5px'}}>Conversation Note</span>
+                  <p className="ld-enquiry-text" style={{marginTop:4,color:'#374151'}}>{lead.telecallerReason}</p>
+                </div>
+              )}
+              {lead.kivReminderDate && (
+                <div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
+                  <span style={{fontSize:11,fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'0.5px'}}>Callback Date</span>
+                  <span style={{fontSize:13,fontWeight:600,color:'#7c3aed',background:'#ede9fe',borderRadius:20,padding:'2px 12px'}}>
+                    📅 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           <OverviewProposalsSummary
             lead={lead}
             currentUser={currentUser}
@@ -1194,8 +1301,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                 <div style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff',borderRadius:10,padding:'18px 20px',marginBottom:16,display:'flex',flexDirection:'column',gap:12}}>
                   <div style={{fontWeight:600,color:'#6d28d9',fontSize:14,marginBottom:2}}>📎 Upload Offline Proposal PDF</div>
                   <div style={{fontSize:13,color:'#6b7280',marginTop:-8}}>Upload a proposal PDF received from the client. A new proposal record will be created automatically.</div>
-                  <div style={{display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
-                    <div style={{flex:'1 1 220px',minWidth:180}}>
+                  <div style={{display:'flex',gap:10,alignItems:'flex-end'}}>
+                    <div style={{flex:'2 1 0',minWidth:0}}>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Proposal Title *</label>
                       <input
                         type="text"
@@ -1205,31 +1312,42 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                         style={{width:'100%',padding:'8px 12px',border:'1.5px solid #d1d5db',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
                       />
                     </div>
-                    <div style={{flex:'1 1 200px',minWidth:180}}>
+                    <div style={{flex:'1 1 0',minWidth:0}}>
+                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Total Value (₹)</label>
+                      <input
+                        type="number"
+                        value={offlineTotalValue}
+                        onChange={e => setOfflineTotalValue(e.target.value)}
+                        placeholder="0.00"
+                        min="0"
+                        step="0.01"
+                        style={{width:'100%',padding:'8px 12px',border:'1.5px solid #d1d5db',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
+                      />
+                    </div>
+                    <div style={{flex:'2 1 0',minWidth:0}}>
                       <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>PDF File *</label>
                       <label style={{
-                        display:'flex',alignItems:'center',gap:8,cursor:'pointer',
+                        display:'flex',alignItems:'center',gap:6,cursor:'pointer',
                         border:'1.5px dashed ' + (offlineFile ? '#7c3aed' : '#c4b5fd'),
-                        borderRadius:8,padding:'8px 14px',background: offlineFile ? '#f5f3ff' : '#faf5ff',
-                        transition:'all .18s',fontSize:13,color: offlineFile ? '#6d28d9' : '#7c3aed',fontWeight:500,
-                        userSelect:'none'
+                        borderRadius:7,padding:'8px 12px',background: offlineFile ? '#f5f3ff' : '#faf5ff',
+                        transition:'all .18s',fontSize:13,userSelect:'none',boxSizing:'border-box',width:'100%'
                       }}>
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18" style={{flexShrink:0}}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{flexShrink:0,color: offlineFile ? '#6d28d9' : '#7c3aed'}}>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,color: offlineFile ? '#6d28d9' : '#7c3aed',fontWeight:500}}>
                           {offlineFile ? offlineFile.name : 'Choose PDF file…'}
                         </span>
+                        <span style={{fontSize:11,color:'#9ca3af',whiteSpace:'nowrap',flexShrink:0}}>PDF only · Max 50 MB</span>
                         <input type="file" accept=".pdf,application/pdf" onChange={e => setOfflineFile(e.target.files[0] || null)} style={{display:'none'}} />
                       </label>
-                      <div style={{fontSize:11,color:'#9ca3af',marginTop:4}}>PDF only · Max 5 MB</div>
-                      {offlineFile && <div style={{fontSize:11,color:'#059669',marginTop:2}}>✓ {offlineFile.name} — Ready to upload</div>}
+                      {offlineFile && <div style={{fontSize:11,color:'#059669',marginTop:3}}>✓ {offlineFile.name} — Ready to upload</div>}
                     </div>
-                    <div style={{display:'flex',gap:8}}>
+                    <div style={{display:'flex',gap:8,flexShrink:0}}>
                       <button className="ld-btn ld-btn-pri" onClick={handleUploadOfflineNew} disabled={offlineUploading || !offlineTitle.trim() || !offlineFile} style={{whiteSpace:'nowrap'}}>
                         {offlineUploading ? 'Uploading…' : 'Save & Upload'}
                       </button>
-                      <button className="ld-btn ld-btn-sec" onClick={() => { setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); }}>Cancel</button>
+                      <button className="ld-btn ld-btn-sec" onClick={() => { setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue(''); }}>Cancel</button>
                     </div>
                   </div>
                 </div>
@@ -1400,10 +1518,12 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                           </span>
                         </div>
 
-                        {/* Summary line — for direct, show only the first part (before " — ") */}
+                        {/* Summary line — for direct, show only the first part (before " — "); for TC status change show only the label (description shown in note block below) */}
                         <div className="ld-history-summary">
                           {isDirect && h.description
                             ? h.description.split(' — ')[0].trim()
+                            : h.actionType === 'TELECALLER_STATUS_CHANGE'
+                            ? (HISTORY_CONFIG['TELECALLER_STATUS_CHANGE']?.label || 'Telecaller Update')
                             : summary}
                         </div>
 
@@ -1436,6 +1556,13 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                           <div className="ld-history-notes">
                             <span className="ld-history-notes-label">Pre-call Notes</span>
                             <span className="ld-history-notes-text">{contextNotes}</span>
+                          </div>
+                        )}
+
+                        {/* TELECALLER_STATUS_CHANGE: show full description as note (contains reason/conversation/callback date) */}
+                        {h.actionType === 'TELECALLER_STATUS_CHANGE' && h.description && (
+                          <div className="ld-history-notes" style={{marginTop:6}}>
+                            <span className="ld-history-notes-text" style={{color:'#374151',fontStyle:'normal'}}>{h.description}</span>
                           </div>
                         )}
 
@@ -1747,6 +1874,7 @@ const isFirstFilterRender = useRef(true);
   // ── Data ─────────────────────────────────────────────────────────
   const [leads, setLeads] = useState([]);
   const [users, setUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
   const [groups, setGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
 
@@ -1780,6 +1908,15 @@ const isFirstFilterRender = useRef(true);
   const [showTimelineModal, setShowTimelineModal] = useState(false);
   const [selectedLeadForFollowup, setSelectedLeadForFollowup] = useState(null);
   const [selectedLeadForTimeline, setSelectedLeadForTimeline] = useState(null);
+  const [showQuickStatusModal, setShowQuickStatusModal] = useState(false);
+  const [quickStatusLead, setQuickStatusLead] = useState(null);
+  const [quickStatus, setQuickStatus] = useState('');
+  const [quickStatusSaving, setQuickStatusSaving] = useState(false);
+  const [quickClosedBy, setQuickClosedBy] = useState('');
+  const [quickClosedByName, setQuickClosedByName] = useState('');
+  const [quickClosedLostReason, setQuickClosedLostReason] = useState('');
+  const [quickKivDate, setQuickKivDate] = useState('');
+  const [quickKivTime, setQuickKivTime] = useState('09:00');
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
   const [phoneError, setPhoneError] = useState('');
 
@@ -1791,12 +1928,14 @@ const isFirstFilterRender = useRef(true);
     closedByUserId: null, closedByName: '',
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
-    leadOwner: '',
+    leadOwner: user?.name || '',
     // New TC interested fields
     tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
   });
   const [billFile, setBillFile] = useState(null);
   const [billFileUploading, setBillFileUploading] = useState(false);
+  const [kivDate, setKivDate] = useState('');
+  const [kivTime, setKivTime] = useState('09:00');
 
   // ── Derived columns ──────────────────────────────────────────────
   const orderedVisibleColumns = columnOrder
@@ -1864,6 +2003,13 @@ const isFirstFilterRender = useRef(true);
     } catch { setUsers([]); }
   };
 
+  const fetchAllUsers = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/filters/all-users`, { credentials: 'include', headers: buildHeaders() });
+      const data = await res.json(); if (Array.isArray(data)) setAllUsers(data);
+    } catch { setAllUsers([]); }
+  };
+
   const fetchGroups = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/filters/leads-groups`, { credentials: 'include', headers: buildHeaders() });
@@ -1884,6 +2030,7 @@ useEffect(() => {
   if (!canView || initialFetchDone.current) return;
   initialFetchDone.current = true;
   fetchUsers();
+  fetchAllUsers();
   fetchGroups();
   fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'INITIAL_LOAD', dateFrom, dateTo);
 }, [canView]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2022,20 +2169,83 @@ useEffect(() => {
     setPhoneError(''); return c;
   };
 
+  const openQuickStatusModal = (lead) => {
+    setQuickStatusLead(lead);
+    setQuickStatus(lead.status || 'New');
+    setQuickClosedBy(lead.closedByUserId ? String(lead.closedByUserId) : '');
+    setQuickClosedByName(lead.closedByName || '');
+    setQuickClosedLostReason('');
+    setQuickKivDate(''); setQuickKivTime('09:00');
+    setShowQuickStatusModal(true);
+  };
+
+  const handleQuickStatus = async () => {
+    if (!quickStatusLead || !quickStatus) return;
+    if (quickStatus === 'Closed Won' && !quickClosedBy) { showError('Please select who closed this lead'); return; }
+    if (quickStatus === 'Closed Lost' && !quickClosedLostReason.trim()) { showError('Please enter a reason for closing lost'); return; }
+    if (quickStatus === 'Keep in View' && (!quickKivDate || !quickKivTime)) { showError('Please set the callback date & time'); return; }
+    setQuickStatusSaving(true);
+    try {
+      const payload = {
+        status: quickStatus,
+        ...(quickStatus === 'Closed Won' && { closedByUserId: Number(quickClosedBy), closedByName: quickClosedByName }),
+        ...(quickStatus === 'Closed Lost' && { closedLostReason: quickClosedLostReason.trim() }),
+      };
+      const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${quickStatusLead.id}`, { method: 'PUT', body: JSON.stringify(payload) });
+      if (data.success) {
+        // For KIV: auto-create followup
+        if (quickStatus === 'Keep in View' && quickKivDate) {
+          try {
+            await fetchWithHeaders(`${API_BASE_URL}/followups/create`, {
+              method: 'POST',
+              body: JSON.stringify({
+                relatedType: 'LEAD', relatedId: quickStatusLead.id, leadId: quickStatusLead.id,
+                followupType: 'Call', priority: 'Medium', status: 'Pending',
+                scheduledAt: `${quickKivDate} ${quickKivTime}:00`,
+                notes: 'Keep in View — client requested callback on this date',
+              }),
+            });
+          } catch { /* non-fatal */ }
+        }
+        showSuccess(quickStatus === 'Closed Won' ? 'Status updated! ✅ Converted to Customer.' : `Status updated to ${quickStatus}`);
+        setShowQuickStatusModal(false);
+        fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'STATUS_REFRESH', dateFrom, dateTo);
+      }
+    } catch (e) { showError(e.message || 'Failed to update status'); }
+    finally { setQuickStatusSaving(false); }
+  };
+
   const handleSubmit = async e => {
     e.preventDefault();
     if (formData.phone && formData.phone.length !== 10) { setPhoneError('Must be exactly 10 digits'); return; }
     if (formData.id && !canEdit) { showWarning('No edit permission'); return; }
     if (!formData.id && !canCreate) { showWarning('No create permission'); return; }
+    if (formData.status === 'Keep in View' && (!kivDate || !kivTime)) { showError('Please set the callback date & time for Keep in View'); return; }
     setLoading(true);
     try {
       const payload = { ...formData };
       let savedLeadId = formData.id;
 
+      const scheduleKivFollowup = async (leadId) => {
+        if (formData.status !== 'Keep in View' || !kivDate) return;
+        try {
+          await fetchWithHeaders(`${API_BASE_URL}/followups/create`, {
+            method: 'POST',
+            body: JSON.stringify({
+              relatedType: 'LEAD', relatedId: leadId, leadId,
+              followupType: 'Call', priority: 'Medium', status: 'Pending',
+              scheduledAt: `${kivDate} ${kivTime}:00`,
+              notes: 'Keep in View — client requested callback on this date',
+            }),
+          });
+        } catch { /* non-fatal — followup creation failure shouldn't block lead save */ }
+      };
+
       if (formData.id) {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${formData.id}`, { method: 'PUT', body: JSON.stringify(payload) });
         if (data.success) {
           savedLeadId = formData.id;
+          await scheduleKivFollowup(savedLeadId);
           if (billFile) {
             try {
               setBillFileUploading(true);
@@ -2054,9 +2264,9 @@ useEffect(() => {
             } finally { setBillFileUploading(false); }
           }
           const wasClosedWon = data.data?.status === 'Closed Won';
-          showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : 'Lead updated successfully');
-          setShowAddModal(false); resetForm(); fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH', dateFrom, dateTo);
-          // If editing from the detail view, refresh detailLead so it reflects the new status immediately
+          showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : formData.status === 'Keep in View' ? 'Lead updated & KIV follow-up scheduled!' : 'Lead updated successfully');
+          setShowAddModal(false); resetForm(); setKivDate(''); setKivTime('09:00');
+          fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH', dateFrom, dateTo);
           if (detailLead && detailLead.id === formData.id) {
             fetchWithHeaders(`${API_BASE_URL}/leads/${formData.id}`)
               .then(d => { if (d.success && d.data) { setDetailLead(d.data); localStorage.setItem('leads_detail_lead', JSON.stringify(d.data)); } })
@@ -2067,6 +2277,7 @@ useEffect(() => {
         const data = await fetchWithHeaders(`${API_BASE_URL}/leads/create`, { method: 'POST', body: JSON.stringify(payload) });
         if (data.success) {
           savedLeadId = data.data?.id;
+          await scheduleKivFollowup(savedLeadId);
           if (billFile && savedLeadId) {
             try {
               setBillFileUploading(true);
@@ -2087,8 +2298,10 @@ useEffect(() => {
           const wasClosedWon = data.data?.status === 'Closed Won';
           showSuccess(wasClosedWon
             ? 'Lead created & automatically converted to Customer! ✅'
+            : formData.status === 'Keep in View'
+            ? 'Lead created & KIV follow-up scheduled!'
             : 'Lead created successfully');
-          setShowAddModal(false); resetForm();
+          setShowAddModal(false); resetForm(); setKivDate(''); setKivTime('09:00');
           setCurrentPage(1);
           fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'CREATE_REFRESH', dateFrom, dateTo);
         }
@@ -2110,7 +2323,7 @@ useEffect(() => {
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
       capacity: '', capacityUnit: 'kW',
-      leadOwner: '',
+      leadOwner: user?.name || '',   // ← auto-fill with logged-in user
       tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
     });
     // Load subgroups for seeded group so the dropdown is ready
@@ -2120,7 +2333,7 @@ useEffect(() => {
   };
 
   // ── Badge helpers ─────────────────────────────────────────────────
-  const getStatusClass = s => ({ 'New': 'leads-enquiries-badge-new', 'Contacted': 'leads-enquiries-badge-contacted', 'In Discussion': 'leads-enquiries-badge-discussion', 'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost', 'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost', 'Not Responded': 'leads-enquiries-badge-default' }[s] || 'leads-enquiries-badge-default');
+  const getStatusClass = s => ({ 'New': 'leads-enquiries-badge-new', 'Proposal Sent': 'leads-enquiries-badge-proposal', 'Closed Won': 'leads-enquiries-badge-won', 'Closed Lost': 'leads-enquiries-badge-lost', 'Interested': 'leads-enquiries-badge-won', 'Not Interested': 'leads-enquiries-badge-lost', 'Not Responded': 'leads-enquiries-badge-default', 'Prospect': 'leads-enquiries-badge-prospect', 'Keep in View': 'leads-enquiries-badge-kiv' }[s] || 'leads-enquiries-badge-default');
   const getPriorityClass = p => ({ 'High': 'leads-enquiries-badge-high', 'Medium': 'leads-enquiries-badge-medium', 'Low': 'leads-enquiries-badge-low' }[p] || 'leads-enquiries-badge-default');
 
   // ── Sort icon ────────────────────────────────────────────────────
@@ -2160,7 +2373,7 @@ useEffect(() => {
       case 'assignedToName': return lead.assignedToName || empty;
       case 'leadOwner': {
         if (!lead.leadOwner) return empty;
-        const ownerUser = users.find(u => u.name === lead.leadOwner);
+        const ownerUser = allUsers.find(u => u.name === lead.leadOwner);
         const hasPhoto  = ownerUser?.avatar_url === 'db';
         return (
           <span className="leads-owner-cell">
@@ -2178,11 +2391,19 @@ useEffect(() => {
       case 'priority': return lead.priority
         ? <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
         : empty;
-      case 'status': return (
-        <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>
-          {getUnifiedStatus(lead)}
-        </span>
-      );
+      case 'status': {
+        const unified = getUnifiedStatus(lead);
+        return (
+          <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'flex-start'}}>
+            <span className={`leads-enquiries-badge ${getStatusClass(unified)}`}>{unified}</span>
+            {unified==='Keep in View' && lead.kivReminderDate && (
+              <span style={{fontSize:10,fontWeight:600,color:'#7c3aed',background:'#f5f3ff',border:'1px solid #e9d5ff',borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
+                🔔 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
+              </span>
+            )}
+          </div>
+        );
+      }
       case 'actions': return (
         <div className="leads-enquiries-action-buttons-cell">
           {canView && (
@@ -2193,6 +2414,11 @@ useEffect(() => {
           {canEdit && (
             <button className="leads-enquiries-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit">
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+            </button>
+          )}
+          {canEdit && (
+            <button className="leads-enquiries-action-btn leads-enquiries-action-status" onClick={() => openQuickStatusModal(lead)} title="Update Status">
+              <GrDocumentUpdate size={16} />
             </button>
           )}
           <button className="leads-enquiries-action-btn leads-enquiries-action-timeline" onClick={() => { setSelectedLeadForTimeline(lead); setShowTimelineModal(true); }} title="Timeline">
@@ -2342,6 +2568,7 @@ useEffect(() => {
                   groups={groups} subGroups={subGroups} users={users}
                   canAssign={canAssign} loading={loading} currentUser={user}
                   billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
+                  kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
                   onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
                 />
               </div>
@@ -2396,7 +2623,7 @@ useEffect(() => {
           <input type="text" placeholder="Search by name, email, phone, or ID…" className="leads-enquiries-search-input" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
         </div>
         <div className="leads-enquiries-filters">
-          <FilterSelect value={statusFilter} options={[{value:'All',label:'All Status'},...['New','Interested','Not Interested','Not Responded','Contacted','In Discussion','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>setStatusFilter(v)} />
+          <FilterSelect value={statusFilter} options={[{value:'All',label:'All Status'},...['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>setStatusFilter(v)} />
           <FilterSelect value={priorityFilter} options={[{value:'All',label:'All Priority'},...['High','Medium','Low'].map(s=>({value:s,label:s}))]} placeholder="All Priority" onChange={v=>setPriorityFilter(v)} />
           <FilterSelect value={sourceFilter} options={[{value:'All',label:'All Sources'},...['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Others'].map(s=>({value:s,label:s}))]} placeholder="All Sources" onChange={v=>setSourceFilter(v)} />
 
@@ -2436,6 +2663,7 @@ useEffect(() => {
           )}
           {canCreate && (
             <LeadsExcelPanel
+              currentUser={currentUser}
               onImportDone={() => { setCurrentPage(1); fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'IMPORT_REFRESH', dateFrom, dateTo); }}
             />
           )}
@@ -2541,6 +2769,7 @@ useEffect(() => {
                     {canCreate && <button className="leads-enquiries-card-action-btn leads-enquiries-action-followup" onClick={() => { setSelectedLeadForFollowup(lead); setShowFollowupModal(true); }} title="Follow-up"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></button>}
                     {permissions.PROPOSAL_VIEW && <button className="leads-enquiries-card-action-btn leads-enquiries-action-proposal" onClick={() => handleView(lead)} title="View Proposals"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg></button>}
                     {canEdit && <button className="leads-enquiries-card-action-btn leads-enquiries-action-edit" onClick={() => handleEdit(lead)} title="Edit"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>}
+                    {canEdit && <button className="leads-enquiries-card-action-btn leads-enquiries-action-status" onClick={() => openQuickStatusModal(lead)} title="Update Status"><GrDocumentUpdate size={16} /></button>}
                     {canDelete && <button className="leads-enquiries-card-action-btn leads-enquiries-action-delete" onClick={() => handleDelete(lead)} title="Delete"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>}
                   </div>
                 </div>
@@ -2577,6 +2806,7 @@ useEffect(() => {
                 groups={groups} subGroups={subGroups} users={users}
                 canAssign={canAssign} loading={loading} currentUser={user}
                 billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
+                kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
                 onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
               />
             </div>
@@ -2587,6 +2817,70 @@ useEffect(() => {
                 </button>
               </div>
         </div>
+        </div>
+      )}
+
+      {/* Quick Status Modal */}
+      {showQuickStatusModal && quickStatusLead && (
+        <div className="qs-modal-overlay" onClick={()=>setShowQuickStatusModal(false)}>
+          <div className="qs-modal" onClick={e=>e.stopPropagation()}>
+            <div className="qs-modal-header">
+              <div>
+                <h3>Update Status</h3>
+                <p>{quickStatusLead.leadCode} · {quickStatusLead.name}</p>
+              </div>
+              <button className="qs-modal-close" onClick={()=>setShowQuickStatusModal(false)}>✕</button>
+            </div>
+
+            <div className="qs-status-label">New Status</div>
+            <div className="qs-status-grid">
+              {['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>(
+                <button key={s} className={`qs-status-btn${quickStatus===s?' active':''}`} onClick={()=>setQuickStatus(s)}>{s}</button>
+              ))}
+            </div>
+
+            {quickStatus==='Closed Won' && (
+              <div className="qs-conditional qs-conditional-won">
+                <div className="qs-conditional-label">✅ Closed Won — Closed By *</div>
+                <FilterSelect value={quickClosedBy} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select who closed this lead"
+                  onChange={v=>{const u=users.find(u=>String(u.id)===v);setQuickClosedBy(v);setQuickClosedByName(u?.name||'');}}/>
+              </div>
+            )}
+
+            {quickStatus==='Closed Lost' && (
+              <div className="qs-conditional qs-conditional-lost">
+                <div className="qs-conditional-label">❌ Closed Lost — Reason *</div>
+                <textarea rows={3} value={quickClosedLostReason} onChange={e=>setQuickClosedLostReason(e.target.value)}
+                  placeholder="Why was this lead closed as lost?"
+                  style={{width:'100%',padding:'8px 10px',border:'1.5px solid #fca5a5',borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
+              </div>
+            )}
+
+            {quickStatus==='Keep in View' && (
+              <div className="qs-conditional qs-conditional-kiv">
+                <div className="qs-conditional-label">👁 Keep in View — Callback Date & Time *</div>
+                <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
+                  <input type="date" value={quickKivDate} onChange={e=>setQuickKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                    style={{flex:'1 1 140px',padding:'8px 10px',border:'1.5px solid #bfdbfe',borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
+                  <input type="time" value={quickKivTime} onChange={e=>setQuickKivTime(e.target.value)}
+                    style={{flex:'1 1 110px',padding:'8px 10px',border:'1.5px solid #bfdbfe',borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
+                </div>
+                <div className="qs-time-presets">
+                  {['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'].map(t=>(
+                    <button key={t} type="button" className={`qs-time-preset${quickKivTime===t?' active':''}`} onClick={()=>setQuickKivTime(t)}>{t}</button>
+                  ))}
+                </div>
+                {quickKivDate && <div className="qs-kiv-hint">📅 Follow-up auto-created for {new Date(quickKivDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} at {quickKivTime}</div>}
+              </div>
+            )}
+
+            <div className="qs-footer">
+              <button className="qs-btn-cancel" onClick={()=>setShowQuickStatusModal(false)}>Cancel</button>
+              <button className="qs-btn-confirm" onClick={handleQuickStatus} disabled={quickStatusSaving}>
+                {quickStatusSaving?'Saving…':'Update Status'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2785,7 +3079,7 @@ function LeadOwnerDropdown({ users, value, onChange }) {
 }
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading }) => {
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime }) => {
   // ── Pincode auto-fill ──────────────────────────────────────────────────────
   const [pincodeError, setPincodeError] = React.useState('');
   const pincodeDebounceRef              = React.useRef(null);
@@ -2950,7 +3244,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
         <div className="leads-enquiries-form-group">
           <label>Status *</label>
-          <FilterSelect value={formData.status} options={['New','Interested','Not Interested','Not Responded','Contacted','In Discussion','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>{setFormData(p=>({...p,status:v,...(v==='Closed Won'&&!p.closedByUserId?{closedByUserId:currentUser?.id||null,closedByName:currentUser?.name||''}:{})}));}} />
+          <FilterSelect value={formData.status} options={['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>{setFormData(p=>({...p,status:v,...(v==='Closed Won'&&!p.closedByUserId?{closedByUserId:currentUser?.id||null,closedByName:currentUser?.name||''}:{})}));}} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Assign To</label>
@@ -2958,6 +3252,35 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           {!canAssign && <small style={{ color: '#6b7280', fontSize: 12 }}>No assign permission</small>}
         </div>
       </div>
+
+      {formData.status === 'Keep in View' && (
+        <div style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff',borderRadius:10,padding:'14px 16px',marginTop:4,marginBottom:4}}>
+          <div style={{fontWeight:600,color:'#6d28d9',fontSize:13,marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+            👁 Keep in View — Callback Date &amp; Time <span style={{fontSize:11,background:'#ede9fe',color:'#7c3aed',borderRadius:4,padding:'1px 7px',fontWeight:700}}>Required</span>
+          </div>
+          <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
+            <div style={{flex:'1 1 160px',minWidth:140}}>
+              <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Date *</label>
+              <input type="date" value={kivDate} onChange={e=>setKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                style={{width:'100%',padding:'8px 12px',border:'1.5px solid #c4b5fd',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{flex:'1 1 130px',minWidth:120}}>
+              <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Time *</label>
+              <input type="time" value={kivTime} onChange={e=>setKivTime(e.target.value)}
+                style={{width:'100%',padding:'8px 12px',border:'1.5px solid #c4b5fd',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+              {['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'].map(t=>(
+                <button key={t} type="button" onClick={()=>setKivTime(t)}
+                  style={{padding:'5px 10px',borderRadius:6,fontSize:12,fontWeight:600,cursor:'pointer',border:kivTime===t?'none':'1.5px solid #e2e8f0',background:kivTime===t?'#7c3aed':'#f8fafc',color:kivTime===t?'#fff':'#374151',transition:'all .15s'}}>
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          {kivDate && <div style={{marginTop:8,fontSize:12,color:'#7c3aed',fontWeight:500}}>📅 A follow-up will be automatically created for {new Date(kivDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} at {kivTime}</div>}
+        </div>
+      )}
 
       {/* ── Lead Owner ──────────────────────────────────────────────────── */}
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>

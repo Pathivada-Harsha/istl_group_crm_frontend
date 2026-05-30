@@ -1342,8 +1342,9 @@ export default function ClientDashboardFollowUps() {
                         ) : (
                           <>
                             <span style={{ display:'inline-block', padding:'1px 7px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:2 }}>👤 Lead</span>
-                            <strong style={{ display:'block', fontSize:13 }}>{followup.leadCode || 'N/A'}</strong>
-                            {/* {followup.groupName && <span className="followup-group-badge">{followup.groupName}</span>} */}
+                            <strong style={{ display:'block', fontSize:13 }}>{followup.leadName || followup.leadCode || 'N/A'}</strong>
+                            <span style={{ fontSize:11, color:'#6b7280' }}>{followup.leadCode}</span>
+                            {followup.leadPhone && <span style={{ fontSize:11, color:'#6b7280', display:'block' }}>📞 {followup.leadPhone}</span>}
                           </>
                         )}
                       </div>
@@ -2208,8 +2209,22 @@ export default function ClientDashboardFollowUps() {
                     ) : (
                       <>
                         <span style={{ display:'inline-block', padding:'1px 8px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>👤 Lead</span>
-                        <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>{f.leadCode || 'N/A'}</div>
+                        {f.leadName && <div style={{ fontWeight:700, fontSize:14, color:'#0f172a', marginBottom:2 }}>{f.leadName}</div>}
+                        <div style={{ fontWeight: f.leadName ? 500 : 700, fontSize:12, color:'#64748b' }}>{f.leadCode || 'N/A'}</div>
                         {f.groupName && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{f.groupName}{f.subGroupName ? ` › ${f.subGroupName}` : ''}</div>}
+                        {(f.leadPhone || f.leadEmail) && (
+                          <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
+                            {f.leadPhone && <div style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:5 }}><span>📞</span>{f.leadPhone}</div>}
+                            {f.leadEmail && <div style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:5 }}><span>✉️</span>{f.leadEmail}</div>}
+                          </div>
+                        )}
+                        {f.leadStatus && (
+                          <div style={{ marginTop:8 }}>
+                            <span style={{ fontSize:11, fontWeight:600, padding:'2px 9px', borderRadius:20, background: f.leadStatus==='Closed Won'?'#d1fae5':f.leadStatus==='Closed Lost'?'#fee2e2':'#f1f5f9', color: f.leadStatus==='Closed Won'?'#065f46':f.leadStatus==='Closed Lost'?'#991b1b':'#374151' }}>
+                              {f.leadStatus}
+                            </span>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
