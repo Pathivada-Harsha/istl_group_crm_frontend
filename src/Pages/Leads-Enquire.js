@@ -2373,15 +2373,24 @@ useEffect(() => {
       case 'assignedToName': return lead.assignedToName || empty;
       case 'leadOwner': {
         if (!lead.leadOwner) return empty;
-        const ownerUser = allUsers.find(u => u.name === lead.leadOwner);
-        const hasPhoto  = ownerUser?.avatar_url === 'db';
+        // Backend now resolves the user id and avatar url directly on the lead object.
+        // Fall back to allUsers lookup for legacy records that pre-date this field.
+        const hasPhoto  = lead.leadOwnerAvatarUrl === 'db';
+        const ownerId   = lead.leadOwnerUserId
+          || allUsers.find(u => u.name?.trim().toLowerCase() === lead.leadOwner?.trim().toLowerCase())?.id;
         return (
           <span className="leads-owner-cell">
             <span className="leads-owner-avatar">
-              {hasPhoto
-                ? <img src={`${API_BASE_URL}/users/avatar/${ownerUser.id}`} alt={lead.leadOwner} className="leads-owner-avatar-img" />
-                : <span className="leads-owner-avatar-initials">{(lead.leadOwner[0]||'').toUpperCase()}</span>
+              {hasPhoto && ownerId
+                ? <img src={`${API_BASE_URL}/users/avatar/${ownerId}`} alt={lead.leadOwner} className="leads-owner-avatar-img"
+                    onError={e => { e.target.style.display='none'; e.target.nextSibling.style.display='flex'; }}
+                  />
+                : null
               }
+              <span className="leads-owner-avatar-initials"
+                style={{ display: (hasPhoto && ownerId) ? 'none' : 'flex' }}>
+                {(lead.leadOwner[0] || '').toUpperCase()}
+              </span>
             </span>
             <span className="leads-owner-name">{lead.leadOwner}</span>
           </span>
