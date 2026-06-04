@@ -618,9 +618,17 @@ useEffect(() => {
       'SALES.ORDERS': 'sales_orders', 'INVOICES': 'invoices',
       'QUOTATIONS.PROCUREMENT': 'quotations.procurement', 'PURCHASE.ORDERS': 'purchase_orders',
       'BILLS': 'bills', 'PAYMENTS': 'payments', 'REPORTS': 'reports', 'FOLLOWUPS': 'followups',
-      'SETTINGS': 'settings', 'ACTIVITY.LOGS': 'activity_logs', 'ATTACHMENTS': 'attachments'
+      'SETTINGS': 'settings', 'ACTIVITY.LOGS': 'activity_logs', 'ATTACHMENTS': 'attachments',
+      // Explicit mappings — DB uses 'orderbook.*' (no underscore), not 'order_book.*'
+      'ORDER_BOOK': 'orderbook',
+      'INVOICE_RECEIPTS': 'invoice_receipts',
+      
     };
-    return `${moduleMap[module] || module.toLowerCase().replace(/\./g, '_')}.${action.toLowerCase()}`;
+    // Normalise action: lowercase, spaces to underscores
+    const normAction = action.toLowerCase().replace(/\s+/g, '_');
+    // Fallback: strip underscores from module name to match DB convention (e.g. some_module -> somemodule)
+    const normModule = moduleMap[module] || module.toLowerCase().replace(/\./g, '_').replace(/__+/g, '_');
+    return `${normModule}.${normAction}`;
   };
 
   const availablePagePermissions = React.useMemo(() => {
@@ -1138,6 +1146,10 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
       assign: { bg: '#fdf4ff', color: '#6b21a8', border: '#a21caf' },
       send: { bg: '#fff7ed', color: '#9a3412', border: '#ea580c' },
       record: { bg: '#f0fdf4', color: '#14532d', border: '#16a34a' },
+      upload: { bg: '#e0f2fe', color: '#0369a1', border: '#0284c7' },
+      download: { bg: '#f0fdf4', color: '#065f46', border: '#22c55e' },
+      adjust: { bg: '#fdf4ff', color: '#7e22ce', border: '#9333ea' },
+      upload_po: { bg: '#e0f2fe', color: '#0369a1', border: '#0284c7' },
     };
     const s = map[actionName.toLowerCase()] || { bg: '#f1f5f9', color: '#475569', border: '#6366f1' };
     return {

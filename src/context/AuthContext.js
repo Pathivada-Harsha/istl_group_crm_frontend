@@ -8,30 +8,22 @@ import React, {
 const USER_KEY = 'bd_portal_user';
 const SIDEBAR_KEY_PREFIX = 'sidebar_state_';
 
-// ─── ACCOUNTS_EXECUTIVE permission override ───────────────────────────────────
-const ACCOUNTS_EXECUTIVE_ROLE = 'ACCOUNTS_EXECUTIVE';
+// ─── Permission policy ────────────────────────────────────────────────────────
+// Permissions are driven ENTIRELY by what the backend returns at login.
+// No role-based overrides (ACCOUNTS_*, SUPERADMIN, etc.) are applied here.
+// Every user — regardless of role — only gets what is in their DB permissions.
+//
+// isAccountsRole is kept solely so pages can still read isAccountsExecutive
+// from the context without breaking their destructuring — it no longer affects
+// what permissions are merged.
+const isAccountsRole = (role) =>
+  typeof role === 'string' && role.trim().toUpperCase().startsWith('ACCOUNTS_');
 
-const ACCOUNTS_EXECUTIVE_PERMISSIONS = {
-  INVOICES:              ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
-  BILLS:                 ['VIEW', 'CREATE', 'EDIT', 'DOWNLOAD'],
-  PAYMENTS:              ['VIEW', 'CREATE', 'EDIT'],
-  PURCHASE_ORDERS:       ['VIEW', 'CREATE', 'EDIT'],
-  ORDER_BOOK:            ['VIEW', 'CREATE', 'EDIT'],
-  PROCUREMENT_QUOTATIONS:['VIEW', 'CREATE', 'EDIT', 'APPROVE'],
-  VENDORS:               ['VIEW', 'CREATE', 'EDIT'],
-  CUSTOMERS:             ['VIEW', 'CREATE', 'EDIT'],
-  LEADS:                 ['VIEW'],
-  REPORTS:               ['VIEW'],
-};
-
-const applyAccountsExecutiveOverride = (role, serverPagePermissions) => {
-  const merged = { ...(serverPagePermissions || {}) };
-  if (role !== ACCOUNTS_EXECUTIVE_ROLE) return merged;
-  Object.entries(ACCOUNTS_EXECUTIVE_PERMISSIONS).forEach(([page, perms]) => {
-    merged[page] = Array.from(new Set([...(merged[page] || []), ...perms]));
-  });
-  return merged;
-};
+// No-op: just return server permissions as-is. The old ACCOUNTS_PERMISSIONS
+// block was removed so that permissions are purely DB-driven.
+const applyAccountsExecutiveOverride = (_role, serverPagePermissions) => ({
+  ...(serverPagePermissions || {}),
+});
 
 // ─── Sidebar state cleanup helper ─────────────────────────────────────────────
 /**
@@ -102,7 +94,7 @@ export const AuthProvider = ({ children }) => {
             setUser(userData.user);
             setMenuPermissions(userData.menuPermissions);
             setPagePermissions(effectivePagePermissions);
-            setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
+            setIsAccountsExecutive(isAccountsRole(role));
             setSessionTimeout(userData.sessionTimeout || null);
             setWarningTime(userData.warningTime || null);
             setIsAuthenticated(true);
@@ -139,7 +131,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData.user);
       setMenuPermissions(userData.menuPermissions);
       setPagePermissions(effectivePagePermissions);
-      setIsAccountsExecutive(role === ACCOUNTS_EXECUTIVE_ROLE);
+      setIsAccountsExecutive(isAccountsRole(role));
       setSessionTimeout(userData.sessionTimeout || null);
       setWarningTime(userData.warningTime || null);
       setIsAuthenticated(true);

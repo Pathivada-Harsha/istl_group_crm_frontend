@@ -45,6 +45,8 @@ import RoleHierarchyPage from './Pages/RoleHierarchyPage.js';
 import './App.css';
 import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
+import InventoryManagement from './Pages/InventoryManagement.js';
+
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
 function AppWrapper() {
@@ -59,7 +61,7 @@ function AppWrapper() {
       '/dashboard', '/sales', '/procurement', '/documents',
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense', '/taskmanagement','/projectaccess'
+      '/project-cost-expense', '/taskmanagement','/projectaccess','/inventory-management'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -135,6 +137,10 @@ function AppShell({ hideShell }) {
 
           <Route path="/project-cost-expense" element={
             <ProtectedRoute><ProjectCostExpenseManagement /></ProtectedRoute>
+          } />
+
+          <Route path="/inventory-management" element={
+            <ProtectedRoute><InventoryManagement /></ProtectedRoute>
           } />
 
           <Route path="/sales/leads"

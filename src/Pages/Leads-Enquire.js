@@ -49,12 +49,14 @@ const getUnifiedStatus = (lead) => {
   if (!lead) return 'New';
   const s  = lead.status || 'New';
   const tc = lead.telecallerStatus;
-  // Terminal states always win
+  // Terminal / BD-progressed states always win — never overridden by TC
   if (s === 'Closed Won' || s === 'Closed Lost') return s;
-  // If BD has moved the lead past the early TC stage (Proposal Sent, etc.)
-  // always show that BD status — never let TC override it.
   if (!TC_EARLY_STATUSES.has(s)) return s;
-  // Lead is still in early stage — surface telecaller status if set
+  // TC override ONLY applies when the BD status is still 'New'
+  // If BD has explicitly set status to Interested / Not Interested / etc,
+  // respect that choice and don't let telecallerStatus overwrite it.
+  if (s !== 'New') return s;
+  // Lead is still 'New' — surface telecaller status if set
   if (tc === 'INTERESTED')     return 'Interested';
   if (tc === 'NOT_INTERESTED') return 'Not Interested';
   if (tc === 'NOT_RESPONDED')  return 'Not Responded';
@@ -2574,7 +2576,7 @@ useEffect(() => {
                 <LeadFormBody
                   formData={formData} setFormData={setFormData}
                   phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
-                  groups={groups} subGroups={subGroups} users={users}
+                  groups={groups} subGroups={subGroups} users={users} allUsers={allUsers}
                   canAssign={canAssign} loading={loading} currentUser={user}
                   billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
                   kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
@@ -2812,7 +2814,7 @@ useEffect(() => {
               <LeadFormBody
                 formData={formData} setFormData={setFormData}
                 phoneError={phoneError} handlePhoneChange={e => setFormData(p => ({ ...p, phone: validatePhone(e.target.value) }))}
-                groups={groups} subGroups={subGroups} users={users}
+                groups={groups} subGroups={subGroups} users={users} allUsers={allUsers}
                 canAssign={canAssign} loading={loading} currentUser={user}
                 billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
                 kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
@@ -3088,7 +3090,7 @@ function LeadOwnerDropdown({ users, value, onChange }) {
 }
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime }) => {
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, allUsers, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime }) => {
   // ── Pincode auto-fill ──────────────────────────────────────────────────────
   const [pincodeError, setPincodeError] = React.useState('');
   const pincodeDebounceRef              = React.useRef(null);
@@ -3239,7 +3241,19 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           <>
             <div className="leads-enquiries-form-group">
               <label>Referred By — Name</label>
-              <input type="text" value={formData.referralName || ''} onChange={e => setFormData(p => ({ ...p, referralName: e.target.value }))} placeholder="Name of the person who referred" />
+              <LeadOwnerDropdown
+                users={allUsers || []}
+                value={formData.referralName || ''}
+                onChange={name => {
+                  // When a user is selected from the list, also auto-fill their phone
+                  const matched = (allUsers || []).find(u => u.name === name);
+                  setFormData(p => ({
+                    ...p,
+                    referralName: name,
+                    referralPhone: matched?.phone ? matched.phone : p.referralPhone,
+                  }));
+                }}
+              />
             </div>
             <div className="leads-enquiries-form-group">
               <label>Referred By — Phone</label>

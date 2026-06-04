@@ -261,13 +261,14 @@ const BillsManagementPage = () => {
   });
 
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
   const billsPerms = pagePermissions?.BILLS || [];
-  const canView    = billsPerms.includes('VIEW')   || isAccountsExecutive;
-  const canCreate  = billsPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit    = billsPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete  = billsPerms.includes('DELETE') && !isAccountsExecutive;
-  const canApprove = billsPerms.includes('APPROVE')|| isAccountsExecutive;
+  // Pure DB-driven permissions — no role overrides
+  const canView    = billsPerms.includes('VIEW');
+  const canCreate  = billsPerms.includes('CREATE');
+  const canEdit    = billsPerms.includes('EDIT');
+  const canDelete  = billsPerms.includes('DELETE');
+  const canApprove = billsPerms.includes('APPROVE');
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
 
   const getAuthHeaders = () => ({
@@ -280,6 +281,11 @@ const BillsManagementPage = () => {
   });
 
   // Fetch bills and KPIs
+  // Clear stale data immediately when logged-in user changes
+  useEffect(() => {
+    setBills([]); setPagination(prev => ({ ...prev, currentPage: 0 }));
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
@@ -322,7 +328,7 @@ const BillsManagementPage = () => {
     load();
     return () => controller.abort(); // cancel previous in-flight request when deps change
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize, billDateFrom, billDateTo]);
+  }, [projectId, groupName, subGroupName, filters.paymentStatus, filters.search, pagination.currentPage, pagination.pageSize, billDateFrom, billDateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     fetchKPIs();

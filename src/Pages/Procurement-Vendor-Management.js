@@ -1066,17 +1066,19 @@ const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 const VendorManagement = () => {
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
   const vendorPerms    = pagePermissions?.VENDORS || [];
-  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  // Pure DB-driven page permissions — no role overrides
+  const canView        = vendorPerms.includes('VIEW');
+  const canCreate      = vendorPerms.includes('CREATE');
+  const canEdit        = vendorPerms.includes('EDIT');
+  const canDelete      = vendorPerms.includes('DELETE');
+  const isViewOnly     = canView && !canCreate && !canEdit && !canDelete;
+  // Data scope — ACCOUNTS_*/ADMIN/SUPERADMIN see all vendors; others see only their own
+  const isAccountsRole = !!(user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_'));
   const isSuperAdmin   = user?.role === 'SUPERADMIN';
   const isAdmin        = user?.role === 'ADMIN';
-  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
-  const canView        = vendorPerms.includes('VIEW')   || isFullAccess;
-  const canCreate      = vendorPerms.includes('CREATE') || isFullAccess;
-  const canEdit        = vendorPerms.includes('EDIT')   || isFullAccess;
-  const canDelete      = vendorPerms.includes('DELETE') && !isAccountsExecutive;
-  const isViewOnly     = canView && !canCreate && !canEdit && !canDelete;
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole;
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [confirmModal, setConfirmModal] = useState({ show: false, vendorId: null, vendorName: '' });
@@ -1151,6 +1153,11 @@ const VendorManagement = () => {
   // This eliminates the race-condition where a slow earlier response (e.g. search='T')
   // could arrive after a faster later response (search='Test Vender From PO') and
   // silently overwrite the correct KPI values with stale/broader data.
+  // Clear stale data immediately when logged-in user changes
+  useEffect(() => {
+    setVendors([]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -1233,7 +1240,7 @@ const VendorManagement = () => {
     loadAll();
     return () => controller.abort(); // cancel previous in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig, groupName, subGroupName, projectId, createdAtFrom, createdAtTo]);
+  }, [currentPage, pageSize, filters.search, filters.status, filters.category, filters.groupName, filters.subGroupName, sortConfig, groupName, subGroupName, projectId, createdAtFrom, createdAtTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Column helpers ────────────────────────────────────────────────────────
   const visibleColumns = columns.filter((c) => c.visible);

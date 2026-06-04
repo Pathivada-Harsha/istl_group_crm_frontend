@@ -5,7 +5,7 @@ import {
   CheckCircle, Clock, XCircle, Briefcase,
   MapPin, Utensils, Plane, Hotel, Users,
   ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
-  Receipt, RefreshCw,
+  Receipt, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -35,8 +35,27 @@ const DEFAULT_COLUMNS = [
   { key: 'amount',        label: 'Total',            sortable: true,  visible: true  },
   { key: 'paidByName',    label: 'Paid By',          sortable: true,  visible: true  },
   { key: 'status',        label: 'Status',           sortable: false, visible: true, mandatory: 1 },
+  { key: 'approval',      label: 'Approval Flow',    sortable: false, visible: true  },
+  { key: 'payment',       label: 'Payment',          sortable: false, visible: true  },
   { key: 'actions',       label: 'Actions',          sortable: false, visible: true  },
 ];
+
+// ─── Approval workflow constants & helpers ──────────────────────────────────
+const APPROVAL_STAGES = [
+  { key: 'stage1', code: 'MANAGER', short: 'M', label: 'Reporting Manager' },
+  { key: 'stage2', code: 'CFO',     short: 'C', label: 'Chief Financial Officer' },
+  { key: 'stage3', code: 'FINAL',   short: 'F', label: 'Final Authorization' },
+];
+// Normalize a role/designation for lenient matching (SUPERADMIN, SUPER_ADMIN → SUPERADMIN)
+const normRole = (s) => (s || '').toUpperCase().replace(/[^A-Z]/g, '');
+const stageColor = (st) => {
+  switch ((st || 'WAITING').toUpperCase()) {
+    case 'APPROVED': return { bg: '#dcfce7', color: '#15803d', br: '#86efac' };
+    case 'REJECTED': return { bg: '#fee2e2', color: '#b91c1c', br: '#fca5a5' };
+    case 'PENDING':  return { bg: '#fef3c7', color: '#b45309', br: '#fcd34d' };
+    default:         return { bg: '#f1f5f9', color: '#94a3b8', br: '#e2e8f0' }; // WAITING
+  }
+};
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = v => v == null ? '₹0' : `₹${parseFloat(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
@@ -312,21 +331,166 @@ const PCEDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
   );
 };
 
+// ─── Single-project selector (radio dropdown) for an expense item ────────────
+const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, placeholder }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    if (open) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+
+  // Normalise: always work with a single string ID (or '')
+  const sel = selected || [];
+  const selectedId = sel.length > 0 ? String(sel[0]) : '';
+
+  const selectOne = (id) => {
+    onChange([String(id)]);
+    setOpen(false);
+  };
+
+  const labelFor = (id) => {
+    const p = (projList || []).find(p => String(p.id) === String(id));
+    return p ? (p.name + (p.location ? ' – ' + p.location : '')) : '#' + id;
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div
+        onClick={() => { if (!disabled) setOpen(o => !o); }}
+        style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
+          border: '1px solid ' + (!selectedId ? '#ef4444' : open ? '#2563eb' : '#d1d5db'),
+          borderRadius: 8, padding: '7px 10px', minHeight: 36,
+          cursor: disabled ? 'not-allowed' : 'pointer',
+          background: disabled ? '#f9fafb' : '#fff',
+          boxShadow: open ? '0 0 0 3px rgba(37,99,235,.1)' : (!selectedId ? '0 0 0 2px rgba(239,68,68,.1)' : 'none'),
+          transition: 'border-color .15s, box-shadow .15s',
+        }}>
+        <span style={{
+          flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          fontSize: 12.5, color: selectedId ? '#111827' : '#9ca3af',
+        }}>
+          {loading ? 'Loading…' : selectedId ? labelFor(selectedId) : (placeholder || '— Select Project *')}
+        </span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"
+          style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </div>
+      {open && (
+        <div style={{
+          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
+          width: 'max-content', minWidth: '100%', maxWidth: 460,
+          zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+          boxShadow: '0 10px 28px rgba(0,0,0,.14)', maxHeight: 260, overflowY: 'auto',
+        }}>
+          {/* Clear / placeholder row */}
+          <div onClick={() => { onChange([]); setOpen(false); }}
+            style={{
+              padding: '8px 12px', fontSize: 11.5, cursor: 'pointer',
+              color: '#9ca3af', borderBottom: '1px solid #f3f4f6', fontStyle: 'italic',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            — Select Project *
+          </div>
+          {(projList || []).length === 0 && (
+            <div style={{ padding: '10px 12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
+              {loading ? 'Loading…' : 'No projects available'}
+            </div>
+          )}
+          {(projList || []).map(p => {
+            const isSelected = String(p.id) === selectedId;
+            return (
+              <div key={p.id} onClick={() => selectOne(p.id)}
+                style={{
+                  padding: '8px 14px', fontSize: 11.5, cursor: 'pointer', display: 'flex',
+                  alignItems: 'flex-start', gap: 10,
+                  background: isSelected ? '#eff6ff' : 'transparent',
+                  borderBottom: '1px solid #f8fafc',
+                }}
+                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#eff6ff' : 'transparent'; }}>
+                {/* Radio indicator */}
+                <span style={{
+                  width: 14, height: 14, borderRadius: '50%', flexShrink: 0, marginTop: 2,
+                  border: '2px solid ' + (isSelected ? '#2563eb' : '#d1d5db'),
+                  background: isSelected ? '#2563eb' : '#fff',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all .15s',
+                }}>
+                  {isSelected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                </span>
+                <span style={{
+                  fontWeight: isSelected ? 600 : 400,
+                  color: isSelected ? '#1d4ed8' : '#111827',
+                  fontSize: 11.5, lineHeight: 1.4,
+                  wordBreak: 'break-word', whiteSpace: 'normal',
+                }}>
+                  {p.name}{p.location ? ` – ${p.location}` : ''}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProjectCostExpenseManagement = () => {
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, isAccountsExecutive } = useAuth();
+  const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
-  // ── Role-based access ──────────────────────────────────────────────────────
+  // ── Role-based data scope (not permission gates) ───────────────────────────
+  // isFullAccess controls whether the user sees all records or only their own.
+  // This is intentional data scoping, not a button-level permission override.
   const userRole      = (user?.role || localStorage.getItem('userRole') || '').toLowerCase();
-  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
   const isSuperAdmin   = user?.role === 'SUPERADMIN' || userRole.includes('super_admin');
   const isAdmin        = user?.role === 'ADMIN';
-  // Full access: superadmin, admin, any ACCOUNTS_* role, or isAccountsExecutive from auth context
-  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
+  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole;
+  // Approval is gated by the multi-stage workflow (canActOnStage), not a blanket role flag
   const canApprove     = isFullAccess;
+
+  // ── Approval-workflow permissions for the logged-in user ───────────────────
+  const myRoleNorm  = normRole(user?.role);
+  const myDesigNorm = normRole(user?.designation);
+  const isAdminOverride = myRoleNorm === 'SUPERADMIN' || myRoleNorm === 'ADMIN';
+  const isCFOUser   = isAdminOverride || myRoleNorm === 'ACCOUNTSCFO'
+    || myDesigNorm.includes('CHIEFFINANCIALOFFICER') || myDesigNorm === 'CFO';
+  const isFinalUser = isAdminOverride || myRoleNorm === 'ACCOUNTSMANAGER'
+    || myRoleNorm === 'SUPERADMIN' || myDesigNorm.includes('ACCOUNTSMANAGER');
+  const isPayUser   = isAdminOverride || myRoleNorm === 'ACCOUNTSEXECUTIVE'
+    || myDesigNorm.includes('ACCOUNTSEXECUTIVE');
+
+  // Can the current user act on the CURRENT stage of this expense?
+  const canActOnStage = (exp) => {
+    if (!exp) return false;
+    const stage = exp.approvalStage;
+    if (stage === 'MANAGER') {
+      return isAdminOverride
+        || (exp.reportingManagerId != null && String(exp.reportingManagerId) === String(user?.id));
+    }
+    if (stage === 'CFO')   return isCFOUser;
+    if (stage === 'FINAL') return isFinalUser;
+    return false; // COMPLETED / REJECTED — nothing to act on
+  };
+  // Can the current user mark this expense as paid?
+  // ALL three approval stages must be complete (approvalStage === 'COMPLETED')
+  // before the Pay button is shown — status='Approved' alone is not enough
+  // because legacy rows may have status set without a completed workflow.
+  const canMarkPaid = (exp) =>
+    exp &&
+    exp.approvalStage === 'COMPLETED' &&
+    exp.status === 'Approved' &&
+    exp.paymentStatus !== 'PAID' &&
+    (isPayUser || isFinalUser);
 
   const [expenses, setExpenses] = useState([]);
   const [stats, setStats] = useState(null);
@@ -363,6 +527,11 @@ const ProjectCostExpenseManagement = () => {
   const [billFile, setBillFile] = useState(null);           // File object
   const [billUploading, setBillUploading] = useState(false);
   const billInputRef = useRef(null);
+
+  // ── Bill preview modal state ───────────────────────────────────────────────
+  const [showBillPreviewModal, setShowBillPreviewModal] = useState(false);
+  const [billPreviewUrl, setBillPreviewUrl]             = useState(null);
+  const [billPreviewName, setBillPreviewName]           = useState('');
 
   // ── Per-item project dropdowns cache (key = item.id) ──────────────────────
   const [itemProjects, setItemProjects] = useState({});     // { [itemId]: [{id,name}] }
@@ -499,6 +668,30 @@ const ProjectCostExpenseManagement = () => {
     finally { setBillUploading(false); }
   };
 
+  // ── Bill preview modal handler ────────────────────────────────────────────
+  const handleViewBill = async (exp) => {
+    try {
+      const url = exp.receiptUrl
+        ? `${API_BASE_URL}${exp.receiptUrl}`
+        : `${API_BASE_URL}/project-expenses/${exp.id}/bill`;
+      const r = await fetch(url, { credentials: 'include', headers: getAuthHeaders() });
+      if (!r.ok) { showError('Bill not found or could not be loaded'); return; }
+      const blob = await r.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      setBillPreviewUrl(blobUrl);
+      setBillPreviewName(exp.expenseCode || `Expense-${exp.id}`);
+      setShowBillPreviewModal(true);
+    } catch { showError('Failed to load bill document'); }
+  };
+
+  const handleCloseBillPreview = () => {
+    if (billPreviewUrl) window.URL.revokeObjectURL(billPreviewUrl);
+    setBillPreviewUrl(null);
+    setBillPreviewName('');
+    setShowBillPreviewModal(false);
+  };
+
+
   // ── Modal dropdown handlers — ADVANCE ────────────────────────────────────────
   // ── Fetch users for Paid By ───────────────────────────────────────────────────
   // The backend /filters/leads-users reads User-Role from the request header.
@@ -628,12 +821,11 @@ const ProjectCostExpenseManagement = () => {
   const handleAddNewExpense = () => {
     setBillFile(null);
     setItemProjects({});
-    const initItem = { id: Date.now(), category: 'Travel', projectId: '', amount: '', paymentMode: 'UPI', description: '' };
+    const initItem = { id: Date.now(), category: 'Travel', projectIds: [], amount: '', paymentMode: 'UPI', description: '' };
     setExpenseFormData({
       groupName: groupName || '', subGroupName: subGroupName || '',
       tripDate: new Date().toISOString().split('T')[0],
       tripReason: '',
-      status: 'Approved',
       paidByUserId: String(user?.id || ''), paidByName: user?.name || '',
       adjustedAdvanceId: '', advanceAdjustedAmount: '',
       expenseItems: [initItem],
@@ -656,19 +848,42 @@ const ProjectCostExpenseManagement = () => {
     const { groupName: grp, subGroupName: sub, tripDate, tripReason, paidByUserId, paidByName, expenseItems } = expenseFormData || {};
     if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
     if (!tripDate) { showWarning('Date is required'); return; }
+    if (!tripReason || !tripReason.trim()) { showWarning('Purpose / Description is required'); return; }
     if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
 
-    // Validate every item has a project and amount
-    const missingProject = expenseItems.find(i => !i.projectId);
-    if (missingProject) { showWarning('Every item must have a project assigned'); return; }
+    // Validate every item: at least one project, valid amount, commission notes
+    const missingProject = expenseItems.find(i => !i.projectIds || i.projectIds.length === 0);
+    if (missingProject) { showWarning('Every item must have a project selected'); return; }
     const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
     if (missingAmount) { showWarning('Every item must have a valid amount'); return; }
+    const missingCommissionNote = expenseItems.find(
+      i => i.category === 'Commission' && (!i.description || !i.description.trim()));
+    if (missingCommissionNote) { showWarning('Commission items require notes specifying who the commission is paid to'); return; }
 
-    // ── Group items by projectId — one expense record per project ────────────
+    // Bill upload is mandatory
+    if (!billFile) { showWarning('Bill / receipt upload is mandatory'); return; }
+
+    // ── Expand each item across its selected projects, dividing equally ───────
+    // An item of ₹900 across 3 projects → ₹300 to each (remainder added to first).
     const byProject = {};
     expenseItems.forEach(i => {
-      if (!byProject[i.projectId]) byProject[i.projectId] = [];
-      byProject[i.projectId].push(i);
+      const pids = i.projectIds || [];
+      const n = pids.length;
+      const total = parseFloat(i.amount) || 0;
+      const base = Math.floor((total / n) * 100) / 100;          // 2-dp share
+      const remainder = Math.round((total - base * n) * 100) / 100;
+      pids.forEach((pid, idx) => {
+        const share = idx === 0 ? Math.round((base + remainder) * 100) / 100 : base;
+        if (!byProject[pid]) byProject[pid] = [];
+        byProject[pid].push({
+          category: i.category,
+          amount: share,
+          paymentMode: i.paymentMode,
+          description: n > 1
+            ? `${i.description || ''}${i.description ? ' ' : ''}[split: ${fmt(share)} of ${fmt(total)} across ${n} projects]`.trim()
+            : (i.description || ''),
+        });
+      });
     });
     const projectGroups = Object.entries(byProject); // [[projectId, [items]], ...]
 
@@ -678,9 +893,8 @@ const ProjectCostExpenseManagement = () => {
       for (const [pid, items] of projectGroups) {
         const body = {
           groupName: grp, subGroupName: sub,
-          projectId: pid,                          // one valid projectId per call
+          projectId: pid,
           tripDate, tripReason: tripReason || null,
-          status: expenseFormData.status || 'Approved',
           paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
           paidByName: paidByName || '',
           expenseItems: items.map(i => ({
@@ -702,15 +916,17 @@ const ProjectCostExpenseManagement = () => {
         results.push(Array.isArray(created) ? created[0] : created);
       }
 
-      // Upload bill to the first created expense if file selected
-      if (billFile && results[0]?.id) await handleBillUpload(results[0].id);
+      // Bill is mandatory — upload to every created expense record
+      if (billFile) {
+        for (const r of results) { if (r?.id) await handleBillUpload(r.id); }
+      }
 
       const projectCount = projectGroups.length;
       const itemCount = expenseItems.length;
       showSuccess(
         projectCount === 1
-          ? `Expense created with ${itemCount} item(s) for 1 project`
-          : `${itemCount} item(s) split across ${projectCount} project expense records`
+          ? `Expense submitted for approval with ${itemCount} item(s)`
+          : `${itemCount} item(s) split equally across ${projectCount} projects — submitted for approval`
       );
       setShowCreateModal(false); setBillFile(null);
       fetchExpenses(); fetchStats();
@@ -761,13 +977,13 @@ const ProjectCostExpenseManagement = () => {
       ? expense.expenseItems.map(i => ({
           id: i.id || Date.now() + Math.random(),
           category: i.category || 'Travel',
-          projectId: i.projectId ? String(i.projectId) : parentProjectId,
+          projectIds: [i.projectId ? String(i.projectId) : parentProjectId].filter(Boolean),
           amount: i.amount?.toString() || '',
           paymentMode: i.paymentMode || 'UPI',
           description: i.description || '',
         }))
       : [{ id: Date.now(), category: expense.category || 'Travel',
-           projectId: expense.projectId ? String(expense.projectId) : '',
+           projectIds: [expense.projectId ? String(expense.projectId) : ''].filter(Boolean),
            amount: expense.amount?.toString() || '',
            paymentMode: expense.paymentMode || 'UPI',
            description: expense.description || '' }];
@@ -804,29 +1020,54 @@ const ProjectCostExpenseManagement = () => {
     const { id, groupName: grp, subGroupName: sub, tripDate, tripReason,
             paidByUserId, paidByName, expenseItems } = expenseFormData || {};
     if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
+    if (!tripReason || !tripReason.trim()) { showWarning('Purpose / Description is required'); return; }
     if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
 
-    const missingProject = expenseItems.find(i => !i.projectId);
-    if (missingProject) { showWarning('Every item must have a project assigned'); return; }
+    const missingProject = expenseItems.find(i => !i.projectIds || i.projectIds.length === 0);
+    if (missingProject) { showWarning('Every item must have a project selected'); return; }
     const missingAmount = expenseItems.find(i => !i.amount || parseFloat(i.amount) <= 0);
     if (missingAmount) { showWarning('Every item must have a valid amount'); return; }
+    const missingCommissionNote = expenseItems.find(
+      i => i.category === 'Commission' && (!i.description || !i.description.trim()));
+    if (missingCommissionNote) { showWarning('Commission items require notes specifying who the commission is paid to'); return; }
 
-    // Check if all items belong to the SAME project as the original expense
-    const allSameProject = expenseItems.every(i => i.projectId === expenseItems[0].projectId);
+    // Expand items across selected projects, dividing equally
+    const byProject = {};
+    expenseItems.forEach(i => {
+      const pids = i.projectIds || [];
+      const n = pids.length;
+      const total = parseFloat(i.amount) || 0;
+      const base = Math.floor((total / n) * 100) / 100;
+      const remainder = Math.round((total - base * n) * 100) / 100;
+      pids.forEach((pid, idx) => {
+        const share = idx === 0 ? Math.round((base + remainder) * 100) / 100 : base;
+        if (!byProject[pid]) byProject[pid] = [];
+        byProject[pid].push({
+          category: i.category,
+          amount: share,
+          paymentMode: i.paymentMode,
+          description: n > 1
+            ? `${i.description || ''}${i.description ? ' ' : ''}[split: ${fmt(share)} of ${fmt(total)} across ${n} projects]`.trim()
+            : (i.description || ''),
+        });
+      });
+    });
+
+    const projectIds = Object.keys(byProject);
+    const singleProject = projectIds.length === 1;
 
     setLoading(true);
     try {
-      if (allSameProject) {
-        // Simple update — single project, use PUT on the existing expense
+      if (singleProject) {
         const res = await fetch(`${API_BASE_URL}/project-expenses/${id}`, {
           method: 'PUT', headers: getAuthHeaders(), credentials: 'include',
           body: JSON.stringify({
             groupName: grp, subGroupName: sub,
-            projectId: expenseItems[0].projectId,
+            projectId: projectIds[0],
             tripDate, tripReason: tripReason || null,
             paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
             paidByName: paidByName || '',
-            expenseItems: expenseItems.map(i => ({
+            expenseItems: byProject[projectIds[0]].map(i => ({
               category: i.category, amount: parseFloat(i.amount) || 0,
               paymentMode: i.paymentMode, description: i.description || '',
             })),
@@ -836,17 +1077,10 @@ const ProjectCostExpenseManagement = () => {
         if (billFile) await handleBillUpload(id);
         showSuccess('Expense updated successfully!');
       } else {
-        // Multi-project: DELETE original, create new split records
+        // Multi-project: delete original, create new split records (re-enters approval)
         await fetch(`${API_BASE_URL}/project-expenses/${id}`, {
           method: 'DELETE', headers: getAuthHeaders(), credentials: 'include',
         });
-
-        const byProject = {};
-        expenseItems.forEach(i => {
-          if (!byProject[i.projectId]) byProject[i.projectId] = [];
-          byProject[i.projectId].push(i);
-        });
-
         const results = [];
         for (const [pid, items] of Object.entries(byProject)) {
           const res = await fetch(`${API_BASE_URL}/project-expenses`, {
@@ -866,8 +1100,8 @@ const ProjectCostExpenseManagement = () => {
           const created = await res.json();
           results.push(Array.isArray(created) ? created[0] : created);
         }
-        if (billFile && results[0]?.id) await handleBillUpload(results[0].id);
-        showSuccess(`Updated: split into ${Object.keys(byProject).length} project expense records`);
+        if (billFile) { for (const r of results) { if (r?.id) await handleBillUpload(r.id); } }
+        showSuccess(`Updated: split equally into ${projectIds.length} project expense records`);
       }
 
       setShowEditModal(false); setBillFile(null);
@@ -901,6 +1135,96 @@ const ProjectCostExpenseManagement = () => {
       showSuccess(`Expense ${newStatus}`);
       fetchExpenses(); fetchStats();
     } catch (error) { showError(error.message); }
+    finally { setLoading(false); }
+  };
+
+  // ── Multi-stage approval actions ───────────────────────────────────────────
+  const stageLabelOf = (exp) => {
+    const s = APPROVAL_STAGES.find(x => x.code === exp?.approvalStage);
+    return s ? s.label : 'approval';
+  };
+
+  // Returns a friendly "your role" label used in confirmation messages
+  const myRoleLabel = () => {
+    if (isCFOUser && !isAdminOverride)   return 'CFO';
+    if (isFinalUser && !isAdminOverride) return 'Accounts Manager';
+    if (isAdminOverride)                 return 'Admin';
+    return 'Reporting Manager';
+  };
+
+  // Returns what happens next after this user approves
+  const nextStepMessage = (exp) => {
+    const stage = exp?.approvalStage;
+    if (stage === 'MANAGER') return 'It will then move to the CFO for the next review.';
+    if (stage === 'CFO')     return 'It will then move to the Accounts Manager for final authorisation.';
+    if (stage === 'FINAL')   return 'This is the final approval step — the expense will be marked as Approved and sent for payment.';
+    return 'It will move to the next step in the approval chain.';
+  };
+
+  const performApprovalAction = async (id, action, remarks) => {
+    setConfirmModal({ show: false });
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/project-expenses/${id}/${action}`, {
+        method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
+        body: JSON.stringify({ remarks: remarks || '' }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `Failed to ${action}`);
+      }
+      showSuccess(action === 'approve' ? `Expense approved successfully as ${myRoleLabel()}.` : 'Expense rejected. The submitter has been notified.');
+      setShowViewModal(false);
+      fetchExpenses(); fetchStats();
+    } catch (e) { showError(e.message); }
+    finally { setLoading(false); }
+  };
+
+  const handleApproveStage = (exp) => {
+    setConfirmModal({
+      show: true,
+      title: 'Confirm Approval',
+      message: `By confirming, this expense (${exp.expenseCode || 'this expense'}) will be approved from your side as ${myRoleLabel()}. ${nextStepMessage(exp)}`,
+      type: 'confirm',
+      onConfirm: () => performApprovalAction(exp.id, 'approve', ''),
+    });
+  };
+
+  const handleRejectStage = (exp) => {
+    setConfirmModal({
+      show: true,
+      title: 'Confirm Rejection',
+      message: `By confirming, this expense (${exp.expenseCode || 'this expense'}) will be rejected from your side as ${myRoleLabel()}. The submitter will be notified and the approval chain will stop here.`,
+      type: 'alert',
+      onConfirm: () => performApprovalAction(exp.id, 'reject', ''),
+    });
+  };
+
+  const handleMarkPaid = (exp) => {
+    setConfirmModal({
+      show: true,
+      title: 'Confirm Payment',
+      message: `By confirming, you are recording that ${exp.paidByName || 'the employee'} has been reimbursed ${fmt(exp.totalAmount)} for expense ${exp.expenseCode || ''}. This action cannot be undone.`,
+      type: 'confirm',
+      onConfirm: () => performMarkPaid(exp.id),
+    });
+  };
+
+  const performMarkPaid = async (id) => {
+    setConfirmModal({ show: false });
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/project-expenses/${id}/pay`, {
+        method: 'PATCH', headers: getAuthHeaders(), credentials: 'include',
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || 'Failed to mark paid');
+      }
+      showSuccess('Expense marked as paid');
+      setShowViewModal(false);
+      fetchExpenses(); fetchStats();
+    } catch (e) { showError(e.message); }
     finally { setLoading(false); }
   };
 
@@ -1044,15 +1368,64 @@ const ProjectCostExpenseManagement = () => {
         );
       }
       case 'status': return <StatusBadge s={exp.status} />;
+      case 'approval': {
+        const stage = exp.approvalStage;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {APPROVAL_STAGES.map((s, idx) => {
+              const st = (exp[s.key] && exp[s.key].status) || 'WAITING';
+              const c = stageColor(st);
+              const isCurrent = stage === s.code;
+              const who = exp[s.key] && exp[s.key].byName ? `\n${exp[s.key].byName}` : '';
+              return (
+                <React.Fragment key={s.key}>
+                  <span
+                    title={`${s.label}: ${st}${who}`}
+                    style={{
+                      width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
+                      alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800,
+                      background: c.bg, color: c.color, border: `1.5px solid ${c.br}`,
+                      boxShadow: isCurrent ? `0 0 0 2px ${c.br}` : 'none',
+                    }}>
+                    {st === 'APPROVED' ? '✓' : st === 'REJECTED' ? '✕' : s.short}
+                  </span>
+                  {idx < APPROVAL_STAGES.length - 1 && (
+                    <span style={{ width: 8, height: 2, background: '#e2e8f0', borderRadius: 2 }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        );
+      }
+      case 'payment': {
+        const paid = exp.paymentStatus === 'PAID';
+        return (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '3px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
+            background: paid ? '#dcfce7' : '#f1f5f9',
+            color: paid ? '#15803d' : '#94a3b8',
+          }}>
+            <IndianRupee size={11} /> {paid ? 'Paid' : 'Unpaid'}
+          </span>
+        );
+      }
       case 'actions': return (
         <div className="exp-actions-cell">
           <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
           <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
-          {canApprove && exp.status === 'Pending' && (
+          {canActOnStage(exp) && (
             <>
-              <button className="exp-act-btn approve-btn" title="Approve" onClick={() => handleStatusChange(exp.id, 'Approved')}><CheckCircle size={14} /></button>
-              <button className="exp-act-btn reject-btn" title="Reject" onClick={() => handleStatusChange(exp.id, 'Rejected')}><XCircle size={14} /></button>
+              <button className="exp-act-btn approve-btn" title="Approve this expense" onClick={() => handleApproveStage(exp)}><CheckCircle size={14} /></button>
+              <button className="exp-act-btn reject-btn" title="Reject this expense" onClick={() => handleRejectStage(exp)}><XCircle size={14} /></button>
             </>
+          )}
+          {canMarkPaid(exp) && (
+            <button className="exp-act-btn approve-btn" title="Mark as Paid" onClick={() => handleMarkPaid(exp)}><IndianRupee size={14} /></button>
+          )}
+          {(exp.hasBill || exp.receiptUrl) && (
+            <button className="exp-act-btn bill-btn" title="View Bill" onClick={() => handleViewBill(exp)}><Receipt size={14} /></button>
           )}
           <button className="exp-act-btn del-btn" title="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
         </div>
@@ -1372,7 +1745,7 @@ const ProjectCostExpenseManagement = () => {
           setExpenseFormData(prev => ({
             ...prev,
             expenseItems: [...prev.expenseItems, {
-              id: newId, category: 'Travel', projectId: prev.projectId || '', amount: '', paymentMode: 'UPI', description: '',
+              id: newId, category: 'Travel', projectIds: [], amount: '', paymentMode: 'UPI', description: '',
             }],
           }));
           if (grp && sub) loadItemProjects(newId, grp, sub);
@@ -1514,24 +1887,16 @@ const ProjectCostExpenseManagement = () => {
                       )}
                     </div>
                     <div className="exp-field">
-                      <label>Purpose / Description</label>
+                      <label>Purpose / Description *</label>
                       <input type="text" value={expenseFormData.tripReason} placeholder="e.g. Site visit, material transport…"
+                        className={!expenseFormData.tripReason?.trim() ? 'exp-field-error-wrap' : ''}
                         onChange={e => setExpenseFormData(p => ({ ...p, tripReason: e.target.value }))} />
                     </div>
                   </div>
-                  <div className="exp-form-row2" style={{marginTop:10}}>
-                    <div className="exp-field">
-                      <label>Status</label>
-                      <FilterSelect
-                        value={expenseFormData.status || 'Approved'}
-                        options={[
-                          { value: 'Approved', label: '✅ Approved' },
-                          { value: 'Pending',  label: '⏳ Pending' },
-                          { value: 'Rejected', label: '❌ Rejected' },
-                        ]}
-                        onChange={(val) => setExpenseFormData(p => ({ ...p, status: val || 'Approved' }))}
-                      />
-                    </div>
+                  <div className="exp-approval-info" style={{marginTop:10}}>
+                    <span className="exp-approval-hint">
+                      On submit this expense enters the approval chain: Reporting Manager → Chief Financial Officer → Final Authorization → Paid.
+                    </span>
                   </div>
                 </div>
 
@@ -1591,15 +1956,15 @@ const ProjectCostExpenseManagement = () => {
                               </div>
                               <div className="exp-field exp-field-proj">
                                 <label>Project * <span className="exp-field-hint">(required)</span></label>
-                                <div className={!item.projectId ? 'exp-field-error-wrap' : ''}>
-                                  <FilterSelect
-                                    value={item.projectId}
-                                    options={projList.map(p => ({ value: String(p.id), label: p.name + (p.location ? ` – ${p.location}` : '') }))}
-                                    placeholder={isLoading ? 'Loading…' : !modalSubGroupName ? 'Select sub-group first' : '— Select Project *'}
-                                    disabled={!modalSubGroupName || isLoading}
-                                    onChange={(val) => updateItem(item.id, 'projectId', val)}
-                                  />
-                                </div>
+                                <ProjectMultiSelect
+                                  projList={projList}
+                                  selected={item.projectIds}
+                                  loading={isLoading}
+                                  disabled={!modalSubGroupName || isLoading}
+                                  placeholder={!modalSubGroupName ? 'Select sub-group first' : '— Select project(s) *'}
+                                  onChange={(vals) => updateItem(item.id, 'projectIds', vals)}
+                                />
+
                               </div>
                               {expenseFormData.expenseItems.length > 1 && (
                                 <button className="exp-item-del-btn" onClick={() => removeItem(item.id)} title="Remove item">
@@ -1608,8 +1973,14 @@ const ProjectCostExpenseManagement = () => {
                               )}
                             </div>
                             <div className="exp-field" style={{marginTop:4}}>
-                              <input type="text" placeholder="Notes / description for this item…" value={item.description}
+                              <input type="text"
+                                placeholder={item.category === 'Commission' ? 'Required: specify who the commission is paid to…' : 'Notes / description for this item…'}
+                                value={item.description}
+                                className={item.category === 'Commission' && !item.description?.trim() ? 'exp-field-error-wrap' : ''}
                                 onChange={e => updateItem(item.id, 'description', e.target.value)} />
+                              {item.category === 'Commission' && (
+                                <span className="exp-field-hint" style={{ color: '#b45309' }}>Notes are mandatory for Commission</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1618,21 +1989,14 @@ const ProjectCostExpenseManagement = () => {
                   </div>
 
                   <div className="exp-items-total-bar">
-                    <span>
-                      Total — {(() => {
-                        const projSet = new Set((expenseFormData.expenseItems||[]).filter(i=>i.projectId).map(i=>i.projectId));
-                        return projSet.size > 1
-                          ? <span style={{color:'#1d4ed8',fontWeight:600}}>splits into {projSet.size} separate project expenses on save</span>
-                          : <span style={{color:'#64748b'}}>1 expense record</span>;
-                      })()}
-                    </span>
+                    <span><span style={{color:'#64748b'}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
                     <strong className="exp-total-amt">{fmt(total)}</strong>
                   </div>
                 </div>
 
                 {/* ── Section 4: Bill Upload ── */}
                 <div className="exp-modal-section">
-                  <div className="exp-section-label"><span className="exp-section-num">4</span> Bill / Receipt Upload <span className="exp-field-hint">(max 10 MB)</span></div>
+                  <div className="exp-section-label"><span className="exp-section-num">4</span> Bill / Receipt Upload * <span className="exp-field-hint">(mandatory · single file · max 10 MB · stored in DB)</span></div>
                   <div className="exp-bill-upload-area"
                     onClick={() => billInputRef.current?.click()}
                     onDragOver={e => e.preventDefault()}
@@ -1688,12 +2052,12 @@ const ProjectCostExpenseManagement = () => {
                 <div className="exp-modal-footer-left">
                   {(() => {
                     const items = expenseFormData.expenseItems || [];
-                    const projSet = new Set(items.filter(i => i.projectId).map(i => i.projectId));
-                    const unassigned = items.filter(i => !i.projectId).length;
+                    const projSet = new Set(items.flatMap(i => i.projectIds || []));
+                    const unassigned = items.filter(i => !i.projectIds || i.projectIds.length === 0).length;
                     return (
                       <span className="exp-footer-total">
                         {items.length} item(s) · {fmt(total)}
-                        {projSet.size > 1 && <span style={{color:'#1d4ed8',marginLeft:8}}>→ {projSet.size} project records</span>}
+
                         {unassigned > 0 && <span style={{color:'#ef4444',marginLeft:8}}>⚠ {unassigned} item(s) need a project</span>}
                       </span>
                     );
@@ -1725,7 +2089,7 @@ const ProjectCostExpenseManagement = () => {
           setExpenseFormData(prev => ({
             ...prev,
             expenseItems: [...prev.expenseItems, {
-              id: newId, category: 'Travel', projectId: prev.projectId || '', amount: '', paymentMode: 'UPI', description: '',
+              id: newId, category: 'Travel', projectIds: [], amount: '', paymentMode: 'UPI', description: '',
             }],
           }));
           if (grp && sub) loadItemProjects(newId, grp, sub);
@@ -1752,16 +2116,6 @@ const ProjectCostExpenseManagement = () => {
                   </div>
                 </div>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
-                  {canApprove && expenseFormData.status === 'Pending' && (
-                    <>
-                      <button className="exp-btn-approve" onClick={() => { performStatusChange(expenseFormData.id, 'Approved'); setShowEditModal(false); }}>
-                        <CheckCircle size={14} /> Approve
-                      </button>
-                      <button className="exp-btn-reject" onClick={() => { performStatusChange(expenseFormData.id, 'Rejected'); setShowEditModal(false); }}>
-                        <XCircle size={14} /> Reject
-                      </button>
-                    </>
-                  )}
                   <button className="exp-modal-close-x" onClick={() => setShowEditModal(false)}><X size={18} /></button>
                 </div>
               </div>
@@ -1874,19 +2228,11 @@ const ProjectCostExpenseManagement = () => {
                       )}
                     </div>
                     <div className="exp-field">
-                      <label>Status</label>
-                      <FilterSelect
-                        value={expenseFormData.status}
-                        options={STATUS_OPTIONS.map(s => ({ value: s, label: s }))}
-                        disabled={!canApprove && expenseFormData.status !== 'Pending'}
-                        onChange={(val) => setExpenseFormData(p => ({ ...p, status: val || p.status }))}
-                      />
+                      <label>Purpose / Description *</label>
+                      <input type="text" value={expenseFormData.tripReason} placeholder="e.g. Site visit, material transport…"
+                        className={!expenseFormData.tripReason?.trim() ? 'exp-field-error-wrap' : ''}
+                        onChange={e => setExpenseFormData(p => ({ ...p, tripReason: e.target.value }))} />
                     </div>
-                  </div>
-                  <div className="exp-field" style={{marginTop:8}}>
-                    <label>Purpose / Description</label>
-                    <input type="text" value={expenseFormData.tripReason} placeholder="e.g. Site visit, material transport…"
-                      onChange={e => setExpenseFormData(p => ({ ...p, tripReason: e.target.value }))} />
                   </div>
                 </div>
 
@@ -1939,28 +2285,29 @@ const ProjectCostExpenseManagement = () => {
                               </div>
                               <div className="exp-field exp-field-proj">
                                 <label>Project * <span className="exp-field-hint">(required)</span></label>
-                                <div className={!item.projectId ? 'exp-field-error-wrap' : ''}>
-                                  <FilterSelect
-                                    value={item.projectId}
-                                    options={[
-                                      ...projList.map(p => ({ value: String(p.id), label: p.name })),
-                                      ...(item.projectId && !projList.find(p => String(p.id) === String(item.projectId)) && !isLoading
-                                        ? [{ value: item.projectId, label: `Project #${item.projectId} (current)` }]
-                                        : [])
-                                    ]}
-                                    placeholder={isLoading ? 'Loading…' : '— Select Project *'}
-                                    disabled={isLoading}
-                                    onChange={(val) => updateItem(item.id, 'projectId', val)}
-                                  />
-                                </div>
+                                <ProjectMultiSelect
+                                  projList={projList}
+                                  selected={item.projectIds}
+                                  loading={isLoading}
+                                  disabled={isLoading}
+                                  placeholder="— Select project(s) *"
+                                  onChange={(vals) => updateItem(item.id, 'projectIds', vals)}
+                                />
+
                               </div>
                               {expenseFormData.expenseItems.length > 1 && (
                                 <button className="exp-item-del-btn" onClick={() => removeItem(item.id)}><Trash2 size={13} /></button>
                               )}
                             </div>
                             <div className="exp-field" style={{marginTop:4}}>
-                              <input type="text" placeholder="Notes…" value={item.description}
+                              <input type="text"
+                                placeholder={item.category === 'Commission' ? 'Required: specify who the commission is paid to…' : 'Notes…'}
+                                value={item.description}
+                                className={item.category === 'Commission' && !item.description?.trim() ? 'exp-field-error-wrap' : ''}
                                 onChange={e => updateItem(item.id, 'description', e.target.value)} />
+                              {item.category === 'Commission' && (
+                                <span className="exp-field-hint" style={{ color: '#b45309' }}>Notes are mandatory for Commission</span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1968,14 +2315,7 @@ const ProjectCostExpenseManagement = () => {
                     })}
                   </div>
                   <div className="exp-items-total-bar">
-                    <span>
-                      Total — {(() => {
-                        const projSet = new Set((expenseFormData.expenseItems||[]).filter(i=>i.projectId).map(i=>i.projectId));
-                        return projSet.size > 1
-                          ? <span style={{color:'#1d4ed8',fontWeight:600}}>splits into {projSet.size} separate project expenses on save</span>
-                          : <span style={{color:'#64748b'}}>1 expense record</span>;
-                      })()}
-                    </span>
+                    <span><span style={{color:'#64748b'}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
                     <strong className="exp-total-amt">{fmt(total)}</strong>
                   </div>
                 </div>
@@ -2010,16 +2350,14 @@ const ProjectCostExpenseManagement = () => {
                   </div>
                 </div>
 
-                {/* ── Approval section for managers ── */}
-                {canApprove && (
-                  <div className="exp-modal-section exp-approval-section">
-                    <div className="exp-section-label"><span className="exp-section-num">5</span> Approval</div>
-                    <div className="exp-approval-info">
-                      <span>Status: <strong><StatusBadge s={expenseFormData.status} /></strong></span>
-                      <span className="exp-approval-hint">You can approve or reject using the buttons in the header above.</span>
-                    </div>
+                {/* ── Approval status (read-only) ── */}
+                <div className="exp-modal-section exp-approval-section">
+                  <div className="exp-section-label"><span className="exp-section-num">5</span> Approval</div>
+                  <div className="exp-approval-info">
+                    <span>Current status: <strong><StatusBadge s={expenseFormData.status} /></strong></span>
+                    <span className="exp-approval-hint">Approvals are handled from the expense list / view screen by each stage approver. Editing a multi-project expense re-submits it for approval.</span>
                   </div>
-                )}
+                </div>
               </div>
 
               {/* ── Footer ── */}
@@ -2151,13 +2489,72 @@ const ProjectCostExpenseManagement = () => {
                 </table>
               </div>
 
+              {/* Approval Workflow Timeline */}
+              <div className="exp-modal-section">
+                <div className="exp-section-label"><span className="exp-section-num">3</span> Approval Workflow</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {APPROVAL_STAGES.map((s, idx) => {
+                    const stg = viewModalExpense[s.key] || {};
+                    const st = (stg.status || 'WAITING').toUpperCase();
+                    const c = stageColor(st);
+                    const isCurrent = viewModalExpense.approvalStage === s.code;
+                    const expectedWho = s.code === 'MANAGER'
+                      ? (viewModalExpense.reportingManagerName || 'Reporting Manager')
+                      : (s.code === 'CFO' ? 'Chief Financial Officer (ACCOUNTS_CFO)' : 'Accounts Manager / Super Admin');
+                    return (
+                      <div key={s.key} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <span style={{
+                          width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 11, fontWeight: 800, background: c.bg, color: c.color,
+                          border: `2px solid ${c.br}`,
+                        }}>{st === 'APPROVED' ? '✓' : st === 'REJECTED' ? '✕' : (idx + 1)}</span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                            {s.label}
+                            {isCurrent && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '1px 7px', borderRadius: 10 }}>CURRENT</span>}
+                          </div>
+                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
+                            <span style={{ fontWeight: 600, color: c.color }}>{st}</span>
+                            {stg.byName ? ` · by ${stg.byName}` : ` · ${expectedWho}`}
+                            {stg.at ? ` · ${fmtDate(stg.at)}` : ''}
+                          </div>
+                          {stg.remarks && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>“{stg.remarks}”</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Payment row */}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderTop: '1px dashed #e2e8f0', paddingTop: 10 }}>
+                    <span style={{
+                      width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 800,
+                      background: viewModalExpense.paymentStatus === 'PAID' ? '#dcfce7' : '#f1f5f9',
+                      color: viewModalExpense.paymentStatus === 'PAID' ? '#15803d' : '#94a3b8',
+                      border: `2px solid ${viewModalExpense.paymentStatus === 'PAID' ? '#86efac' : '#e2e8f0'}`,
+                    }}><IndianRupee size={12} /></span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>Payment (Accounts Executive)</div>
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
+                        <span style={{ fontWeight: 600, color: viewModalExpense.paymentStatus === 'PAID' ? '#15803d' : '#94a3b8' }}>
+                          {viewModalExpense.paymentStatus === 'PAID' ? 'PAID' : 'UNPAID'}
+                        </span>
+                        {viewModalExpense.paidByExecName ? ` · by ${viewModalExpense.paidByExecName}` : ''}
+                        {viewModalExpense.paidAt ? ` · ${fmtDate(viewModalExpense.paidAt)}` : ''}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               {/* Receipt */}
-              {viewModalExpense.receiptUrl && (
+              {(viewModalExpense.receiptUrl || viewModalExpense.hasBill) && (
                 <div className="exp-modal-section">
-                  <div className="exp-section-label"><span className="exp-section-num">3</span> Bill / Receipt</div>
-                  <a href={viewModalExpense.receiptUrl} target="_blank" rel="noreferrer" className="exp-receipt-link">
-                    <FileText size={14} /> View Receipt
-                  </a>
+                  <div className="exp-section-label"><span className="exp-section-num">4</span> Bill / Receipt</div>
+                  <button className="exp-receipt-link" onClick={() => handleViewBill(viewModalExpense)}>
+                    <FileText size={14} /> View Bill
+                  </button>
                 </div>
               )}
             </div>
@@ -2168,15 +2565,20 @@ const ProjectCostExpenseManagement = () => {
                 <span className="exp-footer-total">{(viewModalExpense.expenseItems||[]).length} item(s) · {fmt(viewModalExpense.totalAmount)}</span>
               </div>
               <div className="exp-modal-footer-right">
-                {canApprove && viewModalExpense.status === 'Pending' && (
+                {canActOnStage(viewModalExpense) && (
                   <>
-                    <button className="exp-btn-approve" onClick={() => { handleStatusChange(viewModalExpense.id,'Approved'); setShowViewModal(false); }}>
+                    <button className="exp-btn-approve" onClick={() => handleApproveStage(viewModalExpense)}>
                       <CheckCircle size={13} /> Approve
                     </button>
-                    <button className="exp-btn-reject" onClick={() => { handleStatusChange(viewModalExpense.id,'Rejected'); setShowViewModal(false); }}>
+                    <button className="exp-btn-reject" onClick={() => handleRejectStage(viewModalExpense)}>
                       <XCircle size={13} /> Reject
                     </button>
                   </>
+                )}
+                {canMarkPaid(viewModalExpense) && (
+                  <button className="exp-btn-approve" onClick={() => handleMarkPaid(viewModalExpense)}>
+                    <IndianRupee size={13} /> Mark Paid
+                  </button>
                 )}
                 <button className="exp-btn-secondary" onClick={() => setShowViewModal(false)}>Close</button>
               </div>
@@ -2240,6 +2642,50 @@ const ProjectCostExpenseManagement = () => {
                 </tfoot>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Bill Preview Modal ─────────────────────────────────────────────── */}
+      {showBillPreviewModal && billPreviewUrl && (
+        <div className="exp-bill-preview-overlay" onClick={handleCloseBillPreview}>
+          <div className="exp-bill-preview-modal" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="exp-bill-preview-header">
+              <span className="exp-bill-preview-title">
+                <FileText size={16} /> Bill — {billPreviewName}
+              </span>
+              <div className="exp-bill-preview-actions">
+                <button
+                  className="exp-bill-preview-btn exp-bill-preview-btn-open"
+                  onClick={() => window.open(billPreviewUrl, '_blank')}
+                >
+                  <ExternalLink size={13} /> Open in Tab
+                </button>
+                <button
+                  className="exp-bill-preview-btn exp-bill-preview-btn-download"
+                  onClick={() => {
+                    const a = document.createElement('a');
+                    a.href = billPreviewUrl;
+                    a.download = billPreviewName || 'expense-bill';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                >
+                  <Download size={13} /> Download
+                </button>
+                <button className="exp-modal-close-x" onClick={handleCloseBillPreview}>
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            {/* Preview */}
+            <iframe
+              src={billPreviewUrl}
+              className="exp-bill-preview-iframe"
+              title="Expense Bill"
+            />
           </div>
         </div>
       )}

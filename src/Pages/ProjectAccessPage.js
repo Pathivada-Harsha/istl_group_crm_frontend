@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import ReactDOM from 'react-dom';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/ProjectAccessPage.css';
 
@@ -43,10 +44,12 @@ function ToastStack({ toasts, remove }) {
 }
 
 // ─── Confirm Modal ────────────────────────────────────────────────────────────
+// Rendered via portal into document.body so it always floats above every other
+// modal / overlay in the page regardless of DOM nesting order.
 function ConfirmModal({ open, title, message, onConfirm, onCancel }) {
   if (!open) return null;
-  return (
-    <div className="pa-overlay" onClick={onCancel}>
+  return ReactDOM.createPortal(
+    <div className="pa-overlay pa-overlay--confirm" onClick={onCancel}>
       <div className="pa-modal pa-modal--sm" onClick={e => e.stopPropagation()}>
         <div className="pa-modal-warn-icon">⚠</div>
         <h3 className="pa-modal-title">{title}</h3>
@@ -56,7 +59,8 @@ function ConfirmModal({ open, title, message, onConfirm, onCancel }) {
           <button className="pa-btn pa-btn--danger" onClick={onConfirm}>Remove Access</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -193,14 +197,16 @@ function EditModal({ open, grant, userName, onSave, onClose }) {
 }
 
 // ─── Assign Projects Modal (user→projects) ────────────────────────────────────
-function AssignProjectsModal({ open, user: targetUser, allProjects, currentProjectIds, onAssign, onRevoke, onClose, saving }) {
-  const [search,   setSearch]   = useState('');
-  const [selected, setSelected] = useState(new Set());
-  const [note,     setNote]     = useState('');
-  const [tab,      setTab]      = useState('assign'); // 'assign' | 'current'
+function AssignProjectsModal({ open, user: targetUser, allProjects, currentProjectIds, onAssign, onRevoke, onBulkRevoke, onClose, saving }) {
+  const [search,         setSearch]         = useState('');
+  const [selected,       setSelected]       = useState(new Set());
+  const [note,           setNote]           = useState('');
+  const [tab,            setTab]            = useState('assign'); // 'assign' | 'current'
+  const [removeSelected, setRemoveSelected] = useState(new Set()); // multi-select for bulk revoke
+  const [revoking,       setRevoking]       = useState(false);
 
   useEffect(() => {
-    if (open) { setSearch(''); setSelected(new Set()); setNote(''); setTab('assign'); }
+    if (open) { setSearch(''); setSelected(new Set()); setNote(''); setTab('assign'); setRemoveSelected(new Set()); }
   }, [open]);
 
   if (!open || !targetUser) return null;
@@ -223,6 +229,23 @@ function AssignProjectsModal({ open, user: targetUser, allProjects, currentProje
   const toggleAll = () => allSel
     ? setSelected(new Set())
     : setSelected(new Set(available.map(p => p.id)));
+
+  // Multi-select helpers for "Current Access" remove
+  const toggleRemove = id => setRemoveSelected(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
+  const allRemoveSel = current.length > 0 && removeSelected.size === current.length;
+  const toggleAllRemove = () => allRemoveSel
+    ? setRemoveSelected(new Set())
+    : setRemoveSelected(new Set(current.map(p => p.id)));
+
+  const handleBulkRevoke = async () => {
+    if (!removeSelected.size) return;
+    setRevoking(true);
+    await onBulkRevoke([...removeSelected]);
+    setRemoveSelected(new Set());
+    setRevoking(false);
+  };
 
   return (
     <div className="pa-overlay" onClick={onClose}>
@@ -336,10 +359,27 @@ function AssignProjectsModal({ open, user: targetUser, allProjects, currentProje
           </>
         )}
 
-        {/* Current access tab */}
+        {/* Current access tab — with multi-select bulk remove */}
         {tab === 'current' && (
           <>
             <div className="pa-field" style={{ paddingBottom: 4 }}>
+              {/* Bulk-select header — only shown when there are projects */}
+              {current.length > 0 && (
+                <div className="pa-user-select-header" style={{ marginBottom: 6 }}>
+                  <span className="pa-label" style={{ margin: 0 }}>
+                    Assigned Projects
+                    <span className="pa-count-pill">{current.length}</span>
+                    {removeSelected.size > 0 && (
+                      <span className="pa-badge" style={{ marginLeft: 6, background: '#fee2e2', color: '#991b1b' }}>
+                        {removeSelected.size} selected
+                      </span>
+                    )}
+                  </span>
+                  <button className="pa-btn pa-btn--xs pa-btn--ghost" onClick={toggleAllRemove}>
+                    {allRemoveSel ? 'Deselect All' : 'Select All'}
+                  </button>
+                </div>
+              )}
               <div className="pa-user-list pa-proj-list">
                 {current.length === 0 ? (
                   <p className="pa-empty-hint">
@@ -348,8 +388,18 @@ function AssignProjectsModal({ open, user: targetUser, allProjects, currentProje
                 ) : (
                   current.map(p => {
                     const sm = STATUS_META[(p.status || '').toUpperCase()] || STATUS_META.PLANNING;
+                    const checked = removeSelected.has(p.id);
                     return (
-                      <div key={p.id} className="pa-proj-current-row">
+                      <label
+                        key={p.id}
+                        className={`pa-user-item pa-proj-item${checked ? ' pa-proj-remove-selected' : ''}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleRemove(p.id)}
+                        />
                         <div className="pa-proj-dot" style={{ background: sm.bg, color: sm.color }}>
                           {(p.name || 'P')[0].toUpperCase()}
                         </div>
@@ -365,9 +415,7 @@ function AssignProjectsModal({ open, user: targetUser, allProjects, currentProje
                         <span className="pa-status-badge" style={{ background: sm.bg, color: sm.color, fontSize: 9, padding: '2px 6px', flexShrink: 0 }}>
                           {sm.label}
                         </span>
-                        <button className="pa-act-btn pa-act-btn--del" title="Revoke access"
-                          onClick={() => onRevoke(p.id, p.name)}>✕</button>
-                      </div>
+                      </label>
                     );
                   })
                 )}
@@ -375,6 +423,17 @@ function AssignProjectsModal({ open, user: targetUser, allProjects, currentProje
             </div>
             <div className="pa-modal-actions">
               <button className="pa-btn pa-btn--ghost" onClick={onClose}>Close</button>
+              {removeSelected.size > 0 && (
+                <button
+                  className="pa-btn pa-btn--danger"
+                  disabled={revoking}
+                  onClick={handleBulkRevoke}
+                >
+                  {revoking
+                    ? 'Removing…'
+                    : `Remove ${removeSelected.size} Project${removeSelected.size !== 1 ? 's' : ''}`}
+                </button>
+              )}
             </div>
           </>
         )}
@@ -608,7 +667,27 @@ function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
   };
 
   const doRevoke = async (projectId, projectName) => {
+    // Single-revoke: show confirmation dialog first
     setConfirm({ projectId, projectName });
+  };
+
+  // Bulk-revoke: called from AssignProjectsModal when user clicks "Remove N Projects".
+  // Skips the confirm dialog (user already confirmed via the bulk selection UI)
+  // and calls the DELETE API for every selected project in one pass.
+  const doBulkRevoke = async (projectIds) => {
+    let ok = 0;
+    for (const pid of projectIds) {
+      try {
+        const res  = await fetch(`${API}/projects/${pid}/access/${u.id}`, {
+          method: 'DELETE', credentials: 'include', headers: authHeaders,
+        });
+        const json = await res.json();
+        if (json.success) ok++;
+        else toast.add(json.message || `Failed to remove project ${pid}`, 'error');
+      } catch { toast.add('Network error', 'error'); }
+    }
+    if (ok > 0) toast.add(`Removed access to ${ok} project${ok !== 1 ? 's' : ''}`);
+    fetchGrants();
   };
 
   const confirmRevoke = async () => {
@@ -647,6 +726,7 @@ function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
           currentProjectIds={grantedProjectIds}
           onAssign={doAssign}
           onRevoke={doRevoke}
+          onBulkRevoke={doBulkRevoke}
           onClose={() => setModalOpen(false)}
           saving={assignSaving}
         />

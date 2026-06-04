@@ -89,36 +89,17 @@ const mockTasks = (user) => {
 const _MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const _DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
-/* TimePicker */
-const TimePicker = ({ value, onChange }) => {
-  const [show, setShow] = useState(false);
-  const [temp, setTemp] = useState('');
-  const ref = useRef(null);
-  useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) { setShow(false); setTemp(''); } };
-    if (show) document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [show]);
-  const fmt = t => { if (!t) return 'Select time'; const [h,m]=t.split(':'); const hr=parseInt(h,10); return `${hr%12===0?12:hr%12}:${m} ${hr>=12?'PM':'AM'}`; };
-  return (
-    <div ref={ref} style={{position:'relative'}}>
-      <button type="button" className="tm-time-trigger" onClick={() => { setTemp(value||''); setShow(p=>!p); }}>
-        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/></svg>
-        {fmt(value)}
-      </button>
-      {show && (
-        <div className="tm-time-popover">
-          <span className="tm-time-label">Pick a time</span>
-          <input type="time" autoFocus className="tm-time-input" value={temp} onChange={e=>setTemp(e.target.value)}/>
-          <div className="tm-time-actions">
-            <button type="button" className="tm-time-cancel" onClick={()=>{setShow(false);setTemp('');}}>Cancel</button>
-            <button type="button" className="tm-time-save" onClick={()=>{onChange(temp);setShow(false);setTemp('');}}>Save</button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+/* TimePicker — direct <input type="time"> that fires onChange immediately.
+   No popover, no Save button, no extra click needed. */
+const TimePicker = ({ value, onChange }) => (
+  <input
+    type="time"
+    className="tm-time-direct"
+    value={value || ''}
+    onChange={e => onChange(e.target.value)}
+  />
+);
+
 
 /* DatePicker — date only */
 const DatePicker = ({ value, onChange, placeholder='Select date' }) => {
@@ -489,324 +470,636 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
 };
 
 /* ══════════════════════════════════════════════════════════════════════════
-   BULK DAY LOG MODAL — log updates for multiple tasks at end of day
+   DAY LOG MODAL — unified: Record Task + Add Activity
 ══════════════════════════════════════════════════════════════════════════ */
-const BulkDayLogModal = ({ tasks, onClose, onSaveAll }) => {
+const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActivity }) => {
   const activeTasks = tasks.filter(t => t.status !== 'Completed' && t.status !== 'Cancelled');
-  const [entries, setEntries] = useState(() =>
-    activeTasks.map(t => ({
-      taskId: t.id, taskCode: t.taskCode, title: t.title, category: t.category,
-      priority: t.priority, projectName: t.projectName, status: t.status,
-      completionPercent: t.completionPercent || 0,
-      checked: false,
-      workDone: '', description: '', updateType: 'Progress Update', hoursSpent: '',
-      startTime: '', endTime: '', newStatus: t.status, notes: '',
-    }))
-  );
-  const [saving, setSaving] = useState(false);
-  const [logDate] = useState(todayStr());
 
-  const toggle = (i) => setEntries(p => p.map((e, idx) => idx === i ? { ...e, checked: !e.checked } : e));
-  const setField = (i, k, v) => setEntries(p => p.map((e, idx) => idx === i ? { ...e, [k]: v } : e));
+  /* ─────────────────────────────────────────────────────────────────────────
+     STATE
+  ───────────────────────────────────────────────────────────────────────── */
+  // 'idle' | 'activity' | 'task' | 'review'
+  const [mode, setMode] = useState('idle');
 
-  const checkedCount = entries.filter(e => e.checked).length;
-  const totalHrs = entries.filter(e => e.checked).reduce((s, e) => s + (parseFloat(e.hoursSpent) || 0), 0);
+  // ── Committed items (shown as summary cards) ───────────────────────────
+  // Each committed activity: { id, type:'activity', title, category, projectName, hours, logDate, startTime, endTime, description, projectId, otherProject }
+  // Each committed task log: { id, type:'task', taskCode, taskTitle, workDone, hoursSpent, newStatus, completionPercent, logDate, ...rest }
+  const [committedItems, setCommittedItems] = useState([]);
 
-  const handleSubmit = async () => {
-    const toSave = entries.filter(e => e.checked && e.workDone.trim());
-    if (!toSave.length) return;
-    setSaving(true);
-    await onSaveAll(toSave);
-    setSaving(false);
+  // ── Activity draft (single form, committed on "Done") ──────────────────
+  const emptyDraft = () => ({
+    title: '', description: '', category: 'Internal Work',
+    projectId: '', otherProject: '', logDate: todayStr(),
+    startTime: '', endTime: '', hours: '',
+  });
+  const [activityDraft, setActivityDraft] = useState(emptyDraft());
+  const setAD = (k, v) => setActivityDraft(p => ({ ...p, [k]: v }));
+
+  // Auto-calc hours from start/end for activity draft
+  const handleActivityTime = (key, val) => {
+    setActivityDraft(prev => {
+      const updated = { ...prev, [key]: val };
+      if (updated.startTime && updated.endTime) {
+        const [sh, sm] = updated.startTime.split(':').map(Number);
+        const [eh, em] = updated.endTime.split(':').map(Number);
+        const h = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+        if (h > 0) return { ...updated, hours: h.toFixed(1) };
+      }
+      return updated;
+    });
   };
 
-  const selectAll = () => setEntries(p => p.map(e => ({ ...e, checked: true })));
-  const clearAll  = () => setEntries(p => p.map(e => ({ ...e, checked: false })));
+  const commitActivity = () => {
+    if (!activityDraft.title.trim()) return;
+    const proj = activityDraft.projectId && activityDraft.projectId !== 'OTHER'
+      ? projects.find(p => (p.projectUniqueId || p.id) === activityDraft.projectId)
+      : null;
+    setCommittedItems(p => [...p, {
+      ...activityDraft,
+      id: Date.now() + Math.random(),
+      type: 'activity',
+      projectName: proj?.projectName || (activityDraft.projectId === 'OTHER' ? activityDraft.otherProject || 'Other' : ''),
+    }]);
+    setActivityDraft(emptyDraft());
+    setMode('idle');
+  };
 
-  return (
-    <div className="tm-overlay">
-      <div className="tm-modal" style={{width:'min(820px,96vw)',maxHeight:'90vh',display:'flex',flexDirection:'column'}} onClick={e => e.stopPropagation()}>
-        <div className="tm-mhdr">
-          <div>
-            <h2>📓 Log My Day</h2>
-            <p className="tm-msub">Update all your tasks at once — check the ones you worked on today</p>
-          </div>
-          <button className="tm-xbtn" onClick={onClose}>✕</button>
-        </div>
+  // ── Task log draft ─────────────────────────────────────────────────────
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [showTaskList, setShowTaskList] = useState(false);
+  const [taskLog, setTaskLog] = useState({
+    workDone: '', description: '', updateType: 'Progress Update', hoursSpent: '',
+    startTime: nowTime(), endTime: '', newStatus: '', completionPercent: 0,
+    blockedReason: '', notes: '', logDate: todayStr(),
+  });
+  const setTL = (k, v) => setTaskLog(p => ({ ...p, [k]: v }));
+  const selectTask = (t) => {
+    setSelectedTask(t);
+    setShowTaskList(false);
+    setTaskLog(p => ({ ...p, newStatus: t.status, completionPercent: t.completionPercent || 0 }));
+  };
 
-        {/* Summary bar */}
-        <div style={{padding:'10px 20px',background:'#f8fafc',borderBottom:'1px solid #f1f5f9',display:'flex',alignItems:'center',gap:16,flexWrap:'wrap'}}>
-          <span style={{fontSize:12,color:'#64748b'}}>{activeTasks.length} active tasks</span>
-          <span style={{fontSize:12,fontWeight:700,color:'#3b82f6'}}>{checkedCount} selected</span>
-          {totalHrs > 0 && <span style={{fontSize:12,fontWeight:700,color:'#059669'}}><FiClock size={11} style={{marginRight:3}} />{totalHrs.toFixed(1)}h total today</span>}
-          <div style={{marginLeft:'auto',display:'flex',gap:8}}>
-            <button className="tm-btn tm-ghost tm-sm" onClick={selectAll}>Select All</button>
-            <button className="tm-btn tm-ghost tm-sm" onClick={clearAll}>Clear</button>
-          </div>
-        </div>
+  // Auto-calc hours from start/end for task log
+  useEffect(() => {
+    if (taskLog.startTime && taskLog.endTime) {
+      const [sh, sm] = taskLog.startTime.split(':').map(Number);
+      const [eh, em] = taskLog.endTime.split(':').map(Number);
+      const h = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
+      if (h > 0) setTL('hoursSpent', h.toFixed(1));
+    }
+  }, [taskLog.startTime, taskLog.endTime]); // eslint-disable-line
 
-        {activeTasks.length === 0 ? (
-          <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
-            <div style={{fontSize:36,marginBottom:8}}>🎉</div>
-            <p style={{fontSize:14,margin:0}}>All tasks are completed or cancelled — nothing to log!</p>
-          </div>
-        ) : (
-          <div className="tm-mbody" style={{flex:1,overflowY:'auto',padding:'0'}}>
-            {entries.map((e, i) => (
-              <div key={e.taskId} style={{
-                borderBottom:'1px solid #f1f5f9',
-                background: e.checked ? '#f0f7ff' : '#fff',
-                transition:'background .15s',
-              }}>
-                {/* Task header row — click anywhere to toggle */}
-                <div
-                  style={{display:'flex',alignItems:'center',gap:12,padding:'12px 20px',cursor:'pointer'}}
-                  onClick={() => toggle(i)}
-                >
-                  <div style={{
-                    width:20, height:20, borderRadius:5, flexShrink:0,
-                    border: e.checked ? 'none' : '2px solid #cbd5e1',
-                    background: e.checked ? '#3b82f6' : 'transparent',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    transition:'all .15s',
-                  }}>
-                    {e.checked && <span style={{color:'#fff',fontSize:13,lineHeight:1}}>✓</span>}
-                  </div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                      <span style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#94a3b8'}}>{e.taskCode}</span>
-                      <PBadge p={e.priority} />
-                      <span className="tm-chip">📁 {e.category}</span>
-                      {e.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{e.projectName}</span>}
-                    </div>
-                    <p style={{margin:'3px 0 0',fontSize:13,fontWeight:600,color:'#0f172a',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.title}</p>
-                  </div>
-                  <SBadge s={e.status} />
-                </div>
-
-                {/* Expanded log form — only when checked */}
-                {e.checked && (
-                  <div style={{padding:'0 20px 16px 52px',display:'flex',flexDirection:'column',gap:10}} onClick={ev => ev.stopPropagation()}>
-                    <div className="tm-fg" style={{margin:0}}>
-                      <label>Summary <span className="tm-req">*</span>
-                        <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>One line — what did you do?</span>
-                      </label>
-                      <input className="tm-inp"
-                        placeholder="e.g. Completed proposal draft, sent to client..."
-                        value={e.workDone}
-                        onChange={ev => setField(i,'workDone',ev.target.value)}
-                      />
-                    </div>
-                    <div className="tm-fg" style={{margin:0}}>
-                      <label>Details
-                        <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>Outcomes, discussions, decisions, next steps...</span>
-                      </label>
-                      <textarea className="tm-ta" rows={3}
-                        placeholder="Describe in detail what happened, what was achieved, any blockers or decisions..."
-                        value={e.description}
-                        onChange={ev => setField(i,'description',ev.target.value)}
-                        style={{fontSize:12,lineHeight:1.6}}
-                      />
-                    </div>
-                    <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-                      <div className="tm-fg" style={{flex:1,minWidth:130,margin:0}}>
-                        <label>Update Type</label>
-                        <FilterSelect value={e.updateType} onChange={v => setField(i,'updateType',v)} options={UPDATE_TYPES.map(t=>({value:t,label:t}))} placeholder="Type" />
-                      </div>
-                      <div className="tm-fg" style={{flex:1,minWidth:130,margin:0}}>
-                        <label>Status</label>
-                        <FilterSelect value={e.newStatus} onChange={v => { setField(i,'newStatus',v); if(v==='Completed') setField(i,'completionPercent',100); }} options={STATUSES.map(s=>({value:s,label:s}))} placeholder="Status" />
-                      </div>
-                      <div className="tm-fg" style={{width:90,margin:0}}>
-                        <label>Start</label>
-                        <TimePicker value={e.startTime} onChange={v => setField(i,'startTime',v)} />
-                      </div>
-                      <div className="tm-fg" style={{width:90,margin:0}}>
-                        <label>End</label>
-                        <TimePicker value={e.endTime} onChange={v => setField(i,'endTime',v)} />
-                      </div>
-                      <div className="tm-fg" style={{width:90,margin:0}}>
-                        <label>Hours</label>
-                        <input type="number" className="tm-inp" min="0" max="24" step="0.5" placeholder="hrs"
-                          value={e.hoursSpent} onChange={ev => setField(i,'hoursSpent',ev.target.value)} />
-                      </div>
-                    </div>
-                    <div style={{display:'flex',alignItems:'center',gap:10}}>
-                      <label style={{fontSize:11,fontWeight:600,color:'#64748b',whiteSpace:'nowrap'}}>Progress: {e.completionPercent}%</label>
-                      <input type="range" min={0} max={100} step={5} className="tm-range" style={{flex:1}}
-                        value={e.completionPercent} onChange={ev => setField(i,'completionPercent',Number(ev.target.value))} />
-                    </div>
-                    <div className="tm-fg" style={{margin:0}}>
-                      <label>Notes <span style={{fontSize:10,color:'#94a3b8'}}>(optional)</span></label>
-                      <input className="tm-inp" placeholder="Any decisions, blockers, follow-ups..."
-                        value={e.notes} onChange={ev => setField(i,'notes',ev.target.value)} />
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className="tm-mftr" style={{borderTop:'2px solid #f1f5f9'}}>
-          <div style={{fontSize:12,color:'#64748b'}}>
-            {checkedCount > 0
-              ? `Saving ${checkedCount} update${checkedCount>1?'s':''}${totalHrs>0?` · ${totalHrs.toFixed(1)}h`:''}`
-              : 'Select tasks you worked on today'}
-          </div>
-          <div style={{display:'flex',gap:8}}>
-            <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-            <button className="tm-btn tm-primary" onClick={handleSubmit}
-              disabled={saving || checkedCount === 0 || entries.filter(e=>e.checked&&e.workDone.trim()).length === 0}>
-              {saving ? 'Saving…' : `💾 Save ${checkedCount > 0 ? checkedCount : ''} Update${checkedCount !== 1 ? 's' : ''}`}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+  const taskDraftValid = selectedTask && (
+    taskLog.workDone.trim() !== '' ||
+    taskLog.newStatus !== selectedTask.status ||
+    taskLog.completionPercent !== (selectedTask.completionPercent || 0)
   );
-};
 
-/* ══════════════════════════════════════════════════════════════════════════
-   QUICK SELF-TASK MODAL — simple "what did I work on today"
-══════════════════════════════════════════════════════════════════════════ */
-const QuickSelfTaskModal = ({ user, projects, onClose, onSave }) => {
-  const [entries, setEntries] = useState([
-    { id: Date.now(), title: '', description: '', category: 'Internal Work', hours: '', projectId: '', otherProject: '', logDate: todayStr(), startTime: '', endTime: '' }
-  ]);
+  const commitTask = () => {
+    if (!taskDraftValid) return;
+    const combined = taskLog.description.trim()
+      ? `${taskLog.workDone.trim()}${taskLog.workDone.trim() ? '\n\n' : ''}${taskLog.description.trim()}`
+      : taskLog.workDone.trim();
+    setCommittedItems(p => [...p, {
+      id: Date.now() + Math.random(),
+      type: 'task',
+      taskId: selectedTask.id,
+      taskCode: selectedTask.taskCode,
+      taskTitle: selectedTask.title,
+      projectName: selectedTask.projectName || '',
+      workDone: combined || '(Status/progress updated)',
+      hoursSpent: parseFloat(taskLog.hoursSpent) || 0,
+      newStatus: taskLog.newStatus,
+      completionPercent: taskLog.completionPercent,
+      updateType: taskLog.updateType,
+      startTime: taskLog.startTime,
+      endTime: taskLog.endTime,
+      logDate: taskLog.logDate,
+      blockedReason: taskLog.blockedReason,
+      notes: taskLog.notes,
+    }]);
+    // Reset task draft
+    setSelectedTask(null);
+    setTaskLog({
+      workDone: '', description: '', updateType: 'Progress Update', hoursSpent: '',
+      startTime: nowTime(), endTime: '', newStatus: '', completionPercent: 0,
+      blockedReason: '', notes: '', logDate: todayStr(),
+    });
+    setMode('idle');
+  };
+
+  const removeItem = (id) => setCommittedItems(p => p.filter(i => i.id !== id));
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     SAVE (called after review confirmation)
+  ───────────────────────────────────────────────────────────────────────── */
   const [saving, setSaving] = useState(false);
 
-  const addRow = () => setEntries(p => [...p, { id: Date.now()+p.length, title: '', description: '', category: 'Internal Work', hours: '', projectId: '', otherProject: '', logDate: todayStr(), startTime: '', endTime: '' }]);
-  const removeRow = (id) => setEntries(p => p.filter(e => e.id !== id));
-  const setField = (id, k, v) => setEntries(p => p.map(e => e.id === id ? { ...e, [k]: v } : e));
-
-  const totalHrs = entries.reduce((s, e) => s + (parseFloat(e.hours) || 0), 0);
-
-  const submit = async () => {
-    const valid = entries.filter(e => e.title.trim());
-    if (!valid.length) return;
+  const handleSave = async () => {
     setSaving(true);
-    // Each entry becomes a task assigned to self, already in "Completed" for today
-    for (const e of valid) {
-      const isOther = e.projectId === 'OTHER';
-      const proj = !isOther ? projects.find(p => (p.projectUniqueId || p.id) === e.projectId) : null;
-      const hrs = parseFloat(e.hours) || 0;
-      const entryDate = e.logDate || todayStr();
-      // Build precise start/end datetime from logDate + times
-      const startDT = entryDate + 'T' + (e.startTime || '00:00') + ':00';
-      const endDT   = entryDate + 'T' + (e.endTime   || e.startTime || '23:59') + ':00';
-      await onSave({
-        title: e.title.trim(),
-        description: e.description.trim(),
-        category: e.category,
-        priority: 'Medium',
-        status: 'Completed',
-        dueDate: todayStr(),          // due date = today (task deadline)
-        startDate: startDT,           // actual work start = logDate + startTime
-        endDate: endDT,               // actual work end   = logDate + endTime
-        assignedTo: user?.id,
-        assignedToName: user?.name,
-        projectId: isOther ? null : (e.projectId || null),
-        projectName: isOther ? null : (proj?.projectName || null),
-        otherContext: isOther ? (e.otherProject || 'Other work') : null,
-        estimatedHours: hrs || null,
-        relatedTo: '',
-        completionPercent: 100,
-        isSelfLog: true,
-        workLog: {
-          workDone: e.title.trim(),
-          description: e.description.trim(),
-          hoursSpent: hrs,
-          startTime: e.startTime || null,
-          endTime: e.endTime || null,
-          logDate: entryDate,           // so TaskUpdateEntity.updatedAt = logDate
-          updateType: 'Task Completed',
-          newStatus: 'Completed',
-          completionPercent: 100,
-        },
-      });
+    for (const item of committedItems) {
+      if (item.type === 'task') {
+        await onSaveTaskLog({
+          taskId: item.taskId,
+          workDone: item.workDone,
+          updateType: item.updateType,
+          hoursSpent: item.hoursSpent,
+          startTime: item.startTime,
+          endTime: item.endTime,
+          newStatus: item.newStatus,
+          completionPercent: item.completionPercent,
+          blockedReason: item.blockedReason,
+          notes: item.notes,
+          logDate: item.logDate,
+        });
+      } else {
+        const isOther = item.projectId === 'OTHER';
+        const proj = !isOther ? projects.find(p => (p.projectUniqueId || p.id) === item.projectId) : null;
+        const hrs = parseFloat(item.hours) || 0;
+        const entryDate = item.logDate || todayStr();
+        await onSaveActivity({
+          title: item.title.trim(),
+          description: item.description.trim(),
+          category: item.category,
+          priority: 'Medium', status: 'Completed', dueDate: todayStr(),
+          startDate: entryDate + 'T' + (item.startTime || '00:00') + ':00',
+          endDate: entryDate + 'T' + (item.endTime || item.startTime || '23:59') + ':00',
+          assignedTo: user?.id, assignedToName: user?.name,
+          projectId: isOther ? null : (item.projectId || null),
+          projectName: isOther ? null : (proj?.projectName || null),
+          otherContext: isOther ? (item.otherProject || 'Other work') : null,
+          estimatedHours: hrs || null, relatedTo: '', completionPercent: 100, isSelfLog: true,
+          workLog: {
+            workDone: item.title.trim(), description: item.description.trim(), hoursSpent: hrs,
+            startTime: item.startTime || null, endTime: item.endTime || null,
+            logDate: entryDate, updateType: 'Task Completed', newStatus: 'Completed', completionPercent: 100,
+          },
+        });
+      }
     }
     setSaving(false);
     onClose();
   };
 
+  /* ─────────────────────────────────────────────────────────────────────────
+     RENDER HELPERS
+  ───────────────────────────────────────────────────────────────────────── */
+  const totalHours = committedItems.reduce((s, i) => s + (parseFloat(i.hoursSpent || i.hours) || 0), 0);
+
+  // Summary card for a committed item
+  const ItemCard = ({ item }) => {
+    const isTask = item.type === 'task';
+    return (
+      <div style={{
+        display: 'flex', alignItems: 'flex-start', gap: 12,
+        padding: '12px 14px', borderRadius: 10,
+        background: isTask ? '#fafcff' : '#f8fffe',
+        border: `1px solid ${isTask ? '#bfdbfe' : '#a7f3d0'}`,
+      }}>
+        <div style={{
+          width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 1,
+          background: isTask ? '#eff6ff' : '#ecfdf5',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          {isTask ? <FiCheckCircle size={13} color="#3b82f6" /> : <FiZap size={13} color="#16a34a" />}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+            {isTask && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#94a3b8' }}>{item.taskCode}</span>}
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+              {isTask ? item.taskTitle : item.title}
+            </span>
+          </div>
+          {isTask && item.workDone && item.workDone !== '(Status/progress updated)' && (
+            <p style={{ fontSize: 12, color: '#374151', margin: '2px 0 0', lineHeight: 1.4,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
+              {item.workDone.split('\n\n')[0]}
+            </p>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 5, alignItems: 'center' }}>
+            {isTask && item.newStatus && (
+              <SBadge s={item.newStatus} />
+            )}
+            {isTask && item.completionPercent > 0 && (
+              <span style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>{item.completionPercent}%</span>
+            )}
+            {!isTask && item.category && (
+              <span style={{ fontSize: 11, color: '#374151', background: '#f1f5f9', padding: '1px 7px', borderRadius: 20 }}>📁 {item.category}</span>
+            )}
+            {(item.projectName || (isTask && item.projectName)) && (
+              <span style={{ fontSize: 11, color: '#3b82f6', background: '#eff6ff', padding: '1px 7px', borderRadius: 20 }}>
+                <FiBriefcase size={10} style={{ marginRight: 3 }} />{item.projectName}
+              </span>
+            )}
+            {(item.hoursSpent > 0 || item.hours > 0) && (
+              <span style={{ fontSize: 11, color: '#0891b2', background: '#ecfeff', padding: '1px 7px', borderRadius: 20, fontWeight: 600 }}>
+                <FiClock size={10} style={{ marginRight: 3 }} />{(item.hoursSpent || item.hours)}h
+              </span>
+            )}
+            {item.logDate && item.logDate !== todayStr() && (
+              <span style={{ fontSize: 11, color: '#64748b' }}>📅 {item.logDate}</span>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={() => removeItem(item.id)}
+          title="Remove"
+          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#cbd5e1', fontSize: 15, padding: '2px 4px', flexShrink: 0, lineHeight: 1 }}
+        >✕</button>
+      </div>
+    );
+  };
+
+  // Action button bar
+  const ActionBar = () => (
+    <div style={{ display: 'flex', gap: 10 }}>
+      <button
+        type="button"
+        onClick={() => { setMode(m => m === 'activity' ? 'idle' : 'activity'); setActivityDraft(emptyDraft()); }}
+        style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          padding: '10px 0', borderRadius: 9,
+          background: mode === 'activity' ? '#f0fdf4' : '#fff',
+          border: `1.5px solid ${mode === 'activity' ? '#16a34a' : '#e2e8f0'}`,
+          color: mode === 'activity' ? '#15803d' : '#374151',
+          fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all .15s',
+        }}>
+        <FiZap size={14} color={mode === 'activity' ? '#16a34a' : '#6b7280'} />
+        {mode === 'activity' ? 'Cancel Activity' : '+ Add Activity'}
+      </button>
+      <button
+        type="button"
+        onClick={() => { setMode(m => m === 'task' ? 'idle' : 'task'); }}
+        style={{
+          flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+          padding: '10px 0', borderRadius: 9,
+          background: mode === 'task' ? '#eff6ff' : '#fff',
+          border: `1.5px solid ${mode === 'task' ? '#3b82f6' : '#e2e8f0'}`,
+          color: mode === 'task' ? '#1d4ed8' : '#374151',
+          fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all .15s',
+        }}>
+        <FiCheckCircle size={14} color={mode === 'task' ? '#3b82f6' : '#6b7280'} />
+        {mode === 'task' ? 'Cancel Task' : '+ Record Task'}
+      </button>
+    </div>
+  );
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     RENDER
+  ───────────────────────────────────────────────────────────────────────── */
   return (
     <div className="tm-overlay">
-      <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()} style={{width:'min(780px,97vw)',maxHeight:'92vh'}}>
-        <div className="tm-mhdr">
+      <div
+        className="tm-modal"
+        style={{ width: 'min(860px,97vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column' }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* ── Header ── */}
+        <div className="tm-mhdr" style={{ background: 'linear-gradient(135deg,#0f172a,#1e293b)', borderRadius: '14px 14px 0 0' }}>
           <div>
-            <h2><FiZap size={18} style={{marginRight:8}} />Quick Work Log</h2>
-            <p className="tm-msub">Record what you worked on today — these are logged as completed tasks assigned to you</p>
+            <h2 style={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+              <FiClipboard size={18} /> Day Log
+            </h2>
+            <p className="tm-msub" style={{ color: '#94a3b8', margin: '4px 0 0' }}>
+              Add activities and task updates — review before saving
+            </p>
           </div>
-          <button className="tm-xbtn" onClick={onClose}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {committedItems.length > 0 && (
+              <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 20, fontWeight: 600 }}>
+                {committedItems.length} item{committedItems.length !== 1 ? 's' : ''} · {totalHours.toFixed(1)}h
+              </span>
+            )}
+            <button className="tm-xbtn" style={{ color: '#94a3b8' }} onClick={onClose}>✕</button>
+          </div>
         </div>
-        <div className="tm-mbody" style={{padding:'20px 24px',overflowY:'auto'}}>
-          <div style={{background:'#f0f7ff',borderRadius:10,padding:'10px 14px',marginBottom:16,fontSize:12,color:'#2563eb',display:'flex',alignItems:'center',gap:8}}>
-            <span>💡</span>
-            <span>Use this to quickly record all work done today without setting up full tasks. Each row = one activity.</span>
-          </div>
 
-          <div style={{display:'flex',flexDirection:'column',gap:12}}>
-            {entries.map((e, i) => (
-              <div key={e.id} style={{background:'#f8fafc',borderRadius:10,padding:'14px',border:'1px solid #f1f5f9'}}>
-                <div style={{display:'flex',alignItems:'flex-start',gap:8,marginBottom:8}}>
-                  <div style={{flex:1}}>
-                    <input className="tm-inp" style={{marginBottom:6,fontWeight:600}}
-                      placeholder={`Activity ${i+1} — e.g. Client call with Raju Solar, drafted proposal...`}
-                      value={e.title} onChange={ev => setField(e.id,'title',ev.target.value)}
-                    />
-                    <textarea className="tm-ta" rows={3} style={{fontSize:12,lineHeight:1.6,minHeight:65}}
-                      placeholder="Describe what you did, what was the outcome, any decisions made..."
-                      value={e.description} onChange={ev => setField(e.id,'description',ev.target.value)}
+        {/* ══════════════════ REVIEW SCREEN ══════════════════ */}
+        {mode === 'review' ? (
+          <>
+            <div className="tm-mbody" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+              <div style={{ marginBottom: 16 }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>
+                  Review before saving
+                </h3>
+                <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                  Check everything looks right — you can still remove items
+                </p>
+              </div>
+
+              {/* Summary strip */}
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 14px' }}>
+                  <FiClipboard size={14} color="#0369a1" />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''}</span>
+                </div>
+                {totalHours > 0 && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '8px 14px' }}>
+                    <FiClock size={14} color="#0891b2" />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0891b2' }}>{totalHours.toFixed(1)}h total</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 14px' }}>
+                  <FiZap size={14} color="#16a34a" />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>{committedItems.filter(i => i.type === 'activity').length} activit{committedItems.filter(i => i.type === 'activity').length !== 1 ? 'ies' : 'y'}</span>
+                </div>
+                {committedItems.filter(i => i.type === 'task').length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 14px' }}>
+                    <FiCheckCircle size={14} color="#3b82f6" />
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>{committedItems.filter(i => i.type === 'task').length} task update{committedItems.filter(i => i.type === 'task').length !== 1 ? 's' : ''}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* All items */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {committedItems.map((item) => <ItemCard key={item.id} item={item} />)}
+              </div>
+            </div>
+            <div className="tm-mftr" style={{ borderTop: '2px solid #f1f5f9', background: '#f8fafc' }}>
+              <button className="tm-btn tm-ghost" onClick={() => setMode('idle')} disabled={saving}>
+                ← Edit
+              </button>
+              <button
+                className="tm-btn tm-primary"
+                onClick={handleSave}
+                disabled={saving || committedItems.length === 0}
+                style={{ minWidth: 140 }}
+              >
+                {saving ? 'Saving…' : `✅ Confirm & Save (${committedItems.length})`}
+              </button>
+            </div>
+          </>
+        ) : (
+
+        /* ══════════════════ MAIN ENTRY SCREEN ══════════════════ */
+        <>
+          <div className="tm-mbody" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+            {/* ── Committed items list ── */}
+            {committedItems.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: 4 }}>
+                  Logged so far
+                </div>
+                {committedItems.map((item) => <ItemCard key={item.id} item={item} />)}
+                <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 2 }} />
+              </div>
+            )}
+
+            {/* ── Action buttons ── */}
+            <ActionBar />
+
+            {/* ══ ACTIVITY FORM ══ */}
+            {mode === 'activity' && (
+              <div style={{ background: '#fafffe', border: '1.5px solid #6ee7b7', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FiZap size={13} color="#16a34a" /> New Activity
+                </div>
+
+                <div className="tm-fg" style={{ margin: 0 }}>
+                  <label className="dl-lbl">What did you work on? <span className="tm-req">*</span></label>
+                  <input
+                    className="tm-inp"
+                    placeholder="e.g. Client call with Raju Solar, drafted proposal, attended site visit…"
+                    value={activityDraft.title}
+                    onChange={e => setAD('title', e.target.value)}
+                    style={{ fontSize: 13, fontWeight: 500 }}
+                    autoFocus
+                  />
+                </div>
+
+                <div className="tm-fg" style={{ margin: 0 }}>
+                  <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: '#94a3b8' }}>(outcome, decisions, what happened)</span></label>
+                  <textarea
+                    className="tm-ta"
+                    rows={3}
+                    placeholder="What was the result? Any decisions or next steps?"
+                    value={activityDraft.description}
+                    onChange={e => setAD('description', e.target.value)}
+                    style={{ fontSize: 12, lineHeight: 1.6 }}
+                  />
+                </div>
+
+                {/* Date + Start + End + Auto hours */}
+                <div className="dl-time-row">
+                  <div>
+                    <label className="dl-lbl">Date</label>
+                    <input type="date" className="tm-inp" value={activityDraft.logDate || todayStr()} onChange={e => setAD('logDate', e.target.value)} style={{ fontSize: 12 }} />
+                  </div>
+                  <div>
+                    <label className="dl-lbl">Start</label>
+                    <TimePicker value={activityDraft.startTime || ''} onChange={v => handleActivityTime('startTime', v)} />
+                  </div>
+                  <div>
+                    <label className="dl-lbl">End</label>
+                    <TimePicker value={activityDraft.endTime || ''} onChange={v => handleActivityTime('endTime', v)} />
+                  </div>
+                  <div>
+                    <label className="dl-lbl">
+                      Hrs{activityDraft.startTime && activityDraft.endTime && <span style={{ marginLeft:4, color:'#059669', fontWeight:700, fontSize:10 }}>auto</span>}
+                    </label>
+                    <input
+                      type="number" className="tm-inp" min="0" step="0.5" placeholder="0"
+                      value={activityDraft.hours}
+                      onChange={e => setAD('hours', e.target.value)}
+                      style={{ textAlign: 'center', fontSize: 12 }}
                     />
                   </div>
-                  <button onClick={() => removeRow(e.id)}
-                    style={{border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',fontSize:16,padding:'8px 4px',lineHeight:1,flexShrink:0}}
-                    disabled={entries.length === 1}>✕</button>
-                </div>
-                {/* FIX #2: Date + time fields */}
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 80px',gap:8,marginBottom:8}}>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>📅 Date</label><input type="date" className="tm-inp" value={e.logDate||todayStr()} onChange={ev => setField(e.id,'logDate',ev.target.value)} /></div>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 Start</label><TimePicker value={e.startTime||''} onChange={v => setField(e.id,'startTime',v)} /></div>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>🕐 End</label><TimePicker value={e.endTime||''} onChange={v => setField(e.id,'endTime',v)} /></div>
-                  <div><label style={{fontSize:11,fontWeight:600,color:'#64748b',display:'block',marginBottom:3}}>⏱ Hrs</label><input type="number" className="tm-inp" min="0" step="0.5" placeholder="hrs" value={e.hours} onChange={ev => setField(e.id,'hours',ev.target.value)} /></div>
                 </div>
 
-                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:8,alignItems:'start'}}>
-                  <FilterSelect value={e.category} onChange={v => setField(e.id,'category',v)} options={CATEGORIES.map(c=>({value:c,label:c}))} placeholder="Category" />
-                  <FilterSelect value={e.projectId} onChange={v => setField(e.id,'projectId',v)} options={[{value:'',label:'— No project —'}, ...projects.map(p=>({value:p.projectUniqueId||String(p.id),label:p.projectName})), {value:'OTHER',label:'Other / Ad-hoc'}]} placeholder="Project" />
-                  {e.projectId === 'OTHER' && (
-                    <input className="tm-inp" style={{marginTop:6}} placeholder="Describe context — e.g. Admin, Training, Internal..."
-                      value={e.otherProject||''} onChange={ev => setField(e.id,'otherProject',ev.target.value)} />
-                  )}
-                  <input type="number" className="tm-inp" min="0" step="0.5" placeholder="hrs"
-                    value={e.hours} onChange={ev => setField(e.id,'hours',ev.target.value)} />
+                {/* Category + Project */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label className="dl-lbl">Category</label>
+                    <FilterSelect value={activityDraft.category} onChange={v => setAD('category', v)} options={CATEGORIES.map(c => ({ value: c, label: c }))} placeholder="Category" />
+                  </div>
+                  <div>
+                    <label className="dl-lbl">Project</label>
+                    <FilterSelect
+                      value={activityDraft.projectId}
+                      onChange={v => setAD('projectId', v)}
+                      options={[{ value: '', label: '— No project —' }, ...projects.map(p => ({ value: p.projectUniqueId || String(p.id), label: p.projectName })), { value: 'OTHER', label: 'Other / Ad-hoc' }]}
+                      placeholder="Project"
+                    />
+                  </div>
+                </div>
+                {activityDraft.projectId === 'OTHER' && (
+                  <input className="tm-inp" style={{ fontSize: 12 }} placeholder="e.g. Admin, Training, Internal meeting…" value={activityDraft.otherProject || ''} onChange={e => setAD('otherProject', e.target.value)} />
+                )}
+
+                {/* Done / Cancel */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                  <button className="tm-btn tm-ghost" onClick={() => setMode('idle')}>Cancel</button>
+                  <button
+                    className="tm-btn"
+                    style={{ background: '#16a34a', color: '#fff', border: 'none', fontWeight: 700 }}
+                    onClick={commitActivity}
+                    disabled={!activityDraft.title.trim()}
+                  >
+                    ✓ Add to Log
+                  </button>
                 </div>
               </div>
-            ))}
+            )}
+
+            {/* ══ TASK LOG FORM ══ */}
+            {mode === 'task' && (
+              <div style={{ background: '#fafcff', border: '1.5px solid #93c5fd', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FiCheckCircle size={13} color="#3b82f6" /> Record Task Update
+                </div>
+
+                {/* Task picker */}
+                <div style={{ position: 'relative' }}>
+                  <label className="dl-lbl">Select Task <span style={{ color: '#94a3b8', fontWeight: 400 }}>({activeTasks.length} active)</span></label>
+                  <button type="button" className="dl-task-btn" onClick={() => setShowTaskList(v => !v)}>
+                    {selectedTask
+                      ? <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{selectedTask.taskCode} — {selectedTask.title.slice(0, 55)}{selectedTask.title.length > 55 ? '…' : ''}</span>
+                      : <span style={{ color: '#94a3b8', fontSize: 13 }}>Pick a task to update…</span>}
+                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{showTaskList ? '▲' : '▼'}</span>
+                  </button>
+                  {showTaskList && (
+                    <div className="dl-task-list">
+                      {activeTasks.length === 0
+                        ? <div style={{ padding: 16, fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>🎉 All tasks are done!</div>
+                        : activeTasks.map(t => (
+                          <div key={t.id} className={`dl-task-item ${selectedTask?.id === t.id ? 'dl-task-sel' : ''}`} onClick={() => selectTask(t)}>
+                            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
+                              <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#94a3b8' }}>{t.taskCode}</span>
+                              <PBadge p={t.priority} /><SBadge s={t.status} />
+                            </div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{t.title}</div>
+                            {t.projectName && <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 1 }}>📁 {t.projectName}</div>}
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+
+                {selectedTask && (
+                  <>
+                    {/* Log date */}
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px', background: '#f0f7ff', borderRadius: 7, border: '1px solid #bfdbfe' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', whiteSpace: 'nowrap' }}>📅 Log Date</span>
+                      <input type="date" className="tm-inp" style={{ maxWidth: 155, fontSize: 12 }} value={taskLog.logDate} max={todayStr()} onChange={e => setTL('logDate', e.target.value)} />
+                      <span style={{ fontSize: 11, color: '#64748b' }}>{taskLog.logDate === todayStr() ? 'Today' : 'Past entry'}</span>
+                    </div>
+
+                    <div className="tm-fg" style={{ margin: 0 }}>
+                      <label className="dl-lbl">Work Summary</label>
+                      <input className="tm-inp" placeholder="e.g. Called client, completed draft, attended meeting…" value={taskLog.workDone} onChange={e => setTL('workDone', e.target.value)} style={{ fontSize: 13 }} autoFocus />
+                    </div>
+
+                    <div className="tm-fg" style={{ margin: 0 }}>
+                      <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 10 }}>(outcomes, decisions, next steps)</span></label>
+                      <textarea className="tm-ta" rows={3} placeholder="What happened? What was the result? Any blockers?" value={taskLog.description} onChange={e => setTL('description', e.target.value)} style={{ fontSize: 12, lineHeight: 1.6 }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div className="tm-fg" style={{ margin: 0 }}>
+                        <label className="dl-lbl">Entry Type</label>
+                        <FilterSelect value={taskLog.updateType} onChange={v => setTL('updateType', v)} options={UPDATE_TYPES.map(t => ({ value: t, label: t }))} placeholder="Type" />
+                      </div>
+                      <div className="tm-fg" style={{ margin: 0 }}>
+                        <label className="dl-lbl">Update Status To</label>
+                        <FilterSelect value={taskLog.newStatus} onChange={v => { setTL('newStatus', v); if (v === 'Completed') setTL('completionPercent', 100); }} options={STATUSES.map(s => ({ value: s, label: s }))} placeholder="Status" />
+                      </div>
+                    </div>
+
+                    <div className="dl-time-row-3">
+                      <div className="tm-fg" style={{ margin: 0 }}>
+                        <label className="dl-lbl">Start Time</label>
+                        <TimePicker value={taskLog.startTime} onChange={v => setTL('startTime', v)} />
+                      </div>
+                      <div className="tm-fg" style={{ margin: 0 }}>
+                        <label className="dl-lbl">End Time</label>
+                        <TimePicker value={taskLog.endTime} onChange={v => setTL('endTime', v)} />
+                      </div>
+                      <div className="tm-fg" style={{ margin: 0 }}>
+                        <label className="dl-lbl">Hrs{taskLog.startTime && taskLog.endTime && <span style={{ marginLeft:4, color:'#059669', fontWeight:700, fontSize:10 }}>auto</span>}</label>
+                        <input type="number" className="tm-inp" min="0" max="24" step="0.5" placeholder="h" value={taskLog.hoursSpent} onChange={e => setTL('hoursSpent', e.target.value)} style={{ textAlign: 'center' }} />
+                      </div>
+                    </div>
+
+                    {taskLog.updateType === 'Blocked' && (
+                      <div className="tm-fg" style={{ margin: 0, background: '#fef2f2', padding: 12, borderRadius: 8, border: '1px solid #fca5a5' }}>
+                        <label style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>🔴 What is blocking this task?</label>
+                        <textarea className="tm-ta" rows={2} placeholder="Describe the blocker clearly…" value={taskLog.blockedReason} onChange={e => setTL('blockedReason', e.target.value)} />
+                      </div>
+                    )}
+
+                    <div className="tm-fg" style={{ margin: 0 }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>Completion Progress</span>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: taskLog.completionPercent >= 100 ? '#059669' : '#3b82f6' }}>
+                          {taskLog.completionPercent}%
+                          {taskLog.completionPercent >= 100 && <span style={{ fontSize: 11, marginLeft: 6 }}>✓ Complete!</span>}
+                        </span>
+                      </label>
+                      <input type="range" min={0} max={100} step={5} className="tm-range" value={taskLog.completionPercent}
+                        onChange={e => { const v = Number(e.target.value); setTL('completionPercent', v); if (v === 100) setTL('newStatus', 'Completed'); }} />
+                      <div className="tm-range-ticks"><span>0%</span><span>25%</span><span>50%</span><span>75%</span><span>100%</span></div>
+                    </div>
+
+                    <div className="tm-fg" style={{ margin: 0 }}>
+                      <label className="dl-lbl">Follow-up Notes <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span></label>
+                      <input className="tm-inp" placeholder="Next steps, reminders, client feedback…" value={taskLog.notes} onChange={e => setTL('notes', e.target.value)} style={{ fontSize: 12 }} />
+                    </div>
+                  </>
+                )}
+
+                {/* Done / Cancel */}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', paddingTop: 4 }}>
+                  <button className="tm-btn tm-ghost" onClick={() => setMode('idle')}>Cancel</button>
+                  <button
+                    className="tm-btn"
+                    style={{ background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, opacity: taskDraftValid ? 1 : 0.5 }}
+                    onClick={commitTask}
+                    disabled={!taskDraftValid}
+                  >
+                    ✓ Add to Log
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Empty state hint */}
+            {committedItems.length === 0 && mode === 'idle' && (
+              <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>
+                <FiClipboard size={30} color="#e2e8f0" style={{ marginBottom: 8 }} />
+                <p style={{ fontSize: 13, margin: 0, color: '#64748b' }}>Use the buttons above to log your work</p>
+                <p style={{ fontSize: 11, margin: '4px 0 0' }}>Add activities or record task updates, then review and save</p>
+              </div>
+            )}
+
           </div>
 
-          <button className="tm-btn tm-ghost" style={{marginTop:12}} onClick={addRow}>
-            ＋ Add another activity
-          </button>
-
-          {totalHrs > 0 && (
-            <div style={{marginTop:14,padding:'10px 14px',background:'#ecfdf5',borderRadius:8,fontSize:13,color:'#059669',fontWeight:600}}>
-              Total today: {totalHrs.toFixed(1)} hours across {entries.filter(e=>e.title.trim()).length} activit{entries.filter(e=>e.title.trim()).length===1?'y':'ies'}
+          {/* ── Footer ── */}
+          <div className="tm-mftr" style={{ borderTop: '2px solid #f1f5f9', background: '#f8fafc' }}>
+            <div style={{ fontSize: 12, color: '#64748b' }}>
+              {committedItems.length > 0
+                ? <span style={{ fontWeight: 600, color: '#0f172a' }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''} ready · {totalHours.toFixed(1)}h</span>
+                : <span>Add items above to save</span>}
             </div>
-          )}
-        </div>
-        <div className="tm-mftr">
-          <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="tm-btn tm-primary" onClick={submit}
-            disabled={saving || !entries.some(e => e.title.trim())}>
-            {saving ? 'Saving…' : `Log ${entries.filter(e=>e.title.trim()).length} Activit${entries.filter(e=>e.title.trim()).length===1?'y':'ies'}`}
-          </button>
-        </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="tm-btn tm-ghost" onClick={onClose}>Cancel</button>
+              <button
+                className="tm-btn tm-primary"
+                onClick={() => setMode('review')}
+                disabled={committedItems.length === 0}
+              >
+                Review & Save →
+              </button>
+            </div>
+          </div>
+        </>
+        )}
       </div>
     </div>
   );
 };
+
 
 /* ══════════════════════════════════════════════════════════════════════════
    TASK FORM MODAL — add / edit
@@ -1340,7 +1633,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
 
   return (
     <div style={{marginBottom:24}}>
-      <div style={{background:'#fff',borderRadius:12,border:'1px solid #f1f5f9',boxShadow:'0 1px 3px rgba(0,0,0,.07)',overflow:'hidden'}}>
+      <div style={{background:'#fff',borderRadius:12,border:'1px solid #f1f5f9',boxShadow:'0 1px 3px rgba(0,0,0,.07)',display:'flex',flexDirection:'column',overflow:'hidden',maxHeight:'calc(100vh - 220px)'}}>
 
         {/* ── TOOLBAR ──────────────────────────────────────────────────── */}
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',borderBottom:'1px solid #f1f5f9',background:'#f8fafc',flexWrap:'wrap',gap:10}}>
@@ -1446,6 +1739,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         </div>
 
         {/* ── CONTENT ─────────────────────────────────────────────────── */}
+        <div style={{flex:1,overflowY:'auto',overflowX:'hidden',position:'relative'}}>
         {teamLoading ? (
           <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
             <div style={{fontSize:24,marginBottom:8}}>⏳</div>
@@ -1463,7 +1757,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         ) : logView === 'table' ? (
 
           /* ─────────────────────────── TABLE VIEW ─────────────────────── */
-          <div style={{overflowX:'auto'}}>
+          <div style={{overflowX:'auto',minHeight:0}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:1000}}>
               <thead>
                 <tr style={{background:'#f8fafc',borderBottom:'2px solid #e2e8f0'}}>
@@ -1798,6 +2092,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           </div>
         )}
 
+        </div>{/* end scrollable content */}
         <PaginationBar page={teamPage} totalPages={teamTotalPg} total={teamTotal} pageSize={teamPageSize} onPageChange={goTeamPage} onSizeChange={changeTeamPageSize} />
       </div>
     </div>
@@ -1943,8 +2238,7 @@ export default function TaskManagement() {
   const [editTask, setEditTask]   = useState(null);
   const [logTask, setLogTask]     = useState(null);
   const [detailTask, setDetail]   = useState(null);
-  const [showBulkLog, setShowBulkLog]   = useState(false);
-  const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showDayLog, setShowDayLog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // taskId to delete
 
   // FIX #3: debounced search — keeps cursor in place, avoids refetch on every keystroke
@@ -2199,32 +2493,6 @@ export default function TaskManagement() {
     setLogTask(null);
   };
 
-  // Bulk end-of-day log — save multiple task updates at once
-  const saveBulkLog = async (entries) => {
-    let successCount = 0;
-    for (const e of entries) {
-      try {
-        const combined = e.description?.trim()
-          ? `${e.workDone.trim()}\n\n${e.description.trim()}`
-          : e.workDone.trim();
-        const r = await fetch(`${API}/tasks/${e.taskId}/update`, {
-          method: 'POST', credentials: 'include', headers: hdrs(user),
-          body: JSON.stringify({
-            workDone: combined, updateType: e.updateType,
-            hoursSpent: parseFloat(e.hoursSpent) || 0,
-            startTime: e.startTime, endTime: e.endTime,
-            newStatus: e.newStatus, completionPercent: e.completionPercent,
-            notes: e.notes, updatedByName: user?.name,
-          }),
-        });
-        if (r.ok) successCount++;
-      } catch {}
-    }
-    showSuccess(`Day logged! ${successCount} task${successCount !== 1 ? 's' : ''} updated ✅`);
-    loadTasks();
-    setShowBulkLog(false);
-  };
-
   // ← FIX: Board drag status change now calls backend
   const statusChange = async (task, newStatus) => {
     const now = new Date().toISOString();
@@ -2323,13 +2591,9 @@ export default function TaskManagement() {
             ))}
           </div>
           <button className="tm-btn tm-ghost" onClick={() => exportCSV(taskExportRows(), `tasks_${todayStr()}.csv`)}>📤 Export</button>
-          <button className="tm-btn" style={{background:'#f0fdf4',color:'#16a34a',border:'1px solid #bbf7d0',fontWeight:700}}
-            onClick={() => setShowQuickLog(true)} title="Quickly log all work done today as completed activities">
-            <FiZap size={14} style={{marginRight:5}} />Quick Log
-          </button>
-          <button className="tm-btn" style={{background:'#fffbeb',color:'#d97706',border:'1px solid #fde68a',fontWeight:700}}
-            onClick={() => setShowBulkLog(true)} title="Update all your in-progress tasks at end of day">
-            📓 Log My Day
+          <button className="tm-btn" style={{background:'#f0f9ff',color:'#0369a1',border:'1px solid #bae6fd',fontWeight:700}}
+            onClick={() => setShowDayLog(true)} title="Record task progress or log today's activities">
+            <FiClipboard size={14} style={{marginRight:5}} />Day Log
           </button>
           <button className="tm-btn tm-primary" onClick={() => setShowAdd(true)}><FiPlus size={15} style={{marginRight:6}} />Add Task</button>
         </div>
@@ -2491,14 +2755,14 @@ export default function TaskManagement() {
                             const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
                             const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
                             const cellMap = {
-                              sno:      <td key="sno" style={{textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
+                              sno:      <td key="sno" style={{textAlign:'center',fontWeight:700,color:'#374151',fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
                               task:     <td key="task"><div className="tm-task-cell"><span className="tm-tcode">{task.taskCode}</span><span className="tm-ttitle">{task.title}</span>{task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}</div></td>,
                               project:  <td key="project">{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>,
                               category: <td key="category"><span className="tm-chip">📁 {task.category}</span></td>,
                               priority: <td key="priority"><PBadge p={task.priority} /></td>,
                               status:   <td key="status"><SBadge s={task.status} /></td>,
                               progress: <td key="progress"><div className="tm-mini-prog"><div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? '#059669' : '#3b82f6' }} /></div><span>{task.completionPercent || 0}%</span></div></td>,
-                              dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.5 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: '#059669' }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
+                              dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.7, color: '#1e293b', fontWeight: 500 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: '#059669', fontWeight: 600 }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
                               hours:    <td key="hours">{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>,
                               assignee: <td key="assignee"><span className="tm-assignee">{task.assignedToName || '—'}</span></td>,
                               due:      <td key="due"><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>,
@@ -2527,8 +2791,8 @@ export default function TaskManagement() {
       {editTask   && <TaskFormModal task={editTask} users={users} projects={projects} user={user} isSuperAdmin={isSA} isManager={isManager} onClose={() => setEditTask(null)} onSave={saveTask} />}
       {logTask    && <DailyLogModal task={logTask} onClose={() => setLogTask(null)} onSave={saveLog} />}
       {detailTask && <TaskDetailModal task={detailTask} onClose={() => setDetail(null)} onLog={setLogTask} isSuperAdmin={isSA} />}
-      {showBulkLog  && <BulkDayLogModal tasks={tasks} onClose={() => setShowBulkLog(false)} onSaveAll={saveBulkLog} />}
-      {showQuickLog && <QuickSelfTaskModal user={user} projects={projects} onClose={() => setShowQuickLog(false)} onSave={saveTask} />}
+      {showDayLog && <DayLogModal user={user} tasks={tasks} projects={projects} onClose={() => setShowDayLog(false)} onSaveTaskLog={saveLog} onSaveActivity={saveTask} />}
+
 
       {/* ── Bootstrap-style Delete Confirmation Modal ── */}
       {deleteConfirm && (

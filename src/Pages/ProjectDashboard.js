@@ -19,7 +19,7 @@ import CrmPreloader from "../components/preLoader.js";
 import {
   BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
-  ComposedChart, Treemap, RadialBarChart, RadialBar
+  ComposedChart, Treemap, RadialBarChart, RadialBar, Brush
 } from 'recharts';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -48,13 +48,679 @@ const fmtKpi = (amount) => {
 const formatDate = (d) => d
   ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
   : 'N/A';
-const CHART_COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4'];
+// Softer, lighter palette that sits comfortably against the dashboard's white/light-grey theme
+const CHART_COLORS = ['#60a5fa', '#34d399', '#fbbf24', '#a78bfa', '#f87171', '#22d3ee', '#fb923c', '#4ade80'];
+// Distinct, vibrant-but-not-harsh palette specifically for donut slices
+const DONUT_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#f97316', '#84cc16', '#ec4899', '#6366f1'];
+
+
+// ─── Chart.js zoom/pan — same behaviour as the reference video ────────────────
+// Uses Chart.js + chartjs-plugin-zoom (hammerjs) so scroll-wheel zooms the
+// DATA window (bars get wider), anchored exactly to the mouse cursor.
+// Drag pans left/right. Double-click resets. Page never scrolls.
+//
+// Chart.js + plugin are loaded via CDN <script> tags injected once into <head>.
+// We communicate with Chart.js through a <canvas> ref instead of Recharts.
+
+const CHARTJS_LOADED = { current: false, promise: null };
+
+function loadChartJS() {
+  if (CHARTJS_LOADED.promise) return CHARTJS_LOADED.promise;
+  CHARTJS_LOADED.promise = new Promise((resolve) => {
+    if (window.Chart && window.Chart.registry) { resolve(); return; }
+    // Load Chart.js then chartjs-plugin-zoom (depends on hammerjs)
+    const scripts = [
+      'https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-zoom/2.0.1/chartjs-plugin-zoom.min.js',
+    ];
+    let idx = 0;
+    function next() {
+      if (idx >= scripts.length) { resolve(); return; }
+      const s = document.createElement('script');
+      s.src = scripts[idx++];
+      s.onload = next;
+      document.head.appendChild(s);
+    }
+    next();
+  });
+  return CHARTJS_LOADED.promise;
+}
+
+// Shared Chart.js bar chart with zoom/pan via plugin
+const ChartJSBar = ({
+  data,          // [{ label, values: { Budget?, Received?, Spent?, 'Order Value'? }, color? }]
+  labels,        // string[] — X axis labels
+  datasets,      // Chart.js dataset objects (pre-built by caller)
+  height = 280,
+  yTickFormatter = v => v,
+  xLabelRotation = -30,
+  modal = false,
+  onReset,       // optional external reset trigger ref
+}) => {
+  const canvasRef  = React.useRef(null);
+  const chartRef   = React.useRef(null);
+  const [ready, setReady] = React.useState(!!window.Chart);
+
+  React.useEffect(() => {
+    if (!window.Chart) {
+      loadChartJS().then(() => setReady(true));
+    }
+  }, []);
+
+  React.useEffect(() => {
+    if (!ready || !canvasRef.current || !datasets?.length) return;
+
+    // Destroy previous instance
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    const Chart = window.Chart;
+
+    // Register zoom plugin
+    if (window.ChartZoom) Chart.register(window.ChartZoom);
+
+    // White background plugin (canvas default is transparent)
+    const whiteBgPlugin = {
+      id: 'whiteBg',
+      beforeDraw(chart) {
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return;
+        c.save();
+        c.fillStyle = '#ffffff';
+        c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        c.restore();
+      },
+    };
+
+    const ctx = canvasRef.current.getContext('2d');
+    chartRef.current = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets },
+      plugins: [whiteBgPlugin],
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 300 },
+        backgroundColor: '#ffffff',
+        plugins: {
+          legend: {
+            display: datasets.length > 1,
+            labels: { font: { size: 11 }, boxWidth: 12, padding: 12 },
+          },
+          tooltip: {
+            backgroundColor: '#fff',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            titleColor: '#1e293b',
+            bodyColor: '#475569',
+            padding: 10,
+            callbacks: {
+              label: (ctx) => ` ${ctx.dataset.label}: ${yTickFormatter(ctx.raw)}`,
+            },
+          },
+          zoom: {
+            pan: {
+              enabled: true,
+              mode: 'x',
+              threshold: 5,
+            },
+            zoom: {
+              wheel: {
+                enabled: true,
+                speed: 0.08,
+              },
+              pinch: { enabled: true },
+              mode: 'x',
+              scaleMode: 'x',
+            },
+            limits: {
+              x: { minRange: 1 },
+            },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              font: { size: modal ? 11 : 10 },
+              color: '#374151',
+              maxRotation: Math.abs(xLabelRotation),
+              minRotation: labels.length > 6 ? Math.abs(xLabelRotation) : 0,
+              autoSkip: false,
+            },
+            grid: { display: false },
+            border: { color: '#94a3b8', width: 1.5 },
+          },
+          y: {
+            ticks: {
+              font: { size: modal ? 11 : 10 },
+              color: '#374151',
+              callback: (v) => yTickFormatter(v),
+              maxTicksLimit: 6,
+            },
+            grid: { color: '#e5e7eb' },
+            border: { color: '#94a3b8', width: 1.5 },
+          },
+        },
+        onHover: (event, elements, chart) => {
+          // Prevent page scroll when mouse is inside chart
+          if (canvasRef.current) {
+            canvasRef.current.style.touchAction = 'none';
+          }
+        },
+      },
+    });
+
+    // Prevent page scroll on wheel inside canvas
+    const canvas = canvasRef.current;
+    const stopScroll = (e) => { e.preventDefault(); };
+    canvas.addEventListener('wheel', stopScroll, { passive: false });
+
+    return () => {
+      canvas.removeEventListener('wheel', stopScroll);
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+  }, [ready, labels, datasets, yTickFormatter, modal]);
+
+  const handleReset = () => {
+    if (chartRef.current) chartRef.current.resetZoom();
+  };
+
+  return (
+    <div style={{ height, position: 'relative', width: '100%' }}>
+      {!ready && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:13 }}>
+          Loading chart…
+        </div>
+      )}
+      <canvas
+        ref={canvasRef}
+        style={{ display: ready ? 'block' : 'none', width:'100%', height:'100%' }}
+        onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+      />
+      {ready && (
+        <div
+          style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <span
+            title="Scroll to zoom · Drag to pan · Double-click to reset"
+            style={{
+              fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)',
+              borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0',
+              pointerEvents:'none', lineHeight:'16px', userSelect:'none'
+            }}
+          >🖱 Zoom / Pan</span>
+          <button
+            title="Reset zoom"
+            onClick={e => { e.stopPropagation(); handleReset(); }}
+            style={{
+              fontSize:9, color:'#64748b', background:'#f8fafc',
+              borderRadius:4, padding:'2px 7px', border:'1px solid #e2e8f0',
+              cursor:'pointer', lineHeight:'16px', fontWeight:500
+            }}
+          >⟳ Reset</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ─── ProjDonutChart — Chart.js donut with external elbow labels + zoom ───────
+const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'value', colorKey = null, modal = false }) => {
+  const [ready, setReady] = React.useState(!!window.Chart);
+  const canvasRef = React.useRef(null);
+  const chartRef  = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!window.Chart) { loadChartJS().then(() => setReady(true)); }
+  }, []);
+
+  React.useEffect(() => {
+    if (!ready || !canvasRef.current || !data || data.length === 0) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    const Chart = window.Chart;
+    if (window.ChartZoom) Chart.register(window.ChartZoom);
+
+    const labels  = data.map(d => d[labelKey]);
+    const values  = data.map(d => Number(d[valueKey]));
+    const total   = values.reduce((s, v) => s + v, 0);
+    const bdColors = data.map((d, i) => (colorKey && d[colorKey]) ? d[colorKey] : DONUT_COLORS[i % DONUT_COLORS.length]);
+    const bgColors = bdColors.map(c => c + 'dd');
+
+    // ── External elbow-line label plugin (mimics original Recharts style) ──────
+    const elbowLabelPlugin = {
+      id: 'elbowLabels',
+      afterDraw(chart) {
+        const { ctx: c, chartArea, width, height: h } = chart;
+        const meta = chart.getDatasetMeta(0);
+        if (!meta || !meta.data.length) return;
+
+        const cx = chartArea ? (chartArea.left + chartArea.right) / 2 : width / 2;
+        const cy = chartArea ? (chartArea.top + chartArea.bottom) / 2 : h * 0.44;
+
+        meta.data.forEach((arc, i) => {
+          const val = values[i];
+          const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+          if (parseFloat(pct) < 2) return; // skip slivers
+
+          // Mid-angle of the arc
+          const midAngle = (arc.startAngle + arc.endAngle) / 2;
+          const outerR   = arc.outerRadius;
+          const innerR   = arc.innerRadius;
+          const midR     = outerR + (modal ? 18 : 14); // point on outer edge
+          const elbowR   = outerR + (modal ? 32 : 24); // elbow bend
+
+          const cos = Math.cos(midAngle);
+          const sin = Math.sin(midAngle);
+
+          // Three points: slice edge → elbow → label anchor
+          const x1 = cx + (outerR + 4) * cos;
+          const y1 = cy + (outerR + 4) * sin;
+          const x2 = cx + elbowR * cos;
+          const y2 = cy + elbowR * sin;
+          const x3 = x2 + (cos >= 0 ? (modal ? 14 : 10) : -(modal ? 14 : 10));
+          const y3 = y2;
+
+          const anchor = cos >= 0 ? 'left' : 'right';
+
+          c.save();
+          // Elbow line
+          c.beginPath();
+          c.moveTo(x1, y1);
+          c.lineTo(x2, y2);
+          c.lineTo(x3, y3);
+          c.strokeStyle = '#94a3b8';
+          c.lineWidth = 1.2;
+          c.stroke();
+          // Dot at elbow
+          c.beginPath();
+          c.arc(x3, y3, 2.5, 0, Math.PI * 2);
+          c.fillStyle = '#94a3b8';
+          c.fill();
+          // Label text
+          c.font = `600 ${modal ? 11 : 10}px system-ui,sans-serif`;
+          c.fillStyle = '#1e293b';
+          c.textAlign = anchor;
+          c.textBaseline = 'middle';
+          const labelX = x3 + (cos >= 0 ? 5 : -5);
+          c.fillText(`${pct}%`, labelX, y3);
+          c.restore();
+        });
+      },
+    };
+
+    const whiteBgPlugin = {
+      id: 'whiteBgDonut',
+      beforeDraw(chart) {
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return;
+        c.save();
+        c.fillStyle = '#ffffff';
+        c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        c.restore();
+      },
+    };
+
+    const ctx = canvasRef.current.getContext('2d');
+    chartRef.current = new Chart(ctx, {
+      type: 'doughnut',
+      plugins: [whiteBgPlugin, elbowLabelPlugin],
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          backgroundColor: bgColors,
+          borderColor: bdColors,
+          borderWidth: 2,
+          hoverOffset: 8,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: modal ? '50%' : '45%',
+        animation: { duration: 400 },
+        // Extra padding on all sides so elbow labels aren't clipped
+        layout: { padding: modal ? 50 : 38 },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'bottom',
+            labels: {
+              font: { size: modal ? 12 : 10 },
+              padding: modal ? 12 : 8,
+              boxWidth: 12,
+              generateLabels(chart) {
+                return chart.data.labels.map((label, i) => {
+                  const val = chart.data.datasets[0].data[i];
+                  const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                  return {
+                    text: `${label} (${pct}%)`,
+                    fillStyle: bgColors[i],
+                    strokeStyle: bdColors[i],
+                    lineWidth: 1,
+                    hidden: false,
+                    index: i,
+                  };
+                });
+              },
+            },
+          },
+          tooltip: {
+            backgroundColor: '#fff',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            titleColor: '#1e293b',
+            bodyColor: '#475569',
+            padding: 10,
+            callbacks: {
+              label: (ctx) => {
+                const val = ctx.raw;
+                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                return ` ${ctx.label}: ${val} (${pct}%)`;
+              },
+            },
+          },
+          zoom: {
+            zoom: { wheel: { enabled: true, speed: 0.05 }, pinch: { enabled: true }, mode: 'xy' },
+            pan: { enabled: true, mode: 'xy' },
+          },
+        },
+      },
+    });
+
+    const canvas = canvasRef.current;
+    const stop = (e) => e.preventDefault();
+    canvas.addEventListener('wheel', stop, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', stop);
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+  }, [ready, data, modal, labelKey, valueKey, colorKey]);
+
+  if (!data || data.length === 0) return null;
+  const handleReset = () => { if (chartRef.current) chartRef.current.resetZoom(); };
+
+  return (
+    <div style={{ height, position: 'relative', width: '100%' }}>
+      {!ready && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:13 }}>
+          Loading chart…
+        </div>
+      )}
+      <canvas
+        ref={canvasRef}
+        style={{ display: ready ? 'block' : 'none', width:'100%', height:'100%' }}
+        onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+      />
+      {ready && (
+        <div
+          style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <span style={{ fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)', borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0', pointerEvents:'none', lineHeight:'16px' }}>
+            🖱 Zoom / Pan
+          </span>
+          <button
+            title="Reset zoom"
+            onClick={e => { e.stopPropagation(); handleReset(); }}
+            style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'2px 7px', border:'1px solid #e2e8f0', cursor:'pointer', lineHeight:'16px', fontWeight:500 }}
+          >⟳ Reset</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ─── ContributionBarChart — Chart.js powered, handles skewed data ─────────────
+const ContributionBarChart = ({ data, height = 300, modal = false }) => {
+  // ALL hooks must be declared before any conditional return
+  const [ready, setReady] = React.useState(!!window.Chart);
+  const canvasRef = React.useRef(null);
+  const chartRef  = React.useRef(null);
+
+  const fmtCurr = (v) => {
+    const abs = Math.abs(Number(v));
+    if (abs >= 10000000) return `₹${(abs/10000000).toFixed(1)}Cr`;
+    if (abs >= 100000)   return `₹${(abs/100000).toFixed(1)}L`;
+    return `₹${abs.toLocaleString('en-IN')}`;
+  };
+
+  React.useEffect(() => {
+    if (!window.Chart) { loadChartJS().then(() => setReady(true)); }
+  }, []);
+
+  React.useEffect(() => {
+    // Guard: no data or canvas not mounted yet
+    if (!ready || !canvasRef.current || !data || data.length === 0) return;
+    if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    const Chart = window.Chart;
+    if (window.ChartZoom) Chart.register(window.ChartZoom);
+
+    const whiteBgPlugin = {
+      id: 'whiteBg',
+      beforeDraw(chart) {
+        const { ctx: c, chartArea } = chart;
+        if (!chartArea) return;
+        c.save();
+        c.fillStyle = '#ffffff';
+        c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
+        c.restore();
+      },
+    };
+
+    const maxBudget = Math.max(...data.map(d => d.budget));
+    const minBudget = Math.min(...data.map(d => d.budget));
+    const skewRatio = maxBudget / (minBudget || 1);
+    const yScaleType = skewRatio > 15 ? 'logarithmic' : 'linear';
+
+    const labels   = data.map(d => d.name);
+    const bdColors = data.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
+    const bgColors = bdColors.map(c => c + 'dd');
+
+    const ctx = canvasRef.current.getContext('2d');
+    chartRef.current = new Chart(ctx, {
+      type: 'bar',
+      plugins: [whiteBgPlugin],
+      data: {
+        labels,
+        datasets: [{
+          label: 'Order Value',
+          data: data.map(d => d.budget),
+          backgroundColor: bgColors,
+          borderColor: bdColors,
+          borderWidth: 1.5,
+          borderRadius: 0,
+          borderSkipped: false,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 400 },
+        layout: { padding: { top: 30 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: '#fff',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            titleColor: '#1e293b',
+            bodyColor: '#475569',
+            padding: 10,
+            callbacks: {
+              label: (tooltipCtx) => {
+                const item = data[tooltipCtx.dataIndex];
+                return [` Order Value: ${fmtCurr(tooltipCtx.raw)}`, ` Share: ${item?.pct ?? 0}%`];
+              },
+            },
+          },
+          zoom: {
+            pan: { enabled: true, mode: 'x', threshold: 5 },
+            zoom: {
+              wheel: { enabled: true, speed: 0.08 },
+              pinch: { enabled: true },
+              mode: 'x',
+            },
+            limits: { x: { minRange: 1 } },
+          },
+        },
+        scales: {
+          x: {
+            ticks: {
+              font: { size: modal ? 12 : 11, weight: '600' },
+              color: '#374151',
+              maxRotation: data.length > 5 ? 30 : 0,
+              minRotation: 0,
+              autoSkip: false,
+            },
+            grid: { display: false },
+            border: { color: '#94a3b8', width: 1.5 },
+          },
+          y: {
+            type: yScaleType,
+            ticks: {
+              font: { size: modal ? 11 : 10 },
+              color: '#374151',
+              callback: (v) => fmtCurr(v),
+              maxTicksLimit: 6,
+            },
+            grid: { color: '#e5e7eb' },
+            border: { color: '#94a3b8', width: 1.5 },
+          },
+        },
+        afterDraw(chart) {
+          const { ctx: c, scales: { x, y } } = chart;
+          const _bdColors = data.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
+          chart.data.datasets[0].data.forEach((val, i) => {
+            const item = data[i];
+            if (!item) return;
+            const xPos = x.getPixelForValue(i);
+            const yPos = y.getPixelForValue(val);
+            c.save();
+            c.textAlign = 'center';
+            c.font = `700 ${modal ? 11 : 10}px system-ui,sans-serif`;
+            c.fillStyle = _bdColors[i];
+            c.fillText(fmtCurr(val), xPos, yPos - 16);
+            c.font = `400 ${modal ? 10 : 9}px system-ui,sans-serif`;
+            c.fillStyle = '#94a3b8';
+            c.fillText(`${item.pct ?? 0}%`, xPos, yPos - 4);
+            c.restore();
+          });
+        },
+      },
+    });
+
+    const canvas = canvasRef.current;
+    const stopScroll = (e) => e.preventDefault();
+    canvas.addEventListener('wheel', stopScroll, { passive: false });
+    return () => {
+      canvas.removeEventListener('wheel', stopScroll);
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+  }, [ready, data, modal]);
+
+  // Early return AFTER all hooks
+  if (!data || data.length === 0) return null;
+
+  const maxBudget = Math.max(...data.map(d => d.budget));
+  const minBudget = Math.min(...data.map(d => d.budget));
+  const skewRatio = maxBudget / (minBudget || 1);
+
+  const handleReset = () => { if (chartRef.current) chartRef.current.resetZoom(); };
+
+  return (
+    <div style={{ height, position: 'relative', width: '100%' }}>
+      {!ready && (
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', height:'100%', color:'#94a3b8', fontSize:13 }}>
+          Loading chart…
+        </div>
+      )}
+      <canvas
+        ref={canvasRef}
+        style={{ display: ready ? 'block' : 'none', width:'100%', height:'100%' }}
+        onClick={e => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+      />
+      {ready && (
+        <div
+          style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
+          onClick={e => e.stopPropagation()}
+        >
+          {skewRatio > 15 && (
+            <span
+              title="Values differ greatly — logarithmic scale used so all bars are visible"
+              style={{ fontSize:9, color:'#b45309', background:'rgba(255,251,235,0.95)', borderRadius:4, padding:'2px 6px', border:'1px solid #fde68a', pointerEvents:'none', lineHeight:'16px', userSelect:'none' }}
+            >
+              Log scale
+            </span>
+          )}
+          <span
+            title="Scroll to zoom · Drag to pan · Double-click to reset"
+            style={{ fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)', borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0', pointerEvents:'none', lineHeight:'16px', userSelect:'none' }}
+          >
+            🖱 Zoom / Pan
+          </span>
+          <button
+            title="Reset zoom to full view"
+            onClick={e => { e.stopPropagation(); handleReset(); }}
+            style={{ fontSize:9, color:'#64748b', background:'#f8fafc', borderRadius:4, padding:'2px 7px', border:'1px solid #e2e8f0', cursor:'pointer', lineHeight:'16px', fontWeight:500 }}
+          >
+            ⟳ Reset
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── ZoomableBarChart — fallback wrapper (hooks always at top) ────────────────
+const ZoomableBarChart = ({ data, children, height, brushDataKey = 'name', datasets, labels, yTickFormatter, modal = false }) => {
+  // Hooks declared unconditionally — before any conditional return
+  const wrapRef = React.useRef(null);
+  React.useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const stop = (e) => e.preventDefault();
+    el.addEventListener('wheel', stop, { passive: false });
+    return () => el.removeEventListener('wheel', stop);
+  }, []);
+
+  // After hooks: conditional render
+  if (datasets && labels) {
+    return (
+      <ChartJSBar
+        data={data}
+        labels={labels}
+        datasets={datasets}
+        height={height}
+        yTickFormatter={yTickFormatter}
+        modal={modal}
+      />
+    );
+  }
+  return (
+    <div ref={wrapRef} style={{ height, position: 'relative', width: '100%' }}>
+      <ResponsiveContainer width="100%" height="100%">
+        {children}
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+
 
 /**
  * Renders a pointer line + label only for slices whose value >= minPct.
  * Small slices are silently skipped to avoid clutter.
  */
-const renderPieLabel = (minPct = 5) => ({
+const renderPieLabel = (minPct = 0) => ({
   cx, cy, midAngle, innerRadius, outerRadius, name, value, percent, pct
 }) => {
   const displayPct = pct !== undefined ? pct : +(percent * 100).toFixed(1);
@@ -186,8 +852,8 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
                     <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={v => formatCurrency(v)} />
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 11 }} />
                     <Tooltip formatter={v => formatCurrency(v)} />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {catChartData.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} />)}
+                    <Bar dataKey="value" radius={[0, 0, 0, 0]}>
+                      {catChartData.map((_, idx) => <Cell key={idx} fill={CHART_COLORS[idx % CHART_COLORS.length]} opacity={0.9} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
@@ -750,25 +1416,18 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
       <div className="dashboard-charts-grid">
         {/* Status Pie — click to expand */}
         {statusDistribution.length > 0 ? (
-          <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'statusPie' })}>
+          <div className="chart-card chart-card-clickable" style={{ height: 320 }} onClick={() => setChartModal({ type: 'statusPie' })}>
             <div className="chart-header">
               <h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4>
               <span className="chart-expand-hint">🔍 Click to expand</span>
             </div>
-            <div style={{ height: 260, position: 'relative' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <RechartsPieChart margin={{ top: 10, bottom: 30, left: 20, right: 20 }}>
-                  <Pie data={statusDistribution} cx="50%" cy="44%" labelLine={false}
-                    label={renderPieLabel(8)} outerRadius={75} dataKey="value">
-                    {statusDistribution.map((entry, i) => (
-                      <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-                </RechartsPieChart>
-              </ResponsiveContainer>
-            </div>
+            <ProjDonutChart
+              data={statusDistribution.map(d => ({ name: d.name, value: d.value, color: statusColor[d.name] }))}
+              height={264}
+              labelKey="name"
+              valueKey="value"
+              colorKey="color"
+            />
           </div>
         ) : (
           <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Status Distribution</h4></div><EmptyChart /></div>
@@ -776,25 +1435,21 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 
         {/* Top Projects Budget Bar — click to expand */}
         {topByBudget.length > 0 ? (
-          <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'budgetBar' })}>
+          <div className="chart-card chart-card-clickable" style={{ height: 320 }} onClick={() => setChartModal({ type: 'budgetBar' })}>
             <div className="chart-header">
               <h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4>
               <span className="chart-expand-hint">🔍 Click to expand</span>
             </div>
-            <div style={{ height: 260 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topByBudget} margin={{ left: 10, right: 10, top: 5, bottom: 30 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-20} textAnchor="end" interval={0} />
-                  <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
-                  <Tooltip formatter={v => formatCurrency(v)} />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
-                  <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
-                  <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <ChartJSBar
+              labels={topByBudget.map(d => d.name)}
+              datasets={[
+                { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+              ]}
+              height={264}
+              yTickFormatter={v => formatCurrency(v)}
+            />
           </div>
         ) : (
           <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Budget vs Received</h4></div><EmptyChart /></div>
@@ -814,7 +1469,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           </h3>
           <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
             {/* Horizontal Bar chart — budget amounts */}
-            <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'contributionBar' })}>
+            <div className="chart-card chart-card-clickable" style={{ height: 360 }} onClick={() => setChartModal({ type: 'contributionBar' })}>
               <div className="chart-header">
                 <h4 className="chart-title">
                   <BarChart3 size={15} />
@@ -822,29 +1477,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 </h4>
                 <span className="chart-expand-hint">🔍 Click to expand</span>
               </div>
-              <div style={{ height: Math.max(220, contributionData.length * 36 + 40) }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={contributionData} layout="vertical" margin={{ left: 10, right: 30, top: 5, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={120} />
-                    <Tooltip
-                      formatter={(v, name) => name === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, name]}
-                      labelFormatter={label => label}
-                      contentStyle={{ fontSize: 12 }}
-                    />
-                    <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
-                      {contributionData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+              <ContributionBarChart data={contributionData} height={304} />
             </div>
 
             {/* Pie chart — % contribution */}
-            <div className="chart-card chart-card-clickable" onClick={() => setChartModal({ type: 'contributionPie' })}>
+            <div className="chart-card chart-card-clickable" style={{ height: 360 }} onClick={() => setChartModal({ type: 'contributionPie' })}>
               <div className="chart-header">
                 <h4 className="chart-title">
                   <PieChart size={15} />
@@ -852,30 +1489,12 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 </h4>
                 <span className="chart-expand-hint">🔍 Click to expand</span>
               </div>
-              <div style={{ height: 300 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RechartsPieChart margin={{ top: 10, bottom: 30, left: 20, right: 20 }}>
-                    <Pie
-                      data={contributionData}
-                      dataKey="pct"
-                      nameKey="name"
-                      cx="50%" cy="44%"
-                      outerRadius={85}
-                      labelLine={false}
-                      label={renderPieLabel(5)}
-                    >
-                      {contributionData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v, name) => [`${v}%`, name]} />
-                    <Legend
-                      formatter={(value, entry) => `${value} (${entry.payload.pct}%)`}
-                      wrapperStyle={{ fontSize: 11, paddingTop: 6 }}
-                    />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
-              </div>
+              <ProjDonutChart
+                data={contributionData.map(d => ({ name: d.name, value: d.pct, label: `${d.pct}%` }))}
+                height={304}
+                labelKey="name"
+                valueKey="value"
+              />
             </div>
           </div>
         </div>
@@ -1039,64 +1658,39 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             {/* Chart body */}
             <div style={{ flex:1, padding:'20px 24px', overflow:'auto' }}>
               {chartModal.type === 'statusPie' && statusDistribution.length > 0 && (
-                <ResponsiveContainer width="100%" height={420}>
-                  <RechartsPieChart margin={{ top: 20, bottom: 40, left: 40, right: 40 }}>
-                    <Pie data={statusDistribution} cx="50%" cy="44%" labelLine={false}
-                      label={renderPieLabel(5)} outerRadius={140} dataKey="value">
-                      {statusDistribution.map((entry, i) => (
-                        <Cell key={i} fill={statusColor[entry.name] || CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
+                <ProjDonutChart
+                  data={statusDistribution.map(d => ({ name: d.name, value: d.value, color: statusColor[d.name] }))}
+                  height={440}
+                  labelKey="name"
+                  valueKey="value"
+                  colorKey="color"
+                  modal={true}
+                />
               )}
               {chartModal.type === 'budgetBar' && (
-                <ResponsiveContainer width="100%" height={380}>
-                  <BarChart data={topByBudget} margin={{ left: 20, right: 20, top: 10, bottom: 50 }}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} angle={-20} textAnchor="end" interval={0} />
-                    <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
-                    <Tooltip formatter={v => formatCurrency(v)} />
-                    <Legend wrapperStyle={{ fontSize: 13 }} />
-                    <Bar dataKey="budget"   name="Budget"   fill="#3b82f6" radius={[4,4,0,0]} />
-                    <Bar dataKey="received" name="Received" fill="#22c55e" radius={[4,4,0,0]} />
-                    <Bar dataKey="spent"    name="Spent"    fill="#ef4444" radius={[4,4,0,0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ChartJSBar
+                  labels={topByBudget.map(d => d.name)}
+                  datasets={[
+                    { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                    { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                    { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                  ]}
+                  height={400}
+                  yTickFormatter={v => formatCurrency(v)}
+                  modal={true}
+                />
               )}
               {chartModal.type === 'contributionBar' && (
-                <ResponsiveContainer width="100%" height={Math.max(320, contributionData.length * 44 + 60)}>
-                  <BarChart data={contributionData} layout="vertical" margin={{ left: 20, right: 40, top: 10, bottom: 10 }}>
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                    <XAxis type="number" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 11 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={140} />
-                    <Tooltip formatter={(v, n) => n === 'budget' ? [formatCurrency(v), 'Order Value'] : [v, n]} contentStyle={{ fontSize: 12 }} />
-                    <Bar dataKey="budget" name="Order Value" radius={[0,4,4,0]}>
-                      {contributionData.map((d, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+                <ContributionBarChart data={contributionData} height={Math.max(400, contributionData.length * 60 + 120)} modal={true} />
               )}
               {chartModal.type === 'contributionPie' && (
-                <ResponsiveContainer width="100%" height={460}>
-                  <RechartsPieChart>
-                    <Pie
-                      data={contributionData} dataKey="pct" nameKey="name"
-                      cx="50%" cy="44%" outerRadius={150} labelLine={false}
-                      label={renderPieLabel(5)}
-                    >
-                      {contributionData.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(v, name) => [`${v}%`, name]} />
-                    <Legend formatter={(value, entry) => `${value} (${entry.payload.pct}%)`} wrapperStyle={{ fontSize: 13 }} />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
+                <ProjDonutChart
+                  data={contributionData.map(d => ({ name: d.name, value: d.pct }))}
+                  height={460}
+                  labelKey="name"
+                  valueKey="value"
+                  modal={true}
+                />
               )}
             </div>
           </div>
@@ -1411,6 +2005,7 @@ const ProjectDashboard = () => {
   const [showSpentModal, setShowSpentModal] = useState(false); // Amount Spent breakdown modal
   const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
   const [showProfitModal, setShowProfitModal] = useState(false); // Profit breakdown modal
+  const [projChartModal, setProjChartModal] = useState(null); // single-project chart expand modal
 
   // Determine which mode we are in
   const mode = projectId ? 'PROJECT' : groupName ? (subGroupName ? 'SUBGROUP' : 'GROUP') : 'ALL';
@@ -1813,52 +2408,90 @@ const ProjectDashboard = () => {
           )}
 
           {/* Charts */}
-          <div className="dashboard-charts-grid">
+          {/* ── Single-project Charts Row ── */}
+          <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            {/* Spending Trend — full row */}
             {dashboardData.spendingTrend?.length > 0 ? (
-              <div className="chart-card full-width">
-                <div className="chart-header"><h4 className="chart-title"><TrendingUp size={18} />Monthly Spending Trend</h4></div>
-                <ResponsiveContainer width="100%" height={230}>
-                  <ComposedChart data={dashboardData.spendingTrend}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="month" /><YAxis />
-                    <Tooltip formatter={v => formatCurrency(v)} /><Legend />
-                    <Area dataKey="spending" fill="#3b82f6" stroke="#3b82f6" fillOpacity={.3} />
-                    <Bar dataKey="orders" fill="#22c55e" />
-                  </ComposedChart>
-                </ResponsiveContainer>
+              <div className="chart-card chart-card-clickable" style={{ gridColumn: '1 / -1' }}
+                onClick={() => setProjChartModal({ type: 'spendingTrend' })}>
+                <div className="chart-header">
+                  <h4 className="chart-title"><TrendingUp size={18} />Monthly Spending Trend</h4>
+                  <span className="chart-expand-hint">🔍 Click to expand</span>
+                </div>
+                <ChartJSBar
+                  labels={dashboardData.spendingTrend.map(d => d.month)}
+                  datasets={[
+                    {
+                      label: 'Spending',
+                      data: dashboardData.spendingTrend.map(d => d.spending),
+                      type: 'line',
+                      backgroundColor: 'rgba(96,165,250,0.15)',
+                      borderColor: '#60a5fa',
+                      borderWidth: 2,
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 3,
+                      pointBackgroundColor: '#60a5fa',
+                    },
+                    {
+                      label: 'Orders',
+                      data: dashboardData.spendingTrend.map(d => d.orders),
+                      backgroundColor: '#6ee7b7',
+                      borderColor: '#34d399',
+                      borderWidth: 1.5,
+                      borderRadius: 0,
+                      borderSkipped: false,
+                    },
+                  ]}
+                  height={230}
+                  yTickFormatter={v => formatCurrency(v)}
+                />
               </div>
             ) : (
               <div className="chart-card full-width"><div className="chart-header"><h4 className="chart-title">Monthly Spending Trend</h4></div><EmptyChart message="No spending data available" /></div>
             )}
 
+            {/* PO Status Donut — half width, Chart.js with zoom + labels */}
             {dashboardData.procurementData?.posByStatus?.length > 0 ? (
-              <div className="chart-card">
-                <div className="chart-header"><h4 className="chart-title">PO Status Distribution</h4></div>
-                <ResponsiveContainer width="100%" height={230}>
-                  <RechartsPieChart>
-                    <Pie data={dashboardData.procurementData.posByStatus} cx="50%" cy="50%" labelLine={false}
-                      label={e => `${e.name} (${e.value})`} outerRadius={80} dataKey="value">
-                      {dashboardData.procurementData.posByStatus.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </RechartsPieChart>
-                </ResponsiveContainer>
+              <div className="chart-card chart-card-clickable"
+                onClick={() => setProjChartModal({ type: 'poStatus' })}>
+                <div className="chart-header">
+                  <h4 className="chart-title"><PieChart size={16} />PO Status Distribution</h4>
+                  <span className="chart-expand-hint">🔍 Click to expand</span>
+                </div>
+                <ProjDonutChart
+                  data={dashboardData.procurementData.posByStatus}
+                  height={250}
+                  labelKey="name"
+                  valueKey="value"
+                />
               </div>
             ) : (
               <div className="chart-card"><div className="chart-header"><h4 className="chart-title">PO Status Distribution</h4></div><EmptyChart message="No POs yet" /></div>
             )}
 
+            {/* Top Categories Bar — half width, Chart.js with zoom */}
             {dashboardData.procurementData?.categoryDistribution?.length > 0 ? (
-              <div className="chart-card">
-                <div className="chart-header"><h4 className="chart-title">Top Categories</h4></div>
-                <ResponsiveContainer width="100%" height={230}>
-                  <BarChart data={dashboardData.procurementData.categoryDistribution} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" /><YAxis dataKey="name" type="category" width={100} />
-                    <Tooltip formatter={v => formatCurrency(v)} />
-                    <Bar dataKey="value" fill="#22c55e" />
-                  </BarChart>
-                </ResponsiveContainer>
+              <div className="chart-card chart-card-clickable"
+                onClick={() => setProjChartModal({ type: 'topCategories' })}>
+                <div className="chart-header">
+                  <h4 className="chart-title"><BarChart3 size={16} />Top Categories</h4>
+                  <span className="chart-expand-hint">🔍 Click to expand</span>
+                </div>
+                <ChartJSBar
+                  labels={dashboardData.procurementData.categoryDistribution.map(d => d.name)}
+                  datasets={[{
+                    label: 'Value',
+                    data: dashboardData.procurementData.categoryDistribution.map(d => d.value),
+                    backgroundColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length] + 'cc'),
+                    borderColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
+                    borderWidth: 1.5,
+                    borderRadius: 0,
+                    borderSkipped: false,
+                  }]}
+                  height={250}
+                  yTickFormatter={v => formatCurrency(v)}
+                />
               </div>
             ) : (
               <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Top Categories</h4></div><EmptyChart message="No category data" /></div>
@@ -1930,6 +2563,90 @@ const ProjectDashboard = () => {
           )}
         </>
       )}
+
+      {/* ─── Single-project Chart Expand Modal ────────────────────────────── */}
+      {projChartModal && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(15,23,42,0.72)', backdropFilter:'blur(6px)',
+          zIndex:10300, display:'flex', alignItems:'center', justifyContent:'center', padding:24
+        }} onClick={() => setProjChartModal(null)}>
+          <div style={{
+            background:'#fff', borderRadius:16, width:'100%', maxWidth:940, maxHeight:'90vh',
+            display:'flex', flexDirection:'column', boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden'
+          }} onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ padding:'16px 24px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:'#1e293b', display:'flex', alignItems:'center', gap:8 }}>
+                {projChartModal.type === 'spendingTrend'  && <><TrendingUp size={18} /> Monthly Spending Trend</>}
+                {projChartModal.type === 'poStatus'       && <><PieChart size={18} /> PO Status Distribution</>}
+                {projChartModal.type === 'topCategories'  && <><BarChart3 size={18} /> Top Categories</>}
+              </h3>
+              <button onClick={() => setProjChartModal(null)} style={{ background:'#f1f5f9', border:'none', cursor:'pointer', padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:16 }}>✕</button>
+            </div>
+            {/* Chart body */}
+            <div style={{ flex:1, padding:'20px 24px', overflow:'auto' }}>
+              {projChartModal.type === 'spendingTrend' && dashboardData?.spendingTrend?.length > 0 && (
+                <ChartJSBar
+                  labels={dashboardData.spendingTrend.map(d => d.month)}
+                  datasets={[
+                    {
+                      label: 'Spending',
+                      data: dashboardData.spendingTrend.map(d => d.spending),
+                      type: 'line',
+                      backgroundColor: 'rgba(96,165,250,0.15)',
+                      borderColor: '#60a5fa',
+                      borderWidth: 2,
+                      fill: true,
+                      tension: 0.4,
+                      pointRadius: 4,
+                      pointBackgroundColor: '#60a5fa',
+                    },
+                    {
+                      label: 'Orders',
+                      data: dashboardData.spendingTrend.map(d => d.orders),
+                      backgroundColor: '#6ee7b7',
+                      borderColor: '#34d399',
+                      borderWidth: 1.5,
+                      borderRadius: 0,
+                      borderSkipped: false,
+                    },
+                  ]}
+                  height={400}
+                  yTickFormatter={v => formatCurrency(v)}
+                  modal={true}
+                />
+              )}
+              {projChartModal.type === 'poStatus' && dashboardData?.procurementData?.posByStatus?.length > 0 && (
+                <ProjDonutChart
+                  data={dashboardData.procurementData.posByStatus}
+                  height={440}
+                  labelKey="name"
+                  valueKey="value"
+                  modal={true}
+                />
+              )}
+              {projChartModal.type === 'topCategories' && dashboardData?.procurementData?.categoryDistribution?.length > 0 && (
+                <ChartJSBar
+                  labels={dashboardData.procurementData.categoryDistribution.map(d => d.name)}
+                  datasets={[{
+                    label: 'Value',
+                    data: dashboardData.procurementData.categoryDistribution.map(d => d.value),
+                    backgroundColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length] + 'cc'),
+                    borderColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
+                    borderWidth: 1.5,
+                    borderRadius: 0,
+                    borderSkipped: false,
+                  }]}
+                  height={420}
+                  yTickFormatter={v => formatCurrency(v)}
+                  modal={true}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {/* ─── Amount Spent Breakdown Modal ──────────────────────────────────── */}
       {showSpentModal && dashboardData?.financialData && (

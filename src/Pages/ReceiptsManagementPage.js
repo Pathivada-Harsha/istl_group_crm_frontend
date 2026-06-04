@@ -192,14 +192,15 @@ const SortIcon = ({ columnId, sortConfig }) => {
 const ReceiptsManagementPage = () => {
   const [receipts, setReceipts] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
   const receiptPerms = pagePermissions?.INVOICE_RECEIPTS || pagePermissions?.INVOICES || pagePermissions?.RECEIPTS || [];
-  const canView     = receiptPerms.includes('VIEW')     || isAccountsExecutive;
-  const canCreate   = receiptPerms.includes('CREATE')   || isAccountsExecutive;
-  const canEdit     = receiptPerms.includes('EDIT')     || isAccountsExecutive;
-  const canDelete   = receiptPerms.includes('DELETE')   && !isAccountsExecutive;
-  const canAdjust   = receiptPerms.includes('ADJUST')   || isAccountsExecutive;
-  const canDownload = receiptPerms.includes('DOWNLOAD') || isAccountsExecutive;
+  // Pure DB-driven permissions — no role overrides
+  const canView     = receiptPerms.includes('VIEW');
+  const canCreate   = receiptPerms.includes('CREATE');
+  const canEdit     = receiptPerms.includes('EDIT');
+  const canDelete   = receiptPerms.includes('DELETE');
+  const canAdjust   = receiptPerms.includes('ADJUST');
+  const canDownload = receiptPerms.includes('DOWNLOAD');
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -309,6 +310,12 @@ const ReceiptsManagementPage = () => {
   useEffect(() => { localStorage.setItem('receiptColumns', JSON.stringify(columns)); }, [columns]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   // ── Fetch receipts — AbortController cancels stale in-flight requests ───
+  // Clear stale data immediately when logged-in user changes
+  useEffect(() => {
+    setReceipts([]);
+    setCurrentPage(0);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const controller = new AbortController();
     const load = async () => {
@@ -339,7 +346,7 @@ const ReceiptsManagementPage = () => {
     load();
     return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod, filters.dateFrom, filters.dateTo, refreshKey]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.receiptType, filters.search, filters.paymentMethod, filters.dateFrom, filters.dateTo, refreshKey, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchStats(); }, [groupName, subGroupName, projectId, filters.search, filters.receiptType, filters.paymentMethod, filters.dateFrom, filters.dateTo]);
 

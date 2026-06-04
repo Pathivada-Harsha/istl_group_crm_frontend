@@ -112,10 +112,12 @@ const BillsReceived = () => {
 
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  // isAccountsRole: any ACCOUNTS_* role (ACCOUNTS_EXECUTIVE, ACCOUNTS_CFO, ACCOUNTS_MANAGER …)
+  const isAccountsRole = !!(user?.role && user.role.trim().toUpperCase().startsWith('ACCOUNTS_'));
   const billsPerms = pagePermissions?.BILLS || [];
-  const canCreate = billsPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = billsPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete = billsPerms.includes('DELETE') && !isAccountsExecutive;
+  const canCreate = billsPerms.includes('CREATE') || isAccountsRole;
+  const canEdit   = billsPerms.includes('EDIT')   || isAccountsRole;
+  const canDelete = billsPerms.includes('DELETE') && !isAccountsRole;
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,

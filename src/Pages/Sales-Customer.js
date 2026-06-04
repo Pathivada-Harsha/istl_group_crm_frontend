@@ -1832,17 +1832,16 @@ const ClientsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) =>
 // ═══════════════════════════════════════════════════════════════════
 const CustomerDatabase = () => {
   // const isFirstRender = useRef(true);
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
-  // ── Permissions ──────────────────────────────────────────────────
+  // ── Permissions — pure DB-driven, no role overrides ──────────────
   const customersPermissions = pagePermissions?.CUSTOMERS || [];
-  // ACCOUNTS_EXECUTIVE gets VIEW + CREATE + EDIT but NOT DELETE
-  const canView   = customersPermissions.includes('VIEW')   || isAccountsExecutive;
-  const canCreate = customersPermissions.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = customersPermissions.includes('EDIT')   || isAccountsExecutive;
-  const canDelete = customersPermissions.includes('DELETE') && !isAccountsExecutive;
+  const canView   = customersPermissions.includes('VIEW');
+  const canCreate = customersPermissions.includes('CREATE');
+  const canEdit   = customersPermissions.includes('EDIT');
+  const canDelete = customersPermissions.includes('DELETE');
   const permissions = { canView, canCreate, canEdit, canDelete };
 
   const currentUser = { id: user.id || 1, role: user.role || 'USER', name: user.name || 'Current User' };

@@ -166,21 +166,24 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const InvoicesManagementPage = () => {
   const [invoices, setInvoices] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
 
   // ── Role helpers ───────────────────────────────────────────────────────────
-  // Accounts team: any role starting with ACCOUNTS_ (ACCOUNTS_EXECUTIVE, ACCOUNTS_MANAGER …)
-  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
+  // isAccountsRole: used for WORKFLOW logic only (save as SENT vs PENDING_APPROVAL)
+  // NOT used for page permission gates — those are purely DB-driven below.
+  const isAccountsRole = !!(user?.role && user.role.trim().toUpperCase().startsWith('ACCOUNTS_'));
   // Privileged roles bypass the approval workflow (can create directly as DRAFT/SENT)
   const isPrivileged = isAccountsRole
     || user?.role === 'ADMIN'
-    || user?.role === 'SUPERADMIN';
+    || user?.role === 'SUPERADMIN'
+    || (user?.hierarchyLevel != null && Number(user.hierarchyLevel) <= 2);
   const invoicesPerms = pagePermissions?.INVOICES || [];
-  const canView   = invoicesPerms.includes('VIEW')   || isAccountsExecutive;
-  const canCreate = invoicesPerms.includes('CREATE') || isAccountsExecutive;
-  const canEdit   = invoicesPerms.includes('EDIT')   || isAccountsExecutive;
-  const canDelete = invoicesPerms.includes('DELETE') && !isAccountsExecutive;
-  const canSend   = invoicesPerms.includes('SEND')   || isAccountsExecutive;
+  // Pure DB-driven page permissions — no role overrides
+  const canView   = invoicesPerms.includes('VIEW');
+  const canCreate = invoicesPerms.includes('CREATE');
+  const canEdit   = invoicesPerms.includes('EDIT');
+  const canDelete = invoicesPerms.includes('DELETE');
+  const canSend   = invoicesPerms.includes('SEND');
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete;
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
@@ -401,14 +404,26 @@ const InvoicesManagementPage = () => {
   };
 
   // Fetch invoices on mount and filter change
+  // Clear stale data immediately when the logged-in user changes,
+  // then reset page to 0 which will trigger a fresh fetchInvoices.
+  const prevUserIdRef = React.useRef(user?.id);
+  useEffect(() => {
+    if (prevUserIdRef.current !== user?.id) {
+      setInvoices([]);
+      setStats(null);
+      setCurrentPage(0);
+      prevUserIdRef.current = user?.id;
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     fetchInvoices();
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search, filters.dateFrom, filters.dateTo]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search, filters.dateFrom, filters.dateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch stats when filters change
   useEffect(() => {
     fetchStats();
-  }, [groupName, subGroupName, projectId, filters.status, filters.search, filters.dateFrom, filters.dateTo]);
+  }, [groupName, subGroupName, projectId, filters.status, filters.search, filters.dateFrom, filters.dateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const handleDownloadPdf = async (invoice) => {
     setLoading(true);
     try {

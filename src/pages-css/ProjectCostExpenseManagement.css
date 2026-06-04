@@ -3166,3 +3166,240 @@
 .filter-dropdown-list {
   z-index: 99999 !important;
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   MODAL IMPROVEMENTS — uniform inputs, aligned group/subgroup, project dropdown
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Uniform input height for ALL fields inside modal ─────────────────────── */
+.exp-field input,
+.exp-field select,
+.exp-field textarea,
+.exp-field .filter-trigger,
+.pce-dp-trigger {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box !important;
+  font-size: 13px !important;
+}
+
+/* DatePicker trigger specific fix — keep flex alignment */
+.pce-dp-trigger {
+  display: flex !important;
+  align-items: center !important;
+  padding: 0 11px !important;
+}
+
+/* Textarea override: let notes be taller */
+.exp-field textarea {
+  height: auto !important;
+  min-height: 38px !important;
+  padding: 8px 10px !important;
+}
+
+/* Paid-by custom dropdown: match height */
+.exp-field > div[style*="border"] {
+  min-height: 38px !important;
+  box-sizing: border-box !important;
+}
+
+/* ── Section 1 Scope: Group / Sub-Group — equal two-column layout ─────────── */
+.exp-form-row2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
+}
+
+/* All direct .exp-field children in a row2 are equal width */
+.exp-form-row2 > .exp-field {
+  min-width: 0;
+  width: 100%;
+}
+
+/* FilterSelect inside exp-field: stretch to fill */
+.exp-field .filter-group {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.exp-field .filter-trigger {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* ── Section 3 Expense Info row — three columns, equal */
+.exp-form-row3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  align-items: start;
+}
+.exp-form-row3 > .exp-field {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ── Project dropdown: wide enough to show full project names ─────────────── */
+.exp-field-proj {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* Ensure the project single-select wrapper fills its grid cell */
+.exp-item-top-row .exp-field-proj > div {
+  width: 100%;
+}
+
+/* Project dropdown option list — allow full-width text to wrap */
+.exp-item-top-row .exp-field-proj [style*="position: absolute"] {
+  min-width: 200px !important;
+}
+
+/* ── Expense item top row: balanced columns ───────────────────────────────── */
+.exp-item-top-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 2fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+/* ── Status dropdown in Section 2 ────────────────────────────────────────── */
+.exp-field .filter-trigger,
+.exp-field > select {
+  height: 38px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* Notes/description full-width row */
+.exp-item-fields > .exp-field {
+  width: 100%;
+}
+
+@media (max-width: 720px) {
+  .exp-item-top-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .exp-field-proj {
+    grid-column: 1 / -1;
+  }
+  .exp-form-row2 {
+    grid-template-columns: 1fr !important;
+  }
+  .exp-form-row3 {
+    grid-template-columns: 1fr !important;
+  }
+}
+/* ── Bill / Receipt Preview Modal ──────────────────────────────────────────── */
+.exp-bill-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 10200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: expFadeIn 0.2s;
+}
+
+@keyframes expFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.exp-bill-preview-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 96vw;
+  max-width: 1300px;
+  height: 95vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  animation: expScaleIn 0.25s ease-out;
+}
+
+@keyframes expScaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.exp-bill-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+  gap: 12px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.exp-bill-preview-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  white-space: nowrap;
+}
+
+.exp-bill-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.exp-bill-preview-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.15s;
+}
+.exp-bill-preview-btn:hover { filter: brightness(0.9); }
+
+.exp-bill-preview-btn-open     { background: #d1fae5; color: #065f46; }
+.exp-bill-preview-btn-download { background: #ede9fe; color: #5b21b6; }
+
+.exp-bill-preview-iframe {
+  flex: 1;
+  border: none;
+  min-height: 0;
+  display: block;
+  width: 100%;
+}
+
+/* Bill icon button in actions cell */
+.exp-act-btn.bill-btn {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+.exp-act-btn.bill-btn:hover { background: #dbeafe; }
+
+@media (max-width: 600px) {
+  .exp-bill-preview-modal {
+    width: 100vw;
+    height: 100vh;
+    border-radius: 0;
+  }
+  .exp-bill-preview-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
