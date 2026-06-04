@@ -313,6 +313,8 @@
   position: fixed; inset: 0; background: rgba(15,23,42,0.45);
   z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;
 }
+/* Confirm modal always on top — portalled to document.body */
+.pa-overlay--confirm { z-index: 2000; background: rgba(15,23,42,0.6); }
 .pa-modal {
   background: #fff; border-radius: 14px;
   width: min(520px, 95vw); max-height: 88vh; overflow-y: auto;
@@ -333,6 +335,9 @@
 }
 .pa-icon-btn { background: none; border: none; cursor: pointer; color: #94a3b8; font-size: 18px; padding: 2px; }
 .pa-icon-btn:hover { color: #374151; }
+
+/* Highlight for projects selected for bulk removal in Current Access tab */
+.pa-proj-remove-selected { background: #fef2f2 !important; border-left: 3px solid #ef4444; }
 
 /* ── Form fields ─────────────────────────────────────────────────────────────── */
 .pa-field { padding: 0 20px 14px; }

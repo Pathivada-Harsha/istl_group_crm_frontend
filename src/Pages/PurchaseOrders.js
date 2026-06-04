@@ -386,20 +386,14 @@ const PurchaseOrders = () => {
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
-  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
-  const isSuperAdmin   = user?.role === 'SUPERADMIN';
-  const isAdmin        = user?.role === 'ADMIN';
-  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
+  const { user, pagePermissions } = useAuth();
   const poPerms    = pagePermissions?.PURCHASE_ORDERS || [];
-  const hasPerms   = poPerms.length > 0;
-  // If no permissions set yet, full-access roles get everything.
-  // DELETE is NOT restricted by isAccountsExecutive — it follows the permission flag only.
-  const canView    = !hasPerms ? isFullAccess : poPerms.includes('VIEW')    || isFullAccess;
-  const canCreate  = !hasPerms ? isFullAccess : poPerms.includes('CREATE')  || isFullAccess;
-  const canEdit    = !hasPerms ? isFullAccess : poPerms.includes('EDIT')    || isFullAccess;
-  const canDelete  = !hasPerms ? (isSuperAdmin || isAdmin) : poPerms.includes('DELETE');
-  const canApprove = !hasPerms ? isFullAccess : poPerms.includes('APPROVE') || isFullAccess;
+  // Pure DB-driven permissions — no role overrides
+  const canView    = poPerms.includes('VIEW');
+  const canCreate  = poPerms.includes('CREATE');
+  const canEdit    = poPerms.includes('EDIT');
+  const canDelete  = poPerms.includes('DELETE');
+  const canApprove = poPerms.includes('APPROVE');
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
@@ -531,6 +525,11 @@ const PurchaseOrders = () => {
   // AbortController + Promise.all: fetches PO list and KPI stats simultaneously
   // with identical filter params. Cleanup aborts both in-flight requests when
   // any filter/page/sort dep changes, eliminating race conditions on rapid typing.
+  // Clear stale data immediately when logged-in user changes
+  useEffect(() => {
+    setPurchaseOrders([]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -601,7 +600,7 @@ const PurchaseOrders = () => {
     loadAll();
     return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig, orderDateFrom, orderDateTo]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig, orderDateFrom, orderDateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchVendors(); }, []);
 

@@ -208,13 +208,16 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const fmtOBDate = d => { if (!d) return '-'; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`; };
 
 function OrderBook() {
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
+  // Permissions are driven entirely by the DB-assigned ORDER_BOOK permissions.
+  // The !isAccountsExecutive override was incorrectly blocking ACCOUNTS_* users
+  // who have been explicitly granted CREATE/EDIT/UPLOAD/DELETE permissions.
   const obPerms   = pagePermissions?.ORDER_BOOK || [];
   const canView   = obPerms.includes('VIEW');
-  const canCreate = obPerms.includes('CREATE') && !isAccountsExecutive;
-  const canEdit   = obPerms.includes('EDIT')   && !isAccountsExecutive;
-  const canUpload = obPerms.includes('UPLOAD') && !isAccountsExecutive;
-  const canDelete = obPerms.includes('DELETE') && !isAccountsExecutive;
+  const canCreate = obPerms.includes('CREATE');
+  const canEdit   = obPerms.includes('EDIT');
+  const canUpload = obPerms.includes('UPLOAD');
+  const canDelete = obPerms.includes('DELETE');
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [showExcelUploadModal, setShowExcelUploadModal] = useState(false);
@@ -319,6 +322,16 @@ function OrderBook() {
     poDate: new Date().toISOString().split('T')[0]
   });
 
+  // Clear stale data immediately when logged-in user changes
+  const _prevUserIdRef_OrderBook = React.useRef(user?.id);
+  useEffect(() => {
+    if (_prevUserIdRef_OrderBook.current !== user?.id) {
+      setOrderBooks([]); 
+      setCurrentPage && setCurrentPage(0);
+      _prevUserIdRef_OrderBook.current = user?.id;
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // When page/size/group changes, use the correct fetch based on active filters
     if (searchTerm || statusFilter !== 'All' || fromDate || toDate) {
@@ -328,7 +341,7 @@ function OrderBook() {
     }
     fetchGroups();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPage, rowsPerPage, groupName, subGroupName]);
+  }, [currentPage, rowsPerPage, groupName, subGroupName, user?.id]);
 
   useEffect(() => {
     // When filters change, always reset to page 1

@@ -288,7 +288,7 @@ const QRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 const QuotationsReceived = () => {
   const [quotations, setQuotations] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
-  const { user, pagePermissions, isAccountsExecutive } = useAuth();
+  const { user, pagePermissions } = useAuth();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
@@ -376,19 +376,13 @@ const QuotationsReceived = () => {
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
 
   // Real permission checks from pagePermissions
-  const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
-  const isSuperAdmin   = user?.role === 'SUPERADMIN';
-  const isAdmin        = user?.role === 'ADMIN';
-  const isFullAccess   = isSuperAdmin || isAdmin || isAccountsRole || isAccountsExecutive;
   const quotPerms  = pagePermissions?.PROCUREMENT_QUOTATIONS || [];
-  // Fallback: if no perms configured yet, allow access (existing behaviour)
-  const hasPerms   = quotPerms.length > 0;
-  const canView    = !hasPerms || quotPerms.includes('VIEW')    || isFullAccess;
-  const canCreate  = !hasPerms || quotPerms.includes('CREATE')  || isFullAccess;
-  const canEdit    = !hasPerms || quotPerms.includes('EDIT')    || isFullAccess;
-  const canApprove = !hasPerms || quotPerms.includes('APPROVE') || isFullAccess;
-  // DELETE: follows permission flag only — not blocked by isAccountsExecutive
-  const canDelete  = !hasPerms || quotPerms.includes('DELETE');
+  // Pure DB-driven permissions — no role overrides
+  const canView    = quotPerms.includes('VIEW');
+  const canCreate  = quotPerms.includes('CREATE');
+  const canEdit    = quotPerms.includes('EDIT');
+  const canApprove = quotPerms.includes('APPROVE');
+  const canDelete  = quotPerms.includes('DELETE');
 
   // ── Confirm modal state ──────────────────────────────────────────────────
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', type: 'error', onConfirm: null });
@@ -406,6 +400,11 @@ const QuotationsReceived = () => {
   // ones — eliminating race conditions where a slower earlier response
   // (e.g. search='A') could arrive after a faster later response and
   // overwrite correct KPI values with stale data.
+  // Clear stale data immediately when logged-in user changes
+  useEffect(() => {
+    setQuotations([]);
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
@@ -467,7 +466,7 @@ const QuotationsReceived = () => {
     loadAll();
     return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search, uploadedFrom, uploadedTo]);
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.search, uploadedFrom, uploadedTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Sorting logic ────────────────────────────────────────────────────────
   const sortedQuotations = useMemo(() => {
