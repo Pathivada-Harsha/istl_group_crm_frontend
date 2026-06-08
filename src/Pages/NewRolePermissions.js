@@ -1,6 +1,41 @@
 import React, { useEffect, useState, useCallback } from "react";
 import "../pages-css/NewRolePermissions.css";
 import { useAuth } from '../hooks/useAuth';
+
+/* Inline-style theme mappers (dark mode) */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714','#fcd34d':'#5a4714','#fca5a5':'#5a2a2e',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#fdf4ff':'#2e2147','#fff0f0':'#2b1d20','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#cbd5e0':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#14532d':'#6ee7b7','#6b21a8':'#c4b5fd','#9a3412':'#fb923c','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a','#be123c':'#f0708a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8','#0c4a6e':'#7cc3f0','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#4c1d95':'#a78bfa','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const API = process.env.REACT_APP_API_URL;
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
@@ -32,6 +67,7 @@ function useToast() {
 
 // ─── Custom Confirm Modal ───────────────────────────────────────────────────
 function ConfirmModal({ isOpen, title, message, subMessage, onConfirm, onCancel }) {
+  useThemeVersion();
   if (!isOpen) return null;
   return (
     <div style={{
@@ -40,34 +76,34 @@ function ConfirmModal({ isOpen, title, message, subMessage, onConfirm, onCancel 
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div style={{
-        background: '#fff', borderRadius: 16, padding: '28px 32px',
+        background: __sbg('#fff'), borderRadius: 16, padding: '28px 32px',
         maxWidth: 420, width: '100%',
         boxShadow: '0 20px 40px rgba(0,0,0,0.18)',
         animation: 'rpSlideUp 0.2s ease-out',
       }}>
         <div style={{
           width: 52, height: 52, borderRadius: '50%',
-          background: '#fee2e2', display: 'flex', alignItems: 'center',
+          background: __sbg('#fee2e2'), display: 'flex', alignItems: 'center',
           justifyContent: 'center', margin: '0 auto 16px',
         }}>
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
             <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: '#0f172a', textAlign: 'center' }}>{title}</h3>
-        <p style={{ margin: '0 0 6px', fontSize: 14, color: '#374151', textAlign: 'center', lineHeight: 1.5 }}>{message}</p>
+        <h3 style={{ margin: '0 0 8px', fontSize: 17, fontWeight: 700, color: __stc('#0f172a'), textAlign: 'center' }}>{title}</h3>
+        <p style={{ margin: '0 0 6px', fontSize: 14, color: __stc('#374151'), textAlign: 'center', lineHeight: 1.5 }}>{message}</p>
         {subMessage && (
-          <p style={{ margin: '0 0 22px', fontSize: 12, color: '#ef4444', textAlign: 'center', background: '#fef2f2', padding: '8px 12px', borderRadius: 8 }}>{subMessage}</p>
+          <p style={{ margin: '0 0 22px', fontSize: 12, color: __stc('#ef4444'), textAlign: 'center', background: __sbg('#fef2f2'), padding: '8px 12px', borderRadius: 8 }}>{subMessage}</p>
         )}
         {!subMessage && <div style={{ marginBottom: 22 }} />}
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onCancel} style={{
-            flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #e2e8f0',
-            background: '#f8fafc', color: '#374151', fontSize: 14, fontWeight: 500, cursor: 'pointer',
+            flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${__sbg('#e2e8f0')}`,
+            background: __sbg('#f8fafc'), color: __stc('#374151'), fontSize: 14, fontWeight: 500, cursor: 'pointer',
           }}>Cancel</button>
           <button onClick={onConfirm} style={{
             flex: 1, padding: '10px', borderRadius: 8, border: 'none',
-            background: '#ef4444', color: '#fff', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            background: __sbg('#ef4444'), color: __stc('#fff'), fontSize: 14, fontWeight: 600, cursor: 'pointer',
           }}>Delete</button>
         </div>
       </div>
@@ -83,6 +119,7 @@ function formatMenuName(name) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 export default function NewRolePermissions() {
+  useThemeVersion();
   const { toasts, addToast, removeToast } = useToast();
   const { user } = useAuth();
 
@@ -496,18 +533,18 @@ export default function NewRolePermissions() {
     hierarchyLoading ? (
       <div className="rp-loader-wrap" style={{ alignSelf: 'center' }}><div className="rp-loader" /><span>Loading...</span></div>
     ) : hierarchyData.length === 0 ? (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, background: '#f8fafc', borderRadius: 12, border: '1px dashed #e2e8f0', color: '#9ca3af', textAlign: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 40, background: __sbg('#f8fafc'), borderRadius: 12, border: `1px dashed ${__sbg('#e2e8f0')}`, color: __stc('#9ca3af'), textAlign: 'center' }}>
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" style={{ marginBottom: 12 }}>
           <rect x="9" y="2" width="6" height="5" rx="1.5" stroke="#cbd5e1" strokeWidth="1.5" />
           <rect x="2" y="17" width="6" height="5" rx="1.5" stroke="#e2e8f0" strokeWidth="1.5" />
           <rect x="16" y="17" width="6" height="5" rx="1.5" stroke="#e2e8f0" strokeWidth="1.5" />
           <path d="M12 7v4M5 17v-3h14v3" stroke="#cbd5e1" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
-        <div style={{ fontWeight: 600, fontSize: 13, color: '#6b7280' }}>No hierarchy defined yet</div>
+        <div style={{ fontWeight: 600, fontSize: 13, color: __stc('#6b7280') }}>No hierarchy defined yet</div>
         <div style={{ fontSize: 12, marginTop: 4 }}>Add entries using the form on the left</div>
       </div>
     ) : (
-      <div style={{ background: 'linear-gradient(135deg,#f8fafc,#f1f5f9)', borderRadius: 12, border: '1px solid #e2e8f0', overflowX: 'auto', overflowY: 'auto', maxHeight: 600, padding: '24px 20px' }}>
+      <div style={{ background: `linear-gradient(135deg,${__sbg('#f8fafc')},${__sbg('#f1f5f9')})`, borderRadius: 12, border: `1px solid ${__sbg('#e2e8f0')}`, overflowX: 'auto', overflowY: 'auto', maxHeight: 600, padding: '24px 20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 0, alignItems: 'center' }}>
           {[...hierarchyData].sort((a, b) => (a.levelOrder || 99) - (b.levelOrder || 99)).map((entry, idx, arr) => {
             const parseList = (s) => { try { return JSON.parse(s || '[]'); } catch { return []; } };
@@ -517,27 +554,27 @@ export default function NewRolePermissions() {
             const manages = parseList(entry.canAssignRoles);
             return (
               <div key={entry.roleName} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ background: '#fff', border: `2px solid ${c}`, borderRadius: 12, padding: '12px 20px', minWidth: 200, textAlign: 'center', boxShadow: `0 3px 12px ${c}20`, position: 'relative' }}>
+                <div style={{ background: __sbg('#fff'), border: `2px solid ${c}`, borderRadius: 12, padding: '12px 20px', minWidth: 200, textAlign: 'center', boxShadow: `0 3px 12px ${c}20`, position: 'relative' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
-                    <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: c, padding: '1px 7px', borderRadius: 99 }}>Level {entry.levelOrder}</span>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: __stc('#fff'), background: c, padding: '1px 7px', borderRadius: 99 }}>Level {entry.levelOrder}</span>
                   </div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{entry.roleName}</div>
-                  {entry.description && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{entry.description}</div>}
+                  <div style={{ fontSize: 14, fontWeight: 700, color: __stc('#0f172a') }}>{entry.roleName}</div>
+                  {entry.description && <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 3 }}>{entry.description}</div>}
                   {manages.length > 0 && <div style={{ marginTop: 8, fontSize: 10, color: c, fontWeight: 600 }}>Creates: {manages.join(' - ')}</div>}
                   <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4 }}>
-                    <button title="Edit" style={{ width: 22, height: 22, borderRadius: 5, border: '1px solid #e2e8f0', background: '#f8fafc', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    <button title="Edit" style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#f8fafc'), color: __stc('#6366f1'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       onClick={() => startEditHierarchy(entry)}>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
-                    <button title="Delete" style={{ width: 22, height: 22, borderRadius: 5, border: '1px solid #fee2e2', background: '#fff5f5', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                    <button title="Delete" style={{ width: 22, height: 22, borderRadius: 5, border: `1px solid ${__sbg('#fee2e2')}`, background: __sbg('#fff5f5'), color: __stc('#ef4444'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                       onClick={() => deleteHierarchyEntry(entry.roleName)}>
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
                     </button>
                   </div>
                 </div>
                 {!isLast && (
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#cbd5e1' }}>
-                    <div style={{ width: 2, height: 16, background: '#cbd5e1' }} />
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: __stc('#cbd5e1') }}>
+                    <div style={{ width: 2, height: 16, background: __sbg('#cbd5e1') }} />
                     <svg width="10" height="6" viewBox="0 0 10 6"><path d="M0 0 L5 6 L10 0" fill="#cbd5e1" /></svg>
                   </div>
                 )}
@@ -874,7 +911,7 @@ export default function NewRolePermissions() {
               <div className="rp-field" style={{ flex: 1 }}>
                 <label className="rp-field__label">
                   Menu Item Name
-                  <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400, marginLeft: 8 }}>
+                  <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 400, marginLeft: 8 }}>
                     "New Page" will be stored as "new_page"
                   </span>
                 </label>
@@ -893,7 +930,7 @@ export default function NewRolePermissions() {
                   </button>
                 </div>
                 {newMenuItemName.trim() && (
-                  <div style={{ fontSize: 11, color: '#6366f1', marginTop: 4, fontWeight: 500 }}>
+                  <div style={{ fontSize: 11, color: __stc('#6366f1'), marginTop: 4, fontWeight: 500 }}>
                     Will be stored as: <strong>"{toSnakeCase(newMenuItemName)}"</strong>
                   </div>
                 )}
@@ -913,16 +950,16 @@ export default function NewRolePermissions() {
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               flexWrap: 'wrap', gap: 10, flexShrink: 0,
-              padding: '12px 20px', background: '#f8fafc',
-              borderBottom: '2px solid #e2e8f0', borderRadius: '10px 10px 0 0',
+              padding: '12px 20px', background: __sbg('#f8fafc'),
+              borderBottom: `2px solid ${__sbg('#e2e8f0')}`, borderRadius: '10px 10px 0 0',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
                   <rect x="3" y="11" width="18" height="11" rx="2" stroke="#6366f1" strokeWidth="2" />
                   <path d="M7 11V7a5 5 0 0 1 10 0v4" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>All Page Permissions</span>
-                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: __stc('#0f172a') }}>All Page Permissions</span>
+                <span style={{ fontSize: 11, background: __sbg('#e0e7ff'), color: __stc('#4338ca'), padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
                   {filteredPermissions.length}{permSearch.trim() ? ` / ${permissions.length}` : ''}
                 </span>
               </div>
@@ -935,7 +972,7 @@ export default function NewRolePermissions() {
                     <path d="M21 21l-4.35-4.35" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                   <input
-                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fff', color: '#0f172a', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 7, fontSize: 12, outline: 'none', background: __sbg('#fff'), color: __stc('#0f172a'), boxSizing: 'border-box' }}
                     placeholder="Search by permission name…"
                     value={permSearch}
                     onChange={e => setPermSearch(e.target.value)}
@@ -944,26 +981,26 @@ export default function NewRolePermissions() {
                   />
                   {permSearch && (
                     <button onClick={() => setPermSearch('')}
-                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
+                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: __stc('#94a3b8'), fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
                   )}
                 </div>
               </div>
-              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Edit to rename · Delete removes from all roles</span>
+              <span style={{ fontSize: 11, color: __stc('#94a3b8'), whiteSpace: 'nowrap' }}>Edit to rename · Delete removes from all roles</span>
             </div>
             <div className="rp-table-outer">
               <div className="rp-table-scroll">
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 480 }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 50 }}>#</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Permission Name</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 110 }}>Module</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 160 }}>Actions</th>
+                    <tr style={{ background: __sbg('#f8fafc') }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}`, width: 50 }}>#</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>Permission Name</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}`, width: 110 }}>Module</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}`, width: 160 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredPermissions.length === 0 && (
-                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: __stc('#94a3b8'), fontSize: 13 }}>
                         {permSearch.trim() ? `No permissions match "${permSearch}"` : 'No permissions found'}
                       </td></tr>
                     )}
@@ -972,34 +1009,34 @@ export default function NewRolePermissions() {
                       const isEditing = editingPermId === perm.id;
                       const globalIdx = permPage * permPageSize + idx + 1;
                       return (
-                        <tr key={perm.id} style={{ borderBottom: '1px solid #f1f5f9' }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        <tr key={perm.id} style={{ borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}
+                          onMouseEnter={e => e.currentTarget.style.background = (__isDarkTheme() ? '#232c3e' : '#f8fafc')}
                           onMouseLeave={e => e.currentTarget.style.background = ''}>
-                          <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{globalIdx}</td>
+                          <td style={{ padding: '12px 16px', fontSize: 12, color: __stc('#94a3b8'), fontWeight: 600 }}>{globalIdx}</td>
                           <td style={{ padding: '12px 16px' }}>
                             {isEditing ? (
-                              <input style={{ padding: '6px 10px', border: '1.5px solid #6366f1', borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 300 }}
+                              <input style={{ padding: '6px 10px', border: `1.5px solid ${__sbg('#6366f1')}`, borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 300 }}
                                 value={editingPermName} onChange={e => setEditingPermName(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') handleSaveEditPerm(perm.id); if (e.key === 'Escape') { setEditingPermId(null); setEditingPermName(''); } }}
                                 autoFocus />
                             ) : (
-                              <span style={{ fontSize: 13, fontFamily: 'monospace', background: '#f1f5f9', padding: '3px 9px', borderRadius: 5, color: '#334155' }}>{perm.name}</span>
+                              <span style={{ fontSize: 13, fontFamily: 'monospace', background: __sbg('#f1f5f9'), padding: '3px 9px', borderRadius: 5, color: __stc('#334155') }}>{perm.name}</span>
                             )}
                           </td>
                           <td style={{ padding: '12px 16px' }}>
-                            <span style={{ fontSize: 11, fontWeight: 700, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, textTransform: 'capitalize' }}>{module}</span>
+                            <span style={{ fontSize: 11, fontWeight: 700, background: __sbg('#e0e7ff'), color: __stc('#4338ca'), padding: '2px 8px', borderRadius: 99, textTransform: 'capitalize' }}>{module}</span>
                           </td>
                           <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                               {isEditing ? (
                                 <>
-                                  <button style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => handleSaveEditPerm(perm.id)} disabled={permLoading}>Save</button>
-                                  <button style={{ padding: '5px 10px', fontSize: 12, background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer' }} onClick={() => { setEditingPermId(null); setEditingPermName(''); }}>Cancel</button>
+                                  <button style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, background: __sbg('#6366f1'), color: __stc('#fff'), border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => handleSaveEditPerm(perm.id)} disabled={permLoading}>Save</button>
+                                  <button style={{ padding: '5px 10px', fontSize: 12, background: __sbg('#f3f4f6'), color: __stc('#374151'), border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 6, cursor: 'pointer' }} onClick={() => { setEditingPermId(null); setEditingPermName(''); }}>Cancel</button>
                                 </>
                               ) : (
                                 <>
-                                  <button style={{ padding: '5px 12px', fontSize: 12, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleStartEditPerm(perm)}>Edit</button>
-                                  <button style={{ padding: '5px 12px', fontSize: 12, background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleDeletePerm(perm.id, perm.name)} disabled={permLoading}>Delete</button>
+                                  <button style={{ padding: '5px 12px', fontSize: 12, background: __sbg('#eff6ff'), color: __stc('#2563eb'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleStartEditPerm(perm)}>Edit</button>
+                                  <button style={{ padding: '5px 12px', fontSize: 12, background: __sbg('#fff1f2'), color: __stc('#be123c'), border: `1px solid ${__sbg('#fecdd3')}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleDeletePerm(perm.id, perm.name)} disabled={permLoading}>Delete</button>
                                 </>
                               )}
                             </div>
@@ -1025,14 +1062,14 @@ export default function NewRolePermissions() {
         {createTab === "hierarchy" && (
           <div className="rp-panels">
             <div className="rp-panel">
-              <div style={{ background: 'linear-gradient(135deg,#eff6ff,#f0fdf4)', border: '1px solid #bfdbfe', borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+              <div style={{ background: `linear-gradient(135deg,${__sbg('#eff6ff')},${__sbg('#f0fdf4')})`, border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 10, padding: '14px 18px', marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
                   <circle cx="12" cy="12" r="10" stroke="#2563eb" strokeWidth="1.8" />
                   <path d="M12 8v4m0 4h.01" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" />
                 </svg>
                 <div>
-                  <div style={{ fontWeight: 700, fontSize: 13, color: '#1e40af', marginBottom: 3 }}>What is Role Hierarchy?</div>
-                  <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.6 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13, color: __stc('#1e40af'), marginBottom: 3 }}>What is Role Hierarchy?</div>
+                  <div style={{ fontSize: 12, color: __stc('#374151'), lineHeight: 1.6 }}>
                     Role Hierarchy defines <strong>who can manage whom</strong>. Set <strong>Level Order</strong> (1 = top), choose which roles this role <strong>can assign</strong> and <strong>can see</strong>.
                   </div>
                 </div>
@@ -1052,13 +1089,13 @@ export default function NewRolePermissions() {
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               flexWrap: 'wrap', gap: 10, flexShrink: 0,
-              padding: '12px 20px', background: '#f8fafc',
-              borderBottom: '2px solid #e2e8f0', borderRadius: '10px 10px 0 0',
+              padding: '12px 20px', background: __sbg('#f8fafc'),
+              borderBottom: `2px solid ${__sbg('#e2e8f0')}`, borderRadius: '10px 10px 0 0',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M3 6h18M3 12h18M3 18h10" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" /></svg>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>All Menu Items</span>
-                <span style={{ fontSize: 11, background: '#e0e7ff', color: '#4338ca', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: __stc('#0f172a') }}>All Menu Items</span>
+                <span style={{ fontSize: 11, background: __sbg('#e0e7ff'), color: __stc('#4338ca'), padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>
                   {filteredMenuItems.length}{menuSearch.trim() ? ` / ${menuItems.length}` : ''}
                 </span>
               </div>
@@ -1071,7 +1108,7 @@ export default function NewRolePermissions() {
                     <path d="M21 21l-4.35-4.35" stroke="#94a3b8" strokeWidth="2" strokeLinecap="round" />
                   </svg>
                   <input
-                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, outline: 'none', background: '#fff', color: '#0f172a', boxSizing: 'border-box' }}
+                    style={{ width: '100%', padding: '7px 10px 7px 28px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 7, fontSize: 12, outline: 'none', background: __sbg('#fff'), color: __stc('#0f172a'), boxSizing: 'border-box' }}
                     placeholder="Search by display name…"
                     value={menuSearch}
                     onChange={e => setMenuSearch(e.target.value)}
@@ -1080,74 +1117,74 @@ export default function NewRolePermissions() {
                   />
                   {menuSearch && (
                     <button onClick={() => setMenuSearch('')}
-                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
+                      style={{ position: 'absolute', right: 7, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: __stc('#94a3b8'), fontSize: 14, lineHeight: 1, padding: 0 }}>✕</button>
                   )}
                 </div>
               </div>
-              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Click Edit to rename · Delete removes all linked permissions</span>
+              <span style={{ fontSize: 11, color: __stc('#94a3b8'), whiteSpace: 'nowrap' }}>Click Edit to rename · Delete removes all linked permissions</span>
             </div>
             <div className="rp-table-outer">
               <div className="rp-table-scroll">
                 <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 520 }}>
                   <thead>
-                    <tr style={{ background: '#f8fafc' }}>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 60 }}>S.No</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>Display Name</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0' }}>DB Key (stored in database)</th>
-                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: '1px solid #e2e8f0', width: 160 }}>Actions</th>
+                    <tr style={{ background: __sbg('#f8fafc') }}>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}`, width: 60 }}>S.No</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>Display Name</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>DB Key (stored in database)</th>
+                      <th style={{ padding: '10px 16px', textAlign: 'right', fontSize: 11, fontWeight: 700, color: __stc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.5px', borderBottom: `1px solid ${__sbg('#e2e8f0')}`, width: 160 }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMenuItems.length === 0 && (
-                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                      <tr><td colSpan={4} style={{ padding: '32px', textAlign: 'center', color: __stc('#94a3b8'), fontSize: 13 }}>
                         {menuSearch.trim() ? `No menu items match "${menuSearch}"` : 'No menu items found'}
                       </td></tr>
                     )}
                     {filteredMenuItems.slice(menuPage * menuPageSize, (menuPage + 1) * menuPageSize).map((item, idx) => (
                       <tr key={item.id}
-                        style={{ borderBottom: '1px solid #f1f5f9', transition: 'background 0.1s' }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                        style={{ borderBottom: `1px solid ${__sbg('#f1f5f9')}`, transition: 'background 0.1s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = (__isDarkTheme() ? '#232c3e' : '#f8fafc')}
                         onMouseLeave={e => e.currentTarget.style.background = ''}>
-                        <td style={{ padding: '12px 16px', fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>{menuPage * menuPageSize + idx + 1}</td>
+                        <td style={{ padding: '12px 16px', fontSize: 12, color: __stc('#94a3b8'), fontWeight: 600 }}>{menuPage * menuPageSize + idx + 1}</td>
                         <td style={{ padding: '12px 16px' }}>
-                          <span style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>{formatMenuName(item.name)}</span>
+                          <span style={{ fontSize: 14, fontWeight: 600, color: __stc('#0f172a') }}>{formatMenuName(item.name)}</span>
                         </td>
                         <td style={{ padding: '12px 16px' }}>
                           {editingMenuId === item.id ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                              <input style={{ padding: '6px 10px', border: '1.5px solid #6366f1', borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 280 }}
+                              <input style={{ padding: '6px 10px', border: `1.5px solid ${__sbg('#6366f1')}`, borderRadius: 6, fontSize: 13, outline: 'none', width: '100%', maxWidth: 280 }}
                                 value={editingMenuName} onChange={e => setEditingMenuName(e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') handleSaveEditMenuItem(item.id); if (e.key === 'Escape') { setEditingMenuId(null); setEditingMenuName(''); } }}
                                 autoFocus />
                               {editingMenuName.trim() && editingMenuName.trim() !== item.name && (
-                                <div style={{ fontSize: 11, color: '#6366f1', fontWeight: 500 }}>
+                                <div style={{ fontSize: 11, color: __stc('#6366f1'), fontWeight: 500 }}>
                                   Will be stored as: <strong>"{toSnakeCase(editingMenuName)}"</strong>
                                 </div>
                               )}
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '7px 10px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, maxWidth: 380 }}>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '7px 10px', background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, borderRadius: 7, maxWidth: 380 }}>
                                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
                                   <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
-                                <span style={{ fontSize: 11, color: '#92400e', lineHeight: 1.5 }}>
-                                  <strong>Important:</strong> After renaming, update <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 3 }}>backendKey</code> and <code style={{ background: '#fef3c7', padding: '1px 4px', borderRadius: 3 }}>dbField</code> in your <strong>Sidebar</strong> and <strong>UsersPage.js</strong>.
+                                <span style={{ fontSize: 11, color: __stc('#92400e'), lineHeight: 1.5 }}>
+                                  <strong>Important:</strong> After renaming, update <code style={{ background: __sbg('#fef3c7'), padding: '1px 4px', borderRadius: 3 }}>backendKey</code> and <code style={{ background: __sbg('#fef3c7'), padding: '1px 4px', borderRadius: 3 }}>dbField</code> in your <strong>Sidebar</strong> and <strong>UsersPage.js</strong>.
                                 </span>
                               </div>
                             </div>
                           ) : (
-                            <span style={{ fontSize: 12, color: '#475569', fontFamily: 'monospace', background: '#f1f5f9', padding: '3px 9px', borderRadius: 5 }}>{item.name}</span>
+                            <span style={{ fontSize: 12, color: __stc('#475569'), fontFamily: 'monospace', background: __sbg('#f1f5f9'), padding: '3px 9px', borderRadius: 5 }}>{item.name}</span>
                           )}
                         </td>
                         <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                           <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                             {editingMenuId === item.id ? (
                               <>
-                                <button style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, background: '#6366f1', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => handleSaveEditMenuItem(item.id)} disabled={menuItemLoading}>Save</button>
-                                <button style={{ padding: '5px 10px', fontSize: 12, background: '#f3f4f6', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 6, cursor: 'pointer' }} onClick={() => { setEditingMenuId(null); setEditingMenuName(''); }}>Cancel</button>
+                                <button style={{ padding: '5px 14px', fontSize: 12, fontWeight: 600, background: __sbg('#6366f1'), color: __stc('#fff'), border: 'none', borderRadius: 6, cursor: 'pointer' }} onClick={() => handleSaveEditMenuItem(item.id)} disabled={menuItemLoading}>Save</button>
+                                <button style={{ padding: '5px 10px', fontSize: 12, background: __sbg('#f3f4f6'), color: __stc('#374151'), border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 6, cursor: 'pointer' }} onClick={() => { setEditingMenuId(null); setEditingMenuName(''); }}>Cancel</button>
                               </>
                             ) : (
                               <>
-                                <button style={{ padding: '5px 12px', fontSize: 12, background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleStartEditMenuItem(item)}>Edit</button>
-                                <button style={{ padding: '5px 12px', fontSize: 12, background: '#fff1f2', color: '#be123c', border: '1px solid #fecdd3', borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleDeleteMenuItem(item.id, item.name)} disabled={menuItemLoading}>Delete</button>
+                                <button style={{ padding: '5px 12px', fontSize: 12, background: __sbg('#eff6ff'), color: __stc('#2563eb'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleStartEditMenuItem(item)}>Edit</button>
+                                <button style={{ padding: '5px 12px', fontSize: 12, background: __sbg('#fff1f2'), color: __stc('#be123c'), border: `1px solid ${__sbg('#fecdd3')}`, borderRadius: 6, cursor: 'pointer', fontWeight: 500 }} onClick={() => handleDeleteMenuItem(item.id, item.name)} disabled={menuItemLoading}>Delete</button>
                               </>
                             )}
                           </div>
@@ -1221,15 +1258,15 @@ export default function NewRolePermissions() {
                         <div className="rp-no-data">No permissions defined yet</div>
                       ) : (
                         <>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', borderRadius: '8px 8px 0 0', marginBottom: 0 }}>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px 8px 0 0', marginBottom: 0 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: __stc('#374151') }}>
                               <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1' }}
                                 checked={permissions.length > 0 && permissions.every(p => selectedPermIds.includes(p.id))}
                                 ref={el => { if (el) el.indeterminate = permissions.some(p => selectedPermIds.includes(p.id)) && !permissions.every(p => selectedPermIds.includes(p.id)); }}
                                 onChange={e => { if (e.target.checked) setSelectedPermIds(permissions.map(p => p.id)); else setSelectedPermIds([]); }} />
                               Select All Permissions
                             </label>
-                            <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>{selectedPermIds.length} / {permissions.length} selected</span>
+                            <span style={{ fontSize: 12, color: __stc('#6366f1'), fontWeight: 600 }}>{selectedPermIds.length} / {permissions.length} selected</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                             {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([group, perms], groupIdx) => {
@@ -1238,28 +1275,28 @@ export default function NewRolePermissions() {
                               const groupCount = perms.filter(p => selectedPermIds.includes(p.id)).length;
                               const isLastGroup = groupIdx === Object.entries(grouped).length - 1;
                               const actionColor = {
-                                view: { bg: '#dbeafe', color: '#1e40af', on: '#2563eb' },
-                                create: { bg: '#d1fae5', color: '#065f46', on: '#059669' },
-                                edit: { bg: '#fef3c7', color: '#92400e', on: '#d97706' },
-                                delete: { bg: '#fee2e2', color: '#991b1b', on: '#ef4444' },
-                                manage: { bg: '#ede9fe', color: '#5b21b6', on: '#7c3aed' },
-                                approve: { bg: '#ecfdf5', color: '#065f46', on: '#10b981' },
-                                assign: { bg: '#fdf4ff', color: '#6b21a8', on: '#a21caf' },
-                                send: { bg: '#fff7ed', color: '#9a3412', on: '#ea580c' },
-                                record: { bg: '#f0fdf4', color: '#14532d', on: '#16a34a' },
+                                view: { bg: __sbg('#dbeafe'), color: __stc('#1e40af'), on: '#2563eb' },
+                                create: { bg: __sbg('#d1fae5'), color: __stc('#065f46'), on: '#059669' },
+                                edit: { bg: __sbg('#fef3c7'), color: __stc('#92400e'), on: '#d97706' },
+                                delete: { bg: __sbg('#fee2e2'), color: __stc('#991b1b'), on: '#ef4444' },
+                                manage: { bg: __sbg('#ede9fe'), color: __stc('#5b21b6'), on: '#7c3aed' },
+                                approve: { bg: __sbg('#ecfdf5'), color: __stc('#065f46'), on: '#10b981' },
+                                assign: { bg: __sbg('#fdf4ff'), color: __stc('#6b21a8'), on: '#a21caf' },
+                                send: { bg: __sbg('#fff7ed'), color: __stc('#9a3412'), on: '#ea580c' },
+                                record: { bg: __sbg('#f0fdf4'), color: __stc('#14532d'), on: '#16a34a' },
                               };
-                              const getActionStyle = (actionName) => actionColor[actionName.toLowerCase()] || { bg: '#f1f5f9', color: '#475569', on: '#6366f1' };
+                              const getActionStyle = (actionName) => actionColor[actionName.toLowerCase()] || { bg: __sbg('#f1f5f9'), color: __stc('#475569'), on: '#6366f1' };
                               return (
                                 <div key={group} style={{ borderBottom: isLastGroup ? 'none' : '1px solid #e2e8f0', padding: '0' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: allGroupOn ? '#f5f3ff' : someGroupOn ? '#fafafa' : '#fff', borderBottom: '1px solid #f1f5f9', gap: 12 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: allGroupOn ? __sbg('#f5f3ff') : someGroupOn ? __sbg('#fafafa') : __sbg('#fff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}`, gap: 12 }}>
                                     <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1', flexShrink: 0 }}
                                       checked={allGroupOn}
                                       ref={el => { if (el) el.indeterminate = someGroupOn && !allGroupOn; }}
                                       onChange={e => toggleGroup(perms, e.target.checked)} />
-                                    <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: '#0f172a', textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: allGroupOn ? '#6366f1' : someGroupOn ? '#a5b4fc' : '#cbd5e1', flexShrink: 0 }} />
+                                    <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), textTransform: 'capitalize', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: allGroupOn ? __sbg('#6366f1') : someGroupOn ? __sbg('#a5b4fc') : __sbg('#cbd5e1'), flexShrink: 0 }} />
                                       {group.charAt(0).toUpperCase() + group.slice(1)}
-                                      <span style={{ fontSize: 10, fontWeight: 700, color: allGroupOn ? '#4338ca' : '#94a3b8', background: allGroupOn ? '#e0e7ff' : '#f1f5f9', padding: '1px 7px', borderRadius: 99 }}>{groupCount}/{perms.length}</span>
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: allGroupOn ? __stc('#4338ca') : __stc('#94a3b8'), background: allGroupOn ? __sbg('#e0e7ff') : __sbg('#f1f5f9'), padding: '1px 7px', borderRadius: 99 }}>{groupCount}/{perms.length}</span>
                                     </div>
                                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, flex: 1 }}>
                                       {perms.map(p => {
@@ -1267,9 +1304,9 @@ export default function NewRolePermissions() {
                                         const action = label(p.name);
                                         const aStyle = getActionStyle(action);
                                         return (
-                                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: isOn ? `1.5px solid ${aStyle.on}` : '1.5px solid #e2e8f0', background: isOn ? aStyle.bg : '#f8fafc', color: isOn ? aStyle.color : '#64748b', transition: 'all 0.15s', userSelect: 'none' }}
-                                            onMouseEnter={e => { if (!isOn) e.currentTarget.style.borderColor = '#cbd5e1'; }}
-                                            onMouseLeave={e => { if (!isOn) e.currentTarget.style.borderColor = '#e2e8f0'; }}>
+                                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: isOn ? `1.5px solid ${aStyle.on}` : '1.5px solid #e2e8f0', background: isOn ? aStyle.bg : __sbg('#f8fafc'), color: isOn ? aStyle.color : __stc('#64748b'), transition: 'all 0.15s', userSelect: 'none' }}
+                                            onMouseEnter={e => { if (!isOn) e.currentTarget.style.borderColor = __sbg('#cbd5e1'); }}
+                                            onMouseLeave={e => { if (!isOn) e.currentTarget.style.borderColor = __sbg('#e2e8f0'); }}>
                                             <input type="checkbox" checked={isOn} onChange={() => togglePerm(p.id)} style={{ width: 13, height: 13, accentColor: aStyle.on, cursor: 'pointer' }} />
                                             {action.charAt(0).toUpperCase() + action.slice(1)}
                                           </label>
@@ -1328,16 +1365,16 @@ export default function NewRolePermissions() {
       {/* ── Delete Hierarchy Confirmation Modal ── */}
       {deleteHierConfirm && (
         <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:9999,padding:16}}>
-          <div style={{background:'#fff',borderRadius:16,padding:'36px 32px 28px',width:'min(420px,94vw)',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
-            <div style={{width:64,height:64,borderRadius:'50%',background:'#fff0f0',border:'1px solid #fecaca',display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:28}}>🗑️</div>
-            <h3 style={{margin:'0 0 10px',fontSize:20,fontWeight:700,color:'#0f172a'}}>Delete Hierarchy Entry</h3>
-            <p style={{margin:'0 0 28px',fontSize:14,color:'#64748b',lineHeight:1.6}}>
+          <div style={{background:__sbg('#fff'),borderRadius:16,padding:'36px 32px 28px',width:'min(420px,94vw)',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,0.2)'}}>
+            <div style={{width:64,height:64,borderRadius:'50%',background:__sbg('#fff0f0'),border:`1px solid ${__sbg('#fecaca')}`,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 20px',fontSize:28}}>🗑️</div>
+            <h3 style={{margin:'0 0 10px',fontSize:20,fontWeight:700,color:__stc('#0f172a')}}>Delete Hierarchy Entry</h3>
+            <p style={{margin:'0 0 28px',fontSize:14,color:__stc('#64748b'),lineHeight:1.6}}>
               Delete hierarchy entry for <strong>"{deleteHierConfirm}"</strong>?<br/>
-              <strong style={{color:'#dc2626'}}>This action cannot be undone.</strong>
+              <strong style={{color:__stc('#dc2626')}}>This action cannot be undone.</strong>
             </p>
             <div style={{display:'flex',gap:12,justifyContent:'center'}}>
-              <button onClick={() => setDeleteHierConfirm(null)} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'1.5px solid #e2e8f0',background:'#fff',fontSize:14,fontWeight:600,color:'#374151',cursor:'pointer'}}>Cancel</button>
-              <button onClick={confirmDeleteHierarchy} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'none',background:'#dc2626',fontSize:14,fontWeight:600,color:'#fff',cursor:'pointer'}}>Confirm</button>
+              <button onClick={() => setDeleteHierConfirm(null)} style={{flex:1,padding:'10px 20px',borderRadius:10,border:`1.5px solid ${__sbg('#e2e8f0')}`,background:__sbg('#fff'),fontSize:14,fontWeight:600,color:__stc('#374151'),cursor:'pointer'}}>Cancel</button>
+              <button onClick={confirmDeleteHierarchy} style={{flex:1,padding:'10px 20px',borderRadius:10,border:'none',background:__sbg('#dc2626'),fontSize:14,fontWeight:600,color:__stc('#fff'),cursor:'pointer'}}>Confirm</button>
             </div>
           </div>
         </div>

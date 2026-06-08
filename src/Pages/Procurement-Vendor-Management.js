@@ -19,6 +19,41 @@ import ConfirmationModal from '../components/ConfirmationModal.js';
 import vendorApi from '../services/vendorApi';
 import filterApi from '../services/filterApi';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a','#fcd34d':'#5a4714',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0','#0369a1':'#38bdf8',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 // ─── KYC Document Definitions ──────────────────────────────────────────────
 const KYC_DOCUMENTS = [
   { id: 'gst_certificate',          label: 'GST Certificate',             icon: '🏛️', group: 'main',       numberLabel: 'GSTIN Number',          numberPlaceholder: 'e.g. 22AAAAA0000A1Z5'       },
@@ -77,6 +112,7 @@ const SortIcon = ({ columnId, sortConfig }) => {
 
 // ─── Columns Picker Dropdown ──────────────────────────────────────────────────
 const ColumnsPicker = ({ columns, onToggle, onClose }) => {
+  useThemeVersion();
   const ref = useRef(null);
 
   useEffect(() => {
@@ -167,6 +203,7 @@ const PO_STATUS_STEPS = ['Draft', 'Approved', 'Ordered', 'In-Transit', 'Delivere
 // ─── KYC Document Card ────────────────────────────────────────────────────────
 // ─── KYC Document Row — table-row style like items table ─────────────────────
 const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave }) => {
+  useThemeVersion();
   const fileRef      = React.useRef(null);
   const docNumber    = uploaded?.docNumber  || '';
   const isUploaded   = !!(uploaded?.fileName || uploaded?.fileUrl);
@@ -194,9 +231,9 @@ const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
     <tr className={`kyc-row${isSaved ? ' kyc-row--done' : isComplete ? ' kyc-row--ready' : fileRequired && !isUploaded ? ' kyc-row--warn' : ''}`}>
       {/* Status */}
       <td className="kyc-row-status">
-        {isSaved    ? <CheckCircle size={15} style={{ color: '#16a34a' }} />
-          : isComplete ? <CheckCircle size={15} style={{ color: '#3b82f6' }} />
-          : fileRequired ? <AlertCircle size={15} style={{ color: '#f59e0b' }} />
+        {isSaved    ? <CheckCircle size={15} style={{ color: __stc('#16a34a') }} />
+          : isComplete ? <CheckCircle size={15} style={{ color: __stc('#3b82f6') }} />
+          : fileRequired ? <AlertCircle size={15} style={{ color: __stc('#f59e0b') }} />
           : <div className="kyc-row-dot" />}
       </td>
 
@@ -223,7 +260,7 @@ const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {isUploaded ? (
             <>
-              <CheckCircle size={12} style={{ color: isSaved ? '#16a34a' : '#3b82f6', flexShrink: 0 }} />
+              <CheckCircle size={12} style={{ color: isSaved ? __stc('#16a34a') : __stc('#3b82f6'), flexShrink: 0 }} />
               <span className="kyc-row-filename">{uploaded.fileName || 'File selected'}</span>
               <button className="kyc-row-view-btn" onClick={() => onViewFile && onViewFile(doc, uploaded)} title="Preview">
                 <Eye size={11} /> View
@@ -272,6 +309,7 @@ const KycDocCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
 
 // ─── KYC Additional Document Card (card style, 3-col grid) ──────────────────
 const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave }) => {
+  useThemeVersion();
   const fileRef      = React.useRef(null);
   const docNumber    = uploaded?.docNumber  || '';
   const isUploaded   = !!(uploaded?.fileName || uploaded?.fileUrl);
@@ -290,17 +328,17 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ fontSize: 22, lineHeight: 1 }}>{doc.icon}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', flex: 1 }}>{doc.label}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: __stc('#1e293b'), flex: 1 }}>{doc.label}</span>
         {isComplete
-          ? <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
+          ? <CheckCircle size={14} style={{ color: __stc('#16a34a'), flexShrink: 0 }} />
           : fileRequired && !isUploaded
-            ? <AlertCircle size={14} style={{ color: '#f59e0b', flexShrink: 0 }} />
+            ? <AlertCircle size={14} style={{ color: __stc('#f59e0b'), flexShrink: 0 }} />
             : null}
       </div>
 
       {/* Number input — always visible */}
       <input
-        style={{ padding: '7px 10px', border: `1px solid ${isComplete ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 6, fontSize: 12.5, color: '#1e293b', background: isComplete ? '#f0fdf4' : '#fff', width: '100%', boxSizing: 'border-box', outline: 'none' }}
+        style={{ padding: '7px 10px', border: `1px solid ${isComplete ? __sbg('#bbf7d0') : __sbg('#e2e8f0')}`, borderRadius: 6, fontSize: 12.5, color: __stc('#1e293b'), background: isComplete ? __sbg('#f0fdf4') : __sbg('#fff'), width: '100%', boxSizing: 'border-box', outline: 'none' }}
         type="text"
         placeholder={doc.numberPlaceholder || 'Enter document number'}
         value={docNumber}
@@ -312,22 +350,22 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
 
       {/* Drop zone / file status */}
       <div
-        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: `1.5px ${isUploaded ? 'solid' : 'dashed'} ${isUploaded ? '#86efac' : fileRequired ? '#f59e0b' : '#cbd5e1'}`, borderRadius: 7, background: isUploaded ? '#f0fdf4' : fileRequired ? '#fffbeb' : 'transparent', cursor: isUploading ? 'not-allowed' : 'pointer', minHeight: 38 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', border: `1.5px ${isUploaded ? 'solid' : 'dashed'} ${isUploaded ? __sbg('#86efac') : fileRequired ? __sbg('#f59e0b') : __sbg('#cbd5e1')}`, borderRadius: 7, background: isUploaded ? __sbg('#f0fdf4') : fileRequired ? __sbg('#fffbeb') : __sbg('transparent'), cursor: isUploading ? 'not-allowed' : 'pointer', minHeight: 38 }}
         onClick={() => !isUploading && fileRef.current?.click()}
         onDragOver={e => e.preventDefault()}
         onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onUpload(doc.id, f); }}
       >
         {isUploaded ? (
           <>
-            <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: '#15803d', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <CheckCircle size={14} style={{ color: __stc('#16a34a'), flexShrink: 0 }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: __stc('#15803d'), flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {uploaded.fileName || 'File selected'}
             </span>
           </>
         ) : (
           <>
-            <Upload size={14} style={{ color: fileRequired ? '#f59e0b' : '#94a3b8', flexShrink: 0 }} />
-            <span style={{ fontSize: 12, color: fileRequired ? '#b45309' : '#64748b', fontWeight: fileRequired ? 600 : 400 }}>
+            <Upload size={14} style={{ color: fileRequired ? __stc('#f59e0b') : __stc('#94a3b8'), flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: fileRequired ? __stc('#b45309') : __stc('#64748b'), fontWeight: fileRequired ? 600 : 400 }}>
               {fileRequired ? 'Upload file (required)' : 'Click or drag to upload'}
             </span>
           </>
@@ -340,24 +378,24 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
       {isUploaded && (
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
           <button onClick={() => onViewFile && onViewFile(doc, uploaded)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer' }}>
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', fontSize: 11, fontWeight: 600, color: __stc('#2563eb'), background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 5, cursor: 'pointer' }}>
             <Eye size={11} /> View
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={isUploading || isSaving}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 9px', fontSize: 11, fontWeight: 500, color: '#475569', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, cursor: 'pointer' }}>
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '4px 9px', fontSize: 11, fontWeight: 500, color: __stc('#475569'), background: __sbg('#f1f5f9'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 5, cursor: 'pointer' }}>
             <Upload size={10} /> Replace
           </button>
           <div style={{ marginLeft: 'auto' }}>
             {isSaved ? (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#16a34a' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: __stc('#16a34a') }}>
                 <CheckCircle size={13} /> Saved
               </span>
             ) : (
               <button
                 onClick={() => canSave && onSave && onSave(doc.id)}
                 disabled={!canSave || isSaving}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', background: canSave ? '#2563eb' : '#e2e8f0', color: canSave ? '#fff' : '#94a3b8', transition: 'all .15s' }}>
-                {isSaving ? <><span className="vd-kyc-spin" style={{ borderTopColor: '#fff' }} /> Saving…</> : <><Check size={12} /> Save</>}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: 'none', cursor: canSave ? 'pointer' : 'not-allowed', background: canSave ? __sbg('#2563eb') : __sbg('#e2e8f0'), color: canSave ? __stc('#fff') : __stc('#94a3b8'), transition: 'all .15s' }}>
+                {isSaving ? <><span className="vd-kyc-spin" style={{ borderTopColor: `${__sbg('#fff')}` }} /> Saving…</> : <><Check size={12} /> Save</>}
               </button>
             )}
           </div>
@@ -369,6 +407,7 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
 
 // ─── Vendor Detail Page ───────────────────────────────────────────────────────
 const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete, getAuthHeaders, showSuccess, showError }) => {
+  useThemeVersion();
   const [activeTab, setActiveTab]           = useState(() => localStorage.getItem('vendor_detail_tab') || 'overview');
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [loadingPOs, setLoadingPOs]         = useState(false);
@@ -399,7 +438,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
   };
   const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A';
   const renderStars = (rating) => {
-    if (!rating) return <span style={{ color: '#9ca3af', fontSize: 12 }}>Not rated</span>;
+    if (!rating) return <span style={{ color: __stc('#9ca3af'), fontSize: 12 }}>Not rated</span>;
     return <div style={{ display: 'flex', gap: 2 }}>{[1,2,3,4,5].map(s => <Star key={s} size={13} fill={s <= rating ? '#f59e0b' : 'none'} stroke={s <= rating ? '#f59e0b' : '#d1d5db'} />)}</div>;
   };
 
@@ -565,9 +604,9 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
           Back to Vendors
         </button>
         <div className="vd-breadcrumb">
-          <span style={{ cursor: 'pointer', color: '#6b7280' }} onClick={onBack}>Vendors</span>
-          <span style={{ margin: '0 6px', color: '#d1d5db' }}>/</span>
-          <span style={{ color: '#111827', fontWeight: 500 }}>{vendor.vendorCode || vendor.name}</span>
+          <span style={{ cursor: 'pointer', color: __stc('#6b7280') }} onClick={onBack}>Vendors</span>
+          <span style={{ margin: '0 6px', color: __stc('#d1d5db') }}>/</span>
+          <span style={{ color: __stc('#111827'), fontWeight: 500 }}>{vendor.vendorCode || vendor.name}</span>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {canEdit && <button className="vd-btn vd-btn--primary" onClick={() => onEdit(vendor)}><Edit2 size={14} /> Edit Vendor</button>}
@@ -589,14 +628,14 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
         </div>
         <div className="vd-hero-chips">
           <span className="vd-chip" style={{ color: statusColor, background: statusBg, border: `1px solid ${statusColor}40` }}>{vendor.status}</span>
-          {vendor.category  && <span className="vd-chip" style={{ color: '#7c3aed', background: '#ede9fe', border: '1px solid #ddd6fe' }}>{vendor.category}</span>}
-          {vendor.vendorType && <span className="vd-chip" style={{ color: '#0369a1', background: '#e0f2fe', border: '1px solid #bae6fd' }}>{vendor.vendorType}</span>}
+          {vendor.category  && <span className="vd-chip" style={{ color: __stc('#7c3aed'), background: __sbg('#ede9fe'), border: `1px solid ${__sbg('#ddd6fe')}` }}>{vendor.category}</span>}
+          {vendor.vendorType && <span className="vd-chip" style={{ color: __stc('#0369a1'), background: __sbg('#e0f2fe'), border: `1px solid ${__sbg('#bae6fd')}` }}>{vendor.vendorType}</span>}
           {renderStars(vendor.rating)}
         </div>
         <div className="vd-hero-actions">
           <button className="vd-btn vd-btn--secondary" onClick={() => changeTab('kyc')}>
             <Shield size={14} /> KYC
-            {isVerified ? <CheckCircle size={13} style={{ color: '#16a34a' }} /> : <AlertCircle size={13} style={{ color: '#f59e0b' }} />}
+            {isVerified ? <CheckCircle size={13} style={{ color: __stc('#16a34a') }} /> : <AlertCircle size={13} style={{ color: __stc('#f59e0b') }} />}
           </button>
         </div>
       </div>
@@ -626,8 +665,8 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
           <button key={t.k} className={`vd-tab${activeTab === t.k ? ' active' : ''}`} onClick={() => changeTab(t.k)}>
             {t.l}
             {t.k === 'kyc' && (isVerified
-              ? <CheckCircle size={12} style={{ color: '#16a34a', marginLeft: 4 }} />
-              : <AlertCircle  size={12} style={{ color: '#f59e0b', marginLeft: 4 }} />
+              ? <CheckCircle size={12} style={{ color: __stc('#16a34a'), marginLeft: 4 }} />
+              : <AlertCircle  size={12} style={{ color: __stc('#f59e0b'), marginLeft: 4 }} />
             )}
           </button>
         ))}
@@ -648,7 +687,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                   [FileText,  'GST Number',     vendor.gstNumber],
                 ].map(([Icon, label, val]) => (
                   <div className="vd-field-row" key={label}>
-                    <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                    <div className="vd-field-left"><Icon size={13} style={{ color: __stc('#6b7280'), flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
                     <span className="vd-field-val">{val || '—'}</span>
                   </div>
                 ))}
@@ -665,7 +704,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                   [Star,      'Rating',       renderStars(vendor.rating)],
                 ].map(([Icon, label, val]) => (
                   <div className="vd-field-row" key={label}>
-                    <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                    <div className="vd-field-left"><Icon size={13} style={{ color: __stc('#6b7280'), flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
                     <span className="vd-field-val">{val || '—'}</span>
                   </div>
                 ))}
@@ -682,7 +721,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                     [MapPin, 'Pincode', vendor.pincode],
                   ].filter(([,,v]) => v).map(([Icon, label, val]) => (
                     <div className="vd-field-row" key={label}>
-                      <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                      <div className="vd-field-left"><Icon size={13} style={{ color: __stc('#6b7280'), flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
                       <span className="vd-field-val">{val}</span>
                     </div>
                   ))}
@@ -699,7 +738,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                     [FileText,  'Project',  vendor.projectName || vendor.projectId],
                   ].filter(([,,v]) => v).map(([Icon, label, val]) => (
                     <div className="vd-field-row" key={label}>
-                      <div className="vd-field-left"><Icon size={13} style={{ color: '#6b7280', flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
+                      <div className="vd-field-left"><Icon size={13} style={{ color: __stc('#6b7280'), flexShrink: 0 }} /><span className="vd-field-label">{label}</span></div>
                       <span className="vd-field-val">{val}</span>
                     </div>
                   ))}
@@ -709,17 +748,17 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
             {vendor.notes && (
               <div className="vd-info-card" style={{ gridColumn: '1 / -1' }}>
                 <h4 className="vd-card-title">Notes</h4>
-                <p style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, margin: 0 }}>{vendor.notes}</p>
+                <p style={{ fontSize: 13, color: __stc('#374151'), lineHeight: 1.6, margin: 0 }}>{vendor.notes}</p>
               </div>
             )}
             {/* KYC Numbers summary on Overview tab */}
             {KYC_DOCUMENTS.some(d => kycDocs[d.id]?.docNumber?.trim() || kycDocs[d.id]?.fileName) && (
               <div className="vd-info-card" style={{ gridColumn: '1 / -1' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                  <Shield size={13} style={{ color: '#2563eb' }} />
+                  <Shield size={13} style={{ color: __stc('#2563eb') }} />
                   <h4 className="vd-card-title" style={{ margin: 0 }}>KYC Documents</h4>
                   {KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.savedToDb || kycDocs[d.id]?.fileUrl).length > 0 && (
-                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#16a34a', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 20, padding: '1px 8px' }}>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: __stc('#16a34a'), background: __sbg('#dcfce7'), border: `1px solid ${__sbg('#86efac')}`, borderRadius: 20, padding: '1px 8px' }}>
                       {KYC_DOCUMENTS.filter(d => kycDocs[d.id]?.savedToDb || kycDocs[d.id]?.fileUrl).length} / {KYC_DOCUMENTS.length} saved
                     </span>
                   )}
@@ -729,27 +768,27 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                     const d = kycDocs[doc.id] || {};
                     const hasFile = !!(d.fileName || d.fileUrl);
                     return (
-                      <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: d.savedToDb ? '#f0fdf4' : hasFile ? '#eff6ff' : '#f8fafc', borderRadius: 7, border: `1px solid ${d.savedToDb ? '#86efac' : hasFile ? '#bfdbfe' : '#e5e7eb'}` }}>
+                      <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: d.savedToDb ? __sbg('#f0fdf4') : hasFile ? __sbg('#eff6ff') : __sbg('#f8fafc'), borderRadius: 7, border: `1px solid ${d.savedToDb ? __sbg('#86efac') : hasFile ? __sbg('#bfdbfe') : __sbg('#e5e7eb')}` }}>
                         <span style={{ fontSize: 16, flexShrink: 0 }}>{doc.icon}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>{doc.label}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: __stc('#374151') }}>{doc.label}</div>
                           {d.docNumber && (
-                            <div style={{ fontSize: 11.5, fontFamily: 'monospace', color: '#1e293b', letterSpacing: '.04em', marginTop: 1 }}>{d.docNumber}</div>
+                            <div style={{ fontSize: 11.5, fontFamily: 'monospace', color: __stc('#1e293b'), letterSpacing: '.04em', marginTop: 1 }}>{d.docNumber}</div>
                           )}
                         </div>
                         {hasFile && (
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
-                            <span style={{ fontSize: 11, color: '#475569', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{d.fileName}</span>
+                            <span style={{ fontSize: 11, color: __stc('#475569'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{d.fileName}</span>
                             <button onClick={() => handleViewKycFile(doc, d)}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 5, cursor: 'pointer' }}>
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: __stc('#2563eb'), background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 5, cursor: 'pointer' }}>
                               <Eye size={11} /> View
                             </button>
                           </div>
                         )}
                         {d.savedToDb
-                          ? <CheckCircle size={14} style={{ color: '#16a34a', flexShrink: 0 }} title="Saved to database" />
+                          ? <CheckCircle size={14} style={{ color: __stc('#16a34a'), flexShrink: 0 }} title="Saved to database" />
                           : hasFile
-                            ? <span style={{ fontSize: 10, fontWeight: 600, color: '#2563eb', background: '#dbeafe', borderRadius: 20, padding: '1px 7px', flexShrink: 0 }}>Unsaved</span>
+                            ? <span style={{ fontSize: 10, fontWeight: 600, color: __stc('#2563eb'), background: __sbg('#dbeafe'), borderRadius: 20, padding: '1px 7px', flexShrink: 0 }}>Unsaved</span>
                             : null}
                       </div>
                     );
@@ -768,7 +807,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
             <div className="vd-empty">Loading orders…</div>
           ) : purchaseOrders.length === 0 ? (
             <div className="vd-empty">
-              <ShoppingCart size={36} style={{ color: '#d1d5db', marginBottom: 8 }} />
+              <ShoppingCart size={36} style={{ color: __stc('#d1d5db'), marginBottom: 8 }} />
               <p>No purchase orders found for this vendor.</p>
             </div>
           ) : (
@@ -780,7 +819,7 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                     <div className="vd-po-head">
                       <div>
                         <span className="vd-po-no">{po.poNo}</span>
-                        <span className="vd-po-badge" style={{ color: PO_STATUS_COLORS[po.status] || '#64748b', background: (PO_STATUS_COLORS[po.status] || '#64748b') + '18', border: `1px solid ${(PO_STATUS_COLORS[po.status] || '#64748b')}40` }}>{po.status}</span>
+                        <span className="vd-po-badge" style={{ color: PO_STATUS_COLORS[po.status] || __stc('#64748b'), background: (PO_STATUS_COLORS[po.status] || __sbg('#64748b')) + '18', border: `1px solid ${(PO_STATUS_COLORS[po.status] || __sbg('#64748b'))}40` }}>{po.status}</span>
                       </div>
                       <span className="vd-po-value">{fmtCur(po.totalValue)}</span>
                     </div>
@@ -788,9 +827,9 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                     <div className="vd-po-timeline">
                       {PO_STATUS_STEPS.map((step, i) => (
                         <div key={step} className={`vd-tl-step${i <= cur ? ' done' : ''}`}>
-                          <div className="vd-tl-dot" style={{ background: i <= cur ? PO_STATUS_COLORS[step] : '#e2e8f0' }} />
+                          <div className="vd-tl-dot" style={{ background: i <= cur ? PO_STATUS_COLORS[step] : __sbg('#e2e8f0') }} />
                           <span className="vd-tl-label">{step}</span>
-                          {i < PO_STATUS_STEPS.length - 1 && <div className="vd-tl-line" style={{ background: i < cur ? PO_STATUS_COLORS[step] : '#e2e8f0' }} />}
+                          {i < PO_STATUS_STEPS.length - 1 && <div className="vd-tl-line" style={{ background: i < cur ? PO_STATUS_COLORS[step] : __sbg('#e2e8f0') }} />}
                         </div>
                       ))}
                     </div>
@@ -869,9 +908,9 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
 
           {/* ── Additional documents — styled cards ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 24, marginBottom: 8 }}>
-            <FileText size={13} style={{ color: '#475569' }} />
-            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Additional Documents</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>
+            <FileText size={13} style={{ color: __stc('#475569') }} />
+            <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: __stc('#475569') }}>Additional Documents</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: __stc('#6b7280') }}>
               {ADDITIONAL_DOCS.filter(d => kycDocs[d.id]?.docNumber?.trim() && (kycDocs[d.id]?.fileName || kycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete
             </span>
           </div>
@@ -892,39 +931,39 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
         return (
           <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,.72)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             onClick={() => { setKycViewerOpen(false); if (kycBlobRef.current) { URL.revokeObjectURL(kycBlobRef.current); kycBlobRef.current = null; } }}>
-            <div style={{ background: '#fff', borderRadius: 12, width: 'min(1000px, 94vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.45)' }}
+            <div style={{ background: __sbg('#fff'), borderRadius: 12, width: 'min(1000px, 94vw)', maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,.45)' }}
               onClick={e => e.stopPropagation()}>
 
               {/* Header */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: '1px solid #e5e7eb', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 18px', borderBottom: `1px solid ${__sbg('#e5e7eb')}`, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 20 }}>{isPdf ? '📄' : isImage ? '🖼️' : '📎'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: __stc('#1e293b'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {uploaded.fileName || doc.label}
                   </div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{doc.icon} {doc.label}{uploaded.docNumber ? ` · ${uploaded.docNumber}` : ''}</div>
+                  <div style={{ fontSize: 11, color: __stc('#64748b'), marginTop: 2 }}>{doc.icon} {doc.label}{uploaded.docNumber ? ` · ${uploaded.docNumber}` : ''}</div>
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexShrink: 0, alignItems: 'center' }}>
                   <button onClick={() => handleDownloadKycFile(doc, uploaded)}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#374151', cursor: 'pointer' }}>
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: __sbg('#f1f5f9'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 7, fontSize: 12, fontWeight: 600, color: __stc('#374151'), cursor: 'pointer' }}>
                     <Download size={13} /> Download
                   </button>
                   {kycViewerUrl && (
                     <a href={kycViewerUrl} target="_blank" rel="noreferrer"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 12px', background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 7, fontSize: 12, fontWeight: 600, color: __stc('#2563eb'), textDecoration: 'none' }}>
                       <ExternalLink size={13} /> Open in Tab
                     </a>
                   )}
                   <button onClick={() => { setKycViewerOpen(false); if (kycBlobRef.current) { URL.revokeObjectURL(kycBlobRef.current); kycBlobRef.current = null; } }}
-                    style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f1f5f9', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 18, color: '#475569' }}>✕</button>
+                    style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: __sbg('#f1f5f9'), border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 18, color: __stc('#475569') }}>✕</button>
                 </div>
               </div>
 
               {/* Body */}
-              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', background: '#1e1e2e', borderRadius: '0 0 12px 12px' }}>
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'stretch', background: __sbg('#1e1e2e'), borderRadius: '0 0 12px 12px' }}>
                 {kycViewerLoading && (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#94a3b8' }}>
-                    <div style={{ width: 40, height: 40, border: '3px solid rgba(124,58,237,.2)', borderTopColor: '#7c3aed', borderRadius: '50%', animation: 'vd-spin .8s linear infinite' }} />
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: __stc('#94a3b8') }}>
+                    <div style={{ width: 40, height: 40, border: '3px solid rgba(124,58,237,.2)', borderTopColor: `${__sbg('#7c3aed')}`, borderRadius: '50%', animation: 'vd-spin .8s linear infinite' }} />
                     <p style={{ fontSize: 14 }}>Loading file…</p>
                   </div>
                 )}
@@ -937,11 +976,11 @@ const VendorDetailPage = ({ vendor, onBack, onEdit, onDelete, canEdit, canDelete
                   </div>
                 )}
                 {!kycViewerLoading && !isPdf && !isImage && kycViewerUrl && (
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40, color: '#94a3b8' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, padding: 40, color: __stc('#94a3b8') }}>
                     <span style={{ fontSize: 56, opacity: .5 }}>📎</span>
                     <p style={{ fontSize: 15 }}>This file type cannot be previewed in the browser.</p>
                     <button onClick={() => handleDownloadKycFile(doc, uploaded)}
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', background: '#2563eb', color: '#fff', border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', background: __sbg('#2563eb'), color: __stc('#fff'), border: 'none', borderRadius: 7, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                       <Download size={14} /> Download to View
                     </button>
                   </div>
@@ -960,6 +999,7 @@ const _VM_MONTHS = ['January','February','March','April','May','June','July','Au
 const _VM_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show, setShow] = React.useState(false);
   const [from, setFrom] = React.useState(null);
   const [to,   setTo]   = React.useState(null);
@@ -1008,7 +1048,7 @@ const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
           <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
         </span>}
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          style={{ marginLeft:'auto', color:__stc('#94a3b8'), flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
@@ -1064,6 +1104,7 @@ const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const VendorManagement = () => {
+  useThemeVersion();
   const [vendors, setVendors] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions } = useAuth();
@@ -1790,7 +1831,7 @@ const VendorManagement = () => {
     switch (col.id) {
       case 'sNo':
         return (
-          <td key={col.id} style={{ textAlign:'center', color:'#64748b', fontSize:13, fontWeight:500, width:50 }}>
+          <td key={col.id} style={{ textAlign:'center', color:__stc('#64748b'), fontSize:13, fontWeight:500, width:50 }}>
             {currentPage * pageSize + rowIndex + 1}
           </td>
         );
@@ -1871,17 +1912,17 @@ const VendorManagement = () => {
           <td key={col.id} style={{ minWidth: 200 }}>
             {vendor.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: __stc('#1e293b'), wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
                   {vendor.projectName || vendor.projectId}
                 </span>
                 {vendor.projectName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  <span style={{ fontSize: 11, color: __stc('#64748b'), fontWeight: 400 }}>
                     {vendor.projectId}
                   </span>
                 )}
               </div>
             ) : (
-              <span style={{ color: '#94a3b8' }}>N/A</span>
+              <span style={{ color: __stc('#94a3b8') }}>N/A</span>
             )}
           </td>
         );
@@ -1904,13 +1945,13 @@ const VendorManagement = () => {
       <div className="po-timeline">
         {statusSteps.map((step, index) => (
           <div key={step} className={`timeline-step ${index <= currentIndex ? 'completed' : ''}`}>
-            <div className="timeline-dot" style={{ backgroundColor: index <= currentIndex ? getStatusColor(step) : '#e2e8f0' }} />
+            <div className="timeline-dot" style={{ backgroundColor: index <= currentIndex ? getStatusColor(step) : __sbg('#e2e8f0') }} />
             <div className="timeline-label">
               <span className="timeline-status">{step}</span>
               {index === currentIndex && <span className="timeline-date">{formatDate(po.orderDate)}</span>}
             </div>
             {index < statusSteps.length - 1 && (
-              <div className="timeline-line" style={{ backgroundColor: index < currentIndex ? getStatusColor(step) : '#e2e8f0' }} />
+              <div className="timeline-line" style={{ backgroundColor: index < currentIndex ? getStatusColor(step) : __sbg('#e2e8f0') }} />
             )}
           </div>
         ))}
@@ -1920,10 +1961,10 @@ const VendorManagement = () => {
 
   // ─── KPI ───────────────────────────────────────────────────────────────────
   const kpiData = stats ? [
-    { title: 'Total Vendors',        value: stats.totalVendors.toString(),              icon: <Package size={32} />,     color: '#2563eb' },
-    { title: 'Approved Vendors',     value: stats.activeVendors.toString(),             icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Average Rating',       value: stats.averageRating.toFixed(1) + '/5',      icon: <Star size={32} />,        color: '#f59e0b' },
-    { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue),   icon: <IndianRupee size={32} />, color: '#8b5cf6' },
+    { title: 'Total Vendors',        value: stats.totalVendors.toString(),              icon: <Package size={32} />,     color: __stc('#2563eb') },
+    { title: 'Approved Vendors',     value: stats.activeVendors.toString(),             icon: <CheckCircle size={32} />, color: __stc('#22c55e') },
+    { title: 'Average Rating',       value: stats.averageRating.toFixed(1) + '/5',      icon: <Star size={32} />,        color: __stc('#f59e0b') },
+    { title: 'Total Purchase Value', value: formatCurrency(stats.totalPurchaseValue),   icon: <IndianRupee size={32} />, color: __stc('#8b5cf6') },
   ] : [];
 
   // ─── Handle edit from detail page ─────────────────────────────────────────
@@ -2190,7 +2231,7 @@ const VendorManagement = () => {
                     <FilterSelect value={modalSubGroupName} options={modalSubGroups} placeholder={!modalGroupName ? 'Select Group First' : modalDropdownLoading.subGroups ? 'Loading…' : 'Select Category'} disabled={!modalGroupName || modalDropdownLoading.subGroups} onChange={v => handleModalSubGroupChange({ target: { value: v } })} />
                   </div>
                 </div>
-                <div className="vendor-form-group"><label>Project <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(Optional)</span></label>
+                <div className="vendor-form-group"><label>Project <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(Optional)</span></label>
                   <FilterSelect value={modalProjectId} options={modalProjects.map(p => ({ value: p.id, label: p.name + (p.location ? ` - ${p.location}` : '') }))} placeholder={!modalSubGroupName ? 'Select Category First' : modalDropdownLoading.projects ? 'Loading…' : 'Select Project (Optional)'} disabled={!modalSubGroupName || modalDropdownLoading.projects} onChange={v => handleModalProjectChange({ target: { value: v } })} searchable={true} />
                 </div>
               </div>
@@ -2202,7 +2243,7 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                  <div className="vendor-form-group"><label>Phone / Contact Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
+                  <div className="vendor-form-group"><label>Phone / Contact Number <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={(e) => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="Enter 10-digit phone number" /></div>
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group"><label>Category *</label>
@@ -2230,7 +2271,7 @@ const VendorManagement = () => {
                 </div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group">
-                    <label>GST Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(15 chars)</span></label>
+                    <label>GST Number <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(15 chars)</span></label>
                     <input type="text" value={editFormData.gstNumber}
                       maxLength={15}
                       onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15); setEditFormData({ ...editFormData, gstNumber: v }); }}
@@ -2244,20 +2285,20 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                 <div className="vendor-form-row">
                   <div className="vendor-form-group">
-                    <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                    <label>Pincode <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}></span></label>
                     <input type="text" value={editFormData.pincode || ''} maxLength={6}
                       onChange={e => handlePincodeChange(e.target.value)}
                       placeholder="Enter 6-digit pincode" />
-                    {pincodeError && <span style={{fontSize:11,color:'#ef4444',marginTop:2,display:'block'}}>{pincodeError}</span>}
+                    {pincodeError && <span style={{fontSize:11,color:__stc('#ef4444'),marginTop:2,display:'block'}}>{pincodeError}</span>}
                   </div>
-                  <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                  <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(auto-filled)</span></label>
                     <input type="text" value={editFormData.state || ''} readOnly
-                      style={{background:'#f8fafc',cursor:'default'}}
+                      style={{background:__sbg('#f8fafc'),cursor:'default'}}
                       placeholder="Auto-filled from pincode" />
                   </div>
-                  <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                  <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(auto-filled)</span></label>
                     <input type="text" value={editFormData.district || ''} readOnly
-                      style={{background:'#f8fafc',cursor:'default'}}
+                      style={{background:__sbg('#f8fafc'),cursor:'default'}}
                       placeholder="Auto-filled from pincode" />
                   </div>
                   <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={(e) => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
@@ -2268,7 +2309,7 @@ const VendorManagement = () => {
                 <div className="vendor-form-group"><label>Notes</label><textarea rows={3} value={editFormData.notes} onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })} placeholder="Enter any additional notes" /></div>
               </div>
             </div>
-            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px' }}>
+            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: `1px solid ${__sbg('#e2e8f0')}`, padding: '16px 24px' }}>
               <button className="vendor-management-btn-primary" onClick={handleUpdateVendor}>Save Changes</button>
               <button className="vendor-management-btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
             </div>
@@ -2344,7 +2385,7 @@ const VendorManagement = () => {
             <div className="vendor-management-modal-header" style={{ flexShrink: 0 }}>
               <div>
                 <h2>{createStep === 1 ? 'Add New Vendor' : 'KYC Documents'}</h2>
-                <p style={{ fontSize: 12, color: '#64748b', margin: '2px 0 0' }}>Step {createStep} of 2 — {createStep === 1 ? 'Vendor Information' : 'KYC Details (optional)'}</p>
+                <p style={{ fontSize: 12, color: __stc('#64748b'), margin: '2px 0 0' }}>Step {createStep} of 2 — {createStep === 1 ? 'Vendor Information' : 'KYC Details (optional)'}</p>
               </div>
               <button className="vendor-management-modal-close" onClick={() => setShowCreateModal(false)}>✕</button>
             </div>
@@ -2387,7 +2428,7 @@ const VendorManagement = () => {
                   </div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Email</label><input type="email" value={editFormData.email} onChange={e => setEditFormData({ ...editFormData, email: e.target.value })} placeholder="Enter email" /></div>
-                    <div className="vendor-form-group"><label>Phone <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="10-digit phone number" /></div>
+                    <div className="vendor-form-group"><label>Phone <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(optional)</span></label><input type="tel" value={editFormData.phone} maxLength={10} onChange={e => { const v = e.target.value.replace(/\D/g,'').slice(0,10); setEditFormData({ ...editFormData, phone: v }); }} placeholder="10-digit phone number" /></div>
                   </div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group"><label>Category *</label>
@@ -2406,26 +2447,26 @@ const VendorManagement = () => {
                   <div className="vendor-form-group"><label>Address</label><textarea rows={2} value={editFormData.address} onChange={e => setEditFormData({ ...editFormData, address: e.target.value })} placeholder="Enter address" /></div>
                   <div className="vendor-form-row">
                     <div className="vendor-form-group">
-                      <label>Pincode <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(6 digits — auto-fills state &amp; district)</span></label>
+                      <label>Pincode <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}></span></label>
                       <input type="text" value={editFormData.pincode || ''} maxLength={6}
                         onChange={e => handlePincodeChange(e.target.value)}
                         placeholder="Enter 6-digit pincode" />
-                      {pincodeError && <span style={{fontSize:11,color:'#ef4444',marginTop:2,display:'block'}}>{pincodeError}</span>}
+                      {pincodeError && <span style={{fontSize:11,color:__stc('#ef4444'),marginTop:2,display:'block'}}>{pincodeError}</span>}
                     </div>
-                    <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                    <div className="vendor-form-group"><label>State <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(auto-filled)</span></label>
                       <input type="text" value={editFormData.state || ''} readOnly
-                        style={{background:'#f8fafc',cursor:'default'}}
+                        style={{background:__sbg('#f8fafc'),cursor:'default'}}
                         placeholder="Auto-filled from pincode" />
                     </div>
-                    <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(auto-filled)</span></label>
+                    <div className="vendor-form-group"><label>District <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(auto-filled)</span></label>
                       <input type="text" value={editFormData.district || ''} readOnly
-                        style={{background:'#f8fafc',cursor:'default'}}
+                        style={{background:__sbg('#f8fafc'),cursor:'default'}}
                         placeholder="Auto-filled from pincode" />
                     </div>
                     <div className="vendor-form-group"><label>City</label><input type="text" value={editFormData.city} onChange={e => setEditFormData({ ...editFormData, city: e.target.value })} placeholder="Enter city" /></div>
                   </div>
                   <div className="vendor-form-group">
-                    <label>GST Number <span style={{fontSize:10,color:'#94a3b8',fontWeight:400}}>(15 chars)</span></label>
+                    <label>GST Number <span style={{fontSize:10,color:__stc('#94a3b8'),fontWeight:400}}>(15 chars)</span></label>
                     <input type="text" value={editFormData.gstNumber} maxLength={15}
                       onChange={e => { const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,15); setEditFormData({ ...editFormData, gstNumber: v }); }}
                       placeholder="e.g. 22AAAAA0000A1Z5" />
@@ -2454,11 +2495,11 @@ const VendorManagement = () => {
             {/* ── Step 2: KYC ── */}
             {createStep === 2 && (
               <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
-                <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, lineHeight: 1.5 }}>
+                <p style={{ fontSize: 12, color: __stc('#64748b'), marginBottom: 16, lineHeight: 1.5 }}>
                   All KYC fields are optional. If you enter a document number, uploading the file becomes required before saving.
                 </p>
                 {missingFiles.length > 0 && (
-                  <div style={{ background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#92400e', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fcd34d')}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: __stc('#92400e'), display: 'flex', alignItems: 'center', gap: 8 }}>
                     <AlertCircle size={14} />
                     {missingFiles.length} document(s) have a number but no file uploaded.
                   </div>
@@ -2489,9 +2530,9 @@ const VendorManagement = () => {
 
                 {/* Additional docs — cards */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 20, marginBottom: 8 }}>
-                  <FileText size={13} style={{ color: '#475569' }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#475569' }}>Additional Documents</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{ADDITIONAL_DOCS.filter(d => createKycDocs[d.id]?.docNumber?.trim() && (createKycDocs[d.id]?.fileName || createKycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete</span>
+                  <FileText size={13} style={{ color: __stc('#475569') }} />
+                  <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: __stc('#475569') }}>Additional Documents</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: __stc('#6b7280') }}>{ADDITIONAL_DOCS.filter(d => createKycDocs[d.id]?.docNumber?.trim() && (createKycDocs[d.id]?.fileName || createKycDocs[d.id]?.fileUrl)).length} / {ADDITIONAL_DOCS.length} complete</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
                   {ADDITIONAL_DOCS.map(doc => (
@@ -2502,7 +2543,7 @@ const VendorManagement = () => {
             )}
 
             {/* Footer */}
-            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: '1px solid #e2e8f0', padding: '16px 24px', justifyContent: 'space-between' }}>
+            <div className="vendor-management-modal-actions" style={{ flexShrink: 0, borderTop: `1px solid ${__sbg('#e2e8f0')}`, padding: '16px 24px', justifyContent: 'space-between' }}>
               <div>
                 {createStep === 2 && (
                   <button className="vendor-management-btn-secondary" onClick={() => setCreateStep(1)}>← Back</button>

@@ -10,6 +10,40 @@ import {
   FiChevronsLeft, FiChevronsRight,
 } from 'react-icons/fi';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a', '#fcd34d':'#5a4714',};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API = process.env.REACT_APP_API_URL;
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
@@ -17,6 +51,7 @@ const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 const hdrs = () => ({ 'Content-Type': 'application/json' });
 
 const DropdownAdminPage = () => {
+  useThemeVersion();
   const [activeTab, setActiveTab] = useState('groups');
 
   /* ── Refs for height-matching (table card = form card height) ─────── */
@@ -445,7 +480,7 @@ const DropdownAdminPage = () => {
                 <select
                   value={filterGroupId}
                   onChange={e => { setFilterGroupId(e.target.value); setCurrentPage(0); }}
-                  style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 140 }}
+                  style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#fff'), color: __stc('#374151'), cursor: 'pointer', minWidth: 140 }}
                 >
                   <option value="">All Groups</option>
                   {availableGroups.map(g => (
@@ -460,7 +495,7 @@ const DropdownAdminPage = () => {
                   <select
                     value={filterGroupIdProj}
                     onChange={e => { setFilterGroupIdProj(e.target.value); setFilterSubGroupId(''); setCurrentPage(0); }}
-                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#374151', cursor: 'pointer', minWidth: 130 }}
+                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#fff'), color: __stc('#374151'), cursor: 'pointer', minWidth: 130 }}
                   >
                     <option value="">All Groups</option>
                     {availableGroups.map(g => (
@@ -471,7 +506,7 @@ const DropdownAdminPage = () => {
                     value={filterSubGroupId}
                     onChange={e => { setFilterSubGroupId(e.target.value); setCurrentPage(0); }}
                     disabled={!filterGroupIdProj}
-                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: '1px solid #e2e8f0', background: filterGroupIdProj ? '#fff' : '#f8fafc', color: '#374151', cursor: filterGroupIdProj ? 'pointer' : 'default', minWidth: 140, opacity: filterGroupIdProj ? 1 : 0.6 }}
+                    style={{ fontSize: 12, padding: '5px 10px', borderRadius: 6, border: `1px solid ${__sbg('#e2e8f0')}`, background: filterGroupIdProj ? __sbg('#fff') : __sbg('#f8fafc'), color: __stc('#374151'), cursor: filterGroupIdProj ? 'pointer' : 'default', minWidth: 140, opacity: filterGroupIdProj ? 1 : 0.6 }}
                   >
                     <option value="">{filterGroupIdProj ? 'All Sub-Groups' : 'Select Group First'}</option>
                     {filteredSubGroupsForProj.map(sg => (
@@ -754,7 +789,7 @@ const DropdownAdminPage = () => {
       {deleteConfirm && (
         <div className="da-overlay">
           <div className="da-modal">
-            <div className="da-modal-icon" style={{ background: deleteConfirm.isActive ? '#fffbeb' : '#fef2f2', borderColor: deleteConfirm.isActive ? '#fcd34d' : '#fecaca' }}>
+            <div className="da-modal-icon" style={{ background: deleteConfirm.isActive ? __sbg('#fffbeb') : __sbg('#fef2f2'), borderColor: deleteConfirm.isActive ? __sbg('#fcd34d') : __sbg('#fecaca') }}>
               <FiTrash2 size={26} color={deleteConfirm.isActive ? '#d97706' : '#dc2626'}/>
             </div>
             <h3 className="da-modal-title">
@@ -764,14 +799,14 @@ const DropdownAdminPage = () => {
               {deleteConfirm.isActive ? (
                 <>
                   This {deleteConfirm.label} is currently <strong>active</strong>.<br/>
-                  It will be marked as <strong style={{color:'#d97706'}}>inactive</strong> and hidden from dropdowns.<br/>
-                  <span style={{fontSize:12,color:'#94a3b8'}}>Delete again when inactive to permanently remove it.</span>
+                  It will be marked as <strong style={{color:__stc('#d97706')}}>inactive</strong> and hidden from dropdowns.<br/>
+                  <span style={{fontSize:12,color:__stc('#94a3b8')}}>Delete again when inactive to permanently remove it.</span>
                 </>
               ) : (
                 <>
-                  This {deleteConfirm.label} is already <strong style={{color:'#dc2626'}}>inactive</strong>.<br/>
-                  It will be <strong style={{color:'#dc2626'}}>permanently deleted</strong> along with all related data.<br/>
-                  <strong style={{color:'#dc2626'}}>This action cannot be undone.</strong>
+                  This {deleteConfirm.label} is already <strong style={{color:__stc('#dc2626')}}>inactive</strong>.<br/>
+                  It will be <strong style={{color:__stc('#dc2626')}}>permanently deleted</strong> along with all related data.<br/>
+                  <strong style={{color:__stc('#dc2626')}}>This action cannot be undone.</strong>
                 </>
               )}
             </p>
@@ -779,7 +814,7 @@ const DropdownAdminPage = () => {
               <button className="da-btn da-btn-ghost" onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button
                 className="da-btn"
-                style={{ background: deleteConfirm.isActive ? '#d97706' : '#dc2626', color: '#fff', flex: 1, justifyContent: 'center' }}
+                style={{ background: deleteConfirm.isActive ? __sbg('#d97706') : __sbg('#dc2626'), color: __stc('#fff'), flex: 1, justifyContent: 'center' }}
                 onClick={confirmDelete}>
                 {deleteConfirm.isActive ? 'Mark Inactive' : 'Delete Permanently'}
               </button>

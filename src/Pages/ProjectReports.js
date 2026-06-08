@@ -212,10 +212,10 @@ const Donut = ({ segments, size = 200 }) => {
         return el;
       })}
       {/* Center total */}
-      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e293b">
+      <text className="pr-donut-total" x={cx} y={cy - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e293b">
         {fmtShort(total)}
       </text>
-      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="8.5" fill="#64748b" letterSpacing="0.5">TOTAL</text>
+      <text className="pr-donut-total-label" x={cx} y={cy + 8} textAnchor="middle" fontSize="8.5" fill="#64748b" letterSpacing="0.5">TOTAL</text>
     </svg>
   );
 };

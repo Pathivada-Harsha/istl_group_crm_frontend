@@ -1,0 +1,329 @@
+/* =====================================================================
+   THEME.CSS  —  Dark / Light theming layer  (property-aware)
+   ---------------------------------------------------------------------
+   Every color value in the app was wrapped as:
+       background / border / etc.  ->  var(--c-<color>,  <original>)   (SURFACE)
+       color / fill / stroke       ->  var(--ct-<color>, <original>)   (FOREGROUND)
+
+   LIGHT mode (default): none of these tokens are defined, so every value
+   falls back to its ORIGINAL color — the UI is pixel-for-pixel unchanged.
+
+   DARK mode ([data-theme="dark"]): the tokens below remap the palette.
+   The surface/foreground split lets white CARD backgrounds become dark while
+   white BUTTON TEXT stays white. Foreground tokens are only defined for
+   colors that are dark in light mode (so they flip to light); light-colored
+   text/icons are intentionally left undefined so they keep their light color.
+
+   Only COLOR values change. Layout, spacing, sizing and behavior are untouched.
+   ===================================================================== */
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  background-color: #0f1420;
+}
+[data-theme="dark"] body {
+  background-color: #0f1420;
+}
+
+/* ===================== SURFACE / BACKGROUND / BORDER ===================== */
+[data-theme="dark"] {
+  /* base surfaces */
+  --c-white:  #1b2130;
+  --c-fff:    #1b2130;
+  --c-ffffff: #1b2130;
+  --c-f8fafc: #0f1420;
+  --c-f9fafb: #0f1420;
+  --c-f8f9fa: #0f1420;
+  --c-fafafa: #0f1420;
+  --c-f1f5f9: #232b3b;
+  --c-f3f4f6: #232b3b;
+
+  /* tinted backgrounds (keep hue, darken) */
+  --c-eff6ff: #15243d;
+  --c-dbeafe: #1d3a5f;
+  --c-bfdbfe: #244b7a;
+  --c-93c5fd: #2f5d92;
+  --c-fee2e2: #3a1f22;
+  --c-fef2f2: #2a1719;
+  --c-d1fae5: #14302a;
+  --c-dcfce7: #14302a;
+  --c-ecfdf5: #102a22;
+  --c-fef3c7: #3a3016;
+  --c-fefce8: #2a2710;
+  --c-fff7ed: #2c2113;
+
+  /* dark colors used as backgrounds -> stay deep */
+  --c-0f172a: #0e131f;
+  --c-111827: #0e131f;
+  --c-0b1220: #0e131f;
+  --c-1e293b: #1e2636;
+  --c-1f2937: #1e2636;
+  --c-374151: #2a3342;
+  --c-475569: #33404f;
+  --c-4b5563: #33404f;
+  --c-334155: #2f3a49;
+
+  /* mid greys as backgrounds */
+  --c-64748b: #475569;
+  --c-6b7280: #475569;
+  --c-94a3b8: #3a4456;
+  --c-9ca3af: #3a4456;
+  --c-a1a1aa: #3a4456;
+
+  /* borders / dividers */
+  --c-e2e8f0: #2b3445;
+  --c-e5e7eb: #2b3445;
+  --c-cbd5e1: #3a4456;
+  --c-d1d5db: #3a4456;
+
+  /* brand blues as backgrounds (stay vivid) */
+  --c-2563eb: #2f6fe0;
+  --c-3b82f6: #3b82f6;
+  --c-1d4ed8: #2456c9;
+  --c-1e40af: #27498f;
+  --c-1e3a8a: #24407c;
+  --c-60a5fa: #3b82f6;
+  --c-4f46e5: #5048e6;
+  --c-6366f1: #6366f1;
+  --c-0b63d6: #2f6fe0;
+
+  /* status as backgrounds */
+  --c-dc2626: #c92f2f;
+  --c-ef4444: #e04545;
+  --c-b91c1c: #a52828;
+  --c-991b1b: #7f2222;
+  --c-fca5a5: #b35a5a;
+  --c-059669: #0d9b6f;
+  --c-16a34a: #1c9a4a;
+  --c-10b981: #10b981;
+  --c-22c55e: #1faa53;
+  --c-065f46: #0d4736;
+  --c-15803d: #176b36;
+  --c-f59e0b: #d98f10;
+  --c-d97706: #c06a0c;
+  --c-92400e: #6e3410;
+  --c-b45309: #8a4109;
+  --c-fbbf24: #d9a520;
+}
+
+/* ===================== FOREGROUND (text / icons) ===================== */
+/* Only dark-origin colors are remapped here; white & light colors are left
+   undefined on purpose so text/icons that were light stay light. */
+[data-theme="dark"] {
+  --ct-0f172a: #e7ecf3;
+  --ct-111827: #e7ecf3;
+  --ct-0b1220: #e7ecf3;
+  --ct-1e293b: #d4dbe6;
+  --ct-1f2937: #d4dbe6;
+  --ct-374151: #c2cbd8;
+  --ct-475569: #aab4c2;
+  --ct-4b5563: #aab4c2;
+  --ct-334155: #aab4c2;
+
+  --ct-64748b: #94a1b3;
+  --ct-6b7280: #94a1b3;
+  --ct-94a3b8: #9aa7b8;
+  --ct-9ca3af: #9aa7b8;
+  --ct-a1a1aa: #9aa7b8;
+
+  --ct-0b63d6: #5b9bf0;
+  --ct-2563eb: #5b9bf0;
+  --ct-3b82f6: #6aa6f5;
+  --ct-1d4ed8: #5b9bf0;
+  --ct-1e40af: #5b9bf0;
+  --ct-1e3a8a: #6aa6f5;
+  --ct-60a5fa: #7fb6fb;
+  --ct-4f46e5: #8589f3;
+  --ct-6366f1: #8589f3;
+
+  --ct-dc2626: #f56565;
+  --ct-ef4444: #f87171;
+  --ct-b91c1c: #f05252;
+  --ct-991b1b: #f08a8a;
+  --ct-059669: #2ed9a0;
+  --ct-16a34a: #34d058;
+  --ct-10b981: #2ed9a0;
+  --ct-065f46: #7fe0bc;
+  --ct-15803d: #46c46f;
+  --ct-f59e0b: #fbbf24;
+  --ct-d97706: #f0a93a;
+  --ct-92400e: #f0c07a;
+  --ct-b45309: #f0b056;
+}
+
+/* =============================================================
+   EXTRA PALETTE — Project Cost & Expense Management page
+   (Bootstrap-style greys/tints not in the base token set)
+   Dark-mode only; light mode falls back to originals.
+   ============================================================= */
+[data-theme="dark"] {
+  /* surfaces / borders / tints */
+  --c-dee2e6: #2b3445;  --c-e9ecef: #2b3445;  --c-f1f3f5: #232b3b;  --c-adb5bd: #3a4456;
+  --c-f0f7ff: #15243d;  --c-e0f2fe: #16344d;  --c-e7f5ff: #16344d;  --c-f0f9ff: #15243d;
+  --c-ede9fe: #241b3d;  --c-f3e8ff: #2a1b3d;  --c-faf5ff: #221530;  --c-f0f4ff: #1a1f3d;
+  --c-f8faff: #161b27;  --c-f0fdf4: #14301f;  --c-bbf7d0: #2a5a40;  --c-a7f3d0: #2a5a40;
+  --c-d1e7dd: #14302a;  --c-fde68a: #4a3a14;  --c-fffbeb: #2a2710;  --c-fff3cd: #3a3016;
+  --c-fecaca: #3a1f22;  --c-f8d7da: #3a1d1d;  --c-c4b5fd: #4a3d7a;
+
+  /* colors used as backgrounds — keep vivid / appropriate dark */
+  --c-7c3aed: #7c3aed;  --c-6d28d9: #6d28d9;  --c-8b5cf6: #8b5cf6;  --c-6b21a8: #6b21a8;
+  --c-5b21b6: #5b21b6;  --c-06b6d4: #06b6d4;  --c-0284c7: #0284c7;  --c-4d7ce0: #4d7ce0;
+  --c-ea580c: #ea580c;  --c-6c757d: #475569;  --c-495057: #33404f;  --c-1a202c: #0e131f;
+  --c-166534: #14302a;  --c-0f5132: #0d4736;  --c-856404: #3a3016;  --c-842029: #3a1d1d;
+
+  /* foreground (text/icons) — flip dark originals to light */
+  --ct-6c757d: #94a1b3;  --ct-495057: #aab4c2;  --ct-1a202c: #e7ecf3;
+  --ct-166534: #7fe0bc;  --ct-0f5132: #7fe0bc;  --ct-856404: #f0c07a;  --ct-842029: #f08a8a;
+  --ct-0284c7: #38bdf8;  --ct-6d28d9: #a78bfa;  --ct-7c3aed: #a78bfa;  --ct-6b21a8: #c084fc;
+  --ct-5b21b6: #a78bfa;  --ct-8b5cf6: #b39bf7;  --ct-06b6d4: #22d3ee;  --ct-4d7ce0: #6aa6f5;
+  --ct-ea580c: #fb923c;
+}
+
+/* =============================================================
+   EXTRA PALETTE — Task Management page
+   ============================================================= */
+[data-theme="dark"] {
+  /* surfaces / tints / borders */
+  --c-f5f3ff: #241b3d;  --c-eef2ff: #1e1f45;  --c-fff9f9: #2b1d20;  --c-ecfeff: #103038;
+  --c-f0f7ff: #15243d;  --c-f0fdf4: #14301f;  --c-fffbeb: #2a2710;  --c-fafcff: #161b27;
+  --c-e9eef5: #2b3445;  --c-6ee7b7: #2a5a40;  --c-a5b4fc: #3a3d6a;  --c-fcd34d: #5a4714;
+  /* accent colors used as backgrounds — keep vivid */
+  --c-8b5cf6: #8b5cf6;  --c-7c3aed: #7c3aed;  --c-4338ca: #4338ca;  --c-0e7490: #0e7490;
+  --c-c2410c: #7a3410;
+  /* foreground (text) — flip dark originals to light */
+  --ct-0e7490: #22d3ee;  --ct-c2410c: #fb923c;  --ct-4338ca: #a5b4fc;
+  --ct-7c3aed: #a78bfa;  --ct-8b5cf6: #b39bf7;
+}
+
+/* =============================================================
+   EXTRA PALETTE — Leads / Enquiries page
+   ============================================================= */
+[data-theme="dark"] {
+  /* surfaces / tints / borders */
+  --c-f0fdf4: #14301f;  --c-bbf7d0: #2a5a40;  --c-ede9fe: #2a2147;  --c-fff5f5: #2b1d20;
+  --c-fecaca: #3a1f22;  --c-fffbeb: #2a2710;  --c-e0e7ff: #1e2547;  --c-ddd6fe: #2e2147;
+  --c-fce7f3: #3a1f30;  --c-f5f3ff: #241b3d;  --c-f1f1f1: #232b3b;  --c-f0f9ff: #15243d;
+  --c-bae6fd: #16344d;  --c-f0f0f0: #232b3b;  --c-86efac: #2a5a40;  --c-f0f4ff: #1a2440;
+  --c-faf5ff: #241b3d;  --c-e9d5ff: #2e2147;  --c-fffdf5: #2a2710;  --c-fde68a: #5a4714;
+  /* accents / dark surfaces used as backgrounds — keep */
+  --c-8b5cf6: #8b5cf6;  --c-7c3aed: #7c3aed;  --c-3730a3: #3730a3;  --c-5b21b6: #5b21b6;
+  --c-6d28d9: #6d28d9;  --c-9d174d: #9d174d;  --c-166534: #166534;  --c-1b3a6b: #1b3a6b;
+  --c-1e3a5f: #1e3a5f;  --c-4d7ce0: #4d7ce0;
+  /* foreground (text) — flip dark originals to light */
+  --ct-166534: #6ee7b7;  --ct-1b3a6b: #7fb0f0;  --ct-3730a3: #a5b4fc;  --ct-4d7ce0: #9bbcf5;
+  --ct-5b21b6: #c4b5fd;  --ct-6d28d9: #c4b5fd;  --ct-7c3aed: #a78bfa;  --ct-8b5cf6: #b39bf7;
+  --ct-9d174d: #f0a0c0;
+}
+
+/* =============================================================
+   EXTRA PALETTE — Lead Follow-ups / Interaction modals
+   ============================================================= */
+[data-theme="dark"] {
+  --c-fffafa: #2b1d20;  --c-f9fffe: #161b27;  --c-fffdf0: #2a2710;  --c-fff7e6: #2c2113;
+  --c-f8fafb: #0f1420;
+  /* dark accent surfaces — keep as-is */
+  --c-142d52: #142d52;  --c-1c4532: #1c4532;  --c-78350f: #78350f;
+  /* foreground */
+  --ct-1c4532: #6ee7b7;  --ct-78350f: #f0b080;
+}
+
+/* EXTRA — Add Follow-up modal */
+[data-theme="dark"] { --c-eef2f7: #18202e; --ct-eef2f7: #cdd6e3; }
+
+/* =============================================================
+   AUTO-GENERATED COMPLETE PALETTE — fills every remaining color
+   across all stylesheets (components + pages) so nothing stays
+   light in dark mode. Hand-tuned values above take precedence.
+   ============================================================= */
+[data-theme="dark"] {
+  --c-667eea: #1e2338;
+  --c-818cf8: #1e2138;
+  --c-90caf9: #1e2d38;
+  --c-a0aec0: #232a34;
+  --c-bee3f8: #1c262c;
+  --c-c6f6d5: #1c2c21;
+  --c-c7d2fe: #1c1f2c;
+  --c-cbd5e0: #1c232c;
+  --c-ccc: #242424;
+  --c-ccfbf1: #1c2c28;
+  --c-cffafe: #1c2a2c;
+  --c-d0d5e0: #1c212b;
+  --c-d1e4ff: #1c222c;
+  --c-d4edda: #1c2c20;
+  --c-e3f2fd: #191e22;
+  --c-e5e8ef: #1c212c;
+  --c-e6edf3: #191e22;
+  --c-e6eef8: #191d22;
+  --c-e6f6ff: #191f22;
+  --c-e8ecf1: #191d22;
+  --c-e8edf2: #191d22;
+  --c-e9d8fd: #231c2c;
+  --c-eaf4ff: #191d22;
+  --c-edf2f7: #191d22;
+  --c-eef0f5: #191b22;
+  --c-eef2f6: #191d22;
+  --c-eef2f9: #191c22;
+  --c-eef6ff: #191d22;
+  --c-f0f6ff: #191c22;
+  --c-f0fdfa: #192220;
+  --c-f3f9fc: #191f22;
+  --c-f43f5e: #381e23;
+  --c-f4f6f9: #191c22;
+  --c-f5f0ff: #1c1922;
+  --c-f5f5f5: #1d1d1d;
+  --c-f5f7fa: #191c22;
+  --c-f6f8fa: #191d22;
+  --c-f7fafc: #191e22;
+  --c-f87171: #381e1e;
+  --c-f8f9fc: #191b22;
+  --c-fafbfc: #191d22;
+  --c-fafbfd: #191c22;
+  --c-fbfcff: #191b22;
+  --c-fbfdff: #191d22;
+  --c-fc8181: #381e1e;
+  --c-fecdd3: #2c1c1e;
+  --c-fed7aa: #2c241c;
+  --c-fed7d7: #2c1c1c;
+  --c-fed7e2: #2c1c20;
+  --c-feebc8: #2c261c;
+  --c-fff1f2: #221919;
+  --ct-0369a1: #a7d7f1;
+  --ct-047857: #a7f1dc;
+  --ct-064e3b: #a7f1dd;
+  --ct-075985: #a7d7f1;
+  --ct-0891b2: #a7e2f1;
+  --ct-0b4c9d: #a7c8f1;
+  --ct-0c4a6e: #a7d6f1;
+  --ct-0d9488: #a7f1ea;
+  --ct-0f1724: #b7c7e1;
+  --ct-0f766e: #a7f1eb;
+  --ct-155724: #adebbb;
+  --ct-155e75: #a9deef;
+  --ct-172031: #bac6de;
+  --ct-1976d2: #a7ccf1;
+  --ct-1a1a1a: #d9bfbf;
+  --ct-1f2d3d: #bbcbdd;
+  --ct-22543d: #b6e2ce;
+  --ct-243444: #bcccdc;
+  --ct-2c5282: #b3c9e5;
+  --ct-2d3748: #bfc9d9;
+  --ct-3182ce: #adcdeb;
+  --ct-48bb78: #b5e3c8;
+  --ct-4a5568: #bfc9d9;
+  --ct-553c9a: #c2b6e2;
+  --ct-555: #d9bfbf;
+  --ct-5685eb: #8dabec;
+  --ct-718096: #bfcad9;
+  --ct-721c24: #ebadb3;
+  --ct-742a2a: #e4b4b4;
+  --ct-7c2d12: #f1baa7;
+  --ct-7f1d1d: #ecacac;
+  --ct-97266d: #eaaed4;
+  --ct-9a3412: #f1baa7;
+  --ct-9b1230: #f1a7b7;
+  --ct-be123c: #f1a7b9;
+  --ct-c05621: #f0c0a8;
+  --ct-c53030: #ebadad;
+  --ct-d34848: #e59494;
+  --ct-e53e3e: #ec8d8d;
+}

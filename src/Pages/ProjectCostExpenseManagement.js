@@ -41,6 +41,51 @@ const DEFAULT_COLUMNS = [
 ];
 
 // ─── Approval workflow constants & helpers ──────────────────────────────────
+
+/* ── Inline-style theme mappers (added for dark mode) ──────────────────────────
+   bg()  -> backgrounds / borders (white & light tints become dark)
+   tc()  -> text / icons (dark colours become light; white stays white)
+   Identity in light mode, so light rendering is unchanged. ────────────────────*/
+const __isDarkTheme = () =>
+  typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f3f5':'#232b3b',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#dbeafe':'#1d3a5f','#e0f2fe':'#16344d','#e7f5ff':'#16344d','#f0f9ff':'#15243d',
+  '#fef3c7':'#3a3016','#fffbeb':'#2a2710','#fff3cd':'#3a3016',
+  '#dcfce7':'#14302a','#d1e7dd':'#14302a','#f0fdf4':'#14301f',
+  '#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#f8d7da':'#3a1d1d',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#dee2e6':'#2b3445','#e9ecef':'#2b3445',
+  '#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#adb5bd':'#3a4456',
+  '#86efac':'#2a5a40','#bbf7d0':'#2a5a40','#a7f3d0':'#2a5a40',
+  '#fcd34d':'#5a4714','#fde68a':'#4a3a14','#fca5a5':'#5a2a2a','#c4b5fd':'#4a3d7a',
+  '#ede9fe':'#241b3d','#f3e8ff':'#2a1b3d','#faf5ff':'#221530','#f0f4ff':'#1a1f3d','#f8faff':'#161b27',
+};
+const __TM = {
+  '#111827':'#e7ecf3','#0f172a':'#e7ecf3','#1a202c':'#e7ecf3',
+  '#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#495057':'#aab4c2','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#6c757d':'#94a1b3',
+  '#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#adb5bd':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#7fe0bc','#0f5132':'#7fe0bc',
+  '#b45309':'#f0c07a','#856404':'#f0c07a',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#842029':'#f08a8a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#0284c7':'#38bdf8',
+  '#7c3aed':'#a78bfa','#6d28d9':'#a78bfa','#6b21a8':'#c084fc','#5b21b6':'#a78bfa','#8b5cf6':'#b39bf7','#ea580c':'#fb923c','#06b6d4':'#22d3ee',
+};
+const bg = (v) => (__isDarkTheme() && __SM[v]) ? __SM[v] : v;
+const tc = (v) => (__isDarkTheme() && __TM[v]) ? __TM[v] : v;
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const APPROVAL_STAGES = [
   { key: 'stage1', code: 'MANAGER', short: 'M', label: 'Reporting Manager' },
   { key: 'stage2', code: 'CFO',     short: 'C', label: 'Chief Financial Officer' },
@@ -50,10 +95,10 @@ const APPROVAL_STAGES = [
 const normRole = (s) => (s || '').toUpperCase().replace(/[^A-Z]/g, '');
 const stageColor = (st) => {
   switch ((st || 'WAITING').toUpperCase()) {
-    case 'APPROVED': return { bg: '#dcfce7', color: '#15803d', br: '#86efac' };
-    case 'REJECTED': return { bg: '#fee2e2', color: '#b91c1c', br: '#fca5a5' };
-    case 'PENDING':  return { bg: '#fef3c7', color: '#b45309', br: '#fcd34d' };
-    default:         return { bg: '#f1f5f9', color: '#94a3b8', br: '#e2e8f0' }; // WAITING
+    case 'APPROVED': return { bg: bg('#dcfce7'), color: tc('#15803d'), br: bg('#86efac') };
+    case 'REJECTED': return { bg: bg('#fee2e2'), color: tc('#b91c1c'), br: bg('#fca5a5') };
+    case 'PENDING':  return { bg: bg('#fef3c7'), color: tc('#b45309'), br: bg('#fcd34d') };
+    default:         return { bg: bg('#f1f5f9'), color: tc('#94a3b8'), br: bg('#e2e8f0') }; // WAITING
   }
 };
 
@@ -150,7 +195,7 @@ const PCEDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
         {value
-          ? <span style={{flex:1, fontSize:13, fontWeight:500, color:'#0f172a'}}>{fmt(value)}</span>
+          ? <span style={{flex:1, fontSize:13, fontWeight:500, color:tc('#0f172a')}}>{fmt(value)}</span>
           : <span className="pce-dp-ph">{placeholder}</span>}
         {value
           ? <span className="pce-dp-x" onClick={e=>{e.stopPropagation(); onChange('');}}>
@@ -159,7 +204,7 @@ const PCEDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
               </svg>
             </span>
           : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              style={{marginLeft:'auto', color:'#94a3b8', transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0}}>
+              style={{marginLeft:'auto', color:tc('#94a3b8'), transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0}}>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
             </svg>
         }
@@ -256,7 +301,7 @@ const PCEDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
           </svg>
         </span>}
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}>
+          style={{marginLeft:'auto',color:tc('#94a3b8'),flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
@@ -333,6 +378,7 @@ const PCEDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 // ─── Single-project selector (radio dropdown) for an expense item ────────────
 const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, placeholder }) => {
+  useThemeVersion();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -361,20 +407,20 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
         onClick={() => { if (!disabled) setOpen(o => !o); }}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6,
-          border: '1px solid ' + (!selectedId ? '#ef4444' : open ? '#2563eb' : '#d1d5db'),
+          border: '1px solid ' + (!selectedId ? '#ef4444' : open ? bg('#2563eb') : bg('#d1d5db')),
           borderRadius: 8, padding: '7px 10px', minHeight: 36,
           cursor: disabled ? 'not-allowed' : 'pointer',
-          background: disabled ? '#f9fafb' : '#fff',
+          background: disabled ? bg('#f9fafb') : bg('#fff'),
           boxShadow: open ? '0 0 0 3px rgba(37,99,235,.1)' : (!selectedId ? '0 0 0 2px rgba(239,68,68,.1)' : 'none'),
           transition: 'border-color .15s, box-shadow .15s',
         }}>
         <span style={{
           flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          fontSize: 12.5, color: selectedId ? '#111827' : '#9ca3af',
+          fontSize: 12.5, color: selectedId ? tc('#111827') : tc('#9ca3af'),
         }}>
           {loading ? 'Loading…' : selectedId ? labelFor(selectedId) : (placeholder || '— Select Project *')}
         </span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={tc("#6b7280")} strokeWidth="2"
           style={{ flexShrink: 0, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}>
           <path d="M6 9l6 6 6-6"/>
         </svg>
@@ -383,21 +429,21 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
         <div style={{
           position: 'absolute', top: 'calc(100% + 4px)', left: 0,
           width: 'max-content', minWidth: '100%', maxWidth: 460,
-          zIndex: 9999, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+          zIndex: 9999, background: bg('#fff'), border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 10,
           boxShadow: '0 10px 28px rgba(0,0,0,.14)', maxHeight: 260, overflowY: 'auto',
         }}>
           {/* Clear / placeholder row */}
           <div onClick={() => { onChange([]); setOpen(false); }}
             style={{
               padding: '8px 12px', fontSize: 11.5, cursor: 'pointer',
-              color: '#9ca3af', borderBottom: '1px solid #f3f4f6', fontStyle: 'italic',
+              color: tc('#9ca3af'), borderBottom: `1px solid ${bg('#f3f4f6')}`, fontStyle: 'italic',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
+            onMouseLeave={e => e.currentTarget.style.background = bg('transparent')}>
             — Select Project *
           </div>
           {(projList || []).length === 0 && (
-            <div style={{ padding: '10px 12px', fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
+            <div style={{ padding: '10px 12px', fontSize: 12, color: tc('#9ca3af'), textAlign: 'center' }}>
               {loading ? 'Loading…' : 'No projects available'}
             </div>
           )}
@@ -408,24 +454,24 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
                 style={{
                   padding: '8px 14px', fontSize: 11.5, cursor: 'pointer', display: 'flex',
                   alignItems: 'flex-start', gap: 10,
-                  background: isSelected ? '#eff6ff' : 'transparent',
-                  borderBottom: '1px solid #f8fafc',
+                  background: isSelected ? bg('#eff6ff') : bg('transparent'),
+                  borderBottom: `1px solid ${bg('#f8fafc')}`,
                 }}
-                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f9fafb'; }}
-                onMouseLeave={e => { e.currentTarget.style.background = isSelected ? '#eff6ff' : 'transparent'; }}>
+                onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = bg('#f9fafb'); }}
+                onMouseLeave={e => { e.currentTarget.style.background = isSelected ? bg('#eff6ff') : bg('transparent'); }}>
                 {/* Radio indicator */}
                 <span style={{
                   width: 14, height: 14, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-                  border: '2px solid ' + (isSelected ? '#2563eb' : '#d1d5db'),
-                  background: isSelected ? '#2563eb' : '#fff',
+                  border: '2px solid ' + (isSelected ? bg('#2563eb') : bg('#d1d5db')),
+                  background: isSelected ? bg('#2563eb') : bg('#fff'),
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   transition: 'all .15s',
                 }}>
-                  {isSelected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff' }} />}
+                  {isSelected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: tc('#fff') }} />}
                 </span>
                 <span style={{
                   fontWeight: isSelected ? 600 : 400,
-                  color: isSelected ? '#1d4ed8' : '#111827',
+                  color: isSelected ? tc('#1d4ed8') : tc('#111827'),
                   fontSize: 11.5, lineHeight: 1.4,
                   wordBreak: 'break-word', whiteSpace: 'normal',
                 }}>
@@ -442,6 +488,7 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const ProjectCostExpenseManagement = () => {
+  useThemeVersion();
 
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user } = useAuth();
@@ -1286,11 +1333,11 @@ const ProjectCostExpenseManagement = () => {
       case 'groupCategory': return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           {exp.groupName
-            ? <span style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.groupName}</span>
-            : <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+            ? <span style={{ fontSize: 12, fontWeight: 700, color: tc('#1e293b'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.groupName}</span>
+            : <span style={{ color: tc('#94a3b8'), fontSize: 12 }}>—</span>
           }
           {exp.subGroupName && (
-            <span style={{ fontSize: 11, color: '#64748b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.subGroupName}</span>
+            <span style={{ fontSize: 11, color: tc('#64748b'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 160 }}>{exp.subGroupName}</span>
           )}
         </div>
       );
@@ -1298,17 +1345,17 @@ const ProjectCostExpenseManagement = () => {
         <div style={{ minWidth: 160 }}>
           {exp.projectId ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', lineHeight: 1.4 }}>
+              <span style={{ fontWeight: 600, fontSize: 12, color: tc('#1e293b'), wordBreak: 'break-word', lineHeight: 1.4 }}>
                 {exp.projectName || exp.projectId}
               </span>
               {exp.projectName && (
-                <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                <span style={{ fontSize: 11, color: tc('#64748b'), fontWeight: 400 }}>
                   {exp.projectId}
                 </span>
               )}
             </div>
           ) : (
-            <span style={{ color: '#94a3b8', fontSize: 12 }}>—</span>
+            <span style={{ color: tc('#94a3b8'), fontSize: 12 }}>—</span>
           )}
         </div>
       );
@@ -1333,11 +1380,11 @@ const ProjectCostExpenseManagement = () => {
         // Collect unique payment modes from all expense items
         const modes = [...new Set((exp.expenseItems || []).map(i => i.paymentMode).filter(Boolean))];
         const modeColors = {
-          Cash:          { bg: '#dcfce7', color: '#15803d' },
-          UPI:           { bg: '#ede9fe', color: '#6d28d9' },
-          Card:          { bg: '#dbeafe', color: '#1d4ed8' },
-          Bank_Transfer: { bg: '#e0f2fe', color: '#0369a1' },
-          Cheque:        { bg: '#fef9c3', color: '#92400e' },
+          Cash:          { bg: '#dcfce7', color: tc('#15803d') },
+          UPI:           { bg: '#ede9fe', color: tc('#6d28d9') },
+          Card:          { bg: '#dbeafe', color: tc('#1d4ed8') },
+          Bank_Transfer: { bg: '#e0f2fe', color: tc('#0369a1') },
+          Cheque:        { bg: '#fef9c3', color: tc('#92400e') },
         };
         return (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
@@ -1345,7 +1392,7 @@ const ProjectCostExpenseManagement = () => {
             {modes.length > 0 && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
                 {modes.map(m => {
-                  const c = modeColors[m] || { bg: '#f1f5f9', color: '#475569' };
+                  const c = modeColors[m] || { bg: '#f1f5f9', color: tc('#475569') };
                   return (
                     <span key={m} style={{
                       display: 'inline-flex', alignItems: 'center', gap: 3,
@@ -1361,8 +1408,8 @@ const ProjectCostExpenseManagement = () => {
             )}
             {/* Person name */}
             {exp.paidByName
-              ? <span style={{ fontSize: 12, color: '#374151', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exp.paidByName}</span>
-              : modes.length === 0 && <span style={{ color: '#9ca3af' }}>—</span>
+              ? <span style={{ fontSize: 12, color: tc('#374151'), fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{exp.paidByName}</span>
+              : modes.length === 0 && <span style={{ color: tc('#9ca3af') }}>—</span>
             }
           </div>
         );
@@ -1390,7 +1437,7 @@ const ProjectCostExpenseManagement = () => {
                     {st === 'APPROVED' ? '✓' : st === 'REJECTED' ? '✕' : s.short}
                   </span>
                   {idx < APPROVAL_STAGES.length - 1 && (
-                    <span style={{ width: 8, height: 2, background: '#e2e8f0', borderRadius: 2 }} />
+                    <span style={{ width: 8, height: 2, background: bg('#e2e8f0'), borderRadius: 2 }} />
                   )}
                 </React.Fragment>
               );
@@ -1404,8 +1451,8 @@ const ProjectCostExpenseManagement = () => {
           <span style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
             padding: '3px 9px', borderRadius: 12, fontSize: 11, fontWeight: 700,
-            background: paid ? '#dcfce7' : '#f1f5f9',
-            color: paid ? '#15803d' : '#94a3b8',
+            background: paid ? bg('#dcfce7') : bg('#f1f5f9'),
+            color: paid ? tc('#15803d') : tc('#94a3b8'),
           }}>
             <IndianRupee size={11} /> {paid ? 'Paid' : 'Unpaid'}
           </span>
@@ -1438,25 +1485,13 @@ const ProjectCostExpenseManagement = () => {
   // Each card carries a `filterPatch` — the exact filter values to apply when clicked.
   // Clicking again (same card) clears the filter back to 'all'.
   const kpiData = stats ? [
-    { id: 'total',      title: 'Total Expenses',     value: fmt(stats.totalExpenses),    icon: <IndianRupee size={32} />, color: '#ef4444', filterPatch: null },
-    { id: 'approved',   title: 'Approved',            value: fmt(stats.approvedExpenses), icon: <CheckCircle size={32} />, color: '#22c55e', filterPatch: { status: 'Approved', category: 'all' } },
-    { id: 'pending',    title: 'Pending Approval',    value: fmt(stats.pendingExpenses),  icon: <Clock size={32} />,       color: '#f59e0b', filterPatch: { status: 'Pending',  category: 'all' } },
-    { id: 'travel',     title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,    color: '#3b82f6', filterPatch: { category: 'Travel', status: 'all' } },
-    { id: 'commission', title: 'Total Commission',    value: fmt(stats.totalCommission),  icon: <Users size={32} />,       color: '#8b5cf6', filterPatch: { category: 'Commission', status: 'all' } },
-    { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <IndianRupee size={32} />, color: '#06b6d4', filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
+    { id: 'total',      title: 'Total Expenses',     value: fmt(stats.totalExpenses),    icon: <IndianRupee size={32} />, color: tc('#ef4444'), filterPatch: null },
+    { id: 'approved',   title: 'Approved',            value: fmt(stats.approvedExpenses), icon: <CheckCircle size={32} />, color: tc('#22c55e'), filterPatch: { status: 'Approved', category: 'all' } },
+    { id: 'pending',    title: 'Pending Approval',    value: fmt(stats.pendingExpenses),  icon: <Clock size={32} />,       color: tc('#f59e0b'), filterPatch: { status: 'Pending',  category: 'all' } },
+    { id: 'travel',     title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,    color: tc('#3b82f6'), filterPatch: { category: 'Travel', status: 'all' } },
+    { id: 'commission', title: 'Total Commission',    value: fmt(stats.totalCommission),  icon: <Users size={32} />,       color: tc('#8b5cf6'), filterPatch: { category: 'Commission', status: 'all' } },
+    { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <IndianRupee size={32} />, color: tc('#06b6d4'), filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
   ] : [];
-
-  const handleKpiClick = (kpi) => {
-    if (activeKpi === kpi.id || !kpi.filterPatch) {
-      // clicking same card or "Total" → clear all KPI filters
-      setActiveKpi(null);
-      setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all' }));
-    } else {
-      setActiveKpi(kpi.id);
-      setFilters(prev => ({ ...prev, ...kpi.filterPatch }));
-    }
-    setCurrentPage(0);
-  };
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
   return (
@@ -1558,7 +1593,7 @@ const ProjectCostExpenseManagement = () => {
                   disabled={!!col.mandatory}
                   onChange={() => !col.mandatory && setColumns(prev => prev.map((c, i) =>
                     i === idx ? { ...c, visible: !c.visible } : c))} />
-                <span>{col.label}{col.mandatory ? <span style={{fontSize:9,marginLeft:4,color:'#94a3b8',fontWeight:600}}>FIXED</span> : ''}</span>
+                <span>{col.label}{col.mandatory ? <span style={{fontSize:9,marginLeft:4,color:tc('#94a3b8'),fontWeight:600}}>FIXED</span> : ''}</span>
               </div>
             ))}
           </div>
@@ -1570,22 +1605,16 @@ const ProjectCostExpenseManagement = () => {
         <>
           <div className="exp-mgmt-kpi-grid">
             {kpiData.map((kpi) => {
-              const isActive = activeKpi === kpi.id;
               return (
                 <div
                   key={kpi.id}
-                  className={`exp-mgmt-kpi-card${isActive ? ' exp-mgmt-kpi-card--active' : ''}${kpi.filterPatch ? ' exp-mgmt-kpi-card--clickable' : ''}`}
-                  style={{ borderTopColor: kpi.color, boxShadow: isActive ? `0 0 0 2px ${kpi.color}` : undefined, cursor: kpi.filterPatch ? 'pointer' : 'default' }}
-                  onClick={() => handleKpiClick(kpi)}
-                  title={kpi.filterPatch ? `Click to filter: ${kpi.title}` : undefined}
+                  className="exp-mgmt-kpi-card"
+                  style={{ borderTopColor: kpi.color }}
                 >
                   <div className="exp-mgmt-kpi-icon" style={{ color: kpi.color }}>{kpi.icon}</div>
                   <div className="exp-mgmt-kpi-content">
                     <div className="exp-mgmt-kpi-value">{kpi.value}</div>
                     <div className="exp-mgmt-kpi-label">{kpi.title}</div>
-                    {isActive && (
-                      <div style={{ fontSize: 10, marginTop: 3, color: kpi.color, fontWeight: 700 }}>● Filtering</div>
-                    )}
                   </div>
                 </div>
               );
@@ -1593,12 +1622,12 @@ const ProjectCostExpenseManagement = () => {
           </div>
           {/* Active KPI filter indicator with clear button */}
           {activeKpi && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, fontSize: 12, color: '#1d4ed8', marginBottom: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: bg('#eff6ff'), border: `1px solid ${bg('#bfdbfe')}`, borderRadius: 7, fontSize: 12, color: tc('#1d4ed8'), marginBottom: 4 }}>
               <CheckCircle size={13} />
               <span>Filtering by: <strong>{kpiData.find(k => k.id === activeKpi)?.title}</strong></span>
               <button
                 onClick={() => { setActiveKpi(null); setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all' })); setCurrentPage(0); }}
-                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: 5, cursor: 'pointer' }}>
+                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: tc('#1d4ed8'), background: bg('#dbeafe'), border: `1px solid ${bg('#93c5fd')}`, borderRadius: 5, cursor: 'pointer' }}>
                 <X size={11} /> Clear
               </button>
             </div>
@@ -1825,9 +1854,9 @@ const ProjectCostExpenseManagement = () => {
                         onClick={() => { setPaidByOpen(o => !o); setPaidBySearch(''); }}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px',
-                          cursor: 'pointer', background: '#fff', fontSize: 13,
-                          color: expenseFormData.paidByUserId ? '#111827' : '#9ca3af', minHeight: 38,
+                          border: `1px solid ${bg('#d1d5db')}`, borderRadius: 8, padding: '8px 12px',
+                          cursor: 'pointer', background: bg('#fff'), fontSize: 13,
+                          color: expenseFormData.paidByUserId ? tc('#111827') : tc('#9ca3af'), minHeight: 38,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
@@ -1835,7 +1864,7 @@ const ProjectCostExpenseManagement = () => {
                             const u = availableUsers.find(u => String(u.id) === String(expenseFormData.paidByUserId));
                             return u ? (
                               <>
-                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: tc('#fff'), fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {(u.name || '?')[0].toUpperCase()}
                                 </div>
                                 <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
@@ -1843,44 +1872,44 @@ const ProjectCostExpenseManagement = () => {
                             ) : <span>Select user</span>;
                           })() : <span>Select user</span>}
                         </div>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={tc("#6b7280")} strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
                       </div>
                       {paidByOpen && (
                         <div style={{
                           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
-                          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                          background: bg('#fff'), border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 8,
                           boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
                         }}>
-                          <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${bg('#f3f4f6')}` }}>
                             <input autoFocus type="text" placeholder="Search users..."
                               value={paidBySearch} onChange={e => setPaidBySearch(e.target.value)}
                               onClick={e => e.stopPropagation()}
-                              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                              style={{ width: '100%', border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                           </div>
                           <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                             <div onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: '', paidByName: '' })); setPaidByOpen(false); }}
-                              style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              style={{ padding: '9px 12px', fontSize: 13, color: tc('#6b7280'), cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
+                              onMouseLeave={e => e.currentTarget.style.background = bg('transparent')}
                             >— None —</div>
                             {availableUsers.filter(u => !paidBySearch || (u.name || '').toLowerCase().includes(paidBySearch.toLowerCase())).map(u => (
                               <div key={u.id}
                                 onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: String(u.id), paidByName: u.name || '' })); setPaidByOpen(false); }}
-                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent'}
+                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? bg('#eff6ff') : bg('transparent') }}
+                                onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
+                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? bg('#eff6ff') : bg('transparent')}
                               >
-                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: tc('#fff'), fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {(u.name || '?')[0].toUpperCase()}
                                 </div>
                                 <div>
-                                  <div style={{ fontWeight: 500, color: '#111827' }}>{u.name}</div>
-                                  {u.role && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{u.role}</div>}
+                                  <div style={{ fontWeight: 500, color: tc('#111827') }}>{u.name}</div>
+                                  {u.role && <div style={{ fontSize: 11, color: tc('#6b7280'), marginTop: 1 }}>{u.role}</div>}
                                 </div>
                               </div>
                             ))}
                             {availableUsers.filter(u => !paidBySearch || (u.name || '').toLowerCase().includes(paidBySearch.toLowerCase())).length === 0 && (
-                              <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                              <div style={{ padding: '10px 12px', fontSize: 13, color: tc('#9ca3af'), textAlign: 'center' }}>No users found</div>
                             )}
                           </div>
                         </div>
@@ -1979,7 +2008,7 @@ const ProjectCostExpenseManagement = () => {
                                 className={item.category === 'Commission' && !item.description?.trim() ? 'exp-field-error-wrap' : ''}
                                 onChange={e => updateItem(item.id, 'description', e.target.value)} />
                               {item.category === 'Commission' && (
-                                <span className="exp-field-hint" style={{ color: '#b45309' }}>Notes are mandatory for Commission</span>
+                                <span className="exp-field-hint" style={{ color: tc('#b45309') }}>Notes are mandatory for Commission</span>
                               )}
                             </div>
                           </div>
@@ -1989,7 +2018,7 @@ const ProjectCostExpenseManagement = () => {
                   </div>
 
                   <div className="exp-items-total-bar">
-                    <span><span style={{color:'#64748b'}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
+                    <span><span style={{color:tc('#64748b')}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
                     <strong className="exp-total-amt">{fmt(total)}</strong>
                   </div>
                 </div>
@@ -2058,7 +2087,7 @@ const ProjectCostExpenseManagement = () => {
                       <span className="exp-footer-total">
                         {items.length} item(s) · {fmt(total)}
 
-                        {unassigned > 0 && <span style={{color:'#ef4444',marginLeft:8}}>⚠ {unassigned} item(s) need a project</span>}
+                        {unassigned > 0 && <span style={{color:tc('#ef4444'),marginLeft:8}}>⚠ {unassigned} item(s) need a project</span>}
                       </span>
                     );
                   })()}
@@ -2166,9 +2195,9 @@ const ProjectCostExpenseManagement = () => {
                         onClick={() => { setEditPaidByOpen(o => !o); setEditPaidBySearch(''); }}
                         style={{
                           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                          border: '1px solid #d1d5db', borderRadius: 8, padding: '8px 12px',
-                          cursor: 'pointer', background: '#fff', fontSize: 13,
-                          color: expenseFormData.paidByUserId ? '#111827' : '#9ca3af', minHeight: 38,
+                          border: `1px solid ${bg('#d1d5db')}`, borderRadius: 8, padding: '8px 12px',
+                          cursor: 'pointer', background: bg('#fff'), fontSize: 13,
+                          color: expenseFormData.paidByUserId ? tc('#111827') : tc('#9ca3af'), minHeight: 38,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
@@ -2176,7 +2205,7 @@ const ProjectCostExpenseManagement = () => {
                             const u = availableUsers.find(u => String(u.id) === String(expenseFormData.paidByUserId));
                             return u ? (
                               <>
-                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: tc('#fff'), fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {(u.name || '?')[0].toUpperCase()}
                                 </div>
                                 <span style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
@@ -2184,44 +2213,44 @@ const ProjectCostExpenseManagement = () => {
                             ) : <span>Select user</span>;
                           })() : <span>Select user</span>}
                         </div>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={tc("#6b7280")} strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
                       </div>
                       {editPaidByOpen && (
                         <div style={{
                           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
-                          background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                          background: bg('#fff'), border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 8,
                           boxShadow: '0 8px 24px rgba(0,0,0,.12)', overflow: 'hidden',
                         }}>
-                          <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                          <div style={{ padding: '8px 10px', borderBottom: `1px solid ${bg('#f3f4f6')}` }}>
                             <input autoFocus type="text" placeholder="Search users..."
                               value={editPaidBySearch} onChange={e => setEditPaidBySearch(e.target.value)}
                               onClick={e => e.stopPropagation()}
-                              style={{ width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
+                              style={{ width: '100%', border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 6, padding: '6px 10px', fontSize: 12, outline: 'none', boxSizing: 'border-box' }} />
                           </div>
                           <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                             <div onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: '', paidByName: '' })); setEditPaidByOpen(false); }}
-                              style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                              style={{ padding: '9px 12px', fontSize: 13, color: tc('#6b7280'), cursor: 'pointer' }}
+                              onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
+                              onMouseLeave={e => e.currentTarget.style.background = bg('transparent')}
                             >— None —</div>
                             {availableUsers.filter(u => !editPaidBySearch || (u.name || '').toLowerCase().includes(editPaidBySearch.toLowerCase())).map(u => (
                               <div key={u.id}
                                 onClick={() => { setExpenseFormData(p => ({ ...p, paidByUserId: String(u.id), paidByName: u.name || '' })); setEditPaidByOpen(false); }}
-                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent' }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? '#eff6ff' : 'transparent'}
+                                style={{ padding: '8px 12px', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, background: String(expenseFormData.paidByUserId) === String(u.id) ? bg('#eff6ff') : bg('transparent') }}
+                                onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
+                                onMouseLeave={e => e.currentTarget.style.background = String(expenseFormData.paidByUserId) === String(u.id) ? bg('#eff6ff') : bg('transparent')}
                               >
-                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#2563eb,#7c3aed)', color: tc('#fff'), fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                                   {(u.name || '?')[0].toUpperCase()}
                                 </div>
                                 <div>
-                                  <div style={{ fontWeight: 500, color: '#111827' }}>{u.name}</div>
-                                  {u.role && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1 }}>{u.role}</div>}
+                                  <div style={{ fontWeight: 500, color: tc('#111827') }}>{u.name}</div>
+                                  {u.role && <div style={{ fontSize: 11, color: tc('#6b7280'), marginTop: 1 }}>{u.role}</div>}
                                 </div>
                               </div>
                             ))}
                             {availableUsers.filter(u => !editPaidBySearch || (u.name || '').toLowerCase().includes(editPaidBySearch.toLowerCase())).length === 0 && (
-                              <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                              <div style={{ padding: '10px 12px', fontSize: 13, color: tc('#9ca3af'), textAlign: 'center' }}>No users found</div>
                             )}
                           </div>
                         </div>
@@ -2306,7 +2335,7 @@ const ProjectCostExpenseManagement = () => {
                                 className={item.category === 'Commission' && !item.description?.trim() ? 'exp-field-error-wrap' : ''}
                                 onChange={e => updateItem(item.id, 'description', e.target.value)} />
                               {item.category === 'Commission' && (
-                                <span className="exp-field-hint" style={{ color: '#b45309' }}>Notes are mandatory for Commission</span>
+                                <span className="exp-field-hint" style={{ color: tc('#b45309') }}>Notes are mandatory for Commission</span>
                               )}
                             </div>
                           </div>
@@ -2315,7 +2344,7 @@ const ProjectCostExpenseManagement = () => {
                     })}
                   </div>
                   <div className="exp-items-total-bar">
-                    <span><span style={{color:'#64748b'}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
+                    <span><span style={{color:tc('#64748b')}}>{(expenseFormData.expenseItems||[]).length} item(s)</span></span>
                     <strong className="exp-total-amt">{fmt(total)}</strong>
                   </div>
                 </div>
@@ -2434,7 +2463,7 @@ const ProjectCostExpenseManagement = () => {
                   </div>
                   <div className="exp-view-item">
                     <span className="exp-view-label">Total</span>
-                    <span className="exp-view-val" style={{fontWeight:700,color:'#15803d',fontSize:15}}>{fmt(viewModalExpense.totalAmount)}</span>
+                    <span className="exp-view-val" style={{fontWeight:700,color:tc('#15803d'),fontSize:15}}>{fmt(viewModalExpense.totalAmount)}</span>
                   </div>
                   {viewModalExpense.tripReason && (
                     <div className="exp-view-item exp-view-full">
@@ -2461,15 +2490,15 @@ const ProjectCostExpenseManagement = () => {
                   <tbody>
                     {(viewModalExpense.expenseItems || []).map((item, i) => (
                       <tr key={i}>
-                        <td style={{color:'#94a3b8',fontSize:12}}>{i+1}</td>
+                        <td style={{color:tc('#94a3b8'),fontSize:12}}>{i+1}</td>
                         <td>
                           <div style={{display:'flex',alignItems:'center',gap:6}}>
                             <CategoryIcon cat={item.category} />
                             <span style={{fontWeight:500}}>{item.category}</span>
                           </div>
                         </td>
-                        <td style={{color:'#64748b'}}>{item.description || '—'}</td>
-                        <td style={{color:'#64748b'}}>
+                        <td style={{color:tc('#64748b')}}>{item.description || '—'}</td>
+                        <td style={{color:tc('#64748b')}}>
                           <div style={{display:'flex',alignItems:'center',gap:4}}>
                             <CreditCard size={12} />{formatPaymentMode(item.paymentMode)}
                           </div>
@@ -2480,8 +2509,8 @@ const ProjectCostExpenseManagement = () => {
                   </tbody>
                   <tfoot>
                     <tr>
-                      <td colSpan={4} style={{fontWeight:600,color:'#374151',padding:'10px 12px'}}>Total</td>
-                      <td style={{textAlign:'right',fontWeight:800,fontSize:15,color:'#111827',padding:'10px 12px'}}>
+                      <td colSpan={4} style={{fontWeight:600,color:tc('#374151'),padding:'10px 12px'}}>Total</td>
+                      <td style={{textAlign:'right',fontWeight:800,fontSize:15,color:tc('#111827'),padding:'10px 12px'}}>
                         {fmt((viewModalExpense.expenseItems||[]).reduce((s,i)=>s+(parseFloat(i.amount)||0),0))}
                       </td>
                     </tr>
@@ -2510,34 +2539,34 @@ const ProjectCostExpenseManagement = () => {
                           border: `2px solid ${c.br}`,
                         }}>{st === 'APPROVED' ? '✓' : st === 'REJECTED' ? '✕' : (idx + 1)}</span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: tc('#1e293b') }}>
                             {s.label}
-                            {isCurrent && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fef3c7', padding: '1px 7px', borderRadius: 10 }}>CURRENT</span>}
+                            {isCurrent && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: tc('#b45309'), background: bg('#fef3c7'), padding: '1px 7px', borderRadius: 10 }}>CURRENT</span>}
                           </div>
-                          <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
+                          <div style={{ fontSize: 12, color: tc('#64748b'), marginTop: 1 }}>
                             <span style={{ fontWeight: 600, color: c.color }}>{st}</span>
                             {stg.byName ? ` · by ${stg.byName}` : ` · ${expectedWho}`}
                             {stg.at ? ` · ${fmtDate(stg.at)}` : ''}
                           </div>
-                          {stg.remarks && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>“{stg.remarks}”</div>}
+                          {stg.remarks && <div style={{ fontSize: 11, color: tc('#94a3b8'), marginTop: 2 }}>“{stg.remarks}”</div>}
                         </div>
                       </div>
                     );
                   })}
                   {/* Payment row */}
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderTop: '1px dashed #e2e8f0', paddingTop: 10 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', borderTop: `1px dashed ${bg('#e2e8f0')}`, paddingTop: 10 }}>
                     <span style={{
                       width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       fontSize: 11, fontWeight: 800,
-                      background: viewModalExpense.paymentStatus === 'PAID' ? '#dcfce7' : '#f1f5f9',
-                      color: viewModalExpense.paymentStatus === 'PAID' ? '#15803d' : '#94a3b8',
-                      border: `2px solid ${viewModalExpense.paymentStatus === 'PAID' ? '#86efac' : '#e2e8f0'}`,
+                      background: viewModalExpense.paymentStatus === 'PAID' ? bg('#dcfce7') : bg('#f1f5f9'),
+                      color: viewModalExpense.paymentStatus === 'PAID' ? tc('#15803d') : tc('#94a3b8'),
+                      border: `2px solid ${viewModalExpense.paymentStatus === 'PAID' ? bg('#86efac') : bg('#e2e8f0')}`,
                     }}><IndianRupee size={12} /></span>
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>Payment (Accounts Executive)</div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>
-                        <span style={{ fontWeight: 600, color: viewModalExpense.paymentStatus === 'PAID' ? '#15803d' : '#94a3b8' }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: tc('#1e293b') }}>Payment (Accounts Executive)</div>
+                      <div style={{ fontSize: 12, color: tc('#64748b'), marginTop: 1 }}>
+                        <span style={{ fontWeight: 600, color: viewModalExpense.paymentStatus === 'PAID' ? tc('#15803d') : tc('#94a3b8') }}>
                           {viewModalExpense.paymentStatus === 'PAID' ? 'PAID' : 'UNPAID'}
                         </span>
                         {viewModalExpense.paidByExecName ? ` · by ${viewModalExpense.paidByExecName}` : ''}
@@ -2593,7 +2622,7 @@ const ProjectCostExpenseManagement = () => {
             <div className="exp-mgmt-modal-header">
               <div>
                 <h2>Expense Items — {itemsModalExpense.expenseCode}</h2>
-                <p style={{ fontSize: 13, color: '#64748b', margin: '2px 0 0' }}>
+                <p style={{ fontSize: 13, color: tc('#64748b'), margin: '2px 0 0' }}>
                   {fmtDate(itemsModalExpense.tripDate)}
                   {itemsModalExpense.paidByName ? ` · Paid by ${itemsModalExpense.paidByName}` : ''}
                   {itemsModalExpense.tripReason ? ` · ${itemsModalExpense.tripReason}` : ''}
@@ -2604,38 +2633,38 @@ const ProjectCostExpenseManagement = () => {
             <div style={{ padding: '0 24px 24px' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                 <thead>
-                  <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>#</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Category</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Description</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'left', color: '#64748b', fontWeight: 600 }}>Mode</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'right', color: '#64748b', fontWeight: 600 }}>Amount</th>
+                  <tr style={{ borderBottom: `2px solid ${bg('#e2e8f0')}` }}>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: tc('#64748b'), fontWeight: 600 }}>#</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: tc('#64748b'), fontWeight: 600 }}>Category</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: tc('#64748b'), fontWeight: 600 }}>Description</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'left', color: tc('#64748b'), fontWeight: 600 }}>Mode</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'right', color: tc('#64748b'), fontWeight: 600 }}>Amount</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(itemsModalExpense.expenseItems || []).map((item, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                      <td style={{ padding: '12px', color: '#94a3b8', fontSize: 13 }}>{i + 1}</td>
+                    <tr key={i} style={{ borderBottom: `1px solid ${bg('#f1f5f9')}` }}>
+                      <td style={{ padding: '12px', color: tc('#94a3b8'), fontSize: 13 }}>{i + 1}</td>
                       <td style={{ padding: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <CategoryIcon cat={item.category} />
                           <span style={{ fontWeight: 500 }}>{item.category}</span>
                         </div>
                       </td>
-                      <td style={{ padding: '12px', color: '#64748b' }}>{item.description || '—'}</td>
+                      <td style={{ padding: '12px', color: tc('#64748b') }}>{item.description || '—'}</td>
                       <td style={{ padding: '12px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#64748b' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: tc('#64748b') }}>
                           <CreditCard size={13} />{formatPaymentMode(item.paymentMode)}
                         </div>
                       </td>
-                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: '#111827' }}>{fmt(item.amount)}</td>
+                      <td style={{ padding: '12px', textAlign: 'right', fontWeight: 600, color: tc('#111827') }}>{fmt(item.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ borderTop: '2px solid #e2e8f0', background: '#f8fafc' }}>
-                    <td colSpan={4} style={{ padding: '12px', fontWeight: 600, color: '#374151' }}>Total</td>
-                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: '#111827', fontSize: 15 }}>
+                  <tr style={{ borderTop: `2px solid ${bg('#e2e8f0')}`, background: bg('#f8fafc') }}>
+                    <td colSpan={4} style={{ padding: '12px', fontWeight: 600, color: tc('#374151') }}>Total</td>
+                    <td style={{ padding: '12px', textAlign: 'right', fontWeight: 700, color: tc('#111827'), fontSize: 15 }}>
                       {fmt((itemsModalExpense.expenseItems || []).reduce((s, i) => s + (parseFloat(i.amount) || 0), 0))}
                     </td>
                   </tr>

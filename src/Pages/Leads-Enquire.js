@@ -22,6 +22,43 @@ import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
 import ConfirmationModal from '../components/ConfirmationModal.js';
+
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#f9fffe':'#161b27','#fffafa':'#2b1d20',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fff9f9':'#2b1d20','#fff5f5':'#2b1d20','#fff0f0':'#2b1d20','#fff7ed':'#2c2113','#fff7e6':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fffdf5':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#eef2ff':'#1e1f45','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30','#fdf2f8':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a',
+  '#c4b5fd':'#3a3d6a','#fca5a5':'#5a2a2e','#fefce8':'#2a2710',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#0e7490':'#22d3ee','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+  '#9d174d':'#f0a0c0','#db2777':'#f06fad','#be185d':'#f06fad','#1b3a6b':'#7fb0f0','#1e3a5f':'#7fb0f0','#4d7ce0':'#9bbcf5',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // Indian Rupee formatter for amount fields
@@ -89,12 +126,12 @@ const LeadFollowupsOverviewSnippet = ({ leadId, onGoToFollowups }) => {
   const TYPE_ICON = { Call:'📞', Email:'✉️', Meeting:'🤝', Visit:'🏠', Demo:'💻' };
 
   if (data.length === 0) return (
-    <div className="ld-info-card" style={{ borderStyle: 'dashed', borderColor: '#E5E7EB' }}>
+    <div className="ld-info-card" style={{ borderStyle: 'dashed', borderColor: __sbg('#E5E7EB') }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <h4 className="ld-card-title">Follow-ups</h4>
         <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={onGoToFollowups}>Schedule →</button>
       </div>
-      <p style={{ fontSize: 12, color: '#9CA3AF', margin: '8px 0 0' }}>No follow-ups yet for this lead.</p>
+      <p style={{ fontSize: 12, color: __stc('#9CA3AF'), margin: '8px 0 0' }}>No follow-ups yet for this lead.</p>
     </div>
   );
 
@@ -106,10 +143,10 @@ const LeadFollowupsOverviewSnippet = ({ leadId, onGoToFollowups }) => {
       </div>
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
         {[
-          { label: 'Total',     val: data.length,      bg: '#F3F4F6', color: '#374151' },
-          { label: 'Pending',   val: pending.length,   bg: '#FEF9C3', color: '#92400E' },
-          { label: 'Overdue',   val: overdue.length,   bg: '#FEE2E2', color: '#991B1B' },
-          { label: 'Completed', val: completed.length, bg: '#D1FAE5', color: '#065F46' },
+          { label: 'Total',     val: data.length,      bg: __sbg('#F3F4F6'), color: __stc('#374151') },
+          { label: 'Pending',   val: pending.length,   bg: __sbg('#FEF9C3'), color: __stc('#92400E') },
+          { label: 'Overdue',   val: overdue.length,   bg: __sbg('#FEE2E2'), color: __stc('#991B1B') },
+          { label: 'Completed', val: completed.length, bg: __sbg('#D1FAE5'), color: __stc('#065F46') },
         ].filter(s => s.val > 0).map(s => (
           <div key={s.label} style={{ background: s.bg, color: s.color, borderRadius: 8, padding: '6px 12px', fontSize: 12 }}>
             <strong style={{ fontSize: 16 }}>{s.val}</strong> {s.label}
@@ -117,16 +154,16 @@ const LeadFollowupsOverviewSnippet = ({ leadId, onGoToFollowups }) => {
         ))}
       </div>
       {latest && (
-        <div style={{ background: '#F8FAFC', borderRadius: 8, padding: '8px 12px', fontSize: 12, border: '1px solid #E5E7EB' }}>
-          <span style={{ fontWeight: 600, color: '#374151' }}>
+        <div style={{ background: __sbg('#F8FAFC'), borderRadius: 8, padding: '8px 12px', fontSize: 12, border: `1px solid ${__sbg('#E5E7EB')}` }}>
+          <span style={{ fontWeight: 600, color: __stc('#374151') }}>
             {TYPE_ICON[latest.followupType] || '📌'} Next/Latest: {latest.followupType}
           </span>
-          <span style={{ color: '#6B7280', marginLeft: 8 }}>
+          <span style={{ color: __stc('#6B7280'), marginLeft: 8 }}>
             {new Date(latest.scheduledAt).toLocaleDateString('en-IN')}
             {latest.assignedToName && ` · ${latest.assignedToName}`}
           </span>
           {latest.outcome && (
-            <p style={{ margin: '5px 0 0', color: '#374151', lineHeight: 1.4 }}>
+            <p style={{ margin: '5px 0 0', color: __stc('#374151'), lineHeight: 1.4 }}>
               {latest.outcome.slice(0, 120)}{latest.outcome.length > 120 ? '…' : ''}
             </p>
           )}
@@ -375,10 +412,10 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
   if (isOfflineProposal) {
     return (
       <div className="ld-proposal-form">
-        <div style={{ background: '#faf5ff', border: '1.5px solid #e9d5ff', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ background: __sbg('#faf5ff'), border: `1.5px solid ${__sbg('#e9d5ff')}`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ fontSize: 16 }}>📎</span>
-          <span style={{ fontSize: 13, color: '#6d28d9', fontWeight: 600 }}>Offline PDF Proposal</span>
-          <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 4 }}>— {existingProposal.offlinePdfName || 'uploaded PDF'}</span>
+          <span style={{ fontSize: 13, color: __stc('#6d28d9'), fontWeight: 600 }}>Offline PDF Proposal</span>
+          <span style={{ fontSize: 12, color: __stc('#6b7280'), marginLeft: 4 }}>— {existingProposal.offlinePdfName || 'uploaded PDF'}</span>
         </div>
         <div className="ld-form-grid">
           <div className="ld-fgroup ld-full">
@@ -390,12 +427,12 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
             <input type="number" value={formData.totalValue} onChange={e => setFormData({ ...formData, totalValue: e.target.value })} placeholder="0.00" min="0" step="0.01" />
           </div>
           <div className="ld-fgroup">
-            <label>Replace PDF <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+            <label>Replace PDF <span style={{ fontSize: 11, color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span></label>
             <label style={{
               display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-              border: '1.5px dashed ' + (offlineReplaceFile ? '#7c3aed' : '#c4b5fd'),
-              borderRadius: 7, padding: '8px 12px', background: offlineReplaceFile ? '#f5f3ff' : '#faf5ff',
-              fontSize: 13, color: offlineReplaceFile ? '#6d28d9' : '#7c3aed', fontWeight: 500, userSelect: 'none'
+              border: '1.5px dashed ' + (offlineReplaceFile ? __sbg('#7c3aed') : __sbg('#c4b5fd')),
+              borderRadius: 7, padding: '8px 12px', background: offlineReplaceFile ? __sbg('#f5f3ff') : __sbg('#faf5ff'),
+              fontSize: 13, color: offlineReplaceFile ? __stc('#6d28d9') : __stc('#7c3aed'), fontWeight: 500, userSelect: 'none'
             }}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0 }}>
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
@@ -405,7 +442,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
               </span>
               <input type="file" accept=".pdf,application/pdf" onChange={e => setOfflineReplaceFile(e.target.files[0] || null)} style={{ display: 'none' }} />
             </label>
-            {offlineReplaceFile && <div style={{ fontSize: 11, color: '#059669', marginTop: 4 }}>✓ {offlineReplaceFile.name} — will replace current PDF</div>}
+            {offlineReplaceFile && <div style={{ fontSize: 11, color: __stc('#059669'), marginTop: 4 }}>✓ {offlineReplaceFile.name} — will replace current PDF</div>}
           </div>
         </div>
         <div className="ld-pform-footer">
@@ -490,7 +527,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
               <thead><tr><th>Item</th><th>Description</th><th>Amount (₹)</th><th style={{ width: 40 }}>×</th></tr></thead>
               <tbody>
                 {tmpl.systemPricing.length === 0
-                  ? <tr><td colSpan="4" style={{ textAlign: 'center', color: '#9ca3af', padding: '16px' }}>No items — click "+ Add Row"</td></tr>
+                  ? <tr><td colSpan="4" style={{ textAlign: 'center', color: __stc('#9ca3af'), padding: '16px' }}>No items — click "+ Add Row"</td></tr>
                   : tmpl.systemPricing.map((row, i) => (
                     <tr key={i}>
                       <td><input value={row.item} onChange={e => updPricing(i, 'item', e.target.value)} placeholder="Item" /></td>
@@ -516,7 +553,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
                 <thead><tr><th>Item Name*</th><th>Spec</th><th>Qty</th><th>Unit</th><th>Rate(₹)</th><th>Tax%</th><th>Amount</th><th style={{ width: 40 }}>×</th></tr></thead>
                 <tbody>
                   {tmpl.bomItems.length === 0
-                    ? <tr><td colSpan="8" style={{ textAlign: 'center', color: '#9ca3af', padding: '16px' }}>No items — click "+ Add Row"</td></tr>
+                    ? <tr><td colSpan="8" style={{ textAlign: 'center', color: __stc('#9ca3af'), padding: '16px' }}>No items — click "+ Add Row"</td></tr>
                     : <>
                       {tmpl.bomItems.map((row, i) => (
                         <tr key={i}>
@@ -531,7 +568,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
                                   {filteredBomItems[i].map(bom => (
                                     <div key={bom.id} className="ld-bom-drop-item" onMouseDown={() => selectBomItem(i, bom)}>
                                       <strong>{bom.itemName}</strong>
-                                      {bom.specification && <span style={{ fontSize: 11, color: '#6b7280' }}>{bom.specification}</span>}
+                                      {bom.specification && <span style={{ fontSize: 11, color: __stc('#6b7280') }}>{bom.specification}</span>}
                                     </div>
                                   ))}
                                 </div>
@@ -560,13 +597,13 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
                               placeholder="Tax"
                             />
                           </td>
-                          <td><input type="number" value={row.amount} readOnly style={{ background: '#f9fafb', fontWeight: 600 }} /></td>
+                          <td><input type="number" value={row.amount} readOnly style={{ background: __sbg('#f9fafb'), fontWeight: 600 }} /></td>
                           <td><button className="ld-del-row" onClick={() => rmBOM(i)}>🗑</button></td>
                         </tr>
                       ))}
                       <tr className="ld-subtotal-row"><td colSpan="6" style={{ textAlign: 'right', fontWeight: 600 }}>Subtotal:</td><td style={{ fontWeight: 600 }}>₹{bomTotals().sub}</td><td /></tr>
-                      <tr className="ld-subtotal-row"><td colSpan="6" style={{ textAlign: 'right', fontWeight: 600 }}>Tax:</td><td style={{ fontWeight: 600, color: '#d97706' }}>₹{bomTotals().tax}</td><td /></tr>
-                      <tr className="ld-total-row"><td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold' }}>Grand Total:</td><td style={{ fontWeight: 'bold', color: '#059669' }}>₹{bomTotals().grand}</td><td /></tr>
+                      <tr className="ld-subtotal-row"><td colSpan="6" style={{ textAlign: 'right', fontWeight: 600 }}>Tax:</td><td style={{ fontWeight: 600, color: __stc('#d97706') }}>₹{bomTotals().tax}</td><td /></tr>
+                      <tr className="ld-total-row"><td colSpan="6" style={{ textAlign: 'right', fontWeight: 'bold' }}>Grand Total:</td><td style={{ fontWeight: 'bold', color: __stc('#059669') }}>₹{bomTotals().grand}</td><td /></tr>
                     </>
                   }
                 </tbody>
@@ -646,13 +683,13 @@ function BillPreviewModal({ url, name, type, onClose }) {
         </div>
         <div className="bill-preview-body">
           {loading && (
-            <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'#6b7280'}}>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:__stc('#6b7280')}}>
               <div className="bill-spinner"/>
               <span style={{fontSize:14}}>Loading file…</span>
             </div>
           )}
           {error && (
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:'#dc2626'}}>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:12,color:__stc('#dc2626')}}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="40" height="40"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
               <p style={{fontSize:14,margin:0}}>Failed to load file: {error}</p>
             </div>
@@ -666,7 +703,7 @@ function BillPreviewModal({ url, name, type, onClose }) {
             </div>
           )}
           {!loading && !error && blobUrl && !isPdf && !isImage && (
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:16,color:'#6b7280'}}>
+            <div style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',height:'100%',gap:16,color:__stc('#6b7280')}}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="48" height="48"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
               <p style={{fontSize:14,margin:0}}>Preview not available for this file type.</p>
               <a href={blobUrl} download={name} className="bill-preview-btn bill-preview-btn--download">⬇ Download File</a>
@@ -749,7 +786,7 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
             <span className="ld-ovp-latest-label">Latest:</span>
             <span className="ld-proposal-no" style={{ fontSize: 10 }}>{latest.proposalNo}</span>
             <span className="ld-ovp-latest-title">{latest.title}</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>₹{parseFloat(latest.totalValue || 0).toLocaleString('en-IN')}</span>
+            <span style={{ marginLeft: 'auto', fontSize: 11, color: __stc('#6b7280') }}>₹{parseFloat(latest.totalValue || 0).toLocaleString('en-IN')}</span>
           </div>
         );
       })()}
@@ -759,6 +796,7 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
 
 // ─── Lead Detail Page (full-page view inside leads container) ─────────────────
 const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions, onEdit, showSuccess, showError }) => {
+  useThemeVersion();
   const [activeTab, setActiveTab] = useState(() => localStorage.getItem('leads_detail_tab') || 'overview');
   const [proposals, setProposals] = useState([]);
   const [loadingProposals, setLoadingProposals] = useState(false);
@@ -975,26 +1013,26 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const getPropStatusClass = s => ({ Draft: 'ld-ps-draft', Sent: 'ld-ps-sent', Approved: 'ld-ps-approved', Rejected: 'ld-ps-rejected', 'On Hold': 'ld-ps-hold' }[s] || 'ld-ps-draft');
 
   const HISTORY_CONFIG = {
-    STATUS_CHANGE:        { icon: '🔄', label: 'Status Changed',           color: '#6366f1', bg: '#eef2ff' },
-    LEAD_UPDATED:         { icon: '✏️',  label: 'Lead Updated',             color: '#0284c7', bg: '#e0f2fe' },
-    FOLLOW_UP:            { icon: '📅', label: 'Follow-up Added',           color: '#059669', bg: '#ecfdf5' },
-    FOLLOWUP_ADDED:       { icon: '📅', label: 'Follow-up Scheduled',       color: '#059669', bg: '#ecfdf5' },
-    FOLLOWUP_COMPLETED:   { icon: '✅', label: 'Follow-up Completed',       color: '#16a34a', bg: '#f0fdf4' },
-    FOLLOWUP_DELETED:     { icon: '🗑', label: 'Follow-up Deleted',         color: '#dc2626', bg: '#fef2f2' },
-    DIRECT_INTERACTION:   { icon: '⚡', label: 'Direct Interaction',        color: '#d97706', bg: '#fffbeb' },
-    PROPOSAL_CREATED:     { icon: '📝', label: 'Proposal Created',          color: '#7c3aed', bg: '#f5f3ff' },
-    PROPOSAL_SENT:        { icon: '📤', label: 'Proposal Sent',             color: '#7c3aed', bg: '#f5f3ff' },
-    CREATED:              { icon: '✅', label: 'Lead Created',              color: '#16a34a', bg: '#f0fdf4' },
-    UPDATED:              { icon: '✏️',  label: 'Updated',                  color: '#0284c7', bg: '#e0f2fe' },
-    CLOSED_LOST_REASON:   { icon: '❌', label: 'Closed — Lost',             color: '#dc2626', bg: '#fef2f2' },
-    CLOSED_WON:           { icon: '🏆', label: 'Closed — Won',              color: '#ca8a04', bg: '#fefce8' },
-    CONVERTED:            { icon: '🎉', label: 'Converted to Customer',     color: '#ca8a04', bg: '#fefce8' },
-    CONVERTED_TO_CUSTOMER:{ icon: '🎉', label: 'Converted to Customer',     color: '#ca8a04', bg: '#fefce8' },
-    ASSIGNED:             { icon: '👤', label: 'Assigned',                  color: '#0284c7', bg: '#e0f2fe' },
-    NOTE_ADDED:           { icon: '💬', label: 'Note Added',                color: '#64748b', bg: '#f8fafc' },
-    TELECALLER_UPDATE:    { icon: '📞', label: 'Telecaller Update',         color: '#db2777', bg: '#fdf2f8' },
-    TELECALLER_STATUS_CHANGE: { icon: '📞', label: 'Telecaller Update',     color: '#db2777', bg: '#fdf2f8' },
-    STATUS_CHANGED:       { icon: '🔄', label: 'Status Changed',            color: '#6366f1', bg: '#eef2ff' },
+    STATUS_CHANGE:        { icon: '🔄', label: 'Status Changed',           color: __stc('#6366f1'), bg: __sbg('#eef2ff') },
+    LEAD_UPDATED:         { icon: '✏️',  label: 'Lead Updated',             color: __stc('#0284c7'), bg: __sbg('#e0f2fe') },
+    FOLLOW_UP:            { icon: '📅', label: 'Follow-up Added',           color: __stc('#059669'), bg: __sbg('#ecfdf5') },
+    FOLLOWUP_ADDED:       { icon: '📅', label: 'Follow-up Scheduled',       color: __stc('#059669'), bg: __sbg('#ecfdf5') },
+    FOLLOWUP_COMPLETED:   { icon: '✅', label: 'Follow-up Completed',       color: __stc('#16a34a'), bg: __sbg('#f0fdf4') },
+    FOLLOWUP_DELETED:     { icon: '🗑', label: 'Follow-up Deleted',         color: __stc('#dc2626'), bg: __sbg('#fef2f2') },
+    DIRECT_INTERACTION:   { icon: '⚡', label: 'Direct Interaction',        color: __stc('#d97706'), bg: __sbg('#fffbeb') },
+    PROPOSAL_CREATED:     { icon: '📝', label: 'Proposal Created',          color: __stc('#7c3aed'), bg: __sbg('#f5f3ff') },
+    PROPOSAL_SENT:        { icon: '📤', label: 'Proposal Sent',             color: __stc('#7c3aed'), bg: __sbg('#f5f3ff') },
+    CREATED:              { icon: '✅', label: 'Lead Created',              color: __stc('#16a34a'), bg: __sbg('#f0fdf4') },
+    UPDATED:              { icon: '✏️',  label: 'Updated',                  color: __stc('#0284c7'), bg: __sbg('#e0f2fe') },
+    CLOSED_LOST_REASON:   { icon: '❌', label: 'Closed — Lost',             color: __stc('#dc2626'), bg: __sbg('#fef2f2') },
+    CLOSED_WON:           { icon: '🏆', label: 'Closed — Won',              color: __stc('#ca8a04'), bg: __sbg('#fefce8') },
+    CONVERTED:            { icon: '🎉', label: 'Converted to Customer',     color: __stc('#ca8a04'), bg: __sbg('#fefce8') },
+    CONVERTED_TO_CUSTOMER:{ icon: '🎉', label: 'Converted to Customer',     color: __stc('#ca8a04'), bg: __sbg('#fefce8') },
+    ASSIGNED:             { icon: '👤', label: 'Assigned',                  color: __stc('#0284c7'), bg: __sbg('#e0f2fe') },
+    NOTE_ADDED:           { icon: '💬', label: 'Note Added',                color: __stc('#64748b'), bg: __sbg('#f8fafc') },
+    TELECALLER_UPDATE:    { icon: '📞', label: 'Telecaller Update',         color: __stc('#db2777'), bg: __sbg('#fdf2f8') },
+    TELECALLER_STATUS_CHANGE: { icon: '📞', label: 'Telecaller Update',     color: __stc('#db2777'), bg: __sbg('#fdf2f8') },
+    STATUS_CHANGED:       { icon: '🔄', label: 'Status Changed',            color: __stc('#6366f1'), bg: __sbg('#eef2ff') },
   };
   const getHistoryIcon = type => (HISTORY_CONFIG[type] || { icon: '📋' }).icon;
 
@@ -1021,9 +1059,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
           Back to Leads
         </button>
         <div className="ld-detail-breadcrumb">
-          <span style={{ cursor: 'pointer', color: '#6b7280' }} onClick={onBack}>Leads</span>
-          <span style={{ margin: '0 6px', color: '#d1d5db' }}>/</span>
-          <span style={{ color: '#111827', fontWeight: 500 }}>{lead.leadCode}</span>
+          <span style={{ cursor: 'pointer', color: __stc('#6b7280') }} onClick={onBack}>Leads</span>
+          <span style={{ margin: '0 6px', color: __stc('#d1d5db') }}>/</span>
+          <span style={{ color: __stc('#111827'), fontWeight: 500 }}>{lead.leadCode}</span>
         </div>
         {permissions.EDIT && (
           <button className="leads-enquiries-btn leads-enquiries-btn-primary" style={{ marginLeft: 'auto' }} onClick={() => onEdit(lead)}>
@@ -1225,18 +1263,18 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             <p className="ld-enquiry-text">{lead.enquiry || 'No description provided.'}</p>
           </div>
           {lead.telecallerStatus === 'KEEP_IN_VIEW' && (lead.telecallerReason || lead.kivReminderDate) && (
-            <div className="ld-enquiry-card" style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff'}}>
-              <h4 className="ld-card-title" style={{color:'#6d28d9'}}>👁 Keep in View Details</h4>
+            <div className="ld-enquiry-card" style={{background:__sbg('#f5f3ff'),border:`1.5px solid ${__sbg('#e9d5ff')}`}}>
+              <h4 className="ld-card-title" style={{color:__stc('#6d28d9')}}>👁 Keep in View Details</h4>
               {lead.telecallerReason && (
                 <div style={{marginBottom:8}}>
-                  <span style={{fontSize:11,fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'0.5px'}}>Conversation Note</span>
-                  <p className="ld-enquiry-text" style={{marginTop:4,color:'#374151'}}>{lead.telecallerReason}</p>
+                  <span style={{fontSize:11,fontWeight:700,color:__stc('#7c3aed'),textTransform:'uppercase',letterSpacing:'0.5px'}}>Conversation Note</span>
+                  <p className="ld-enquiry-text" style={{marginTop:4,color:__stc('#374151')}}>{lead.telecallerReason}</p>
                 </div>
               )}
               {lead.kivReminderDate && (
                 <div style={{display:'flex',alignItems:'center',gap:8,marginTop:4}}>
-                  <span style={{fontSize:11,fontWeight:700,color:'#7c3aed',textTransform:'uppercase',letterSpacing:'0.5px'}}>Callback Date</span>
-                  <span style={{fontSize:13,fontWeight:600,color:'#7c3aed',background:'#ede9fe',borderRadius:20,padding:'2px 12px'}}>
+                  <span style={{fontSize:11,fontWeight:700,color:__stc('#7c3aed'),textTransform:'uppercase',letterSpacing:'0.5px'}}>Callback Date</span>
+                  <span style={{fontSize:13,fontWeight:600,color:__stc('#7c3aed'),background:__sbg('#ede9fe'),borderRadius:20,padding:'2px 12px'}}>
                     📅 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
                   </span>
                 </div>
@@ -1300,22 +1338,22 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
               </div>
 
               {showOfflinePanel && (
-                <div style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff',borderRadius:10,padding:'18px 20px',marginBottom:16,display:'flex',flexDirection:'column',gap:12}}>
-                  <div style={{fontWeight:600,color:'#6d28d9',fontSize:14,marginBottom:2}}>📎 Upload Offline Proposal PDF</div>
-                  <div style={{fontSize:13,color:'#6b7280',marginTop:-8}}>Upload a proposal PDF received from the client. A new proposal record will be created automatically.</div>
+                <div style={{background:__sbg('#f5f3ff'),border:`1.5px solid ${__sbg('#e9d5ff')}`,borderRadius:10,padding:'18px 20px',marginBottom:16,display:'flex',flexDirection:'column',gap:12}}>
+                  <div style={{fontWeight:600,color:__stc('#6d28d9'),fontSize:14,marginBottom:2}}>📎 Upload Offline Proposal PDF</div>
+                  <div style={{fontSize:13,color:__stc('#6b7280'),marginTop:-8}}>Upload a proposal PDF received from the client. A new proposal record will be created automatically.</div>
                   <div style={{display:'flex',gap:10,alignItems:'flex-end'}}>
                     <div style={{flex:'2 1 0',minWidth:0}}>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Proposal Title *</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Proposal Title *</label>
                       <input
                         type="text"
                         value={offlineTitle}
                         onChange={e => setOfflineTitle(e.target.value)}
                         placeholder="e.g. Rooftop Solar Proposal – Client Name"
-                        style={{width:'100%',padding:'8px 12px',border:'1.5px solid #d1d5db',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
+                        style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#d1d5db')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
                       />
                     </div>
                     <div style={{flex:'1 1 0',minWidth:0}}>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Total Value (₹)</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Total Value (₹)</label>
                       <input
                         type="number"
                         value={offlineTotalValue}
@@ -1323,27 +1361,27 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                         placeholder="0.00"
                         min="0"
                         step="0.01"
-                        style={{width:'100%',padding:'8px 12px',border:'1.5px solid #d1d5db',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
+                        style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#d1d5db')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
                       />
                     </div>
                     <div style={{flex:'2 1 0',minWidth:0}}>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>PDF File *</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>PDF File *</label>
                       <label style={{
                         display:'flex',alignItems:'center',gap:6,cursor:'pointer',
-                        border:'1.5px dashed ' + (offlineFile ? '#7c3aed' : '#c4b5fd'),
-                        borderRadius:7,padding:'8px 12px',background: offlineFile ? '#f5f3ff' : '#faf5ff',
+                        border:'1.5px dashed ' + (offlineFile ? __sbg('#7c3aed') : __sbg('#c4b5fd')),
+                        borderRadius:7,padding:'8px 12px',background: offlineFile ? __sbg('#f5f3ff') : __sbg('#faf5ff'),
                         transition:'all .18s',fontSize:13,userSelect:'none',boxSizing:'border-box',width:'100%'
                       }}>
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{flexShrink:0,color: offlineFile ? '#6d28d9' : '#7c3aed'}}>
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{flexShrink:0,color: offlineFile ? __stc('#6d28d9') : __stc('#7c3aed')}}>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                         </svg>
-                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,color: offlineFile ? '#6d28d9' : '#7c3aed',fontWeight:500}}>
+                        <span style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flex:1,color: offlineFile ? __stc('#6d28d9') : __stc('#7c3aed'),fontWeight:500}}>
                           {offlineFile ? offlineFile.name : 'Choose PDF file…'}
                         </span>
-                        <span style={{fontSize:11,color:'#9ca3af',whiteSpace:'nowrap',flexShrink:0}}>PDF only · Max 50 MB</span>
+                        <span style={{fontSize:11,color:__stc('#9ca3af'),whiteSpace:'nowrap',flexShrink:0}}>PDF only · Max 50 MB</span>
                         <input type="file" accept=".pdf,application/pdf" onChange={e => setOfflineFile(e.target.files[0] || null)} style={{display:'none'}} />
                       </label>
-                      {offlineFile && <div style={{fontSize:11,color:'#059669',marginTop:3}}>✓ {offlineFile.name} — Ready to upload</div>}
+                      {offlineFile && <div style={{fontSize:11,color:__stc('#059669'),marginTop:3}}>✓ {offlineFile.name} — Ready to upload</div>}
                     </div>
                     <div style={{display:'flex',gap:8,flexShrink:0}}>
                       <button className="ld-btn ld-btn-pri" onClick={handleUploadOfflineNew} disabled={offlineUploading || !offlineTitle.trim() || !offlineFile} style={{whiteSpace:'nowrap'}}>
@@ -1484,7 +1522,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             <div className="ld-history-scroll">
               <div className="ld-history-timeline">
                 {history.map((h, idx) => {
-                  const cfg = HISTORY_CONFIG[h.actionType] || { icon: '📋', label: h.actionType?.replace(/_/g, ' ') || 'Activity', color: '#64748b', bg: '#f8fafc' };
+                  const cfg = HISTORY_CONFIG[h.actionType] || { icon: '📋', label: h.actionType?.replace(/_/g, ' ') || 'Activity', color: __stc('#64748b'), bg: __sbg('#f8fafc') };
                   const summary = getHistorySummary(h);
                   const isDirect = h.actionType === 'DIRECT_INTERACTION';
                   const isCompleted = h.actionType === 'FOLLOWUP_COMPLETED';
@@ -1564,7 +1602,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                         {/* TELECALLER_STATUS_CHANGE: show full description as note (contains reason/conversation/callback date) */}
                         {h.actionType === 'TELECALLER_STATUS_CHANGE' && h.description && (
                           <div className="ld-history-notes" style={{marginTop:6}}>
-                            <span className="ld-history-notes-text" style={{color:'#374151',fontStyle:'normal'}}>{h.description}</span>
+                            <span className="ld-history-notes-text" style={{color:__stc('#374151'),fontStyle:'normal'}}>{h.description}</span>
                           </div>
                         )}
 
@@ -1740,7 +1778,7 @@ const LeadsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
           </span>
         )}
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0,
+          style={{ marginLeft:'auto', color:__stc('#94a3b8'), flexShrink:0,
             transform: show?'rotate(180deg)':'none', transition:'transform .2s' }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
         </svg>
@@ -1831,6 +1869,7 @@ const LeadsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 // ═══════════════════════════════════════════════════════════════════
 function LeadsEnquiries() {
+  useThemeVersion();
   //  console.log('🔄 RENDER');
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
@@ -2348,20 +2387,20 @@ useEffect(() => {
 
   // ── Render cell ──────────────────────────────────────────────────
   const renderCell = (lead, colKey) => {
-    const empty = <span style={{display:'block',textAlign:'center',color:'#9ca3af'}}>—</span>;
+    const empty = <span style={{display:'block',textAlign:'center',color:__stc('#9ca3af')}}>—</span>;
     switch (colKey) {
       case 'name': return lead.name ? <span className="leads-enquiries-font-medium">{lead.name}</span> : empty;
       case 'contact': return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           {lead.email
-            ? <span style={{ fontSize: 12, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: '#6366f1' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{lead.email}</span>
+            ? <span style={{ fontSize: 12, color: __stc('#1e293b'), display: 'flex', alignItems: 'flex-start', gap: 4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, marginTop: 2, color: __stc('#6366f1') }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                <span style={{ whiteSpace: 'normal', wordBreak: 'break-word', overflowWrap: 'anywhere', minWidth: 0 }}>{lead.email}</span>
               </span>
             : null}
           {lead.phone
-            ? <span style={{ fontSize: 12, color: '#374151', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: '#10b981' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            ? <span style={{ fontSize: 12, color: __stc('#374151'), display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: __stc('#10b981') }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                 {lead.phone}
               </span>
             : null}
@@ -2408,7 +2447,7 @@ useEffect(() => {
           <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'flex-start'}}>
             <span className={`leads-enquiries-badge ${getStatusClass(unified)}`}>{unified}</span>
             {unified==='Keep in View' && lead.kivReminderDate && (
-              <span style={{fontSize:10,fontWeight:600,color:'#7c3aed',background:'#f5f3ff',border:'1px solid #e9d5ff',borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
+              <span style={{fontSize:10,fontWeight:600,color:__stc('#7c3aed'),background:__sbg('#f5f3ff'),border:`1px solid ${__sbg('#e9d5ff')}`,borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
                 🔔 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
               </span>
             )}
@@ -2863,7 +2902,7 @@ useEffect(() => {
                 <div className="qs-conditional-label">❌ Closed Lost — Reason *</div>
                 <textarea rows={3} value={quickClosedLostReason} onChange={e=>setQuickClosedLostReason(e.target.value)}
                   placeholder="Why was this lead closed as lost?"
-                  style={{width:'100%',padding:'8px 10px',border:'1.5px solid #fca5a5',borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
+                  style={{width:'100%',padding:'8px 10px',border:`1.5px solid ${__sbg('#fca5a5')}`,borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
               </div>
             )}
 
@@ -2872,9 +2911,9 @@ useEffect(() => {
                 <div className="qs-conditional-label">👁 Keep in View — Callback Date & Time *</div>
                 <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
                   <input type="date" value={quickKivDate} onChange={e=>setQuickKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                    style={{flex:'1 1 140px',padding:'8px 10px',border:'1.5px solid #bfdbfe',borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
+                    style={{flex:'1 1 140px',padding:'8px 10px',border:`1.5px solid ${__sbg('#bfdbfe')}`,borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
                   <input type="time" value={quickKivTime} onChange={e=>setQuickKivTime(e.target.value)}
-                    style={{flex:'1 1 110px',padding:'8px 10px',border:'1.5px solid #bfdbfe',borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
+                    style={{flex:'1 1 110px',padding:'8px 10px',border:`1.5px solid ${__sbg('#bfdbfe')}`,borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
                 </div>
                 <div className="qs-time-presets">
                   {['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'].map(t=>(
@@ -2937,11 +2976,11 @@ const ServerPagination = ({
           options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
           placeholder="Rows"
         />
-        <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+        <span style={{whiteSpace:'nowrap',color:__stc('#64748b')}}>
           {totalRecords === 0 ? 'No records' : `${startRecord}–${endRecord} of ${totalRecords} leads`}
         </span>
-        <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-          Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+        <span style={{fontSize:12,color:__stc('#94a3b8'),whiteSpace:'nowrap'}}>
+          Page <strong style={{color:__stc('#0f172a')}}>{currentPage}</strong> of <strong style={{color:__stc('#0f172a')}}>{tp}</strong>
         </span>
       </div>
       {/* Right: page buttons */}
@@ -3204,7 +3243,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             maxLength="6"
             placeholder="Enter 6-digit PINCODE — auto fills State & District"
           />
-          {pincodeError && <span style={{fontSize:11, color:'#ef4444', marginTop:2, display:'block'}}>{pincodeError}</span>}
+          {pincodeError && <span style={{fontSize:11, color:__stc('#ef4444'), marginTop:2, display:'block'}}>{pincodeError}</span>}
         </div>
         <div className="leads-enquiries-form-group">
           <label>State</label>
@@ -3272,36 +3311,36 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         <div className="leads-enquiries-form-group">
           <label>Assign To</label>
           <FilterSelect value={formData.assignedTo?String(formData.assignedTo):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select Member" disabled={!canAssign} onChange={v=>setFormData(p=>({...p,assignedTo:v?Number(v):null}))} />
-          {!canAssign && <small style={{ color: '#6b7280', fontSize: 12 }}>No assign permission</small>}
+          {!canAssign && <small style={{ color: __stc('#6b7280'), fontSize: 12 }}>No assign permission</small>}
         </div>
       </div>
 
       {formData.status === 'Keep in View' && (
-        <div style={{background:'#f5f3ff',border:'1.5px solid #e9d5ff',borderRadius:10,padding:'14px 16px',marginTop:4,marginBottom:4}}>
-          <div style={{fontWeight:600,color:'#6d28d9',fontSize:13,marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
-            👁 Keep in View — Callback Date &amp; Time <span style={{fontSize:11,background:'#ede9fe',color:'#7c3aed',borderRadius:4,padding:'1px 7px',fontWeight:700}}>Required</span>
+        <div style={{background:__sbg('#f5f3ff'),border:`1.5px solid ${__sbg('#e9d5ff')}`,borderRadius:10,padding:'14px 16px',marginTop:4,marginBottom:4}}>
+          <div style={{fontWeight:600,color:__stc('#6d28d9'),fontSize:13,marginBottom:10,display:'flex',alignItems:'center',gap:6}}>
+            👁 Keep in View — Callback Date &amp; Time <span style={{fontSize:11,background:__sbg('#ede9fe'),color:__stc('#7c3aed'),borderRadius:4,padding:'1px 7px',fontWeight:700}}>Required</span>
           </div>
           <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
             <div style={{flex:'1 1 160px',minWidth:140}}>
-              <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Date *</label>
+              <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Date *</label>
               <input type="date" value={kivDate} onChange={e=>setKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
-                style={{width:'100%',padding:'8px 12px',border:'1.5px solid #c4b5fd',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#c4b5fd')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
             </div>
             <div style={{flex:'1 1 130px',minWidth:120}}>
-              <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Time *</label>
+              <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Time *</label>
               <input type="time" value={kivTime} onChange={e=>setKivTime(e.target.value)}
-                style={{width:'100%',padding:'8px 12px',border:'1.5px solid #c4b5fd',borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
+                style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#c4b5fd')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
             </div>
             <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
               {['09:00','10:00','11:00','12:00','14:00','15:00','16:00','17:00'].map(t=>(
                 <button key={t} type="button" onClick={()=>setKivTime(t)}
-                  style={{padding:'5px 10px',borderRadius:6,fontSize:12,fontWeight:600,cursor:'pointer',border:kivTime===t?'none':'1.5px solid #e2e8f0',background:kivTime===t?'#7c3aed':'#f8fafc',color:kivTime===t?'#fff':'#374151',transition:'all .15s'}}>
+                  style={{padding:'5px 10px',borderRadius:6,fontSize:12,fontWeight:600,cursor:'pointer',border:kivTime===t?'none':'1.5px solid #e2e8f0',background:kivTime===t?__sbg('#7c3aed'):__sbg('#f8fafc'),color:kivTime===t?__stc('#fff'):__stc('#374151'),transition:'all .15s'}}>
                   {t}
                 </button>
               ))}
             </div>
           </div>
-          {kivDate && <div style={{marginTop:8,fontSize:12,color:'#7c3aed',fontWeight:500}}>📅 A follow-up will be automatically created for {new Date(kivDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} at {kivTime}</div>}
+          {kivDate && <div style={{marginTop:8,fontSize:12,color:__stc('#7c3aed'),fontWeight:500}}>📅 A follow-up will be automatically created for {new Date(kivDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})} at {kivTime}</div>}
         </div>
       )}
 
@@ -3309,31 +3348,31 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           Lead Owner
-          <span style={{ background: '#EFF6FF', color: '#2563eb', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
+          <span style={{ background: __sbg('#EFF6FF'), color: __stc('#2563eb'), borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
         </label>
         <LeadOwnerDropdown
           users={users}
           value={formData.leadOwner || ''}
           onChange={val => setFormData(p => ({ ...p, leadOwner: val }))}
         />
-        <small style={{ color: '#6b7280', fontSize: 11 }}>Person responsible for this lead. Select from users or type a custom name.</small>
+        <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Person responsible for this lead. Select from users or type a custom name.</small>
       </div>
 
       {formData.status === 'Closed Won' && (
         <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ background: '#dcfce7', color: '#166534', borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>CLOSED WON</span>
+            <span style={{ background: __sbg('#dcfce7'), color: __stc('#166534'), borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>CLOSED WON</span>
             Closed By *
           </label>
           <FilterSelect value={formData.closedByUserId?String(formData.closedByUserId):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select who closed this lead" onChange={v=>{const u=users.find(u=>String(u.id)===v);setFormData(p=>({...p,closedByUserId:v?Number(v):null,closedByName:u?.name||''}));}} />
-          <small style={{ color: '#6b7280', fontSize: 11 }}>Select the person who closed this deal.</small>
+          <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Select the person who closed this deal.</small>
         </div>
       )}
 
       {formData.status === 'Closed Lost' && (
         <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ background: '#fee2e2', color: '#991b1b', borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>REQUIRED</span>
+            <span style={{ background: __sbg('#fee2e2'), color: __stc('#991b1b'), borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>REQUIRED</span>
             Reason for Closing Lost *
           </label>
           <textarea
@@ -3342,9 +3381,9 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             value={formData.closedLostReason || ''}
             onChange={e => setFormData(p => ({ ...p, closedLostReason: e.target.value }))}
             placeholder="Please specify why this lead was closed as lost…"
-            style={{ borderColor: '#fca5a5' }}
+            style={{ borderColor: __sbg('#fca5a5') }}
           />
-          <small style={{ color: '#6b7280', fontSize: 11 }}>This reason will be recorded in the lead history.</small>
+          <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>This reason will be recorded in the lead history.</small>
         </div>
       )}
 
@@ -3380,14 +3419,14 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             <option value="Units">Units</option>
           </select>
         </div>
-        <small style={{ color: '#6b7280', fontSize: 11 }}>Optional — enter the project capacity if known.</small>
+        <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Optional — enter the project capacity if known.</small>
       </div>
 
       {/* TC Interested Details (optional, available for pre-filling) */}
       <div className="leads-enquiries-form-section" style={{ marginTop: 16 }}>
         <h3 className="leads-enquiries-form-section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           Telecaller Interested Details
-          <span style={{ background: '#f0fdf4', color: '#166534', borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
+          <span style={{ background: __sbg('#f0fdf4'), color: __stc('#166534'), borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
         </h3>
         <div className="leads-enquiries-form-grid">
           <div className="leads-enquiries-form-group">
@@ -3421,10 +3460,10 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             <label>Upload Current Bill (PDF/Image, max 10 MB)</label>
             <label className="le-bill-upload-label" style={{
               display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-              border: '1.5px dashed ' + (billFile ? '#059669' : '#d1d5db'),
+              border: '1.5px dashed ' + (billFile ? __sbg('#059669') : __sbg('#d1d5db')),
               borderRadius: 8, padding: '8px 14px',
-              background: billFile ? '#f0fdf4' : '#fafafa',
-              fontSize: 13, color: billFile ? '#059669' : '#6b7280',
+              background: billFile ? __sbg('#f0fdf4') : __sbg('#fafafa'),
+              fontSize: 13, color: billFile ? __stc('#059669') : __stc('#6b7280'),
             }}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
@@ -3439,11 +3478,11 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
             </label>
             {billFile && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                <span style={{ fontSize: 11, color: '#059669' }}>✓ {billFile.name} selected</span>
-                <button type="button" style={{ fontSize: 11, color: '#dc2626', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setBillFile(null)}>✕ Remove</button>
+                <span style={{ fontSize: 11, color: __stc('#059669') }}>✓ {billFile.name} selected</span>
+                <button type="button" style={{ fontSize: 11, color: __stc('#dc2626'), background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setBillFile(null)}>✕ Remove</button>
               </div>
             )}
-            <small style={{ color: '#6b7280', fontSize: 11 }}>Upload the customer's current electricity bill (optional, max 10 MB).</small>
+            <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Upload the customer's current electricity bill (optional, max 10 MB).</small>
           </div>
         </div>
       </div>

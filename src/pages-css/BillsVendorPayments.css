@@ -38,51 +38,51 @@
 
 .receipt-action-btn.btn-view {
   background-color: transparent;
-  color: #3b82f6;
+  color: var(--ct-3b82f6, #3b82f6);
 }
 .receipt-action-btn.btn-view:hover {
-  background-color: #3b82f6;
-  color: #ffffff;
+  background-color: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 .receipt-action-btn.btn-edit {
   background-color: transparent;
-  color: #f59e0b;
+  color: var(--ct-f59e0b, #f59e0b);
 }
 .receipt-action-btn.btn-edit:hover {
-  background-color: #f59e0b;
-  color: #ffffff;
+  background-color: var(--c-f59e0b, #f59e0b);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 .receipt-action-btn.btn-delete {
   background-color: transparent;
-  color: #ef4444;
+  color: var(--ct-ef4444, #ef4444);
 }
 .receipt-action-btn.btn-delete:hover {
-  background-color: #ef4444;
-  color: #ffffff;
+  background-color: var(--c-ef4444, #ef4444);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 .receipt-action-btn.btn-adjust {
   background-color: transparent;
-  color: #22c55e;
+  color: var(--ct-22c55e, #22c55e);
 }
 .receipt-action-btn.btn-adjust:hover {
-  background-color: #22c55e;
-  color: #ffffff;
+  background-color: var(--c-22c55e, #22c55e);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 .receipt-action-btn.btn-restore {
   background-color: transparent;
-  color: #16a34a;
+  color: var(--ct-16a34a, #16a34a);
   padding: 0 10px;
   width: auto;
   font-size: 12px;
   font-weight: 600;
 }
 .receipt-action-btn.btn-restore:hover {
-  background-color: #16a34a;
-  color: #ffffff;
+  background-color: var(--c-16a34a, #16a34a);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 /* ── Bill status badges ──────────────────────────────────────── */
@@ -99,23 +99,23 @@
 }
 
 .bill-status-pending {
-  background: #fef3c7;
-  color: #92400e;
+  background: var(--c-fef3c7, #fef3c7);
+  color: var(--ct-92400e, #92400e);
 }
 
 .bill-status-partial {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--c-dbeafe, #dbeafe);
+  color: var(--ct-1e40af, #1e40af);
 }
 
 .bill-status-paid {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--c-dcfce7, #dcfce7);
+  color: var(--ct-166534, #166534);
 }
 
 .bill-status-overdue {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--c-fee2e2, #fee2e2);
+  color: var(--ct-991b1b, #991b1b);
 }
 
 /* ── Vendor payment type badges ──────────────────────────────── */
@@ -131,13 +131,13 @@
 }
 
 .vp-type-advance {
-  background: #ede9fe;
-  color: #6d28d9;
+  background: var(--c-ede9fe, #ede9fe);
+  color: var(--ct-6d28d9, #6d28d9);
 }
 
 .vp-type-bill {
-  background: #dbeafe;
-  color: #1e40af;
+  background: var(--c-dbeafe, #dbeafe);
+  color: var(--ct-1e40af, #1e40af);
 }
 
 /* ── Table cell helpers ──────────────────────────────────────── */
@@ -145,19 +145,19 @@
 .bill-no,
 .vp-advance-no {
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   font-size: 13px;
 }
 
 .bill-amount,
 .vp-amount {
   font-weight: 600;
-  color: #0f172a;
+  color: var(--ct-0f172a, #0f172a);
 }
 
-.text-success { color: #16a34a; font-weight: 600; }
-.text-warning { color: #d97706; font-weight: 600; }
-.text-danger  { color: #dc2626; font-weight: 600; }
+.text-success { color: var(--ct-16a34a, #16a34a); font-weight: 600; }
+.text-warning { color: var(--ct-d97706, #d97706); font-weight: 600; }
+.text-danger  { color: var(--ct-dc2626, #dc2626); font-weight: 600; }
 
 /* ── Action button container ─────────────────────────────────── */
 
@@ -188,7 +188,7 @@
 .procurement-bills-received-breadcrumb,
 .receipts-page-breadcrumb {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   margin-bottom: 6px;
 }
 
@@ -196,7 +196,7 @@
 .receipts-page-title {
   font-size: 26px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin: 0 0 16px 0;
 }
 
@@ -225,17 +225,17 @@
 .receipts-page-search {
   height: 42px;
   padding: 0 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
-  background: white;
+  background: var(--c-white, white);
   box-sizing: border-box;
 }
 
 .procurement-bills-received-search:focus,
 .receipts-page-search:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
 }
 
@@ -244,10 +244,10 @@
 .receipts-page-filter {
   height: 42px;
   padding: 0 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
-  background: white;
+  background: var(--c-white, white);
   cursor: pointer;
   box-sizing: border-box;
 }
@@ -255,7 +255,7 @@
 .procurement-bills-received-filter:focus,
 .receipts-page-filter:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59,130,246,0.1);
 }
 
@@ -288,8 +288,8 @@
 .receipts-page-btn-primary {
   height: 42px;
   padding: 0 18px;
-  background: #3b82f6;
-  color: white;
+  background: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -303,7 +303,7 @@
 }
 .procurement-bills-received-btn-primary:hover,
 .receipts-page-btn-primary:hover {
-  background: #2563eb;
+  background: var(--c-2563eb, #2563eb);
   transform: translateY(-1px);
 }
 
@@ -312,9 +312,9 @@
 .receipts-page-btn-secondary {
   height: 42px;
   padding: 0 16px;
-  background: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: var(--c-white, white);
+  color: var(--ct-475569, #475569);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -327,8 +327,8 @@
 }
 .procurement-bills-received-btn-secondary:hover,
 .receipts-page-btn-secondary:hover {
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  background: var(--c-f8fafc, #f8fafc);
+  border-color: var(--c-cbd5e1, #cbd5e1);
 }
 
 /* ── Unified KPI cards ─────────────────────────────────────────── */
@@ -340,7 +340,7 @@
 }
 
 .unified-kpi-card {
-  background: white;
+  background: var(--c-white, white);
   padding: 20px 22px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
@@ -365,10 +365,10 @@
   justify-content: center;
   border-radius: 12px;
 }
-.unified-kpi-icon--blue   { background: #eff6ff; color: #3b82f6; }
-.unified-kpi-icon--purple { background: #f5f3ff; color: #7c3aed; }
-.unified-kpi-icon--green  { background: #f0fdf4; color: #16a34a; }
-.unified-kpi-icon--amber  { background: #fffbeb; color: #d97706; }
+.unified-kpi-icon--blue   { background: var(--c-eff6ff, #eff6ff); color: var(--ct-3b82f6, #3b82f6); }
+.unified-kpi-icon--purple { background: var(--c-f5f3ff, #f5f3ff); color: var(--ct-7c3aed, #7c3aed); }
+.unified-kpi-icon--green  { background: var(--c-f0fdf4, #f0fdf4); color: var(--ct-16a34a, #16a34a); }
+.unified-kpi-icon--amber  { background: var(--c-fffbeb, #fffbeb); color: var(--ct-d97706, #d97706); }
 
 .unified-kpi-content {
   flex: 1;
@@ -378,7 +378,7 @@
 .unified-kpi-value {
   font-size: 18px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -388,7 +388,7 @@
 
 .unified-kpi-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -398,7 +398,7 @@
 /* ── Unified table ─────────────────────────────────────────────── */
 .procurement-bills-received-table-container,
 .receipts-page-table-container {
-  background: white;
+  background: var(--c-white, white);
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   overflow: hidden;
@@ -419,8 +419,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 20px;
-  border-top: 1px solid #f1f5f9;
-  background: white;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
+  background: var(--c-white, white);
   flex-wrap: wrap;
   gap: 10px;
 }
@@ -428,7 +428,7 @@
 .pagination-info,
 .receipts-page-pagination-info {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -597,10 +597,10 @@
   padding: 7px 12px;
   min-width: 36px;
   height: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
-  background: white;
-  color: #475569;
+  background: var(--c-white, white);
+  color: var(--ct-475569, #475569);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -612,25 +612,25 @@
 }
 
 .page-number:hover:not(.active) {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--c-f1f5f9, #f1f5f9);
+  border-color: var(--c-cbd5e1, #cbd5e1);
 }
 
 .page-number.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
+  border-color: var(--c-3b82f6, #3b82f6);
   font-weight: 600;
 }
 
 /* Mark Paid approve button (Bills tab) */
 .receipt-action-btn.btn-approve {
   background-color: transparent;
-  color: #16a34a;
+  color: var(--ct-16a34a, #16a34a);
 }
 .receipt-action-btn.btn-approve:hover {
-  background-color: #16a34a;
-  color: #ffffff;
+  background-color: var(--c-16a34a, #16a34a);
+  color: var(--ct-ffffff, #ffffff);
 }
 /* ── FilterSelect in Vendor Payments filter bar ─────────────────────────── */
 .bills-filter-select-wrap {
@@ -685,13 +685,13 @@
   padding: 0 26px 0 10px;
   display: flex;
   align-items: center;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--c-ffffff, #ffffff);
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ct-374151, #374151);
   cursor: pointer;
   outline: none;
   user-select: none;
@@ -708,13 +708,13 @@
   box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--has-value {
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
   font-weight: 600;
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--disabled {
-  background-color: #f8fafc;
-  border-color: #e2e8f0;
-  color: #cbd5e1;
+  background-color: var(--c-f8fafc, #f8fafc);
+  border-color: var(--c-e2e8f0, #e2e8f0);
+  color: var(--ct-cbd5e1, #cbd5e1);
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -724,7 +724,7 @@
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   display: flex;
   align-items: center;
   transition: transform 0.2s, color 0.15s;
@@ -732,10 +732,10 @@
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--open .filter-trigger__chevron {
   transform: translateY(-50%) rotate(180deg);
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--has-value .filter-trigger__chevron {
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
 }
 .pce-rows-dropdown .filter-trigger__text {
   overflow: hidden;
@@ -744,7 +744,7 @@
   flex: 1;
 }
 .pce-rows-dropdown .filter-trigger__text--placeholder {
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   font-weight: 400;
   font-style: italic;
 }

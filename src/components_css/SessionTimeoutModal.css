@@ -16,7 +16,7 @@ body.session-modal-open {
 
 /* Modal */
 .session-dialog {
-  background: #ffffff;
+  background: var(--c-ffffff, #ffffff);
   width: 440px;
   max-width: 92%;
   border-radius: 14px;
@@ -31,19 +31,19 @@ body.session-modal-open {
 .session-header {
   padding: 22px;
   text-align: center;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
 }
 
 .session-icon {
   font-size: 30px;
-  color: #f59e0b;
+  color: var(--ct-f59e0b, #f59e0b);
   margin-bottom: 8px;
 }
 
 .session-header h3 {
   margin: 0;
   font-size: 20px;
-  color: #111827;
+  color: var(--ct-111827, #111827);
 }
 
 /* Body */
@@ -54,19 +54,19 @@ body.session-modal-open {
 
 .session-text {
   font-size: 14px;
-  color: #374151;
+  color: var(--ct-374151, #374151);
 }
 
 .session-timer {
   font-size: 48px;
   font-weight: bold;
-  color: #dc2626;
+  color: var(--ct-dc2626, #dc2626);
   margin: 14px 0;
 }
 
 .session-subtext {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 
 /* Footer */
@@ -75,7 +75,7 @@ body.session-modal-open {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
 }
 
 /* Buttons */
@@ -90,23 +90,23 @@ body.session-modal-open {
 
 /* Stay */
 .session-btn-outline {
-  background: #ffffff;
-  color: #2563eb;
-  border: 1px solid #2563eb;
+  background: var(--c-ffffff, #ffffff);
+  color: var(--ct-2563eb, #2563eb);
+  border: 1px solid var(--c-2563eb, #2563eb);
 }
 
 .session-btn-outline:hover {
-  background: #eff6ff;
+  background: var(--c-eff6ff, #eff6ff);
 }
 
 /* Logout */
 .session-btn-danger {
-  background: #dc2626;
-  color: #ffffff;
+  background: var(--c-dc2626, #dc2626);
+  color: var(--ct-ffffff, #ffffff);
 }
 
 .session-btn-danger:hover {
-  background: #b91c1c;
+  background: var(--c-b91c1c, #b91c1c);
 }
 
 /* Animation */

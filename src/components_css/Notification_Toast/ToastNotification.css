@@ -17,7 +17,7 @@
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
-  background: white;
+  background: var(--c-white, white);
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   min-width: 320px;
@@ -82,7 +82,7 @@
 .toast-message {
   font-size: 14px;
   line-height: 1.5;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 
 .toast-close {
@@ -93,12 +93,12 @@
   border: none;
   background: none;
   cursor: pointer;
-  color: #9ca3af;
+  color: var(--ct-9ca3af, #9ca3af);
   transition: color 0.2s;
 }
 
 .toast-close:hover {
-  color: #4b5563;
+  color: var(--ct-4b5563, #4b5563);
 }
 
 .toast-close svg {
@@ -108,59 +108,59 @@
 
 /* Success Toast */
 .toast-success {
-  border-left-color: #10b981;
+  border-left-color: var(--c-10b981, #10b981);
 }
 
 .toast-success .toast-icon-container {
-  color: #10b981;
+  color: var(--ct-10b981, #10b981);
 }
 
 .toast-success .toast-title {
-  color: #065f46;
+  color: var(--ct-065f46, #065f46);
 }
 
 /* Error Toast */
 .toast-error {
-  border-left-color: #ef4444;
+  border-left-color: var(--c-ef4444, #ef4444);
 }
 
 .toast-error .toast-icon-container {
-  color: #ef4444;
+  color: var(--ct-ef4444, #ef4444);
 }
 
 .toast-error .toast-title {
-  color: #991b1b;
+  color: var(--ct-991b1b, #991b1b);
 }
 
 /* Warning Toast */
 .toast-warning {
-  border-left-color: #f59e0b;
-  background-color: #fffbeb;
+  border-left-color: var(--c-f59e0b, #f59e0b);
+  background-color: var(--c-fffbeb, #fffbeb);
 }
 
 .toast-warning .toast-icon-container {
-  color: #d97706;
+  color: var(--ct-d97706, #d97706);
 }
 
 .toast-warning .toast-title {
-  color: #92400e;
+  color: var(--ct-92400e, #92400e);
 }
 
 .toast-warning .toast-message {
-  color: #78350f;
+  color: var(--ct-78350f, #78350f);
 }
 
 /* Info Toast */
 .toast-info {
-  border-left-color: #3b82f6;
+  border-left-color: var(--c-3b82f6, #3b82f6);
 }
 
 .toast-info .toast-icon-container {
-  color: #3b82f6;
+  color: var(--ct-3b82f6, #3b82f6);
 }
 
 .toast-info .toast-title {
-  color: #1e40af;
+  color: var(--ct-1e40af, #1e40af);
 }
 
 /* Responsive */

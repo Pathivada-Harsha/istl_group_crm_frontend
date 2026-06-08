@@ -16,6 +16,39 @@ import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a', '#fca5a5':'#5a2a2e',};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3', '#0369a1':'#38bdf8',};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ── Date constants ────────────────────────────────────────────────────────────
@@ -24,6 +57,7 @@ const _BR_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 // ── BRDatePicker — compact single date (same style as PO Create Modal) ────────
 const BRDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }) => {
+  useThemeVersion();
   const [show,    setShow]    = React.useState(false);
   const [calMo,   setCalMo]   = React.useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
   const [calYr,   setCalYr]   = React.useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
@@ -47,16 +81,16 @@ const BRDatePicker = ({ value, onChange, placeholder = 'Select date', minDate })
       <button type="button"
         className={`po-dtp-trigger${show?' po-dtp--open':''}${value?' po-dtp--set':''}`}
         onClick={show ? () => setShow(false) : open} style={{ width:'100%' }}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color: value?'#4f46e5':'#94a3b8' }}>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color: value?__stc('#4f46e5'):__stc('#94a3b8') }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
-        {value ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:'#0f172a' }}>{fmtD(value)}</span>
+        {value ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:__stc('#0f172a') }}>{fmtD(value)}</span>
                : <span className="po-dtp-ph">{placeholder}</span>}
         {value
           ? <span className="po-dtp-x" onClick={e => { e.stopPropagation(); onChange(''); }}>
               <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
             </span>
-          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0 }}>
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft:'auto',color:__stc('#94a3b8'),transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0 }}>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
             </svg>}
       </button>
@@ -100,6 +134,7 @@ const BRDatePicker = ({ value, onChange, placeholder = 'Select date', minDate })
 
 // ── BRDateRangeFilter — date range picker (same style as PO page filter bar) ──
 const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,  setShow]  = React.useState(false);
   const [from,  setFrom]  = React.useState(null);
   const [to,    setTo]    = React.useState(null);
@@ -127,7 +162,7 @@ const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
         <span className="po-cal-sep">—</span>
         <span className={appliedTo&&appliedTo!==appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}</span>
         {appliedFrom&&<span className="po-cal-x" onClick={e=>{e.stopPropagation();handleClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:__stc('#94a3b8'),flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
       </button>
       {show&&(
         <div className="po-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
@@ -172,6 +207,7 @@ const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 
 const BillsManagementPage = () => {
+  useThemeVersion();
   const [bills, setBills] = useState([]);
   const [selectedBills, setSelectedBills] = useState([]);
   const [projectNames, setProjectNames] = useState({});
@@ -1392,8 +1428,8 @@ const BillsManagementPage = () => {
   const SortIcon = ({ colKey }) => {
     if (sortConfig.key !== colKey) return <ChevronUp size={13} style={{ opacity: 0.3, marginLeft: 3 }} />;
     return sortConfig.direction === 'asc'
-      ? <ChevronUp size={13} style={{ marginLeft: 3, color: '#6366f1' }} />
-      : <ChevronDown size={13} style={{ marginLeft: 3, color: '#6366f1' }} />;
+      ? <ChevronUp size={13} style={{ marginLeft: 3, color: __stc('#6366f1') }} />
+      : <ChevronDown size={13} style={{ marginLeft: 3, color: __stc('#6366f1') }} />;
   };
 
   // Drag-and-drop column reorder
@@ -1521,8 +1557,8 @@ const BillsManagementPage = () => {
               title="Toggle Columns"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px',
-                background: '#fff', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                padding: '8px 14px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px',
+                background: __sbg('#fff'), cursor: 'pointer', fontSize: '14px', color: __stc('#374151'),
                 fontWeight: 500
               }}
             >
@@ -1532,10 +1568,10 @@ const BillsManagementPage = () => {
             {showColumnsPanel && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 999,
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px',
+                background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '10px',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '10px 0', minWidth: '200px'
               }}>
-                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: __stc('#6b7280'), textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}>
                   Show / Hide Columns
                 </div>
                 {BILLS_COLUMNS.map(col => (
@@ -1544,7 +1580,7 @@ const BillsManagementPage = () => {
                     onClick={() => toggleColumn(col.key)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: __stc('#374151'),
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -1552,8 +1588,8 @@ const BillsManagementPage = () => {
                   >
                     <div style={{
                       width: 17, height: 17, borderRadius: 4, border: '1.5px solid',
-                      borderColor: visibleColumns.includes(col.key) ? '#6366f1' : '#d1d5db',
-                      background: visibleColumns.includes(col.key) ? '#6366f1' : '#fff',
+                      borderColor: visibleColumns.includes(col.key) ? __sbg('#6366f1') : __sbg('#d1d5db'),
+                      background: visibleColumns.includes(col.key) ? __sbg('#6366f1') : __sbg('#fff'),
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                     }}>
                       {visibleColumns.includes(col.key) && <Check size={11} color="#fff" strokeWidth={3} />}
@@ -1574,7 +1610,7 @@ const BillsManagementPage = () => {
       {/* KPI Cards */}
       {/* Permission notice */}
       {isViewOnly && (
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:'#fffbeb', border:'1px solid #fde68a', borderRadius:8, fontSize:12, color:'#92400e', fontWeight:500, marginBottom:12 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 14px', background:__sbg('#fffbeb'), border:`1px solid ${__sbg('#fde68a')}`, borderRadius:8, fontSize:12, color:__stc('#92400e'), fontWeight:500, marginBottom:12 }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
           You have view-only access. Contact your administrator to request Create, Edit, Approve or Delete permissions.
         </div>
@@ -1653,8 +1689,8 @@ const BillsManagementPage = () => {
               {bills.length === 0 ? (
                 <tr>
                   <td colSpan={orderedVisibleCols.length + 1} style={{ textAlign: 'center', padding: '60px 20px' }}>
-                    <FileText size={48} style={{ color: '#cbd5e1', marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
-                    <p style={{ color: '#64748b', fontSize: '15px', margin: 0 }}>
+                    <FileText size={48} style={{ color: __stc('#cbd5e1'), marginBottom: '16px', display: 'block', margin: '0 auto 16px' }} />
+                    <p style={{ color: __stc('#64748b'), fontSize: '15px', margin: 0 }}>
                       No bills found. Click "Add New Bill" to create one.
                     </p>
                   </td>
@@ -1663,50 +1699,50 @@ const BillsManagementPage = () => {
                 getSortedBills().map(bill => (
                   <tr key={bill.id} className="procurement-bills-received-table-row">
                     {orderedVisibleCols.map(key => {
-                      if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName || <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
                       if (key === 'poNumber')       return (
                         <td key={key}>
                           {bill.poRefId || bill.poNumber
                             ? <span>{bill.poRefId || bill.poNumber}</span>
-                            : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}
+                            : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}
                         </td>
                       );
-                      if (key === 'billDate')       return <td key={key}>{bill.billDate ? formatDate(bill.billDate) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'dueDate')        return <td key={key}>{bill.dueDate ? formatDate(bill.dueDate) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'totalAmount')    return <td key={key} className="procurement-bills-received-table-amount">{bill.totalAmount != null ? formatCurrency(bill.totalAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'paidAmount')     return <td key={key} className="procurement-bills-received-table-paid">{bill.paidAmount != null ? formatCurrency(bill.paidAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'balanceAmount')  return <td key={key} className="procurement-bills-received-table-balance">{bill.balanceAmount != null ? formatCurrency(bill.balanceAmount) : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'billDate')       return <td key={key}>{bill.billDate ? formatDate(bill.billDate) : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'dueDate')        return <td key={key}>{bill.dueDate ? formatDate(bill.dueDate) : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'totalAmount')    return <td key={key} className="procurement-bills-received-table-amount">{bill.totalAmount != null ? formatCurrency(bill.totalAmount) : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'paidAmount')     return <td key={key} className="procurement-bills-received-table-paid">{bill.paidAmount != null ? formatCurrency(bill.paidAmount) : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'balanceAmount')  return <td key={key} className="procurement-bills-received-table-balance">{bill.balanceAmount != null ? formatCurrency(bill.balanceAmount) : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
                       if (key === 'status')         return (
                         <td key={key}>
                           {bill.status
                             ? <span className={`procurement-bills-received-badge ${getPaymentBadgeClass(bill.status)}`}>{bill.status}</span>
-                            : <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}
+                            : <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}
                         </td>
                       );
-                      if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'groupName')      return <td key={key}>{bill.groupName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'category')       return <td key={key}>{bill.category || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'uploadedByName') return <td key={key}>{bill.uploadedByName || <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'groupName')      return <td key={key}>{bill.groupName || <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'category')       return <td key={key}>{bill.category || <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>}</td>;
                       if (key === 'projectId') {
                         const pName = projectNames[bill.projectId];
                         return (
                           <td key={key} style={{ minWidth: 180 }}>
                             {bill.projectId ? (
                               <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                                <span style={{ fontWeight:600, fontSize:12, color:'#1e293b', whiteSpace:'nowrap' }}>
+                                <span style={{ fontWeight:600, fontSize:12, color:__stc('#1e293b'), whiteSpace:'nowrap' }}>
                                   {pName || bill.projectId}
                                 </span>
                                 {pName && (
-                                  <span style={{ fontSize:11, color:'#64748b', fontWeight:400, whiteSpace:'nowrap' }}>
+                                  <span style={{ fontSize:11, color:__stc('#64748b'), fontWeight:400, whiteSpace:'nowrap' }}>
                                     {bill.projectId}
                                   </span>
                                 )}
                               </div>
-                            ) : <span style={{ color:'#94a3b8', display:'block', textAlign:'center' }}>—</span>}
+                            ) : <span style={{ color:__stc('#94a3b8'), display:'block', textAlign:'center' }}>—</span>}
                           </td>
                         );
                       }
-                      return <td key={key} style={{textAlign:'center',color:'#94a3b8'}}>—</td>;
+                      return <td key={key} style={{textAlign:'center',color:__stc('#94a3b8')}}>—</td>;
                     })}
                     <td>
                       <div className="receipt-action-buttons">
@@ -1967,7 +2003,7 @@ const BillsManagementPage = () => {
                 </div>
                 <div className="bill-form-row">
                   <div className="bill-form-field">
-                    <label className="bill-form-label">Bill Ref ID <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 400 }}>(Vendor's Bill Reference Number)</span></label>
+                    <label className="bill-form-label">Bill Ref ID <span style={{ fontSize: '12px', color: __stc('#64748b'), fontWeight: 400 }}>(Vendor's Bill Reference Number)</span></label>
                     <input
                       className="bill-form-input"
                       type="text"
@@ -2020,7 +2056,7 @@ const BillsManagementPage = () => {
                               onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
                               readOnly={!!item.poItemId}
                               style={{
-                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
+                                backgroundColor: item.poItemId ? __sbg('#f8fafc') : __sbg('white'),
                                 cursor: item.poItemId ? 'not-allowed' : 'text'
                               }}
                             />
@@ -2034,30 +2070,30 @@ const BillsManagementPage = () => {
                               onChange={(e) => handleUpdateItem(index, 'description', e.target.value)}
                               readOnly={!!item.poItemId}
                               style={{
-                                backgroundColor: item.poItemId ? '#f8fafc' : 'white',
+                                backgroundColor: item.poItemId ? __sbg('#f8fafc') : __sbg('white'),
                                 cursor: item.poItemId ? 'not-allowed' : 'text'
                               }}
                             />
                             {item.poItemId && (
-                              <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                              <small style={{ fontSize: '11px', color: __stc('#64748b'), display: 'block', marginTop: '2px' }}>
                                 PO Item #{item.poItemId}
                               </small>
                             )}
                           </td>
                           {item.poItemId && (
                             <>
-                              <td style={{ color: '#64748b', fontSize: '13px', textAlign: 'center' }}>
+                              <td style={{ color: __stc('#64748b'), fontSize: '13px', textAlign: 'center' }}>
                                 {item.orderedQty ?? '-'}
                               </td>
-                              <td style={{ color: '#f59e0b', fontSize: '13px', textAlign: 'center', fontWeight: 600 }}>
+                              <td style={{ color: __stc('#f59e0b'), fontSize: '13px', textAlign: 'center', fontWeight: 600 }}>
                                 {item.deliveredQty ?? '-'}
                               </td>
                               <td style={{ textAlign: 'center' }}>
                                 {item.pendingQty != null ? (
                                   <span style={{
                                     display: 'inline-block',
-                                    background: item.pendingQty > 0 ? '#dcfce7' : '#fee2e2',
-                                    color: item.pendingQty > 0 ? '#15803d' : '#dc2626',
+                                    background: item.pendingQty > 0 ? __sbg('#dcfce7') : __sbg('#fee2e2'),
+                                    color: item.pendingQty > 0 ? __stc('#15803d') : __stc('#dc2626'),
                                     fontWeight: 700,
                                     fontSize: '13px',
                                     borderRadius: '5px',
@@ -2085,7 +2121,7 @@ const BillsManagementPage = () => {
                               max={item.maxBillableQty || undefined}
                               step="0.01"
                               style={{
-                                borderColor: item.maxBillableQty && item.quantity > item.maxBillableQty ? '#ef4444' : undefined
+                                borderColor: item.maxBillableQty && item.quantity > item.maxBillableQty ? __sbg('#ef4444') : undefined
                               }}
                             />
                             {item.poItemId && item.maxBillableQty != null && (() => {
@@ -2101,10 +2137,10 @@ const BillsManagementPage = () => {
                               return (
                                 <div style={{ marginTop: 4 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: 2 }}>
-                                    <span style={{ color: '#64748b' }}>
+                                    <span style={{ color: __stc('#64748b') }}>
                                       {entered} / {max}
                                     </span>
-                                    <span style={{ fontWeight: 600, color: over ? '#dc2626' : pendingAfter <= 0 ? '#15803d' : '#0369a1' }}>
+                                    <span style={{ fontWeight: 600, color: over ? __stc('#dc2626') : pendingAfter <= 0 ? __stc('#15803d') : __stc('#0369a1') }}>
                                       {over
                                         ? `⚠ over by ${entered - max}`
                                         : pendingAfter <= 0
@@ -2112,11 +2148,11 @@ const BillsManagementPage = () => {
                                           : `${pendingAfter} pending after save`}
                                     </span>
                                   </div>
-                                  <div style={{ height: 4, background: '#e2e8f0', borderRadius: 999, overflow: 'hidden' }}>
+                                  <div style={{ height: 4, background: __sbg('#e2e8f0'), borderRadius: 999, overflow: 'hidden' }}>
                                     <div style={{
                                       height: '100%',
                                       width: `${pct}%`,
-                                      background: over ? '#ef4444' : pct >= 80 ? '#f59e0b' : '#22c55e',
+                                      background: over ? __sbg('#ef4444') : pct >= 80 ? __sbg('#f59e0b') : __sbg('#22c55e'),
                                       borderRadius: 999,
                                       transition: 'width 0.2s'
                                     }} />
@@ -2135,10 +2171,10 @@ const BillsManagementPage = () => {
                               min="0"
                               step="0.01"
                               readOnly={false}
-                              style={{ backgroundColor: 'white' }}
+                              style={{ backgroundColor: __sbg('white') }}
                             />
                             {item.poItemId && (
-                              <small style={{ fontSize: '11px', color: '#64748b', display: 'block', marginTop: '2px' }}>
+                              <small style={{ fontSize: '11px', color: __stc('#64748b'), display: 'block', marginTop: '2px' }}>
                                 From PO
                               </small>
                             )}
@@ -2167,7 +2203,7 @@ const BillsManagementPage = () => {
                                 onClick={() => handleRemoveItem(index)}
                                 type="button"
                                 title="Remove item"
-                                style={{ background:'#fee2e2', border:'1px solid #fca5a5', borderRadius:'4px', padding:'3px 8px', color:'#dc2626', cursor:'pointer', fontWeight:600 }}
+                                style={{ background:__sbg('#fee2e2'), border:`1px solid ${__sbg('#fca5a5')}`, borderRadius:'4px', padding:'3px 8px', color:__stc('#dc2626'), cursor:'pointer', fontWeight:600 }}
                               >
                                 ✕
                               </button>
@@ -2362,12 +2398,12 @@ const BillsManagementPage = () => {
                           <td>
                             <strong>{item.itemName || 'N/A'}</strong>
                             {item.poItemId && (
-                              <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>
+                              <div style={{ fontSize: '11px', color: __stc('#64748b'), marginTop: '2px' }}>
                                 PO Item #{item.poItemId}
                               </div>
                             )}
                           </td>
-                          <td style={{ fontSize: '13px', color: '#64748b' }}>
+                          <td style={{ fontSize: '13px', color: __stc('#64748b') }}>
                             {item.description || '-'}
                           </td>
                           <td>{item.quantity}</td>
@@ -2437,7 +2473,7 @@ const BillsManagementPage = () => {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <FileText size={16} /> {selectedBill.billFileName}
                         {selectedBill.billFileSize && (
-                          <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                          <span style={{ fontSize: 11, color: __stc('#94a3b8') }}>
                             ({(selectedBill.billFileSize / 1024).toFixed(1)} KB)
                           </span>
                         )}
@@ -2548,7 +2584,7 @@ const BillsManagementPage = () => {
                 </div>
                 <div className="procurement-bills-received-info-item">
                   <label>Already Paid:</label>
-                  <span style={{color:'#059669',fontWeight:600}}>₹{formatCurrency(selectedBill.paidAmount)}</span>
+                  <span style={{color:__stc('#059669'),fontWeight:600}}>₹{formatCurrency(selectedBill.paidAmount)}</span>
                 </div>
                 <div className="procurement-bills-received-info-item">
                   <label>Balance Due:</label>
@@ -2557,7 +2593,7 @@ const BillsManagementPage = () => {
               </div>
 
               {/* Info banner */}
-              <div style={{padding:'10px 14px',background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:'6px',fontSize:'13px',color:'#6d28d9',marginBottom:'16px'}}>
+              <div style={{padding:'10px 14px',background:__sbg('#f5f3ff'),border:`1px solid ${__sbg('#ddd6fe')}`,borderRadius:'6px',fontSize:'13px',color:__stc('#6d28d9'),marginBottom:'16px'}}>
                 💡 This payment will be recorded as a Vendor Payment (Bill Payment) and will appear in the Vendor Payments tab.
               </div>
 
@@ -2572,7 +2608,7 @@ const BillsManagementPage = () => {
                   step="0.01"
                   min="0"
                 />
-                <small style={{color:'#64748b'}}>Max: ₹{formatCurrency(selectedBill.balanceAmount)}</small>
+                <small style={{color:__stc('#64748b')}}>Max: ₹{formatCurrency(selectedBill.balanceAmount)}</small>
               </div>
 
               <div className="procurement-bills-received-form-row">

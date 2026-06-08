@@ -17,6 +17,42 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const _FU_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const _FU_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
+/* Theme helper for inline-styled UI (added for dark mode) */
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+/* Inline-style theme mappers (dark mode) */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f0f0f0':'#232b3b','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#bbf7d0':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fde047':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#d97706':'#f0b454','#ca8a04':'#e3c258',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a','#be123c':'#f0708a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8','#0891b2':'#22d3ee',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+
 const FollowUpDatePicker = ({ value, onChange, minDate, placeholder = 'Select date', required }) => {
   const [show, setShow]   = useState(false);
   const [calMo, setCalMo] = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
@@ -153,6 +189,26 @@ export default function ClientDashboardFollowUps() {
   const [allLeads, setAllLeads] = useState([]);
   const [leadDropdownOpen, setLeadDropdownOpen] = useState(false);
   const [leadSearch, setLeadSearch] = useState('');
+  const _themeV = useThemeVersion();
+  const isDark = React.useMemo(
+    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark',
+    [_themeV]
+  );
+  const lp = isDark ? {
+    panel: '#1b2130', disabledBg: '#0f1420', hover: '#232b3b', rowBorder: '#232b3b',
+    selBg: '#15243d', text: '#e7ecf3', muted: '#9aa7b8', sub: '#94a1b3',
+    inputBg: '#0f1420', inputBorder: '#3a4456', searchSep: '#2b3445', footerSep: '#2b3445',
+    chevron: '#9aa7b8', footMuted: '#9aa7b8', codeBg: '#1e1f45', codeText: '#8589f3',
+    wonBg: '#14302a', wonText: '#7fe0bc', lostBg: '#3a1f22', lostText: '#f08a8a',
+    badgeNeutralBg: '#232b3b', badgeNeutralText: '#aab4c2',
+  } : {
+    panel: 'white', disabledBg: '#f8fafc', hover: '#f8fafc', rowBorder: '#f8fafc',
+    selBg: '#eff6ff', text: '#111827', muted: '#9ca3af', sub: '#64748b',
+    inputBg: 'white', inputBorder: '#e2e8f0', searchSep: '#f1f5f9', footerSep: '#f1f5f9',
+    chevron: '#6b7280', footMuted: '#94a3b8', codeBg: '#eef2ff', codeText: '#6366f1',
+    wonBg: '#dcfce7', wonText: '#166534', lostBg: '#fee2e2', lostText: '#991b1b',
+    badgeNeutralBg: '#f1f5f9', badgeNeutralText: '#475569',
+  };
   const [groups, setGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
 
@@ -1587,9 +1643,9 @@ export default function ClientDashboardFollowUps() {
                           width: '100%',
                           padding: '10px 36px 10px 14px',
                           fontSize: '14px',
-                          border: `1px solid ${leadDropdownOpen ? '#3b82f6' : '#e2e8f0'}`,
+                          border: `1px solid ${leadDropdownOpen ? '#3b82f6' : (isDark ? 'transparent' : lp.inputBorder)}`,
                           borderRadius: '8px',
-                          background: !addForm.modalGroupName ? '#f8fafc' : 'white',
+                          background: !addForm.modalGroupName ? lp.disabledBg : lp.panel,
                           cursor: !addForm.modalGroupName ? 'not-allowed' : 'pointer',
                           boxSizing: 'border-box',
                           display: 'flex',
@@ -1601,7 +1657,7 @@ export default function ClientDashboardFollowUps() {
                           transition: 'all 0.2s ease',
                         }}
                       >
-                        <span style={{ color: addForm.leadId ? '#111827' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                        <span style={{ color: addForm.leadId ? lp.text : lp.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                           {addForm.leadId
                             ? (() => {
                                 const sel = leads.find(l => String(l.id) === String(addForm.leadId));
@@ -1616,7 +1672,7 @@ export default function ClientDashboardFollowUps() {
                                 : '— Select a Lead —'}
                         </span>
                         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"
-                          style={{ flexShrink: 0, color: '#6b7280', transform: leadDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s', marginLeft: 8 }}>
+                          style={{ flexShrink: 0, color: lp.chevron, transform: leadDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s', marginLeft: 8 }}>
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                       </div>
@@ -1625,11 +1681,11 @@ export default function ClientDashboardFollowUps() {
                       {leadDropdownOpen && (
                         <div style={{
                           position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
-                          background: 'white', border: '1.5px solid #3b82f6', borderRadius: '10px',
+                          background: lp.panel, border: '1.5px solid #3b82f6', borderRadius: '10px',
                           boxShadow: '0 8px 24px rgba(0,0,0,0.13)', zIndex: 9999, overflow: 'hidden'
                         }}>
                           {/* Search box */}
-                          <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ padding: '8px', borderBottom: `1px solid ${lp.searchSep}` }}>
                             <input
                               autoFocus
                               type="text"
@@ -1639,8 +1695,9 @@ export default function ClientDashboardFollowUps() {
                               onClick={e => e.stopPropagation()}
                               style={{
                                 width: '100%', padding: '8px 12px', fontSize: '13px',
-                                border: '1px solid #e2e8f0', borderRadius: '6px',
-                                outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit'
+                                border: `1px solid ${lp.inputBorder}`, borderRadius: '6px',
+                                outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
+                                background: lp.inputBg, color: lp.text
                               }}
                             />
                           </div>
@@ -1654,9 +1711,9 @@ export default function ClientDashboardFollowUps() {
                                 setLeadDropdownOpen(false);
                                 setLeadSearch('');
                               }}
-                              style={{ padding: '9px 14px', fontSize: '13px', color: '#9ca3af', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'white'}
+                              style={{ padding: '9px 14px', fontSize: '13px', color: lp.muted, cursor: 'pointer', borderBottom: `1px solid ${lp.rowBorder}` }}
+                              onMouseEnter={e => e.currentTarget.style.background = lp.hover}
+                              onMouseLeave={e => e.currentTarget.style.background = lp.panel}
                             >
                               — Select a Lead —
                             </div>
@@ -1685,32 +1742,32 @@ export default function ClientDashboardFollowUps() {
                                     }}
                                     style={{
                                       padding: '10px 14px', cursor: 'pointer',
-                                      background: isSelected ? '#eff6ff' : 'white',
+                                      background: isSelected ? lp.selBg : lp.panel,
                                       borderLeft: isSelected ? '3px solid #3b82f6' : '3px solid transparent',
-                                      borderBottom: '1px solid #f8fafc',
+                                      borderBottom: `1px solid ${lp.rowBorder}`,
                                     }}
-                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = '#f8fafc'; }}
-                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'white'; }}
+                                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = lp.hover; }}
+                                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = lp.panel; }}
                                   >
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#6366f1', background: '#eef2ff', padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
+                                      <span style={{ fontFamily: 'monospace', fontSize: '11px', color: lp.codeText, background: lp.codeBg, padding: '1px 6px', borderRadius: 4, flexShrink: 0 }}>
                                         {l.leadCode}
                                       </span>
-                                      <span style={{ fontWeight: 600, color: '#111827', fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      <span style={{ fontWeight: 600, color: lp.text, fontSize: '14px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                         {l.name}
                                       </span>
                                       {l.status && (
                                         <span style={{
                                           marginLeft: 'auto', flexShrink: 0, fontSize: '11px', fontWeight: 600,
                                           padding: '1px 7px', borderRadius: 20,
-                                          background: l.status === 'Closed Won' ? '#dcfce7' : l.status === 'Closed Lost' ? '#fee2e2' : '#f1f5f9',
-                                          color:      l.status === 'Closed Won' ? '#166534' : l.status === 'Closed Lost' ? '#991b1b' : '#475569',
+                                          background: l.status === 'Closed Won' ? lp.wonBg : l.status === 'Closed Lost' ? lp.lostBg : lp.badgeNeutralBg,
+                                          color:      l.status === 'Closed Won' ? lp.wonText : l.status === 'Closed Lost' ? lp.lostText : lp.badgeNeutralText,
                                         }}>
                                           {l.status}
                                         </span>
                                       )}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#64748b', marginTop: 3, display: 'flex', gap: 10 }}>
+                                    <div style={{ fontSize: '12px', color: lp.sub, marginTop: 3, display: 'flex', gap: 10 }}>
                                       {l.phone && <span>📞 {l.phone}</span>}
                                       {l.email && <span>✉️ {l.email}</span>}
                                     </div>
@@ -1724,14 +1781,14 @@ export default function ClientDashboardFollowUps() {
                               const q = leadSearch.toLowerCase();
                               return l.name?.toLowerCase().includes(q) || l.leadCode?.toLowerCase().includes(q) || l.phone?.includes(leadSearch) || l.email?.toLowerCase().includes(q);
                             }).length === 0 && (
-                              <div style={{ padding: '16px', fontSize: '13px', color: '#9ca3af', textAlign: 'center' }}>
+                              <div style={{ padding: '16px', fontSize: '13px', color: lp.muted, textAlign: 'center' }}>
                                 No leads match "{leadSearch}"
                               </div>
                             )}
                           </div>
 
                           {/* Footer */}
-                          <div style={{ padding: '6px 14px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#94a3b8', display: 'flex', justifyContent: 'space-between' }}>
+                          <div style={{ padding: '6px 14px', borderTop: `1px solid ${lp.footerSep}`, fontSize: '11px', color: lp.footMuted, display: 'flex', justifyContent: 'space-between' }}>
                             <span>{leads.length} lead{leads.length !== 1 ? 's' : ''} in this group</span>
                             {leadSearch && <span>{leads.filter(l => l.name?.toLowerCase().includes(leadSearch.toLowerCase()) || l.leadCode?.toLowerCase().includes(leadSearch.toLowerCase())).length} match{leads.filter(l => l.name?.toLowerCase().includes(leadSearch.toLowerCase()) || l.leadCode?.toLowerCase().includes(leadSearch.toLowerCase())).length !== 1 ? 'es' : ''}</span>}
                           </div>
@@ -2174,20 +2231,20 @@ export default function ClientDashboardFollowUps() {
           <div className="followup-modal-overlay" onClick={closeFn}>
             <div className="followup-modal" onClick={e => e.stopPropagation()} style={{ maxWidth:580 }}>
               {/* Header */}
-              <div style={{ background:tb, padding:'20px 24px', borderRadius:'16px 16px 0 0', borderBottom:`2px solid ${tc}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div style={{ background:__sbg(tb), padding:'20px 24px', borderRadius:'16px 16px 0 0', borderBottom:`2px solid ${tc}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                  <div style={{ width:44, height:44, borderRadius:12, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, border:`1.5px solid ${tbd}` }}>
+                  <div style={{ width:44, height:44, borderRadius:12, background:__sbg('#fff'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, border:`1.5px solid ${__sbg(tbd)}` }}>
                     {TYPE_ICON[f.followupType] || '📋'}
                   </div>
                   <div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                      <h3 style={{ margin:0, fontSize:17, fontWeight:700, color:'#0f172a' }}>{f.followupType} Follow-up</h3>
+                      <h3 style={{ margin:0, fontSize:17, fontWeight:700, color:__stc('#0f172a') }}>{f.followupType} Follow-up</h3>
                       <span style={{ background:sm.bg, color:sm.color, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', gap:4 }}>
                         <span style={{ width:7, height:7, borderRadius:'50%', background:sm.dot, display:'inline-block' }}/>{f.status}
                       </span>
-                      {overdue && <span style={{ background:'#FEE2E2', color:'#991B1B', borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
+                      {overdue && <span style={{ background:__sbg('#FEE2E2'), color:__stc('#991B1B'), borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
                     </div>
-                    <p style={{ margin:'3px 0 0', fontSize:12, color:'#64748b' }}>Follow-up #{f.id}</p>
+                    <p style={{ margin:'3px 0 0', fontSize:12, color:__stc('#64748b') }}>Follow-up #{f.id}</p>
                   </div>
                 </div>
                 <button className="followup-modal-close" onClick={closeFn}>
@@ -2198,29 +2255,29 @@ export default function ClientDashboardFollowUps() {
               <div style={{ padding:'20px 24px', display:'flex', flexDirection:'column', gap:14 }}>
                 {/* Source + Priority */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Source</div>
+                  <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Source</div>
                     {isCustomer ? (
                       <>
-                        <span style={{ display:'inline-block', padding:'1px 8px', background:'#eff6ff', color:'#1d4ed8', border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>🏢 Customer</span>
-                        <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>{f.customerCode ? f.customerCode.split(' — ')[0] : 'N/A'}</div>
-                        {f.customerCode && f.customerCode.includes(' — ') && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{f.customerCode.split(' — ')[1]}</div>}
+                        <span style={{ display:'inline-block', padding:'1px 8px', background:__sbg('#eff6ff'), color:__stc('#1d4ed8'), border:'1px solid #bfdbfe', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>🏢 Customer</span>
+                        <div style={{ fontWeight:700, fontSize:13, color:__stc('#0f172a') }}>{f.customerCode ? f.customerCode.split(' — ')[0] : 'N/A'}</div>
+                        {f.customerCode && f.customerCode.includes(' — ') && <div style={{ fontSize:11, color:__stc('#64748b'), marginTop:2 }}>{f.customerCode.split(' — ')[1]}</div>}
                       </>
                     ) : (
                       <>
-                        <span style={{ display:'inline-block', padding:'1px 8px', background:'#f0fdf4', color:'#15803d', border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>👤 Lead</span>
-                        {f.leadName && <div style={{ fontWeight:700, fontSize:14, color:'#0f172a', marginBottom:2 }}>{f.leadName}</div>}
-                        <div style={{ fontWeight: f.leadName ? 500 : 700, fontSize:12, color:'#64748b' }}>{f.leadCode || 'N/A'}</div>
-                        {f.groupName && <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>{f.groupName}{f.subGroupName ? ` › ${f.subGroupName}` : ''}</div>}
+                        <span style={{ display:'inline-block', padding:'1px 8px', background:__sbg('#f0fdf4'), color:__stc('#15803d'), border:'1px solid #bbf7d0', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4 }}>👤 Lead</span>
+                        {f.leadName && <div style={{ fontWeight:700, fontSize:14, color:__stc('#0f172a'), marginBottom:2 }}>{f.leadName}</div>}
+                        <div style={{ fontWeight: f.leadName ? 500 : 700, fontSize:12, color:__stc('#64748b') }}>{f.leadCode || 'N/A'}</div>
+                        {f.groupName && <div style={{ fontSize:11, color:__stc('#64748b'), marginTop:2 }}>{f.groupName}{f.subGroupName ? ` › ${f.subGroupName}` : ''}</div>}
                         {(f.leadPhone || f.leadEmail) && (
                           <div style={{ marginTop:8, display:'flex', flexDirection:'column', gap:3 }}>
-                            {f.leadPhone && <div style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:5 }}><span>📞</span>{f.leadPhone}</div>}
-                            {f.leadEmail && <div style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:5 }}><span>✉️</span>{f.leadEmail}</div>}
+                            {f.leadPhone && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><span>📞</span>{f.leadPhone}</div>}
+                            {f.leadEmail && <div style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:5 }}><span>✉️</span>{f.leadEmail}</div>}
                           </div>
                         )}
                         {f.leadStatus && (
                           <div style={{ marginTop:8 }}>
-                            <span style={{ fontSize:11, fontWeight:600, padding:'2px 9px', borderRadius:20, background: f.leadStatus==='Closed Won'?'#d1fae5':f.leadStatus==='Closed Lost'?'#fee2e2':'#f1f5f9', color: f.leadStatus==='Closed Won'?'#065f46':f.leadStatus==='Closed Lost'?'#991b1b':'#374151' }}>
+                            <span style={{ fontSize:11, fontWeight:600, padding:'2px 9px', borderRadius:20, background: f.leadStatus==='Closed Won'?__sbg('#d1fae5'):f.leadStatus==='Closed Lost'?__sbg('#fee2e2'):__sbg('#f1f5f9'), color: f.leadStatus==='Closed Won'?__stc('#065f46'):f.leadStatus==='Closed Lost'?__stc('#991b1b'):__stc('#374151') }}>
                               {f.leadStatus}
                             </span>
                           </div>
@@ -2228,45 +2285,45 @@ export default function ClientDashboardFollowUps() {
                       </>
                     )}
                   </div>
-                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Priority</div>
+                  <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>Priority</div>
                     <span style={{ background:pm.bg, color:pm.color, borderRadius:20, padding:'4px 14px', fontSize:13, fontWeight:700 }}>{f.priority}</span>
                   </div>
                 </div>
 
                 {/* Scheduled + People */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📅 Scheduled</div>
-                    <div style={{ fontWeight:700, fontSize:13, color: overdue ? '#DC2626' : '#0f172a' }}>{formatDateTime(f.scheduledAt) || '—'}</div>
-                    {f.completedAt && <div style={{ fontSize:11, color:'#059669', marginTop:4 }}>✓ Completed: {formatDateTime(f.completedAt)}</div>}
+                  <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📅 Scheduled</div>
+                    <div style={{ fontWeight:700, fontSize:13, color: overdue ? __stc('#DC2626') : __stc('#0f172a') }}>{formatDateTime(f.scheduledAt) || '—'}</div>
+                    {f.completedAt && <div style={{ fontSize:11, color:__stc('#059669'), marginTop:4 }}>✓ Completed: {formatDateTime(f.completedAt)}</div>}
                   </div>
-                  <div style={{ background:'#f8fafc', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>👥 People</div>
-                    <div style={{ fontSize:13, marginBottom:4 }}><span style={{ color:'#64748b' }}>Assigned: </span><strong>{f.assignedToName || 'Unassigned'}</strong></div>
-                    <div style={{ fontSize:13 }}><span style={{ color:'#64748b' }}>Created by: </span><strong>{f.createdByName || '—'}</strong></div>
-                    {f.createdAt && <div style={{ fontSize:11, color:'#94a3b8', marginTop:3 }}>On {formatDateTime(f.createdAt)}</div>}
+                  <div style={{ background:__sbg('#f8fafc'), borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>👥 People</div>
+                    <div style={{ fontSize:13, marginBottom:4 }}><span style={{ color:__stc('#64748b') }}>Assigned: </span><strong>{f.assignedToName || 'Unassigned'}</strong></div>
+                    <div style={{ fontSize:13 }}><span style={{ color:__stc('#64748b') }}>Created by: </span><strong>{f.createdByName || '—'}</strong></div>
+                    {f.createdAt && <div style={{ fontSize:11, color:__stc('#94a3b8'), marginTop:3 }}>On {formatDateTime(f.createdAt)}</div>}
                   </div>
                 </div>
 
                 {/* Notes */}
                 {f.notes && (
-                  <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#0369a1', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📋 Pre-call Notes</div>
-                    <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.notes}</p>
+                  <div style={{ background:__sbg('#f0f9ff'), border:'1px solid #bae6fd', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#0369a1'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📋 Pre-call Notes</div>
+                    <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.notes}</p>
                   </div>
                 )}
 
                 {/* Outcome */}
                 {f.outcome && (
-                  <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, fontWeight:700, color:'#15803d', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📊 Outcome / Result</div>
-                    <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
+                  <div style={{ background:__sbg('#f0fdf4'), border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, fontWeight:700, color:__stc('#15803d'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:8 }}>📊 Outcome / Result</div>
+                    <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.7, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
                   </div>
                 )}
 
                 {!f.notes && !f.outcome && (
-                  <div style={{ textAlign:'center', color:'#94a3b8', fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>
+                  <div style={{ textAlign:'center', color:__stc('#94a3b8'), fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>
                 )}
 
                 {/* Footer */}

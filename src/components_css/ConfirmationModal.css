@@ -15,7 +15,7 @@
 
 /* Modal card */
 .cm-modal {
-  background: #ffffff;
+  background: var(--c-ffffff, #ffffff);
   border-radius: 14px;
   box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06);
   width: 100%;
@@ -34,10 +34,10 @@
 }
 
 /* Type accent — top border strip */
-.cm-type-alert   { border-top: 4px solid #ef4444; }
-.cm-type-error   { border-top: 4px solid #ef4444; }
-.cm-type-confirm { border-top: 4px solid #3b82f6; }
-.cm-type-success { border-top: 4px solid #22c55e; }
+.cm-type-alert   { border-top: 4px solid var(--c-ef4444, #ef4444); }
+.cm-type-error   { border-top: 4px solid var(--c-ef4444, #ef4444); }
+.cm-type-confirm { border-top: 4px solid var(--c-3b82f6, #3b82f6); }
+.cm-type-success { border-top: 4px solid var(--c-22c55e, #22c55e); }
 
 /* Icon */
 .cm-icon-wrap {
@@ -51,15 +51,15 @@
 }
 
 .cm-type-alert   .cm-icon-wrap,
-.cm-type-error   .cm-icon-wrap { background: #fef2f2; }
-.cm-type-confirm .cm-icon-wrap { background: #eff6ff; }
-.cm-type-success .cm-icon-wrap { background: #f0fdf4; }
+.cm-type-error   .cm-icon-wrap { background: var(--c-fef2f2, #fef2f2); }
+.cm-type-confirm .cm-icon-wrap { background: var(--c-eff6ff, #eff6ff); }
+.cm-type-success .cm-icon-wrap { background: var(--c-f0fdf4, #f0fdf4); }
 
 /* Title */
 .cm-title {
   font-size: 17px;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ct-0f172a, #0f172a);
   text-align: center;
   margin: 0 0 12px;
   line-height: 1.3;
@@ -74,7 +74,7 @@
 /* Simple message */
 .cm-message {
   font-size: 13.5px;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   text-align: center;
   line-height: 1.6;
   margin: 0;
@@ -90,15 +90,15 @@
 
 .cm-lead {
   font-size: 13px;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   text-align: center;
   margin: 0 0 4px;
 }
 
 /* Info card — receipt details table */
 .cm-info-card {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--c-f8fafc, #f8fafc);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -108,7 +108,7 @@
   justify-content: space-between;
   align-items: center;
   padding: 8px 14px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
   gap: 12px;
 }
 
@@ -119,34 +119,34 @@
 .cm-info-key {
   font-size: 12px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   white-space: nowrap;
 }
 
 .cm-info-value {
   font-size: 13px;
   font-weight: 500;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   text-align: right;
 }
 
 .cm-info-value.cm-amount {
-  color: #dc2626;
+  color: var(--ct-dc2626, #dc2626);
   font-weight: 700;
   font-size: 14px;
 }
 
 /* Warning box */
 .cm-warning-box {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: var(--c-fef2f2, #fef2f2);
+  border: 1px solid var(--c-fecaca, #fecaca);
   border-radius: 6px;
   padding: 10px 14px;
 }
 
 .cm-warning-box p {
   font-size: 12px;
-  color: #b91c1c;
+  color: var(--ct-b91c1c, #b91c1c);
   margin: 0;
   line-height: 1.5;
 }
@@ -154,7 +154,7 @@
 /* Note line */
 .cm-note {
   font-size: 11.5px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   text-align: center;
   font-style: italic;
   margin: 0;
@@ -184,30 +184,30 @@
 }
 
 .cm-btn-cancel {
-  background: #f1f5f9;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
 }
 .cm-btn-cancel:hover {
-  background: #e2e8f0;
-  color: #334155;
+  background: var(--c-e2e8f0, #e2e8f0);
+  color: var(--ct-334155, #334155);
 }
 
 .cm-btn-primary {
-  background: #2563eb;
-  color: #fff;
+  background: var(--c-2563eb, #2563eb);
+  color: var(--ct-fff, #fff);
 }
 .cm-btn-primary:hover {
-  background: #1d4ed8;
+  background: var(--c-1d4ed8, #1d4ed8);
   box-shadow: 0 3px 10px rgba(37, 99, 235, 0.3);
 }
 
 .cm-btn-danger {
-  background: #dc2626;
-  color: #fff;
+  background: var(--c-dc2626, #dc2626);
+  color: var(--ct-fff, #fff);
 }
 .cm-btn-danger:hover {
-  background: #b91c1c;
+  background: var(--c-b91c1c, #b91c1c);
   box-shadow: 0 3px 10px rgba(220, 38, 38, 0.3);
 }
 

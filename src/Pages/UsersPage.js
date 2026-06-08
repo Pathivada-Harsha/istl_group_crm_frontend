@@ -5,6 +5,41 @@ import '../pages-css/UsersPage.css';
 import CrmPreloader from '../components/preLoader';
 import FilterSelect from '../components/Dropdowns/FilterSelect';
 
+/* Inline-style theme mappers (dark mode) */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714','#fcd34d':'#5a4714','#fca5a5':'#5a2a2e',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#f3e8ff':'#2e2147','#fdf4ff':'#2e2147','#94a3b8':'#3a4456','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#cbd5e0':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#14532d':'#6ee7b7','#6b21a8':'#c4b5fd','#7e22ce':'#c4b5fd','#854d0e':'#f0c07a','#9a3412':'#fb923c','#1e1b4b':'#a5b4fc','#0ea5e9':'#38bdf8','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a','#be123c':'#f0708a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8','#0c4a6e':'#7cc3f0','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#4c1d95':'#a78bfa','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API = process.env.REACT_APP_API_URL;
 
 // Toast 
@@ -29,6 +64,7 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
 //  Confirm Modal 
 const ConfirmModal = ({ isOpen, onClose, onConfirm, title = "Confirm Action",
   message = "Are you sure?", confirmText = "Confirm", cancelText = "Cancel", type = "danger" }) => {
+  useThemeVersion();
   if (!isOpen) return null;
   const icons = { danger: '!', warning: '\u2713', info: 'i' };
   return (
@@ -60,13 +96,16 @@ const ROLE_STYLE = {
 };
 const ROLE_ORDER = ['SUPERADMIN', 'ADMIN', 'BD_MANAGER', 'SALES_MANAGER', 'BD_EXECUTIVE', 'SALES_EXEC', 'TELECALLER'];
 
+// Resolve theme at call time (called inside render) so cards react to dark/light.
 function getRoleStyle(role) {
   const key = (role || '').toUpperCase().replace(/\s+/g, '_');
-  return ROLE_STYLE[key] || { bg: '#f8fafc', border: '#94a3b8', text: '#334155', badge: '#94a3b8' };
+  const r = ROLE_STYLE[key] || { bg: '#f8fafc', border: '#94a3b8', text: '#334155', badge: '#94a3b8' };
+  return { bg: __sbg(r.bg), border: __sbg(r.border), text: __stc(r.text), badge: r.badge };
 }
 
 //  Tree node card 
 function TreeNode({ node, isLast, isRoot }) {
+  useThemeVersion();
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children && node.children.length > 0;
   const s = getRoleStyle(node.role_name);
@@ -100,7 +139,7 @@ function TreeNode({ node, isLast, isRoot }) {
         {/* Avatar */}
         <div style={{
           width: 36, height: 36, borderRadius: '50%',
-          background: s.badge, color: '#fff',
+          background: s.badge, color: __stc('#fff'),
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 14, fontWeight: 800, flexShrink: 0,
           boxShadow: `0 2px 6px ${s.badge}55`,
@@ -110,7 +149,7 @@ function TreeNode({ node, isLast, isRoot }) {
 
         {/* Info */}
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {name}
           </div>
           {/* FIX #7: show designation if set, else fall back to role_name */}
@@ -123,7 +162,7 @@ function TreeNode({ node, isLast, isRoot }) {
             </div>
           )}
           {node.team && (
-            <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+            <div style={{ fontSize: 9, color: __stc('#94a3b8'), marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
               <span style={{ fontSize: 9, color: "#94a3b8" }}>&#9632;</span>{node.team}
             </div>
           )}
@@ -133,7 +172,7 @@ function TreeNode({ node, isLast, isRoot }) {
         {hasChildren && (
           <div style={{
             width: 18, height: 18, borderRadius: '50%',
-            background: s.border, color: '#fff',
+            background: s.border, color: __stc('#fff'),
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 10, fontWeight: 700, flexShrink: 0,
           }}>
@@ -146,7 +185,7 @@ function TreeNode({ node, isLast, isRoot }) {
       {hasChildren && !collapsed && (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           {/* stem down from parent */}
-          <div style={{ width: 2, height: 28, background: '#cbd5e1' }} />
+          <div style={{ width: 2, height: 28, background: __sbg('#cbd5e1') }} />
 
           {/* horizontal branch */}
           <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative' }}>
@@ -162,11 +201,11 @@ function TreeNode({ node, isLast, isRoot }) {
                       position: 'absolute', top: 0,
                       left: isFirst ? '50%' : 0,
                       right: isLastChild ? '50%' : 0,
-                      height: 2, background: '#cbd5e1',
+                      height: 2, background: __sbg('#cbd5e1'),
                     }} />
                   )}
                   {/* vertical stem down to child */}
-                  <div style={{ width: 2, height: 24, background: '#cbd5e1' }} />
+                  <div style={{ width: 2, height: 24, background: __sbg('#cbd5e1') }} />
                   <div style={{ paddingLeft: 12, paddingRight: 12 }}>
                     <TreeNode node={child} isRoot={false} />
                   </div>
@@ -183,11 +222,12 @@ function TreeNode({ node, isLast, isRoot }) {
 //  Main HierarchyChart 
 // ── Teams View for Hierarchy ─────────────────────────────────────────────────
 function TeamsView({ teams }) {
+  useThemeVersion();
   if (!teams || teams.length === 0) {
     return (
-      <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-        <FiUsers size={48} style={{ margin: '0 auto 12px', display: 'block', color: '#cbd5e1' }} />
-        <div style={{ fontWeight: 600, color: '#374151' }}>No teams found</div>
+      <div style={{ textAlign: 'center', padding: 60, color: __stc('#94a3b8') }}>
+        <FiUsers size={48} style={{ margin: '0 auto 12px', display: 'block', color: __stc('#cbd5e1') }} />
+        <div style={{ fontWeight: 600, color: __stc('#374151') }}>No teams found</div>
         <div style={{ fontSize: 13, marginTop: 4 }}>Go to Teams tab to create teams first</div>
       </div>
     );
@@ -207,24 +247,24 @@ function TeamsView({ teams }) {
                 borderRadius: 14, padding: '14px 20px', textAlign: 'center',
                 boxShadow: `0 3px 12px ${color}25`, minWidth: 160,
               }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontWeight: 800, fontSize: 16 }}>
+                <div style={{ width: 40, height: 40, borderRadius: '50%', background: color, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontWeight: 800, fontSize: 16 }}>
                   {team.name.charAt(0).toUpperCase()}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{team.name}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: __stc('#0f172a') }}>{team.name}</div>
                 <div style={{ fontSize: 11, color: color, fontWeight: 600, marginTop: 3 }}>{members.length} member{members.length !== 1 ? 's' : ''}</div>
-                {team.description && <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, maxWidth: 140 }}>{team.description}</div>}
+                {team.description && <div style={{ fontSize: 10, color: __stc('#94a3b8'), marginTop: 4, maxWidth: 140 }}>{team.description}</div>}
               </div>
               {/* Connector line */}
-              {members.length > 0 && <div style={{ width: 2, height: 20, background: '#cbd5e1' }} />}
+              {members.length > 0 && <div style={{ width: 2, height: 20, background: __sbg('#cbd5e1') }} />}
               {/* Members */}
               {members.length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
                   {members.map(m => (
                     <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: `hsl(${(m.id * 47) % 360},55%,62%)`, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', border: '2px solid #fff' }}>
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: `hsl(${(m.id * 47) % 360},55%,62%)`, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', border: `2px solid ${__sbg('#fff')}` }}>
                         {(m.name || '?').charAt(0).toUpperCase()}
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#374151', textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: __stc('#374151'), textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
                       <div style={{ fontSize: 9, color: color, fontWeight: 500, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>
                     </div>
                   ))}
@@ -235,8 +275,8 @@ function TeamsView({ teams }) {
         })}
       </div>
       {/* Legend */}
-      <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
-        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>TEAMS</span>
+      <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10 }}>
+        <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>TEAMS</span>
         {teams.map((team, idx) => {
           const color = teamColors[idx % teamColors.length];
           return (
@@ -253,6 +293,7 @@ function TeamsView({ teams }) {
 
 // ── HierarchySection (wraps Org Chart + Teams View with toggle) ───────────────
 function HierarchySection({ users, teams, loading, onRefresh }) {
+  useThemeVersion();
   const [viewMode, setViewMode] = React.useState('org');
 
   React.useEffect(() => {
@@ -263,7 +304,7 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
     <div>
       {/* Toggle + Refresh */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', borderRadius: 8, padding: 3 }}>
+        <div style={{ display: 'flex', gap: 2, background: __sbg('#f1f5f9'), borderRadius: 8, padding: 3 }}>
           {[
             { key: 'org', label: 'Org Chart', icon: <FiGrid size={14} /> },
             { key: 'teams', label: 'Teams View', icon: <FiUsers size={14} /> },
@@ -271,8 +312,8 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
             <button key={btn.key} onClick={() => setViewMode(btn.key)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
-                background: viewMode === btn.key ? '#fff' : 'transparent',
-                color: viewMode === btn.key ? '#4f46e5' : '#6b7280',
+                background: viewMode === btn.key ? __sbg('#fff') : __sbg('transparent'),
+                color: viewMode === btn.key ? __stc('#4f46e5') : __stc('#6b7280'),
                 boxShadow: viewMode === btn.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
               }}>
               {btn.icon}
@@ -281,21 +322,21 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
           ))}
         </div>
         <button onClick={onRefresh}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 14px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', cursor: 'pointer', color: '#374151', fontWeight: 500 }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 14px', borderRadius: 8, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#fff'), cursor: 'pointer', color: __stc('#374151'), fontWeight: 500 }}>
           <FiRefreshCw size={13} />
           Refresh
         </button>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-          <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+        <div style={{ textAlign: 'center', padding: 60, color: __stc('#94a3b8') }}>
+          <div style={{ width: 32, height: 32, border: `3px solid ${__sbg('#e2e8f0')}`, borderTopColor: `${__sbg('#6366f1')}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
           Loading...
         </div>
       ) : viewMode === 'org' ? (
         <HierarchyChart users={users} />
       ) : (
-        <div style={{ background: 'linear-gradient(135deg,#f8fafc 0%,#f1f5f9 100%)', borderRadius: 16, border: '1px solid #e2e8f0', minHeight: 200 }}>
+        <div style={{ background: `linear-gradient(135deg,${__sbg('#f8fafc')} 0%,${__sbg('#f1f5f9')} 100%)`, borderRadius: 16, border: `1px solid ${__sbg('#e2e8f0')}`, minHeight: 200 }}>
           <TeamsView teams={teams} />
         </div>
       )}
@@ -304,6 +345,7 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
 }
 
 function HierarchyChart({ users }) {
+  useThemeVersion();
 
   //  Build tree from managerId, fallback to role-level grouping 
   const buildTree = () => {
@@ -391,8 +433,8 @@ function HierarchyChart({ users }) {
 
   if (users.length === 0) {
     return (
-      <div style={{ padding: 60, textAlign: 'center', color: '#94a3b8' }}>
-        <FiUsers size={48} style={{ margin: '0 auto 12px', display: 'block', color: '#cbd5e1' }} />
+      <div style={{ padding: 60, textAlign: 'center', color: __stc('#94a3b8') }}>
+        <FiUsers size={48} style={{ margin: '0 auto 12px', display: 'block', color: __stc('#cbd5e1') }} />
         <div style={{ fontSize: 15, fontWeight: 600 }}>No users to display</div>
       </div>
     );
@@ -403,11 +445,11 @@ function HierarchyChart({ users }) {
       {/* Info banner when no manager links */}
       {!hasManagerLinks && (
         <div style={{
-          background: '#fef9c3', border: '1px solid #fde047', borderRadius: 8,
-          padding: '10px 16px', fontSize: 13, color: '#854d0e',
+          background: __sbg('#fef9c3'), border: `1px solid ${__sbg('#fde047')}`, borderRadius: 8,
+          padding: '10px 16px', fontSize: 13, color: __stc('#854d0e'),
           marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <FiAlertCircle size={16} style={{ flexShrink: 0, color: '#ca8a04' }} />
+          <FiAlertCircle size={16} style={{ flexShrink: 0, color: __stc('#ca8a04') }} />
           <span>No "Reports To" manager assignments found  showing role-level grouping. Set managers via Edit User to see the real org chart.</span>
         </div>
       )}
@@ -416,8 +458,8 @@ function HierarchyChart({ users }) {
       <div style={{
         overflowX: 'auto', overflowY: 'visible',
         padding: '32px 24px 40px',
-        background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
-        borderRadius: 16, border: '1px solid #e2e8f0',
+        background: `linear-gradient(135deg, ${__sbg('#f8fafc')} 0%, ${__sbg('#f1f5f9')} 100%)`,
+        borderRadius: 16, border: `1px solid ${__sbg('#e2e8f0')}`,
         minHeight: 200,
       }}>
         <div style={{ display: 'flex', gap: 40, justifyContent: 'center', flexWrap: 'nowrap', minWidth: 'max-content' }}>
@@ -430,10 +472,10 @@ function HierarchyChart({ users }) {
       {/* Legend */}
       <div style={{
         marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8,
-        padding: '12px 16px', background: '#fff',
-        border: '1px solid #e2e8f0', borderRadius: 10,
+        padding: '12px 16px', background: __sbg('#fff'),
+        border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10,
       }}>
-        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>ROLES</span>
+        <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>ROLES</span>
         {ROLE_ORDER.map(role => {
           const s = ROLE_STYLE[role];
           const hasUsers = users.some(u => (u.role_name || '').toUpperCase().replace(/\s+/g, '_') === role);
@@ -477,6 +519,7 @@ const transformUser = (apiUser) => ({
 });
 
 const UsersPage = () => {
+  useThemeVersion();
   const [activeTab, setActiveTab] = useState('list');   // 'list' | 'hierarchy'
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
@@ -1137,28 +1180,28 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
   // Action colour chips — same as Role & Permission page
   const actionChipStyle = (actionName, isOn) => {
     const map = {
-      view: { bg: '#dbeafe', color: '#1e40af', border: '#2563eb' },
-      create: { bg: '#d1fae5', color: '#065f46', border: '#059669' },
-      edit: { bg: '#fef3c7', color: '#92400e', border: '#d97706' },
-      delete: { bg: '#fee2e2', color: '#991b1b', border: '#ef4444' },
-      manage: { bg: '#ede9fe', color: '#5b21b6', border: '#7c3aed' },
-      approve: { bg: '#ecfdf5', color: '#065f46', border: '#10b981' },
-      assign: { bg: '#fdf4ff', color: '#6b21a8', border: '#a21caf' },
-      send: { bg: '#fff7ed', color: '#9a3412', border: '#ea580c' },
-      record: { bg: '#f0fdf4', color: '#14532d', border: '#16a34a' },
-      upload: { bg: '#e0f2fe', color: '#0369a1', border: '#0284c7' },
-      download: { bg: '#f0fdf4', color: '#065f46', border: '#22c55e' },
-      adjust: { bg: '#fdf4ff', color: '#7e22ce', border: '#9333ea' },
-      upload_po: { bg: '#e0f2fe', color: '#0369a1', border: '#0284c7' },
+      view: { bg: __sbg('#dbeafe'), color: __stc('#1e40af'), border: __sbg('#2563eb') },
+      create: { bg: __sbg('#d1fae5'), color: __stc('#065f46'), border: __sbg('#059669') },
+      edit: { bg: __sbg('#fef3c7'), color: __stc('#92400e'), border: __sbg('#d97706') },
+      delete: { bg: __sbg('#fee2e2'), color: __stc('#991b1b'), border: __sbg('#ef4444') },
+      manage: { bg: __sbg('#ede9fe'), color: __stc('#5b21b6'), border: __sbg('#7c3aed') },
+      approve: { bg: __sbg('#ecfdf5'), color: __stc('#065f46'), border: __sbg('#10b981') },
+      assign: { bg: __sbg('#fdf4ff'), color: __stc('#6b21a8'), border: __sbg('#a21caf') },
+      send: { bg: __sbg('#fff7ed'), color: __stc('#9a3412'), border: __sbg('#ea580c') },
+      record: { bg: __sbg('#f0fdf4'), color: __stc('#14532d'), border: __sbg('#16a34a') },
+      upload: { bg: __sbg('#e0f2fe'), color: __stc('#0369a1'), border: __sbg('#0284c7') },
+      download: { bg: __sbg('#f0fdf4'), color: __stc('#065f46'), border: __sbg('#22c55e') },
+      adjust: { bg: __sbg('#fdf4ff'), color: __stc('#7e22ce'), border: __sbg('#9333ea') },
+      upload_po: { bg: __sbg('#e0f2fe'), color: __stc('#0369a1'), border: __sbg('#0284c7') },
     };
-    const s = map[actionName.toLowerCase()] || { bg: '#f1f5f9', color: '#475569', border: '#6366f1' };
+    const s = map[actionName.toLowerCase()] || { bg: __sbg('#f1f5f9'), color: __stc('#475569'), border: __sbg('#6366f1') };
     return {
       display: 'flex', alignItems: 'center', gap: 5,
       padding: '5px 12px', borderRadius: 7, cursor: 'pointer',
       fontSize: 12, fontWeight: 600, userSelect: 'none', transition: 'all 0.15s',
       border: isOn ? `1.5px solid ${s.border}` : '1.5px solid #e2e8f0',
-      background: isOn ? s.bg : '#f8fafc',
-      color: isOn ? s.color : '#64748b',
+      background: isOn ? s.bg : __sbg('#f8fafc'),
+      color: isOn ? s.color : __stc('#64748b'),
     };
   };
   const groupedPermissions = groupPermissionsByModule(availablePagePermissions);
@@ -1180,9 +1223,9 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
       {loading && <CrmPreloader text={loadingText} />}
       {modalLoading && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.25)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:'#fff', borderRadius:12, padding:'20px 28px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 8px 24px rgba(0,0,0,0.15)' }}>
+          <div style={{ background:__sbg('#fff'), borderRadius:12, padding:'20px 28px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 8px 24px rgba(0,0,0,0.15)' }}>
             <FiLoader size={20} color="#3b82f6" style={{ animation:'spin 0.8s linear infinite' }} />
-            <span style={{ fontSize:14, fontWeight:500, color:'#374151' }}>Loading permissions...</span>
+            <span style={{ fontSize:14, fontWeight:500, color:__stc('#374151') }}>Loading permissions...</span>
           </div>
         </div>
       )}
@@ -1206,7 +1249,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
       </div>
 
       {/*  TABS  */}
-      <div style={{ display: 'flex', gap: 4, borderBottom: '2px solid #e5e7eb', marginBottom: 10 }}>
+      <div style={{ display: 'flex', gap: 4, borderBottom: `2px solid ${__sbg('#e5e7eb')}`, marginBottom: 10 }}>
         {[{ key: 'list', label: 'Users List' }, { key: 'hierarchy', label: 'Hierarchy Chart' }, { key: 'teams', label: 'Teams' }].map(tab => (
           <button key={tab.key} onClick={() => {
             setActiveTab(tab.key);
@@ -1215,7 +1258,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
           }}
             style={{
               padding: '9px 20px', fontSize: 14, fontWeight: activeTab === tab.key ? 600 : 400,
-              color: activeTab === tab.key ? '#2563eb' : '#6b7280',
+              color: activeTab === tab.key ? __stc('#2563eb') : __stc('#6b7280'),
               background: 'none', border: 'none',
               borderBottom: activeTab === tab.key ? '2px solid #2563eb' : '2px solid transparent',
               marginBottom: -2, cursor: 'pointer', borderRadius: '6px 6px 0 0',
@@ -1244,15 +1287,15 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
         justifyContent: 'center', padding: '80px 20px', textAlign: 'center',
       }}>
         <div style={{
-          width: 72, height: 72, borderRadius: '50%', background: '#fef2f2',
+          width: 72, height: 72, borderRadius: '50%', background: __sbg('#fef2f2'),
           display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20,
         }}>
           <FiAlertCircle size={36} color="#ef4444" />
         </div>
-        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: '#111827' }}>
+        <h3 style={{ margin: '0 0 8px', fontSize: 18, fontWeight: 700, color: __stc('#111827') }}>
           Access Denied
         </h3>
-        <p style={{ margin: 0, fontSize: 14, color: '#6b7280', maxWidth: 360 }}>
+        <p style={{ margin: 0, fontSize: 14, color: __stc('#6b7280'), maxWidth: 360 }}>
           You don't have permission to view the data. Please contact your administrator.
         </p>
       </div>
@@ -1319,32 +1362,32 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       {users.map(u => (
                         <tr key={u.id} className={!u.is_active ? 'users-page-row-inactive' : ''}>
                           <td><div className="users-page-user-name">{u.full_name}</div></td>
-                          <td><div>{u.phone}</div><div style={{ fontSize: 12, color: '#6b7280' }}>{u.email}</div></td>
+                          <td><div>{u.phone}</div><div style={{ fontSize: 12, color: __stc('#6b7280') }}>{u.email}</div></td>
                           <td>
                             <span className={`users-page-badge ${getRoleBadgeClass(u.role_name)}`}>{u.role_name}</span>
-                            {u.designation && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{u.designation}</div>}
+                            {u.designation && <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 3 }}>{u.designation}</div>}
                           </td>
 
                           {/*  Reports To column  */}
                           <td>
                             {u.managerName
                               ? <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#dbeafe', color: '#1e40af', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                                <div style={{ width: 26, height: 26, borderRadius: '50%', background: __sbg('#dbeafe'), color: __stc('#1e40af'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                                   {u.managerName.charAt(0).toUpperCase()}
                                 </div>
-                                <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>{u.managerName}</span>
+                                <span style={{ fontSize: 13, color: __stc('#374151'), fontWeight: 500 }}>{u.managerName}</span>
                               </div>
-                              : <span style={{ color: '#d1d5db', fontSize: 12 }}>--</span>
+                              : <span style={{ color: __stc('#d1d5db'), fontSize: 12 }}>--</span>
                             }
                           </td>
 
                           {/*  Team column  */}
                           <td>
                             {u.team
-                              ? <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, background: '#f3e8ff', color: '#6b21a8', border: '1px solid #e9d5ff', fontSize: 12, fontWeight: 500 }}>
+                              ? <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 99, background: __sbg('#f3e8ff'), color: __stc('#6b21a8'), border: `1px solid ${__sbg('#e9d5ff')}`, fontSize: 12, fontWeight: 500 }}>
                                 {u.team}
                               </span>
-                              : <span style={{ color: '#d1d5db', fontSize: 12 }}></span>
+                              : <span style={{ color: __stc('#d1d5db'), fontSize: 12 }}></span>
                             }
                           </td>
 
@@ -1371,7 +1414,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             </div>
                           </td>
                           <td><span className={`users-page-status-badge ${u.is_active ? 'users-page-status-active' : 'users-page-status-inactive'}`}>{u.is_active ? 'ACTIVE' : 'INACTIVE'}</span></td>
-                          <td style={{ fontSize: 12, color: '#6b7280' }}>{u.created_at}</td>
+                          <td style={{ fontSize: 12, color: __stc('#6b7280') }}>{u.created_at}</td>
                           <td>
                             <div className="users-page-actions">
                               <div className="tooltip-wrapper">
@@ -1431,8 +1474,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#0f172a' }}>Teams</h2>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: '#6b7280' }}>Manage teams and their members</p>
+              <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: __stc('#0f172a') }}>Teams</h2>
+              <p style={{ margin: '4px 0 0', fontSize: 13, color: __stc('#6b7280') }}>Manage teams and their members</p>
             </div>
             <button className="users-page-btn users-page-btn-primary"
               onClick={() => { setTeamForm({ name: '', description: '', memberIds: [] }); setShowCreateTeamModal(true); fetchAllUsersForTeams(); }}>
@@ -1440,15 +1483,15 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
             </button>
           </div>
           {teamsLoading ? (
-            <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-              <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
+            <div style={{ textAlign: 'center', padding: 60, color: __stc('#94a3b8') }}>
+              <div style={{ width: 32, height: 32, border: `3px solid ${__sbg('#e2e8f0')}`, borderTopColor: `${__sbg('#6366f1')}`, borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 12px' }} />
               Loading teams...
             </div>
           ) : teams.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 60, color: '#94a3b8' }}>
-              <FiUsers size={52} style={{ margin: '0 auto 16px', display: 'block', color: '#cbd5e1' }} />
-              <div style={{ fontWeight: 700, fontSize: 16, color: '#374151', marginBottom: 6 }}>No teams yet</div>
-              <div style={{ fontSize: 13, color: '#9ca3af', marginBottom: 20 }}>Create your first team to group users together</div>
+            <div style={{ textAlign: 'center', padding: 60, color: __stc('#94a3b8') }}>
+              <FiUsers size={52} style={{ margin: '0 auto 16px', display: 'block', color: __stc('#cbd5e1') }} />
+              <div style={{ fontWeight: 700, fontSize: 16, color: __stc('#374151'), marginBottom: 6 }}>No teams yet</div>
+              <div style={{ fontSize: 13, color: __stc('#9ca3af'), marginBottom: 20 }}>Create your first team to group users together</div>
               <button className="users-page-btn users-page-btn-primary"
                 onClick={() => { setTeamForm({ name: '', description: '', memberIds: [] }); setShowCreateTeamModal(true); fetchAllUsersForTeams(); }}>
                 + Create First Team
@@ -1463,7 +1506,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 const teamBg = teamColor + '12';
                 return (
                   <div key={team.id} style={{
-                    background: '#fff', borderRadius: 14, border: '1px solid #e5e7eb',
+                    background: __sbg('#fff'), borderRadius: 14, border: `1px solid ${__sbg('#e5e7eb')}`,
                     overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
                     transition: 'box-shadow 0.2s, transform 0.15s',
                   }}
@@ -1479,24 +1522,24 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             <FiUsers size={18} color={teamColor} />
                           </div>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: 15, color: '#0f172a', lineHeight: 1.2 }}>{team.name}</div>
+                            <div style={{ fontWeight: 700, fontSize: 15, color: __stc('#0f172a'), lineHeight: 1.2 }}>{team.name}</div>
                             <div style={{ fontSize: 11, color: teamColor, fontWeight: 600, marginTop: 2 }}>
                               {team.memberCount || 0} member{(team.memberCount || 0) !== 1 ? 's' : ''}
                             </div>
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
-                          <button style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #e5e7eb', background: '#f0fdf4', color: '#10b981', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          <button style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${__sbg('#e5e7eb')}`, background: __sbg('#f0fdf4'), color: __stc('#10b981'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="View members"
                             onClick={() => { setViewingTeam(team); setShowViewTeamModal(true); }}>
                             <FiEye size={13} />
                           </button>
-                          <button style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #e5e7eb', background: '#f8fafc', color: '#6366f1', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          <button style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${__sbg('#e5e7eb')}`, background: __sbg('#f8fafc'), color: __stc('#6366f1'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Edit team"
                             onClick={() => { setSelectedTeam(team); setTeamForm({ name: team.name, description: team.description || '', memberIds: (team.memberIds || []) }); setShowEditTeamModal(true); fetchAllUsersForTeams(); }}>
                             <FiEdit size={13} />
                           </button>
-                          <button style={{ width: 30, height: 30, borderRadius: 8, border: '1px solid #fee2e2', background: '#fff5f5', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                          <button style={{ width: 30, height: 30, borderRadius: 8, border: `1px solid ${__sbg('#fee2e2')}`, background: __sbg('#fff5f5'), color: __stc('#ef4444'), cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             title="Delete team"
                             onClick={async () => {
                               if (!window.confirm('Delete team "' + team.name + '"?')) return;
@@ -1512,15 +1555,15 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       </div>
                       {/* Description */}
                       {team.description && (
-                        <p style={{ margin: '0 0 12px', fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>{team.description}</p>
+                        <p style={{ margin: '0 0 12px', fontSize: 12, color: __stc('#6b7280'), lineHeight: 1.5 }}>{team.description}</p>
                       )}
                       {/* Member avatars */}
                       {(team.members || []).length > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 0, marginTop: 8 }}>
                           {(team.members || []).slice(0, 5).map((m, idx) => (
                             <div key={m.id} title={m.name} style={{
-                              width: 28, height: 28, borderRadius: '50%', border: '2px solid #fff',
-                              background: `hsl(${(m.id * 47) % 360},60%,65%)`, color: '#fff',
+                              width: 28, height: 28, borderRadius: '50%', border: `2px solid ${__sbg('#fff')}`,
+                              background: `hsl(${(m.id * 47) % 360},60%,65%)`, color: __stc('#fff'),
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontSize: 10, fontWeight: 700, marginLeft: idx === 0 ? 0 : -8,
                               boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
@@ -1529,11 +1572,11 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             </div>
                           ))}
                           {(team.members || []).length > 5 && (
-                            <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #fff', background: '#e5e7eb', color: '#6b7280', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, marginLeft: -8 }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', border: `2px solid ${__sbg('#fff')}`, background: __sbg('#e5e7eb'), color: __stc('#6b7280'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 700, marginLeft: -8 }}>
                               +{(team.members || []).length - 5}
                             </div>
                           )}
-                          <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 10 }}>
+                          <span style={{ fontSize: 11, color: __stc('#9ca3af'), marginLeft: 10 }}>
                             {(team.members || []).map(m => m.name).slice(0, 2).join(', ')}{(team.members || []).length > 2 ? '...' : ''}
                           </span>
                         </div>
@@ -1558,13 +1601,13 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               style={{ maxWidth: 520, borderRadius: 16, overflow: 'hidden' }}>
               {/* Header */}
               <div className="users-page-modal-header"
-                style={{ background: `linear-gradient(135deg,${teamColor},${teamColor}cc)`, color: '#fff', padding: '20px 24px' }}>
+                style={{ background: `linear-gradient(135deg,${teamColor},${teamColor}cc)`, color: __stc('#fff'), padding: '20px 24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: '#fff' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 800, color: __stc('#fff') }}>
                     {viewingTeam.name.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>{viewingTeam.name}</h2>
+                    <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: __stc('#fff') }}>{viewingTeam.name}</h2>
                     <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.8)', marginTop: 2 }}>
                       {members.length} member{members.length !== 1 ? 's' : ''}
                       {viewingTeam.description ? ` · ${viewingTeam.description}` : ''}
@@ -1572,7 +1615,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                 </div>
                 <button className="users-page-modal-close"
-                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}
+                  style={{ background: 'rgba(255,255,255,0.18)', border: 'none', borderRadius: 8, color: __stc('#fff'), cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}
                   onClick={() => { setShowViewTeamModal(false); setViewingTeam(null); }}>
                   <FiX size={18} />
                 </button>
@@ -1581,9 +1624,9 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               {/* Body */}
               <div className="users-page-modal-body" style={{ padding: '20px 24px', maxHeight: '60vh', overflowY: 'auto' }}>
                 {members.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '40px 0', color: '#9ca3af' }}>
-                    <FiUsers size={40} style={{ display: 'block', margin: '0 auto 12px', color: '#cbd5e1' }} />
-                    <div style={{ fontWeight: 600, color: '#374151', marginBottom: 4 }}>No members yet</div>
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: __stc('#9ca3af') }}>
+                    <FiUsers size={40} style={{ display: 'block', margin: '0 auto 12px', color: __stc('#cbd5e1') }} />
+                    <div style={{ fontWeight: 600, color: __stc('#374151'), marginBottom: 4 }}>No members yet</div>
                     <div style={{ fontSize: 13 }}>Edit this team to add members</div>
                   </div>
                 ) : (
@@ -1592,32 +1635,32 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       <div key={m.id} style={{
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '11px 14px', borderRadius: 10,
-                        background: idx % 2 === 0 ? '#f8fafc' : '#fff',
-                        border: '1px solid #f1f5f9',
+                        background: idx % 2 === 0 ? __sbg('#f8fafc') : __sbg('#fff'),
+                        border: `1px solid ${__sbg('#f1f5f9')}`,
                       }}>
                         {/* Avatar */}
                         <div style={{
                           width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
                           background: `hsl(${(m.id * 47) % 360},55%,62%)`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#fff', fontSize: 14, fontWeight: 700,
+                          color: __stc('#fff'), fontSize: 14, fontWeight: 700,
                           border: `2px solid ${teamColor}30`,
                         }}>
                           {(m.name || '?').charAt(0).toUpperCase()}
                         </div>
                         {/* Info */}
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: __stc('#0f172a'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {m.name}
                           </div>
-                          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 2, display: 'flex', alignItems: 'center', gap: 8 }}>
                             {m.role && <span style={{ background: `${teamColor}15`, color: teamColor, borderRadius: 4, padding: '1px 7px', fontWeight: 600, fontSize: 10 }}>{m.role}</span>}
-                            {m.designation && <span style={{ color: '#9ca3af' }}>{m.designation}</span>}
-                            {m.email && <span style={{ color: '#9ca3af' }}>{m.email}</span>}
+                            {m.designation && <span style={{ color: __stc('#9ca3af') }}>{m.designation}</span>}
+                            {m.email && <span style={{ color: __stc('#9ca3af') }}>{m.email}</span>}
                           </div>
                         </div>
                         {/* Member number badge */}
-                        <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600, flexShrink: 0 }}>
+                        <div style={{ fontSize: 11, color: __stc('#9ca3af'), fontWeight: 600, flexShrink: 0 }}>
                           #{idx + 1}
                         </div>
                       </div>
@@ -1627,8 +1670,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               </div>
 
               {/* Footer */}
-              <div className="users-page-modal-footer" style={{ padding: '14px 24px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 12, color: '#6b7280' }}>
+              <div className="users-page-modal-footer" style={{ padding: '14px 24px', borderTop: `1px solid ${__sbg('#f1f5f9')}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 12, color: __stc('#6b7280') }}>
                   Team has <strong style={{ color: teamColor }}>{members.length}</strong> member{members.length !== 1 ? 's' : ''}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -1660,18 +1703,18 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
           <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}
             style={{ maxWidth: 560, borderRadius: 16, overflow: 'hidden' }}>
             {/* Header */}
-            <div className="users-page-modal-header" style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: '#fff', padding: '20px 24px' }}>
+            <div className="users-page-modal-header" style={{ background: 'linear-gradient(135deg,#6366f1,#4f46e5)', color: __stc('#fff'), padding: '20px 24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FiUsers size={20} color="#fff" />
                 </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Create New Team</h2>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: __stc('#fff') }}>Create New Team</h2>
                   <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>Group users into a team</p>
                 </div>
               </div>
               <button className="users-page-modal-close" onClick={() => setShowCreateTeamModal(false)}
-                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}>
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: __stc('#fff'), cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}>
                 <FiX size={18} />
               </button>
             </div>
@@ -1679,14 +1722,14 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               {/* Team Name + Description side by side */}
               <div className="users-page-form-row">
                 <div className="users-page-form-group">
-                  <label>Team Name <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label>Team Name <span style={{ color: __stc('#ef4444') }}>*</span></label>
                   <input type="text" value={teamForm.name}
                     onChange={e => setTeamForm({ ...teamForm, name: e.target.value })}
                     placeholder="e.g. Sales North Team"
-                    style={{ borderColor: teamForm.name ? '#6366f1' : '' }} />
+                    style={{ borderColor: teamForm.name ? __sbg('#6366f1') : '' }} />
                 </div>
                 <div className="users-page-form-group">
-                  <label>Description <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+                  <label>Description <span style={{ color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span></label>
                   <input type="text" value={teamForm.description}
                     onChange={e => setTeamForm({ ...teamForm, description: e.target.value })}
                     placeholder="Brief description of this team" />
@@ -1697,21 +1740,21 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Members</span>
                   {teamForm.memberIds.length > 0 && (
-                    <button type="button" style={{ fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                    <button type="button" style={{ fontSize: 11, color: __stc('#ef4444'), background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
                       onClick={() => setTeamForm(prev => ({ ...prev, memberIds: [] }))}>
                       Clear all
                     </button>
                   )}
                 </label>
-                <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: '1px solid #e5e7eb' }}>
-                  <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
-                    <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 700 }}>
+                <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: `1px solid ${__sbg('#e5e7eb')}` }}>
+                  <div style={{ padding: '10px 14px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e5e7eb')}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: __stc('#6b7280'), display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
+                    <span style={{ fontSize: 12, color: __stc('#6366f1'), fontWeight: 700 }}>
                         {teamForm.memberIds.length} selected · {allUsersForTeams.filter(u => !new Set(teams.flatMap(t => t.memberIds || [])).has(u.id)).length} available
                       </span>
                   </div>
                   {allUsersForTeamsLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: __stc('#9ca3af'), fontSize: 13 }}>
                       <FiLoader size={18} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
                       Loading users...
                     </div>
@@ -1720,8 +1763,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     const allAssignedIds = new Set(teams.flatMap(t => t.memberIds || []));
                     const availableUsers = allUsersForTeams.filter(u => !allAssignedIds.has(u.id));
                     return availableUsers.length === 0 ? (
-                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: '#cbd5e1' }} />
+                      <div style={{ padding: '24px', textAlign: 'center', color: __stc('#9ca3af'), fontSize: 13 }}>
+                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: __stc('#cbd5e1') }} />
                         All users are already assigned to a team
                       </div>
                     ) : (
@@ -1731,8 +1774,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                           <label key={u.id} style={{
                             display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
                             cursor: 'pointer', transition: 'background 0.1s',
-                            background: isSelected ? '#f0f4ff' : '#fff',
-                            borderBottom: '1px solid #f1f5f9',
+                            background: isSelected ? __sbg('#f0f4ff') : __sbg('#fff'),
+                            borderBottom: `1px solid ${__sbg('#f1f5f9')}`,
                           }}>
                             <input type="checkbox" checked={isSelected}
                               onChange={e => setTeamForm(prev => ({
@@ -1744,15 +1787,15 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                               style={{ width: 15, height: 15, accentColor: '#6366f1', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
                             <div style={{
                               width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                              background: isSelected ? '#6366f1' : `hsl(${(u.id * 47) % 360},55%,62%)`,
+                              background: isSelected ? __sbg('#6366f1') : `hsl(${(u.id * 47) % 360},55%,62%)`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: '#fff', fontSize: 13, fontWeight: 700,
+                              color: __stc('#fff'), fontSize: 13, fontWeight: 700,
                             }}>{(u.full_name || '?').charAt(0).toUpperCase()}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#1e1b4b' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? __stc('#1e1b4b') : __stc('#111827'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {u.full_name}
                               </div>
-                              <div style={{ fontSize: 11, color: isSelected ? '#6366f1' : '#9ca3af', marginTop: 1 }}>
+                              <div style={{ fontSize: 11, color: isSelected ? __stc('#6366f1') : __stc('#9ca3af'), marginTop: 1 }}>
                                 {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
                               </div>
                             </div>
@@ -1764,7 +1807,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 </div>
               </div>
             </div>
-            <div className="users-page-modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9' }}>
+            <div className="users-page-modal-footer" style={{ padding: '16px 24px', borderTop: `1px solid ${__sbg('#f1f5f9')}` }}>
               <button className="users-page-btn users-page-btn-secondary" onClick={() => setShowCreateTeamModal(false)}>Cancel</button>
               <button className="users-page-btn users-page-btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
@@ -1789,18 +1832,18 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
           <div className="users-page-modal users-page-modal-large" onClick={e => e.stopPropagation()}
             style={{ maxWidth: 560, borderRadius: 16, overflow: 'hidden' }}>
             {/* Header */}
-            <div className="users-page-modal-header" style={{ background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: '#fff', padding: '20px 24px' }}>
+            <div className="users-page-modal-header" style={{ background: 'linear-gradient(135deg,#0ea5e9,#0284c7)', color: __stc('#fff'), padding: '20px 24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <FiEdit size={20} color="#fff" />
                 </div>
                 <div>
-                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: '#fff' }}>Edit Team</h2>
+                  <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: __stc('#fff') }}>Edit Team</h2>
                   <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2 }}>{selectedTeam.name}</p>
                 </div>
               </div>
               <button className="users-page-modal-close" onClick={() => setShowEditTeamModal(false)}
-                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}>
+                style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, color: __stc('#fff'), cursor: 'pointer', padding: 6, display: 'flex', alignItems: 'center' }}>
                 <FiX size={18} />
               </button>
             </div>
@@ -1808,12 +1851,12 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
               {/* Team Name + Description side by side */}
               <div className="users-page-form-row">
                 <div className="users-page-form-group">
-                  <label>Team Name <span style={{ color: '#ef4444' }}>*</span></label>
+                  <label>Team Name <span style={{ color: __stc('#ef4444') }}>*</span></label>
                   <input type="text" value={teamForm.name}
                     onChange={e => setTeamForm({ ...teamForm, name: e.target.value })} />
                 </div>
                 <div className="users-page-form-group">
-                  <label>Description <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span></label>
+                  <label>Description <span style={{ color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span></label>
                   <input type="text" value={teamForm.description}
                     onChange={e => setTeamForm({ ...teamForm, description: e.target.value })}
                     placeholder="Brief description" />
@@ -1824,21 +1867,21 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Members</span>
                   {teamForm.memberIds.length > 0 && (
-                    <button type="button" style={{ fontSize: 11, color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                    <button type="button" style={{ fontSize: 11, color: __stc('#ef4444'), background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
                       onClick={() => setTeamForm(prev => ({ ...prev, memberIds: [] }))}>
                       Clear all
                     </button>
                   )}
                 </label>
-                <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: '1px solid #e5e7eb' }}>
-                  <div style={{ padding: '10px 14px', background: '#f8fafc', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
-                    <span style={{ fontSize: 12, color: '#0ea5e9', fontWeight: 700 }}>
+                <div style={{ maxHeight: 300, overflowY: 'auto', borderRadius: 10, border: `1px solid ${__sbg('#e5e7eb')}` }}>
+                  <div style={{ padding: '10px 14px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e5e7eb')}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: __stc('#6b7280'), display: 'flex', alignItems: 'center', gap: 6 }}><FiUsers size={13} /> USERS</span>
+                    <span style={{ fontSize: 12, color: __stc('#0ea5e9'), fontWeight: 700 }}>
                         {teamForm.memberIds.length} selected
                       </span>
                   </div>
                   {allUsersForTeamsLoading ? (
-                    <div style={{ padding: '20px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                    <div style={{ padding: '20px', textAlign: 'center', color: __stc('#9ca3af'), fontSize: 13 }}>
                       <FiLoader size={18} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 6, display: 'block', margin: '0 auto 6px' }} />
                       Loading users...
                     </div>
@@ -1854,8 +1897,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       u => currentTeamMemberIds.has(u.id) || !otherTeamsAssignedIds.has(u.id)
                     );
                     return availableForEdit.length === 0 ? (
-                      <div style={{ padding: '24px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
-                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: '#cbd5e1' }} />
+                      <div style={{ padding: '24px', textAlign: 'center', color: __stc('#9ca3af'), fontSize: 13 }}>
+                        <FiUsers size={28} style={{ display: 'block', margin: '0 auto 8px', color: __stc('#cbd5e1') }} />
                         No available users to add
                       </div>
                     ) : (
@@ -1866,8 +1909,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                           <label key={u.id} style={{
                             display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px',
                             cursor: 'pointer', transition: 'background 0.1s',
-                            background: isSelected ? '#f0f9ff' : '#fff',
-                            borderBottom: '1px solid #f1f5f9',
+                            background: isSelected ? __sbg('#f0f9ff') : __sbg('#fff'),
+                            borderBottom: `1px solid ${__sbg('#f1f5f9')}`,
                           }}>
                             <input type="checkbox" checked={isSelected}
                               onChange={e => setTeamForm(prev => ({
@@ -1879,17 +1922,17 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                               style={{ width: 15, height: 15, accentColor: '#0ea5e9', cursor: 'pointer', flexShrink: 0, marginTop: 1 }} />
                             <div style={{
                               width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                              background: isSelected ? '#0ea5e9' : `hsl(${(u.id * 47) % 360},55%,62%)`,
+                              background: isSelected ? __sbg('#0ea5e9') : `hsl(${(u.id * 47) % 360},55%,62%)`,
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              color: '#fff', fontSize: 13, fontWeight: 700,
+                              color: __stc('#fff'), fontSize: 13, fontWeight: 700,
                             }}>{(u.full_name || '?').charAt(0).toUpperCase()}</div>
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? '#0c4a6e' : '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <div style={{ fontSize: 13, fontWeight: isSelected ? 600 : 500, color: isSelected ? __stc('#0c4a6e') : __stc('#111827'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {u.full_name}
                               </div>
-                              <div style={{ fontSize: 11, color: isSelected ? '#0ea5e9' : '#9ca3af', marginTop: 1 }}>
+                              <div style={{ fontSize: 11, color: isSelected ? __stc('#0ea5e9') : __stc('#9ca3af'), marginTop: 1 }}>
                                 {u.role_name}{u.designation ? ` · ${u.designation}` : ''}
-                                {isCurrentMember && <span style={{ marginLeft: 6, background: '#e0f2fe', color: '#0284c7', borderRadius: 4, padding: '0 5px', fontSize: 10, fontWeight: 600 }}>Current</span>}
+                                {isCurrentMember && <span style={{ marginLeft: 6, background: __sbg('#e0f2fe'), color: __stc('#0284c7'), borderRadius: 4, padding: '0 5px', fontSize: 10, fontWeight: 600 }}>Current</span>}
                               </div>
                             </div>
                           </label>
@@ -1900,7 +1943,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 </div>
               </div>
             </div>
-            <div className="users-page-modal-footer" style={{ padding: '16px 24px', borderTop: '1px solid #f1f5f9' }}>
+            <div className="users-page-modal-footer" style={{ padding: '16px 24px', borderTop: `1px solid ${__sbg('#f1f5f9')}` }}>
               <button className="users-page-btn users-page-btn-secondary" onClick={() => setShowEditTeamModal(false)}>Cancel</button>
               <button className="users-page-btn users-page-btn-primary"
                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
@@ -1935,7 +1978,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     <input type="text" required autoComplete="off" value={newUser.user_id}
                       onChange={e => setNewUser({ ...newUser, user_id: e.target.value })} placeholder="Enter unique username" />
                     {userIdValidation.message && (
-                      <div style={{ marginTop: 4, fontSize: 13, color: userIdValidation.isValid ? '#22c55e' : userIdValidation.isValid === false ? '#ef4444' : '#6b7280', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ marginTop: 4, fontSize: 13, color: userIdValidation.isValid ? __stc('#22c55e') : userIdValidation.isValid === false ? __stc('#ef4444') : __stc('#6b7280'), display: 'flex', alignItems: 'center', gap: 4 }}>
                         {userIdValidation.checking ? <FiLoader size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> : userIdValidation.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : userIdValidation.isValid === false ? <FiAlertCircle size={13} color="#ef4444" /> : null}
                         {userIdValidation.message}
                       </div>
@@ -1954,14 +1997,14 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       onChange={e => setNewUser({ ...newUser, email: e.target.value })} placeholder="Enter email address" />
                   </div>
                   <div className="users-page-form-group">
-                    <label>Phone <span style={{ color: '#ef4444' }}>*</span></label>
+                    <label>Phone <span style={{ color: __stc('#ef4444') }}>*</span></label>
                     <input type="tel" required autoComplete="off" value={newUser.phone}
                       onChange={e => { const v = e.target.value.replace(/\D/g, ''); if (v.length <= 10) setNewUser({ ...newUser, phone: v }); setPhoneTouched(true); }}
                       onBlur={() => setPhoneTouched(true)}
                       placeholder="Enter 10-digit phone number" maxLength="10"
-                      style={{ borderColor: phoneTouched && phoneValidation.isValid ? '#22c55e' : phoneTouched && !phoneValidation.isValid ? '#ef4444' : '' }} />
+                      style={{ borderColor: phoneTouched && phoneValidation.isValid ? __sbg('#22c55e') : phoneTouched && !phoneValidation.isValid ? __sbg('#ef4444') : '' }} />
                     {phoneValidation.message && (
-                      <div style={{ marginTop: 4, fontSize: 13, color: phoneValidation.isValid ? '#22c55e' : '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ marginTop: 4, fontSize: 13, color: phoneValidation.isValid ? __stc('#22c55e') : __stc('#ef4444'), display: 'flex', alignItems: 'center', gap: 4 }}>
                         {phoneValidation.isValid ? <FiCheckCircle size={13} /> : <FiAlertCircle size={13} />}
                         {phoneValidation.message}
                       </div>
@@ -1974,22 +2017,22 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     <div style={{ position: 'relative' }}>
                       <input type={showPassword ? "text" : "password"} required autoComplete="new-password" value={newUser.password}
                         onChange={e => setNewUser({ ...newUser, password: e.target.value })} placeholder="Enter password" style={{ paddingRight: 40 }} />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#718096', fontSize: 18, padding: 4, display: 'flex', alignItems: 'center' }}>
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: __stc('#718096'), fontSize: 18, padding: 4, display: 'flex', alignItems: 'center' }}>
                         {showPassword ? <FiEyeOff /> : <FiEye />}
                       </button>
                     </div>
-                    {passwordStrength.message && <div style={{ marginTop: 4, fontSize: 13, color: passwordStrength.isValid ? '#22c55e' : '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>{passwordStrength.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordStrength.message}</div>}
+                    {passwordStrength.message && <div style={{ marginTop: 4, fontSize: 13, color: passwordStrength.isValid ? __stc('#22c55e') : __stc('#ef4444'), display: 'flex', alignItems: 'center', gap: 4 }}>{passwordStrength.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordStrength.message}</div>}
                   </div>
                   <div className="users-page-form-group">
                     <label>Confirm Password <span style={{ color: 'red' }}>*</span></label>
                     <div style={{ position: 'relative' }}>
                       <input type={showConfirmPassword ? "text" : "password"} required autoComplete="new-password" value={newUser.confirmPassword}
                         onChange={e => setNewUser({ ...newUser, confirmPassword: e.target.value })} placeholder="Re-enter password" style={{ paddingRight: 40 }} />
-                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#718096', fontSize: 18, padding: 4, display: 'flex', alignItems: 'center' }}>
+                      <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: __stc('#718096'), fontSize: 18, padding: 4, display: 'flex', alignItems: 'center' }}>
                         {showConfirmPassword ? <FiEyeOff /> : <FiEye />}
                       </button>
                     </div>
-                    {passwordMatch.message && <div style={{ marginTop: 4, fontSize: 13, color: passwordMatch.isValid ? '#22c55e' : '#ef4444', display: 'flex', alignItems: 'center', gap: 4 }}>{passwordMatch.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordMatch.message}</div>}
+                    {passwordMatch.message && <div style={{ marginTop: 4, fontSize: 13, color: passwordMatch.isValid ? __stc('#22c55e') : __stc('#ef4444'), display: 'flex', alignItems: 'center', gap: 4 }}>{passwordMatch.isValid ? <FiCheckCircle size={13} color="#22c55e" /> : <FiAlertCircle size={13} color="#ef4444" />}{passwordMatch.message}</div>}
                   </div>
                 </div>
                 <div className="users-page-form-row">
@@ -2016,8 +2059,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       onClick={() => { setCreateManagerOpen(o => !o); setCreateManagerSearch(''); }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #d1d5db', borderRadius: 8, padding: '9px 12px',
-                        cursor: 'pointer', background: '#fff', fontSize: 14, color: newUser.managerId ? '#111827' : '#9ca3af',
+                        border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 8, padding: '9px 12px',
+                        cursor: 'pointer', background: __sbg('#fff'), fontSize: 14, color: newUser.managerId ? __stc('#111827') : __stc('#9ca3af'),
                         minHeight: 40
                       }}
                     >
@@ -2031,10 +2074,10 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     {createManagerOpen && (
                       <div style={{
                         position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
-                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                        background: __sbg('#fff'), border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 8,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden'
                       }}>
-                        <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                        <div style={{ padding: '8px 10px', borderBottom: `1px solid ${__sbg('#f3f4f6')}` }}>
                           <input
                             autoFocus
                             type="text"
@@ -2052,22 +2095,22 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             }}
                             onClick={e => e.stopPropagation()}
                             style={{
-                              width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
-                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                              width: '100%', border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 6,
+                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', background: __sbg('#fff'), color: __stc('#111827')
                             }}
                           />
                         </div>
                         <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                           {dropdownUsersLoading ? (
-                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: __stc('#9ca3af'), display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                               <FiLoader size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Loading...
                             </div>
                           ) : (
                             <>
                           <div
                             onClick={() => { setNewUser({ ...newUser, managerId: '' }); setCreateManagerOpen(false); }}
-                            style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                            style={{ padding: '9px 12px', fontSize: 13, color: __stc('#6b7280'), cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = __sbg('#f9fafb')}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >-- None --</div>
                           {dropdownUsers
@@ -2077,30 +2120,30 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                                 onClick={() => { setNewUser({ ...newUser, managerId: u.id }); setCreateManagerOpen(false); }}
                                 style={{
                                   padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: newUser.managerId === u.id ? '#eff6ff' : 'transparent',
-                                  color: '#111827'
+                                  background: newUser.managerId === u.id ? __sbg('#eff6ff') : __sbg('transparent'),
+                                  color: __stc('#111827')
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                onMouseLeave={e => e.currentTarget.style.background = newUser.managerId === u.id ? '#eff6ff' : 'transparent'}
+                                onMouseEnter={e => e.currentTarget.style.background = __sbg('#f9fafb')}
+                                onMouseLeave={e => e.currentTarget.style.background = newUser.managerId === u.id ? __sbg('#eff6ff') : 'transparent'}
                               >
                                 <div style={{ fontWeight: 500 }}>{u.full_name}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
+                                <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 2 }}>{u.role_name}</div>
                               </div>
                           ))}
                           {dropdownUsers.length === 0 && (
-                            <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                            <div style={{ padding: '10px 12px', fontSize: 13, color: __stc('#9ca3af'), textAlign: 'center' }}>No users found</div>
                           )}
                             </>
                           )}
                         </div>
                       </div>
                     )}
-                    <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>Sets who this user reports to in the hierarchy</span>
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Sets who this user reports to in the hierarchy</span>
                   </div>
                   <div className="users-page-form-group">
                     <label>Team</label>
                     <input type="text" value={newUser.team} onChange={e => setNewUser({ ...newUser, team: e.target.value })} placeholder="e.g. Sales Team A, BD North" />
-                    <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>Optional grouping label</span>
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Optional grouping label</span>
                   </div>
                 </div>
                 {/* FIX #7: designation field */}
@@ -2108,7 +2151,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   <div className="users-page-form-group">
                     <label>Designation</label>
                     <input type="text" value={newUser.designation} onChange={e => setNewUser({ ...newUser, designation: e.target.value })} placeholder="e.g. Senior Sales Executive" />
-                    <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>Job title shown in hierarchy chart</span>
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Job title shown in hierarchy chart</span>
                   </div>
                 </div>
               </div>
@@ -2166,9 +2209,9 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                       onClick={() => { setEditManagerOpen(o => !o); setEditManagerSearch(''); }}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        border: '1px solid #d1d5db', borderRadius: 8, padding: '9px 12px',
-                        cursor: 'pointer', background: '#fff', fontSize: 14,
-                        color: selectedUser.managerId ? '#111827' : '#9ca3af', minHeight: 40
+                        border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 8, padding: '9px 12px',
+                        cursor: 'pointer', background: __sbg('#fff'), fontSize: 14,
+                        color: selectedUser.managerId ? __stc('#111827') : __stc('#9ca3af'), minHeight: 40
                       }}
                     >
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -2181,10 +2224,10 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     {editManagerOpen && (
                       <div style={{
                         position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0, zIndex: 9999,
-                        background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8,
+                        background: __sbg('#fff'), border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 8,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.12)', overflow: 'hidden'
                       }}>
-                        <div style={{ padding: '8px 10px', borderBottom: '1px solid #f3f4f6' }}>
+                        <div style={{ padding: '8px 10px', borderBottom: `1px solid ${__sbg('#f3f4f6')}` }}>
                           <input
                             autoFocus
                             type="text"
@@ -2202,22 +2245,22 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                             }}
                             onClick={e => e.stopPropagation()}
                             style={{
-                              width: '100%', border: '1px solid #e5e7eb', borderRadius: 6,
-                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box'
+                              width: '100%', border: `1px solid ${__sbg('#e5e7eb')}`, borderRadius: 6,
+                              padding: '7px 10px', fontSize: 13, outline: 'none', boxSizing: 'border-box', background: __sbg('#fff'), color: __stc('#111827')
                             }}
                           />
                         </div>
                         <div style={{ maxHeight: 200, overflowY: 'auto' }}>
                           {dropdownUsersLoading ? (
-                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: '#9ca3af', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <div style={{ padding: '12px', textAlign: 'center', fontSize: 13, color: __stc('#9ca3af'), display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                               <FiLoader size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Loading...
                             </div>
                           ) : (
                             <>
                           <div
                             onClick={() => { setSelectedUser({ ...selectedUser, managerId: null }); setEditManagerOpen(false); }}
-                            style={{ padding: '9px 12px', fontSize: 13, color: '#6b7280', cursor: 'pointer' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
+                            style={{ padding: '9px 12px', fontSize: 13, color: __stc('#6b7280'), cursor: 'pointer' }}
+                            onMouseEnter={e => e.currentTarget.style.background = __sbg('#f9fafb')}
                             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                           >-- None --</div>
                           {dropdownUsers
@@ -2228,18 +2271,18 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                                 onClick={() => { setSelectedUser({ ...selectedUser, managerId: u.id }); setEditManagerOpen(false); }}
                                 style={{
                                   padding: '9px 12px', fontSize: 13, cursor: 'pointer',
-                                  background: selectedUser.managerId === u.id ? '#eff6ff' : 'transparent',
-                                  color: '#111827'
+                                  background: selectedUser.managerId === u.id ? __sbg('#eff6ff') : __sbg('transparent'),
+                                  color: __stc('#111827')
                                 }}
-                                onMouseEnter={e => e.currentTarget.style.background = '#f9fafb'}
-                                onMouseLeave={e => e.currentTarget.style.background = selectedUser.managerId === u.id ? '#eff6ff' : 'transparent'}
+                                onMouseEnter={e => e.currentTarget.style.background = __sbg('#f9fafb')}
+                                onMouseLeave={e => e.currentTarget.style.background = selectedUser.managerId === u.id ? __sbg('#eff6ff') : 'transparent'}
                               >
                                 <div style={{ fontWeight: 500 }}>{u.full_name}</div>
-                                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{u.role_name}</div>
+                                <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 2 }}>{u.role_name}</div>
                               </div>
                           ))}
                           {dropdownUsers.filter(u => u.id !== selectedUser.id).length === 0 && (
-                            <div style={{ padding: '10px 12px', fontSize: 13, color: '#9ca3af', textAlign: 'center' }}>No users found</div>
+                            <div style={{ padding: '10px 12px', fontSize: 13, color: __stc('#9ca3af'), textAlign: 'center' }}>No users found</div>
                           )}
                             </>
                           )}
@@ -2257,7 +2300,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   <div className="users-page-form-group">
                     <label>Designation</label>
                     <input type="text" value={selectedUser.designation || ''} onChange={e => setSelectedUser({ ...selectedUser, designation: e.target.value })} placeholder="e.g. Senior Sales Executive" />
-                    <span style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, display: 'block' }}>Job title shown in hierarchy chart</span>
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Job title shown in hierarchy chart</span>
                   </div>
                 </div>
                 <div className="users-page-form-group">
@@ -2266,8 +2309,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     <span>Active User</span>
                   </label>
                 </div>
-                <div style={{ marginTop: 20, padding: 12, background: '#f0f9ff', borderRadius: 8, border: '1px solid #bae6fd' }}>
-                  <p style={{ margin: 0, fontSize: 14, color: '#0369a1' }}><strong>Note:</strong> To edit permissions, use the permission buttons from the table row for this user.</p>
+                <div style={{ marginTop: 20, padding: 12, background: __sbg('#f0f9ff'), borderRadius: 8, border: `1px solid ${__sbg('#bae6fd')}` }}>
+                  <p style={{ margin: 0, fontSize: 14, color: __stc('#0369a1') }}><strong>Note:</strong> To edit permissions, use the permission buttons from the table row for this user.</p>
                 </div>
               </div>
               <div className="users-page-modal-footer">
@@ -2358,9 +2401,9 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
             <div className="users-page-modal-body" style={{ padding: 0 }}>
 
               {/* ── Summary bar ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>Total Assigned</span>
-                <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 700 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: __stc('#374151') }}>Total Assigned</span>
+                <span style={{ fontSize: 12, color: __stc('#6366f1'), fontWeight: 700 }}>
                   {selectedUserPermissions.length} permissions assigned
                 </span>
               </div>
@@ -2373,13 +2416,13 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   <div key={mod} style={{ borderBottom: groupIdx === arr.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
                     <div style={{
                       display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12,
-                      background: '#f5f3ff', borderBottom: '1px solid #f1f5f9',
+                      background: __sbg('#f5f3ff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}`,
                     }}>
                       {/* Module name */}
-                      <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, display: 'inline-block', background: '#6366f1' }} />
+                      <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, display: 'inline-block', background: __sbg('#6366f1') }} />
                         {mod.charAt(0).toUpperCase() + mod.slice(1)}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: '#e0e7ff', color: '#4338ca' }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: __sbg('#e0e7ff'), color: __stc('#4338ca') }}>
                           {perms.length}
                         </span>
                       </div>
@@ -2428,8 +2471,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
             <div className="users-page-modal-body" style={{ padding: 0 }}>
 
               {/* ── Summary bar with master select-all ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: '#374151' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600, color: __stc('#374151') }}>
                   <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1' }}
                     checked={assignablePagePerms.length > 0 && assignablePagePerms.every(p => selectedUserPermissions.includes(p.id))}
                     ref={el => {
@@ -2444,7 +2487,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   />
                   Select All Permissions
                 </label>
-                <span style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: __stc('#6366f1'), fontWeight: 600 }}>
                   {selectedUserPermissions.length} / {assignablePagePerms.length} selected
                 </span>
               </div>
@@ -2461,8 +2504,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                     <div key={mod} style={{ borderBottom: isLast ? 'none' : '1px solid #e2e8f0' }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12,
-                        background: allGroupOn ? '#f5f3ff' : someGroupOn ? '#fafafa' : '#fff',
-                        borderBottom: '1px solid #f1f5f9',
+                        background: allGroupOn ? __sbg('#f5f3ff') : someGroupOn ? __sbg('#fafafa') : __sbg('#fff'),
+                        borderBottom: `1px solid ${__sbg('#f1f5f9')}`,
                       }}>
                         {/* Group checkbox */}
                         <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1', flexShrink: 0 }}
@@ -2472,16 +2515,16 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                         />
 
                         {/* Module name */}
-                        <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{
                             width: 7, height: 7, borderRadius: '50%', flexShrink: 0, display: 'inline-block',
-                            background: allGroupOn ? '#6366f1' : someGroupOn ? '#a5b4fc' : '#cbd5e1'
+                            background: allGroupOn ? __sbg('#6366f1') : someGroupOn ? __sbg('#a5b4fc') : __sbg('#cbd5e1')
                           }} />
                           {mod.charAt(0).toUpperCase() + mod.slice(1)}
                           <span style={{
                             fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                            background: allGroupOn ? '#e0e7ff' : '#f1f5f9',
-                            color: allGroupOn ? '#4338ca' : '#94a3b8'
+                            background: allGroupOn ? __sbg('#e0e7ff') : __sbg('#f1f5f9'),
+                            color: allGroupOn ? __stc('#4338ca') : __stc('#94a3b8')
                           }}>
                             {groupCount}/{perms.length}
                           </span>

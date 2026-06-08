@@ -14,11 +14,48 @@ import CrmPreloader from "../components/preLoader.js";
 import filterApi from '../services/filterApi';
 import ConfirmationModal from '../components/ConfirmationModal';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+  '#c7d2fe':'#2e3566','#fcd34d':'#5a4714','#fef9f9':'#2b1d20','#fed7aa':'#4a2f1a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#064e3b':'#6ee7b7','#4b7a5e':'#7fbf9b','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 /* ─── Shared helpers (same as Invoices) ─────────────────────────────────────── */
 const _REC_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const _REC_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 const RecDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  useThemeVersion();
   const [show, setShow]     = useState(false);
   const [calMo, setCalMo]   = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
   const [calYr, setCalYr]   = useState(() => value ? parseInt(value.slice(0,4))   : new Date().getFullYear());
@@ -40,28 +77,28 @@ const RecDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
   return(
     <>
       <button ref={trigRef} type="button" onClick={show?()=>setShow(false):open}
-        style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'9px 10px',border:`1px solid ${show?'#4f46e5':'#d1d5db'}`,borderRadius:6,background:value?'#f5f3ff':'#fff',cursor:'pointer',fontSize:13,textAlign:'left'}}
+        style={{display:'flex',alignItems:'center',gap:6,width:'100%',padding:'9px 10px',border:`1px solid ${show?__sbg('#4f46e5'):__sbg('#d1d5db')}`,borderRadius:6,background:value?__sbg('#f5f3ff'):__sbg('#fff'),cursor:'pointer',fontSize:13,textAlign:'left'}}
       >
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#9ca3af'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        {value?<span style={{flex:1,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span style={{flex:1,color:'#9ca3af'}}>{placeholder}</span>}
-        {value&&<span onClick={e=>{e.stopPropagation();onChange('');}} style={{color:'#9ca3af',cursor:'pointer',lineHeight:1}}>×</span>}
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?__stc('#4f46e5'):__stc('#9ca3af')}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontWeight:600,color:__stc('#0f172a')}}>{fmtD(value)}</span>:<span style={{flex:1,color:__stc('#9ca3af')}}>{placeholder}</span>}
+        {value&&<span onClick={e=>{e.stopPropagation();onChange('');}} style={{color:__stc('#9ca3af'),cursor:'pointer',lineHeight:1}}>×</span>}
       </button>
       {show&&(
-        <div ref={dpRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:14,minWidth:260}}>
+        <div ref={dpRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:__sbg('#fff'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:14,minWidth:260}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
             <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
-            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_REC_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:__stc('#1e293b')}}>{_REC_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
           </div>
           {showYr?(
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4}}>
-              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?__sbg('#4f46e5'):__sbg('transparent'),color:yr===calYr?__stc('#fff'):__stc('#1e293b'),fontSize:12}}>{yr}</div>);})}
             </div>
           ):(
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
-              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:__stc('#94a3b8'),padding:'2px 0'}}>{d}</div>)}
               {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
-              {Array.from({length:DIM}).map((_,i)=>{const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;const isSel=ds===value,isToday=ds===tod;return(<div key={ds} onClick={()=>{onChange(ds);setShow(false);}} style={{textAlign:'center',padding:'6px 0',cursor:'pointer',borderRadius:4,background:isSel?'#4f46e5':'transparent',color:isSel?'#fff':isToday?'#4f46e5':'#1e293b',fontWeight:isSel||isToday?700:400,fontSize:12}}>{dy}</div>);})}
+              {Array.from({length:DIM}).map((_,i)=>{const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;const isSel=ds===value,isToday=ds===tod;return(<div key={ds} onClick={()=>{onChange(ds);setShow(false);}} style={{textAlign:'center',padding:'6px 0',cursor:'pointer',borderRadius:4,background:isSel?__sbg('#4f46e5'):__sbg('transparent'),color:isSel?__stc('#fff'):isToday?__stc('#4f46e5'):__stc('#1e293b'),fontWeight:isSel||isToday?700:400,fontSize:12}}>{dy}</div>);})}
             </div>
           )}
         </div>
@@ -71,6 +108,7 @@ const RecDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
 };
 
 const RecDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,setShow]=useState(false),[from,setFrom]=useState(null),[to,setTo]=useState(null),[hover,setHover]=useState(null);
   const [calMo,setCalMo]=useState(new Date().getMonth()),[calYr,setCalYr]=useState(new Date().getFullYear()),[showYr,setShowYr]=useState(false);
   const ref=useRef(null);
@@ -82,50 +120,50 @@ const RecDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
   return(
     <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
       <button type="button" onClick={()=>setShow(p=>!p)}
-        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?'#c7d2fe':'#e2e8f0'}`,borderRadius:6,background:appliedFrom?'#f5f3ff':'#fff',cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
+        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?__sbg('#c7d2fe'):__sbg('#e2e8f0')}`,borderRadius:6,background:appliedFrom?__sbg('#f5f3ff'):__sbg('#fff'),cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
       >
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <span style={{fontSize:11,color:'#94a3b8'}}>FROM</span>
-        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?'#1e293b':'#94a3b8'}}>{fmt(appliedFrom)}</span>
+        <span style={{fontSize:11,color:__stc('#94a3b8')}}>FROM</span>
+        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?__stc('#1e293b'):__stc('#94a3b8')}}>{fmt(appliedFrom)}</span>
         <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-        <span style={{fontSize:11,color:'#94a3b8'}}>TO</span>
-        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?'#1e293b':'#94a3b8'}}>{fmt(appliedTo)}</span>
-        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:'#94a3b8',cursor:'pointer',lineHeight:1}}>×</span>}
+        <span style={{fontSize:11,color:__stc('#94a3b8')}}>TO</span>
+        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?__stc('#1e293b'):__stc('#94a3b8')}}>{fmt(appliedTo)}</span>
+        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:__stc('#94a3b8'),cursor:'pointer',lineHeight:1}}>×</span>}
       </button>
       {show&&(
-        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:__sbg('#fff'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
             <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
-            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_REC_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:__stc('#1e293b')}}>{_REC_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
           </div>
           {showYr?(
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,marginBottom:10}}>
-              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?__sbg('#4f46e5'):__sbg('transparent'),color:yr===calYr?__stc('#fff'):__stc('#1e293b'),fontSize:12}}>{yr}</div>);})}
             </div>
           ):(
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:8}}>
-              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {_REC_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:__stc('#94a3b8'),padding:'2px 0'}}>{d}</div>)}
               {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
               {Array.from({length:DIM}).map((_,i)=>{
                 const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;
-                let bg='transparent',color='#1e293b',br=4;
-                if(ds===from||ds===to){bg='#4f46e5';color='#fff';}
-                else if(inR(ds)){bg='#e0e7ff';color='#3730a3';if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
-                else if(ds===tod)color='#4f46e5';
+                let bg = __sbg('transparent'),color = __stc('#1e293b'),br=4;
+                if(ds===from||ds===to){bg = __sbg('#4f46e5');color = __stc('#fff');}
+                else if(inR(ds)){bg = __sbg('#e0e7ff');color = __stc('#3730a3');if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
+                else if(ds===tod)color = __stc('#4f46e5');
                 return(<div key={ds} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)} style={{textAlign:'center',padding:'5px 0',cursor:'pointer',borderRadius:br,background:bg,color,fontSize:12,fontWeight:ds===from||ds===to?700:400}}>{dy}</div>);
               })}
             </div>
           )}
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?'#e0e7ff':'#f1f5f9',color:from?'#3730a3':'#94a3b8',fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?__sbg('#e0e7ff'):__sbg('#f1f5f9'),color:from?__stc('#3730a3'):__stc('#94a3b8'),fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
             <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?'#e0e7ff':'#f1f5f9',color:to?'#3730a3':'#94a3b8',fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?__sbg('#e0e7ff'):__sbg('#f1f5f9'),color:to?__stc('#3730a3'):__stc('#94a3b8'),fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
           </div>
           <div style={{display:'flex',gap:6,justifyContent:'center'}}>
-            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Clear</button>}
-            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Cancel</button>
-            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?'#4f46e5':'#e2e8f0',color:from?'#fff':'#94a3b8',cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
+            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:6,background:__sbg('#fff'),cursor:'pointer',fontSize:12,color:__stc('#64748b')}}>Clear</button>}
+            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:6,background:__sbg('#fff'),cursor:'pointer',fontSize:12,color:__stc('#64748b')}}>Cancel</button>
+            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?__sbg('#4f46e5'):__sbg('#e2e8f0'),color:from?__stc('#fff'):__stc('#94a3b8'),cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
           </div>
         </div>
       )}
@@ -185,11 +223,12 @@ const SORTABLE_RECEIPT_COLUMNS = new Set(['receiptNo', 'receiptDate', 'customer'
 const SortIcon = ({ columnId, sortConfig }) => {
   if (sortConfig.key !== columnId) return <ChevronsUpDown size={13} style={{ opacity: 0.4, marginLeft: 4, verticalAlign: 'middle' }} />;
   return sortConfig.direction === 'asc'
-    ? <ChevronUp size={13} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#059669' }} />
-    : <ChevronDown size={13} style={{ marginLeft: 4, verticalAlign: 'middle', color: '#059669' }} />;
+    ? <ChevronUp size={13} style={{ marginLeft: 4, verticalAlign: 'middle', color: __stc('#059669') }} />
+    : <ChevronDown size={13} style={{ marginLeft: 4, verticalAlign: 'middle', color: __stc('#059669') }} />;
 };
 
 const ReceiptsManagementPage = () => {
+  useThemeVersion();
   const [receipts, setReceipts] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions } = useAuth();
@@ -858,7 +897,7 @@ const ReceiptsManagementPage = () => {
         setReceiptFormData(prev => ({ ...prev, customerId: data.customerId }));
         await fetchInvoicesForCustomer(data.customerId, pid);
         if (showAdjustmentModal) await fetchAvailableAdvances(data.customerId);
-      } else { setCustomerData(null); setInvoicesForCustomer([]); setAvailableAdvances([]); showError('Customer not found for this project'); }
+      } else { setCustomerData(null); setInvoicesForCustomer([]); setAvailableAdvances([]); showWarning('Customer not found for this project'); }
     } catch { setCustomerData(null); setInvoicesForCustomer([]); setAvailableAdvances([]); }
   };
 
@@ -874,7 +913,7 @@ const ReceiptsManagementPage = () => {
       const response = await fetch(endpoint, { credentials: "include", headers: getAuthHeaders() });
       if (!response.ok) throw new Error('Failed to fetch invoices');
       const data = await response.json(); setInvoicesForCustomer(data);
-      if (data.length === 0) showError('No unpaid invoices found for this project');
+      if (data.length === 0) showWarning('No unpaid invoices found for this project');
     } catch { showError('Failed to load invoices for this project'); setInvoicesForCustomer([]); }
     finally { setLoadingInvoices(false); }
   };
@@ -1028,7 +1067,7 @@ const ReceiptsManagementPage = () => {
         ? `${API_BASE_URL}/invoices/project/${encodeURIComponent(receipt.projectId)}/unpaid-invoices`
         : `${API_BASE_URL}/invoices/customer/${receipt.customerId}/unpaid-invoices`;
       const res = await fetch(ep, { credentials: "include", headers: getAuthHeaders() });
-      if (res.ok) { const d = await res.json(); setInvoicesForCustomer(d); if (d.length === 0) showError('No unpaid invoices found for this project'); }
+      if (res.ok) { const d = await res.json(); setInvoicesForCustomer(d); if (d.length === 0) showWarning('No unpaid invoices found for this project'); }
       else { setInvoicesForCustomer([]); showError('Failed to load invoices for this project'); }
       setAdjustmentData({ receiptId: receipt.id, customerId: receipt.customerId, availableAmount: receipt.unappliedAmount || receipt.amount, invoiceAllocations: [] });
       setShowAdjustmentModal(true);
@@ -1037,8 +1076,8 @@ const ReceiptsManagementPage = () => {
   };
 
   const handleSaveReceipt = async () => {
-    if (!receiptFormData.customerId) { showError('Please select a project to identify the customer'); return; }
-    if (receiptFormData.receiptType === 'invoice' && !receiptFormData.invoiceId) { showError('Please select an invoice'); return; }
+    if (!receiptFormData.customerId) { showWarning('Please select a project to identify the customer'); return; }
+    if (receiptFormData.receiptType === 'invoice' && !receiptFormData.invoiceId) { showWarning('Please select an invoice'); return; }
     if (receiptFormData.amount <= 0) { showWarning('Amount must be greater than zero'); return; }
     setLoading(true);
     try {
@@ -1052,9 +1091,9 @@ const ReceiptsManagementPage = () => {
 
   const handleSaveAdjustment = async () => {
     const allocations = adjustmentData.invoiceAllocations.filter(a => a.amount > 0).map(a => ({ invoiceId: a.invoiceId, amount: parseFloat(a.amount) }));
-    if (allocations.length === 0) { showError('Please allocate at least one invoice'); return; }
+    if (allocations.length === 0) { showWarning('Please allocate at least one invoice'); return; }
     const totalAllocation = allocations.reduce((sum, a) => sum + a.amount, 0);
-    if (totalAllocation > (adjustmentData.availableAmount || selectedReceipt.unappliedAmount)) { showError('Total allocation exceeds available advance amount'); return; }
+    if (totalAllocation > (adjustmentData.availableAmount || selectedReceipt.unappliedAmount)) { showWarning('Total allocation exceeds available advance amount'); return; }
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/invoices/receipts/${adjustmentData.receiptId}/allocate-advance`, { credentials: "include", method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify({ allocations }) });
@@ -1070,10 +1109,10 @@ const ReceiptsManagementPage = () => {
     if (isNaN(amount) || amount < 0) return;
     const invoice = invoicesForCustomer.find(inv => inv.id === invoiceId);
     if (!invoice) return;
-    if (amount > invoice.balanceAmount) { showError(`Amount cannot exceed invoice balance of ${formatCurrency(invoice.balanceAmount)}`); return; }
+    if (amount > invoice.balanceAmount) { showWarning(`Amount cannot exceed invoice balance of ${formatCurrency(invoice.balanceAmount)}`); return; }
     const currentAllocations = adjustmentData.invoiceAllocations || [];
     const otherTotal = currentAllocations.filter(a => a.invoiceId !== invoiceId).reduce((sum, a) => sum + (parseFloat(a.amount) || 0), 0);
-    if (otherTotal + amount > (adjustmentData.availableAmount || selectedReceipt.unappliedAmount)) { showError('Total allocation exceeds available advance amount'); return; }
+    if (otherTotal + amount > (adjustmentData.availableAmount || selectedReceipt.unappliedAmount)) { showWarning('Total allocation exceeds available advance amount'); return; }
     let newAllocations = [...currentAllocations];
     const existingIndex = newAllocations.findIndex(a => a.invoiceId === invoiceId);
     if (amount === 0 || value === '') { if (existingIndex >= 0) newAllocations.splice(existingIndex, 1); }
@@ -1336,7 +1375,7 @@ const ReceiptsManagementPage = () => {
               ) : (
                 sortedReceipts.map((receipt, rowIndex) => (
                   <tr key={receipt.id}>
-                    <td style={{ textAlign:'center', fontWeight:600, color:'#6b7280', fontSize:13 }}>{currentPage * pageSize + rowIndex + 1}</td>
+                    <td style={{ textAlign:'center', fontWeight:600, color:__stc('#6b7280'), fontSize:13 }}>{currentPage * pageSize + rowIndex + 1}</td>
                     {visibleColumns.map(column => (
                       <React.Fragment key={column.id}>{renderColumnValue(column, receipt)}</React.Fragment>
                     ))}
@@ -1356,11 +1395,11 @@ const ReceiptsManagementPage = () => {
               options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
               placeholder="Rows"
             />
-            <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+            <span style={{whiteSpace:'nowrap',color:__stc('#64748b')}}>
               {totalElements === 0 ? 'No records' : `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, totalElements)} of ${totalElements}`}
             </span>
-            <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-              Page <strong style={{color:'#0f172a'}}>{currentPage + 1}</strong> of <strong style={{color:'#0f172a'}}>{totalPages}</strong>
+            <span style={{fontSize:12,color:__stc('#94a3b8'),whiteSpace:'nowrap'}}>
+              Page <strong style={{color:__stc('#0f172a')}}>{currentPage + 1}</strong> of <strong style={{color:__stc('#0f172a')}}>{totalPages}</strong>
             </span>
           </div>
           <div className="receipts-page-pagination-buttons">
@@ -1418,12 +1457,12 @@ const ReceiptsManagementPage = () => {
                   <div style={{ marginTop: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                       <Link2 size={16} color="#059669" />
-                      <strong style={{ fontSize: '14px', color: '#064e3b' }}>
+                      <strong style={{ fontSize: '14px', color: __stc('#064e3b') }}>
                         Advance Adjusted Against Invoices
                       </strong>
                       {parseFloat(selectedReceipt.appliedAmount) > 0 && (
                         <span style={{
-                          background: '#d1fae5', color: '#065f46',
+                          background: __sbg('#d1fae5'), color: __stc('#065f46'),
                           fontSize: '11px', fontWeight: 700,
                           padding: '2px 8px', borderRadius: '99px'
                         }}>
@@ -1435,9 +1474,9 @@ const ReceiptsManagementPage = () => {
                     {/* Loading state */}
                     {loadingViewAllocations && (
                       <div style={{
-                        background: '#f0fdf4', border: '1px solid #bbf7d0',
+                        background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`,
                         borderRadius: '10px', padding: '20px', textAlign: 'center',
-                        color: '#059669', fontSize: '13px'
+                        color: __stc('#059669'), fontSize: '13px'
                       }}>
                         Loading allocation details...
                       </div>
@@ -1446,9 +1485,9 @@ const ReceiptsManagementPage = () => {
                     {/* No allocations yet */}
                     {!loadingViewAllocations && parseFloat(selectedReceipt.appliedAmount) === 0 && (
                       <div style={{
-                        background: '#f8fafc', border: '1px dashed #cbd5e1',
+                        background: __sbg('#f8fafc'), border: `1px dashed ${__sbg('#cbd5e1')}`,
                         borderRadius: '10px', padding: '18px', textAlign: 'center',
-                        color: '#94a3b8', fontSize: '13px'
+                        color: __stc('#94a3b8'), fontSize: '13px'
                       }}>
                         This advance has not been allocated to any invoice yet.
                       </div>
@@ -1459,9 +1498,9 @@ const ReceiptsManagementPage = () => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                         {viewAllocationDetails.map((alloc, idx) => (
                           <div key={alloc.allocationId || idx} style={{
-                            background: '#f0fdf4',
-                            border: '1px solid #bbf7d0',
-                            borderLeft: '4px solid #059669',
+                            background: __sbg('#f0fdf4'),
+                            border: `1px solid ${__sbg('#bbf7d0')}`,
+                            borderLeft: `4px solid ${__sbg('#059669')}`,
                             borderRadius: '10px',
                             padding: '14px 16px',
                             display: 'grid',
@@ -1471,12 +1510,12 @@ const ReceiptsManagementPage = () => {
                           }}>
                             {/* Invoice Number */}
                             <div>
-                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
-                              <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>{alloc.invoiceNo}</div>
+                              <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
+                              <div style={{ fontSize: '14px', fontWeight: 700, color: __stc('#1e293b') }}>{alloc.invoiceNo}</div>
                               <div style={{ marginTop: '4px' }}>
                                 <span style={{
                                   fontSize: '10px', fontWeight: 700, padding: '2px 7px',
-                                  borderRadius: '99px', background: '#dcfce7', color: '#166534'
+                                  borderRadius: '99px', background: __sbg('#dcfce7'), color: __stc('#166534')
                                 }}>
                                   {getStatusDisplayName(alloc.invoiceStatus)}
                                 </span>
@@ -1485,37 +1524,37 @@ const ReceiptsManagementPage = () => {
 
                             {/* Allocated Amount */}
                             <div>
-                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Allocated</div>
-                              <div style={{ fontSize: '16px', fontWeight: 700, color: '#059669' }}>{formatCurrency(alloc.allocatedAmount)}</div>
+                              <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Allocated</div>
+                              <div style={{ fontSize: '16px', fontWeight: 700, color: __stc('#059669') }}>{formatCurrency(alloc.allocatedAmount)}</div>
                             </div>
 
                             {/* Invoice Totals */}
                             <div>
-                              <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
-                              <div style={{ fontSize: '13px', color: '#374151' }}>{formatCurrency(alloc.invoiceTotal)}</div>
-                              <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
+                              <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
+                              <div style={{ fontSize: '13px', color: __stc('#374151') }}>{formatCurrency(alloc.invoiceTotal)}</div>
+                              <div style={{ fontSize: '11px', color: __stc('#dc2626'), marginTop: '2px' }}>
                                 Balance: {formatCurrency(alloc.invoiceBalance)}
                               </div>
                             </div>
 
                             {/* Allocation Date — full width */}
-                            <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #d1fae5', paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <span style={{ fontSize: '11px', color: '#6b7280' }}>Allocated on:</span>
-                              <span style={{ fontSize: '12px', color: '#374151', fontWeight: 500 }}>{formatDateTime(alloc.allocationDate)}</span>
+                            <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${__sbg('#d1fae5')}`, paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{ fontSize: '11px', color: __stc('#6b7280') }}>Allocated on:</span>
+                              <span style={{ fontSize: '12px', color: __stc('#374151'), fontWeight: 500 }}>{formatDateTime(alloc.allocationDate)}</span>
                             </div>
                           </div>
                         ))}
 
                         {/* Total summary row */}
                         <div style={{
-                          background: '#ecfdf5', border: '1px solid #6ee7b7',
+                          background: __sbg('#ecfdf5'), border: `1px solid ${__sbg('#6ee7b7')}`,
                           borderRadius: '8px', padding: '10px 16px',
                           display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                         }}>
-                          <span style={{ fontSize: '13px', color: '#065f46', fontWeight: 600 }}>
+                          <span style={{ fontSize: '13px', color: __stc('#065f46'), fontWeight: 600 }}>
                             Total Allocated across {viewAllocationDetails.length} invoice{viewAllocationDetails.length !== 1 ? 's' : ''}
                           </span>
-                          <span style={{ fontSize: '15px', fontWeight: 700, color: '#059669' }}>
+                          <span style={{ fontSize: '15px', fontWeight: 700, color: __stc('#059669') }}>
                             {formatCurrency(viewAllocationDetails.reduce((sum, a) => sum + parseFloat(a.allocatedAmount || 0), 0))}
                           </span>
                         </div>
@@ -1529,9 +1568,9 @@ const ReceiptsManagementPage = () => {
                   <div style={{ marginTop: '20px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                       <Link2 size={16} color="#3b82f6" />
-                      <strong style={{ fontSize: '14px', color: '#1e3a8a' }}>Applied to Invoice</strong>
+                      <strong style={{ fontSize: '14px', color: __stc('#1e3a8a') }}>Applied to Invoice</strong>
                       <span style={{
-                        background: '#dbeafe', color: '#1e40af',
+                        background: __sbg('#dbeafe'), color: __stc('#1e40af'),
                         fontSize: '11px', fontWeight: 700,
                         padding: '2px 8px', borderRadius: '99px'
                       }}>1 invoice</span>
@@ -1539,9 +1578,9 @@ const ReceiptsManagementPage = () => {
 
                     {/* Rich invoice card — same layout as advance allocation blocks */}
                     <div style={{
-                      background: '#eff6ff',
-                      border: '1px solid #bfdbfe',
-                      borderLeft: '4px solid #3b82f6',
+                      background: __sbg('#eff6ff'),
+                      border: `1px solid ${__sbg('#bfdbfe')}`,
+                      borderLeft: `4px solid ${__sbg('#3b82f6')}`,
                       borderRadius: '10px',
                       padding: '14px 16px',
                       display: 'grid',
@@ -1551,14 +1590,14 @@ const ReceiptsManagementPage = () => {
                     }}>
                       {/* Invoice Number */}
                       <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: '#1e293b' }}>
+                        <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice</div>
+                        <div style={{ fontSize: '14px', fontWeight: 700, color: __stc('#1e293b') }}>
                           {viewInvoiceDetails?.invoiceNo || selectedReceipt.invoiceNo || `INV-${selectedReceipt.invoiceId}`}
                         </div>
                         <div style={{ marginTop: '4px' }}>
                           <span style={{
                             fontSize: '10px', fontWeight: 700, padding: '2px 7px',
-                            borderRadius: '99px', background: '#dbeafe', color: '#1e40af'
+                            borderRadius: '99px', background: __sbg('#dbeafe'), color: __stc('#1e40af')
                           }}>
                             {getStatusDisplayName(viewInvoiceDetails?.status || 'PAID')}
                           </span>
@@ -1567,38 +1606,38 @@ const ReceiptsManagementPage = () => {
 
                       {/* Applied Amount */}
                       <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Applied</div>
-                        <div style={{ fontSize: '16px', fontWeight: 700, color: '#3b82f6' }}>{formatCurrency(selectedReceipt.amount)}</div>
+                        <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Applied</div>
+                        <div style={{ fontSize: '16px', fontWeight: 700, color: __stc('#3b82f6') }}>{formatCurrency(selectedReceipt.amount)}</div>
                       </div>
 
                       {/* Invoice Totals */}
                       <div>
-                        <div style={{ fontSize: '11px', color: '#6b7280', fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
-                        <div style={{ fontSize: '13px', color: '#374151' }}>
+                        <div style={{ fontSize: '11px', color: __stc('#6b7280'), fontWeight: 600, marginBottom: '3px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Invoice Total</div>
+                        <div style={{ fontSize: '13px', color: __stc('#374151') }}>
                           {viewInvoiceDetails ? formatCurrency(viewInvoiceDetails.totalAmount) : '—'}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '2px' }}>
+                        <div style={{ fontSize: '11px', color: __stc('#dc2626'), marginTop: '2px' }}>
                           Balance: {viewInvoiceDetails ? formatCurrency(viewInvoiceDetails.balanceAmount) : '—'}
                         </div>
                       </div>
 
                       {/* Payment date — full width */}
-                      <div style={{ gridColumn: '1 / -1', borderTop: '1px solid #bfdbfe', paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', color: '#6b7280' }}>Payment recorded on:</span>
-                        <span style={{ fontSize: '12px', color: '#374151', fontWeight: 500 }}>{formatDateTime(selectedReceipt.receiptDate)}</span>
+                      <div style={{ gridColumn: '1 / -1', borderTop: `1px solid ${__sbg('#bfdbfe')}`, paddingTop: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{ fontSize: '11px', color: __stc('#6b7280') }}>Payment recorded on:</span>
+                        <span style={{ fontSize: '12px', color: __stc('#374151'), fontWeight: 500 }}>{formatDateTime(selectedReceipt.receiptDate)}</span>
                       </div>
                     </div>
 
                     {/* Total summary row */}
                     <div style={{
-                      background: '#eff6ff', border: '1px solid #93c5fd',
+                      background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#93c5fd')}`,
                       borderRadius: '8px', padding: '10px 16px', marginTop: '10px',
                       display: 'flex', justifyContent: 'space-between', alignItems: 'center'
                     }}>
-                      <span style={{ fontSize: '13px', color: '#1e3a8a', fontWeight: 600 }}>
+                      <span style={{ fontSize: '13px', color: __stc('#1e3a8a'), fontWeight: 600 }}>
                         Total Applied to 1 invoice
                       </span>
-                      <span style={{ fontSize: '15px', fontWeight: 700, color: '#3b82f6' }}>
+                      <span style={{ fontSize: '15px', fontWeight: 700, color: __stc('#3b82f6') }}>
                         {formatCurrency(selectedReceipt.amount)}
                       </span>
                     </div>
@@ -1658,16 +1697,16 @@ const ReceiptsManagementPage = () => {
             <div className="receipts-page-modal-body">
               <div className="receipts-page-form">
                 {/* Excel Import Strip */}
-                <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`, borderRadius: '8px', padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <FileSpreadsheet size={18} color="#16a34a" />
-                    <span style={{ fontSize: '14px', color: '#166534', fontWeight: 500 }}>Import receipt data from Excel template</span>
+                    <span style={{ fontSize: '14px', color: __stc('#166534'), fontWeight: 500 }}>Import receipt data from Excel template</span>
                   </div>
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={handleDownloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'white', color: '#16a34a', border: '1px solid #16a34a', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                    <button onClick={handleDownloadTemplate} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: __sbg('white'), color: __stc('#16a34a'), border: `1px solid ${__sbg('#16a34a')}`, borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                       <Download size={14} /> Download Template
                     </button>
-                    <button onClick={() => { setBulkImportProgress(null); setBulkImportDone(false); setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
+                    <button onClick={() => { setBulkImportProgress(null); setBulkImportDone(false); setImportPreview([]); setImportErrors([]); setImportFileName(''); setShowImportModal(true); }} style={{ display: 'flex', alignItems: 'center', gap: '6px', background: __sbg('#16a34a'), color: __stc('white'), border: 'none', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 600, fontSize: '13px' }}>
                       <Upload size={14} /> Import Excel
                     </button>
                   </div>
@@ -1727,7 +1766,7 @@ const ReceiptsManagementPage = () => {
                 {customerData && (
                   <div className="receipts-page-form-section">
                     <h3>Customer Information</h3>
-                    <div style={{ padding: '16px', backgroundColor: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '8px', fontSize: '14px' }}>
+                    <div style={{ padding: '16px', backgroundColor: __sbg('#f0f9ff'), border: `1px solid ${__sbg('#bae6fd')}`, borderRadius: '8px', fontSize: '14px' }}>
                       <p><strong>Company:</strong> {customerData.companyName}</p>
                       <p><strong>Contact Person:</strong> {customerData.contactPerson}</p>
                       <p><strong>Email:</strong> {customerData.email}</p>
@@ -1757,7 +1796,7 @@ const ReceiptsManagementPage = () => {
                           </label>
                         ))}
                       </div>
-                    ) : <div className="empty-state-small">No unpaid invoices found for this customer</div>}
+                    ) : <div style={{ background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, borderRadius: 8, padding: '12px 14px', textAlign: 'center', color: __stc('#92400e'), fontSize: 13, fontWeight: 500 }}>⚠️ No Unpaid Invoices Found For This Customer</div>}
                   </div>
                 )}
 
@@ -1776,7 +1815,7 @@ const ReceiptsManagementPage = () => {
                       <label>Amount *</label>
                       <input type="number" value={receiptFormData.amount} onChange={(e) => setReceiptFormData({ ...receiptFormData, amount: parseFloat(e.target.value) })} placeholder="0.00" step="0.01" />
                       {receiptFormData.receiptType === 'invoice' && receiptFormData.invoiceId && (
-                        <small style={{ color: '#64748b', marginTop: '4px' }}>Maximum: {formatCurrency(invoicesForCustomer.find(inv => inv.id === receiptFormData.invoiceId)?.balanceAmount || 0)}</small>
+                        <small style={{ color: __stc('#64748b'), marginTop: '4px' }}>Maximum: {formatCurrency(invoicesForCustomer.find(inv => inv.id === receiptFormData.invoiceId)?.balanceAmount || 0)}</small>
                       )}
                     </div>
                     <div className="receipts-page-form-group">
@@ -1829,51 +1868,51 @@ const ReceiptsManagementPage = () => {
             <div className="receipts-page-modal-body">
               {!bulkImportProgress && (
                 <>
-                  <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '10px', padding: '16px 18px', marginBottom: '16px' }}>
+                  <div style={{ background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`, borderRadius: '10px', padding: '16px 18px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ background: '#16a34a', color: 'white', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>1</div>
+                        <div style={{ background: __sbg('#16a34a'), color: __stc('white'), width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>1</div>
                         <div>
-                          <strong style={{ fontSize: '14px', color: '#166534', display: 'block' }}>Download Receipt Template</strong>
-                          <span style={{ fontSize: '12px', color: '#4b7a5e' }}>Row 4 = headers, data from Row 5 onwards. Do not modify headers.</span>
+                          <strong style={{ fontSize: '14px', color: __stc('#166534'), display: 'block' }}>Download Receipt Template</strong>
+                          <span style={{ fontSize: '12px', color: __stc('#4b7a5e') }}>Row 4 = headers, data from Row 5 onwards. Do not modify headers.</span>
                         </div>
                       </div>
-                      <button onClick={handleDownloadTemplate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#16a34a', color: 'white', border: 'none', borderRadius: '6px', padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap' }}>
+                      <button onClick={handleDownloadTemplate} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: __sbg('#16a34a'), color: __stc('white'), border: 'none', borderRadius: '6px', padding: '7px 14px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap' }}>
                         <Download size={14} /> Download Template
                       </button>
                     </div>
                   </div>
 
                   {!receiptFormData.customerId && (
-                    <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: '#92400e' }}>
+                    <div style={{ background: __sbg('#fff7ed'), border: `1px solid ${__sbg('#fed7aa')}`, borderRadius: '8px', padding: '12px 16px', marginBottom: '16px', fontSize: '13px', color: __stc('#92400e') }}>
                       <strong>⚠ Required before importing:</strong> Please close this modal, select a Group → Sub Group → Project first so receipts are linked to the correct customer.
                     </div>
                   )}
                   {receiptFormData.customerId && customerData && (
-                    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: '#166534', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`, borderRadius: '8px', padding: '10px 16px', marginBottom: '16px', fontSize: '13px', color: __stc('#166534'), display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '16px' }}>✓</span>
                       <span>Receipts will be linked to: <strong>{customerData.companyName}</strong></span>
                     </div>
                   )}
 
-                  <div style={{ border: '2px dashed #6ee7b7', borderRadius: '10px', padding: '22px', marginBottom: '16px', textAlign: 'center', background: '#f8fafc' }}>
+                  <div style={{ border: `2px dashed ${__sbg('#6ee7b7')}`, borderRadius: '10px', padding: '22px', marginBottom: '16px', textAlign: 'center', background: __sbg('#f8fafc') }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px', justifyContent: 'center' }}>
-                      <div style={{ background: '#059669', color: 'white', width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>2</div>
-                      <strong style={{ fontSize: '14px', color: '#065f46' }}>Upload Filled Excel File</strong>
+                      <div style={{ background: __sbg('#059669'), color: __stc('white'), width: '26px', height: '26px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '13px', flexShrink: 0 }}>2</div>
+                      <strong style={{ fontSize: '14px', color: __stc('#065f46') }}>Upload Filled Excel File</strong>
                     </div>
                     <Upload size={32} color="#6ee7b7" style={{ marginBottom: '10px' }} />
-                    <p style={{ color: '#64748b', margin: '0 0 14px 0', fontSize: '13px' }}>All rows with valid data will be saved as individual receipts</p>
+                    <p style={{ color: __stc('#64748b'), margin: '0 0 14px 0', fontSize: '13px' }}>All rows with valid data will be saved as individual receipts</p>
                     <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileSelect} style={{ display: 'none' }} />
-                    <button onClick={() => fileInputRef.current?.click()} style={{ background: '#059669', color: 'white', border: 'none', borderRadius: '6px', padding: '9px 22px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                    <button onClick={() => fileInputRef.current?.click()} style={{ background: __sbg('#059669'), color: __stc('white'), border: 'none', borderRadius: '6px', padding: '9px 22px', cursor: 'pointer', fontWeight: 600, fontSize: '13px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       <Upload size={15} /> Browse File
                     </button>
-                    {importFileName && <p style={{ marginTop: '10px', color: '#16a34a', fontWeight: 600, fontSize: '13px' }}>📎 {importFileName}</p>}
+                    {importFileName && <p style={{ marginTop: '10px', color: __stc('#16a34a'), fontWeight: 600, fontSize: '13px' }}>📎 {importFileName}</p>}
                   </div>
 
                   {importErrors.length > 0 && (
-                    <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
-                      <strong style={{ color: '#dc2626', display: 'block', marginBottom: '6px' }}>⚠ Fix these errors in the Excel file before importing:</strong>
-                      <ul style={{ margin: 0, paddingLeft: '18px', color: '#b91c1c', fontSize: '12px', lineHeight: '1.7' }}>
+                    <div style={{ background: __sbg('#fef2f2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '8px', padding: '12px 14px', marginBottom: '14px' }}>
+                      <strong style={{ color: __stc('#dc2626'), display: 'block', marginBottom: '6px' }}>⚠ Fix these errors in the Excel file before importing:</strong>
+                      <ul style={{ margin: 0, paddingLeft: '18px', color: __stc('#b91c1c'), fontSize: '12px', lineHeight: '1.7' }}>
                         {importErrors.map((err, i) => <li key={i}>{err}</li>)}
                       </ul>
                     </div>
@@ -1882,28 +1921,28 @@ const ReceiptsManagementPage = () => {
                   {importPreview.length > 0 && importErrors.length === 0 && (
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                        <strong style={{ color: '#166534', fontSize: '14px' }}>✓ {importPreview.length} receipt{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
-                        <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '3px 8px', borderRadius: '12px' }}>Total: {formatCurrency(importPreview.reduce((s, r) => s + (r.amount || 0), 0))}</span>
+                        <strong style={{ color: __stc('#166534'), fontSize: '14px' }}>✓ {importPreview.length} receipt{importPreview.length !== 1 ? 's' : ''} ready to import</strong>
+                        <span style={{ fontSize: '12px', color: __stc('#64748b'), background: __sbg('#f1f5f9'), padding: '3px 8px', borderRadius: '12px' }}>Total: {formatCurrency(importPreview.reduce((s, r) => s + (r.amount || 0), 0))}</span>
                       </div>
-                      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                      <div style={{ overflowX: 'auto', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px', maxHeight: '280px', overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                           <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                            <tr style={{ background: '#065f46' }}>
+                            <tr style={{ background: __sbg('#065f46') }}>
                               {['#', 'Date', 'Amount', 'Type', 'Method', 'Reference', 'Notes'].map(h => (
-                                <th key={h} style={{ padding: '9px 11px', textAlign: 'left', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>{h}</th>
+                                <th key={h} style={{ padding: '9px 11px', textAlign: 'left', fontWeight: 600, color: __stc('#fff'), whiteSpace: 'nowrap' }}>{h}</th>
                               ))}
                             </tr>
                           </thead>
                           <tbody>
                             {importPreview.map((row, i) => (
-                              <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: i % 2 === 0 ? '#fff' : '#f9fafb' }}>
-                                <td style={{ padding: '7px 11px', color: '#94a3b8', fontWeight: 600 }}>{i + 1}</td>
+                              <tr key={i} style={{ borderBottom: `1px solid ${__sbg('#f1f5f9')}`, background: i % 2 === 0 ? __sbg('#fff') : __sbg('#f9fafb') }}>
+                                <td style={{ padding: '7px 11px', color: __stc('#94a3b8'), fontWeight: 600 }}>{i + 1}</td>
                                 <td style={{ padding: '7px 11px', whiteSpace: 'nowrap' }}>{row.receiptDate}</td>
-                                <td style={{ padding: '7px 11px', fontWeight: 600, color: '#0f172a' }}>{formatCurrency(row.amount)}</td>
-                                <td style={{ padding: '7px 11px' }}><span style={{ background: row.receiptType === 'ADVANCE' ? '#dcfce7' : '#dbeafe', color: row.receiptType === 'ADVANCE' ? '#166534' : '#1e40af', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>{row.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice'}</span></td>
+                                <td style={{ padding: '7px 11px', fontWeight: 600, color: __stc('#0f172a') }}>{formatCurrency(row.amount)}</td>
+                                <td style={{ padding: '7px 11px' }}><span style={{ background: row.receiptType === 'ADVANCE' ? __sbg('#dcfce7') : __sbg('#dbeafe'), color: row.receiptType === 'ADVANCE' ? __stc('#166534') : __stc('#1e40af'), padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>{row.receiptType === 'ADVANCE' ? 'Advance' : 'Invoice'}</span></td>
                                 <td style={{ padding: '7px 11px', whiteSpace: 'nowrap' }}>{row.paymentMethod}</td>
-                                <td style={{ padding: '7px 11px', color: '#64748b' }}>{row.transactionReference || '—'}</td>
-                                <td style={{ padding: '7px 11px', color: '#64748b', maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
+                                <td style={{ padding: '7px 11px', color: __stc('#64748b') }}>{row.transactionReference || '—'}</td>
+                                <td style={{ padding: '7px 11px', color: __stc('#64748b'), maxWidth: '150px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.notes || '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -1919,59 +1958,59 @@ const ReceiptsManagementPage = () => {
                 <div>
                   <div style={{ marginBottom: '20px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                      <strong style={{ fontSize: '14px', color: bulkImportDone ? '#166534' : '#0f172a' }}>
+                      <strong style={{ fontSize: '14px', color: bulkImportDone ? __stc('#166534') : __stc('#0f172a') }}>
                         {bulkImportDone ? `Import complete — ${bulkImportProgress.results.filter(r => r.status === 'success').length} of ${bulkImportProgress.total} saved` : `Importing... ${bulkImportProgress.current} of ${bulkImportProgress.total}`}
                       </strong>
-                      <span style={{ fontSize: '13px', color: '#64748b' }}>{Math.round((bulkImportProgress.current / bulkImportProgress.total) * 100)}%</span>
+                      <span style={{ fontSize: '13px', color: __stc('#64748b') }}>{Math.round((bulkImportProgress.current / bulkImportProgress.total) * 100)}%</span>
                     </div>
-                    <div style={{ height: '10px', background: '#e2e8f0', borderRadius: '99px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%`, background: bulkImportDone ? (bulkImportProgress.results.every(r => r.status === 'success') ? '#16a34a' : '#f59e0b') : '#059669', borderRadius: '99px', transition: 'width 0.3s ease' }} />
+                    <div style={{ height: '10px', background: __sbg('#e2e8f0'), borderRadius: '99px', overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(bulkImportProgress.current / bulkImportProgress.total) * 100}%`, background: bulkImportDone ? (bulkImportProgress.results.every(r => r.status === 'success') ? __sbg('#16a34a') : __sbg('#f59e0b')) : __sbg('#059669'), borderRadius: '99px', transition: 'width 0.3s ease' }} />
                     </div>
                   </div>
 
                   {bulkImportDone && (
                     <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
-                      <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#16a34a' }}>{bulkImportProgress.results.filter(r => r.status === 'success').length}</div>
-                        <div style={{ fontSize: '12px', color: '#166534', fontWeight: 600 }}>Successful</div>
+                      <div style={{ flex: 1, background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: __stc('#16a34a') }}>{bulkImportProgress.results.filter(r => r.status === 'success').length}</div>
+                        <div style={{ fontSize: '12px', color: __stc('#166534'), fontWeight: 600 }}>Successful</div>
                       </div>
-                      <div style={{ flex: 1, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#dc2626' }}>{bulkImportProgress.results.filter(r => r.status === 'error').length}</div>
-                        <div style={{ fontSize: '12px', color: '#991b1b', fontWeight: 600 }}>Failed</div>
+                      <div style={{ flex: 1, background: __sbg('#fef2f2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: __stc('#dc2626') }}>{bulkImportProgress.results.filter(r => r.status === 'error').length}</div>
+                        <div style={{ fontSize: '12px', color: __stc('#991b1b'), fontWeight: 600 }}>Failed</div>
                       </div>
-                      <div style={{ flex: 1, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: '24px', fontWeight: 700, color: '#0f172a' }}>{formatCurrency(bulkImportProgress.results.filter(r => r.status === 'success').reduce((s, r) => s + (r.amount || 0), 0))}</div>
-                        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 600 }}>Total Saved</div>
+                      <div style={{ flex: 1, background: __sbg('#f8fafc'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                        <div style={{ fontSize: '24px', fontWeight: 700, color: __stc('#0f172a') }}>{formatCurrency(bulkImportProgress.results.filter(r => r.status === 'success').reduce((s, r) => s + (r.amount || 0), 0))}</div>
+                        <div style={{ fontSize: '12px', color: __stc('#64748b'), fontWeight: 600 }}>Total Saved</div>
                       </div>
                     </div>
                   )}
 
-                  <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px', maxHeight: '320px', overflowY: 'auto' }}>
+                  <div style={{ overflowX: 'auto', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px', maxHeight: '320px', overflowY: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
                       <thead style={{ position: 'sticky', top: 0, zIndex: 1 }}>
-                        <tr style={{ background: '#1e293b' }}>
+                        <tr style={{ background: __sbg('#1e293b') }}>
                           {['Row', 'Date', 'Amount', 'Status', 'Message'].map(h => (
-                            <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap' }}>{h}</th>
+                            <th key={h} style={{ padding: '9px 12px', textAlign: 'left', fontWeight: 600, color: __stc('#fff'), whiteSpace: 'nowrap' }}>{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {bulkImportProgress.results.map((result, i) => (
-                          <tr key={i} style={{ borderBottom: '1px solid #f1f5f9', background: result.status === 'success' ? '#f0fdf4' : '#fef2f2' }}>
-                            <td style={{ padding: '7px 12px', color: '#64748b', fontWeight: 600 }}>#{result.row}</td>
+                          <tr key={i} style={{ borderBottom: `1px solid ${__sbg('#f1f5f9')}`, background: result.status === 'success' ? __sbg('#f0fdf4') : __sbg('#fef2f2') }}>
+                            <td style={{ padding: '7px 12px', color: __stc('#64748b'), fontWeight: 600 }}>#{result.row}</td>
                             <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>{result.date}</td>
                             <td style={{ padding: '7px 12px', fontWeight: 600 }}>{formatCurrency(result.amount)}</td>
-                            <td style={{ padding: '7px 12px' }}><span style={{ background: result.status === 'success' ? '#dcfce7' : '#fee2e2', color: result.status === 'success' ? '#166534' : '#dc2626', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>{result.status === 'success' ? '✓ Saved' : '✗ Failed'}</span></td>
-                            <td style={{ padding: '7px 12px', color: result.status === 'error' ? '#b91c1c' : '#64748b' }}>{result.message}</td>
+                            <td style={{ padding: '7px 12px' }}><span style={{ background: result.status === 'success' ? __sbg('#dcfce7') : __sbg('#fee2e2'), color: result.status === 'success' ? __stc('#166534') : __stc('#dc2626'), padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 700 }}>{result.status === 'success' ? '✓ Saved' : '✗ Failed'}</span></td>
+                            <td style={{ padding: '7px 12px', color: result.status === 'error' ? __stc('#b91c1c') : __stc('#64748b') }}>{result.message}</td>
                           </tr>
                         ))}
                         {!bulkImportDone && importPreview.slice(bulkImportProgress.results.length).map((row, i) => (
-                          <tr key={`pending-${i}`} style={{ borderBottom: '1px solid #f1f5f9', background: '#fff', opacity: 0.45 }}>
-                            <td style={{ padding: '7px 12px', color: '#94a3b8', fontWeight: 600 }}>#{bulkImportProgress.results.length + i + 1}</td>
-                            <td style={{ padding: '7px 12px', color: '#94a3b8' }}>{row.receiptDate}</td>
-                            <td style={{ padding: '7px 12px', color: '#94a3b8' }}>{formatCurrency(row.amount)}</td>
-                            <td style={{ padding: '7px 12px' }}><span style={{ background: '#f1f5f9', color: '#94a3b8', padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Pending</span></td>
-                            <td style={{ padding: '7px 12px', color: '#94a3b8' }}>—</td>
+                          <tr key={`pending-${i}`} style={{ borderBottom: `1px solid ${__sbg('#f1f5f9')}`, background: __sbg('#fff'), opacity: 0.45 }}>
+                            <td style={{ padding: '7px 12px', color: __stc('#94a3b8'), fontWeight: 600 }}>#{bulkImportProgress.results.length + i + 1}</td>
+                            <td style={{ padding: '7px 12px', color: __stc('#94a3b8') }}>{row.receiptDate}</td>
+                            <td style={{ padding: '7px 12px', color: __stc('#94a3b8') }}>{formatCurrency(row.amount)}</td>
+                            <td style={{ padding: '7px 12px' }}><span style={{ background: __sbg('#f1f5f9'), color: __stc('#94a3b8'), padding: '2px 8px', borderRadius: '10px', fontSize: '11px', fontWeight: 600 }}>Pending</span></td>
+                            <td style={{ padding: '7px 12px', color: __stc('#94a3b8') }}>—</td>
                           </tr>
                         ))}
                       </tbody>
@@ -2035,7 +2074,7 @@ const ReceiptsManagementPage = () => {
                               <div className="invoice-adjustment-details">
                                 <span>Date: {formatDate(invoice.invoiceDate)}</span><span>Due: {formatDate(invoice.dueDate)}</span>
                                 <span>Total: {formatCurrency(invoice.totalAmount)}</span>
-                                <span style={{ color: '#dc2626', fontWeight: 600 }}>Balance: {formatCurrency(invoice.balanceAmount)}</span>
+                                <span style={{ color: __stc('#dc2626'), fontWeight: 600 }}>Balance: {formatCurrency(invoice.balanceAmount)}</span>
                               </div>
                             </div>
                             <div className="invoice-adjustment-input">
@@ -2047,7 +2086,7 @@ const ReceiptsManagementPage = () => {
                         );
                       })}
                     </div>
-                  ) : <div className="empty-state-small">No outstanding invoices found for project {selectedReceipt.projectId || '—'}</div>}
+                  ) : <div style={{ background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, borderRadius: 8, padding: '12px 14px', textAlign: 'center', color: __stc('#92400e'), fontSize: 13, fontWeight: 500 }}>⚠️ No Outstanding Invoices Found For Project {selectedReceipt.projectId || '—'}</div>}
                 </div>
               </div>
             </div>
@@ -2072,16 +2111,16 @@ const ReceiptsManagementPage = () => {
 
                 {/* ── Project Assignment — ADVANCE only, locked for INVOICE_PAYMENT ── */}
                 {editingReceipt.receiptType === 'ADVANCE' ? (
-                <div className="receipts-page-form-section" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
+                <div className="receipts-page-form-section" style={{ background: __sbg('#f8fafc'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px', padding: '16px' }}>
+                  <div style={{ fontSize: '12px', color: __stc('#6b7280'), fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>
                     Project Assignment
                     {(editReceiptGroupName !== (editingReceipt.groupId || '') || editReceiptSubGroupName !== (editingReceipt.subGroupId || '') || editReceiptProjectId !== (editingReceipt.projectId || '')) && (
-                      <span style={{ marginLeft: '10px', background: '#fef3c7', color: '#92400e', fontSize: '11px', padding: '2px 8px', borderRadius: '99px', fontWeight: 700 }}>⚠ Changed — will save on Update</span>
+                      <span style={{ marginLeft: '10px', background: __sbg('#fef3c7'), color: __stc('#92400e'), fontSize: '11px', padding: '2px 8px', borderRadius: '99px', fontWeight: 700 }}>⚠ Changed — will save on Update</span>
                     )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
                     <div>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Group *</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: __stc('#374151'), display: 'block', marginBottom: '4px' }}>Group *</label>
                       <FilterSelect
                         value={editReceiptGroupName}
                         options={editReceiptProjectGroups}
@@ -2091,7 +2130,7 @@ const ReceiptsManagementPage = () => {
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Sub Group</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: __stc('#374151'), display: 'block', marginBottom: '4px' }}>Sub Group</label>
                       <FilterSelect
                         value={editReceiptSubGroupName}
                         options={editReceiptProjectSubs}
@@ -2101,7 +2140,7 @@ const ReceiptsManagementPage = () => {
                       />
                     </div>
                     <div>
-                      <label style={{ fontSize: '12px', fontWeight: 600, color: '#374151', display: 'block', marginBottom: '4px' }}>Project *</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: __stc('#374151'), display: 'block', marginBottom: '4px' }}>Project *</label>
                       <FilterSelect
                         value={editReceiptProjectId}
                         options={editReceiptProjectList.map(p => ({ value: p.id, label: p.name }))}
@@ -2120,26 +2159,26 @@ const ReceiptsManagementPage = () => {
                     </div>
                   )}
                   {(editReceiptGroupName !== (editingReceipt.groupId || '') || editReceiptSubGroupName !== (editingReceipt.subGroupId || '') || editReceiptProjectId !== (editingReceipt.projectId || '')) && parseFloat(editingReceipt.appliedAmount) > 0 && (
-                    <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef9c3', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
+                    <div style={{ marginTop: '10px', padding: '8px 12px', background: __sbg('#fef9c3'), border: `1px solid ${__sbg('#fcd34d')}`, borderRadius: '6px', fontSize: '12px', color: __stc('#92400e') }}>
                       ⚠ This advance has <strong>{formatCurrency(editingReceipt.appliedAmount)}</strong> already allocated to invoices.
                       Changing the project will <strong>automatically reverse those allocations</strong> so the advance starts fresh under the new project.
                     </div>
                   )}
                   {editReceiptGroupName === (editingReceipt.groupId || '') && editReceiptProjectId === (editingReceipt.projectId || '') && parseFloat(editingReceipt.appliedAmount) > 0 && (
-                    <div style={{ marginTop: '10px', padding: '8px 12px', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '6px', fontSize: '12px', color: '#92400e' }}>
+                    <div style={{ marginTop: '10px', padding: '8px 12px', background: __sbg('#fef3c7'), border: `1px solid ${__sbg('#fcd34d')}`, borderRadius: '6px', fontSize: '12px', color: __stc('#92400e') }}>
                       ⚠ {formatCurrency(editingReceipt.appliedAmount)} already allocated. Cannot reduce amount below this.
                     </div>
                   )}
                 </div>
                 ) : (
-                <div className="receipts-page-form-section" style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '14px 16px' }}>
-                  <div style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Project Assignment</div>
-                  <div style={{ fontSize: '14px', fontWeight: 600, color: '#1e293b' }}>
+                <div className="receipts-page-form-section" style={{ background: __sbg('#f8fafc'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px', padding: '14px 16px' }}>
+                  <div style={{ fontSize: '12px', color: __stc('#6b7280'), fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Project Assignment</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: __stc('#1e293b') }}>
                     {editingReceipt.groupId || '—'}
                     {editingReceipt.subGroupId ? ` › ${editingReceipt.subGroupId}` : ''}
                     {editingReceipt.projectId ? ` › ${editingReceipt.projectId}` : ''}
                   </div>
-                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#6b7280' }}>Project cannot be changed for Invoice Payments.</div>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: __stc('#6b7280') }}>Project cannot be changed for Invoice Payments.</div>
                 </div>
                 )}
 
@@ -2149,7 +2188,7 @@ const ReceiptsManagementPage = () => {
                     <span className={`receipt-badge ${editingReceipt.receiptType === 'ADVANCE' ? 'receipt-type-advance' : 'receipt-type-invoice'}`}>{editingReceipt.receiptType === 'ADVANCE' ? 'Advance Payment' : 'Invoice Payment'}</span>
                   </div>
                   {editingReceipt.receiptType === 'INVOICE_PAYMENT' && editingReceipt.invoiceNo && (
-                    <div style={{ padding: '12px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '6px', fontSize: '14px' }}>
+                    <div style={{ padding: '12px', background: __sbg('#f0f9ff'), border: `1px solid ${__sbg('#bae6fd')}`, borderRadius: '6px', fontSize: '14px' }}>
                       <strong>Applied to Invoice:</strong> {editingReceipt.invoiceNo}
                     </div>
                   )}
@@ -2166,7 +2205,7 @@ const ReceiptsManagementPage = () => {
                     <div className="receipts-page-form-group">
                       <label>Amount *</label>
                       <input type="number" value={editReceiptFormData.amount} onChange={(e) => setEditReceiptFormData({ ...editReceiptFormData, amount: parseFloat(e.target.value) })} placeholder="0.00" step="0.01" min={editingReceipt.appliedAmount || 0} />
-                      {editingReceipt.appliedAmount > 0 && <small style={{ color: '#92400e' }}>Minimum: {formatCurrency(editingReceipt.appliedAmount)} (already allocated)</small>}
+                      {editingReceipt.appliedAmount > 0 && <small style={{ color: __stc('#92400e') }}>Minimum: {formatCurrency(editingReceipt.appliedAmount)} (already allocated)</small>}
                     </div>
                     <div className="receipts-page-form-group">
                       <label>Payment Method *</label>

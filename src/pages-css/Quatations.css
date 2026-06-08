@@ -3,7 +3,7 @@
    Simple, modern CRM-style blue/white/grey theme with rounded cards and shadows.
 */
 
-.quatations-page-root { color:#1f2d3d; background:#f6f8fa; min-height:100vh; }
+.quatations-page-root { color:var(--ct-1f2d3d, #1f2d3d); background:var(--c-f6f8fa, #f6f8fa); min-height:100vh; }
 .quatations-page-layout { display:flex; }
 
 /* main content (space for optional sidebar) */
@@ -11,11 +11,11 @@
 
 /* header */
 .quatations-page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
-.quatations-page-title { margin:0; font-size:24px; color:#0b4c9d; }
-.quatations-page-breadcrumb { color:#6b7280; font-size:13px; }
+.quatations-page-title { margin:0; font-size:24px; color:var(--ct-0b4c9d, #0b4c9d); }
+.quatations-page-breadcrumb { color:var(--ct-6b7280, #6b7280); font-size:13px; }
 
 /* card */
-.card { background:white; border-radius:10px; box-shadow:0 6px 18px rgba(17,24,39,0.06); padding:16px; margin-bottom:16px; }
+.card { background:var(--c-white, white); border-radius:10px; box-shadow:0 6px 18px rgba(17,24,39,0.06); padding:16px; margin-bottom:16px; }
 
 /* actions top bar */
 .quatations-page-actions { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; }
@@ -23,70 +23,70 @@
 .quatations-page-actions-right { display:flex; gap:8px; align-items:center; }
 
 .quatations-page-search { min-width:320px; }
-.quatations-page-search-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid #e6edf3; box-shadow:none; font-size:14px; }
+.quatations-page-search-input { width:100%; padding:10px 12px; border-radius:8px; border:1px solid var(--c-e6edf3, #e6edf3); box-shadow:none; font-size:14px; }
 
 .quatations-page-filters { display:flex; gap:8px; align-items:center; }
-.quatations-page-filter { padding:8px 10px; border-radius:8px; border:1px solid #e6edf3; background:white; font-size:14px; }
+.quatations-page-filter { padding:8px 10px; border-radius:8px; border:1px solid var(--c-e6edf3, #e6edf3); background:var(--c-white, white); font-size:14px; }
 
-.quatations-page-date-range input { padding:8px 10px; border-radius:8px; border:1px solid #e6edf3; }
+.quatations-page-date-range input { padding:8px 10px; border-radius:8px; border:1px solid var(--c-e6edf3, #e6edf3); }
 
 /* buttons */
-.quatations-page-btn { padding:8px 12px; border-radius:8px; border:1px solid #d1e4ff; background:transparent; cursor:pointer; font-size:14px; }
-.quatations-page-btn.primary { background:#0b63d6; color:white; border-color:#0b63d6; }
-.quatations-page-btn.danger { background:transparent; color:#b91c1c; border-color:transparent; }
+.quatations-page-btn { padding:8px 12px; border-radius:8px; border:1px solid var(--c-d1e4ff, #d1e4ff); background:transparent; cursor:pointer; font-size:14px; }
+.quatations-page-btn.primary { background:var(--c-0b63d6, #0b63d6); color:var(--ct-white, white); border-color:var(--c-0b63d6, #0b63d6); }
+.quatations-page-btn.danger { background:transparent; color:var(--ct-b91c1c, #b91c1c); border-color:transparent; }
 
 /* table */
 .quatations-page-table-wrapper { overflow:auto; max-height:520px; border-radius:8px; }
 .quatations-page-data-table { width:100%; border-collapse:collapse; min-width:1000px; }
-.quatations-page-data-table thead th { text-align:left; padding:12px; font-weight:600; font-size:13px; color:#475569; background:linear-gradient(180deg,#ffffff,#fbfdff); }
-.quatations-page-data-table tbody td { padding:12px; border-top:1px solid #eef2f6; font-size:14px; vertical-align:middle; }
-.quatations-page-sticky-head { position:sticky; top:0; z-index:2; background:white; }
+.quatations-page-data-table thead th { text-align:left; padding:12px; font-weight:600; font-size:13px; color:var(--ct-475569, #475569); background:linear-gradient(180deg,var(--c-ffffff, #ffffff),var(--c-fbfdff, #fbfdff)); }
+.quatations-page-data-table tbody td { padding:12px; border-top:1px solid var(--c-eef2f6, #eef2f6); font-size:14px; vertical-align:middle; }
+.quatations-page-sticky-head { position:sticky; top:0; z-index:2; background:var(--c-white, white); }
 
-.quatations-page-row:hover { background:#fbfcff; }
-.quatations-page-empty { text-align:center; padding:30px; color:#6b7280; }
+.quatations-page-row:hover { background:var(--c-fbfcff, #fbfcff); }
+.quatations-page-empty { text-align:center; padding:30px; color:var(--ct-6b7280, #6b7280); }
 
 .quatations-page-col-check { width:40px; }
 .quatations-page-actions-td { display:flex; gap:6px; flex-wrap:wrap; }
-.quatations-page-icon-btn { padding:6px 8px; border-radius:6px; border:1px solid #e6edf3; background:white; cursor:pointer; font-size:13px; }
-.quatations-page-icon-btn.danger { color:#b91c1c; }
+.quatations-page-icon-btn { padding:6px 8px; border-radius:6px; border:1px solid var(--c-e6edf3, #e6edf3); background:var(--c-white, white); cursor:pointer; font-size:13px; }
+.quatations-page-icon-btn.danger { color:var(--ct-b91c1c, #b91c1c); }
 
 /* client cell */
 .quatations-page-client { display:flex; flex-direction:column; }
 .quatations-page-client-name { font-weight:600; }
-.quatations-page-client-company { font-size:12px; color:#6b7280; }
+.quatations-page-client-company { font-size:12px; color:var(--ct-6b7280, #6b7280); }
 
 /* badges */
 .quatations-page-badge { padding:4px 8px; border-radius:999px; font-size:12px; font-weight:600; display:inline-block; }
-.quatations-page-badge-draft { background:#eef2ff; color:#0b63d6; }
-.quatations-page-badge-sent { background:#fff7ed; color:#b45309; }
-.quatations-page-badge-approved { background:#ecfdf5; color:#059669; }
-.quatations-page-badge-rejected { background:#fff1f2; color:#be123c; }
-.quatations-page-badge-revised { background:#eef2ff; color:#0b63d6; }
-.quatations-page-badge-cancelled { background:#f3f4f6; color:#6b7280; }
+.quatations-page-badge-draft { background:var(--c-eef2ff, #eef2ff); color:var(--ct-0b63d6, #0b63d6); }
+.quatations-page-badge-sent { background:var(--c-fff7ed, #fff7ed); color:var(--ct-b45309, #b45309); }
+.quatations-page-badge-approved { background:var(--c-ecfdf5, #ecfdf5); color:var(--ct-059669, #059669); }
+.quatations-page-badge-rejected { background:var(--c-fff1f2, #fff1f2); color:var(--ct-be123c, #be123c); }
+.quatations-page-badge-revised { background:var(--c-eef2ff, #eef2ff); color:var(--ct-0b63d6, #0b63d6); }
+.quatations-page-badge-cancelled { background:var(--c-f3f4f6, #f3f4f6); color:var(--ct-6b7280, #6b7280); }
 
 /* pagination */
 .quatations-page-pagination { display:flex; justify-content:space-between; align-items:center; padding-top:12px; }
 .quatations-page-pagination-controls { display:flex; gap:8px; align-items:center; }
-.quatations-page-pagination-controls input { width:60px; padding:6px; border-radius:6px; border:1px solid #e6edf3; }
+.quatations-page-pagination-controls input { width:60px; padding:6px; border-radius:6px; border:1px solid var(--c-e6edf3, #e6edf3); }
 
 /* modal overlay */
 .quatations-page-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:90; }
-.quatations-page-modal { width:960px; max-height:90vh; overflow:auto; background:white; border-radius:10px; box-shadow:0 12px 40px rgba(2,6,23,0.2); }
-.quatations-page-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid #eef2f6; }
+.quatations-page-modal { width:960px; max-height:90vh; overflow:auto; background:var(--c-white, white); border-radius:10px; box-shadow:0 12px 40px rgba(2,6,23,0.2); }
+.quatations-page-modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--c-eef2f6, #eef2f6); }
 .quatations-page-modal-body { padding:18px 20px; }
 .quatations-page-modal-section { margin-bottom:18px; }
 .quatations-page-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
 .quatations-page-full { grid-column:1 / -1; }
 
 .quatations-page-items-table { width:100%; border-collapse:collapse; }
-.quatations-page-items-table th, .quatations-page-items-table td { padding:8px; border:1px solid #eef2f6; font-size:14px; }
+.quatations-page-items-table th, .quatations-page-items-table td { padding:8px; border:1px solid var(--c-eef2f6, #eef2f6); font-size:14px; }
 .quatations-page-grand { font-weight:700; }
 
-.quatations-page-modal-footer { padding:12px 20px; border-top:1px solid #eef2f6; display:flex; justify-content:flex-end; }
+.quatations-page-modal-footer { padding:12px 20px; border-top:1px solid var(--c-eef2f6, #eef2f6); display:flex; justify-content:flex-end; }
 
 /* builder */
-.quatations-page-builder { width:1100px; max-height:90vh; overflow:auto; background:white; border-radius:10px; box-shadow:0 12px 40px rgba(2,6,23,0.2); }
-.quatations-page-builder-header { padding:16px 20px; border-bottom:1px solid #eef2f6; }
+.quatations-page-builder { width:1100px; max-height:90vh; overflow:auto; background:var(--c-white, white); border-radius:10px; box-shadow:0 12px 40px rgba(2,6,23,0.2); }
+.quatations-page-builder-header { padding:16px 20px; border-bottom:1px solid var(--c-eef2f6, #eef2f6); }
 .quatations-page-builder-body { display:flex; gap:20px; padding:18px 20px; }
 .quatations-page-form-col { flex:1; display:flex; flex-direction:column; gap:8px; }
 .quatations-page-form-summary { margin-top:12px; display:flex; flex-direction:column; gap:6px; }

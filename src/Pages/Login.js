@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import { AiOutlineEye, AiOutlineEyeInvisible, AiOutlineUser, AiOutlineLock } from "react-icons/ai";
 import "../pages-css/Login.css";
 import heroDesktop from "../images/logo.png";
 import heroMobile from "../images/logo.png";
@@ -37,6 +37,14 @@ export default function Login() {
   const [fpError, setFpError] = useState("");
   const [fpSuccess, setFpSuccess] = useState("");
   const [fpLoading, setFpLoading] = useState(false);
+
+  // Login page is always LIGHT — never apply dark theme here.
+  useEffect(() => {
+    const root = document.documentElement;
+    const prev = root.getAttribute("data-theme");
+    root.setAttribute("data-theme", "light");
+    return () => { root.setAttribute("data-theme", prev || "light"); };
+  }, []);
 
   // Resend timer
   const [fpTimer, setFpTimer] = useState(0);
@@ -322,20 +330,25 @@ export default function Login() {
                   <label className="login-label">
                     Username <span className="required">*</span>
                   </label>
-                  <input
-                    className="login-input"
-                    type="text"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    autoComplete="username"
-                    disabled={submitting}
-                  />
+                  <div className="login-input-wrap" style={{ position: "relative" }}>
+                    <AiOutlineUser size={18} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none" }} />
+                    <input
+                      className="login-input"
+                      type="text"
+                      placeholder="Enter your username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      autoComplete="username"
+                      disabled={submitting}
+                      style={{ paddingLeft: "38px" }}
+                    />
+                  </div>
 
                   <label className="login-label">
                     Password <span className="required">*</span>
                   </label>
                   <div className="login-password-row">
+                    <AiOutlineLock size={18} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#94a3b8", pointerEvents: "none", zIndex: 1 }} />
                     <input
                       className="login-input"
                       type={showPassword ? "text" : "password"}
@@ -344,7 +357,7 @@ export default function Login() {
                       onChange={(e) => setPassword(e.target.value)}
                       autoComplete="current-password"
                       disabled={submitting}
-                      style={{ paddingRight: "40px" }}
+                      style={{ paddingRight: "40px", paddingLeft: "38px" }}
                     />
                     <button
                       type="button"

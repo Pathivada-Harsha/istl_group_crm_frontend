@@ -13,11 +13,49 @@ import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
 import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fff5f5':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714',
+  '#f5f3ff':'#241b3d','#eef2ff':'#1e1f45','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a',
+  '#90caf9':'#244b7a','#e3f2fd':'#16344d',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#d97706':'#f0b454','#ca8a04':'#e3c258',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1976d2':'#5b9bf0','#3182ce':'#5b9bf0',
+  '#38a169':'#34d39e','#e53e3e':'#f06a6a',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 /* ── OrderBook Date Range Picker (same style as Clients Data) ────────────── */
 const _OB_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const _OB_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 const OBDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,  setShow]  = useState(false);
   const [from,  setFrom]  = useState(null);
   const [to,    setTo]    = useState(null);
@@ -60,44 +98,44 @@ const OBDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
         style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', whiteSpace: 'nowrap' }}
       >
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <span style={{ fontSize: 12, color: appliedFrom ? '#1e293b' : '#94a3b8' }}>FROM</span>
-        <span style={{ fontSize: 12, fontWeight: appliedFrom ? 600 : 400, color: appliedFrom ? '#1e293b' : '#94a3b8' }}>{fmt(appliedFrom)}</span>
+        <span style={{ fontSize: 12, color: appliedFrom ? __stc('#1e293b') : __stc('#94a3b8') }}>FROM</span>
+        <span style={{ fontSize: 12, fontWeight: appliedFrom ? 600 : 400, color: appliedFrom ? __stc('#1e293b') : __stc('#94a3b8') }}>{fmt(appliedFrom)}</span>
         <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>TO</span>
-        <span style={{ fontSize: 12, fontWeight: appliedTo ? 600 : 400, color: appliedTo ? '#1e293b' : '#94a3b8' }}>{fmt(appliedTo)}</span>
+        <span style={{ fontSize: 12, color: __stc('#94a3b8') }}>TO</span>
+        <span style={{ fontSize: 12, fontWeight: appliedTo ? 600 : 400, color: appliedTo ? __stc('#1e293b') : __stc('#94a3b8') }}>{fmt(appliedTo)}</span>
         {appliedFrom && (
-          <span onClick={e => { e.stopPropagation(); setFrom(null); setTo(null); onClear(); }} style={{ marginLeft: 2, color: '#94a3b8', cursor: 'pointer', lineHeight: 1 }}>
+          <span onClick={e => { e.stopPropagation(); setFrom(null); setTo(null); onClear(); }} style={{ marginLeft: 2, color: __stc('#94a3b8'), cursor: 'pointer', lineHeight: 1 }}>
             <svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
           </span>
         )}
       </button>
 
       {show && (
-        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 16, minWidth: 280 }}>
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 9999, background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 16, minWidth: 280 }}>
           {/* Month/Year header */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <button type="button" onClick={() => { if (calMo === 0) { setCalMo(11); setCalYr(y => y - 1); } else setCalMo(m => m - 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, fontSize: 16 }}>‹</button>
-            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{_OB_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: __stc('#1e293b') }}>{_OB_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={() => { if (calMo === 11) { setCalMo(0); setCalYr(y => y + 1); } else setCalMo(m => m + 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, fontSize: 16 }}>›</button>
           </div>
           {showYr ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4, marginBottom: 10 }}>
               {Array.from({ length: 16 }, (_, i) => { const yr = new Date().getFullYear() - 4 + i; return (
-                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? '#4f46e5' : 'transparent', color: yr === calYr ? '#fff' : '#1e293b', fontSize: 12 }}>{yr}</div>
+                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? __sbg('#4f46e5') : __sbg('transparent'), color: yr === calYr ? __stc('#fff') : __stc('#1e293b'), fontSize: 12 }}>{yr}</div>
               ); })}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2, marginBottom: 8 }}>
-              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '2px 0' }}>{d}</div>)}
+              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: __stc('#94a3b8'), padding: '2px 0' }}>{d}</div>)}
               {Array.from({ length: FD }).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: DIM }).map((_, i) => {
                 const dy = i + 1;
                 const ds = `${calYr}-${String(calMo + 1).padStart(2, '0')}-${String(dy).padStart(2, '0')}`;
                 const dow = (FD + i) % 7;
-                let bg = 'transparent', color = '#1e293b', borderRadius = 4;
-                if (ds === from || ds === to) { bg = '#4f46e5'; color = '#fff'; }
-                else if (inR(ds)) { bg = '#e0e7ff'; color = '#3730a3'; if (dow === 0) borderRadius = '4px 0 0 4px'; if (dow === 6) borderRadius = '0 4px 4px 0'; }
-                else if (ds === tod) { color = '#4f46e5'; }
+                let bg = __sbg('transparent'), color = __stc('#1e293b'), borderRadius = 4;
+                if (ds === from || ds === to) { bg = __sbg('#4f46e5'); color = __stc('#fff'); }
+                else if (inR(ds)) { bg = __sbg('#e0e7ff'); color = __stc('#3730a3'); if (dow === 0) borderRadius = '4px 0 0 4px'; if (dow === 6) borderRadius = '0 4px 4px 0'; }
+                else if (ds === tod) { color = __stc('#4f46e5'); }
                 return (
                   <div key={ds} onClick={() => clickDay(ds)} onMouseEnter={() => from && !to && setHover(ds)} onMouseLeave={() => setHover(null)}
                     style={{ textAlign: 'center', padding: '5px 0', cursor: 'pointer', borderRadius, background: bg, color, fontSize: 12, fontWeight: ds === from || ds === to ? 700 : 400 }}>{dy}</div>
@@ -107,15 +145,15 @@ const OBDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
           )}
           {/* Chips */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: from ? '#e0e7ff' : '#f1f5f9', color: from ? '#3730a3' : '#94a3b8', fontWeight: from ? 600 : 400 }}>{from ? fmt(from) : 'From —'}</span>
+            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: from ? __sbg('#e0e7ff') : __sbg('#f1f5f9'), color: from ? __stc('#3730a3') : __stc('#94a3b8'), fontWeight: from ? 600 : 400 }}>{from ? fmt(from) : 'From —'}</span>
             <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: to ? '#e0e7ff' : '#f1f5f9', color: to ? '#3730a3' : '#94a3b8', fontWeight: to ? 600 : 400 }}>{to ? fmt(to) : 'To —'}</span>
+            <span style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, background: to ? __sbg('#e0e7ff') : __sbg('#f1f5f9'), color: to ? __stc('#3730a3') : __stc('#94a3b8'), fontWeight: to ? 600 : 400 }}>{to ? fmt(to) : 'To —'}</span>
           </div>
           {/* Buttons */}
           <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-            {(from || appliedFrom) && <button type="button" onClick={() => { setFrom(null); setTo(null); onClear(); setShow(false); }} style={{ flex: 1, padding: '6px 0', border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#64748b' }}>Clear</button>}
-            <button type="button" onClick={() => setShow(false)} style={{ flex: 1, padding: '6px 0', border: '1px solid #e2e8f0', borderRadius: 6, background: '#fff', cursor: 'pointer', fontSize: 12, color: '#64748b' }}>Cancel</button>
-            <button type="button" onClick={() => { if (!from) return; onApply(from, to || from); setShow(false); }} disabled={!from} style={{ flex: 1, padding: '6px 0', border: 'none', borderRadius: 6, background: from ? '#4f46e5' : '#e2e8f0', color: from ? '#fff' : '#94a3b8', cursor: from ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Apply</button>
+            {(from || appliedFrom) && <button type="button" onClick={() => { setFrom(null); setTo(null); onClear(); setShow(false); }} style={{ flex: 1, padding: '6px 0', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 6, background: __sbg('#fff'), cursor: 'pointer', fontSize: 12, color: __stc('#64748b') }}>Clear</button>}
+            <button type="button" onClick={() => setShow(false)} style={{ flex: 1, padding: '6px 0', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 6, background: __sbg('#fff'), cursor: 'pointer', fontSize: 12, color: __stc('#64748b') }}>Cancel</button>
+            <button type="button" onClick={() => { if (!from) return; onApply(from, to || from); setShow(false); }} disabled={!from} style={{ flex: 1, padding: '6px 0', border: 'none', borderRadius: 6, background: from ? __sbg('#4f46e5') : __sbg('#e2e8f0'), color: from ? __stc('#fff') : __stc('#94a3b8'), cursor: from ? 'pointer' : 'default', fontSize: 12, fontWeight: 600 }}>Apply</button>
           </div>
         </div>
       )}
@@ -125,6 +163,7 @@ const OBDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 /* ── Simple DatePicker (calendar only, no time — same style as TaskManagement) ── */
 const OBDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  useThemeVersion();
   const [show, setShow] = useState(false);
   const [calMo, setCalMo] = useState(() => value ? parseInt(value.slice(5, 7)) - 1 : new Date().getMonth());
   const [calYr, setCalYr] = useState(() => value ? parseInt(value.slice(0, 4)) : new Date().getFullYear());
@@ -160,32 +199,32 @@ const OBDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
         className={`ob-dp-trigger${show ? ' ob-dp-trigger--open' : ''}${value ? ' ob-dp-trigger--set' : ''}`}
         onClick={show ? () => setShow(false) : open}
       >
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: value ? '#4f46e5' : '#94a3b8' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink: 0, color: value ? __stc('#4f46e5') : __stc('#94a3b8') }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         {value
-          ? <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: '#0f172a' }}>{fmtD(value)}</span>
-          : <span style={{ flex: 1, fontSize: 13, color: '#94a3b8' }}>{placeholder}</span>}
+          ? <span style={{ flex: 1, fontSize: 13, fontWeight: 600, color: __stc('#0f172a') }}>{fmtD(value)}</span>
+          : <span style={{ flex: 1, fontSize: 13, color: __stc('#94a3b8') }}>{placeholder}</span>}
         {value
-          ? <span onClick={e => { e.stopPropagation(); onChange(''); }} style={{ cursor: 'pointer', color: '#94a3b8', lineHeight: 1 }}>
+          ? <span onClick={e => { e.stopPropagation(); onChange(''); }} style={{ cursor: 'pointer', color: __stc('#94a3b8'), lineHeight: 1 }}>
               <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg>
             </span>
-          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft: 'auto', color: '#94a3b8', transform: show ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+          : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ marginLeft: 'auto', color: __stc('#94a3b8'), transform: show ? 'rotate(180deg)' : 'none', transition: 'transform .2s', flexShrink: 0 }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
       </button>
       {show && (
-        <div ref={dpRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 14, minWidth: 260 }}>
+        <div ref={dpRef} style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999, background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10, boxShadow: '0 8px 30px rgba(0,0,0,.12)', padding: 14, minWidth: 260 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
             <button type="button" onClick={() => { if (calMo === 0) { setCalMo(11); setCalYr(y => y - 1); } else setCalMo(m => m - 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}>‹</button>
-            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: '#1e293b' }}>{_OB_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={() => setShowYr(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 13, color: __stc('#1e293b') }}>{_OB_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={() => { if (calMo === 11) { setCalMo(0); setCalYr(y => y + 1); } else setCalMo(m => m + 1); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}>›</button>
           </div>
           {showYr ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 4 }}>
               {Array.from({ length: 16 }, (_, i) => { const yr = new Date().getFullYear() - 4 + i; return (
-                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? '#4f46e5' : 'transparent', color: yr === calYr ? '#fff' : '#1e293b', fontSize: 12 }}>{yr}</div>
+                <div key={yr} onClick={() => { setCalYr(yr); setShowYr(false); }} style={{ textAlign: 'center', padding: '4px 0', borderRadius: 4, cursor: 'pointer', fontWeight: yr === calYr ? 700 : 400, background: yr === calYr ? __sbg('#4f46e5') : __sbg('transparent'), color: yr === calYr ? __stc('#fff') : __stc('#1e293b'), fontSize: 12 }}>{yr}</div>
               ); })}
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7,1fr)', gap: 2 }}>
-              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: '#94a3b8', padding: '2px 0' }}>{d}</div>)}
+              {_OB_DAYS.map(d => <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: __stc('#94a3b8'), padding: '2px 0' }}>{d}</div>)}
               {Array.from({ length: FD }).map((_, i) => <div key={`e${i}`} />)}
               {Array.from({ length: DIM }).map((_, i) => {
                 const dy = i + 1;
@@ -193,7 +232,7 @@ const OBDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
                 const isSel = ds === value, isToday = ds === tod;
                 return (
                   <div key={ds} onClick={() => { onChange(ds); setShow(false); }}
-                    style={{ textAlign: 'center', padding: '6px 0', cursor: 'pointer', borderRadius: 4, background: isSel ? '#4f46e5' : 'transparent', color: isSel ? '#fff' : isToday ? '#4f46e5' : '#1e293b', fontWeight: isSel ? 700 : isToday ? 700 : 400, fontSize: 12 }}>{dy}</div>
+                    style={{ textAlign: 'center', padding: '6px 0', cursor: 'pointer', borderRadius: 4, background: isSel ? __sbg('#4f46e5') : __sbg('transparent'), color: isSel ? __stc('#fff') : isToday ? __stc('#4f46e5') : __stc('#1e293b'), fontWeight: isSel ? 700 : isToday ? 700 : 400, fontSize: 12 }}>{dy}</div>
                 );
               })}
             </div>
@@ -208,6 +247,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 const fmtOBDate = d => { if (!d) return '-'; const dt = new Date(d); return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`; };
 
 function OrderBook() {
+  useThemeVersion();
   const { user, pagePermissions } = useAuth();
   // Permissions are driven entirely by the DB-assigned ORDER_BOOK permissions.
   // The !isAccountsExecutive override was incorrectly blocking ACCOUNTS_* users
@@ -678,9 +718,9 @@ function OrderBook() {
   const getFileIcon = (fileName) => {
     if (!fileName) return <FaFileAlt />;
     const ext = fileName.split('.').pop().toLowerCase();
-    if (ext === 'pdf') return <FaFilePdf style={{ color: '#e53e3e' }} />;
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <FaFileImage style={{ color: '#38a169' }} />;
-    return <FaFileAlt style={{ color: '#3182ce' }} />;
+    if (ext === 'pdf') return <FaFilePdf style={{ color: __stc('#e53e3e') }} />;
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) return <FaFileImage style={{ color: __stc('#38a169') }} />;
+    return <FaFileAlt style={{ color: __stc('#3182ce') }} />;
   };
 
   const isImageFile = (ext) => ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(ext);
@@ -1320,7 +1360,7 @@ function OrderBook() {
   const columnMeta = {
     sno: {
       label: 'S.No', sortKey: null,
-      render: (o, idx) => <td key="sno" style={{ textAlign: 'center', fontWeight: 600, color: '#6b7280', fontSize: 13 }}>{(currentPage - 1) * rowsPerPage + idx + 1}</td>
+      render: (o, idx) => <td key="sno" style={{ textAlign: 'center', fontWeight: 600, color: __stc('#6b7280'), fontSize: 13 }}>{(currentPage - 1) * rowsPerPage + idx + 1}</td>
     },
     orderNo:          {
       label: 'Order No', sortKey: 'orderNo',
@@ -1578,11 +1618,11 @@ function OrderBook() {
                   options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
                   placeholder="Rows"
                 />
-                <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+                <span style={{whiteSpace:'nowrap',color:__stc('#64748b')}}>
                   {totalItems === 0 ? 'No entries' : `${from}–${to} of ${totalItems} entries`}
                 </span>
-                <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-                  Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+                <span style={{fontSize:12,color:__stc('#94a3b8'),whiteSpace:'nowrap'}}>
+                  Page <strong style={{color:__stc('#0f172a')}}>{currentPage}</strong> of <strong style={{color:__stc('#0f172a')}}>{tp}</strong>
                 </span>
               </div>
               <div className="orderbook-pagination-buttons">
@@ -1935,7 +1975,7 @@ function OrderBook() {
                   {/* ── Attachment field ── */}
                   <div className="orderbook-form-group orderbook-form-full">
                     <label>
-                      <FaFileAlt style={{ marginRight: 6, verticalAlign: 'middle', color: '#7c3aed' }} />
+                      <FaFileAlt style={{ marginRight: 6, verticalAlign: 'middle', color: __stc('#7c3aed') }} />
                       Attach Document (PO / Reference File)
                     </label>
 
@@ -2108,9 +2148,9 @@ function OrderBook() {
                                       title="Back to dropdown"
                                       onClick={() => updateItem(index, 'unit', 'Nos')}
                                       style={{
-                                        flexShrink: 0, background: 'none', border: '1px solid #d1d5db',
+                                        flexShrink: 0, background: 'none', border: `1px solid ${__sbg('#d1d5db')}`,
                                         borderRadius: 4, cursor: 'pointer', padding: '2px 5px',
-                                        fontSize: 13, color: '#6b7280', lineHeight: 1
+                                        fontSize: 13, color: __stc('#6b7280'), lineHeight: 1
                                       }}
                                     >\u2715</button>
                                   </div>
@@ -2239,9 +2279,9 @@ function OrderBook() {
             </div>
 
             <form onSubmit={handleExcelUpload} className="orderbook-modal-content">
-              <div className="orderbook-info-box" style={{ background: '#e3f2fd', padding: '15px', borderRadius: '8px', marginBottom: '20px', border: '1px solid #90caf9' }}>
-                <h4 style={{ margin: '0 0 10px 0', color: '#1976d2' }}>📋 Excel Format Instructions:</h4>
-                <ul style={{ margin: 0, paddingLeft: '20px', color: '#555' }}>
+              <div className="orderbook-info-box" style={{ background: __sbg('#e3f2fd'), padding: '15px', borderRadius: '8px', marginBottom: '20px', border: `1px solid ${__sbg('#90caf9')}` }}>
+                <h4 style={{ margin: '0 0 10px 0', color: __stc('#1976d2') }}>📋 Excel Format Instructions:</h4>
+                <ul style={{ margin: 0, paddingLeft: '20px', color: __stc('#555') }}>
                   <li>Use the downloaded template for correct format</li>
                   <li>Required columns: Item Name, Quantity, Unit</li>
                   <li>Optional columns: Specification, Description, Unit Price, Discount %, Tax %, Remarks</li>
@@ -2253,14 +2293,14 @@ function OrderBook() {
               <div className="orderbook-form-group">
                 <label>
                   Excel File *
-                  <button type="button" onClick={downloadExcelTemplate} style={{ marginLeft: '10px', padding: '4px 12px', fontSize: '12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  <button type="button" onClick={downloadExcelTemplate} style={{ marginLeft: '10px', padding: '4px 12px', fontSize: '12px', background: __sbg('#4CAF50'), color: __stc('white'), border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                     <FaFileDownload /> Download Template
                   </button>
                 </label>
                 <input type="file" onChange={(e) => setExcelFile(e.target.files[0])} accept=".xlsx,.xls" required />
                 <small className="orderbook-help-text">Accepted formats: .xlsx, .xls</small>
                 {excelFile && (
-                  <small style={{ display: 'block', marginTop: '8px', color: '#4CAF50' }}>
+                  <small style={{ display: 'block', marginTop: '8px', color: __stc('#4CAF50') }}>
                     ✓ Selected: {excelFile.name}
                   </small>
                 )}

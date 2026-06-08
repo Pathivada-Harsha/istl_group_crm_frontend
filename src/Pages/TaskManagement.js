@@ -10,6 +10,44 @@ import '../pages-css/TaskManagement.css';
 import FilterSelect from '../components/Dropdowns/FilterSelect';
 import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2, FiPlus, FiZap, FiClock, FiBriefcase, FiTag, FiArrowRight, FiFileText, FiList, FiAlertTriangle } from 'react-icons/fi';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#fafcff':'#161b27','#f8fffe':'#161b27',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#e9eef5':'#2b3445',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fff9f9':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fef3c7':'#3a3016',
+  '#fca5a5':'#5a2a2e','#fecaca':'#3a1f22','#fff0f0':'#2b1d20','#fafffe':'#161b27','#f0f9ff':'#15243d',
+  '#93c5fd':'#244b7a','#bae6fd':'#16344d','#a5f3fc':'#103038','#bbf7d0':'#2a5a40','#e9d5ff':'#2e2147',
+  '#f5f3ff':'#241b3d','#eef2ff':'#1e1f45','#ecfeff':'#103038','#e0f2fe':'#16344d',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#7fe0bc','#059669':'#18c08a','#16a34a':'#2bc55e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#0e7490':'#22d3ee','#3b82f6':'#5b9bf0',
+  '#0369a1':'#38bdf8','#0891b2':'#22d3ee','#065f46':'#6ee7b7',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const bg = (v) => (__isDarkTheme() && __SM[v]) ? __SM[v] : v;
+const tc = (v) => (__isDarkTheme() && __TM[v]) ? __TM[v] : v;
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API = process.env.REACT_APP_API_URL;
 const hdrs = (u) => ({
   'Content-Type': 'application/json',
@@ -124,10 +162,10 @@ const DatePicker = ({ value, onChange, placeholder='Select date' }) => {
   return (
     <>
       <button ref={trRef} type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>setShow(false):open}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span className="tm-dtp-ph">{placeholder}</span>}
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?tc('#4f46e5'):tc('#94a3b8')}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:tc('#0f172a')}}>{fmtD(value)}</span>:<span className="tm-dtp-ph">{placeholder}</span>}
         {value?<span className="tm-dtp-x" onClick={e=>{e.stopPropagation();onChange('');}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
-        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:tc('#94a3b8'),transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
       </button>
       {show&&(
         <div ref={dpRef} className="tm-dtp-dropdown" style={{position:'fixed',top:pos.top,left:pos.left,width:pos.width,zIndex:9999}}>
@@ -178,10 +216,10 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
   return (
     <div ref={wRef}>
       <button type="button" className={`tm-dtp-trigger${show?' tm-dtp--open':''}${value?' tm-dtp--set':''}`} onClick={show?()=>{setShow(false);}:open}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?tc('#4f46e5'):tc('#94a3b8')}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
         {disp?(<span className="tm-dtp-val"><span className="tm-dtp-date">{disp.date}</span>{disp.time&&<span className="tm-dtp-time">{disp.time}</span>}</span>):(<span className="tm-dtp-ph">{placeholder}</span>)}
         {value?<span className="tm-dtp-x" onClick={e=>{e.stopPropagation();onChange('');setShow(false);}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
-        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:tc('#94a3b8'),flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
       </button>
       {show&&(
         <div className="tm-dtp-dropdown" style={{position:'fixed',top:pos.top,left:pos.left,width:pos.width,zIndex:9999}}>
@@ -200,7 +238,7 @@ const DateTimePicker = ({ value, onChange, placeholder='Select date & time' }) =
           </div>
           )}
           <div className="tm-dtp-time-row" style={{cursor:'pointer'}} onClick={()=>{if(tRef.current){try{tRef.current.showPicker();}catch(_){tRef.current.focus();}}}}>
-            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{color:'#6366f1',flexShrink:0}}><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/></svg>
+            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{color:tc('#6366f1'),flexShrink:0}}><circle cx="12" cy="12" r="10" strokeWidth="2"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/></svg>
             <span className="tm-dtp-time-lbl">Time</span>
             <input ref={tRef} type="time" className="tm-dtp-time-inp" value={tmpT} style={{cursor:'pointer'}}
               onClick={e=>{e.stopPropagation();try{e.target.showPicker();}catch(_){}}}
@@ -249,7 +287,7 @@ const DateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
         <span className="tm-cal-sep">—</span>
         <span className={appliedTo&&appliedTo!==appliedFrom?'tm-cal-val':'tm-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmtC(appliedTo):'dd-mm-yyyy'}</span>
         {appliedFrom&&<span className="tm-cal-x" onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:tc('#94a3b8'),flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
       </button>
       {show&&(
         <div className="tm-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
@@ -340,36 +378,36 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
         <div className="tm-mtask-strip">
           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
             <span className="tm-tcode">{task.taskCode}</span>
-            <strong style={{fontSize:14,color:'#0f172a'}}>{task.title}</strong>
+            <strong style={{fontSize:14,color:tc('#0f172a')}}>{task.title}</strong>
           </div>
           <div className="tm-strip-row" style={{marginTop:6}}>
             <PBadge p={task.priority} />
             <span className="tm-chip">📁 {task.category}</span>
             {task.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span>}
-            {task.relatedTo && <span className="tm-chip" style={{color:'#7c3aed',background:'#f5f3ff'}}>↳ {task.relatedTo}</span>}
+            {task.relatedTo && <span className="tm-chip" style={{color:tc('#7c3aed'),background:bg('#f5f3ff')}}>↳ {task.relatedTo}</span>}
           </div>
         </div>
 
         <div className="tm-mbody">
           {/* ── Log Date ── */}
-          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'10px 14px',background:'#f0f7ff',borderRadius:8,border:'1px solid #bfdbfe'}}>
-            <label style={{fontSize:12,fontWeight:700,color:'#1e40af',whiteSpace:'nowrap'}}>📅 Log Date</label>
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'10px 14px',background:bg('#f0f7ff'),borderRadius:8,border:`1px solid ${bg('#bfdbfe')}`}}>
+            <label style={{fontSize:12,fontWeight:700,color:tc('#1e40af'),whiteSpace:'nowrap'}}>📅 Log Date</label>
             <input type="date" className="tm-inp" style={{maxWidth:180,fontSize:13}}
               value={form.logDate}
               max={todayStr()}
               onChange={e => set('logDate', e.target.value)}
             />
-            <span style={{fontSize:11,color:'#64748b'}}>
+            <span style={{fontSize:11,color:tc('#64748b')}}>
               {form.logDate === todayStr() ? 'Today' : form.logDate < todayStr() ? 'Past entry' : ''}
             </span>
           </div>
 
           {/* ── Section 1: What you did ── */}
-          <div style={{background:'#f8fafc',borderRadius:10,padding:'14px 16px',marginBottom:16,border:'1px solid #f1f5f9'}}>
+          <div style={{background:bg('#f8fafc'),borderRadius:10,padding:'14px 16px',marginBottom:16,border:`1px solid ${bg('#f1f5f9')}`}}>
             <div className="tm-fg" style={{margin:'0 0 12px'}}>
-              <label style={{fontWeight:700,color:'#0f172a',fontSize:13}}>
+              <label style={{fontWeight:700,color:tc('#0f172a'),fontSize:13}}>
                 Work Summary
-                <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>One line — what did you work on? (optional if status/progress changed)</span>
+                <span style={{fontWeight:400,color:tc('#94a3b8'),fontSize:11,marginLeft:6}}>One line — what did you work on? (optional if status/progress changed)</span>
               </label>
               <input
                 className="tm-inp"
@@ -380,9 +418,9 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
               />
             </div>
             <div className="tm-fg" style={{margin:0}}>
-              <label style={{fontWeight:700,color:'#0f172a',fontSize:13}}>
+              <label style={{fontWeight:700,color:tc('#0f172a'),fontSize:13}}>
                 Detailed Description
-                <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>What exactly happened? Include outcomes, discussions, decisions</span>
+                <span style={{fontWeight:400,color:tc('#94a3b8'),fontSize:11,marginLeft:6}}>What exactly happened? Include outcomes, discussions, decisions</span>
               </label>
               <textarea
                 className="tm-ta"
@@ -393,7 +431,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
                 style={{fontSize:13,lineHeight:1.6,fontFamily:'inherit'}}
               />
               {form.description.length > 0 && (
-                <div style={{fontSize:10,color:'#94a3b8',textAlign:'right',marginTop:2}}>{form.description.length} chars</div>
+                <div style={{fontSize:10,color:tc('#94a3b8'),textAlign:'right',marginTop:2}}>{form.description.length} chars</div>
               )}
             </div>
           </div>
@@ -428,8 +466,8 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
 
           {/* Blocked reason — only if blocked */}
           {form.updateType === 'Blocked' && (
-            <div className="tm-fg" style={{background:'#fef2f2',padding:'12px',borderRadius:8,border:'1px solid #fca5a5'}}>
-              <label style={{color:'#dc2626'}}>🔴 What is blocking this task? <span className="tm-req">*</span></label>
+            <div className="tm-fg" style={{background:bg('#fef2f2'),padding:'12px',borderRadius:8,border:`1px solid ${bg('#fca5a5')}`}}>
+              <label style={{color:tc('#dc2626')}}>🔴 What is blocking this task? <span className="tm-req">*</span></label>
               <textarea className="tm-ta" rows={2} placeholder="Describe the blocker clearly..." value={form.blockedReason} onChange={e => set('blockedReason', e.target.value)} />
             </div>
           )}
@@ -438,10 +476,10 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div className="tm-fg">
             <label>
               Completion Progress
-              <span className="tm-pval" style={{marginLeft:8,fontSize:14,fontWeight:800,color: form.completionPercent>=100?'#059669':'#3b82f6'}}>
+              <span className="tm-pval" style={{marginLeft:8,fontSize:14,fontWeight:800,color: form.completionPercent>=100?tc('#059669'):tc('#3b82f6')}}>
                 {form.completionPercent}%
               </span>
-              {form.completionPercent >= 100 && <span style={{marginLeft:6,fontSize:11,color:'#059669',fontWeight:600}}>✓ Complete!</span>}
+              {form.completionPercent >= 100 && <span style={{marginLeft:6,fontSize:11,color:tc('#059669'),fontWeight:600}}>✓ Complete!</span>}
             </label>
             <input type="range" min={0} max={100} step={5} className="tm-range" value={form.completionPercent}
               onChange={e => { const v = Number(e.target.value); set('completionPercent', v); if(v===100) set('newStatus','Completed'); }} />
@@ -452,7 +490,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           <div className="tm-fg">
             <label>
               Follow-up Notes
-              <span style={{fontWeight:400,color:'#94a3b8',fontSize:11,marginLeft:6}}>Next steps, reminders, client feedback...</span>
+              <span style={{fontWeight:400,color:tc('#94a3b8'),fontSize:11,marginLeft:6}}>Next steps, reminders, client feedback...</span>
             </label>
             <textarea className="tm-ta" rows={2} placeholder="e.g. Client to revert by Friday. Need approval from manager before proceeding..." value={form.notes} onChange={e => set('notes', e.target.value)} />
           </div>
@@ -653,25 +691,25 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
       <div style={{
         display: 'flex', alignItems: 'flex-start', gap: 12,
         padding: '12px 14px', borderRadius: 10,
-        background: isTask ? '#fafcff' : '#f8fffe',
-        border: `1px solid ${isTask ? '#bfdbfe' : '#a7f3d0'}`,
+        background: isTask ? bg('#fafcff') : bg('#f8fffe'),
+        border: `1px solid ${isTask ? bg('#bfdbfe') : bg('#a7f3d0')}`,
       }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8, flexShrink: 0, marginTop: 1,
-          background: isTask ? '#eff6ff' : '#ecfdf5',
+          background: isTask ? bg('#eff6ff') : bg('#ecfdf5'),
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {isTask ? <FiCheckCircle size={13} color="#3b82f6" /> : <FiZap size={13} color="#16a34a" />}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-            {isTask && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#94a3b8' }}>{item.taskCode}</span>}
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>
+            {isTask && <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: tc('#94a3b8') }}>{item.taskCode}</span>}
+            <span style={{ fontSize: 13, fontWeight: 700, color: tc('#0f172a') }}>
               {isTask ? item.taskTitle : item.title}
             </span>
           </div>
           {isTask && item.workDone && item.workDone !== '(Status/progress updated)' && (
-            <p style={{ fontSize: 12, color: '#374151', margin: '2px 0 0', lineHeight: 1.4,
+            <p style={{ fontSize: 12, color: tc('#374151'), margin: '2px 0 0', lineHeight: 1.4,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>
               {item.workDone.split('\n\n')[0]}
             </p>
@@ -681,30 +719,30 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
               <SBadge s={item.newStatus} />
             )}
             {isTask && item.completionPercent > 0 && (
-              <span style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600 }}>{item.completionPercent}%</span>
+              <span style={{ fontSize: 11, color: tc('#3b82f6'), fontWeight: 600 }}>{item.completionPercent}%</span>
             )}
             {!isTask && item.category && (
-              <span style={{ fontSize: 11, color: '#374151', background: '#f1f5f9', padding: '1px 7px', borderRadius: 20 }}>📁 {item.category}</span>
+              <span style={{ fontSize: 11, color: tc('#374151'), background: bg('#f1f5f9'), padding: '1px 7px', borderRadius: 20 }}>📁 {item.category}</span>
             )}
             {(item.projectName || (isTask && item.projectName)) && (
-              <span style={{ fontSize: 11, color: '#3b82f6', background: '#eff6ff', padding: '1px 7px', borderRadius: 20 }}>
+              <span style={{ fontSize: 11, color: tc('#3b82f6'), background: bg('#eff6ff'), padding: '1px 7px', borderRadius: 20 }}>
                 <FiBriefcase size={10} style={{ marginRight: 3 }} />{item.projectName}
               </span>
             )}
             {(item.hoursSpent > 0 || item.hours > 0) && (
-              <span style={{ fontSize: 11, color: '#0891b2', background: '#ecfeff', padding: '1px 7px', borderRadius: 20, fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: tc('#0891b2'), background: bg('#ecfeff'), padding: '1px 7px', borderRadius: 20, fontWeight: 600 }}>
                 <FiClock size={10} style={{ marginRight: 3 }} />{(item.hoursSpent || item.hours)}h
               </span>
             )}
             {item.logDate && item.logDate !== todayStr() && (
-              <span style={{ fontSize: 11, color: '#64748b' }}>📅 {item.logDate}</span>
+              <span style={{ fontSize: 11, color: tc('#64748b') }}>📅 {item.logDate}</span>
             )}
           </div>
         </div>
         <button
           onClick={() => removeItem(item.id)}
           title="Remove"
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#cbd5e1', fontSize: 15, padding: '2px 4px', flexShrink: 0, lineHeight: 1 }}
+          style={{ border: 'none', background: bg('transparent'), cursor: 'pointer', color: tc('#cbd5e1'), fontSize: 15, padding: '2px 4px', flexShrink: 0, lineHeight: 1 }}
         >✕</button>
       </div>
     );
@@ -719,9 +757,9 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
         style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           padding: '10px 0', borderRadius: 9,
-          background: mode === 'activity' ? '#f0fdf4' : '#fff',
-          border: `1.5px solid ${mode === 'activity' ? '#16a34a' : '#e2e8f0'}`,
-          color: mode === 'activity' ? '#15803d' : '#374151',
+          background: mode === 'activity' ? bg('#f0fdf4') : bg('#fff'),
+          border: `1.5px solid ${mode === 'activity' ? bg('#16a34a') : bg('#e2e8f0')}`,
+          color: mode === 'activity' ? tc('#15803d') : tc('#374151'),
           fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all .15s',
         }}>
         <FiZap size={14} color={mode === 'activity' ? '#16a34a' : '#6b7280'} />
@@ -733,9 +771,9 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
         style={{
           flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
           padding: '10px 0', borderRadius: 9,
-          background: mode === 'task' ? '#eff6ff' : '#fff',
-          border: `1.5px solid ${mode === 'task' ? '#3b82f6' : '#e2e8f0'}`,
-          color: mode === 'task' ? '#1d4ed8' : '#374151',
+          background: mode === 'task' ? bg('#eff6ff') : bg('#fff'),
+          border: `1.5px solid ${mode === 'task' ? bg('#3b82f6') : bg('#e2e8f0')}`,
+          color: mode === 'task' ? tc('#1d4ed8') : tc('#374151'),
           fontWeight: 600, fontSize: 13, cursor: 'pointer', transition: 'all .15s',
         }}>
         <FiCheckCircle size={14} color={mode === 'task' ? '#3b82f6' : '#6b7280'} />
@@ -755,22 +793,22 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
         onClick={e => e.stopPropagation()}
       >
         {/* ── Header ── */}
-        <div className="tm-mhdr" style={{ background: 'linear-gradient(135deg,#0f172a,#1e293b)', borderRadius: '14px 14px 0 0' }}>
+        <div className="tm-mhdr" style={{ background: `linear-gradient(135deg,${bg('#0f172a')},${bg('#1e293b')})`, borderRadius: '14px 14px 0 0' }}>
           <div>
-            <h2 style={{ color: '#fff', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+            <h2 style={{ color: tc('#fff'), display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
               <FiClipboard size={18} /> Day Log
             </h2>
-            <p className="tm-msub" style={{ color: '#94a3b8', margin: '4px 0 0' }}>
+            <p className="tm-msub" style={{ color: tc('#94a3b8'), margin: '4px 0 0' }}>
               Add activities and task updates — review before saving
             </p>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {committedItems.length > 0 && (
-              <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 20, fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: tc('#94a3b8'), background: 'rgba(255,255,255,0.1)', padding: '4px 10px', borderRadius: 20, fontWeight: 600 }}>
                 {committedItems.length} item{committedItems.length !== 1 ? 's' : ''} · {totalHours.toFixed(1)}h
               </span>
             )}
-            <button className="tm-xbtn" style={{ color: '#94a3b8' }} onClick={onClose}>✕</button>
+            <button className="tm-xbtn" style={{ color: tc('#94a3b8') }} onClick={onClose}>✕</button>
           </div>
         </div>
 
@@ -779,34 +817,34 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
           <>
             <div className="tm-mbody" style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
               <div style={{ marginBottom: 16 }}>
-                <h3 style={{ fontSize: 15, fontWeight: 700, color: '#0f172a', margin: '0 0 4px' }}>
+                <h3 style={{ fontSize: 15, fontWeight: 700, color: tc('#0f172a'), margin: '0 0 4px' }}>
                   Review before saving
                 </h3>
-                <p style={{ fontSize: 12, color: '#64748b', margin: 0 }}>
+                <p style={{ fontSize: 12, color: tc('#64748b'), margin: 0 }}>
                   Check everything looks right — you can still remove items
                 </p>
               </div>
 
               {/* Summary strip */}
               <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 8, padding: '8px 14px' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: bg('#f0f9ff'), border: `1px solid ${bg('#bae6fd')}`, borderRadius: 8, padding: '8px 14px' }}>
                   <FiClipboard size={14} color="#0369a1" />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#0369a1' }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: tc('#0369a1') }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''}</span>
                 </div>
                 {totalHours > 0 && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 8, padding: '8px 14px' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: bg('#ecfeff'), border: `1px solid ${bg('#a5f3fc')}`, borderRadius: 8, padding: '8px 14px' }}>
                     <FiClock size={14} color="#0891b2" />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#0891b2' }}>{totalHours.toFixed(1)}h total</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: tc('#0891b2') }}>{totalHours.toFixed(1)}h total</span>
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '8px 14px' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: bg('#f0fdf4'), border: `1px solid ${bg('#bbf7d0')}`, borderRadius: 8, padding: '8px 14px' }}>
                   <FiZap size={14} color="#16a34a" />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#16a34a' }}>{committedItems.filter(i => i.type === 'activity').length} activit{committedItems.filter(i => i.type === 'activity').length !== 1 ? 'ies' : 'y'}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: tc('#16a34a') }}>{committedItems.filter(i => i.type === 'activity').length} activit{committedItems.filter(i => i.type === 'activity').length !== 1 ? 'ies' : 'y'}</span>
                 </div>
                 {committedItems.filter(i => i.type === 'task').length > 0 && (
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 14px' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', background: bg('#eff6ff'), border: `1px solid ${bg('#bfdbfe')}`, borderRadius: 8, padding: '8px 14px' }}>
                     <FiCheckCircle size={14} color="#3b82f6" />
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>{committedItems.filter(i => i.type === 'task').length} task update{committedItems.filter(i => i.type === 'task').length !== 1 ? 's' : ''}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: tc('#3b82f6') }}>{committedItems.filter(i => i.type === 'task').length} task update{committedItems.filter(i => i.type === 'task').length !== 1 ? 's' : ''}</span>
                   </div>
                 )}
               </div>
@@ -816,7 +854,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                 {committedItems.map((item) => <ItemCard key={item.id} item={item} />)}
               </div>
             </div>
-            <div className="tm-mftr" style={{ borderTop: '2px solid #f1f5f9', background: '#f8fafc' }}>
+            <div className="tm-mftr" style={{ borderTop: `2px solid ${bg('#f1f5f9')}`, background: bg('#f8fafc') }}>
               <button className="tm-btn tm-ghost" onClick={() => setMode('idle')} disabled={saving}>
                 ← Edit
               </button>
@@ -839,11 +877,11 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
             {/* ── Committed items list ── */}
             {committedItems.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: 4 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: tc('#64748b'), textTransform: 'uppercase', letterSpacing: '0.05em', paddingBottom: 4 }}>
                   Logged so far
                 </div>
                 {committedItems.map((item) => <ItemCard key={item.id} item={item} />)}
-                <div style={{ borderTop: '1px dashed #e2e8f0', marginTop: 2 }} />
+                <div style={{ borderTop: `1px dashed ${bg('#e2e8f0')}`, marginTop: 2 }} />
               </div>
             )}
 
@@ -852,8 +890,8 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
 
             {/* ══ ACTIVITY FORM ══ */}
             {mode === 'activity' && (
-              <div style={{ background: '#fafffe', border: '1.5px solid #6ee7b7', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ background: bg('#fafffe'), border: `1.5px solid ${bg('#6ee7b7')}`, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: tc('#065f46'), display: 'flex', alignItems: 'center', gap: 6 }}>
                   <FiZap size={13} color="#16a34a" /> New Activity
                 </div>
 
@@ -870,7 +908,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                 </div>
 
                 <div className="tm-fg" style={{ margin: 0 }}>
-                  <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: '#94a3b8' }}>(outcome, decisions, what happened)</span></label>
+                  <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: tc('#94a3b8') }}>(outcome, decisions, what happened)</span></label>
                   <textarea
                     className="tm-ta"
                     rows={3}
@@ -897,7 +935,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   </div>
                   <div>
                     <label className="dl-lbl">
-                      Hrs{activityDraft.startTime && activityDraft.endTime && <span style={{ marginLeft:4, color:'#059669', fontWeight:700, fontSize:10 }}>auto</span>}
+                      Hrs{activityDraft.startTime && activityDraft.endTime && <span style={{ marginLeft:4, color:tc('#059669'), fontWeight:700, fontSize:10 }}>auto</span>}
                     </label>
                     <input
                       type="number" className="tm-inp" min="0" step="0.5" placeholder="0"
@@ -933,7 +971,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   <button className="tm-btn tm-ghost" onClick={() => setMode('idle')}>Cancel</button>
                   <button
                     className="tm-btn"
-                    style={{ background: '#16a34a', color: '#fff', border: 'none', fontWeight: 700 }}
+                    style={{ background: bg('#16a34a'), color: tc('#fff'), border: 'none', fontWeight: 700 }}
                     onClick={commitActivity}
                     disabled={!activityDraft.title.trim()}
                   >
@@ -945,32 +983,32 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
 
             {/* ══ TASK LOG FORM ══ */}
             {mode === 'task' && (
-              <div style={{ background: '#fafcff', border: '1.5px solid #93c5fd', borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ background: bg('#fafcff'), border: `1.5px solid ${bg('#93c5fd')}`, borderRadius: 12, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: tc('#1e40af'), display: 'flex', alignItems: 'center', gap: 6 }}>
                   <FiCheckCircle size={13} color="#3b82f6" /> Record Task Update
                 </div>
 
                 {/* Task picker */}
                 <div style={{ position: 'relative' }}>
-                  <label className="dl-lbl">Select Task <span style={{ color: '#94a3b8', fontWeight: 400 }}>({activeTasks.length} active)</span></label>
+                  <label className="dl-lbl">Select Task <span style={{ color: tc('#94a3b8'), fontWeight: 400 }}>({activeTasks.length} active)</span></label>
                   <button type="button" className="dl-task-btn" onClick={() => setShowTaskList(v => !v)}>
                     {selectedTask
-                      ? <span style={{ fontWeight: 600, fontSize: 13, color: '#0f172a' }}>{selectedTask.taskCode} — {selectedTask.title.slice(0, 55)}{selectedTask.title.length > 55 ? '…' : ''}</span>
-                      : <span style={{ color: '#94a3b8', fontSize: 13 }}>Pick a task to update…</span>}
-                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{showTaskList ? '▲' : '▼'}</span>
+                      ? <span style={{ fontWeight: 600, fontSize: 13, color: tc('#0f172a') }}>{selectedTask.taskCode} — {selectedTask.title.slice(0, 55)}{selectedTask.title.length > 55 ? '…' : ''}</span>
+                      : <span style={{ color: tc('#94a3b8'), fontSize: 13 }}>Pick a task to update…</span>}
+                    <span style={{ fontSize: 11, color: tc('#94a3b8'), marginLeft: 'auto' }}>{showTaskList ? '▲' : '▼'}</span>
                   </button>
                   {showTaskList && (
                     <div className="dl-task-list">
                       {activeTasks.length === 0
-                        ? <div style={{ padding: 16, fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>🎉 All tasks are done!</div>
+                        ? <div style={{ padding: 16, fontSize: 12, color: tc('#94a3b8'), textAlign: 'center' }}>🎉 All tasks are done!</div>
                         : activeTasks.map(t => (
                           <div key={t.id} className={`dl-task-item ${selectedTask?.id === t.id ? 'dl-task-sel' : ''}`} onClick={() => selectTask(t)}>
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
-                              <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: '#94a3b8' }}>{t.taskCode}</span>
+                              <span style={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 700, color: tc('#94a3b8') }}>{t.taskCode}</span>
                               <PBadge p={t.priority} /><SBadge s={t.status} />
                             </div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a', lineHeight: 1.3 }}>{t.title}</div>
-                            {t.projectName && <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 1 }}>📁 {t.projectName}</div>}
+                            <div style={{ fontSize: 12, fontWeight: 600, color: tc('#0f172a'), lineHeight: 1.3 }}>{t.title}</div>
+                            {t.projectName && <div style={{ fontSize: 11, color: tc('#3b82f6'), marginTop: 1 }}>📁 {t.projectName}</div>}
                           </div>
                         ))}
                     </div>
@@ -980,10 +1018,10 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                 {selectedTask && (
                   <>
                     {/* Log date */}
-                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px', background: '#f0f7ff', borderRadius: 7, border: '1px solid #bfdbfe' }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#1e40af', whiteSpace: 'nowrap' }}>📅 Log Date</span>
+                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px', background: bg('#f0f7ff'), borderRadius: 7, border: `1px solid ${bg('#bfdbfe')}` }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: tc('#1e40af'), whiteSpace: 'nowrap' }}>📅 Log Date</span>
                       <input type="date" className="tm-inp" style={{ maxWidth: 155, fontSize: 12 }} value={taskLog.logDate} max={todayStr()} onChange={e => setTL('logDate', e.target.value)} />
-                      <span style={{ fontSize: 11, color: '#64748b' }}>{taskLog.logDate === todayStr() ? 'Today' : 'Past entry'}</span>
+                      <span style={{ fontSize: 11, color: tc('#64748b') }}>{taskLog.logDate === todayStr() ? 'Today' : 'Past entry'}</span>
                     </div>
 
                     <div className="tm-fg" style={{ margin: 0 }}>
@@ -992,7 +1030,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                     </div>
 
                     <div className="tm-fg" style={{ margin: 0 }}>
-                      <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: '#94a3b8', fontSize: 10 }}>(outcomes, decisions, next steps)</span></label>
+                      <label className="dl-lbl">Details <span style={{ fontWeight: 400, color: tc('#94a3b8'), fontSize: 10 }}>(outcomes, decisions, next steps)</span></label>
                       <textarea className="tm-ta" rows={3} placeholder="What happened? What was the result? Any blockers?" value={taskLog.description} onChange={e => setTL('description', e.target.value)} style={{ fontSize: 12, lineHeight: 1.6 }} />
                     </div>
 
@@ -1017,22 +1055,22 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                         <TimePicker value={taskLog.endTime} onChange={v => setTL('endTime', v)} />
                       </div>
                       <div className="tm-fg" style={{ margin: 0 }}>
-                        <label className="dl-lbl">Hrs{taskLog.startTime && taskLog.endTime && <span style={{ marginLeft:4, color:'#059669', fontWeight:700, fontSize:10 }}>auto</span>}</label>
+                        <label className="dl-lbl">Hrs{taskLog.startTime && taskLog.endTime && <span style={{ marginLeft:4, color:tc('#059669'), fontWeight:700, fontSize:10 }}>auto</span>}</label>
                         <input type="number" className="tm-inp" min="0" max="24" step="0.5" placeholder="h" value={taskLog.hoursSpent} onChange={e => setTL('hoursSpent', e.target.value)} style={{ textAlign: 'center' }} />
                       </div>
                     </div>
 
                     {taskLog.updateType === 'Blocked' && (
-                      <div className="tm-fg" style={{ margin: 0, background: '#fef2f2', padding: 12, borderRadius: 8, border: '1px solid #fca5a5' }}>
-                        <label style={{ fontSize: 11, color: '#dc2626', fontWeight: 600 }}>🔴 What is blocking this task?</label>
+                      <div className="tm-fg" style={{ margin: 0, background: bg('#fef2f2'), padding: 12, borderRadius: 8, border: `1px solid ${bg('#fca5a5')}` }}>
+                        <label style={{ fontSize: 11, color: tc('#dc2626'), fontWeight: 600 }}>🔴 What is blocking this task?</label>
                         <textarea className="tm-ta" rows={2} placeholder="Describe the blocker clearly…" value={taskLog.blockedReason} onChange={e => setTL('blockedReason', e.target.value)} />
                       </div>
                     )}
 
                     <div className="tm-fg" style={{ margin: 0 }}>
-                      <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label style={{ fontSize: 11, fontWeight: 600, color: tc('#374151'), display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span>Completion Progress</span>
-                        <span style={{ fontSize: 15, fontWeight: 800, color: taskLog.completionPercent >= 100 ? '#059669' : '#3b82f6' }}>
+                        <span style={{ fontSize: 15, fontWeight: 800, color: taskLog.completionPercent >= 100 ? tc('#059669') : tc('#3b82f6') }}>
                           {taskLog.completionPercent}%
                           {taskLog.completionPercent >= 100 && <span style={{ fontSize: 11, marginLeft: 6 }}>✓ Complete!</span>}
                         </span>
@@ -1043,7 +1081,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                     </div>
 
                     <div className="tm-fg" style={{ margin: 0 }}>
-                      <label className="dl-lbl">Follow-up Notes <span style={{ fontWeight: 400, color: '#94a3b8' }}>(optional)</span></label>
+                      <label className="dl-lbl">Follow-up Notes <span style={{ fontWeight: 400, color: tc('#94a3b8') }}>(optional)</span></label>
                       <input className="tm-inp" placeholder="Next steps, reminders, client feedback…" value={taskLog.notes} onChange={e => setTL('notes', e.target.value)} style={{ fontSize: 12 }} />
                     </div>
                   </>
@@ -1054,7 +1092,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   <button className="tm-btn tm-ghost" onClick={() => setMode('idle')}>Cancel</button>
                   <button
                     className="tm-btn"
-                    style={{ background: '#3b82f6', color: '#fff', border: 'none', fontWeight: 700, opacity: taskDraftValid ? 1 : 0.5 }}
+                    style={{ background: bg('#3b82f6'), color: tc('#fff'), border: 'none', fontWeight: 700, opacity: taskDraftValid ? 1 : 0.5 }}
                     onClick={commitTask}
                     disabled={!taskDraftValid}
                   >
@@ -1066,9 +1104,9 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
 
             {/* Empty state hint */}
             {committedItems.length === 0 && mode === 'idle' && (
-              <div style={{ textAlign: 'center', padding: '24px 0', color: '#94a3b8' }}>
+              <div style={{ textAlign: 'center', padding: '24px 0', color: tc('#94a3b8') }}>
                 <FiClipboard size={30} color="#e2e8f0" style={{ marginBottom: 8 }} />
-                <p style={{ fontSize: 13, margin: 0, color: '#64748b' }}>Use the buttons above to log your work</p>
+                <p style={{ fontSize: 13, margin: 0, color: tc('#64748b') }}>Use the buttons above to log your work</p>
                 <p style={{ fontSize: 11, margin: '4px 0 0' }}>Add activities or record task updates, then review and save</p>
               </div>
             )}
@@ -1076,10 +1114,10 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
           </div>
 
           {/* ── Footer ── */}
-          <div className="tm-mftr" style={{ borderTop: '2px solid #f1f5f9', background: '#f8fafc' }}>
-            <div style={{ fontSize: 12, color: '#64748b' }}>
+          <div className="tm-mftr" style={{ borderTop: `2px solid ${bg('#f1f5f9')}`, background: bg('#f8fafc') }}>
+            <div style={{ fontSize: 12, color: tc('#64748b') }}>
               {committedItems.length > 0
-                ? <span style={{ fontWeight: 600, color: '#0f172a' }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''} ready · {totalHours.toFixed(1)}h</span>
+                ? <span style={{ fontWeight: 600, color: tc('#0f172a') }}>{committedItems.length} item{committedItems.length !== 1 ? 's' : ''} ready · {totalHours.toFixed(1)}h</span>
                 : <span>Add items above to save</span>}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -1234,7 +1272,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
           <div>
             <div className="tm-mhdr-top"><span className="tm-tcode">{task.taskCode}</span> <SBadge s={task.status} /> <PBadge p={task.priority} /> {isOD && <span className="tm-chip tm-chip-danger">🚨 Overdue</span>}</div>
             <h2 style={{ margin: '8px 0 4px', fontSize: 18 }}>{task.title}</h2>
-            {task.relatedTo && <p style={{ margin: 0, fontSize: 12, color: '#64748b' }}>↳ {task.relatedTo}</p>}
+            {task.relatedTo && <p style={{ margin: 0, fontSize: 12, color: tc('#64748b') }}>↳ {task.relatedTo}</p>}
           </div>
           <button className="tm-xbtn" onClick={onClose}>✕</button>
         </div>
@@ -1262,7 +1300,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
           {/* Progress bar */}
           <div className="tm-dr-sec">
             <div className="tm-prog-hdr"><h4>Progress</h4><span className="tm-prog-pct">{task.completionPercent || 0}%</span></div>
-            <div className="tm-prog-track"><div className="tm-prog-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? '#059669' : '#3b82f6' }} /></div>
+            <div className="tm-prog-track"><div className="tm-prog-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? bg('#059669') : bg('#3b82f6') }} /></div>
             {task.estimatedHours && totalH > 0 && (
               <div className="tm-time-ratio">
                 <span>Logged {totalH.toFixed(1)}h of {task.estimatedHours}h estimated</span>
@@ -1275,10 +1313,10 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
           <div className="tm-dr-sec">
             <h4>Work Entries ({(task.updates || []).length} entries · {totalH.toFixed(1)}h total)</h4>
             {!(task.updates?.length) ? (
-              <div style={{textAlign:'center',padding:'24px 0',color:'#94a3b8'}}>
+              <div style={{textAlign:'center',padding:'24px 0',color:tc('#94a3b8')}}>
                 <div style={{marginBottom:6}}><FiList size={28} color="#94a3b8" /></div>
                 <p style={{fontSize:13,margin:0}}>No work entries yet.</p>
-                <p style={{fontSize:11,margin:'4px 0 0',color:'#cbd5e1'}}>Click "Add Work Entry" to log what you've done on this task.</p>
+                <p style={{fontSize:11,margin:'4px 0 0',color:tc('#cbd5e1')}}>Click "Add Work Entry" to log what you've done on this task.</p>
               </div>
             ) : (
               <div className="tm-hist">
@@ -1306,8 +1344,8 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
                         {/* Full detail — shown in a readable block */}
                         {detail && (
                           <div style={{
-                            background:'#f8fafc', border:'1px solid #f1f5f9', borderRadius:8,
-                            padding:'10px 14px', fontSize:12, color:'#374151', lineHeight:1.7,
+                            background:bg('#f8fafc'), border:`1px solid ${bg('#f1f5f9')}`, borderRadius:8,
+                            padding:'10px 14px', fontSize:12, color:tc('#374151'), lineHeight:1.7,
                             whiteSpace:'pre-wrap', marginBottom:4,
                           }}>
                             {detail}
@@ -1387,12 +1425,12 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                     onDragEnd={onDragEnd}
                     onClick={() => onDetail(task)}>
                     <div className="tm-ci-top">
-                      <span className="tm-tcode" style={{fontSize:10,color:'#94a3b8',fontWeight:700}}>{task.taskCode}</span>
+                      <span className="tm-tcode" style={{fontSize:10,color:tc('#94a3b8'),fontWeight:700}}>{task.taskCode}</span>
                       <PBadge p={task.priority} />
                     </div>
                     <p className="tm-ci-title">{task.title}</p>
                     {task.projectName && <p className="tm-ci-proj" title={task.projectName}><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</p>}
-                    {task.otherContext && <p className="tm-ci-proj" style={{ color: '#c2410c' }} title={task.otherContext}><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</p>}
+                    {task.otherContext && <p className="tm-ci-proj" style={{ color: tc('#c2410c') }} title={task.otherContext}><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</p>}
                     {task.relatedTo && (
                       <p className="tm-ci-rel" title={task.relatedTo}>
                         ↳ {task.relatedTo.length > 55 ? task.relatedTo.slice(0, 55) + '…' : task.relatedTo}
@@ -1416,7 +1454,7 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                       <button className="tm-ci-log-btn" onClick={e => { e.stopPropagation(); onLog(task); }}>
                         <FiClipboard size={13} style={{marginRight:4}} />Work Entry
                       </button>
-                      <button className="tm-ci-log-btn" style={{background:'#eff6ff',color:'#2563eb',border:'1px solid #bfdbfe'}} onClick={e => { e.stopPropagation(); onEdit(task); }}>
+                      <button className="tm-ci-log-btn" style={{background:bg('#eff6ff'),color:tc('#2563eb'),border:`1px solid ${bg('#bfdbfe')}`}} onClick={e => { e.stopPropagation(); onEdit(task); }}>
                         <FiEdit size={13} style={{marginRight:4}} />Edit
                       </button>
                     </div>
@@ -1437,6 +1475,7 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
    Logs view: every work entry with full description, grouped by employee
 ══════════════════════════════════════════════════════════════════════════ */
 const TeamView = ({ user, users, onDetail, onExportCSV }) => {
+  useThemeVersion();
   const [empSearch,    setEmpSearch]    = useState('');
   const [selectedEmp,  setSelectedEmp]  = useState(null);
   const [dateFrom,     setDateFrom]     = useState('');
@@ -1633,41 +1672,41 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
 
   return (
     <div style={{marginBottom:24}}>
-      <div style={{background:'#fff',borderRadius:12,border:'1px solid #f1f5f9',boxShadow:'0 1px 3px rgba(0,0,0,.07)',display:'flex',flexDirection:'column',overflow:'hidden',maxHeight:'calc(100vh - 220px)'}}>
+      <div style={{background:bg('#fff'),borderRadius:12,border:`1px solid ${bg('#f1f5f9')}`,boxShadow:'0 1px 3px rgba(0,0,0,.07)',display:'flex',flexDirection:'column',overflow:'hidden',maxHeight:'calc(100vh - 220px)'}}>
 
         {/* ── TOOLBAR ──────────────────────────────────────────────────── */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',borderBottom:'1px solid #f1f5f9',background:'#f8fafc',flexWrap:'wrap',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',borderBottom:`1px solid ${bg('#f1f5f9')}`,background:bg('#f8fafc'),flexWrap:'wrap',gap:10}}>
           <div style={{display:'flex',alignItems:'center',gap:10,flex:1,flexWrap:'wrap',minWidth:0}}>
 
             {/* Employee autocomplete */}
             <div ref={sugRef} style={{position:'relative',minWidth:220,maxWidth:280}}>
-              <div style={{display:'flex',alignItems:'center',border:'1px solid #e2e8f0',borderRadius:9,background:'#fff',overflow:'hidden'}}>
-                <span style={{padding:'0 10px',fontSize:14,color:'#94a3b8',flexShrink:0}}>🔍</span>
-                <input style={{flex:1,border:'none',outline:'none',fontSize:13,padding:'8px 0',background:'transparent',color:'#0f172a'}}
+              <div style={{display:'flex',alignItems:'center',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:9,background:bg('#fff'),overflow:'hidden'}}>
+                <span style={{padding:'0 10px',fontSize:14,color:tc('#94a3b8'),flexShrink:0}}>🔍</span>
+                <input style={{flex:1,border:'none',outline:'none',fontSize:13,padding:'8px 0',background:bg('transparent'),color:tc('#0f172a')}}
                   placeholder="Search employee…" value={empSearch}
                   onChange={e => { setEmpSearch(e.target.value); setSelectedEmp(null); setShowSug(true); }}
                   onFocus={() => setShowSug(true)} />
                 {(empSearch||selectedEmp) && (
-                  <button onClick={doClear} style={{border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',padding:'0 10px',fontSize:13}}>✕</button>
+                  <button onClick={doClear} style={{border:'none',background:bg('transparent'),cursor:'pointer',color:tc('#94a3b8'),padding:'0 10px',fontSize:13}}>✕</button>
                 )}
               </div>
               {/* FIX #5: warn user to click suggestion */}
               {empSearch && !selectedEmp && (
-                <div style={{fontSize:10,color:'#f59e0b',marginTop:2}}>⚠ Click a name below to filter</div>
+                <div style={{fontSize:10,color:tc('#f59e0b'),marginTop:2}}>⚠ Click a name below to filter</div>
               )}
               {showSug && suggestions.length > 0 && (
-                <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.12)',zIndex:300,overflow:'hidden',maxHeight:280,overflowY:'auto'}}>
+                <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.12)',zIndex:300,overflow:'hidden',maxHeight:280,overflowY:'auto'}}>
                   {suggestions.map(u => (
                     <div key={u.id} onMouseDown={() => doSelect(u)}
-                      style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'pointer',borderBottom:'1px solid #f8fafc'}}
-                      onMouseEnter={e => e.currentTarget.style.background='#f0f7ff'}
+                      style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${bg('#f8fafc')}`}}
+                      onMouseEnter={e => e.currentTarget.style.background=bg('#f0f7ff')}
                       onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <div style={{width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                      <div style={{width:30,height:30,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                         {(u.name||'?').charAt(0).toUpperCase()}
                       </div>
                       <div>
-                        <div style={{fontSize:13,fontWeight:600,color:'#0f172a'}}>{u.name}</div>
-                        <div style={{fontSize:11,color:'#64748b'}}>{u.role||'—'}</div>
+                        <div style={{fontSize:13,fontWeight:600,color:tc('#0f172a')}}>{u.name}</div>
+                        <div style={{fontSize:11,color:tc('#64748b')}}>{u.role||'—'}</div>
                       </div>
                     </div>
                   ))}
@@ -1677,26 +1716,26 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
 
             {/* Date range */}
             <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <span style={{fontSize:12,fontWeight:600,color:'#64748b'}}>From</span>
+              <span style={{fontSize:12,fontWeight:600,color:tc('#64748b')}}>From</span>
               <input type="date" className="tm-filter-sel" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              <span style={{fontSize:12,fontWeight:600,color:'#64748b'}}>To</span>
+              <span style={{fontSize:12,fontWeight:600,color:tc('#64748b')}}>To</span>
               <input type="date" className="tm-filter-sel" value={dateTo} onChange={e => setDateTo(e.target.value)} />
             </div>
 
             {/* Task search */}
             <div style={{position:'relative',display:'flex',alignItems:'center',flex:1,minWidth:160}}>
-              <span style={{position:'absolute',left:10,fontSize:13,color:'#94a3b8',pointerEvents:'none'}}>🔍</span>
-              <input style={{width:'100%',padding:'8px 30px 8px 32px',border:'1px solid #e2e8f0',borderRadius:8,fontSize:13,outline:'none',background:'#fff',color:'#0f172a',boxSizing:'border-box'}}
+              <span style={{position:'absolute',left:10,fontSize:13,color:tc('#94a3b8'),pointerEvents:'none'}}>🔍</span>
+              <input style={{width:'100%',padding:'8px 30px 8px 32px',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:8,fontSize:13,outline:'none',background:bg('#fff'),color:tc('#0f172a'),boxSizing:'border-box'}}
                 placeholder="Search tasks, work done…" onChange={e => handleTeamSearchChange(e.target.value)} />
-              {taskSearch && <button onClick={() => { setTaskSearchInput(''); setTaskSearch(''); }} style={{position:'absolute',right:8,border:'none',background:'transparent',cursor:'pointer',color:'#94a3b8',fontSize:12}}>✕</button>}
+              {taskSearch && <button onClick={() => { setTaskSearchInput(''); setTaskSearch(''); }} style={{position:'absolute',right:8,border:'none',background:bg('transparent'),cursor:'pointer',color:tc('#94a3b8'),fontSize:12}}>✕</button>}
             </div>
           </div>
 
           {/* Right: stats + export */}
           <div style={{display:'flex',alignItems:'center',gap:10,flexShrink:0}}>
             <div style={{textAlign:'right'}}>
-              <div style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>{teamTotal} task{teamTotal!==1?'s':''} · {totalEntries} entr{totalEntries!==1?'ies':'y'}</div>
-              {totalHours > 0 && <div style={{fontSize:11,color:'#0e7490',fontWeight:600}}><FiClock size={11} style={{marginRight:3}} />{totalHours.toFixed(1)}h logged</div>}
+              <div style={{fontSize:12,fontWeight:700,color:tc('#0f172a')}}>{teamTotal} task{teamTotal!==1?'s':''} · {totalEntries} entr{totalEntries!==1?'ies':'y'}</div>
+              {totalHours > 0 && <div style={{fontSize:11,color:tc('#0e7490'),fontWeight:600}}><FiClock size={11} style={{marginRight:3}} />{totalHours.toFixed(1)}h logged</div>}
             </div>
             <button className="tm-btn tm-ghost"
               onClick={() => logView==='logs'
@@ -1709,30 +1748,30 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         </div>
 
         {/* ── SECTION HEADER + VIEW TOGGLE ────────────────────────────── */}
-        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderBottom:'1px solid #f1f5f9',flexWrap:'wrap',gap:10}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'12px 20px',borderBottom:`1px solid ${bg('#f1f5f9')}`,flexWrap:'wrap',gap:10}}>
           <div>
-            <h3 style={{fontSize:15,fontWeight:700,color:'#0f172a',margin:'0 0 2px',display:'flex',alignItems:'center',gap:8}}>
+            <h3 style={{fontSize:15,fontWeight:700,color:tc('#0f172a'),margin:'0 0 2px',display:'flex',alignItems:'center',gap:8}}>
               {selectedEmp ? (
                 <>
-                  <span style={{width:26,height:26,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>
+                  <span style={{width:26,height:26,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:11,fontWeight:700,display:'inline-flex',alignItems:'center',justifyContent:'center'}}>
                     {selectedEmp.name.charAt(0).toUpperCase()}
                   </span>
                   {selectedEmp.name}
                 </>
               ) : '👥 Team Overview'}
             </h3>
-            <p style={{fontSize:11,color:'#64748b',margin:0}}>
+            <p style={{fontSize:11,color:tc('#64748b'),margin:0}}>
               {dateFrom && dateTo ? `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}` : dateFrom ? `From ${fmtDate(dateFrom)}` : 'All time'}
               {selectedEmp?.role ? ` · ${selectedEmp.role}` : ''}
             </p>
           </div>
           {/* 3-way view toggle */}
-          <div style={{display:'flex',border:'1px solid #e2e8f0',borderRadius:9,overflow:'hidden',background:'#f8fafc'}}>
+          <div style={{display:'flex',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:9,overflow:'hidden',background:bg('#f8fafc')}}>
             {[['table','Tasks'],['logs','Work Logs'],['grid','Grid']].map(([v,l]) => (
               <button key={v} onClick={() => setLogView(v)} style={{
                 padding:'7px 14px',border:'none',cursor:'pointer',fontSize:12,fontWeight:700,
-                background:logView===v?'#0f172a':'transparent',
-                color:logView===v?'#fff':'#64748b',transition:'all .15s',whiteSpace:'nowrap',
+                background:logView===v?bg('#0f172a'):bg('transparent'),
+                color:logView===v?tc('#fff'):tc('#64748b'),transition:'all .15s',whiteSpace:'nowrap',
               }}>{l}</button>
             ))}
           </div>
@@ -1741,12 +1780,12 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         {/* ── CONTENT ─────────────────────────────────────────────────── */}
         <div style={{flex:1,overflowY:'auto',overflowX:'hidden',position:'relative'}}>
         {teamLoading ? (
-          <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
+          <div style={{padding:'48px 24px',textAlign:'center',color:tc('#94a3b8')}}>
             <div style={{fontSize:24,marginBottom:8}}>⏳</div>
             <p style={{fontSize:13,margin:0}}>Loading…</p>
           </div>
         ) : rows.length === 0 ? (
-          <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
+          <div style={{padding:'48px 24px',textAlign:'center',color:tc('#94a3b8')}}>
             <div style={{fontSize:36,marginBottom:10}}><FiList size={36} color="#94a3b8" /></div>
             <p style={{fontSize:13,margin:0}}>
               {selectedEmp ? `No tasks found for ${selectedEmp.name}.` : `No tasks found. Try widening the date range or selecting an employee.`}
@@ -1760,9 +1799,9 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           <div style={{overflowX:'auto',minHeight:0}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:13,minWidth:1000}}>
               <thead>
-                <tr style={{background:'#f8fafc',borderBottom:'2px solid #e2e8f0'}}>
+                <tr style={{background:bg('#f8fafc'),borderBottom:`2px solid ${bg('#e2e8f0')}`}}>
                   {['S.No','Employee','Task','Project','Category','Priority','Status','Progress','Hours','Due','Entries','Last Work Done','Last Date',''].map(h => (
-                    <th key={h} style={{padding:'10px 12px',textAlign:'left',fontSize:11,fontWeight:700,color:'#64748b',textTransform:'uppercase',letterSpacing:'.06em',whiteSpace:'nowrap'}}>{h}</th>
+                    <th key={h} style={{padding:'10px 12px',textAlign:'left',fontSize:11,fontWeight:700,color:tc('#64748b'),textTransform:'uppercase',letterSpacing:'.06em',whiteSpace:'nowrap'}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1774,77 +1813,77 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                     <React.Fragment key={r._id}>
                       <tr
                         style={{borderBottom: expanded ? 'none' : '1px solid #f8fafc', cursor:'pointer',
-                          background: expanded ? '#f0f7ff' : 'transparent', transition:'background .12s'}}
+                          background: expanded ? bg('#f0f7ff') : bg('transparent'), transition:'background .12s'}}
                         onClick={() => onDetail(r._task)}
-                        onMouseEnter={e => { if (!expanded) e.currentTarget.style.background='#f8fafc'; }}
+                        onMouseEnter={e => { if (!expanded) e.currentTarget.style.background=bg('#f8fafc'); }}
                         onMouseLeave={e => { if (!expanded) e.currentTarget.style.background='transparent'; }}>
-                        <td style={{padding:'10px 12px',verticalAlign:'middle',textAlign:'center',fontWeight:600,color:'#64748b',fontSize:12}}>{i + 1}</td>
+                        <td style={{padding:'10px 12px',verticalAlign:'middle',textAlign:'center',fontWeight:600,color:tc('#64748b'),fontSize:12}}>{i + 1}</td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
                           <div style={{display:'flex',alignItems:'center',gap:8}}>
-                            <div style={{width:28,height:28,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                            <div style={{width:28,height:28,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:11,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                               {(r.employee||'?').charAt(0).toUpperCase()}
                             </div>
                             <div>
-                              <div style={{fontSize:12,fontWeight:700,color:'#0f172a',lineHeight:1.2}}>{r.employee}</div>
-                              <div style={{fontSize:10,color:'#64748b'}}>{r.role}</div>
+                              <div style={{fontSize:12,fontWeight:700,color:tc('#0f172a'),lineHeight:1.2}}>{r.employee}</div>
+                              <div style={{fontSize:10,color:tc('#64748b')}}>{r.role}</div>
                             </div>
                           </div>
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',maxWidth:200}}>
-                          <span style={{fontSize:10,fontWeight:700,color:'#94a3b8',fontFamily:'monospace',display:'block'}}>{r.taskCode}</span>
-                          <span style={{fontSize:13,fontWeight:600,color:'#0f172a',lineHeight:1.3}}>{r.taskTitle}</span>
-                          {r.relatedTo !== '—' && <span style={{fontSize:11,color:'#64748b',display:'block'}}>↳ {r.relatedTo}</span>}
+                          <span style={{fontSize:10,fontWeight:700,color:tc('#94a3b8'),fontFamily:'monospace',display:'block'}}>{r.taskCode}</span>
+                          <span style={{fontSize:13,fontWeight:600,color:tc('#0f172a'),lineHeight:1.3}}>{r.taskTitle}</span>
+                          {r.relatedTo !== '—' && <span style={{fontSize:11,color:tc('#64748b'),display:'block'}}>↳ {r.relatedTo}</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          {r.project !== '—' ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span> : <span style={{color:'#94a3b8'}}>—</span>}
+                          {r.project !== '—' ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span> : <span style={{color:tc('#94a3b8')}}>—</span>}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><span className="tm-chip">📁 {r.category}</span></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><PBadge p={r.priority} /></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><SBadge s={r.status} /></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',minWidth:90}}>
                           <div style={{display:'flex',alignItems:'center',gap:5}}>
-                            <div style={{flex:1,height:5,background:'#e2e8f0',borderRadius:3,overflow:'hidden'}}>
-                              <div style={{height:'100%',width:`${r.pct}%`,background:r.pct>=100?'#059669':'#3b82f6',borderRadius:3}}/>
+                            <div style={{flex:1,height:5,background:bg('#e2e8f0'),borderRadius:3,overflow:'hidden'}}>
+                              <div style={{height:'100%',width:`${r.pct}%`,background:r.pct>=100?bg('#059669'):bg('#3b82f6'),borderRadius:3}}/>
                             </div>
-                            <span style={{fontSize:10,color:'#64748b',whiteSpace:'nowrap'}}>{r.pct}%</span>
+                            <span style={{fontSize:10,color:tc('#64748b'),whiteSpace:'nowrap'}}>{r.pct}%</span>
                           </div>
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          {r.totalHours > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours.toFixed(1)}h</span> : <span style={{color:'#94a3b8'}}>—</span>}
+                          {r.totalHours > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours.toFixed(1)}h</span> : <span style={{color:tc('#94a3b8')}}>—</span>}
                         </td>
-                        <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:12,color:'#475569',whiteSpace:'nowrap'}}>
+                        <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:12,color:tc('#475569'),whiteSpace:'nowrap'}}>
                           {r.dueDate !== '—' ? fmtDate(r.dueDate) : '—'}
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',textAlign:'center'}}>
                           {r.updateCount > 0
                             ? <button onClick={e => toggleExpand(r._id, e)} style={{
                                 padding:'3px 10px',border:'none',borderRadius:20,cursor:'pointer',fontSize:11,fontWeight:700,
-                                background: expanded ? '#0f172a' : '#eff6ff', color: expanded ? '#fff' : '#2563eb',
+                                background: expanded ? bg('#0f172a') : bg('#eff6ff'), color: expanded ? tc('#fff') : tc('#2563eb'),
                                 transition:'all .15s',
                               }}>
                                 {expanded ? '▲ Hide' : `${r.updateCount} entr${r.updateCount>1?'ies':'y'}`}
                               </button>
-                            : <span style={{fontSize:11,color:'#94a3b8'}}>No entries</span>
+                            : <span style={{fontSize:11,color:tc('#94a3b8')}}>No entries</span>
                           }
                         </td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',maxWidth:220}}>
                           {summaryLine && summaryLine !== '—'
-                            ? <p style={{fontSize:12,color:'#374151',margin:0,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',lineHeight:1.4}}>{summaryLine}</p>
-                            : <span style={{color:'#94a3b8'}}>—</span>}
+                            ? <p style={{fontSize:12,color:tc('#374151'),margin:0,display:'-webkit-box',WebkitLineClamp:2,WebkitBoxOrient:'vertical',overflow:'hidden',lineHeight:1.4}}>{summaryLine}</p>
+                            : <span style={{color:tc('#94a3b8')}}>—</span>}
                         </td>
-                        <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:11,color:'#64748b',whiteSpace:'nowrap'}}>{r.lastDate||'—'}</td>
+                        <td style={{padding:'10px 12px',verticalAlign:'middle',fontSize:11,color:tc('#64748b'),whiteSpace:'nowrap'}}>{r.lastDate||'—'}</td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
-                          <span style={{fontSize:16,color:'#94a3b8'}}>›</span>
+                          <span style={{fontSize:16,color:tc('#94a3b8')}}>›</span>
                         </td>
                       </tr>
 
                       {/* ── INLINE EXPANDED WORK ENTRIES ── */}
                       {expanded && (
-                        <tr style={{background:'#f8fafc'}}>
-                          <td colSpan={13} style={{padding:'0 0 4px 60px',borderBottom:'2px solid #e2e8f0'}}>
+                        <tr style={{background:bg('#f8fafc')}}>
+                          <td colSpan={13} style={{padding:'0 0 4px 60px',borderBottom:`2px solid ${bg('#e2e8f0')}`}}>
                             <div style={{paddingRight:20,paddingBottom:12}}>
                               {r.updates.length === 0
-                                ? <p style={{fontSize:12,color:'#94a3b8',padding:'12px 0',margin:0}}>No work entries yet.</p>
+                                ? <p style={{fontSize:12,color:tc('#94a3b8'),padding:'12px 0',margin:0}}>No work entries yet.</p>
                                 : r.updates.map((u, ui) => {
                                     const parts = (u.workDone||'').split('\n\n');
                                     const summary = parts[0] || '';
@@ -1856,50 +1895,50 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                       }}>
                                         {/* Timeline dot */}
                                         <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0,paddingTop:4}}>
-                                          <div style={{width:10,height:10,borderRadius:'50%',background:entryDot(u.updateType),border:'2px solid #fff',boxShadow:`0 0 0 2px ${entryDot(u.updateType)}`}}/>
-                                          {ui < r.updates.length-1 && <div style={{width:2,flex:1,background:'#f1f5f9',marginTop:4}}/>}
+                                          <div style={{width:10,height:10,borderRadius:'50%',background:entryDot(u.updateType),border:`2px solid ${bg('#fff')}`,boxShadow:`0 0 0 2px ${entryDot(u.updateType)}`}}/>
+                                          {ui < r.updates.length-1 && <div style={{width:2,flex:1,background:bg('#f1f5f9'),marginTop:4}}/>}
                                         </div>
 
                                         {/* Entry content */}
                                         <div style={{flex:1,minWidth:0}}>
                                           {/* Meta row */}
                                           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:5}}>
-                                            <span style={{fontSize:11,fontWeight:700,color:'#0f172a'}}>{u.updatedByName}</span>
+                                            <span style={{fontSize:11,fontWeight:700,color:tc('#0f172a')}}>{u.updatedByName}</span>
                                             <span className="tm-type-pill">{u.updateType||'Update'}</span>
-                                            <span style={{fontSize:11,color:'#64748b'}}>{fmtDate(u.updatedAt)}</span>
+                                            <span style={{fontSize:11,color:tc('#64748b')}}>{fmtDate(u.updatedAt)}</span>
                                             {(u.startTime||u.endTime) && (
-                                              <span style={{fontSize:11,color:'#64748b',background:'#f1f5f9',padding:'1px 7px',borderRadius:5}}>
+                                              <span style={{fontSize:11,color:tc('#64748b'),background:bg('#f1f5f9'),padding:'1px 7px',borderRadius:5}}>
                                                 🕐 {fmtTime(u.startTime)}{u.endTime?` → ${fmtTime(u.endTime)}`:''}
                                               </span>
                                             )}
                                             {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{parseFloat(u.hoursSpent).toFixed(1)}h</span>}
                                             {u.statusChanged && (
-                                              <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'1px 8px',borderRadius:5,fontWeight:600}}>
+                                              <span style={{fontSize:11,color:tc('#059669'),background:bg('#ecfdf5'),padding:'1px 8px',borderRadius:5,fontWeight:600}}>
                                                 → {u.newStatus}
                                               </span>
                                             )}
                                           </div>
 
                                           {/* Summary */}
-                                          <p style={{fontSize:13,fontWeight:600,color:'#0f172a',margin:'0 0 4px',lineHeight:1.4}}>{summary}</p>
+                                          <p style={{fontSize:13,fontWeight:600,color:tc('#0f172a'),margin:'0 0 4px',lineHeight:1.4}}>{summary}</p>
 
                                           {/* Full detail block */}
                                           {detail && (
                                             <div style={{
-                                              background:'#fff',border:'1px solid #e2e8f0',borderLeft:`3px solid ${entryDot(u.updateType)}`,
+                                              background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,borderLeft:`3px solid ${entryDot(u.updateType)}`,
                                               borderRadius:'0 8px 8px 0',padding:'8px 12px',
-                                              fontSize:12,color:'#374151',lineHeight:1.7,whiteSpace:'pre-wrap',
+                                              fontSize:12,color:tc('#374151'),lineHeight:1.7,whiteSpace:'pre-wrap',
                                               marginBottom:4,
                                             }}>{detail}</div>
                                           )}
 
                                           {u.blockedReason && (
-                                            <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#dc2626',marginTop:4}}>
+                                            <div style={{background:bg('#fef2f2'),border:`1px solid ${bg('#fca5a5')}`,borderRadius:6,padding:'6px 10px',fontSize:12,color:tc('#dc2626'),marginTop:4}}>
                                               🔴 <strong>Blocked:</strong> {u.blockedReason}
                                             </div>
                                           )}
                                           {u.notes && (
-                                            <div style={{background:'#f5f3ff',borderRadius:6,padding:'6px 10px',fontSize:12,color:'#7c3aed',marginTop:4}}>
+                                            <div style={{background:bg('#f5f3ff'),borderRadius:6,padding:'6px 10px',fontSize:12,color:tc('#7c3aed'),marginTop:4}}>
                                               <FiFileText size={12} style={{marginRight:4,verticalAlign:'middle'}} />{u.notes}
                                             </div>
                                           )}
@@ -1924,26 +1963,26 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
           /* ─────────────────────── LOGS VIEW (all work entries) ─────────── */
           <div>
             {allEntries.length === 0 ? (
-              <div style={{padding:'48px 24px',textAlign:'center',color:'#94a3b8'}}>
+              <div style={{padding:'48px 24px',textAlign:'center',color:tc('#94a3b8')}}>
                 <div style={{fontSize:36,marginBottom:8}}><FiClipboard size={36} color="#94a3b8" /></div>
                 <p style={{fontSize:13,margin:0}}>No work entries found for this period.</p>
               </div>
             ) : Object.entries(logsByEmployee).map(([empName, empData]) => (
-              <div key={empName} style={{borderBottom:'2px solid #f1f5f9'}}>
+              <div key={empName} style={{borderBottom:`2px solid ${bg('#f1f5f9')}`}}>
                 {/* Employee header */}
                 <div style={{
                   display:'flex',alignItems:'center',gap:12,
-                  padding:'12px 20px',background:'#f8fafc',
-                  borderBottom:'1px solid #f1f5f9',
+                  padding:'12px 20px',background:bg('#f8fafc'),
+                  borderBottom:`1px solid ${bg('#f1f5f9')}`,
                 }}>
-                  <div style={{width:36,height:36,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:14,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+                  <div style={{width:36,height:36,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:14,fontWeight:800,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
                     {empName.charAt(0).toUpperCase()}
                   </div>
                   <div style={{flex:1}}>
-                    <div style={{fontSize:14,fontWeight:800,color:'#0f172a'}}>{empName}</div>
-                    <div style={{fontSize:11,color:'#64748b'}}>{empData.role} · {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'} · {empData.entries.reduce((s,e)=>s+(parseFloat(e.hoursSpent)||0),0).toFixed(1)}h</div>
+                    <div style={{fontSize:14,fontWeight:800,color:tc('#0f172a')}}>{empName}</div>
+                    <div style={{fontSize:11,color:tc('#64748b')}}>{empData.role} · {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'} · {empData.entries.reduce((s,e)=>s+(parseFloat(e.hoursSpent)||0),0).toFixed(1)}h</div>
                   </div>
-                  <span style={{fontSize:12,fontWeight:700,color:'#3b82f6',background:'#eff6ff',padding:'3px 12px',borderRadius:20}}>
+                  <span style={{fontSize:12,fontWeight:700,color:tc('#3b82f6'),background:bg('#eff6ff'),padding:'3px 12px',borderRadius:20}}>
                     {empData.entries.length} entr{empData.entries.length!==1?'ies':'y'}
                   </span>
                 </div>
@@ -1961,8 +2000,8 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                       }}>
                         {/* Timeline */}
                         <div style={{display:'flex',flexDirection:'column',alignItems:'center',flexShrink:0,paddingTop:4}}>
-                          <div style={{width:11,height:11,borderRadius:'50%',background:entryDot(u.updateType),border:'2px solid #fff',boxShadow:`0 0 0 2px ${entryDot(u.updateType)}`,flexShrink:0}}/>
-                          {ui < empData.entries.length-1 && <div style={{width:2,flex:1,minHeight:20,background:'#e2e8f0',marginTop:4}}/>}
+                          <div style={{width:11,height:11,borderRadius:'50%',background:entryDot(u.updateType),border:`2px solid ${bg('#fff')}`,boxShadow:`0 0 0 2px ${entryDot(u.updateType)}`,flexShrink:0}}/>
+                          {ui < empData.entries.length-1 && <div style={{width:2,flex:1,minHeight:20,background:bg('#e2e8f0'),marginTop:4}}/>}
                         </div>
 
                         {/* Content */}
@@ -1970,12 +2009,12 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           {/* Task context pill */}
                           <div style={{
                             display:'inline-flex',alignItems:'center',gap:6,
-                            background:'#f1f5f9',borderRadius:6,padding:'3px 10px',
+                            background:bg('#f1f5f9'),borderRadius:6,padding:'3px 10px',
                             marginBottom:6,cursor:'pointer',
                           }}
                             onClick={() => { const t = teamTasks.find(x=>x.id===u.taskId); if(t) onDetail(t); }}>
-                            <span style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:'#94a3b8'}}>{u.taskCode}</span>
-                            <span style={{fontSize:12,fontWeight:600,color:'#0f172a'}}>{u.taskTitle}</span>
+                            <span style={{fontSize:10,fontFamily:'monospace',fontWeight:700,color:tc('#94a3b8')}}>{u.taskCode}</span>
+                            <span style={{fontSize:12,fontWeight:600,color:tc('#0f172a')}}>{u.taskTitle}</span>
                             {u.projectName && <span className="tm-chip tm-chip-blue" style={{padding:'1px 6px'}}><FiBriefcase size={11} style={{marginRight:3}} />{u.projectName}</span>}
                             <SBadge s={u.taskStatus} />
                           </div>
@@ -1983,41 +2022,41 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                           {/* Meta row */}
                           <div style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:6}}>
                             <span className="tm-type-pill">{u.updateType||'Update'}</span>
-                            <span style={{fontSize:11,color:'#64748b',fontWeight:600}}>{fmtDate(u.updatedAt)}</span>
+                            <span style={{fontSize:11,color:tc('#64748b'),fontWeight:600}}>{fmtDate(u.updatedAt)}</span>
                             {(u.startTime||u.endTime) && (
-                              <span style={{fontSize:11,color:'#64748b',background:'#f8fafc',padding:'2px 8px',borderRadius:5,fontFamily:'monospace'}}>
+                              <span style={{fontSize:11,color:tc('#64748b'),background:bg('#f8fafc'),padding:'2px 8px',borderRadius:5,fontFamily:'monospace'}}>
                                 {fmtTime(u.startTime)}{u.endTime?` – ${fmtTime(u.endTime)}`:''}
                               </span>
                             )}
                             {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{parseFloat(u.hoursSpent).toFixed(1)}h</span>} {/* FIX #4 */}
                             {u.statusChanged && (
-                              <span style={{fontSize:11,color:'#059669',background:'#ecfdf5',padding:'2px 8px',borderRadius:5,fontWeight:700,border:'1px solid #6ee7b7'}}>
+                              <span style={{fontSize:11,color:tc('#059669'),background:bg('#ecfdf5'),padding:'2px 8px',borderRadius:5,fontWeight:700,border:`1px solid ${bg('#6ee7b7')}`}}>
                                 <FiArrowRight size={12} style={{marginRight:3}} />{u.newStatus}
                               </span>
                             )}
                           </div>
 
                           {/* Summary */}
-                          <p style={{fontSize:13,fontWeight:700,color:'#0f172a',margin:'0 0 6px',lineHeight:1.4}}>{summary}</p>
+                          <p style={{fontSize:13,fontWeight:700,color:tc('#0f172a'),margin:'0 0 6px',lineHeight:1.4}}>{summary}</p>
 
                           {/* Full detail */}
                           {detail && (
                             <div style={{
-                              background:'#fff',border:'1px solid #e2e8f0',
+                              background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,
                               borderLeft:`3px solid ${entryDot(u.updateType)}`,
                               borderRadius:'0 8px 8px 0',padding:'10px 14px',
-                              fontSize:12,color:'#374151',lineHeight:1.75,
+                              fontSize:12,color:tc('#374151'),lineHeight:1.75,
                               whiteSpace:'pre-wrap',marginBottom:4,
                             }}>{detail}</div>
                           )}
 
                           {u.blockedReason && (
-                            <div style={{background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:6,padding:'7px 12px',fontSize:12,color:'#dc2626',marginTop:4}}>
+                            <div style={{background:bg('#fef2f2'),border:`1px solid ${bg('#fca5a5')}`,borderRadius:6,padding:'7px 12px',fontSize:12,color:tc('#dc2626'),marginTop:4}}>
                               🔴 <strong>Blocker:</strong> {u.blockedReason}
                             </div>
                           )}
                           {u.notes && (
-                            <div style={{background:'#f5f3ff',border:'1px solid #e9d5ff',borderRadius:6,padding:'7px 12px',fontSize:12,color:'#7c3aed',marginTop:4}}>
+                            <div style={{background:bg('#f5f3ff'),border:`1px solid ${bg('#e9d5ff')}`,borderRadius:6,padding:'7px 12px',fontSize:12,color:tc('#7c3aed'),marginTop:4}}>
                               <FiFileText size={12} style={{marginRight:4,verticalAlign:'middle'}} />{u.notes}
                             </div>
                           )}
@@ -2037,24 +2076,24 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
             {rows.map((r, i) => (
               <div key={i}
                 onClick={() => onDetail(r._task)}
-                style={{background:'#fff',border:'1px solid #e2e8f0',borderRadius:12,padding:16,transition:'box-shadow .15s,transform .15s',cursor:'pointer'}}
+                style={{background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,borderRadius:12,padding:16,transition:'box-shadow .15s,transform .15s',cursor:'pointer'}}
                 onMouseEnter={e => { e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,.1)'; e.currentTarget.style.transform='translateY(-1px)'; }}
                 onMouseLeave={e => { e.currentTarget.style.boxShadow='none'; e.currentTarget.style.transform='none'; }}>
                 <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
                   <div style={{display:'flex',alignItems:'center',gap:8}}>
-                    <div style={{width:30,height:30,borderRadius:'50%',background:'linear-gradient(135deg,#3b82f6,#8b5cf6)',color:'#fff',fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <div style={{width:30,height:30,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>
                       {(r.employee||'?').charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <div style={{fontSize:12,fontWeight:700,color:'#0f172a'}}>{r.employee}</div>
-                      <div style={{fontSize:10,color:'#64748b'}}>{r.role}</div>
+                      <div style={{fontSize:12,fontWeight:700,color:tc('#0f172a')}}>{r.employee}</div>
+                      <div style={{fontSize:10,color:tc('#64748b')}}>{r.role}</div>
                     </div>
                   </div>
                   <SBadge s={r.status} />
                 </div>
                 <div style={{marginBottom:8}}>
-                  <span style={{fontSize:10,fontWeight:700,color:'#94a3b8',fontFamily:'monospace'}}>{r.taskCode}</span>
-                  <p style={{fontSize:13,fontWeight:600,color:'#0f172a',margin:'2px 0 0',lineHeight:1.3}}>{r.taskTitle}</p>
+                  <span style={{fontSize:10,fontWeight:700,color:tc('#94a3b8'),fontFamily:'monospace'}}>{r.taskCode}</span>
+                  <p style={{fontSize:13,fontWeight:600,color:tc('#0f172a'),margin:'2px 0 0',lineHeight:1.3}}>{r.taskTitle}</p>
                 </div>
                 <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>
                   {r.project !== '—' && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span>}
@@ -2063,29 +2102,29 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                   {r.totalHours > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours}h</span>}
                 </div>
                 <div style={{marginBottom:8}}>
-                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:'#64748b',marginBottom:3}}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11,color:tc('#64748b'),marginBottom:3}}>
                     <span>Progress</span><span>{r.pct}%</span>
                   </div>
-                  <div style={{height:5,background:'#e2e8f0',borderRadius:3}}>
-                    <div style={{height:'100%',width:`${r.pct}%`,background:r.pct>=100?'#059669':'#3b82f6',borderRadius:3}}/>
+                  <div style={{height:5,background:bg('#e2e8f0'),borderRadius:3}}>
+                    <div style={{height:'100%',width:`${r.pct}%`,background:r.pct>=100?bg('#059669'):bg('#3b82f6'),borderRadius:3}}/>
                   </div>
                 </div>
                 {/* Show all entries count + preview of last one */}
                 {r.updateCount > 0 ? (
-                  <div style={{background:'#f8fafc',borderRadius:8,padding:'8px 10px',marginBottom:6}}>
-                    <div style={{fontSize:10,fontWeight:700,color:'#94a3b8',textTransform:'uppercase',marginBottom:4}}>
+                  <div style={{background:bg('#f8fafc'),borderRadius:8,padding:'8px 10px',marginBottom:6}}>
+                    <div style={{fontSize:10,fontWeight:700,color:tc('#94a3b8'),textTransform:'uppercase',marginBottom:4}}>
                       Latest entry · {r.lastDate}
                     </div>
-                    <p style={{fontSize:12,color:'#374151',margin:0,lineHeight:1.4,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
+                    <p style={{fontSize:12,color:tc('#374151'),margin:0,lineHeight:1.4,display:'-webkit-box',WebkitLineClamp:3,WebkitBoxOrient:'vertical',overflow:'hidden'}}>
                       {(r.lastWorkDone||'').split('\n\n')[0]}
                     </p>
                   </div>
                 ) : (
-                  <p style={{fontSize:11,color:'#94a3b8',margin:'0 0 6px'}}>No work entries yet</p>
+                  <p style={{fontSize:11,color:tc('#94a3b8'),margin:'0 0 6px'}}>No work entries yet</p>
                 )}
                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:6}}>
-                  <span style={{fontSize:11,color:'#64748b'}}>{r.updateCount} entr{r.updateCount!==1?'ies':'y'}</span>
-                  <span style={{fontSize:11,color:'#3b82f6',fontWeight:600}}>View full details ›</span>
+                  <span style={{fontSize:11,color:tc('#64748b')}}>{r.updateCount} entr{r.updateCount!==1?'ies':'y'}</span>
+                  <span style={{fontSize:11,color:tc('#3b82f6'),fontWeight:600}}>View full details ›</span>
                 </div>
               </div>
             ))}
@@ -2120,8 +2159,8 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
         <div className="tm-today-tl">
           {todayUpds.map((u, i) => (
             <div key={i} className="tm-tl-item" onClick={() => onDetail(u.task)} style={{ cursor: 'pointer' }}>
-              <div className="tm-tl-time">{u.startTime ? fmtTime(u.startTime) : '—'}{u.endTime ? <><br /><span style={{ color: '#94a3b8', fontSize: 10 }}>{fmtTime(u.endTime)}</span></> : null}</div>
-              <div className="tm-tl-dot" style={{ background: u.updateType === 'Blocked' ? '#dc2626' : u.updateType === 'Discussion' ? '#7c3aed' : '#3b82f6' }} />
+              <div className="tm-tl-time">{u.startTime ? fmtTime(u.startTime) : '—'}{u.endTime ? <><br /><span style={{ color: tc('#94a3b8'), fontSize: 10 }}>{fmtTime(u.endTime)}</span></> : null}</div>
+              <div className="tm-tl-dot" style={{ background: u.updateType === 'Blocked' ? bg('#dc2626') : u.updateType === 'Discussion' ? bg('#7c3aed') : bg('#3b82f6') }} />
               <div className="tm-tl-body">
                 <div className="tm-tl-meta">
                   <span className="tm-tcode">{u.task.taskCode}</span>
@@ -2144,7 +2183,7 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
             <div key={t.id} className="tm-today-task" onClick={() => onDetail(t)}>
               <SBadge s={t.status} />
               <span className="tm-tcode">{t.taskCode}</span>
-              <span style={{ flex: 1, fontSize: 13, color: '#0f172a' }}>{t.title}</span>
+              <span style={{ flex: 1, fontSize: 13, color: tc('#0f172a') }}>{t.title}</span>
               <button className="tm-btn tm-ghost tm-sm" onClick={e => { e.stopPropagation(); onLog(t); }}><FiClipboard size={13} style={{marginRight:4}} />Work Entry</button>
             </div>
           ))}
@@ -2172,15 +2211,15 @@ const PaginationBar = ({ page, totalPages, total, pageSize, onPageChange, onSize
       {/* Left: rows per page + showing info */}
       <div style={{display:'flex',alignItems:'center',gap:10,flexWrap:'wrap'}}>
         <div style={{display:'flex',alignItems:'center',gap:6}}>
-          <span style={{fontSize:12,color:'#64748b',whiteSpace:'nowrap'}}>Rows per page:</span>
+          <span style={{fontSize:12,color:tc('#64748b'),whiteSpace:'nowrap'}}>Rows per page:</span>
           <FilterSelect value={String(pageSize)} onChange={v => onSizeChange && onSizeChange(Number(v))} options={PAGE_SIZE_OPTIONS.map(s => ({value:String(s),label:String(s)}))} placeholder="Rows" />
         </div>
         <span className="tm-pgn-info" style={{whiteSpace:'nowrap'}}>
           {total === 0 ? '0 results' : `${from}–${to} of ${total} result${total !== 1 ? 's' : ''}`}
         </span>
         {/* Always show current page indicator */}
-        <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-          Page <strong style={{color:'#0f172a'}}>{page}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+        <span style={{fontSize:12,color:tc('#94a3b8'),whiteSpace:'nowrap'}}>
+          Page <strong style={{color:tc('#0f172a')}}>{page}</strong> of <strong style={{color:tc('#0f172a')}}>{tp}</strong>
         </span>
       </div>
       {/* Right: page buttons — always shown so user knows where they are */}
@@ -2200,8 +2239,8 @@ const PaginationBar = ({ page, totalPages, total, pageSize, onPageChange, onSize
 /* ══════════════════════════════════════════════════════════════════════════
    KPI CARD
 ══════════════════════════════════════════════════════════════════════════ */
-const KpiCard = ({ label, value, icon, accent, iconBg, sub, onClick, active }) => (
-  <div className={`tm-kpi ${active ? 'tm-kpi-on' : ''}`} style={{ '--ka': accent, '--kib': iconBg }} onClick={onClick}>
+const KpiCard = ({ label, value, icon, accent, iconBg, sub }) => (
+  <div className="tm-kpi tm-kpi--static" style={{ '--ka': accent, '--kib': iconBg }}>
     <div className="tm-kpi-ico">{icon}</div>
     <div className="tm-kpi-lbl">{label}</div>
     <div className="tm-kpi-val">{value ?? '—'}</div>
@@ -2213,6 +2252,7 @@ const KpiCard = ({ label, value, icon, accent, iconBg, sub, onClick, active }) =
    MAIN COMPONENT
 ══════════════════════════════════════════════════════════════════════════ */
 export default function TaskManagement() {
+  useThemeVersion();
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showWarning } = useToast();
   const isSA = user?.role === 'SUPERADMIN' || user?.role === 'ADMIN';
@@ -2591,7 +2631,7 @@ export default function TaskManagement() {
             ))}
           </div>
           <button className="tm-btn tm-ghost" onClick={() => exportCSV(taskExportRows(), `tasks_${todayStr()}.csv`)}>📤 Export</button>
-          <button className="tm-btn" style={{background:'#f0f9ff',color:'#0369a1',border:'1px solid #bae6fd',fontWeight:700}}
+          <button className="tm-btn" style={{background:bg('#f0f9ff'),color:tc('#0369a1'),border:`1px solid ${bg('#bae6fd')}`,fontWeight:700}}
             onClick={() => setShowDayLog(true)} title="Record task progress or log today's activities">
             <FiClipboard size={14} style={{marginRight:5}} />Day Log
           </button>
@@ -2663,7 +2703,7 @@ export default function TaskManagement() {
                 <div className="tm-col-panel">
                   <div className="tm-col-panel-hdr">
                     <span>Columns</span>
-                    <span style={{fontSize:10,color:'#94a3b8'}}>drag to reorder</span>
+                    <span style={{fontSize:10,color:tc('#94a3b8')}}>drag to reorder</span>
                   </div>
                   {colOrder.map(id => {
                     const col = ALL_COLS.find(c => c.id === id);
@@ -2683,7 +2723,7 @@ export default function TaskManagement() {
                             onChange={() => !col.required && toggleCol(id)} />
                           {col.label}
                         </label>
-                        {col.required && <span style={{fontSize:9,color:'#cbd5e1',marginLeft:'auto'}}>fixed</span>}
+                        {col.required && <span style={{fontSize:9,color:tc('#cbd5e1'),marginLeft:'auto'}}>fixed</span>}
                       </div>
                     );
                   })}
@@ -2694,7 +2734,7 @@ export default function TaskManagement() {
 
           <div className="tm-card">
             {loading ? (
-              <div style={{padding:'40px 24px',textAlign:'center',color:'#94a3b8'}}>
+              <div style={{padding:'40px 24px',textAlign:'center',color:tc('#94a3b8')}}>
                 <div style={{fontSize:22,marginBottom:8}}>⏳</div>
                 <p style={{fontSize:13,margin:0}}>Loading…</p>
               </div>
@@ -2755,14 +2795,14 @@ export default function TaskManagement() {
                             const isOD = task.status !== 'Completed' && task.status !== 'Cancelled' && task.dueDate && task.dueDate < todayStr();
                             const totalH = computeHours(task) || parseFloat(task.totalHoursSpent) || 0;
                             const cellMap = {
-                              sno:      <td key="sno" style={{textAlign:'center',fontWeight:700,color:'#374151',fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
+                              sno:      <td key="sno" style={{textAlign:'center',fontWeight:700,color:tc('#374151'),fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
                               task:     <td key="task"><div className="tm-task-cell"><span className="tm-tcode">{task.taskCode}</span><span className="tm-ttitle">{task.title}</span>{task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}</div></td>,
                               project:  <td key="project">{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>,
                               category: <td key="category"><span className="tm-chip">📁 {task.category}</span></td>,
                               priority: <td key="priority"><PBadge p={task.priority} /></td>,
                               status:   <td key="status"><SBadge s={task.status} /></td>,
-                              progress: <td key="progress"><div className="tm-mini-prog"><div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? '#059669' : '#3b82f6' }} /></div><span>{task.completionPercent || 0}%</span></div></td>,
-                              dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.7, color: '#1e293b', fontWeight: 500 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: '#059669', fontWeight: 600 }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
+                              progress: <td key="progress"><div className="tm-mini-prog"><div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? bg('#059669') : bg('#3b82f6') }} /></div><span>{task.completionPercent || 0}%</span></div></td>,
+                              dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.7, color: tc('#1e293b'), fontWeight: 500 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: tc('#059669'), fontWeight: 600 }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
                               hours:    <td key="hours">{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>,
                               assignee: <td key="assignee"><span className="tm-assignee">{task.assignedToName || '—'}</span></td>,
                               due:      <td key="due"><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>,
@@ -2802,7 +2842,7 @@ export default function TaskManagement() {
           zIndex:9999, padding:16,
         }}>
           <div style={{
-            background:'#fff', borderRadius:16, padding:'36px 32px 28px',
+            background:bg('#fff'), borderRadius:16, padding:'36px 32px 28px',
             width:'min(420px,94vw)', textAlign:'center',
             boxShadow:'0 20px 60px rgba(0,0,0,0.2)',
             animation:'tm-pop .18s ease',
@@ -2810,24 +2850,24 @@ export default function TaskManagement() {
             {/* Trash icon circle */}
             <div style={{
               width:64, height:64, borderRadius:'50%',
-              background:'#fff0f0', border:'1px solid #fecaca',
+              background:bg('#fff0f0'), border:`1px solid ${bg('#fecaca')}`,
               display:'flex', alignItems:'center', justifyContent:'center',
               margin:'0 auto 20px', fontSize:26,
             }}><FiTrash2 size={28} color="#dc2626" /></div>
-            <h3 style={{ margin:'0 0 10px', fontSize:20, fontWeight:700, color:'#0f172a' }}>
+            <h3 style={{ margin:'0 0 10px', fontSize:20, fontWeight:700, color:tc('#0f172a') }}>
               Delete Task
             </h3>
-            <p style={{ margin:'0 0 28px', fontSize:14, color:'#64748b', lineHeight:1.6 }}>
+            <p style={{ margin:'0 0 28px', fontSize:14, color:tc('#64748b'), lineHeight:1.6 }}>
               Are you sure you want to delete this task?<br />
-              <strong style={{ color:'#dc2626' }}>This action cannot be undone.</strong>
+              <strong style={{ color:tc('#dc2626') }}>This action cannot be undone.</strong>
             </p>
             <div style={{ display:'flex', gap:12, justifyContent:'center' }}>
               <button
                 onClick={() => setDeleteConfirm(null)}
                 style={{
                   flex:1, padding:'10px 20px', borderRadius:10,
-                  border:'1.5px solid #e2e8f0', background:'#fff',
-                  fontSize:14, fontWeight:600, color:'#374151', cursor:'pointer',
+                  border:`1.5px solid ${bg('#e2e8f0')}`, background:bg('#fff'),
+                  fontSize:14, fontWeight:600, color:tc('#374151'), cursor:'pointer',
                 }}>
                 Cancel
               </button>
@@ -2835,8 +2875,8 @@ export default function TaskManagement() {
                 onClick={confirmDelete}
                 style={{
                   flex:1, padding:'10px 20px', borderRadius:10,
-                  border:'none', background:'#dc2626',
-                  fontSize:14, fontWeight:600, color:'#fff', cursor:'pointer',
+                  border:'none', background:bg('#dc2626'),
+                  fontSize:14, fontWeight:600, color:tc('#fff'), cursor:'pointer',
                 }}>
                 Confirm
               </button>

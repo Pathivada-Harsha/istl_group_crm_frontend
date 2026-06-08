@@ -16,6 +16,39 @@ import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a', '#cbd5e0':'#3a4456',};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3', '#0369a1':'#38bdf8', '#0c4a6e':'#7cc3f0',};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Calendar Constants ───────────────────────────────────────────────────────
@@ -24,6 +57,7 @@ const _PO_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 // ─── PODateRangeFilter — for the filter bar (range calendar, like Leads page) ─
 const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,  setShow]  = useState(false);
   const [from,  setFrom]  = useState(null);
   const [to,    setTo]    = useState(null);
@@ -84,7 +118,7 @@ const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
           </span>
         )}
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          style={{ marginLeft:'auto', color:__stc('#94a3b8'), flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
@@ -174,6 +208,7 @@ const PODateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 
 // ─── PODatePicker — single date calendar for modal forms (like TaskManagement) ─
 const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) => {
+  useThemeVersion();
   const [show,    setShow]    = useState(false);
   const [calMo,   setCalMo]   = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
   const [calYr,   setCalYr]   = useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
@@ -205,11 +240,11 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
         style={{ width:'100%' }}
       >
         <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{ flexShrink:0, color: value?'#4f46e5':'#94a3b8' }}>
+          style={{ flexShrink:0, color: value?__stc('#4f46e5'):__stc('#94a3b8') }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
         {value
-          ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:'#0f172a' }}>{fmtD(value)}</span>
+          ? <span style={{ flex:1, fontSize:13, fontWeight:600, color:__stc('#0f172a') }}>{fmtD(value)}</span>
           : <span className="po-dtp-ph">{placeholder}</span>
         }
         {value
@@ -219,7 +254,7 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
               </svg>
             </span>
           : <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-              style={{ marginLeft:'auto', color:'#94a3b8', transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0 }}>
+              style={{ marginLeft:'auto', color:__stc('#94a3b8'), transform:show?'rotate(180deg)':'none', transition:'transform .2s', flexShrink:0 }}>
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
             </svg>
         }
@@ -306,6 +341,7 @@ const SortIcon = ({ columnId, sortConfig }) => {
 
 // ─── Columns Picker ───────────────────────────────────────────────────────────
 const ColumnsPicker = ({ columns, onToggle, onClose }) => {
+  useThemeVersion();
   const ref = useRef(null);
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
@@ -383,6 +419,7 @@ const DraggableTH = ({ col, index, onDragStart, onDragOver, onDrop, onDragEnd, i
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 const PurchaseOrders = () => {
+  useThemeVersion();
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -1392,7 +1429,7 @@ const PurchaseOrders = () => {
     const progress = calculateDeliveryProgress(po);
     switch (col.id) {
       case 'sNo':
-        return <td key={col.id} style={{ textAlign:'center', color:'#64748b', fontSize:13, fontWeight:500, width:50 }}>{currentPage * pageSize + rowIndex + 1}</td>;
+        return <td key={col.id} style={{ textAlign:'center', color:__stc('#64748b'), fontSize:13, fontWeight:500, width:50 }}>{currentPage * pageSize + rowIndex + 1}</td>;
       case 'poNumber':
         return <td key={col.id} className="purchase-orders-table-id">{po.poRefId || po.poNo}</td>;
       case 'poRefId':
@@ -1400,8 +1437,8 @@ const PurchaseOrders = () => {
       case 'vendor':
         return (
           <td key={col.id}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b' }}>{po.vendorName || '—'}</div>
-            {po.vendorCode && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 1 }}>{po.vendorCode}</div>}
+            <div style={{ fontWeight: 600, fontSize: 13, color: __stc('#1e293b') }}>{po.vendorName || '—'}</div>
+            {po.vendorCode && <div style={{ fontSize: 11, color: __stc('#94a3b8'), marginTop: 1 }}>{po.vendorCode}</div>}
           </td>
         );
       case 'orderDate':
@@ -1440,7 +1477,7 @@ const PurchaseOrders = () => {
                 className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
                 onClick={() => canEdit && handleEditPO(po.id)}
                 title={canEdit ? 'Edit PO' : '🔒 No edit permission'}
-                style={{ color: canEdit ? '#3b82f6' : undefined }}
+                style={{ color: canEdit ? __stc('#3b82f6') : undefined }}
                 disabled={!canEdit}
               >
                 <Edit2 size={14} />
@@ -1452,7 +1489,7 @@ const PurchaseOrders = () => {
                   className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
                   onClick={() => canEdit && handleUpdateStatus(po.id, 'Delivered')}
                   title={canEdit ? 'Mark Delivered' : '🔒 No edit permission'}
-                  style={{ color: canEdit ? '#10b981' : undefined }}
+                  style={{ color: canEdit ? __stc('#10b981') : undefined }}
                   disabled={!canEdit}
                 >
                   <CheckCircle size={14} />
@@ -1464,7 +1501,7 @@ const PurchaseOrders = () => {
                 className={`purchase-orders-action-btn${!canDelete ? ' action-btn-disabled' : ''}`}
                 onClick={() => canDelete && handleDeletePO(po.id)}
                 title={canDelete ? 'Delete PO' : '🔒 No delete permission'}
-                style={{ color: canDelete ? '#ef4444' : undefined }}
+                style={{ color: canDelete ? __stc('#ef4444') : undefined }}
                 disabled={!canDelete}
               >
                 <Trash2 size={14} />
@@ -1482,16 +1519,16 @@ const PurchaseOrders = () => {
           <td key={col.id} style={{ minWidth: 200 }}>
             {po.projectId ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontWeight: 600, fontSize: 12, color: '#1e293b', wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
+                <span style={{ fontWeight: 600, fontSize: 12, color: __stc('#1e293b'), wordBreak: 'break-word', whiteSpace: 'normal', lineHeight: 1.4 }}>
                   {pName || po.projectId}
                 </span>
                 {pName && (
-                  <span style={{ fontSize: 11, color: '#64748b', fontWeight: 400 }}>
+                  <span style={{ fontSize: 11, color: __stc('#64748b'), fontWeight: 400 }}>
                     {po.projectId}
                   </span>
                 )}
               </div>
-            ) : <span style={{ color: '#94a3b8' }}>—</span>}
+            ) : <span style={{ color: __stc('#94a3b8') }}>—</span>}
           </td>
         );
       }
@@ -1622,10 +1659,10 @@ const PurchaseOrders = () => {
 
   // ─── KPI ───────────────────────────────────────────────────────────────────
   const kpiData = stats ? [
-    { title: 'Total POs',   value: stats.totalPOs.toString(),        icon: <FileText size={32} />,    color: '#2563eb' },
-    { title: 'In Transit',  value: stats.inTransit.toString(),       icon: <Truck size={32} />,       color: '#f59e0b' },
-    { title: 'Delivered',   value: stats.delivered.toString(),       icon: <CheckCircle size={32} />, color: '#22c55e' },
-    { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <IndianRupee size={32} />, color: '#8b5cf6' },
+    { title: 'Total POs',   value: stats.totalPOs.toString(),        icon: <FileText size={32} />,    color: __stc('#2563eb') },
+    { title: 'In Transit',  value: stats.inTransit.toString(),       icon: <Truck size={32} />,       color: __stc('#f59e0b') },
+    { title: 'Delivered',   value: stats.delivered.toString(),       icon: <CheckCircle size={32} />, color: __stc('#22c55e') },
+    { title: 'Total Value', value: formatCurrency(stats.totalValue), icon: <IndianRupee size={32} />, color: __stc('#8b5cf6') },
   ] : [];
 
   // ─── Render ────────────────────────────────────────────────────────────────
@@ -1881,7 +1918,7 @@ const PurchaseOrders = () => {
                   {selectedPO.notes && (
                     <div className="po-detail-item" style={{gridColumn:'1/-1'}}>
                       <span className="po-detail-label">Notes:</span>
-                      <span style={{color:'#6b7280'}}>{selectedPO.notes}</span>
+                      <span style={{color:__stc('#6b7280')}}>{selectedPO.notes}</span>
                     </div>
                   )}
                 </div>
@@ -1946,8 +1983,8 @@ const PurchaseOrders = () => {
                   </div>
                 ) : (
                   <div className="po-doc-section po-doc-empty">
-                    <File size={15} style={{ color: '#9ca3af' }} />
-                    <span style={{ color: '#9ca3af', fontSize: 13 }}>No PO document attached</span>
+                    <File size={15} style={{ color: __stc('#9ca3af') }} />
+                    <span style={{ color: __stc('#9ca3af'), fontSize: 13 }}>No PO document attached</span>
                     {/* Allow uploading directly from the drawer for any PO status */}
                     {canEdit && (
                       <div style={{ marginTop: 10 }}>
@@ -1991,8 +2028,8 @@ const PurchaseOrders = () => {
                   <h3>Delivery Summary</h3>
                   <div className="po-details-grid">
                     <div className="po-detail-item"><span className="po-detail-label">Items Ordered:</span><span>{selectedPO.totalItemsOrdered ?? '—'}</span></div>
-                    <div className="po-detail-item"><span className="po-detail-label">Items Delivered:</span><span style={{color:'#059669',fontWeight:600}}>{selectedPO.totalItemsDelivered ?? 0}</span></div>
-                    <div className="po-detail-item"><span className="po-detail-label">Items Pending:</span><span style={{color: (selectedPO.totalItemsPending ?? 0) > 0 ? '#dc2626' : '#059669', fontWeight:600}}>{selectedPO.totalItemsPending ?? 0}</span></div>
+                    <div className="po-detail-item"><span className="po-detail-label">Items Delivered:</span><span style={{color:__stc('#059669'),fontWeight:600}}>{selectedPO.totalItemsDelivered ?? 0}</span></div>
+                    <div className="po-detail-item"><span className="po-detail-label">Items Pending:</span><span style={{color: (selectedPO.totalItemsPending ?? 0) > 0 ? __stc('#dc2626') : __stc('#059669'), fontWeight:600}}>{selectedPO.totalItemsPending ?? 0}</span></div>
                   </div>
                 </div>
               )}
@@ -2027,11 +2064,11 @@ const PurchaseOrders = () => {
                       <tr key={item.id}>
                         <td>
                           <div style={{fontWeight:500}}>{item.itemName}</div>
-                          {item.description && <div style={{fontSize:11,color:'#6b7280',marginTop:2}}>{item.description}</div>}
+                          {item.description && <div style={{fontSize:11,color:__stc('#6b7280'),marginTop:2}}>{item.description}</div>}
                         </td>
                         <td>{formatQty(item.quantity)}</td>
                         <td className="delivered-qty">{formatQty(item.deliveredQty ?? 0)}</td>
-                        <td className="pending-qty" style={{color: (item.pendingQty ?? 0) > 0 ? '#dc2626' : '#374151'}}>
+                        <td className="pending-qty" style={{color: (item.pendingQty ?? 0) > 0 ? __stc('#dc2626') : __stc('#374151')}}>
                           {formatQty(item.pendingQty ?? 0)}
                         </td>
                         <td>{formatCurrency(item.unitPrice)}</td>
@@ -2043,14 +2080,14 @@ const PurchaseOrders = () => {
                       </tr>
                       );
                     }) : (
-                      <tr><td colSpan={8} style={{textAlign:'center',padding:'1rem',color:'#9ca3af'}}>No items found</td></tr>
+                      <tr><td colSpan={8} style={{textAlign:'center',padding:'1rem',color:__stc('#9ca3af')}}>No items found</td></tr>
                     )}
                   </tbody>
                   {selectedPO.items && selectedPO.items.length > 0 && (
                     <tfoot>
-                      <tr style={{borderTop:'2px solid #e5e7eb',fontWeight:600}}>
+                      <tr style={{borderTop:`2px solid ${__sbg('#e5e7eb')}`,fontWeight:600}}>
                         <td colSpan={6} style={{textAlign:'right',padding:'8px 10px'}}>Grand Total:</td>
-                        <td style={{padding:'8px 10px', whiteSpace:'nowrap', overflow:'visible', fontWeight:'700', color:'#059669'}}>
+                        <td style={{padding:'8px 10px', whiteSpace:'nowrap', overflow:'visible', fontWeight:'700', color:__stc('#059669')}}>
                           {formatCurrency(
                             (selectedPO.items || []).reduce((sum, item) => {
                               const qty      = parseFloat(item.quantity)   || 0;
@@ -2164,9 +2201,9 @@ const PurchaseOrders = () => {
 
             <div className="purchase-orders-modal-content" style={{ flex: 1, overflowY: 'auto' }}>
               {/* Step 1: Project Selection */}
-              <div className="po-form-section" style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '2px solid #e2e8f0' }}>
+              <div className="po-form-section" style={{ background: __sbg('#f8fafc'), padding: '20px', borderRadius: '8px', border: `2px solid ${__sbg('#e2e8f0')}` }}>
                 <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📂</span> Step 1: Select Project</h3>
-                <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '16px' }}>
+                <p style={{ fontSize: '13px', color: __stc('#64748b'), marginBottom: '16px' }}>
                   {isEditMode
                     ? 'Change the project assignment for this PO. Existing items will be preserved.'
                     : 'Choose a project to load approved quotations or order book items'}
@@ -2204,18 +2241,18 @@ const PurchaseOrders = () => {
                     />
                   </div>
                 </div>
-                {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: '#dbeafe', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>🔄 Loading quotations and order books...</div>}
+                {loadingOrderItems && <div style={{ marginTop: '12px', padding: '10px', background: __sbg('#dbeafe'), borderRadius: '6px', fontSize: '13px', color: __stc('#1e40af') }}>🔄 Loading quotations and order books...</div>}
               </div>
 
               {/* ─── Edit-mode Project Change Warning Banner ──────────────────── */}
               {showProjectChangeWarning && isEditMode && (
-                <div style={{ padding: '18px 20px', background: '#fffbeb', border: '2px solid #f59e0b', borderRadius: '10px', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
+                <div style={{ padding: '18px 20px', background: __sbg('#fffbeb'), border: `2px solid ${__sbg('#f59e0b')}`, borderRadius: '10px', display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
                   <span style={{ fontSize: '24px', flexShrink: 0 }}>⚠️</span>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: '700', fontSize: '15px', color: '#92400e', marginBottom: '6px' }}>
+                    <div style={{ fontWeight: '700', fontSize: '15px', color: __stc('#92400e'), marginBottom: '6px' }}>
                       Change Project for This Purchase Order?
                     </div>
-                    <div style={{ fontSize: '13px', color: '#78350f', marginBottom: '14px' }}>
+                    <div style={{ fontSize: '13px', color: __stc('#78350f'), marginBottom: '14px' }}>
                       You are changing the project while there are <strong>{createPOFormData.items.length} item(s)</strong> in this PO.
                       Click <em>"Keep Items &amp; Change Project"</em> to update only the project assignment without touching the items.
                       Or click <em>"Cancel"</em> to revert.
@@ -2223,13 +2260,13 @@ const PurchaseOrders = () => {
                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                       <button
                         onClick={handleConfirmProjectChange}
-                        style={{ padding: '9px 18px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
+                        style={{ padding: '9px 18px', background: __sbg('#d97706'), color: __stc('white'), border: 'none', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
                       >
                         ✅ Keep Items &amp; Change Project
                       </button>
                       <button
                         onClick={handleCancelProjectChange}
-                        style={{ padding: '9px 18px', background: 'white', color: '#92400e', border: '1.5px solid #f59e0b', borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
+                        style={{ padding: '9px 18px', background: __sbg('white'), color: __stc('#92400e'), border: `1.5px solid ${__sbg('#f59e0b')}`, borderRadius: '6px', fontWeight: '600', fontSize: '13px', cursor: 'pointer' }}
                       >
                         ✕ Cancel
                       </button>
@@ -2245,9 +2282,9 @@ const PurchaseOrders = () => {
                     <>
                       <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}><span>✅</span> Choose Your Option</h3>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px', marginBottom: '16px' }}>
-                        <div style={{ padding: '20px', background: '#f0fdf4', border: '2px solid #86efac', borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: '#166534', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Quotation</h4>
-                          <p style={{ fontSize: '13px', color: '#059669', marginBottom: '12px' }}>Select from {quotations.length} available quotation(s)</p>
+                        <div style={{ padding: '20px', background: __sbg('#f0fdf4'), border: `2px solid ${__sbg('#86efac')}`, borderRadius: '8px' }}>
+                          <h4 style={{ marginBottom: '8px', color: __stc('#166534'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📋</span> Option 1: Use Quotation</h4>
+                          <p style={{ fontSize: '13px', color: __stc('#059669'), marginBottom: '12px' }}>Select from {quotations.length} available quotation(s)</p>
                           {!createPOFormData.quotationId && (
                             <div className="po-form-group po-form-group--dropdown-up" style={{ marginTop: '12px' }}>
                               <FilterSelect
@@ -2259,18 +2296,18 @@ const PurchaseOrders = () => {
                             </div>
                           )}
                           {createPOFormData.quotationId && (
-                            <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #86efac' }}>
-                              <div style={{ fontSize: '13px', color: '#166534', marginBottom: '4px' }}>✓ {createPOFormData.quotation?.quoteNo}</div>
-                              <button onClick={() => handleQuotationSelect('')} style={{ fontSize: '12px', padding: '4px 8px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#dc2626' }}>Clear</button>
+                            <div style={{ marginTop: '12px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#86efac')}` }}>
+                              <div style={{ fontSize: '13px', color: __stc('#166534'), marginBottom: '4px' }}>✓ {createPOFormData.quotation?.quoteNo}</div>
+                              <button onClick={() => handleQuotationSelect('')} style={{ fontSize: '12px', padding: '4px 8px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626') }}>Clear</button>
                             </div>
                           )}
                         </div>
-                        <div style={{ padding: '20px', background: '#eff6ff', border: '2px solid #93c5fd', borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '8px', color: '#1e40af', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> Option 2: Load from Order Book</h4>
+                        <div style={{ padding: '20px', background: __sbg('#eff6ff'), border: `2px solid ${__sbg('#93c5fd')}`, borderRadius: '8px' }}>
+                          <h4 style={{ marginBottom: '8px', color: __stc('#1e40af'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> Option 2: Load from Order Book</h4>
                           {createPOFormData.items.length > 0 && !createPOFormData.quotationId ? (
-                            <div style={{ marginTop: '8px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #93c5fd', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div style={{ fontSize: '13px', color: '#1e40af', fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
-                              <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>Clear</button>
+                            <div style={{ marginTop: '8px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#93c5fd')}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div style={{ fontSize: '13px', color: __stc('#1e40af'), fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
+                              <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626'), fontWeight: 600 }}>Clear</button>
                             </div>
                           ) : (
                             <div className="po-ob-dropdown-wrap" style={{ marginTop: '8px' }}>
@@ -2286,18 +2323,18 @@ const PurchaseOrders = () => {
                                 )}
                               </div>
                               {loadingOrderItems && (
-                                <div style={{ fontSize: '12px', color: '#1e40af', marginTop: '6px', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
+                                <div style={{ fontSize: '12px', color: __stc('#1e40af'), marginTop: '6px', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
                               )}
                               {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
-                                <div style={{ fontSize: '12px', color: '#64748b', marginTop: '6px' }}>No items found in this order book.</div>
+                                <div style={{ fontSize: '12px', color: __stc('#64748b'), marginTop: '6px' }}>No items found in this order book.</div>
                               )}
                             </div>
                           )}
                         </div>
                       </div>
                       {createPOFormData.quotation && (
-                        <div style={{ padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '2px solid #86efac', marginTop: '16px' }}>
-                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: '#166534' }}>Selected Quotation Details</h4>
+                        <div style={{ padding: '16px', backgroundColor: __sbg('#f0fdf4'), borderRadius: '8px', border: `2px solid ${__sbg('#86efac')}`, marginTop: '16px' }}>
+                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: __stc('#166534') }}>Selected Quotation Details</h4>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '14px' }}>
                             <div><strong>Vendor:</strong> {createPOFormData.quotation.vendorName || createPOFormData.quotation.vendorContact || 'N/A'}</div>
                             <div><strong>Category:</strong> {createPOFormData.quotation.category}</div>
@@ -2320,8 +2357,8 @@ const PurchaseOrders = () => {
                         />
                       </div>
                       {createPOFormData.quotation && (
-                        <div style={{ marginTop: '16px', padding: '16px', backgroundColor: '#f0fdf4', borderRadius: '8px', border: '2px solid #86efac' }}>
-                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: '#166534' }}>Quotation Details</h4>
+                        <div style={{ marginTop: '16px', padding: '16px', backgroundColor: __sbg('#f0fdf4'), borderRadius: '8px', border: `2px solid ${__sbg('#86efac')}` }}>
+                          <h4 style={{ marginBottom: '12px', fontSize: '15px', fontWeight: '600', color: __stc('#166534') }}>Quotation Details</h4>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px', fontSize: '14px' }}>
                             <div><strong>Vendor:</strong> {createPOFormData.quotation.vendorContact || 'N/A'}</div>
                             <div><strong>Category:</strong> {createPOFormData.quotation.category}</div>
@@ -2332,16 +2369,16 @@ const PurchaseOrders = () => {
                     </>
                   )}
                   {!loadingOrderItems && quotations.length === 0 && orderBooks.length > 0 && (
-                    <div style={{ padding: '20px', background: '#fef3c7', border: '2px solid #fbbf24', borderRadius: '8px' }}>
-                      <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> No Approved Quotations — Select Order Book</h4>
+                    <div style={{ padding: '20px', background: __sbg('#fef3c7'), border: `2px solid ${__sbg('#fbbf24')}`, borderRadius: '8px' }}>
+                      <h4 style={{ marginBottom: '10px', color: __stc('#92400e'), fontSize: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📦</span> No Approved Quotations — Select Order Book</h4>
                       {createPOFormData.items.length > 0 ? (
-                        <div style={{ marginTop: '12px', padding: '12px', background: 'white', borderRadius: '6px', border: '1px solid #fbbf24', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
-                          <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: '4px', cursor: 'pointer', color: '#dc2626', fontWeight: 600 }}>Clear</button>
+                        <div style={{ marginTop: '12px', padding: '12px', background: __sbg('white'), borderRadius: '6px', border: `1px solid ${__sbg('#fbbf24')}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ fontSize: '13px', color: __stc('#92400e'), fontWeight: 600 }}>✓ {createPOFormData.items.length} items loaded from order book</div>
+                          <button onClick={() => { setCreatePOFormData(prev => ({ ...prev, items: [] })); setSelectedOrderBookId(''); setOrderBookItems([]); setItemsStepUnlocked(false); }} style={{ fontSize: '12px', padding: '4px 10px', background: __sbg('#fee2e2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: '4px', cursor: 'pointer', color: __stc('#dc2626'), fontWeight: 600 }}>Clear</button>
                         </div>
                       ) : (
                         <div className="po-ob-dropdown-wrap" style={{ marginTop: '12px' }}>
-                          <label style={{ fontSize: '13px', color: '#92400e', marginBottom: '6px', display: 'block', fontWeight: 600 }}>Select Order Book</label>
+                          <label style={{ fontSize: '13px', color: __stc('#92400e'), marginBottom: '6px', display: 'block', fontWeight: 600 }}>Select Order Book</label>
                           <div className="po-ob-filterselect-wrap">
                             <FilterSelect
                               value={selectedOrderBookId}
@@ -2354,19 +2391,19 @@ const PurchaseOrders = () => {
                             )}
                           </div>
                           {loadingOrderItems && (
-                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: __stc('#92400e'), display: 'flex', alignItems: 'center', gap: 4 }}><span>🔄</span> Loading items…</div>
                           )}
                           {selectedOrderBookId && !loadingOrderItems && orderBookItems.length === 0 && (
-                            <div style={{ marginTop: '8px', fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                            <div style={{ marginTop: '8px', fontSize: '13px', color: __stc('#92400e') }}>No items found in this order book.</div>
                           )}
                         </div>
                       )}
                     </div>
                   )}
                   {!loadingOrderItems && quotations.length === 0 && orderBooks.length === 0 && (
-                    <div style={{ padding: '20px', background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '8px', textAlign: 'center' }}>
-                      <h4 style={{ marginBottom: '10px', color: '#991b1b', fontSize: '16px' }}>❌ No Data Available</h4>
-                      <p style={{ fontSize: '14px', color: '#991b1b' }}>No quotations or order book items found.</p>
+                    <div style={{ padding: '20px', background: __sbg('#fee2e2'), border: `2px solid ${__sbg('#fecaca')}`, borderRadius: '8px', textAlign: 'center' }}>
+                      <h4 style={{ marginBottom: '10px', color: __stc('#991b1b'), fontSize: '16px' }}>❌ No Data Available</h4>
+                      <p style={{ fontSize: '14px', color: __stc('#991b1b') }}>No quotations or order book items found.</p>
                     </div>
                   )}
                 </div>
@@ -2378,17 +2415,17 @@ const PurchaseOrders = () => {
                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><span>🏢</span> Vendor Information</h3>
                   {createPOFormData.quotation ? (
                     <>
-                      <div style={{ padding: '16px', background: '#f0f9ff', border: '2px solid #bae6fd', borderRadius: '8px', marginBottom: '16px' }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: '600', color: '#0c4a6e', marginBottom: '8px' }}>📋 Vendor from Quotation</h4>
-                        <div style={{ fontSize: '15px', fontWeight: '600', color: '#0c4a6e' }}>{createPOFormData.quotation.vendorName || createPOFormData.quotation.vendorContact || `Vendor #${createPOFormData.quotation.vendorId}`}</div>
-                        {createPOFormData.quotation.vendorContact && <div style={{ fontSize: '13px', color: '#0369a1', marginTop: '4px' }}>Contact: {createPOFormData.quotation.vendorContact}</div>}
+                      <div style={{ padding: '16px', background: __sbg('#f0f9ff'), border: `2px solid ${__sbg('#bae6fd')}`, borderRadius: '8px', marginBottom: '16px' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: '600', color: __stc('#0c4a6e'), marginBottom: '8px' }}>📋 Vendor from Quotation</h4>
+                        <div style={{ fontSize: '15px', fontWeight: '600', color: __stc('#0c4a6e') }}>{createPOFormData.quotation.vendorName || createPOFormData.quotation.vendorContact || `Vendor #${createPOFormData.quotation.vendorId}`}</div>
+                        {createPOFormData.quotation.vendorContact && <div style={{ fontSize: '13px', color: __stc('#0369a1'), marginTop: '4px' }}>Contact: {createPOFormData.quotation.vendorContact}</div>}
                       </div>
-                      <div style={{ padding: '12px', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '6px', fontSize: '13px', color: '#92400e' }}>💡 To use a different vendor, clear the quotation and load order book items instead.</div>
+                      <div style={{ padding: '12px', background: __sbg('#fef3c7'), border: `1px solid ${__sbg('#fbbf24')}`, borderRadius: '6px', fontSize: '13px', color: __stc('#92400e') }}>💡 To use a different vendor, clear the quotation and load order book items instead.</div>
                     </>
                   ) : (
                     <>
                       {!isEditMode && (
-                        <div style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '16px', padding: '12px', background: '#f8fafc', borderRadius: '6px' }}>
+                        <div style={{ marginBottom: '16px', display: 'flex', flexWrap: 'wrap', gap: '16px', padding: '12px', background: __sbg('#f8fafc'), borderRadius: '6px' }}>
                           <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '14px' }}>
                             <input type="radio" name="vendorType" checked={!showNewVendorForm} onChange={() => handleVendorTypeChange('existing')} style={{ marginRight: '8px', width: '18px', height: '18px' }} />
                             <span>Existing Vendor</span>
@@ -2406,19 +2443,19 @@ const PurchaseOrders = () => {
                           <div style={{ position: 'relative' }}>
                             <div
                               onClick={() => { setVendorDropdownOpen(o => !o); setVendorSearch(''); }}
-                              style={{ width: '100%', padding: '10px 36px 10px 12px', fontSize: '14px', border: `1px solid ${vendorDropdownOpen ? '#3b82f6' : '#d1d5db'}`, borderRadius: '6px', background: 'white', cursor: 'pointer', boxSizing: 'border-box', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none', minHeight: '42px' }}
+                              style={{ width: '100%', padding: '10px 36px 10px 12px', fontSize: '14px', border: `1px solid ${vendorDropdownOpen ? __sbg('#3b82f6') : __sbg('#d1d5db')}`, borderRadius: '6px', background: __sbg('white'), cursor: 'pointer', boxSizing: 'border-box', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'space-between', userSelect: 'none', minHeight: '42px' }}
                             >
-                              <span style={{ color: createPOFormData.vendorId ? '#111827' : '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                              <span style={{ color: createPOFormData.vendorId ? __stc('#111827') : __stc('#9ca3af'), overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                                 {createPOFormData.vendorId
                                   ? (() => { const sel = vendors.find(v => v.id === parseInt(createPOFormData.vendorId)); return sel ? `${sel.name}${sel.contactNumber ? ' • ' + sel.contactNumber : ''}` : 'Select Vendor'; })()
                                   : '-- Select Vendor --'}
                               </span>
-                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0, color: '#6b7280', transform: vendorDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16" style={{ flexShrink: 0, color: __stc('#6b7280'), transform: vendorDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
                             </div>
                             {vendorDropdownOpen && (
-                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1.5px solid #3b82f6', borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, marginTop: '4px', overflow: 'hidden' }}>
+                              <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: __sbg('white'), border: `1.5px solid ${__sbg('#3b82f6')}`, borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 9999, marginTop: '4px', overflow: 'hidden' }}>
                                 {/* Search box */}
-                                <div style={{ padding: '8px', borderBottom: '1px solid #f1f5f9' }}>
+                                <div style={{ padding: '8px', borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}>
                                   <input
                                     autoFocus
                                     type="text"
@@ -2426,14 +2463,14 @@ const PurchaseOrders = () => {
                                     onChange={e => setVendorSearch(e.target.value)}
                                     placeholder="Search vendor..."
                                     onClick={e => e.stopPropagation()}
-                                    style={{ width: '100%', padding: '7px 10px', fontSize: '13px', border: '1px solid #e2e8f0', borderRadius: '5px', outline: 'none', boxSizing: 'border-box' }}
+                                    style={{ width: '100%', padding: '7px 10px', fontSize: '13px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '5px', outline: 'none', boxSizing: 'border-box' }}
                                   />
                                 </div>
                                 {/* Options list */}
                                 <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                                   <div
                                     onClick={() => { handleVendorSelection({ target: { value: '' } }); setVendorDropdownOpen(false); }}
-                                    style={{ padding: '9px 12px', fontSize: '14px', color: '#9ca3af', cursor: 'pointer', borderBottom: '1px solid #f8fafc' }}
+                                    style={{ padding: '9px 12px', fontSize: '14px', color: __stc('#9ca3af'), cursor: 'pointer', borderBottom: `1px solid ${__sbg('#f8fafc')}` }}
                                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                                     onMouseLeave={e => e.currentTarget.style.background = 'white'}
                                   >
@@ -2445,13 +2482,13 @@ const PurchaseOrders = () => {
                                       <div
                                         key={v.id}
                                         onClick={() => { handleVendorSelection({ target: { value: String(v.id) } }); setVendorDropdownOpen(false); setVendorSearch(''); }}
-                                        style={{ padding: '9px 12px', fontSize: '14px', cursor: 'pointer', background: createPOFormData.vendorId === v.id ? '#eff6ff' : 'white', borderLeft: createPOFormData.vendorId === v.id ? '3px solid #3b82f6' : '3px solid transparent' }}
+                                        style={{ padding: '9px 12px', fontSize: '14px', cursor: 'pointer', background: createPOFormData.vendorId === v.id ? __sbg('#eff6ff') : __sbg('white'), borderLeft: createPOFormData.vendorId === v.id ? '3px solid #3b82f6' : '3px solid transparent' }}
                                         onMouseEnter={e => { if (createPOFormData.vendorId !== v.id) e.currentTarget.style.background = '#f8fafc'; }}
                                         onMouseLeave={e => { if (createPOFormData.vendorId !== v.id) e.currentTarget.style.background = 'white'; }}
                                       >
-                                        <div style={{ fontWeight: 500, color: '#111827' }}>{v.name}</div>
+                                        <div style={{ fontWeight: 500, color: __stc('#111827') }}>{v.name}</div>
                                         {(v.contactNumber || v.category) && (
-                                          <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>
+                                          <div style={{ fontSize: '12px', color: __stc('#6b7280'), marginTop: '2px' }}>
                                             {v.contactNumber && <span>{v.contactNumber}</span>}
                                             {v.contactNumber && v.category && <span> · </span>}
                                             {v.category && <span>{v.category}</span>}
@@ -2461,29 +2498,29 @@ const PurchaseOrders = () => {
                                     ))
                                   }
                                   {vendors.filter(v => !vendorSearch || v.name?.toLowerCase().includes(vendorSearch.toLowerCase()) || v.contactNumber?.includes(vendorSearch) || v.category?.toLowerCase().includes(vendorSearch.toLowerCase())).length === 0 && (
-                                    <div style={{ padding: '12px', fontSize: '13px', color: '#9ca3af', textAlign: 'center' }}>No vendors found</div>
+                                    <div style={{ padding: '12px', fontSize: '13px', color: __stc('#9ca3af'), textAlign: 'center' }}>No vendors found</div>
                                   )}
                                 </div>
-                                <div style={{ padding: '6px 12px', borderTop: '1px solid #f1f5f9', fontSize: '11px', color: '#9ca3af' }}>{vendors.length} vendor(s) total</div>
+                                <div style={{ padding: '6px 12px', borderTop: `1px solid ${__sbg('#f1f5f9')}`, fontSize: '11px', color: __stc('#9ca3af') }}>{vendors.length} vendor(s) total</div>
                               </div>
                             )}
                             {/* Click-outside overlay */}
                             {vendorDropdownOpen && <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setVendorDropdownOpen(false)} />}
                           </div>
-                          {vendors.length === 0 && <small style={{ color: '#ef4444', fontSize: '12px', marginTop: '6px', display: 'block' }}>No vendors available. Add a new vendor.</small>}
+                          {vendors.length === 0 && <small style={{ color: __stc('#ef4444'), fontSize: '12px', marginTop: '6px', display: 'block' }}>No vendors available. Add a new vendor.</small>}
                         </div>
                       )}
                       {showNewVendorForm && (
-                        <div style={{ padding: '20px', background: '#f0fdf4', border: '2px solid #86efac', borderRadius: '8px' }}>
+                        <div style={{ padding: '20px', background: __sbg('#f0fdf4'), border: `2px solid ${__sbg('#86efac')}`, borderRadius: '8px' }}>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '16px' }}>
                             <div className="po-form-group">
                               <label>Vendor Name *</label>
                               <input type="text" value={createPOFormData.vendorName || ''} onChange={(e) => setCreatePOFormData(prev => ({ ...prev, vendorName: e.target.value }))} placeholder="Enter vendor company name" style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
                             </div>
                             <div className="po-form-group">
-                              <label>Contact Number <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                              <label>Contact Number <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 400 }}>(optional)</span></label>
                               <input type="tel" value={createPOFormData.vendorContact || ''} onChange={(e) => handleNewVendorContactChange(e.target.value)} placeholder="Enter 10-digit mobile" maxLength={10} style={{ width: '100%', padding: '10px', fontSize: '14px' }} />
-                              {createPOFormData.vendorContact && createPOFormData.vendorContact.length > 0 && createPOFormData.vendorContact.length < 10 && <small style={{ color: '#dc2626', fontSize: '12px', marginTop: '4px', display: 'block' }}>⚠️ Must be 10 digits ({createPOFormData.vendorContact.length}/10)</small>}
+                              {createPOFormData.vendorContact && createPOFormData.vendorContact.length > 0 && createPOFormData.vendorContact.length < 10 && <small style={{ color: __stc('#dc2626'), fontSize: '12px', marginTop: '4px', display: 'block' }}>⚠️ Must be 10 digits ({createPOFormData.vendorContact.length}/10)</small>}
                             </div>
                             <div className="po-form-group">
                               <label>Category *</label>
@@ -2497,7 +2534,7 @@ const PurchaseOrders = () => {
                                 <option value="Other">Other</option>
                               </select>
                               {createPOFormData.vendorCategory === 'Other' && (
-                                <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                                <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13 }} />
                               )}
                             </div>
                             <div className="po-form-group">
@@ -2510,11 +2547,11 @@ const PurchaseOrders = () => {
                                 <option value="Other">Other</option>
                               </select>
                               {createPOFormData.vendorType === 'Other' && (
-                                <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }} />
+                                <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13 }} />
                               )}
                             </div>
                           </div>
-                          <div style={{ marginTop: '12px', padding: '12px', background: '#dbeafe', border: '1px solid #93c5fd', borderRadius: '6px', fontSize: '13px', color: '#1e40af' }}>💡 This vendor will be created immediately when you submit the PO.</div>
+                          <div style={{ marginTop: '12px', padding: '12px', background: __sbg('#dbeafe'), border: `1px solid ${__sbg('#93c5fd')}`, borderRadius: '6px', fontSize: '13px', color: __stc('#1e40af') }}>💡 This vendor will be created immediately when you submit the PO.</div>
                         </div>
                       )}
                     </>
@@ -2569,7 +2606,7 @@ const PurchaseOrders = () => {
                   </div>
                   <div className="po-form-row">
                     <div className="po-form-group">
-                      <label>PO REF ID <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 400 }}>(optional)</span></label>
+                      <label>PO REF ID <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 400 }}>(optional)</span></label>
                       <input
                         type="text"
                         value={createPOFormData.poRefId || ''}
@@ -2630,7 +2667,7 @@ const PurchaseOrders = () => {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                     <div>
                       <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}><span>📋</span> Purchase Order Items</h3>
-                      <p style={{ fontSize: '13px', color: '#64748b' }}>{createPOFormData.quotationId ? 'Select items and adjust quantities' : 'Enter vendor prices for selected items'}</p>
+                      <p style={{ fontSize: '13px', color: __stc('#64748b') }}>{createPOFormData.quotationId ? 'Select items and adjust quantities' : 'Enter vendor prices for selected items'}</p>
                     </div>
                     <button className="purchase-orders-btn-secondary" onClick={() => setShowManualItemForm(!showManualItemForm)} style={{ padding: '8px 16px', fontSize: '14px' }}>
                       <Plus size={16} /> {showManualItemForm ? 'Cancel' : 'Add Manual Item'}
@@ -2638,8 +2675,8 @@ const PurchaseOrders = () => {
                   </div>
 
                   {showManualItemForm && (
-                    <div style={{ padding: '16px', background: '#f0fdf4', border: '2px solid #86efac', borderRadius: '8px', marginBottom: '16px' }}>
-                      <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: '#166534' }}>Add Manual Item</h4>
+                    <div style={{ padding: '16px', background: __sbg('#f0fdf4'), border: `2px solid ${__sbg('#86efac')}`, borderRadius: '8px', marginBottom: '16px' }}>
+                      <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: __stc('#166534') }}>Add Manual Item</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
@@ -2656,7 +2693,7 @@ const PurchaseOrders = () => {
 
                   {createPOFormData.items.length > 0 ? (
                     <>
-                      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: '8px' }}>
+                      <div style={{ overflowX: 'auto', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px' }}>
                         <table className="po-items-table" style={{ width: '100%', tableLayout: 'fixed', borderCollapse: 'collapse' }}>
                           <colgroup>
                             <col style={{ width: '46px' }} />
@@ -2670,7 +2707,7 @@ const PurchaseOrders = () => {
                             <col style={{ width: '130px' }} />
                             <col style={{ width: '56px' }} />
                           </colgroup>
-                          <thead style={{ background: '#f8fafc' }}>
+                          <thead style={{ background: __sbg('#f8fafc') }}>
                             <tr>
                               <th className="po-th" style={{ textAlign: 'center' }}>
                                 <input type="checkbox" checked={createPOFormData.items.every(i => i.selected)}
@@ -2698,29 +2735,29 @@ const PurchaseOrders = () => {
                               const disc     = base * (discount / 100);
                               const computedLineTotal = (base - disc) * (1 + gst / 100);
                               return (
-                              <tr key={index} style={{ borderTop: '1px solid #e2e8f0', opacity: item.selected ? 1 : 0.5, background: item.selected ? 'white' : '#f9fafb', verticalAlign: 'middle' }}>
+                              <tr key={index} style={{ borderTop: `1px solid ${__sbg('#e2e8f0')}`, opacity: item.selected ? 1 : 0.5, background: item.selected ? __sbg('white') : __sbg('#f9fafb'), verticalAlign: 'middle' }}>
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <input type="checkbox" checked={item.selected} onChange={() => handleToggleItemSelection(index)} style={{ width: '16px', height: '16px', cursor: 'pointer' }} />
                                 </td>
                                 <td className="po-td" style={{ fontWeight: '500' }}>
                                   <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.itemName}
-                                    {item.isManual && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 5px', background: '#dbeafe', color: '#1e40af', borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}
+                                    {item.isManual && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 5px', background: __sbg('#dbeafe'), color: __stc('#1e40af'), borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}
                                   </div>
                                   {item.remainingQty != null && (
-                                    <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? '#ef4444' : '#22c55e', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                    <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? __stc('#ef4444') : __stc('#22c55e'), marginTop: '2px', whiteSpace: 'nowrap' }}>
                                       OB: {item.quotedQuantity} total · {item.allocatedQty || 0} assigned · <strong>{item.remainingQty} remaining</strong>
                                     </div>
                                   )}
                                 </td>
-                                <td className="po-td po-td-clip" style={{ fontSize: '13px', color: '#64748b' }}>{item.itemDescription || '—'}</td>
-                                {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: '#0284c7' }}>{item.quotedQuantity}</td>}
+                                <td className="po-td po-td-clip" style={{ fontSize: '13px', color: __stc('#64748b') }}>{item.itemDescription || '—'}</td>
+                                {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: __stc('#0284c7') }}>{item.quotedQuantity}</td>}
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <input type="text" inputMode="decimal"
                                     value={formatIndianInput(item.quantity)}
                                     onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdatePOItemQuantity(index, raw); }}
                                     disabled={!item.selected}
-                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'center', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', background: item.selected ? 'white' : '#f1f5f9' }} />
+                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'center', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', background: item.selected ? __sbg('white') : __sbg('#f1f5f9') }} />
                                 </td>
                                 <td className="po-td" style={{ textAlign: 'right' }}>
                                   <input type="text" inputMode="decimal"
@@ -2728,43 +2765,43 @@ const PurchaseOrders = () => {
                                     onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) handleUpdatePOItemPrice(index, raw); }}
                                     disabled={createPOFormData.quotationId || !item.selected}
                                     placeholder="0.00"
-                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'right', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: (createPOFormData.quotationId || !item.selected) ? '#f1f5f9' : 'white' }} />
+                                    style={{ width: '100%', padding: '6px 8px', textAlign: 'right', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', boxSizing: 'border-box', backgroundColor: (createPOFormData.quotationId || !item.selected) ? __sbg('#f1f5f9') : __sbg('white') }} />
                                 </td>
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <select value={item.gst} onChange={(e) => handleUpdatePOItemGST(index, e.target.value)} disabled={!item.selected}
-                                    style={{ width: '100%', padding: '6px 4px', border: '1px solid #e2e8f0', borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? 'white' : '#f1f5f9' }}>
+                                    style={{ width: '100%', padding: '6px 4px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '4px', fontSize: '13px', fontFamily: 'inherit', cursor: item.selected ? 'pointer' : 'not-allowed', backgroundColor: item.selected ? __sbg('white') : __sbg('#f1f5f9') }}>
                                     {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
                                   </select>
                                 </td>
                                 <td className="po-td" style={{ textAlign: 'center', fontSize: '13px' }}>{item.discount}%</td>
-                                <td className="po-td po-td-clip" style={{ textAlign: 'right', fontWeight: '600', color: item.selected ? '#059669' : '#94a3b8', fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
+                                <td className="po-td po-td-clip" style={{ textAlign: 'right', fontWeight: '600', color: item.selected ? __stc('#059669') : __stc('#94a3b8'), fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
                                 <td className="po-td" style={{ textAlign: 'center' }}><button className="remove-item-btn" onClick={() => handleRemoveItem(index)} title="Remove item"><Trash2 size={16} /></button></td>
                               </tr>
                               );
                             })}
                           </tbody>
-                          <tfoot style={{ background: '#f8fafc', borderTop: '2px solid #e2e8f0' }}>
+                          <tfoot style={{ background: __sbg('#f8fafc'), borderTop: `2px solid ${__sbg('#e2e8f0')}` }}>
                             <tr>
-                              <td colSpan={createPOFormData.quotationId ? 8 : 7} style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: '#475569' }}>
+                              <td colSpan={createPOFormData.quotationId ? 8 : 7} style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '13px', color: __stc('#475569') }}>
                                 Grand Total ({createPOFormData.items.filter(i => i.selected).length} items selected):
                               </td>
-                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '14px', color: '#059669', whiteSpace: 'nowrap', overflow: 'visible' }}>{formatCurrency(calculatePOTotal())}</td>
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: '700', fontSize: '14px', color: __stc('#059669'), whiteSpace: 'nowrap', overflow: 'visible' }}>{formatCurrency(calculatePOTotal())}</td>
                               <td></td>
                             </tr>
                           </tfoot>
                         </table>
                       </div>
                       <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '13px', color: '#64748b' }}>{createPOFormData.items.filter(i => i.selected).length} of {createPOFormData.items.length} items selected</span>
+                        <span style={{ fontSize: '13px', color: __stc('#64748b') }}>{createPOFormData.items.filter(i => i.selected).length} of {createPOFormData.items.length} items selected</span>
                         {!createPOFormData.quotationId && createPOFormData.items.some(i => i.selected && (!i.unitPrice || i.unitPrice === 0)) && (
-                          <div style={{ padding: '7px 12px', background: '#fef3c7', border: '1px solid #fbbf24', borderRadius: '6px', fontSize: '13px', color: '#92400e' }}>⚠️ Please enter unit prices for all selected items</div>
+                          <div style={{ padding: '7px 12px', background: __sbg('#fef3c7'), border: `1px solid ${__sbg('#fbbf24')}`, borderRadius: '6px', fontSize: '13px', color: __stc('#92400e') }}>⚠️ Please enter unit prices for all selected items</div>
                         )}
                       </div>
                     </>
                   ) : (
-                    <div style={{ padding: '48px', textAlign: 'center', background: '#f8fafc', border: '2px dashed #cbd5e0', borderRadius: '8px', color: '#94a3b8' }}>
+                    <div style={{ padding: '48px', textAlign: 'center', background: __sbg('#f8fafc'), border: `2px dashed ${__sbg('#cbd5e0')}`, borderRadius: '8px', color: __stc('#94a3b8') }}>
                       <div style={{ fontSize: '44px', marginBottom: '10px' }}>📦</div>
-                      <div style={{ fontSize: '15px', fontWeight: '500', color: '#64748b', marginBottom: '4px' }}>No items to display</div>
+                      <div style={{ fontSize: '15px', fontWeight: '500', color: __stc('#64748b'), marginBottom: '4px' }}>No items to display</div>
                       <div style={{ fontSize: '13px' }}>Select a quotation, load order book items, or add manual items</div>
                     </div>
                   )}
