@@ -1287,7 +1287,7 @@ export default function NewRolePermissions() {
                               };
                               const getActionStyle = (actionName) => actionColor[actionName.toLowerCase()] || { bg: __sbg('#f1f5f9'), color: __stc('#475569'), on: '#6366f1' };
                               return (
-                                <div key={group} style={{ borderBottom: isLastGroup ? 'none' : '1px solid #e2e8f0', padding: '0' }}>
+                                <div key={group} style={{ borderBottom: isLastGroup ? 'none' : `1px solid ${__sbg('#e2e8f0')}`, padding: '0' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', padding: '10px 16px', background: allGroupOn ? __sbg('#f5f3ff') : someGroupOn ? __sbg('#fafafa') : __sbg('#fff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}`, gap: 12 }}>
                                     <input type="checkbox" style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#6366f1', flexShrink: 0 }}
                                       checked={allGroupOn}
@@ -1304,7 +1304,7 @@ export default function NewRolePermissions() {
                                         const action = label(p.name);
                                         const aStyle = getActionStyle(action);
                                         return (
-                                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: isOn ? `1.5px solid ${aStyle.on}` : '1.5px solid #e2e8f0', background: isOn ? aStyle.bg : __sbg('#f8fafc'), color: isOn ? aStyle.color : __stc('#64748b'), transition: 'all 0.15s', userSelect: 'none' }}
+                                          <label key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, cursor: 'pointer', fontSize: 12, fontWeight: 600, border: isOn ? `1.5px solid ${aStyle.on}` : `1.5px solid ${__sbg('#e2e8f0')}`, background: isOn ? aStyle.bg : __sbg('#f8fafc'), color: isOn ? aStyle.color : __stc('#64748b'), transition: 'all 0.15s', userSelect: 'none' }}
                                             onMouseEnter={e => { if (!isOn) e.currentTarget.style.borderColor = __sbg('#cbd5e1'); }}
                                             onMouseLeave={e => { if (!isOn) e.currentTarget.style.borderColor = __sbg('#e2e8f0'); }}>
                                             <input type="checkbox" checked={isOn} onChange={() => togglePerm(p.id)} style={{ width: 13, height: 13, accentColor: aStyle.on, cursor: 'pointer' }} />

@@ -1333,3 +1333,22 @@
 
 /* Save button */
 .hf-save-btn { width: 100%; justify-content: center; }
+/* ============================================================
+   DARK THEME — Role Name / Description inputs (scoped; light untouched)
+   The border resolved to a prominent slate that read as a bright outline.
+   !important guarantees this wins over the two earlier .rp-field__input
+   rules regardless of source order / cached bundles.
+   ============================================================ */
+[data-theme="dark"] .rp-field__input,
+[data-theme="dark"] select.rp-field__input {
+  background: #161b27 !important;
+  border: 1px solid transparent !important;
+  color: #e7ecf3 !important;
+  box-shadow: none !important;
+}
+[data-theme="dark"] .rp-field__input::placeholder { color: #8893a7 !important; }
+[data-theme="dark"] .rp-field__input:focus,
+[data-theme="dark"] select.rp-field__input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}

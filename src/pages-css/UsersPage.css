@@ -1542,3 +1542,18 @@ font-size: 14px;        /* was 15px */
   visibility: visible;
   transform: translateX(-50%) translateY(-4px);
 }
+/* ============================================================
+   DARK THEME — search input (scoped; light mode untouched)
+   Input had no background set, so it fell to the near-black
+   color-scheme default and clashed with sibling controls.
+   ============================================================ */
+[data-theme="dark"] .users-page-search-input {
+  background-color: #161b27;
+  color: #e7ecf3;
+  border-color: #2b3445;
+}
+[data-theme="dark"] .users-page-search-input::placeholder { color: #8893a7; }
+[data-theme="dark"] .users-page-search-input:focus {
+  border-color: #8589f3;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+}

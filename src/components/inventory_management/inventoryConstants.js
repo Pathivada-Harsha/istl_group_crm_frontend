@@ -168,7 +168,7 @@ export function PaginationBar({ page, pageSize, total, totalPages, onPageChange,
           : <>Showing <strong>{firstEntry}</strong>–<strong>{lastEntry}</strong> of <strong>{total}</strong> {label}</>}
         <select className="inv-page-size-select" value={pageSize}
           onChange={e => { onPageSizeChange(Number(e.target.value)); onPageChange(0); }}>
-          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} / page</option>)}
+          {[10, 20, 50, 100].map(n => <option key={n} value={n}>{n} Rows</option>)}
         </select>
       </div>
       <div className="inv-pagination">
