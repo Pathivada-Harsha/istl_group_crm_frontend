@@ -2029,6 +2029,319 @@ const getStatusColor = (s) => ({
   COMPLETED: '#22c55e', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444',
 }[s] || '#94a3b8');
 
+// ─── Warehouse Issuance Block — needs own component so useState is valid ──────
+function WarehouseIssuanceBlock({ wi, siteReturn, formatCurrency }) {
+  const [expanded,  setExpanded]  = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState('outward');
+  const [modal,     setModal]     = React.useState(null); // null | 'outward' | 'inward'
+
+  if (!wi) return null;
+
+  const outwardLines = wi.issuanceLines || [];
+  const inwardLines  = (siteReturn && siteReturn.lines) ? siteReturn.lines : [];
+
+  const tabStyle = (tab) => ({
+    padding: '5px 16px', fontSize: 12, fontWeight: 600, borderRadius: 6,
+    border: '1px solid',
+    cursor: 'pointer',
+    background:  activeTab === tab ? '#0f172a' : '#fff',
+    color:       activeTab === tab ? '#fff'    : '#64748b',
+    borderColor: activeTab === tab ? '#0f172a' : '#e2e8f0',
+    transition: 'all 0.15s',
+  });
+
+  // ── Shared table renderers ────────────────────────────────────────────────
+  const OutwardTable = ({ lines, totalQty, totalValue, compact }) => (
+    lines.length === 0
+      ? <div style={{ padding:'28px 0', textAlign:'center', color:'#94a3b8', fontSize:13 }}>
+          No materials received from warehouse for this project
+        </div>
+      : <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize: compact ? 12 : 13 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                {['Txn No','Date','Item Code','Item Name','Warehouse','Qty','Unit Cost (₹)','Value (₹)'].map(h => (
+                  <th key={h} style={{ padding: compact ? '8px 12px' : '10px 14px',
+                    textAlign: h.includes('₹') || h === 'Qty' ? 'right' : 'left',
+                    borderBottom:'2px solid #e2e8f0', color:'#374151', fontWeight:700,
+                    fontSize:11, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i}
+                  style={{ background: i%2===0 ? '#fff' : '#fafbfd' }}
+                  onMouseEnter={e => e.currentTarget.style.background='#f0f9ff'}
+                  onMouseLeave={e => e.currentTarget.style.background=i%2===0?'#fff':'#fafbfd'}>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontFamily:'monospace', fontSize:11.5, color:'#475569', whiteSpace:'nowrap' }}>{l.txnNo||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', color:'#64748b', whiteSpace:'nowrap' }}>{l.txnDate||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontFamily:'monospace', fontSize:11.5 }}>{l.itemCode||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontWeight:500, color:'#0f172a' }}>{l.itemName||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', color:'#64748b' }}>{l.warehouseName||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', textAlign:'right', fontWeight:600, color:'#1e40af' }}>
+                    {Number(l.qtyIssued||0).toLocaleString('en-IN')}{l.unit ? <span style={{ fontSize:10, fontWeight:400, color:'#94a3b8', marginLeft:3 }}>{l.unit}</span> : null}
+                  </td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', textAlign:'right', color:'#475569' }}>{formatCurrency(l.unitCost||0)}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', textAlign:'right', fontWeight:700, color:'#0f172a' }}>{formatCurrency(l.lineValue||0)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background:'#f8fafc' }}>
+                <td colSpan={5} style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0', fontWeight:700, fontSize:12, color:'#374151' }}>
+                  Total — {lines.length} receipt{lines.length!==1?'s':''}
+                </td>
+                <td style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0', textAlign:'right', fontWeight:700, color:'#1e40af' }}>
+                  {Number(totalQty||0).toLocaleString('en-IN')}
+                </td>
+                <td style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0' }}/>
+                <td style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0', textAlign:'right', fontWeight:700, color:'#0f172a' }}>
+                  {formatCurrency(totalValue||0)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+  );
+
+  const InwardTable = ({ lines, totalQty, compact }) => (
+    lines.length === 0
+      ? <div style={{ padding:'28px 0', textAlign:'center', color:'#94a3b8', fontSize:13 }}>
+          No items returned to warehouse for this project
+        </div>
+      : <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize: compact ? 12 : 13 }}>
+            <thead>
+              <tr style={{ background:'#f8fafc' }}>
+                {['Txn No','Date','Item Code','Item Name','Warehouse','Qty'].map(h => (
+                  <th key={h} style={{ padding: compact?'8px 12px':'10px 14px',
+                    textAlign: h==='Qty' ? 'right' : 'left',
+                    borderBottom:'2px solid #e2e8f0', color:'#374151', fontWeight:700,
+                    fontSize:11, textTransform:'uppercase', letterSpacing:'0.4px', whiteSpace:'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l, i) => (
+                <tr key={i}
+                  style={{ background: i%2===0 ? '#fff' : '#fafbfd' }}
+                  onMouseEnter={e => e.currentTarget.style.background='#f0fdf4'}
+                  onMouseLeave={e => e.currentTarget.style.background=i%2===0?'#fff':'#fafbfd'}>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontFamily:'monospace', fontSize:11.5, color:'#475569', whiteSpace:'nowrap' }}>{l.txnNo||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', color:'#64748b', whiteSpace:'nowrap' }}>{l.txnDate||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontFamily:'monospace', fontSize:11.5 }}>{l.itemCode||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', fontWeight:500, color:'#0f172a' }}>{l.itemName||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', color:'#64748b' }}>{l.warehouseName||'—'}</td>
+                  <td style={{ padding: compact?'8px 12px':'10px 14px', borderBottom:'1px solid #f1f5f9', textAlign:'right', fontWeight:600, color:'#15803d' }}>
+                    {Number(l.qty||0).toLocaleString('en-IN')}{l.unit ? <span style={{ fontSize:10, fontWeight:400, color:'#94a3b8', marginLeft:3 }}>{l.unit}</span> : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background:'#f8fafc' }}>
+                <td colSpan={5} style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0', fontWeight:700, fontSize:12, color:'#374151' }}>
+                  Total — {lines.length} return{lines.length!==1?'s':''}
+                </td>
+                <td style={{ padding: compact?'8px 12px':'10px 14px', borderTop:'2px solid #e2e8f0', textAlign:'right', fontWeight:700, color:'#15803d' }}>
+                  {Number(totalQty||0).toLocaleString('en-IN')}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+  );
+
+  return (
+    <>
+      <div className="dashboard-section">
+        {/* Header */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <h3 className="section-title" style={{ margin:0 }}>
+            <Package size={20} style={{ marginRight:6 }} />
+            Site Material &amp; Warehouse Returns
+          </h3>
+          <button
+            onClick={() => setExpanded(v => !v)}
+            style={{ display:'flex', alignItems:'center', gap:5, background:'#f8fafc',
+              border:'1px solid #e2e8f0', borderRadius:6, padding:'5px 12px',
+              fontSize:12, color:'#374151', fontWeight:600, cursor:'pointer' }}>
+            {expanded ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
+            {expanded ? 'Collapse' : 'Expand Details'}
+          </button>
+        </div>
+
+        {/* KPI cards — clickable */}
+        <div className="kpi-grid" style={{ marginTop:12 }}>
+          {/* Received from Warehouse */}
+          <div className="kpi-card" style={{ borderTopColor:'#3b82f6', cursor:'pointer' }}
+            title="Click to view issued items detail"
+            onClick={() => setModal('outward')}
+            onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(59,130,246,0.18)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow=''}>
+            <div className="kpi-icon" style={{ color:'#3b82f6' }}><Package size={28}/></div>
+            <div className="kpi-content">
+              <div className="kpi-value">{wi.totalItemsIssued || 0}</div>
+              <div className="kpi-label">Received from Warehouse</div>
+              <div style={{ fontSize:11, color:'#64748b', marginTop:3 }}>
+                Qty: {Number(wi.totalQtyIssued||0).toLocaleString('en-IN')}
+              </div>
+              <div style={{ fontSize:10, color:'#3b82f6', marginTop:4, fontWeight:600 }}>View details →</div>
+            </div>
+          </div>
+
+          {/* Issuance Value */}
+          <div className="kpi-card" style={{ borderTopColor:'#8b5cf6', cursor:'pointer' }}
+            title="Click to view issuance value detail"
+            onClick={() => setModal('outward')}
+            onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(139,92,246,0.18)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow=''}>
+            <div className="kpi-icon" style={{ color:'#8b5cf6' }}><IndianRupee size={28}/></div>
+            <div className="kpi-content">
+              <div className="kpi-value">{formatCurrency(wi.totalIssuanceValue||0)}</div>
+              <div className="kpi-label">Issuance Value</div>
+              <div style={{ fontSize:11, color:'#64748b', marginTop:3 }}>
+                {wi.warehouseBillCount||0} bill{wi.warehouseBillCount!==1?'s':''} auto-generated
+              </div>
+              <div style={{ fontSize:10, color:'#8b5cf6', marginTop:4, fontWeight:600 }}>View details →</div>
+            </div>
+          </div>
+
+          {/* Returned to Warehouse */}
+          <div className="kpi-card" style={{ borderTopColor:'#22c55e', cursor:'pointer' }}
+            title="Click to view returned items detail"
+            onClick={() => setModal('inward')}
+            onMouseEnter={e => e.currentTarget.style.boxShadow='0 4px 16px rgba(34,197,94,0.18)'}
+            onMouseLeave={e => e.currentTarget.style.boxShadow=''}>
+            <div className="kpi-icon" style={{ color:'#22c55e' }}><Package size={28}/></div>
+            <div className="kpi-content">
+              <div className="kpi-value">{wi.totalItemsReturned || 0}</div>
+              <div className="kpi-label">Returned to Warehouse</div>
+              <div style={{ fontSize:11, color:'#64748b', marginTop:3 }}>
+                Value: {formatCurrency(wi.totalReturnValue||0)}
+              </div>
+              <div style={{ fontSize:10, color:'#22c55e', marginTop:4, fontWeight:600 }}>View details →</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Inline expand — tabs + tables */}
+        {expanded && (
+          <div style={{ marginTop:16 }}>
+            <div style={{ display:'flex', gap:8, marginBottom:12 }}>
+              <button style={tabStyle('outward')} onClick={() => setActiveTab('outward')}>
+                ↑ Received from Warehouse ({outwardLines.length})
+              </button>
+              <button style={tabStyle('inward')} onClick={() => setActiveTab('inward')}>
+                ↓ Returned to Warehouse ({inwardLines.length})
+              </button>
+            </div>
+            {activeTab === 'outward' && (
+              <OutwardTable lines={outwardLines} totalQty={wi.totalQtyIssued} totalValue={wi.totalIssuanceValue} compact />
+            )}
+            {activeTab === 'inward' && (
+              <InwardTable lines={inwardLines} totalQty={siteReturn?.totalQtyReturned} compact />
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Outward detail modal ─────────────────────────────────────────────── */}
+      {modal === 'outward' && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
+          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={() => setModal(null)}>
+          <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:900,
+            maxHeight:'88vh', display:'flex', flexDirection:'column',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.22)' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Modal header */}
+            <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #f1f5f9',
+              display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:1 }}>
+                  Project Material Movements
+                </div>
+                <div style={{ fontSize:18, fontWeight:700, color:'#0f172a', marginTop:2, display:'flex', alignItems:'center', gap:8 }}>
+                  <Package size={20} style={{ color:'#3b82f6' }}/>
+                  Items Received from Warehouse
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:11, color:'#94a3b8' }}>Total Value</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#0f172a' }}>{formatCurrency(wi.totalIssuanceValue||0)}</div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:11, color:'#94a3b8' }}>Transactions</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#3b82f6' }}>{outwardLines.length}</div>
+                </div>
+                <button onClick={() => setModal(null)}
+                  style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
+                    padding:'8px 10px', cursor:'pointer', color:'#64748b', display:'flex', alignItems:'center' }}>
+                  <X size={16}/>
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <div style={{ overflowY:'auto', padding:'16px 24px 24px', flex:1 }}>
+              <OutwardTable lines={outwardLines} totalQty={wi.totalQtyIssued} totalValue={wi.totalIssuanceValue} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Inward detail modal ──────────────────────────────────────────────── */}
+      {modal === 'inward' && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
+          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
+          onClick={() => setModal(null)}>
+          <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:860,
+            maxHeight:'88vh', display:'flex', flexDirection:'column',
+            boxShadow:'0 24px 64px rgba(0,0,0,0.22)' }}
+            onClick={e => e.stopPropagation()}>
+            {/* Modal header */}
+            <div style={{ padding:'20px 24px 16px', borderBottom:'1px solid #f1f5f9',
+              display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <div>
+                <div style={{ fontSize:11, fontWeight:600, color:'#94a3b8', textTransform:'uppercase', letterSpacing:1 }}>
+                  Project Material Movements
+                </div>
+                <div style={{ fontSize:18, fontWeight:700, color:'#0f172a', marginTop:2, display:'flex', alignItems:'center', gap:8 }}>
+                  <Package size={20} style={{ color:'#22c55e' }}/>
+                  Items Returned to Warehouse
+                </div>
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:11, color:'#94a3b8' }}>Total Qty Returned</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#15803d' }}>
+                    {Number(siteReturn?.totalQtyReturned||0).toLocaleString('en-IN')}
+                  </div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:11, color:'#94a3b8' }}>Returns</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#22c55e' }}>{inwardLines.length}</div>
+                </div>
+                <button onClick={() => setModal(null)}
+                  style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8,
+                    padding:'8px 10px', cursor:'pointer', color:'#64748b', display:'flex', alignItems:'center' }}>
+                  <X size={16}/>
+                </button>
+              </div>
+            </div>
+            {/* Modal body */}
+            <div style={{ overflowY:'auto', padding:'16px 24px 24px', flex:1 }}>
+              <InwardTable lines={inwardLines} totalQty={siteReturn?.totalQtyReturned} />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 const ProjectDashboard = () => {
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -2414,6 +2727,14 @@ const ProjectDashboard = () => {
             </>
           )}
 
+          {/* Warehouse Issuance Block */}
+          {dashboardData.warehouseIssuanceData && (dashboardData.warehouseIssuanceData.totalItemsIssued > 0 || dashboardData.warehouseIssuanceData.totalItemsReturned > 0) && (
+            <WarehouseIssuanceBlock
+              wi={dashboardData.warehouseIssuanceData}
+              siteReturn={dashboardData.siteReturnData}
+              formatCurrency={formatCurrency} />
+          )}
+
           {/* Procurement */}
           {dashboardData.procurementData && (
             <div className="dashboard-section">
@@ -2700,7 +3021,7 @@ const ProjectDashboard = () => {
               <div className="spent-block">
                 <div className="spent-block-header spent-block-header--procurement">
                   <ShoppingCart size={16} />
-                  <span>Procurement (Vendor Bills)</span>
+                  <span>Procurement (Vendor Bills + Material from Warehouse)</span>
                 </div>
                 <div className="spent-row">
                   <span className="spent-row-label">Total paid to vendors</span>

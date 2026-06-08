@@ -1510,3 +1510,31 @@
   box-shadow: 0 0 0 2px rgba(37,99,235,0.08);
 }
 .leads-enquiries-pagination-info .filter-trigger__chevron { right: 5px; }
+/* ============================================================
+   DARK THEME FIX — Columns button + dropdown (scoped; light untouched)
+   ============================================================ */
+[data-theme="dark"] .col-visibility-btn {
+  background: #1b2130;
+  border-color: #2b3445;
+  color: #c2cbd8;
+}
+[data-theme="dark"] .col-visibility-btn:hover {
+  background: #232b3b;
+  border-color: #3b82f6;
+}
+[data-theme="dark"] .col-visibility-btn.has-hidden {
+  border-color: #3b82f6;
+  color: #7fb0f0;
+}
+[data-theme="dark"] .col-visibility-dropdown {
+  background: #161b27;
+  border-color: #2b3445;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] .col-visibility-header {
+  border-bottom-color: #2b3445;
+  color: #e7ecf3;
+}
+[data-theme="dark"] .col-visibility-reset:hover { background: #15243d; }
+[data-theme="dark"] .col-visibility-item:hover { background: #232b3b; }
+[data-theme="dark"] .col-visibility-label { color: #c2cbd8; }

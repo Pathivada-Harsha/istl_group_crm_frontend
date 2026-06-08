@@ -2355,18 +2355,45 @@
   .followups-pagination-btn { padding: 5px 10px; font-size: 12px; }
 }
 /* ─────────────────────────────────────────────────────────────────────
-   Add / Edit Follow-up modals — remove field borders in dark mode.
-   Covers every field type used in these modals (native inputs/selects/textareas,
-   FilterSelect .filter-trigger, the date picker, and the custom time trigger).
-   Uses !important so it wins regardless of where the field's border is defined.
-   Focus / open states are excluded so an active field still shows a border.
+   Add / Edit Follow-up modals — proper dark-mode field treatment.
+   The fields previously shared the modal surface and were defined only by a
+   light border, so they read as bright outlines on dark. Give every field a
+   slightly recessed dark fill + a subtle dark border + light text so they are
+   clearly defined and consistent. Covers native inputs/selects/textareas, the
+   FilterSelect .filter-trigger, the date picker, and the custom time trigger.
+   !important wins regardless of where the field's border is defined.
+   Scoped to .followup-modal under [data-theme="dark"] — light mode untouched.
    ───────────────────────────────────────────────────────────────────── */
-[data-theme="dark"] .followup-modal .followup-form-group input:not(:focus),
-[data-theme="dark"] .followup-modal .followup-form-group select:not(:focus),
-[data-theme="dark"] .followup-modal .followup-form-group textarea:not(:focus),
-[data-theme="dark"] .followup-modal .filter-trigger:not(.filter-trigger--open),
-[data-theme="dark"] .followup-modal .fu-datepicker-trigger:not(.fu-datepicker--open),
-[data-theme="dark"] .followup-modal .followup-time-trigger:not(.followup-time-trigger--open) {
-  border-color: transparent !important;
+[data-theme="dark"] .followup-modal .followup-form-group input,
+[data-theme="dark"] .followup-modal .followup-form-group select,
+[data-theme="dark"] .followup-modal .followup-form-group textarea,
+[data-theme="dark"] .followup-modal .filter-trigger,
+[data-theme="dark"] .followup-modal .fu-datepicker-trigger,
+[data-theme="dark"] .followup-modal .followup-time-trigger {
+  background: #161b27 !important;
+  border: 1px solid #2b3445 !important;
+  color: #e7ecf3 !important;
   box-shadow: none !important;
+}
+
+/* Active / open / set states — accent border */
+[data-theme="dark"] .followup-modal .followup-form-group input:focus,
+[data-theme="dark"] .followup-modal .followup-form-group select:focus,
+[data-theme="dark"] .followup-modal .followup-form-group textarea:focus,
+[data-theme="dark"] .followup-modal .filter-trigger.filter-trigger--open,
+[data-theme="dark"] .followup-modal .fu-datepicker-trigger.fu-datepicker--open,
+[data-theme="dark"] .followup-modal .fu-datepicker-trigger.fu-datepicker--set,
+[data-theme="dark"] .followup-modal .followup-time-trigger.followup-time-trigger--open {
+  border-color: #3b82f6 !important;
+  background: #15243d !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18) !important;
+}
+
+/* Placeholder text + disabled fields stay muted/recessed */
+[data-theme="dark"] .followup-modal .followup-form-group input::placeholder,
+[data-theme="dark"] .followup-modal .followup-form-group textarea::placeholder { color: #8893a7 !important; }
+[data-theme="dark"] .followup-modal .followup-form-group input:disabled,
+[data-theme="dark"] .followup-modal .followup-form-group select:disabled {
+  background: #11151f !important;
+  color: #8893a7 !important;
 }

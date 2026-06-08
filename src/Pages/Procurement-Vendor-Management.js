@@ -320,8 +320,8 @@ const KycAddCard = ({ doc, uploaded, onUpload, onMetaChange, onViewFile, onSave 
   const isComplete   = isSaved && isUploaded;
   const canSave      = isUploaded && !isSaved && !isSaving;
 
-  const borderColor = isComplete ? '#86efac' : canSave ? '#93c5fd' : fileRequired && !isUploaded ? '#fcd34d' : '#e2e8f0';
-  const bgColor     = isComplete ? '#f0fdf4' : canSave ? '#eff6ff' : fileRequired && !isUploaded ? '#fffbeb' : '#fff';
+  const borderColor = __sbg(isComplete ? '#86efac' : canSave ? '#93c5fd' : fileRequired && !isUploaded ? '#fcd34d' : '#e2e8f0');
+  const bgColor     = __sbg(isComplete ? '#f0fdf4' : canSave ? '#eff6ff' : fileRequired && !isUploaded ? '#fffbeb' : '#fff');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, border: `1.5px solid ${borderColor}`, borderRadius: 10, background: bgColor, transition: 'border-color .18s' }}>

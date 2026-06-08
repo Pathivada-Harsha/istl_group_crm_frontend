@@ -166,8 +166,8 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         {
           name: 'Inventory Management',
           path: '/inventory-management',
-          permission: 'TASK_MANAGEMENT',
-          icon: 'M9 5l2 2 4-4M7 13h10M7 17h6M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z',
+          permission: 'INVENTORY_MANAGEMENT',
+          icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4',
         },
       ],
     },

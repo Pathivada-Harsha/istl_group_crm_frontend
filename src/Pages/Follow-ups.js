@@ -101,7 +101,7 @@ const FollowUpDatePicker = ({ value, onChange, minDate, placeholder = 'Select da
             d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
         </svg>
         {value
-          ? <span style={{ flex:1, fontSize:14, fontWeight:500, color:'#0f172a' }}>{fmtD(value)}</span>
+          ? <span style={{ flex:1, fontSize:14, fontWeight:500, color:__stc('#0f172a') }}>{fmtD(value)}</span>
           : <span style={{ flex:1, fontSize:14, color:'#94a3b8' }}>{placeholder}</span>}
         {value
           ? <span className="fu-dp-x" onClick={e => { e.stopPropagation(); onChange({ target: { name: '', value: '' } }); }}>
@@ -2327,7 +2327,7 @@ export default function ClientDashboardFollowUps() {
                 )}
 
                 {/* Footer */}
-                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
+                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, }}>
                   <button className="followups-btn followups-btn-secondary" onClick={closeFn}>Close</button>
                   <button className="followups-btn followups-btn-primary" onClick={() => { closeFn(); handleEdit(f); }}>
                     <FiEdit size={13} style={{ marginRight:4 }}/> Edit

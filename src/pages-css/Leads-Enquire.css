@@ -3640,3 +3640,48 @@
    ───────────────────────────────────────────────────────────────────── */
 [data-theme="dark"] .leads-enquiries-table tbody tr:hover      { background-color: var(--c-232c3e, #232c3e); }
 [data-theme="dark"] .leads-enquiries-clickable-row:hover td    { background: var(--c-232c3e, #232c3e) !important; }
+
+/* ============================================================
+   DARK THEME FIXES (scoped; light mode untouched)
+   - Search input: pin surface bg so it matches sibling controls
+   - Columns button + dropdown: force dark surfaces (pin directly)
+   ============================================================ */
+[data-theme="dark"] .leads-enquiries-search-input {
+  background-color: #161b27;
+  color: #e7ecf3;
+  border-color: #2b3445;
+}
+[data-theme="dark"] .leads-enquiries-search-input::placeholder { color: #8893a7; }
+[data-theme="dark"] .leads-enquiries-search-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+[data-theme="dark"] .col-visibility-btn {
+  background-color: #1b2130;
+  border-color: #2b3445;
+  color: #cdd6e3;
+}
+[data-theme="dark"] .col-visibility-btn:hover {
+  background-color: #232b3b;
+  border-color: #3b82f6;
+  color: #7fb0f0;
+}
+[data-theme="dark"] .col-visibility-btn.has-hidden {
+  background-color: #15243d;
+  border-color: #3b82f6;
+  color: #7fb0f0;
+}
+[data-theme="dark"] .col-visibility-dropdown {
+  background: #161b27;
+  border-color: #2b3445;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+[data-theme="dark"] .col-visibility-header {
+  background-color: #1b2130;
+  border-bottom-color: #2b3445;
+}
+[data-theme="dark"] .col-visibility-header span { color: #cdd6e3; }
+[data-theme="dark"] .col-visibility-item:hover { background: #232b3b; }
+[data-theme="dark"] .col-visibility-label { color: #c2cbd8; }
+[data-theme="dark"] .col-required-tag { color: #8893a7; }

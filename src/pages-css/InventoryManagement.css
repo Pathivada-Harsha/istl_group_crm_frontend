@@ -26,14 +26,28 @@
 /* ── Page Header ──────────────────────────────────────────────────────────────── */
 .inv-page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
   gap: 16px;
   flex-wrap: wrap;
 }
-.inv-header-left  { display: flex; align-items: flex-start; gap: 14px; }
-.inv-header-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.inv-header-left  { display: flex; align-items: center; gap: 14px; }
+.inv-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+/* Make GroupSubgroupWarehouseFilter sit inline in header */
+.inv-header-right .group-project-filter,
+.inv-header-right > div[class*="group"] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
 .inv-header-icon {
   width: 44px; height: 44px;
   background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb);
@@ -241,18 +255,27 @@
   font-size: 11px; font-weight: 700;
   white-space: nowrap;
 }
-.inv-view-btn {
-  padding: 3px 9px;
-  border-radius: 6px;
-  border: 1px solid var(--c-e2e8f0, #e2e8f0);
-  background: var(--c-fff, #fff);
-  color: var(--ct-2563eb, #2563eb);
-  font-size: 12px; font-weight: 600;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.inv-view-btn:hover { background: var(--c-eff6ff, #eff6ff); border-color: var(--c-bfdbfe, #bfdbfe); }
 
+.inv-view-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 3px 9px;
+
+    border-radius: 7px;
+    border: 1px solid var(--c-e2e8f0, #e2e8f0);
+
+    background: var(--c-fff, #fff);
+    color: var(--c-2563eb, #2563eb);
+
+    font-size: 12px;
+    font-weight: 600;
+
+    cursor: pointer;
+
+    transition: all 0.15s;
+}
 /* ── Transaction type badge ──────────────────────────────────────────────────────── */
 .inv-txn-type {
   display: inline-flex; align-items: center; gap: 4px;
@@ -414,18 +437,59 @@
 .inv-field--full { grid-column: 1 / -1; }
 .inv-label       { font-size: 12px; font-weight: 700; color: var(--ct-374151, #374151); }
 .inv-req         { color: var(--ct-ef4444, #ef4444); }
-.inv-input, .inv-select, .inv-textarea {
-  width: 100%; padding: 7px 10px;
-  border: 1.5px solid var(--c-e2e8f0, #e2e8f0); border-radius: 7px;
-  font-size: 13px; color: var(--ct-0f172a, #0f172a);
-  outline: none; box-sizing: border-box;
+
+.inv-input,
+.inv-select,
+.inv-textarea {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1.5px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 7px;
+  font-size: 13px;
+  color: var(--ct-0f172a, #0f172a);
+  background-color: #fff;
+  outline: none;
+  box-sizing: border-box;
   transition: border-color 0.15s;
   font-family: inherit;
 }
 .inv-input:focus, .inv-select:focus, .inv-textarea:focus { border-color: var(--c-3b82f6, #3b82f6); }
-.inv-textarea { resize: vertical; }
-.inv-item-hint { font-size: 11px; color: var(--ct-64748b, #64748b); margin-top: 3px; }
+.inv-item-hint {
+  font-size: 11px;
+  color: var(--ct-64748b, #64748b);
+  margin-top: 3px;
+}
+/* Selects: kill native chrome, draw our own chevron, force legible option rows.
+   Without this the native dropdown can render with a dark highlight + invisible
+   text on Windows / dark-mode browsers (the "Select Group" bug). */
+.inv-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  cursor: pointer;
+  padding-right: 30px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='none' stroke='%2364748b' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 12px 8px;
+}
 
+.inv-select:disabled {
+  background-color: #f1f5f9;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.inv-select option {
+  background-color: #fff;
+  color: #0f172a;
+  font-weight: 500;
+  padding: 6px 8px;
+}
+
+.inv-select option:disabled {
+  color: #94a3b8;
+}
 /* ── Transaction type pills ──────────────────────────────────────────────────── */
 .inv-type-pills {
   display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px;
@@ -445,7 +509,7 @@
 
 /* ── Toast ──────────────────────────────────────────────────────────────────────── */
 .inv-toast-stack {
-  position: fixed; bottom: 24px; right: 24px;
+  position: fixed; top: 24px; right: 24px;
   display: flex; flex-direction: column; gap: 8px;
   z-index: 9999;
 }
@@ -563,7 +627,7 @@
 }
 .inv-lineitems-row {
   display: grid;
-  grid-template-columns: 110px 1fr 80px 80px 110px 70px 120px 32px;
+  grid-template-columns: minmax(200px, 1.8fr) minmax(140px, 1fr) 72px 80px 110px 66px 110px 32px;
   gap: 6px;
   align-items: center;
 }
@@ -575,6 +639,13 @@
   letter-spacing: 0.4px;
   padding: 0 4px 4px;
   border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+}
+/* Make the FilterSelect trigger fill its grid cell */
+.inv-lineitems-row .filter-trigger {
+  height: 34px;
+  font-size: 12px;
+  width: 100%;
+  min-width: 0;
 }
 .inv-input--sm {
   padding: 6px 8px !important;
@@ -725,6 +796,7 @@
 .inv-filter-row {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 12px;
   padding: 12px 0 8px;
   flex-wrap: wrap;
@@ -740,4 +812,714 @@
 .inv-filter-hint--error {
   background: var(--c-fee2e2, #fee2e2);
   color: var(--ct-991b1b, #991b1b);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Items table pagination footer — mirrors da- pattern from other pages
+   ═══════════════════════════════════════════════════════════════════════════ */
+.inv-tbl-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 11px 16px;
+  border-top: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 13px;
+  color: #64748b;
+  border-radius: 0 0 10px 10px;
+  margin-bottom: 24px;
+}
+.inv-pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #64748b;
+}
+.inv-pagination-info strong { color: #0f172a; }
+.inv-page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+  color: #1e293b;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+}
+.inv-page-size-select:focus { border-color: #2563eb; }
+.inv-pagination {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.inv-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: pointer;
+  transition: background .12s, color .12s, border-color .12s;
+  font-family: inherit;
+}
+.inv-page-btn:hover:not(:disabled) {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+.inv-page-btn.active {
+  background: #2563eb;
+  color: #fff;
+  border-color: #2563eb;
+}
+.inv-page-btn:disabled { opacity: .38; cursor: not-allowed; }
+
+/* Filter row — let the GroupProjectFilter handle its own alignment */
+.inv-filter-row {
+  padding: 8px 0 4px;
+}
+.inv-filter-row .group-project-filter {
+  margin-left: 0;  /* override the default margin-left: auto */
+}
+
+@media (max-width: 600px) {
+  .inv-tbl-footer   { flex-direction: column; align-items: flex-start; }
+  .inv-pagination   { flex-wrap: wrap; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Add Item Modal — scope section (Group → Sub-Group → Warehouse)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.inv-scope-section {
+  padding: 14px;
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  margin-bottom: 4px;
+}
+.inv-scope-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #475569;
+  margin-bottom: 12px;
+}
+.inv-muted-sm {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: #94a3b8;
+  font-size: 10.5px;
+  margin-left: 4px;
+}
+.inv-scope-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
+.inv-scope-select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.inv-scope-select-wrap .inv-select { flex: 1; }
+.inv-scope-spinner {
+  position: absolute;
+  right: 32px;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e2e8f0;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: inv-spin 0.7s linear infinite;
+  pointer-events: none;
+}
+@keyframes inv-spin { to { transform: rotate(360deg); } }
+
+/* Resolved scope breadcrumb */
+.inv-scope-resolved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+.inv-scope-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+}
+.inv-scope-chip--active {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+.inv-scope-arrow {
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+@media (max-width: 640px) {
+  .inv-scope-grid { grid-template-columns: 1fr; }
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   Add-Item modal: Single / Bulk mode toggle + bulk entry grid
+   ═══════════════════════════════════════════════════════════════════════════ */
+.inv-mode-toggle {
+  display: inline-flex;
+  background: #f1f5f9;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+  margin-top: 8px;
+}
+.inv-mode-btn {
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+}
+.inv-mode-btn--active {
+  background: #fff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 2px rgba(15,23,42,0.08);
+}
+
+.inv-bulk-wrap { margin-top: 16px; }
+.inv-bulk-toolbar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.inv-bulk-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #64748b;
+  font-weight: 600;
+}
+.inv-bulk-count strong { color: #0f172a; }
+
+.inv-bulk-scroll {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: auto;
+  max-height: 46vh;
+}
+.inv-bulk-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12.5px;
+  min-width: 920px;
+}
+.inv-bulk-table thead th {
+  position: sticky; top: 0; z-index: 2;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  padding: 8px 8px;
+  border-bottom: 1.5px solid #e2e8f0;
+  white-space: nowrap;
+}
+.inv-bulk-table th .inv-req { color: #ef4444; }
+.inv-bulk-table tbody td {
+  padding: 5px 6px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+.inv-bulk-table tbody tr:last-child td { border-bottom: none; }
+.inv-bulk-rownum {
+  text-align: center; color: #94a3b8; font-weight: 600;
+  width: 34px;
+}
+.inv-bulk-table .inv-input,
+.inv-bulk-table .inv-select {
+  padding: 5px 8px;
+  font-size: 12.5px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.inv-bulk-table .inv-select { padding-right: 26px; background-position: right 8px center; }
+.inv-bulk-table .inv-input:focus,
+.inv-bulk-table .inv-select:focus { border-color: #3b82f6; }
+.inv-bulk-row--error .inv-bulk-cell-key .inv-input { border-color: #fca5a5; background: #fef2f2; }
+.inv-bulk-remove {
+  background: none; border: none; cursor: pointer;
+  color: #cbd5e1; font-size: 15px; padding: 2px 4px; line-height: 1;
+  border-radius: 5px;
+}
+.inv-bulk-remove:hover { color: #ef4444; background: #fef2f2; }
+.inv-bulk-rowmsg {
+  color: #b91c1c; font-size: 11px; padding: 2px 8px 8px 40px;
+}
+
+/* sensible widths for bulk columns */
+.inv-bulk-col-code  { width: 120px; }
+.inv-bulk-col-name  { min-width: 200px; }
+.inv-bulk-col-cat   { width: 130px; }
+.inv-bulk-col-unit  { width: 90px; }
+.inv-bulk-col-num   { width: 86px; }
+.inv-bulk-col-proj  { width: 140px; }
+.inv-bulk-col-note  { min-width: 150px; }
+.inv-bulk-col-x     { width: 34px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   FilterSelect overrides — match inv-select height/style inside modal fields.
+   filter-trigger is normally 220px fixed; inside .inv-field it must fill 100%.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.inv-field .filter-trigger {
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  box-sizing: border-box;
+  font-size: 13px;
+  font-family: inherit;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 7px;
+  background-color: #fff;
+  color: #0f172a;
+  padding: 0 30px 0 10px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.inv-field .filter-trigger:hover:not(.filter-trigger--disabled) {
+  border-color: #cbd5e1;
+  box-shadow: none;
+}
+.inv-field .filter-trigger--open {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12) !important;
+}
+.inv-field .filter-trigger--has-value { color: #0f172a; font-weight: 500; }
+.inv-field .filter-trigger--disabled  { background-color: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; }
+.inv-field .filter-trigger__text { font-size: 13px; }
+.inv-field .filter-trigger__text--placeholder { color: #94a3b8; font-style: normal; font-weight: 400; }
+.inv-field .filter-trigger__chevron { color: #64748b; }
+/* Dropdown list — use 13px font, match inv page tokens */
+.inv-modal .filter-dropdown-list {
+  font-size: 13px;
+  border-radius: 8px;
+  border: 1.5px solid #3b82f6;
+}
+.inv-modal .filter-dropdown-item { font-size: 13px; padding: 8px 12px; }
+.inv-modal .filter-dropdown-item--selected { background: #eff6ff; color: #1d4ed8; border-left: 3px solid #3b82f6; }
+.inv-modal .filter-dropdown-search-wrapper { padding: 8px 8px 6px; }
+.inv-modal .filter-dropdown-search-input { font-size: 13px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Row action buttons (Edit / Delete)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.inv-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+/* ── Icon-style action buttons — matches CRM page pattern ── */
+.inv-icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  background: transparent;
+  transition: background 0.12s, border-color 0.12s, transform 0.1s;
+  padding: 0;
+  flex-shrink: 0;
+}
+.inv-icon-action:hover { transform: translateY(-1px); }
+
+.inv-icon-action--view   { color: #3b82f6; }
+.inv-icon-action--view:hover   { background: #eff6ff; border-color: #bfdbfe; }
+
+.inv-icon-action--edit   { color: #059669; }
+.inv-icon-action--edit:hover   { background: #ecfdf5; border-color: #6ee7b7; }
+
+.inv-icon-action--delete { color: #ef4444; }
+.inv-icon-action--delete:hover { background: #fef2f2; border-color: #fecaca; }
+
+.inv-icon-action--void   { color: #f59e0b; }
+.inv-icon-action--void:hover   { background: #fffbeb; border-color: #fde68a; }
+
+/* ── Column Visibility Dropdown ──────────────────────────────────────────────── */
+.col-visibility-wrapper {
+  position: relative;
+}
+.col-visibility-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  height: 36px;
+}
+.col-visibility-btn:hover {
+  background-color: #f9fafb;
+  border-color: #2563eb;
+  color: #2563eb;
+}
+.col-visibility-btn.has-hidden {
+  border-color: #2563eb;
+  color: #2563eb;
+  background-color: #eff6ff;
+}
+.col-visibility-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background-color: #2563eb;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+.col-visibility-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 200;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  min-width: 200px;
+  overflow: hidden;
+  animation: invDropdownReveal 0.15s ease-out;
+}
+@keyframes invDropdownReveal {
+  from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.col-visibility-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  background-color: #f9fafb;
+}
+.col-visibility-header span {
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.col-visibility-reset {
+  background: none;
+  border: none;
+  font-size: 11px;
+  font-family: inherit;
+  color: #2563eb;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+.col-visibility-reset:hover { background-color: #dbeafe; }
+.col-visibility-list {
+  padding: 6px 0;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.col-visibility-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+  user-select: none;
+}
+.col-visibility-item:hover:not(.col-required) { background-color: #f9fafb; }
+.col-visibility-item.col-required { opacity: 0.6; cursor: not-allowed; }
+.col-visibility-item input[type="checkbox"] {
+  width: 14px; height: 14px;
+  accent-color: #2563eb;
+  cursor: pointer; flex-shrink: 0;
+}
+.col-visibility-item input[type="checkbox"]:disabled { cursor: not-allowed; }
+.col-visibility-label { font-size: 13px; color: #374151; font-family: inherit; flex: 1; }
+.col-required-tag {
+  font-size: 9px; font-weight: 600; color: #6b7280;
+  background-color: #f3f4f6; padding: 1px 5px;
+  border-radius: 3px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+
+/* ── Draggable Column Headers ──────────────────────────────────────────────── */
+.th-content {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-start;
+}
+.sort-icon { flex-shrink: 0; transition: all 0.2s; }
+.sort-icon-default { opacity: 0.3; }
+.sort-icon-active  { opacity: 1; stroke: #2563eb; }
+.inv-table th:hover .sort-icon-default { opacity: 0.6; }
+
+.col-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  color: #9ca3af;
+  margin-right: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.inv-table th.col-draggable:hover .col-drag-handle { opacity: 1; }
+.inv-table th.col-draggable { transition: background-color 0.15s, box-shadow 0.15s; }
+.inv-table th.col-draggable:hover { background-color: #eff6ff; cursor: grab; }
+.inv-table th.col-draggable:active { cursor: grabbing; }
+.inv-table th.col-dragging {
+  opacity: 0.5;
+  background-color: #dbeafe !important;
+  box-shadow: inset 0 0 0 2px #2563eb;
+}
+.inv-table th.col-drag-over {
+  background-color: #dbeafe !important;
+  box-shadow: -3px 0 0 0 #2563eb;
+  position: relative;
+}
+.inv-table th.col-drag-over::before {
+  content: '';
+  position: absolute;
+  left: -2px; top: 0; bottom: 0;
+  width: 3px;
+  background-color: #2563eb;
+  border-radius: 2px;
+  animation: invDropIndicatorPulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes invDropIndicatorPulse {
+  from { opacity: 0.7; }
+  to   { opacity: 1; }
+}
+.inv-table th, .inv-table td { transition: background-color 0.2s; }
+
+/* ── FilterSelect trigger styling (inherits from GroupProjectFilter.css) ─── */
+/* Ensure filter-trigger matches inv-page height */
+.inv-search-filters .filter-trigger,
+.inv-action-right .filter-trigger {
+  height: 36px;
+  min-width: 120px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.inv-header-right .filter-trigger {
+  height: 36px;
+  font-size: 13px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   COLUMN ALIGNMENT — unified via data-col on both th and td
+   ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* ── S.No ─────────────────────────────────────────────────────────────────────── */
+.inv-table th[data-col="idx"],
+.inv-table td[data-col="idx"] {
+  width: 56px;
+  min-width: 56px;
+  max-width: 56px;
+  text-align: center !important;
+}
+
+/* ── Center-aligned columns ───────────────────────────────────────────────────── */
+.inv-table th[data-col="category"],  .inv-table td[data-col="category"],
+.inv-table th[data-col="currentQty"],.inv-table td[data-col="currentQty"],
+.inv-table th[data-col="unit"],      .inv-table td[data-col="unit"],
+.inv-table th[data-col="qty"],       .inv-table td[data-col="qty"],
+.inv-table th[data-col="status"],    .inv-table td[data-col="status"],
+.inv-table th[data-col="type"],      .inv-table td[data-col="type"],
+.inv-table th[data-col="mode"],      .inv-table td[data-col="mode"] {
+  text-align: center !important;
+}
+
+/* ── Right-aligned columns ────────────────────────────────────────────────────── */
+.inv-table th[data-col="unitCost"],   .inv-table td[data-col="unitCost"],
+.inv-table th[data-col="totalValue"], .inv-table td[data-col="totalValue"],
+.inv-table th[data-col="amount"],     .inv-table td[data-col="amount"],
+.inv-table th[data-col="paid"],       .inv-table td[data-col="paid"],
+.inv-table th[data-col="balance"],    .inv-table td[data-col="balance"],
+.inv-table th[data-col="total"],      .inv-table td[data-col="total"] {
+  text-align: right !important;
+  padding-right: 16px;
+}
+
+/* ── Actions column ───────────────────────────────────────────────────────────── */
+.inv-table th[data-col="actions"],
+.inv-table td[data-col="actions"] {
+  width: 100px;
+  min-width: 100px;
+  text-align: center !important;
+}
+.inv-table td[data-col="actions"] .inv-row-actions {
+  justify-content: center;
+}
+
+/* ── Left-aligned columns (explicit, overrides any other rules) ───────────────── */
+.inv-table th[data-col="itemCode"],   .inv-table td[data-col="itemCode"],
+.inv-table th[data-col="name"],       .inv-table td[data-col="name"],
+.inv-table th[data-col="location"],   .inv-table td[data-col="location"],
+.inv-table th[data-col="lastUpdated"],.inv-table td[data-col="lastUpdated"],
+.inv-table th[data-col="date"],       .inv-table td[data-col="date"],
+.inv-table th[data-col="itemName"],   .inv-table td[data-col="itemName"],
+.inv-table th[data-col="ref"],        .inv-table td[data-col="ref"],
+.inv-table th[data-col="projectId"],  .inv-table td[data-col="projectId"],
+.inv-table th[data-col="note"],       .inv-table td[data-col="note"],
+.inv-table th[data-col="by"],         .inv-table td[data-col="by"],
+.inv-table th[data-col="poNumber"],   .inv-table td[data-col="poNumber"],
+.inv-table th[data-col="vendor"],     .inv-table td[data-col="vendor"],
+.inv-table th[data-col="progress"],   .inv-table td[data-col="progress"],
+.inv-table th[data-col="billNumber"], .inv-table td[data-col="billNumber"],
+.inv-table th[data-col="vendorName"], .inv-table td[data-col="vendorName"],
+.inv-table th[data-col="poNumber"],   .inv-table td[data-col="poNumber"],
+.inv-table th[data-col="billDate"],   .inv-table td[data-col="billDate"],
+.inv-table th[data-col="dueDate"],    .inv-table td[data-col="dueDate"],
+.inv-table th[data-col="paymentNumber"],.inv-table td[data-col="paymentNumber"],
+.inv-table th[data-col="billRef"],    .inv-table td[data-col="billRef"],
+.inv-table th[data-col="reference"],  .inv-table td[data-col="reference"] {
+  text-align: left !important;
+}
+
+/* Ensure th-content flex respects column alignment ──────────────────────────── */
+.inv-table th .th-content {
+  width: 100%;
+}
+
+/* ── PO View Modal (centered, replaces side drawer) ─────────────────────────── */
+.inv-modal--po {
+  width: min(860px, 95vw);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* KPI strip */
+.inv-po-modal-kpis {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1px;
+  background: #e2e8f0;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.inv-po-modal-kpi {
+  background: #fff;
+  padding: 14px 16px;
+}
+.inv-po-modal-kpi-val {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.inv-po-modal-kpi-lbl {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 3px;
+}
+
+/* Section */
+.inv-po-modal-section {
+  margin-bottom: 20px;
+}
+.inv-po-modal-section:last-child {
+  margin-bottom: 0;
+}
+.inv-po-modal-section-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* Details grid */
+.inv-po-modal-details-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+}
+.inv-po-modal-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inv-po-modal-detail-item--full {
+  grid-column: 1 / -1;
+}
+.inv-po-modal-detail-lbl {
+  font-size: 11px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.inv-po-modal-detail-val {
+  font-size: 13px;
+  color: #1e293b;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .inv-po-modal-kpis         { grid-template-columns: repeat(2, 1fr); }
+  .inv-po-modal-details-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Bill / Payment View Modal ───────────────────────────────────────────────── */
+.inv-modal--bill-view {
+  width: min(620px, 95vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
 }
