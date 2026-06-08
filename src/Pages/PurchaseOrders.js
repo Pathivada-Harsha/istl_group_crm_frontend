@@ -1127,9 +1127,9 @@ const PurchaseOrders = () => {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ status: newStatus })
       });
-      if (!r.ok) throw new Error();
+      if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.message || 'Failed to update status'); }
       showSuccess(`PO status updated to ${newStatus}`); fetchPurchaseOrders(); fetchStats(); setShowDetailDrawer(false);
-    } catch { showError('Failed to update PO status'); }
+    } catch (err) { showError(err.message || 'Failed to update PO status'); }
     finally { setLoading(false); }
   };
 
@@ -1336,6 +1336,7 @@ const PurchaseOrders = () => {
         await handleUploadPOFile(savedId);
       }
       showSuccess(`PO ${result.poRefId || result.data?.poRefId || result.poNo || result.data?.poNo} ${isEditMode ? 'updated' : 'created'} successfully!`);
+      if (result.statusWarning) showWarning(result.statusWarning);
       handleCloseCreatePOModal(); fetchPurchaseOrders(); fetchStats();
     } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
     finally { setLoading(false); }
@@ -2550,13 +2551,16 @@ const PurchaseOrders = () => {
                       <label>Status</label>
                       <FilterSelect
                         value={createPOFormData.status || 'Draft'}
-                        options={[
+                        options={isEditMode ? [
                           { value: 'Draft',      label: 'Draft' },
                           { value: 'Approved',   label: 'Approved' },
                           { value: 'Ordered',    label: 'Ordered' },
                           { value: 'In-Transit', label: 'In-Transit' },
                           { value: 'Delivered',  label: 'Delivered' },
                           { value: 'Cancelled',  label: 'Cancelled' },
+                        ] : [
+                          { value: 'Draft',    label: 'Draft' },
+                          { value: 'Approved', label: 'Approved' },
                         ]}
                         placeholder="Select Status"
                         onChange={(v) => setCreatePOFormData(prev => ({ ...prev, status: v }))}

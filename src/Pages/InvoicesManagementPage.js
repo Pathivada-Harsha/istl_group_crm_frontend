@@ -216,6 +216,7 @@ const InvoicesManagementPage = () => {
     { key: 'status',         label: 'Status' },
     { key: 'invoiceDate',    label: 'Invoice Date' },
     { key: 'dueDate',        label: 'Due Date' },
+    { key: 'ageing',         label: 'Ageing (Days)' },
   ];
   const [columnOrder, setColumnOrder] = useState(INVOICE_COLUMNS.map(c => c.key));
   const [visibleColumns, setVisibleColumns] = useState(INVOICE_COLUMNS.map(c => c.key));
@@ -1152,6 +1153,11 @@ const fetchStats = async () => {
       return;
     }
 
+    if (!formData.dueDate) {
+      showError('Due date is required');
+      return;
+    }
+
     if (formData.items.length === 0 || !formData.items[0].description) {
       showError('Please add at least one item');
       return;
@@ -1746,6 +1752,31 @@ const fetchStats = async () => {
                     );
                     if (key === 'invoiceDate')   return <td key={key}>{formatDate(invoice.invoiceDate)}</td>;
                     if (key === 'dueDate')       return <td key={key}>{formatDate(invoice.dueDate)}</td>;
+                    if (key === 'ageing') {
+                      const invDate = invoice.invoiceDate ? new Date(invoice.invoiceDate) : null;
+                      const dueDate = invoice.dueDate     ? new Date(invoice.dueDate)     : null;
+                      const compareDate = dueDate || new Date();
+                      if (!invDate) return <td key={key} style={{ textAlign: 'center', color: '#94a3b8' }}>—</td>;
+                      const days = Math.floor((compareDate - invDate) / 86400000);
+                      const isPaid      = ['Paid','PAID'].includes(invoice.status);
+                      const isCancelled = ['Cancelled','CANCELLED'].includes(invoice.status);
+                      const isOverdue   = !isPaid && !isCancelled && compareDate < new Date();
+                      return (
+                        <td key={key} style={{ textAlign: 'center' }}>
+                          <span style={{
+                            display: 'inline-block',
+                            padding: '2px 10px',
+                            borderRadius: 12,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            background: isPaid || isCancelled ? '#f1f5f9' : isOverdue ? '#fee2e2' : '#dbeafe',
+                            color:      isPaid || isCancelled ? '#64748b'  : isOverdue ? '#991b1b' : '#1e40af',
+                          }}>
+                            {days} day{days !== 1 ? 's' : ''}
+                          </span>
+                        </td>
+                      );
+                    }
                     return <td key={key}>—</td>;
                   })}
                   <td>
@@ -2186,7 +2217,7 @@ const fetchStats = async () => {
                       />
                     </div>
                     <div className="Invoices-page-form-group">
-                      <label>Due Date</label>
+                      <label>Due Date <span style={{ color: '#ef4444' }}>*</span></label>
                       <InvDatePicker
                         value={formData.dueDate}
                         onChange={v => setFormData({ ...formData, dueDate: v })}

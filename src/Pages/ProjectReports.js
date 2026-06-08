@@ -51,6 +51,95 @@ const KPI = ({ label, value, sub, color = '#2563eb', icon }) => (
   </div>
 );
 
+// ─── Warehouse Report Tab component ──────────────────────────────────────────
+// Must be a named component (not an inline render fn) so useState is valid.
+function WarehouseReportTab({ wh, fmtShort }) {
+  const [tab, setTab] = React.useState('outward');
+  const outRows = (wh && wh.outwardTransactions) || [];
+  const inRows  = (wh && wh.inwardTransactions)  || [];
+
+  const tabBtn = (id, label, count) => (
+    <button key={id} onClick={() => setTab(id)}
+      className={`pr-tab ${tab === id ? 'pr-tab--active' : ''}`}
+      style={{ padding:'6px 18px', fontSize:13 }}>
+      {label} <span style={{ marginLeft:4, background: tab===id?'rgba(255,255,255,0.25)':'#f1f5f9', borderRadius:99, padding:'1px 7px', fontSize:11, fontWeight:700 }}>{count}</span>
+    </button>
+  );
+
+  const TxnTable = ({ rows, isOutward }) => rows.length === 0
+    ? <div className="pr-empty" style={{ padding:'32px 0', textAlign:'center', color:'#94a3b8' }}>
+        No {isOutward ? 'outward (issued)' : 'inward (returned)'} transactions recorded
+      </div>
+    : <div style={{ overflowX:'auto' }}>
+        <table className="pr-table">
+          <thead>
+            <tr>
+              <th>Txn No</th><th>Date</th><th>Item Code</th><th>Item Name</th>
+              <th>Warehouse</th><th className="pr-td-num">Qty</th>
+              {isOutward && <><th className="pr-td-num">Unit Cost (₹)</th><th className="pr-td-num">Value (₹)</th></>}
+              <th>Ref</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={i}>
+                <td className="pr-td-mono" style={{ fontSize:11.5 }}>{r.txnNo||'—'}</td>
+                <td style={{ whiteSpace:'nowrap' }}>{r.txnDate||'—'}</td>
+                <td className="pr-td-mono" style={{ fontSize:11.5 }}>{r.itemCode||'—'}</td>
+                <td style={{ fontWeight:500 }}>{r.itemName||'—'}</td>
+                <td style={{ color:'#64748b' }}>{r.warehouseName||'—'}</td>
+                <td className="pr-td-num" style={{ fontWeight:600, color: isOutward ? '#1e40af' : '#15803d' }}>
+                  {Number(r.qty||0).toLocaleString('en-IN')} <small style={{ fontWeight:400, color:'#94a3b8' }}>{r.unit}</small>
+                </td>
+                {isOutward && <>
+                  <td className="pr-td-num">{fmtShort(r.unitCost)}</td>
+                  <td className="pr-td-num" style={{ fontWeight:700 }}>{fmtShort(r.lineValue)}</td>
+                </>}
+                <td style={{ fontSize:11, color:'#64748b' }}>{r.refNo||'—'}</td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr style={{ fontWeight:700, background:'#f8fafc' }}>
+              <td colSpan={5} style={{ padding:'10px 14px', borderTop:'2px solid #e2e8f0' }}>
+                Total — {rows.length} transaction{rows.length!==1?'s':''}
+              </td>
+              <td className="pr-td-num" style={{ borderTop:'2px solid #e2e8f0', color: isOutward?'#1e40af':'#15803d' }}>
+                {Number(isOutward ? (wh.totalQtyIssued||0) : (wh.totalQtyReturned||0)).toLocaleString('en-IN')}
+              </td>
+              {isOutward && <>
+                <td style={{ borderTop:'2px solid #e2e8f0' }}/>
+                <td className="pr-td-num" style={{ borderTop:'2px solid #e2e8f0' }}>{fmtShort(wh.totalIssuanceValue)}</td>
+              </>}
+              <td style={{ borderTop:'2px solid #e2e8f0' }}/>
+            </tr>
+          </tfoot>
+        </table>
+      </div>;
+
+  return (
+    <div className="pr-section">
+      <div className="pr-kpi-row" style={{ marginBottom:16 }}>
+        <KPI label="Issued to Site" value={wh.totalOutwardTxns||0} sub={`Qty: ${Number(wh.totalQtyIssued||0).toLocaleString('en-IN')}`} color="#3b82f6" icon={<Package size={20}/>} />
+        <KPI label="Issuance Value" value={fmtShort(wh.totalIssuanceValue)} sub={`${wh.warehouseBillCount||0} warehouse bill(s)`} color="#8b5cf6" icon={<IndianRupee size={20}/>} />
+        <KPI label="Returned from Site" value={wh.totalInwardTxns||0} sub={`Qty: ${Number(wh.totalQtyReturned||0).toLocaleString('en-IN')}`} color="#22c55e" icon={<Package size={20}/>} />
+        <KPI label="Return Value" value={fmtShort(wh.totalReturnValue)} sub="Credit back to project" color="#059669" icon={<IndianRupee size={20}/>} />
+      </div>
+      <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12.5, color:'#166534' }}>
+        <strong>Cost impact:</strong> Issuance value (<strong>{fmtShort(wh.totalIssuanceValue)}</strong>) is included in Amount Spent via auto-generated warehouse bills.
+        Return value (<strong>{fmtShort(wh.totalReturnValue)}</strong>) is credited back in the profitability calculation.
+        Net warehouse cost = <strong>{fmtShort(Math.max(0, (parseFloat(wh.totalIssuanceValue)||0) - (parseFloat(wh.totalReturnValue)||0)))}</strong>.
+      </div>
+      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+        {tabBtn('outward', '↑ Issued to Site', outRows.length)}
+        {tabBtn('inward',  '↓ Returned from Site', inRows.length)}
+      </div>
+      {tab === 'outward' && <TxnTable rows={outRows} isOutward={true}  />}
+      {tab === 'inward'  && <TxnTable rows={inRows}  isOutward={false} />}
+    </div>
+  );
+}
+
 // ─── useInView hook — fires once when element enters viewport ─────────────────
 const useInView = (threshold = 0.25) => {
   const ref = useRef(null);
@@ -1435,6 +1524,10 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     );
   };
 
+  const renderWarehouse = () => (
+    <WarehouseReportTab wh={report?.warehouse || {}} fmtShort={fmtShort} />
+  );
+
   const renderProfitability = () => {
     const prof = report?.profitability || {};
     const ov2  = report?.overview || {};
@@ -1443,6 +1536,7 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     const isCompleted  = prof.isCompleted === true;
     const statusLabel  = ov2?.status || '';
     const netGST       = parseFloat(prof.additionalGST) || 0;
+    const inwardRecovery = parseFloat(prof.inwardRecoveryValue) || 0;
     // Color helpers
     const profitColor  = isLoss ? '#dc2626' : '#059669';
     const profitBg     = isLoss ? '#fef2f2' : '#f0fdf4';
@@ -1451,7 +1545,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
       <div className="pr-section">
         {/* Formula note */}
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 12.5, color: '#475569' }}>
-          <strong>Profit formula:</strong>&nbsp; Received from Clients &minus; Bills Paid to Vendors &minus; Approved Expenses &minus; Net GST = Net Profit
+          <strong>Profit formula:</strong>&nbsp; Received from Clients &minus; Bills Paid to Vendors &minus; Approved Expenses &minus; Net GST
+          {inwardRecovery > 0 && <> + Inward Recovery (returned materials)</>} = Net Profit
         </div>
         {/* Status-aware context note */}
         {!isCompleted && (
@@ -1472,6 +1567,7 @@ tbody tr:nth-child(even) td{background:#f9fafb}
           <KPI label="Bills Paid to Vendors" value={fmtShort(prof.paidBillValue ?? prof.totalProcurement)} sub="Actual payments made" color="#ea580c" icon={<Package size={20}/>} />
           <KPI label="Project Expenses" value={fmtShort(prof.projectExpenses)} sub="Approved employee expenses" color="#dc2626" icon={<AlertCircle size={20}/>} />
           <KPI label="Net GST Deducted" value={fmtShort(prof.additionalGST)} sub="Invoice GST − Vendor GST" color="#d97706" icon={<BarChart2 size={20}/>} />
+          {inwardRecovery > 0 && <KPI label="Inward Recovery" value={fmtShort(inwardRecovery)} sub="Materials returned from site" color="#059669" icon={<Package size={20}/>} />}
           <KPI label={isLoss ? 'Net Loss' : 'Net Profit'} value={fmtShort(Math.abs(netProfit))} sub={(isLoss ? 'In Loss — ' : '') + pct(Math.abs(parseFloat(prof.netMarginPercent)||0)) + ' margin'} color={profitColor} icon={<TrendingUp size={20}/>} />
         </div>
         <div className="pr-profit-breakdown">
@@ -1491,6 +1587,12 @@ tbody tr:nth-child(even) td{background:#f9fafb}
             <span style={{ color: '#92400e' }}>− Net GST <small style={{ fontWeight: 400, color: '#78716c' }}>(Invoice GST − Vendor GST, always deducted)</small></span>
             <span className="pr-red" style={{flexShrink:0,textAlign:'right',minWidth:140}}>− {fmt(prof.additionalGST)}</span>
           </div>
+          {inwardRecovery > 0 && (
+            <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: '3px solid #22c55e', background: '#f0fdf4' }}>
+              <span style={{ color: '#15803d' }}>+ Inward Recovery <small style={{ fontWeight: 400, color: '#6b7280' }}>(materials returned from site to warehouse)</small></span>
+              <span className="pr-green" style={{flexShrink:0,textAlign:'right',minWidth:140}}>+ {fmt(inwardRecovery)}</span>
+            </div>
+          )}
           <div className="pr-breakdown-row pr-breakdown-final" style={{ background: profitBg, borderTop: `2px solid ${profitBorder}` }}>
             <span style={{ color: profitColor, fontWeight: 700 }}>
               {isLoss ? '= In Loss' : '= Net Profit'}
@@ -1564,6 +1666,7 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     { id: 'billing',        label: 'Billing & Receipts', icon: <FileText size={15}/> },
     { id: 'procurement',    label: 'Procurement',        icon: <Package size={15}/> },
     { id: 'expenses',       label: 'Project Expenses',   icon: <AlertCircle size={15}/> },
+    { id: 'warehouse',      label: 'Warehouse',          icon: <Package size={15}/> },
     { id: 'profitability',  label: 'Profitability',      icon: <TrendingUp size={15}/> },
   ];
 
@@ -1672,7 +1775,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
             {activeTab === 'billing'       && renderBilling()}
             {activeTab === 'procurement'   && renderProcurement()}
             {activeTab === 'profitability' && renderProfitability()}
-            {activeTab === 'expenses'       && renderExpenses()}
+            {activeTab === 'expenses'      && renderExpenses()}
+            {activeTab === 'warehouse'     && renderWarehouse()}
           </div>
         </div>
       ) : (

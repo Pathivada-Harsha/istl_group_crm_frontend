@@ -1664,7 +1664,13 @@ const BillsManagementPage = () => {
                   <tr key={bill.id} className="procurement-bills-received-table-row">
                     {orderedVisibleCols.map(key => {
                       if (key === 'billRefId')       return <td key={key} className="procurement-bills-received-table-id">{bill.billRefId || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
-                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{bill.vendorName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>}</td>;
+                      if (key === 'vendorName')     return <td key={key} className="procurement-bills-received-table-vendor">{
+                        bill.sourceType === 'WAREHOUSE'
+                          ? <span style={{ display:'flex', alignItems:'center', gap:4, color:'#7c3aed', fontWeight:500 }}>
+                              <span>🏭</span>{bill.warehouseName || 'Warehouse'}
+                            </span>
+                          : (bill.vendorName || <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>)
+                      }</td>;
                       if (key === 'poNumber')       return (
                         <td key={key}>
                           {bill.poRefId || bill.poNumber
@@ -2269,7 +2275,13 @@ const BillsManagementPage = () => {
             <div className="procurement-bills-received-drawer-header">
               <div>
                 <h2>{selectedBill.billNo}</h2>
-                <p className="procurement-bills-received-drawer-vendor">{selectedBill.vendorName}</p>
+                <p className="procurement-bills-received-drawer-vendor">
+                  {selectedBill.sourceType === 'WAREHOUSE'
+                    ? <span style={{ display:'flex', alignItems:'center', gap:5, color:'#7c3aed', fontWeight:600 }}>
+                        🏭 {selectedBill.warehouseName || 'Warehouse'} <span style={{ fontWeight:400, color:'#6b7280', fontSize:12 }}>(Warehouse Issuance)</span>
+                      </span>
+                    : selectedBill.vendorName}
+                </p>
               </div>
               <button className="procurement-bills-received-drawer-close" onClick={() => setShowDetailDrawer(false)}>
                 <X size={24} />
@@ -2426,6 +2438,13 @@ const BillsManagementPage = () => {
                     </table>
                   </>
                 )}
+
+                {/* Warehouse issuance — info note only (payment recorded in Payment History above) */}
+                {selectedBill.sourceType === 'WAREHOUSE' && (
+                  <div style={{ marginTop: 12, padding: '8px 10px', background: '#ede9fe', borderRadius: 6, fontSize: 12, color: '#6d28d9', border: '1px solid #ddd6fe' }}>
+                    ℹ️ This bill was auto-generated when items were issued from <strong>{selectedBill.warehouseName || 'warehouse'}</strong>. Since the stock was already purchased via a vendor PO, the balance is <strong>₹0.00</strong> — no further payment is needed.
+                  </div>
+                )}
               </div>
 
               {/* Bill Document */}
@@ -2469,14 +2488,16 @@ const BillsManagementPage = () => {
 
               {/* Action Buttons */}
               <div className="procurement-bills-received-drawer-actions">
-                <button
-                  className="procurement-bills-received-btn-secondary"
-                  onClick={() => handleEditBill(selectedBill)}
-                >
-                  <Edit2 size={18} style={{ marginRight: '8px' }} />
-                  Edit Bill
-                </button>
-                {selectedBill.status !== 'Paid' && (
+                {selectedBill.sourceType !== 'WAREHOUSE' && (
+                  <button
+                    className="procurement-bills-received-btn-secondary"
+                    onClick={() => handleEditBill(selectedBill)}
+                  >
+                    <Edit2 size={18} style={{ marginRight: '8px' }} />
+                    Edit Bill
+                  </button>
+                )}
+                {selectedBill.status !== 'Paid' && selectedBill.sourceType !== 'WAREHOUSE' && (
                   <>
                     <button
                       className="procurement-bills-received-btn-primary"
@@ -2496,6 +2517,11 @@ const BillsManagementPage = () => {
                       Mark Fully Paid
                     </button>
                   </>
+                )}
+                {selectedBill.sourceType === 'WAREHOUSE' && (
+                  <div style={{ padding: '8px 12px', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 6, fontSize: 12, color: '#7c3aed', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CheckCircle size={14} /> Auto-paid from warehouse stock — no payment action needed
+                  </div>
                 )}
                 {selectedBill.billFilePath && (
                   <button
@@ -2530,7 +2556,12 @@ const BillsManagementPage = () => {
                   <label>Bill:</label>
                   <span><strong>{selectedBill.billNo}</strong></span>
                 </div>
-                {selectedBill.vendorName && (
+                {selectedBill.sourceType === 'WAREHOUSE' ? (
+                  <div className="procurement-bills-received-info-item">
+                    <label>Warehouse:</label>
+                    <span style={{ color:'#7c3aed', fontWeight:600 }}>🏭 {selectedBill.warehouseName || 'Warehouse'}</span>
+                  </div>
+                ) : selectedBill.vendorName && (
                   <div className="procurement-bills-received-info-item">
                     <label>Vendor:</label>
                     <span>{selectedBill.vendorName}</span>

@@ -7,7 +7,7 @@ import {
   FiEdit2, FiTrash2, FiLayers, FiGitBranch,
   FiBriefcase, FiCheckCircle, FiXCircle, FiRefreshCw,
   FiSearch, FiSave, FiX, FiChevronLeft, FiChevronRight,
-  FiChevronsLeft, FiChevronsRight,
+  FiChevronsLeft, FiChevronsRight, FiHome,
 } from 'react-icons/fi';
 
 const API = process.env.REACT_APP_API_URL;
@@ -60,7 +60,10 @@ const DropdownAdminPage = () => {
   /* ── Form dropdown data (always full list) ─────────────────────── */
   const [availableGroups,    setAvailableGroups]    = useState([]);
   const [availableSubGroups, setAvailableSubGroups] = useState([]);
+  const [availableProjects,  setAvailableProjects]  = useState([]);
   const [filteredSubs,       setFilteredSubs]       = useState([]);
+  // Sub-groups derived from the group picked in the warehouse form
+  const [filteredSubsWh,     setFilteredSubsWh]     = useState([]);
 
   /* Derived: sub-groups of the group selected in the Projects tab filter.
      Must be declared AFTER availableSubGroups to avoid TDZ error. */
@@ -79,6 +82,13 @@ const DropdownAdminPage = () => {
     projectUniqueId: '', projectName: '', description: '', location: '',
     startDate: '', endDate: '', status: 'PLANNING', budget: '', isActive: true,
     selectedGroupId: '', subGroupId: '',
+  });
+  const [warehouseForm, setWarehouseForm] = useState({
+    id: null, code: '', name: '', city: '', address: '', inCharge: '', phone: '',
+    groupName: '', subGroupName: '',
+    notes: '', isActive: true,
+    // local-only — used to drive the cascading selects in the form
+    _selectedGroupId: '', _selectedSubGroupId: '',
   });
 
   const [editModal,     setEditModal]     = useState(null); // { type, data }
@@ -114,6 +124,9 @@ const DropdownAdminPage = () => {
         if (filterSubGroupId)  params.append('subGroupId', filterSubGroupId);
         url = `${API}/admin/dropdowns/projects?${params}`;
       }
+      if (activeTab === 'warehouses') {
+        url = `${API}/admin/dropdowns/warehouses?${params}`;
+      }
 
       const res  = await fetch(url, { credentials: 'include', headers: hdrs() });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -131,12 +144,14 @@ const DropdownAdminPage = () => {
   /* ── Load full lists for form selects ──────────────────────────── */
   const loadDropdownData = async () => {
     try {
-      const [gRes, sgRes] = await Promise.all([
+      const [gRes, sgRes, pRes] = await Promise.all([
         fetch(`${API}/admin/dropdowns/groups`,    { credentials: 'include', headers: hdrs() }),
         fetch(`${API}/admin/dropdowns/subgroups`, { credentials: 'include', headers: hdrs() }),
+        fetch(`${API}/admin/dropdowns/projects`,  { credentials: 'include', headers: hdrs() }),
       ]);
       setAvailableGroups(await gRes.json());
       setAvailableSubGroups(await sgRes.json());
+      setAvailableProjects(pRes.ok ? (await pRes.json()) : []);
     } catch {}
   };
 
@@ -146,12 +161,24 @@ const DropdownAdminPage = () => {
     else setFilteredSubs([]);
   }, [projectForm.selectedGroupId, availableSubGroups]);
 
+  /* Warehouse form cascading dropdowns:
+       group → sub-groups under that group
+     Group & sub-group on a warehouse are OPTIONAL (null = global).
+     Project is NOT a warehouse field — warehouses are not created under projects. */
+  useEffect(() => {
+    if (warehouseForm._selectedGroupId)
+      setFilteredSubsWh(availableSubGroups.filter(sg => sg.group?.id === Number(warehouseForm._selectedGroupId)));
+    else
+      setFilteredSubsWh([]);
+  }, [warehouseForm._selectedGroupId, availableSubGroups]);
+
   /* ── Reset forms ───────────────────────────────────────────────── */
   const resetForms = () => {
     setGroupForm({ id: null, groupName: '', groupLabel: '', description: '', isActive: true });
     setSubGroupForm({ id: null, subGroupName: '', subGroupLabel: '', description: '', isActive: true, groupId: '' });
     setProjectForm({ projectUniqueId: '', projectName: '', description: '', location: '', startDate: '', endDate: '', status: 'PLANNING', budget: '', isActive: true, selectedGroupId: '', subGroupId: '' });
-    setFilteredSubs([]);
+    setWarehouseForm({ id: null, code: '', name: '', city: '', address: '', inCharge: '', phone: '', groupName: '', subGroupName: '', notes: '', isActive: true, _selectedGroupId: '', _selectedSubGroupId: '' });
+    setFilteredSubs([]); setFilteredSubsWh([]);
   };
 
   /* ── GROUP handlers ────────────────────────────────────────────── */
@@ -220,6 +247,85 @@ const DropdownAdminPage = () => {
   });
   const handleDeleteProject = (id, isActive) => setDeleteConfirm({ type: 'project', url: `${API}/admin/dropdowns/projects/${id}`, label: 'project', isActive });
 
+  /* ── WAREHOUSE handlers ────────────────────────────────────────── */
+  // Resolves the local _selectedGroupId / _selectedSubGroupId picks into the
+  // string fields the backend expects (groupName / subGroupName).
+  // Note: projects are NOT a warehouse field — warehouses aren't scoped by project.
+  const resolveWarehouseScope = (form) => {
+    const group    = availableGroups.find(g => g.id === Number(form._selectedGroupId));
+    const subGroup = availableSubGroups.find(sg => sg.id === Number(form._selectedSubGroupId));
+    return {
+      ...form,
+      groupName:    group?.groupName    || '',
+      subGroupName: subGroup?.subGroupName || '',
+    };
+  };
+
+  const handleWarehouseSubmit = async (e) => {
+    e.preventDefault(); setLoading(true);
+    try {
+      const payload = resolveWarehouseScope(warehouseForm);
+      // Strip local-only helper fields before sending
+      const { _selectedGroupId, _selectedSubGroupId, ...body } = payload;
+      const res = await fetch(`${API}/admin/dropdowns/warehouses`, {
+        credentials: 'include', method: 'POST', headers: hdrs(), body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || 'Failed');
+      }
+      showSuccess('Warehouse created'); resetForms(); loadData();
+    } catch (err) {
+      showError(err.message || 'Failed to create warehouse');
+    } finally { setLoading(false); }
+  };
+
+  const handleEditWarehouseSubmit = async (e) => {
+    e.preventDefault(); setLoading(true);
+    const data = editModal.data;
+    try {
+      const payload = resolveWarehouseScope(data);
+      const { _selectedGroupId, _selectedSubGroupId, ...body } = payload;
+      const res = await fetch(`${API}/admin/dropdowns/warehouses/${data.id}`, {
+        credentials: 'include', method: 'PUT', headers: hdrs(), body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || 'Failed');
+      }
+      showSuccess('Warehouse updated'); setEditModal(null); loadData();
+    } catch (err) {
+      showError(err.message || 'Failed to update warehouse');
+    } finally { setLoading(false); }
+  };
+
+  const handleEditWarehouse = (w) => {
+    // Reverse-resolve scope back into local _selectedX ids for the cascading selects
+    const group    = availableGroups.find(g => g.groupName === w.groupName);
+    const subGroup = availableSubGroups.find(sg =>
+      sg.subGroupName === w.subGroupName && (!group || sg.group?.id === group.id));
+    setEditModal({
+      type: 'warehouse',
+      data: {
+        ...w,
+        _selectedGroupId:    group?.id    || '',
+        _selectedSubGroupId: subGroup?.id || '',
+        // Coerce nullable strings to '' so React inputs stay controlled
+        code: w.code || '', name: w.name || '', city: w.city || '',
+        address: w.address || '', inCharge: w.inCharge || '', phone: w.phone || '',
+        groupName: w.groupName || '', subGroupName: w.subGroupName || '',
+        notes: w.notes || '',
+        isActive: w.isActive !== false,
+      }
+    });
+  };
+  const handleDeleteWarehouse = (id, isActive) => setDeleteConfirm({
+    type: 'warehouse',
+    url: `${API}/admin/dropdowns/warehouses/${id}`,
+    label: 'warehouse',
+    isActive,
+  });
+
   /* ── Confirm delete ────────────────────────────────────────────── */
   const confirmDelete = async () => {
     const { url, type, label } = deleteConfirm; setDeleteConfirm(null); setLoading(true);
@@ -227,7 +333,9 @@ const DropdownAdminPage = () => {
       const res = await fetch(url, { credentials: 'include', method: 'DELETE', headers: hdrs() });
       if (!res.ok) throw new Error();
       showSuccess(`${label.charAt(0).toUpperCase() + label.slice(1)} deleted`);
-      loadData(); if (type !== 'project') loadDropdownData();
+      loadData();
+      // Only refresh the form-driver dropdowns when groups / sub-groups change
+      if (type !== 'project' && type !== 'warehouse') loadDropdownData();
     } catch { showError(`Failed to delete ${label}`); } finally { setLoading(false); }
   };
 
@@ -248,9 +356,10 @@ const DropdownAdminPage = () => {
   const STATUS_MAP = { PLANNING:'Planning', IN_PROGRESS:'In Progress', COMPLETED:'Completed', ON_HOLD:'On Hold', CANCELLED:'Cancelled' };
 
   const tabs = [
-    { key:'groups',    label:'Groups',     icon:<FiLayers size={14}/> },
-    { key:'subgroups', label:'Sub-Groups', icon:<FiGitBranch size={14}/> },
-    { key:'projects',  label:'Projects',   icon:<FiBriefcase size={14}/> },
+    { key:'groups',     label:'Groups',     icon:<FiLayers size={14}/> },
+    { key:'subgroups',  label:'Sub-Groups', icon:<FiGitBranch size={14}/> },
+    { key:'projects',   label:'Projects',   icon:<FiBriefcase size={14}/> },
+    { key:'warehouses', label:'Warehouses', icon:<FiHome size={14}/> },
   ];
 
   return (
@@ -262,7 +371,7 @@ const DropdownAdminPage = () => {
         <div>
           <p className="da-breadcrumb">Office Use &rsaquo; Dropdown Management</p>
           <h1 className="da-title">Dropdown Management</h1>
-          <p className="da-subtitle">Manage groups, sub-groups and projects used throughout the CRM</p>
+          <p className="da-subtitle">Manage groups, sub-groups, projects and warehouses used throughout the CRM</p>
         </div>
       </div>
 
@@ -287,7 +396,10 @@ const DropdownAdminPage = () => {
           <div className="da-form-card" ref={formCardRef}>
             <div className="da-form-card-hd">
               <span className="da-form-card-title">
-                Add New {activeTab === 'groups' ? 'Group' : activeTab === 'subgroups' ? 'Sub-Group' : 'Project'}
+                Add New {activeTab === 'groups' ? 'Group'
+                       : activeTab === 'subgroups' ? 'Sub-Group'
+                       : activeTab === 'projects' ? 'Project'
+                       : 'Warehouse'}
               </span>
             </div>
 
@@ -419,6 +531,79 @@ const DropdownAdminPage = () => {
                 </div>
               </form>
             )}
+
+            {/* WAREHOUSE form */}
+            {activeTab === 'warehouses' && (
+              <form onSubmit={handleWarehouseSubmit} className="da-form">
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Warehouse Code <span className="da-req">*</span></label>
+                    <input value={warehouseForm.code} onChange={e => setWarehouseForm({...warehouseForm, code:e.target.value})} required placeholder="e.g. WH-A"/>
+                  </div>
+                  <div className="da-field">
+                    <label>Warehouse Name <span className="da-req">*</span></label>
+                    <input value={warehouseForm.name} onChange={e => setWarehouseForm({...warehouseForm, name:e.target.value})} required placeholder="e.g. Warehouse A"/>
+                  </div>
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>City</label>
+                    <input value={warehouseForm.city} onChange={e => setWarehouseForm({...warehouseForm, city:e.target.value})} placeholder="e.g. Hyderabad HQ"/>
+                  </div>
+                  <div className="da-field">
+                    <label>In-Charge</label>
+                    <input value={warehouseForm.inCharge} onChange={e => setWarehouseForm({...warehouseForm, inCharge:e.target.value})} placeholder="e.g. Ravi Kumar"/>
+                  </div>
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Phone</label>
+                    <input value={warehouseForm.phone} onChange={e => setWarehouseForm({...warehouseForm, phone:e.target.value})} placeholder="e.g. +91 98xxxxxx"/>
+                  </div>
+                  <div className="da-field">
+                    <label>Address</label>
+                    <input value={warehouseForm.address} onChange={e => setWarehouseForm({...warehouseForm, address:e.target.value})} placeholder="Optional"/>
+                  </div>
+                </div>
+
+                {/* Optional scoping — leave blank for a global warehouse */}
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 }}>
+                  Scope (optional — leave blank for global)
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Group</label>
+                    <select value={warehouseForm._selectedGroupId}
+                      onChange={e => setWarehouseForm({...warehouseForm, _selectedGroupId:e.target.value, _selectedSubGroupId:''})}>
+                      <option value="">— Global —</option>
+                      {availableGroups.map(g => <option key={g.id} value={g.id}>{g.groupLabel || g.groupName}</option>)}
+                    </select>
+                  </div>
+                  <div className="da-field">
+                    <label>Sub-Group</label>
+                    <select value={warehouseForm._selectedSubGroupId}
+                      onChange={e => setWarehouseForm({...warehouseForm, _selectedSubGroupId:e.target.value})}
+                      disabled={!warehouseForm._selectedGroupId}>
+                      <option value="">{warehouseForm._selectedGroupId ? '— Any —' : 'Select Group First'}</option>
+                      {filteredSubsWh.map(sg => <option key={sg.id} value={sg.id}>{sg.subGroupLabel || sg.subGroupName}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="da-field">
+                  <label>Notes</label>
+                  <textarea value={warehouseForm.notes} onChange={e => setWarehouseForm({...warehouseForm, notes:e.target.value})} rows={2} placeholder="Optional notes"/>
+                </div>
+                <label className="da-check">
+                  <input type="checkbox" checked={warehouseForm.isActive} onChange={e => setWarehouseForm({...warehouseForm, isActive:e.target.checked})}/> Active
+                </label>
+                <div className="da-form-actions">
+                  <button type="submit" className="da-btn da-btn-primary" disabled={loading}>
+                    <FiSave size={13}/>{loading ? 'Saving…' : 'Create Warehouse'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
 
@@ -480,6 +665,8 @@ const DropdownAdminPage = () => {
                   </select>
                 </>
               )}
+
+              {/* Warehouses tab — no project filter (warehouses aren't scoped by project) */}
 
               <button className="da-btn da-btn-icon" title="Refresh" onClick={loadData}>
                 <FiRefreshCw size={13} className={loading ? 'da-spin' : ''}/>
@@ -577,6 +764,43 @@ const DropdownAdminPage = () => {
                   </tbody>
                 </table>
               )}
+
+              {activeTab === 'warehouses' && (
+                <table className="da-tbl">
+                  <thead><tr>
+                    <th>ID</th><th>Code</th><th>Name</th><th>City</th>
+                    <th>In-Charge</th><th>Scope</th><th>Status</th><th>Actions</th>
+                  </tr></thead>
+                  <tbody>
+                    {loading ? <tr><td colSpan={8} className="da-empty">Loading…</td></tr>
+                    : rows.length === 0 ? <tr><td colSpan={8} className="da-empty">No warehouses found</td></tr>
+                    : rows.map(w => (
+                      <tr key={w.id}>
+                        <td className="da-mono">{w.id}</td>
+                        <td className="da-mono da-bold">{w.code}</td>
+                        <td className="da-bold">{w.name}</td>
+                        <td className="da-muted">{w.city || '—'}</td>
+                        <td className="da-muted">{w.inCharge || '—'}</td>
+                        <td>
+                          {(w.groupName || w.subGroupName)
+                            ? <span className="da-chip da-chip-blue">
+                                {w.groupName || '—'}{w.subGroupName ? ` › ${w.subGroupName}` : ''}
+                              </span>
+                            : <span className="da-chip" style={{ background: '#f1f5f9', color: '#64748b' }}>Global</span>}
+                        </td>
+                        <td>{w.isActive
+                          ? <span className="da-badge da-green"><FiCheckCircle size={10}/>Active</span>
+                          : <span className="da-badge da-red"><FiXCircle size={10}/>Inactive</span>}
+                        </td>
+                        <td><div className="da-acts">
+                          <button className="da-act da-act-edit" title="Edit" onClick={() => handleEditWarehouse(w)}><FiEdit2 size={13}/></button>
+                          <button className="da-act da-act-del" title="Delete" onClick={() => handleDeleteWarehouse(w.id, w.isActive)}><FiTrash2 size={13}/></button>
+                        </div></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             {/* ── Pagination footer ── */}
@@ -621,7 +845,10 @@ const DropdownAdminPage = () => {
             {/* Modal header */}
             <div className="da-modal-edit-hd">
               <span className="da-modal-edit-title">
-                Edit {editModal.type === 'group' ? 'Group' : editModal.type === 'subgroup' ? 'Sub-Group' : 'Project'}
+                Edit {editModal.type === 'group' ? 'Group'
+                    : editModal.type === 'subgroup' ? 'Sub-Group'
+                    : editModal.type === 'project'  ? 'Project'
+                    : 'Warehouse'}
               </span>
               <button className="da-icon-btn" onClick={() => setEditModal(null)} title="Close"><FiX size={14}/></button>
             </div>
@@ -741,6 +968,89 @@ const DropdownAdminPage = () => {
                   <button type="button" className="da-btn da-btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
                   <button type="submit" className="da-btn da-btn-primary" disabled={loading}>
                     <FiSave size={13}/>{loading ? 'Saving…' : 'Update Project'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── Edit Warehouse form ── */}
+            {editModal.type === 'warehouse' && (
+              <form onSubmit={handleEditWarehouseSubmit} className="da-form da-modal-form">
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Warehouse Code <span className="da-req">*</span></label>
+                    <input value={editModal.data.code}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, code:e.target.value}}))} required/>
+                  </div>
+                  <div className="da-field">
+                    <label>Warehouse Name <span className="da-req">*</span></label>
+                    <input value={editModal.data.name}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, name:e.target.value}}))} required/>
+                  </div>
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>City</label>
+                    <input value={editModal.data.city}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, city:e.target.value}}))}/>
+                  </div>
+                  <div className="da-field">
+                    <label>In-Charge</label>
+                    <input value={editModal.data.inCharge}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, inCharge:e.target.value}}))}/>
+                  </div>
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Phone</label>
+                    <input value={editModal.data.phone}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, phone:e.target.value}}))}/>
+                  </div>
+                  <div className="da-field">
+                    <label>Address</label>
+                    <input value={editModal.data.address}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, address:e.target.value}}))}/>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 }}>
+                  Scope (optional — leave blank for global)
+                </div>
+                <div className="da-row2">
+                  <div className="da-field">
+                    <label>Group</label>
+                    <select value={editModal.data._selectedGroupId}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, _selectedGroupId:e.target.value, _selectedSubGroupId:''}}))}>
+                      <option value="">— Global —</option>
+                      {availableGroups.map(g => <option key={g.id} value={g.id}>{g.groupLabel || g.groupName}</option>)}
+                    </select>
+                  </div>
+                  <div className="da-field">
+                    <label>Sub-Group</label>
+                    <select value={editModal.data._selectedSubGroupId}
+                      onChange={e => setEditModal(m => ({...m, data:{...m.data, _selectedSubGroupId:e.target.value}}))}
+                      disabled={!editModal.data._selectedGroupId}>
+                      <option value="">{editModal.data._selectedGroupId ? '— Any —' : 'Select Group First'}</option>
+                      {availableSubGroups
+                        .filter(sg => sg.group?.id === Number(editModal.data._selectedGroupId))
+                        .map(sg => <option key={sg.id} value={sg.id}>{sg.subGroupLabel || sg.subGroupName}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="da-field">
+                  <label>Notes</label>
+                  <textarea value={editModal.data.notes}
+                    onChange={e => setEditModal(m => ({...m, data:{...m.data, notes:e.target.value}}))} rows={2}/>
+                </div>
+                <label className="da-check">
+                  <input type="checkbox" checked={editModal.data.isActive}
+                    onChange={e => setEditModal(m => ({...m, data:{...m.data, isActive:e.target.checked}}))}/> Active
+                </label>
+                <div className="da-modal-edit-footer">
+                  <button type="button" className="da-btn da-btn-ghost" onClick={() => setEditModal(null)}>Cancel</button>
+                  <button type="submit" className="da-btn da-btn-primary" disabled={loading}>
+                    <FiSave size={13}/>{loading ? 'Saving…' : 'Update Warehouse'}
                   </button>
                 </div>
               </form>
