@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, IndianRupee } from 'lucide-react';
+import { FileText, IndianRupee, AlertCircle } from 'lucide-react';
 import InvoicesManagementPage from './InvoicesManagementPage';
 import ReceiptsManagementPage from './ReceiptsManagementPage';
+import OutstandingsTab from './OutstandingsTab';
 import '../pages-css/InvoicesReceiptsPage.css';
 import { useAuth } from '../hooks/useAuth';
 
@@ -56,17 +57,23 @@ const InvoicesReceiptsPage = () => {
           </button>
         )}
 
+        <button
+          className={`tab-button ${resolvedTab === 'outstandings' ? 'active' : ''}`}
+          onClick={() => handleTabChange('outstandings')}
+        >
+          <AlertCircle size={20} />
+          <span>Outstandings</span>
+        </button>
+
         {/* Sliding indicator */}
         <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
       </div>
 
       {/* Tab Content */}
       <div className="tab-content">
-        {resolvedTab === 'invoices' ? (
-          <InvoicesManagementPage />
-        ) : (
-          <ReceiptsManagementPage />
-        )}
+        {resolvedTab === 'invoices'     && <InvoicesManagementPage />}
+        {resolvedTab === 'receipts'     && <ReceiptsManagementPage />}
+        {resolvedTab === 'outstandings' && <OutstandingsTab />}
       </div>
     </div>
   );

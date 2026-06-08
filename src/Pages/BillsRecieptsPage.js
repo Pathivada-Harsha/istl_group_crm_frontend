@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FileText, CreditCard } from 'lucide-react';
+import { FileText, CreditCard, AlertCircle } from 'lucide-react';
 import BillsManagementPage from './BillsManagementPage';
 import VendorPaymentsPage from './VendorPaymentsPage';
+import BillsOutstandingsTab from './BillsOutstandingsTab';
 import '../pages-css/InvoicesReceiptsPage.css';
 import { useAuth } from '../hooks/useAuth';
 
@@ -55,12 +56,22 @@ const BillsReceiptsPage = () => {
           </button>
         )}
 
+        <button
+          className={`tab-button ${resolvedTab === 'outstandings' ? 'active' : ''}`}
+          onClick={() => handleTabChange('outstandings')}
+        >
+          <AlertCircle size={20} />
+          <span>Outstandings</span>
+        </button>
+
         {/* Sliding indicator */}
         <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />
       </div>
 
       <div className="tab-content">
-        {resolvedTab === 'bills' ? <BillsManagementPage /> : <VendorPaymentsPage />}
+        {resolvedTab === 'bills'        && <BillsManagementPage />}
+        {resolvedTab === 'payments'     && <VendorPaymentsPage />}
+        {resolvedTab === 'outstandings' && <BillsOutstandingsTab />}
       </div>
     </div>
   );
