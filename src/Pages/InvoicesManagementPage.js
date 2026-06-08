@@ -1753,25 +1753,51 @@ const fetchStats = async () => {
                     if (key === 'invoiceDate')   return <td key={key}>{formatDate(invoice.invoiceDate)}</td>;
                     if (key === 'dueDate')       return <td key={key}>{formatDate(invoice.dueDate)}</td>;
                     if (key === 'ageing') {
-                      const invDate = invoice.invoiceDate ? new Date(invoice.invoiceDate) : null;
-                      const dueDate = invoice.dueDate     ? new Date(invoice.dueDate)     : null;
-                      const compareDate = dueDate || new Date();
-                      if (!invDate) return <td key={key} style={{ textAlign: 'center', color: '#94a3b8' }}>—</td>;
-                      const days = Math.floor((compareDate - invDate) / 86400000);
                       const isPaid      = ['Paid','PAID'].includes(invoice.status);
                       const isCancelled = ['Cancelled','CANCELLED'].includes(invoice.status);
-                      const isOverdue   = !isPaid && !isCancelled && compareDate < new Date();
+
+                      // Paid invoices — show a green Paid badge with date if available
+                      if (isPaid) {
+                        // Use dueDate as a proxy for paid context — no paid date on row object.
+                        // Show due date alongside Paid badge if available.
+                        const paidDateStr = invoice.dueDate ? formatDate(invoice.dueDate) : null;
+                        return (
+                          <td key={key} style={{ textAlign: 'center' }}>
+                            <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center',
+                              padding: '2px 10px', borderRadius: 12, fontSize: 12, fontWeight: 600,
+                              background: '#dcfce7', color: '#15803d', lineHeight: 1.4 }}>
+                              ✓ Paid
+                              {paidDateStr && <span style={{ fontSize: 10, fontWeight: 400, color: '#16a34a' }}>Due: {paidDateStr}</span>}
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      // Cancelled — show neutral badge
+                      if (isCancelled) {
+                        return (
+                          <td key={key} style={{ textAlign: 'center' }}>
+                            <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 12,
+                              fontSize: 12, fontWeight: 600, background: '#f1f5f9', color: '#94a3b8' }}>
+                              Cancelled
+                            </span>
+                          </td>
+                        );
+                      }
+
+                      // Active invoice — show ageing days
+                      const invDate = invoice.invoiceDate ? new Date(invoice.invoiceDate) : null;
+                      if (!invDate) return <td key={key} style={{ textAlign: 'center', color: '#94a3b8' }}>—</td>;
+                      const dueDate     = invoice.dueDate ? new Date(invoice.dueDate) : null;
+                      const compareDate = dueDate || new Date();
+                      const days        = Math.floor((compareDate - invDate) / 86400000);
+                      const isOverdue   = dueDate ? dueDate < new Date() : false;
                       return (
                         <td key={key} style={{ textAlign: 'center' }}>
-                          <span style={{
-                            display: 'inline-block',
-                            padding: '2px 10px',
-                            borderRadius: 12,
-                            fontSize: 12,
-                            fontWeight: 600,
-                            background: isPaid || isCancelled ? '#f1f5f9' : isOverdue ? '#fee2e2' : '#dbeafe',
-                            color:      isPaid || isCancelled ? '#64748b'  : isOverdue ? '#991b1b' : '#1e40af',
-                          }}>
+                          <span style={{ display: 'inline-block', padding: '2px 10px', borderRadius: 12,
+                            fontSize: 12, fontWeight: 600,
+                            background: isOverdue ? '#fee2e2' : '#dbeafe',
+                            color:      isOverdue ? '#991b1b' : '#1e40af' }}>
                             {days} day{days !== 1 ? 's' : ''}
                           </span>
                         </td>
