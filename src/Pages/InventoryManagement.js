@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Eye, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -181,6 +181,11 @@ const invBillApi = {
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete bill'); }
     return res.json();
   },
+  getPayments: async (billId) => {
+    const res = await fetch(`${API}/inventory/bills/${billId}/payments`, { headers: getAuthHeaders(), credentials: 'include' });
+    if (!res.ok) return [];
+    return res.json();
+  },
 };
 
 const invPaymentApi = {
@@ -211,6 +216,11 @@ const invPaymentApi = {
       body: JSON.stringify({ allocations }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to allocate advance'); }
+    return res.json();
+  },
+  getAllocations: async (paymentId) => {
+    const res = await fetch(`${API}/inventory/payments/${paymentId}/allocations`, { headers: getAuthHeaders(), credentials: 'include' });
+    if (!res.ok) return [];
     return res.json();
   },
   delete: async (id) => {
@@ -3564,7 +3574,6 @@ export default function InventoryManagementPage() {
     const saved = localStorage.getItem(LS_TAB);
     return saved && saved !== 'alerts' ? saved : 'items';
   });
-  const switchTab = t => { setActiveTab(t); localStorage.setItem(LS_TAB, t); };
 
   // Page-level group / subgroup / project filter (synced across all pages)
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
@@ -3651,6 +3660,32 @@ export default function InventoryManagementPage() {
   const [transactions,setTransactions]= useState(MOCK_TRANSACTIONS);
   const [pos,         setPos]         = useState([]);
   const [bills,       setBills]       = useState([]);
+
+  // ── Pagination state: POs ─────────────────────────────────────────────────
+  const [poPage,      setPoPage]      = useState(0);
+  const [poPageSize,  setPoPageSize]  = useState(10);
+  const [poTotal,     setPoTotal]     = useState(0);
+  const [poTotalPages,setPoTotalPages]= useState(0);
+  const [poSearch,    setPoSearch]    = useState('');
+  const [poStatus,    setPoStatus]    = useState('');
+  const [poVendor,    setPoVendor]    = useState('');
+
+  // ── Pagination state: Bills ───────────────────────────────────────────────
+  const [billPage,      setBillPage]      = useState(0);
+  const [billPageSize,  setBillPageSize]  = useState(10);
+  const [billTotal,     setBillTotal]     = useState(0);
+  const [billTotalPages,setBillTotalPages]= useState(0);
+  const [billSearch,    setBillSearch]    = useState('');
+  const [billStatus,    setBillStatus]    = useState('');
+
+  // ── Pagination state: Payments ────────────────────────────────────────────
+  const [payPage,      setPayPage]      = useState(0);
+  const [payPageSize,  setPayPageSize]  = useState(10);
+  const [payTotal,     setPayTotal]     = useState(0);
+  const [payTotalPages,setPayTotalPages]= useState(0);
+  const [paySearch,    setPaySearch]    = useState('');
+  const [payMode,      setPayMode]      = useState('');
+  const [payType,      setPayType]      = useState('');
   const [payments,    setPayments]    = useState([]);
   const [vendors,     setVendors]     = useState([]);
 
@@ -3665,28 +3700,161 @@ export default function InventoryManagementPage() {
   }, []);
 
   // Load procurement + transactions scoped to current group/subgroup/warehouse
-  const reloadProcurement = useCallback(() => {
-    const params = {};
-    if (selectedWh)   params.warehouseId  = selectedWh;
-    if (groupName)    params.groupName     = groupName;
-    if (subGroupName) params.subGroupName  = subGroupName;
-
-    invPoApi.list({ ...params, size: 100 })
-      .then(d => setPos((d?.content || []).map(normalizePO)))
-      .catch(() => {});
-    invBillApi.list({ ...params, size: 100 })
-      .then(d => setBills((d?.content || []).map(normalizeBill)))
-      .catch(() => {});
-    invPaymentApi.list({ groupName: params.groupName, subGroupName: params.subGroupName, size: 100 })
-      .then(d => setPayments((d?.content || []).map(normalizePayment)))
-      .catch(() => {});
-    // Reload transactions from backend too
-    invTransactionApi.list({ ...params, size: 200 })
-      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
-      .catch(() => {});
+  // useMemo so the object reference is stable — only changes when warehouse/group actually changes.
+  // Plain object (not a function) so reload functions read it directly without calling it.
+  const baseParams = useMemo(() => {
+    const p = {};
+    if (selectedWh)   p.warehouseId  = selectedWh;
+    if (groupName)    p.groupName     = groupName;
+    if (subGroupName) p.subGroupName  = subGroupName;
+    return p;
   }, [selectedWh, groupName, subGroupName]);
 
-  useEffect(() => { reloadProcurement(); }, [reloadProcurement]);
+  // Plain functions — no useCallback, no memoisation needed.
+  // Each reads baseParams (stable ref) and hits the backend directly.
+  const reloadPos = (page = 0, size = 10, search = '', status = '', vendor = '') => {
+    const params = { ...baseParams, page, size };
+    if (search) params.search   = search;
+    if (status) params.status   = status;
+    if (vendor) params.vendorId = vendor;
+    invPoApi.list(params)
+      .then(d => {
+        setPos((d?.content || []).map(normalizePO));
+        setPoTotal(d?.totalElements ?? 0);
+        setPoTotalPages(d?.totalPages ?? 0);
+      })
+      .catch(() => {});
+  };
+
+  const reloadBills = (page = 0, size = 10, search = '', status = '') => {
+    const params = { ...baseParams, page, size };
+    if (search) params.search = search;
+    if (status) params.status = status;
+    invBillApi.list(params)
+      .then(d => {
+        setBills((d?.content || []).map(normalizeBill));
+        setBillTotal(d?.totalElements ?? 0);
+        setBillTotalPages(d?.totalPages ?? 0);
+      })
+      .catch(() => {});
+  };
+
+  const reloadPayments = (page = 0, size = 10, search = '', mode = '', type = '') => {
+    const params = { groupName: baseParams.groupName, subGroupName: baseParams.subGroupName, page, size };
+    if (search) params.search = search;
+    if (mode)   params.mode   = mode;
+    if (type)   params.type   = type;
+    invPaymentApi.list(params)
+      .then(d => {
+        setPayments((d?.content || []).map(normalizePayment));
+        setPayTotal(d?.totalElements ?? 0);
+        setPayTotalPages(d?.totalPages ?? 0);
+      })
+      .catch(() => {});
+  };
+
+  // Refs so the single useEffect below can always read current values without
+  // them being listed as deps (which would cause extra re-runs).
+  const activeTabRef   = useRef(activeTab);
+  const baseParamsRef  = useRef(baseParams);
+  const poPageSizeRef  = useRef(poPageSize);
+  const poSearchRef    = useRef(poSearch);
+  const poStatusRef    = useRef(poStatus);
+  const poVendorRef    = useRef(poVendor);
+  const billPageSizeRef= useRef(billPageSize);
+  const billSearchRef  = useRef(billSearch);
+  const billStatusRef  = useRef(billStatus);
+  const payPageSizeRef = useRef(payPageSize);
+  const paySearchRef   = useRef(paySearch);
+  const payModeRef     = useRef(payMode);
+  const payTypeRef     = useRef(payType);
+  activeTabRef.current   = activeTab;
+  baseParamsRef.current  = baseParams;
+  poPageSizeRef.current  = poPageSize;
+  poSearchRef.current    = poSearch;
+  poStatusRef.current    = poStatus;
+  poVendorRef.current    = poVendor;
+  billPageSizeRef.current= billPageSize;
+  billSearchRef.current  = billSearch;
+  billStatusRef.current  = billStatus;
+  payPageSizeRef.current = payPageSize;
+  paySearchRef.current   = paySearch;
+  payModeRef.current     = payMode;
+  payTypeRef.current     = payType;
+
+  // Track whether component has mounted to avoid double-firing on initial render
+  const hasMounted = useRef(false);
+
+  // Mount-only effect — runs exactly once
+  useEffect(() => {
+    hasMounted.current = true;
+    const tab = activeTabRef.current;
+    const bp  = baseParamsRef.current;
+    invTransactionApi.list({ ...bp, size: 200 })
+      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
+      .catch(() => {});
+    if (tab === 'po') {
+      invPoApi.list({ ...bp, page: 0, size: poPageSizeRef.current })
+        .then(d => { setPos((d?.content||[]).map(normalizePO)); setPoTotal(d?.totalElements??0); setPoTotalPages(d?.totalPages??0); })
+        .catch(() => {});
+    }
+    if (tab === 'bills') {
+      invBillApi.list({ ...bp, page: 0, size: billPageSizeRef.current })
+        .then(d => { setBills((d?.content||[]).map(normalizeBill)); setBillTotal(d?.totalElements??0); setBillTotalPages(d?.totalPages??0); })
+        .catch(() => {});
+      invPaymentApi.list({ groupName: bp.groupName, subGroupName: bp.subGroupName, page: 0, size: payPageSizeRef.current })
+        .then(d => { setPayments((d?.content||[]).map(normalizePayment)); setPayTotal(d?.totalElements??0); setPayTotalPages(d?.totalPages??0); })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Filter-change effect — fires when warehouse/group changes, but skips the initial mount
+  useEffect(() => {
+    if (!hasMounted.current) return;
+    const tab = activeTabRef.current;
+    invTransactionApi.list({ ...baseParams, size: 200 })
+      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
+      .catch(() => {});
+    if (tab === 'po') {
+      setPoPage(0);
+      reloadPos(0, poPageSizeRef.current, poSearchRef.current, poStatusRef.current, poVendorRef.current);
+    }
+    if (tab === 'bills') {
+      setBillPage(0); setPayPage(0);
+      reloadBills(0, billPageSizeRef.current, billSearchRef.current, billStatusRef.current);
+      reloadPayments(0, payPageSizeRef.current, paySearchRef.current, payModeRef.current, payTypeRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWh, groupName, subGroupName]);
+
+  // Reload helper called after mutations (create/update/delete).
+  // Reloads only the active tab's data — never crosses tab boundaries.
+  const reloadProcurement = () => {
+    invTransactionApi.list({ ...baseParams, size: 200 })
+      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
+      .catch(() => {});
+    const tab = activeTabRef.current;
+    if (tab === 'po')    reloadPos(0, poPageSizeRef.current, poSearchRef.current, poStatusRef.current, poVendorRef.current);
+    if (tab === 'bills') {
+      reloadBills(0, billPageSizeRef.current, billSearchRef.current, billStatusRef.current);
+      reloadPayments(0, payPageSizeRef.current, paySearchRef.current, payModeRef.current, payTypeRef.current);
+    }
+  };
+
+  const switchTab = t => {
+    setActiveTab(t);
+    localStorage.setItem(LS_TAB, t);
+    if (t === 'po') {
+      setPoPage(0);
+      reloadPos(0, poPageSize, poSearch, poStatus, poVendor);
+    }
+    if (t === 'bills') {
+      setBillPage(0); setPayPage(0);
+      reloadBills(0, billPageSize, billSearch, billStatus);
+      reloadPayments(0, payPageSize, paySearch, payMode, payType);
+    }
+  };
 
   const handleCreatePO = async (form) => {
     try {
@@ -4441,7 +4609,14 @@ export default function InventoryManagementPage() {
                 onCreate={() => setPoOpen(true)}
                 onEdit={po => { setEditingPO(po); setEditPoOpen(true); }}
                 onDelete={handleDeletePO}
-                canCreate={canCreate} />
+                canCreate={canCreate}
+                page={poPage} pageSize={poPageSize} total={poTotal} totalPages={poTotalPages}
+                search={poSearch} status={poStatus} vendor={poVendor}
+                onPageChange={p => { setPoPage(p); reloadPos(p, poPageSize, poSearch, poStatus, poVendor); }}
+                onPageSizeChange={s => { setPoPageSize(s); setPoPage(0); reloadPos(0, s, poSearch, poStatus, poVendor); }}
+                onSearchChange={v => { setPoSearch(v); setPoPage(0); reloadPos(0, poPageSize, v, poStatus, poVendor); }}
+                onStatusChange={v => { setPoStatus(v); setPoPage(0); reloadPos(0, poPageSize, poSearch, v, poVendor); }}
+                onVendorChange={v => { setPoVendor(v); setPoPage(0); reloadPos(0, poPageSize, poSearch, poStatus, v); }} />
             )}
             {activeTab === 'bills' && (
               <BillsPaymentsTab bills={bills} payments={payments} vendors={vendors} pos={pos}
@@ -4450,7 +4625,22 @@ export default function InventoryManagementPage() {
                 onEditPayment={p => { setEditingPay(p); setPayOpen(true); }}
                 onAllocateAdvance={p => setAllocatingAdv(p)}
                 onDeleteBill={handleDeleteBill} onDeletePayment={handleDeletePayment}
-                canCreate={canCreate} />
+                canCreate={canCreate}
+                billPage={billPage} billPageSize={billPageSize} billTotal={billTotal} billTotalPages={billTotalPages}
+                billSearch={billSearch} billStatus={billStatus}
+                onBillPageChange={p => { setBillPage(p); reloadBills(p, billPageSize, billSearch, billStatus); }}
+                onBillPageSizeChange={s => { setBillPageSize(s); setBillPage(0); reloadBills(0, s, billSearch, billStatus); }}
+                onBillSearchChange={v => { setBillSearch(v); setBillPage(0); reloadBills(0, billPageSize, v, billStatus); }}
+                onBillStatusChange={v => { setBillStatus(v); setBillPage(0); reloadBills(0, billPageSize, billSearch, v); }}
+                onGetBillPayments={invBillApi.getPayments}
+                payPage={payPage} payPageSize={payPageSize} payTotal={payTotal} payTotalPages={payTotalPages}
+                paySearch={paySearch} payMode={payMode} payType={payType}
+                onPayPageChange={p => { setPayPage(p); reloadPayments(p, payPageSize, paySearch, payMode, payType); }}
+                onPayPageSizeChange={s => { setPayPageSize(s); setPayPage(0); reloadPayments(0, s, paySearch, payMode, payType); }}
+                onPaySearchChange={v => { setPaySearch(v); setPayPage(0); reloadPayments(0, payPageSize, v, payMode, payType); }}
+                onPayModeChange={v => { setPayMode(v); setPayPage(0); reloadPayments(0, payPageSize, paySearch, v, payType); }}
+                onPayTypeChange={v => { setPayType(v); setPayPage(0); reloadPayments(0, payPageSize, paySearch, payMode, v); }}
+                onGetAdvanceAllocations={invPaymentApi.getAllocations} />
             )}
           </>
         )}
