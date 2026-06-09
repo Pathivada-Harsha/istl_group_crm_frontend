@@ -2536,3 +2536,50 @@
   max-width: 100%;
   min-width: 0;
 }
+/* ============================================================
+   RESPONSIVE FIX — keep the PO table inside its card and make
+   the hidden right-hand columns (Status/Project/Actions) reachable
+   via a clear horizontal scrollbar instead of being clipped.
+   Safe at all widths: when the table already fits (wide desktop)
+   no scrollbar shows and nothing is constrained away.
+   ============================================================ */
+.purchase-orders-container { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.purchase-orders-action-bar,
+.purchase-orders-search-filters,
+.purchase-orders-actions { min-width: 0; }
+
+/* The table's card must not be allowed to grow past the content area */
+.purchase-orders-table-container { min-width: 0; max-width: 100%; }
+
+/* The scroll box constrains to the card width, so its own overflow-x
+   produces a real, grabbable horizontal scrollbar */
+.purchase-orders-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Make that horizontal scrollbar obvious so the off-screen columns are discoverable */
+.purchase-orders-table-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
+.purchase-orders-table-scroll::-webkit-scrollbar-track { background: var(--c-f1f5f9, #f1f5f9); border-radius: 6px; }
+.purchase-orders-table-scroll::-webkit-scrollbar-thumb { background: var(--c-cbd5e1, #cbd5e1); border-radius: 6px; }
+.purchase-orders-table-scroll::-webkit-scrollbar-thumb:hover { background: var(--c-94a3b8, #94a3b8); }
+.purchase-orders-table-scroll { scrollbar-width: thin; scrollbar-color: var(--c-cbd5e1, #cbd5e1) var(--c-f1f5f9, #f1f5f9); }
+
+/* Dark-theme scrollbar (matches the rest of the dark rollout) */
+[data-theme="dark"] .purchase-orders-table-scroll::-webkit-scrollbar-track { background: #11151f; }
+[data-theme="dark"] .purchase-orders-table-scroll::-webkit-scrollbar-thumb { background: #3a4456; }
+[data-theme="dark"] .purchase-orders-table-scroll { scrollbar-color: #3a4456 #11151f; }
+
+/* ============================================================
+   ACTION-BAR ALIGNMENT FIX
+   The Columns / Create PO / Export cluster was vertically centered
+   against the wrapped search block, so it floated down beside the
+   Order-Date row. Top-align the bar so the cluster lines up with the
+   search bar, and keep it right-aligned even when it wraps to its
+   own line.
+   ============================================================ */
+.purchase-orders-action-bar { align-items: flex-start; }
+.purchase-orders-actions { margin-left: auto; align-self: flex-start; }

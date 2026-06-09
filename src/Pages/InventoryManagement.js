@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Eye, Edit2, Trash2, RotateCcw } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import ConfirmationModal from '../components/ConfirmationModal';
@@ -12,6 +12,41 @@ import PurchaseOrdersTab from '../components/inventory_management/PurchaseOrders
 import BillsPaymentsTab from '../components/inventory_management/BillsPaymentsTab.js';
 import '../pages-css/InventoryManagement.css';
 import '../components_css/Dropdowns/GroupProjectFilter.css';
+
+/* Inline-style theme mappers (dark mode) — no-ops in light mode */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714','#fcd34d':'#5a4714','#fca5a5':'#5a2a2e','#fed7aa':'#3a2a13','#fef08a':'#5a4714','#fde047':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#fdf4ff':'#2e2147','#fff0f0':'#2b1d20','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30','#fefce8':'#2a2710','#fbcfe8':'#3a1f30','#fdf2f8':'#2e1a26','#a5f3fc':'#16344d',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#cbd5e0':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#14532d':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#155e75':'#5fd0e0','#075985':'#54b6e8','#0c4a6e':'#7cc3f0','#854d0e':'#e3c258','#92400e':'#f0c07a','#9f1239':'#f0708a','#831843':'#f0708a','#7e22ce':'#c4a3f5','#713f12':'#e3c258','#7c2d12':'#fb923c',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#78350f':'#f0b080','#9a3412':'#fb923c','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#7f1d1d':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a','#be123c':'#f0708a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#6b21a8':'#c4b5fd','#4c1d95':'#a78bfa','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 
 // ── Column Visibility Dropdown (shared across all tabs) ───────────────────────
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -181,11 +216,6 @@ const invBillApi = {
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to delete bill'); }
     return res.json();
   },
-  getPayments: async (billId) => {
-    const res = await fetch(`${API}/inventory/bills/${billId}/payments`, { headers: getAuthHeaders(), credentials: 'include' });
-    if (!res.ok) return [];
-    return res.json();
-  },
 };
 
 const invPaymentApi = {
@@ -216,11 +246,6 @@ const invPaymentApi = {
       body: JSON.stringify({ allocations }),
     });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to allocate advance'); }
-    return res.json();
-  },
-  getAllocations: async (paymentId) => {
-    const res = await fetch(`${API}/inventory/payments/${paymentId}/allocations`, { headers: getAuthHeaders(), credentials: 'include' });
-    if (!res.ok) return [];
     return res.json();
   },
   delete: async (id) => {
@@ -766,7 +791,7 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
           {mode === 'single' && (
             <div className="inv-form-grid" style={{ marginTop: 16 }}>
               <div className="inv-field inv-field--full">
-                <div className="inv-item-hint" style={{ marginBottom: 8, background:'#f0f9ff', borderRadius:6, padding:'6px 10px', border:'1px solid #bae6fd' }}>
+                <div className="inv-item-hint" style={{ marginBottom: 8, background:__sbg('#f0f9ff'), borderRadius:6, padding:'6px 10px', border:`1px solid ${__sbg('#bae6fd')}` }}>
                   🔑 Item Code is <strong>auto-generated</strong> as <code>WHCODE-NNNNNN</code> after saving
                 </div>
               </div>
@@ -1150,7 +1175,7 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
               {Object.entries(TXN_TYPES).map(([k, v]) => (
                 <button key={k}
                   className={`inv-type-pill${form.type === k ? ' active' : ''}`}
-                  style={form.type === k ? { background: v.bg, color: v.color, borderColor: v.color + '88' } : {}}
+                  style={form.type === k ? { background: __sbg(v.bg), color: __stc(v.color), borderColor: __stc(v.color) + '88' } : {}}
                   onClick={() => set('type', k)}>
                   <span className="inv-type-icon">{v.icon}</span> {v.label}
                 </button>
@@ -1261,13 +1286,13 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                         placeholder={form.warehouseId ? 'Search item…' : 'Select warehouse first'}
                         disabled={!form.warehouseId}
                       />
-                      <div className="inv-lineitems-subtotal" style={{ color: '#64748b', fontSize: 12 }}>
+                      <div className="inv-lineitems-subtotal" style={{ color: __stc('#64748b'), fontSize: 12 }}>
                         {selItem ? `${fmt(selItem.currentQty)} ${selItem.unit}` : '—'}
                       </div>
                       <input className="inv-input inv-input--sm" type="number" min="0.01" step="0.01"
                         style={{ textAlign: 'right' }} placeholder="0"
                         value={l.qty} onChange={e => setLine(idx, 'qty', e.target.value)} />
-                      <div className="inv-lineitems-subtotal" style={{ color: '#64748b', fontSize: 12 }}>
+                      <div className="inv-lineitems-subtotal" style={{ color: __stc('#64748b'), fontSize: 12 }}>
                         {selItem?.unit || '—'}
                       </div>
                       <input className="inv-input inv-input--sm" type="number" min="0" step="0.01"
@@ -1297,10 +1322,10 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                 {form.projectId ? (
                   <>
                     {loadingPoItems2 && (
-                      <div style={{ padding:'12px 16px', color:'#6366f1', fontSize:13 }}>⏳ Loading PO items…</div>
+                      <div style={{ padding:'12px 16px', color:__stc('#6366f1'), fontSize:13 }}>⏳ Loading PO items…</div>
                     )}
                     {!loadingPoItems2 && allPoItems.length === 0 && (
-                      <div style={{ padding:'16px', textAlign:'center', color:'#94a3b8', fontSize:13 }}>
+                      <div style={{ padding:'16px', textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>
                         No PO items found for this project
                       </div>
                     )}
@@ -1331,12 +1356,12 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                                   }))}
                                   placeholder="Search item…"
                                 />
-                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:'#64748b' }}>{l.orderedQty || '—'}</div>
-                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:'#64748b' }}>{l.receivedQty || '—'}</div>
+                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}>{l.orderedQty || '—'}</div>
+                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}>{l.receivedQty || '—'}</div>
                                 <input className="inv-input inv-input--sm" type="number" min="0.01" step="0.01"
                                   style={{ textAlign:'right' }} placeholder="0"
                                   value={l.qty} onChange={e => setPoLine(idx, 'qty', e.target.value)} />
-                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:'#64748b' }}>{l.unit || '—'}</div>
+                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}>{l.unit || '—'}</div>
                                 <input className="inv-input inv-input--sm" type="number" min="0" step="0.01"
                                   style={{ textAlign:'right' }} placeholder="0"
                                   value={l.unitCost} onChange={e => setPoLine(idx, 'unitCost', e.target.value)} />
@@ -1354,12 +1379,12 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                     )}
                   </>
                 ) : (
-                  <div style={{ padding:'16px', textAlign:'center', color:'#94a3b8', fontSize:13 }}>
+                  <div style={{ padding:'16px', textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>
                     Select a project above to load procurement items
                   </div>
                 )}
               </div>
-              <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 14px', marginTop:8, fontSize:12, color:'#166534' }}>
+              <div style={{ background:__sbg('#f0fdf4'), border:`1px solid ${__sbg('#bbf7d0')}`, borderRadius:8, padding:'10px 14px', marginTop:8, fontSize:12, color:__stc('#166534') }}>
                 💡 Items will be received into the selected warehouse. If an item is not yet in inventory, it will be created automatically.
               </div>
             </>
@@ -1403,7 +1428,7 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
 
           {/* OUTWARD info banner */}
           {isOutward && (
-            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginTop: 8, fontSize: 12, color: '#1e40af' }}>
+            <div style={{ background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: 8, padding: '10px 14px', marginTop: 8, fontSize: 12, color: __stc('#1e40af') }}>
               💡 An auto-generated bill will be recorded under this project for cost tracking. Payment is marked as <strong>Paid</strong> since items are issued from already-purchased warehouse stock.
             </div>
           )}
@@ -1431,11 +1456,11 @@ function ViewTransactionModal({ open, onClose, txn, warehouses, items }) {
   const isVoided = txn.note && txn.note.startsWith('VOIDED');
   const rows = [
     ['Transaction No', txn.txnNo || txn.id],
-    ['Type', <span style={{ background: TXN_META.bg, color: TXN_META.color, padding: '2px 10px', borderRadius: 12, fontWeight: 600, fontSize: 12 }}>{TXN_META.icon} {TXN_META.label}</span>],
+    ['Type', <span style={{ background: __sbg(TXN_META.bg), color: __stc(TXN_META.color), padding: '2px 10px', borderRadius: 12, fontWeight: 600, fontSize: 12 }}>{TXN_META.icon} {TXN_META.label}</span>],
     ['Date', txn.date || txn.transactionDate || '—'],
     ['Item Code', txn.itemCode || '—'],
     ['Item Name', txn.itemName || '—'],
-    ['Quantity', <span style={{ fontWeight: 700, color: ['OUTWARD','TRANSFER'].includes(txn.type) ? '#ef4444' : '#166534' }}>{txn.qty > 0 && !['OUTWARD','TRANSFER'].includes(txn.type) ? '+' : ''}{fmt(txn.qty)} {txn.unit}</span>],
+    ['Quantity', <span style={{ fontWeight: 700, color: ['OUTWARD','TRANSFER'].includes(txn.type) ? __stc('#ef4444') : __stc('#166534') }}>{txn.qty > 0 && !['OUTWARD','TRANSFER'].includes(txn.type) ? '+' : ''}{fmt(txn.qty)} {txn.unit}</span>],
     ['Warehouse', wh ? `${wh.name}${wh.code ? ` (${wh.code})` : ''}` : (txn.warehouseName || '—')],
     ['Project', txn.projectId || '—'],
     ['Group', txn.groupName || '—'],
@@ -1456,26 +1481,26 @@ function ViewTransactionModal({ open, onClose, txn, warehouses, items }) {
         </div>
         <div className="inv-modal-body">
           {isVoided && (
-            <div style={{ background:'#fef2f2', border:'1px solid #fecaca', borderRadius:8, padding:'8px 12px', marginBottom:12, color:'#dc2626', fontWeight:600, fontSize:12 }}>
+            <div style={{ background:__sbg('#fef2f2'), border:`1px solid ${__sbg('#fecaca')}`, borderRadius:8, padding:'8px 12px', marginBottom:12, color:__stc('#dc2626'), fontWeight:600, fontSize:12 }}>
               ⚠️ This transaction has been VOIDED
             </div>
           )}
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
             <tbody>
               {rows.map(([label, val], i) => (
-                <tr key={i} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                  <td style={{ padding:'8px 12px 8px 0', color:'#64748b', fontWeight:600, whiteSpace:'nowrap', width:'40%' }}>{label}</td>
-                  <td style={{ padding:'8px 0', color:'#1e293b' }}>{val}</td>
+                <tr key={i} style={{ borderBottom:`1px solid ${__sbg('#f1f5f9')}` }}>
+                  <td style={{ padding:'8px 12px 8px 0', color:__stc('#64748b'), fontWeight:600, whiteSpace:'nowrap', width:'40%' }}>{label}</td>
+                  <td style={{ padding:'8px 0', color:__stc('#1e293b') }}>{val}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           {item && (
-            <div style={{ marginTop:14, background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px', fontSize:12 }}>
-              <div style={{ fontWeight:600, color:'#475569', marginBottom:6 }}>Current Stock Status</div>
+            <div style={{ marginTop:14, background:__sbg('#f8fafc'), border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:8, padding:'10px 14px', fontSize:12 }}>
+              <div style={{ fontWeight:600, color:__stc('#475569'), marginBottom:6 }}>Current Stock Status</div>
               <div style={{ display:'flex', gap:16 }}>
-                <span>Stock: <strong style={{ color:'#1e40af' }}>{fmt(item.currentQty)} {item.unit}</strong></span>
-                <span>Unit Cost: <strong style={{ color:'#065f46' }}>{fmtCcy(item.unitCost)}</strong></span>
+                <span>Stock: <strong style={{ color:__stc('#1e40af') }}>{fmt(item.currentQty)} {item.unit}</strong></span>
+                <span>Unit Cost: <strong style={{ color:__stc('#065f46') }}>{fmtCcy(item.unitCost)}</strong></span>
               </div>
             </div>
           )}
@@ -1540,19 +1565,19 @@ function EditTransactionModal({ open, onClose, onSave, txn, items, warehouses })
         <div className="inv-modal-header">
           <div>
             <h3 className="inv-modal-title">Edit Transaction</h3>
-            <p className="inv-modal-sub">{txn.txnNo} · <span style={{ background: TXN_META.bg, color: TXN_META.color, padding:'1px 8px', borderRadius:8, fontSize:11 }}>{TXN_META.icon} {TXN_META.label}</span></p>
+            <p className="inv-modal-sub">{txn.txnNo} · <span style={{ background: __sbg(TXN_META.bg), color: __stc(TXN_META.color), padding:'1px 8px', borderRadius:8, fontSize:11 }}>{TXN_META.icon} {TXN_META.label}</span></p>
           </div>
           <button className="inv-icon-btn" onClick={onClose}>✕</button>
         </div>
         <div className="inv-modal-body">
           {/* Read-only info row */}
-          <div style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12 }}>
+          <div style={{ background:__sbg('#f8fafc'), border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:12 }}>
             <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
               <span><strong>Item:</strong> {txn.itemCode} — {txn.itemName}</span>
               <span><strong>Qty:</strong> {fmt(txn.qty)} {txn.unit}</span>
               <span><strong>Warehouse:</strong> {wh?.name || txn.warehouseName || '—'}</span>
             </div>
-            <div style={{ marginTop:4, color:'#94a3b8', fontSize:11 }}>Qty, item and warehouse cannot be changed after creation</div>
+            <div style={{ marginTop:4, color:__stc('#94a3b8'), fontSize:11 }}>Qty, item and warehouse cannot be changed after creation</div>
           </div>
 
           <div className="inv-form-grid">
@@ -1611,17 +1636,17 @@ function ItemDetailNav({ item, onBack, onEdit, canEdit, activeTab, onTabChange }
   const statMeta = STOCK_STATUS[item.status] || STOCK_STATUS.IN_STOCK;
   return (
     <>
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px 8px', borderBottom:'1px solid #f1f5f9', background:'#fff' }}>
-        <button onClick={onBack} style={{ display:'flex', alignItems:'center', gap:5, background:'none', border:'1.5px solid #e2e8f0', cursor:'pointer', color:'#475569', fontSize:13, padding:'5px 10px', borderRadius:7, fontFamily:'inherit', fontWeight:600 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'10px 20px 8px', borderBottom:`1px solid ${__sbg('#f1f5f9')}`, background:__sbg('#fff') }}>
+        <button onClick={onBack} style={{ display:'flex', alignItems:'center', gap:5, background:'none', border:`1.5px solid ${__sbg('#e2e8f0')}`, cursor:'pointer', color:__stc('#475569'), fontSize:13, padding:'5px 10px', borderRadius:7, fontFamily:'inherit', fontWeight:600 }}>
           ← Back to Inventory
         </button>
-        <span style={{ color:'#e2e8f0', fontSize:16, margin:'0 2px' }}>|</span>
-        <span style={{ fontFamily:'monospace', background:'#f1f5f9', padding:'2px 8px', borderRadius:5, fontSize:12, fontWeight:700, color:'#475569' }}>
+        <span style={{ color:__stc('#e2e8f0'), fontSize:16, margin:'0 2px' }}>|</span>
+        <span style={{ fontFamily:'monospace', background:__sbg('#f1f5f9'), padding:'2px 8px', borderRadius:5, fontSize:12, fontWeight:700, color:__stc('#475569') }}>
           {item.itemCode}
         </span>
-        <span style={{ fontWeight:700, color:'#0f172a', fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:300 }}>{item.name}</span>
+        <span style={{ fontWeight:700, color:__stc('#0f172a'), fontSize:14, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:300 }}>{item.name}</span>
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
-          <span className="inv-status-badge" style={{ background:statMeta.bg, color:statMeta.color }}>{statMeta.label}</span>
+          <span className="inv-status-badge" style={{ background:__sbg(statMeta.bg), color:__stc(statMeta.color) }}>{statMeta.label}</span>
           {canEdit && (
             <button className="inv-btn inv-btn--secondary inv-btn--sm"
               style={{ display:'inline-flex', alignItems:'center', gap:5 }}
@@ -1660,64 +1685,64 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
         <>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:16, marginBottom:24 }}>
             {[
-              { label:'Current Stock', value:`${fmt(item.currentQty)} ${item.unit}`, color:'#1e40af', bg:'#eff6ff' },
-              { label:'Unit Cost',     value:fmtCcy(item.unitCost),                  color:'#065f46', bg:'#ecfdf5' },
-              { label:'Total Value',   value:fmtCcy(totalValue),                     color:'#7c3aed', bg:'#f5f3ff' },
-              { label:'Reorder Level', value:`${fmt(item.minQty)} ${item.unit}`,      color:'#92400e', bg:'#fef3c7' },
-              { label:'Max Level',     value:`${fmt(item.maxQty)} ${item.unit}`,      color:'#334155', bg:'#f1f5f9' },
+              { label:'Current Stock', value:`${fmt(item.currentQty)} ${item.unit}`, color:__stc('#1e40af'), bg:__sbg('#eff6ff') },
+              { label:'Unit Cost',     value:fmtCcy(item.unitCost),                  color:__stc('#065f46'), bg:__sbg('#ecfdf5') },
+              { label:'Total Value',   value:fmtCcy(totalValue),                     color:__stc('#7c3aed'), bg:__sbg('#f5f3ff') },
+              { label:'Reorder Level', value:`${fmt(item.minQty)} ${item.unit}`,      color:__stc('#92400e'), bg:__sbg('#fef3c7') },
+              { label:'Max Level',     value:`${fmt(item.maxQty)} ${item.unit}`,      color:__stc('#334155'), bg:__sbg('#f1f5f9') },
             ].map(c => (
-              <div key={c.label} style={{ background:'#fff', borderRadius:10, padding:'16px 18px', border:'1.5px solid #e2e8f0', borderLeft:`4px solid ${c.color}` }}>
-                <div style={{ fontSize:20, fontWeight:800, color:'#0f172a' }}>{c.value}</div>
-                <div style={{ fontSize:12, color:'#64748b', marginTop:4, fontWeight:600 }}>{c.label}</div>
+              <div key={c.label} style={{ background:__sbg('#fff'), borderRadius:10, padding:'16px 18px', border:`1.5px solid ${__sbg('#e2e8f0')}`, borderLeft:`4px solid ${c.color}` }}>
+                <div style={{ fontSize:20, fontWeight:800, color:__stc('#0f172a') }}>{c.value}</div>
+                <div style={{ fontSize:12, color:__stc('#64748b'), marginTop:4, fontWeight:600 }}>{c.label}</div>
               </div>
             ))}
           </div>
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20 }}>
-            <div style={{ background:'#fff', borderRadius:10, border:'1.5px solid #e2e8f0', padding:20 }}>
-              <div style={{ fontWeight:700, color:'#0f172a', marginBottom:16, fontSize:14, borderBottom:'1px solid #f1f5f9', paddingBottom:10 }}>Item Details</div>
+            <div style={{ background:__sbg('#fff'), borderRadius:10, border:`1.5px solid ${__sbg('#e2e8f0')}`, padding:20 }}>
+              <div style={{ fontWeight:700, color:__stc('#0f172a'), marginBottom:16, fontSize:14, borderBottom:`1px solid ${__sbg('#f1f5f9')}`, paddingBottom:10 }}>Item Details</div>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <tbody>
                   {[
                     ['Item Code',   item.itemCode],
                     ['Item Name',   item.name],
-                    ['Category',    <span key="cat" className="inv-cat-badge" style={{ background:catMeta.bg, color:catMeta.color, borderColor:catMeta.border }}>{item.category}</span>],
+                    ['Category',    <span key="cat" className="inv-cat-badge" style={{ background:__sbg(catMeta.bg), color:__stc(catMeta.color), borderColor:__sbg(catMeta.border) }}>{item.category}</span>],
                     ['Unit',        item.unit],
                     ['Project',     item.projectId || '—'],
                     ['Group',       item.groupName || '—'],
                     ['Sub-Group',   item.subGroupName || '—'],
                     ['Warehouse',   wh ? `${wh.name}${wh.code ? ` (${wh.code})` : ''}` : (item.location||'—')],
-                    ['Status',      <span key="st" className="inv-status-badge" style={{ background:statMeta.bg, color:statMeta.color }}>{statMeta.label}</span>],
+                    ['Status',      <span key="st" className="inv-status-badge" style={{ background:__sbg(statMeta.bg), color:__stc(statMeta.color) }}>{statMeta.label}</span>],
                     ['Last Updated',item.lastUpdated ? String(item.lastUpdated).slice(0,10) : '—'],
                     ['Notes',       item.notes || '—'],
                   ].map(([k,v]) => (
-                    <tr key={k} style={{ borderBottom:'1px solid #f8fafc' }}>
-                      <td style={{ padding:'9px 0', color:'#64748b', fontSize:13, fontWeight:600, width:'40%', paddingRight:12 }}>{k}</td>
-                      <td style={{ padding:'9px 0', fontSize:13, color:'#0f172a', fontWeight:500 }}>{v}</td>
+                    <tr key={k} style={{ borderBottom:`1px solid ${__sbg('#f8fafc')}` }}>
+                      <td style={{ padding:'9px 0', color:__stc('#64748b'), fontSize:13, fontWeight:600, width:'40%', paddingRight:12 }}>{k}</td>
+                      <td style={{ padding:'9px 0', fontSize:13, color:__stc('#0f172a'), fontWeight:500 }}>{v}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
 
-            <div style={{ background:'#fff', borderRadius:10, border:'1.5px solid #e2e8f0', padding:20 }}>
-              <div style={{ fontWeight:700, color:'#0f172a', marginBottom:16, fontSize:14, borderBottom:'1px solid #f1f5f9', paddingBottom:10 }}>
-                Recent Transactions <span style={{ color:'#94a3b8', fontWeight:400 }}>({itemTxns.length})</span>
+            <div style={{ background:__sbg('#fff'), borderRadius:10, border:`1.5px solid ${__sbg('#e2e8f0')}`, padding:20 }}>
+              <div style={{ fontWeight:700, color:__stc('#0f172a'), marginBottom:16, fontSize:14, borderBottom:`1px solid ${__sbg('#f1f5f9')}`, paddingBottom:10 }}>
+                Recent Transactions <span style={{ color:__stc('#94a3b8'), fontWeight:400 }}>({itemTxns.length})</span>
               </div>
               {itemTxns.length === 0 ? (
-                <div style={{ padding:'24px 0', textAlign:'center', color:'#94a3b8', fontSize:13 }}>No transactions yet for this item.</div>
+                <div style={{ padding:'24px 0', textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>No transactions yet for this item.</div>
               ) : (
                 <div style={{ maxHeight:340, overflowY:'auto' }}>
                   {itemTxns.slice(0,20).map(t => {
                     const tm = TXN_TYPES[t.type] || TXN_TYPES.INWARD;
                     return (
-                      <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 0', borderBottom:'1px solid #f8fafc' }}>
-                        <span className="inv-txn-type" style={{ background:tm.bg, color:tm.color, fontSize:11, flexShrink:0 }}>{tm.icon} {tm.label}</span>
-                        <span style={{ fontWeight:700, color:Number(t.qty)<0?'#ef4444':'#166534', fontSize:13 }}>
+                      <div key={t.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 0', borderBottom:`1px solid ${__sbg('#f8fafc')}` }}>
+                        <span className="inv-txn-type" style={{ background:__sbg(tm.bg), color:__stc(tm.color), fontSize:11, flexShrink:0 }}>{tm.icon} {tm.label}</span>
+                        <span style={{ fontWeight:700, color:Number(t.qty)<0?__stc('#ef4444'):__stc('#166534'), fontSize:13 }}>
                           {Number(t.qty)>0?'+':''}{fmt(t.qty)} {t.unit}
                         </span>
-                        <span style={{ color:'#64748b', fontSize:12, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.ref||''}</span>
-                        <span style={{ color:'#94a3b8', fontSize:12, flexShrink:0 }}>{t.date}</span>
+                        <span style={{ color:__stc('#64748b'), fontSize:12, flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.ref||''}</span>
+                        <span style={{ color:__stc('#94a3b8'), fontSize:12, flexShrink:0 }}>{t.date}</span>
                       </div>
                     );
                   })}
@@ -1729,19 +1754,19 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
       )}
 
       {activeTab === 'transactions' && (
-        <div style={{ background:'#fff', borderRadius:10, border:'1.5px solid #e2e8f0', overflow:'hidden' }}>
-          <div style={{ padding:'16px 20px', borderBottom:'1px solid #f1f5f9', fontWeight:700, fontSize:14 }}>
+        <div style={{ background:__sbg('#fff'), borderRadius:10, border:`1.5px solid ${__sbg('#e2e8f0')}`, overflow:'hidden' }}>
+          <div style={{ padding:'16px 20px', borderBottom:`1px solid ${__sbg('#f1f5f9')}`, fontWeight:700, fontSize:14 }}>
             Transaction History — {item.itemCode}
-            <span style={{ fontWeight:400, color:'#64748b', marginLeft:8 }}>({itemTxns.length} records)</span>
+            <span style={{ fontWeight:400, color:__stc('#64748b'), marginLeft:8 }}>({itemTxns.length} records)</span>
           </div>
           {itemTxns.length === 0 ? (
-            <div style={{ padding:32, textAlign:'center', color:'#94a3b8' }}>No transactions for this item.</div>
+            <div style={{ padding:32, textAlign:'center', color:__stc('#94a3b8') }}>No transactions for this item.</div>
           ) : (
             <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
-                <tr style={{ background:'#f8fafc' }}>
+                <tr style={{ background:__sbg('#f8fafc') }}>
                   {['#','Date','Type','Qty','Unit','Reference','Project','Note','By'].map(h => (
-                    <th key={h} style={{ padding:'10px 12px', textAlign:h==='Qty'?'right':'left', fontSize:12, fontWeight:700, color:'#475569', borderBottom:'1.5px solid #e2e8f0' }}>{h}</th>
+                    <th key={h} style={{ padding:'10px 12px', textAlign:h==='Qty'?'right':'left', fontSize:12, fontWeight:700, color:__stc('#475569'), borderBottom:`1.5px solid ${__sbg('#e2e8f0')}` }}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1749,18 +1774,18 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
                 {itemTxns.map((t,i) => {
                   const tm = TXN_TYPES[t.type] || TXN_TYPES.INWARD;
                   return (
-                    <tr key={t.id} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                      <td style={{ padding:'9px 12px', color:'#94a3b8', fontSize:12 }}>{i+1}</td>
-                      <td style={{ padding:'9px 12px', color:'#64748b', fontSize:13 }}>{t.date}</td>
-                      <td style={{ padding:'9px 12px' }}><span className="inv-txn-type" style={{ background:tm.bg, color:tm.color, fontSize:11 }}>{tm.icon} {tm.label}</span></td>
-                      <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:700, color:Number(t.qty)<0?'#ef4444':'#166534', fontSize:13 }}>
+                    <tr key={t.id} style={{ borderBottom:`1px solid ${__sbg('#f1f5f9')}` }}>
+                      <td style={{ padding:'9px 12px', color:__stc('#94a3b8'), fontSize:12 }}>{i+1}</td>
+                      <td style={{ padding:'9px 12px', color:__stc('#64748b'), fontSize:13 }}>{t.date}</td>
+                      <td style={{ padding:'9px 12px' }}><span className="inv-txn-type" style={{ background:__sbg(tm.bg), color:__stc(tm.color), fontSize:11 }}>{tm.icon} {tm.label}</span></td>
+                      <td style={{ padding:'9px 12px', textAlign:'right', fontWeight:700, color:Number(t.qty)<0?__stc('#ef4444'):__stc('#166534'), fontSize:13 }}>
                         {Number(t.qty)>0&&!['OUTWARD','TRANSFER'].includes(t.type)?'+':''}{fmt(t.qty)}
                       </td>
-                      <td style={{ padding:'9px 12px', color:'#64748b', fontSize:13 }}>{t.unit}</td>
-                      <td style={{ padding:'9px 12px', fontFamily:'monospace', fontSize:12, color:'#475569' }}>{t.ref||'—'}</td>
-                      <td style={{ padding:'9px 12px', color:'#64748b', fontSize:13 }}>{t.projectId||'—'}</td>
-                      <td style={{ padding:'9px 12px', color:'#64748b', fontSize:13, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.note}>{t.note||'—'}</td>
-                      <td style={{ padding:'9px 12px', color:'#94a3b8', fontSize:12 }}>{t.by}</td>
+                      <td style={{ padding:'9px 12px', color:__stc('#64748b'), fontSize:13 }}>{t.unit}</td>
+                      <td style={{ padding:'9px 12px', fontFamily:'monospace', fontSize:12, color:__stc('#475569') }}>{t.ref||'—'}</td>
+                      <td style={{ padding:'9px 12px', color:__stc('#64748b'), fontSize:13 }}>{t.projectId||'—'}</td>
+                      <td style={{ padding:'9px 12px', color:__stc('#64748b'), fontSize:13, maxWidth:200, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }} title={t.note}>{t.note||'—'}</td>
+                      <td style={{ padding:'9px 12px', color:__stc('#94a3b8'), fontSize:12 }}>{t.by}</td>
                     </tr>
                   );
                 })}
@@ -1771,35 +1796,35 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
       )}
 
       {activeTab === 'stock' && (
-        <div style={{ background:'#fff', borderRadius:10, border:'1.5px solid #e2e8f0', padding:28 }}>
-          <div style={{ fontWeight:700, color:'#0f172a', marginBottom:24, fontSize:15 }}>Stock Level Analysis</div>
+        <div style={{ background:__sbg('#fff'), borderRadius:10, border:`1.5px solid ${__sbg('#e2e8f0')}`, padding:28 }}>
+          <div style={{ fontWeight:700, color:__stc('#0f172a'), marginBottom:24, fontSize:15 }}>Stock Level Analysis</div>
           <div style={{ marginBottom:32 }}>
             <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-              <span style={{ fontWeight:600, color:'#0f172a' }}>Current Level</span>
-              <span style={{ fontWeight:800, fontSize:16, color: item.status==='OUT_OF_STOCK'?'#ef4444':item.status==='LOW_STOCK'?'#f59e0b':'#10b981' }}>
+              <span style={{ fontWeight:600, color:__stc('#0f172a') }}>Current Level</span>
+              <span style={{ fontWeight:800, fontSize:16, color: item.status==='OUT_OF_STOCK'?__stc('#ef4444'):item.status==='LOW_STOCK'?__stc('#f59e0b'):__stc('#10b981') }}>
                 {fmt(item.currentQty)} / {fmt(item.maxQty)} {item.unit} ({stockPct.toFixed(1)}%)
               </span>
             </div>
-            <div style={{ position:'relative', height:20, background:'#f1f5f9', borderRadius:10, overflow:'hidden' }}>
-              <div style={{ position:'absolute', height:'100%', width:`${stockPct}%`, background: item.status==='OUT_OF_STOCK'?'#ef4444':item.status==='LOW_STOCK'?'#f59e0b':'#10b981', borderRadius:10, transition:'width .4s' }} />
-              <div style={{ position:'absolute', left:`${minPct}%`, top:0, height:'100%', width:2, background:'#f97316' }} />
+            <div style={{ position:'relative', height:20, background:__sbg('#f1f5f9'), borderRadius:10, overflow:'hidden' }}>
+              <div style={{ position:'absolute', height:'100%', width:`${stockPct}%`, background: item.status==='OUT_OF_STOCK'?__sbg('#ef4444'):item.status==='LOW_STOCK'?__sbg('#f59e0b'):__sbg('#10b981'), borderRadius:10, transition:'width .4s' }} />
+              <div style={{ position:'absolute', left:`${minPct}%`, top:0, height:'100%', width:2, background:__sbg('#f97316') }} />
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', marginTop:6, fontSize:12, color:'#94a3b8' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginTop:6, fontSize:12, color:__stc('#94a3b8') }}>
               <span>0</span>
-              <span style={{ color:'#f97316' }}>Reorder: {fmt(item.minQty)} {item.unit}</span>
+              <span style={{ color:__stc('#f97316') }}>Reorder: {fmt(item.minQty)} {item.unit}</span>
               <span>Max: {fmt(item.maxQty)} {item.unit}</span>
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:16 }}>
             {[
-              { label:'On Hand',       value:`${fmt(item.currentQty)} ${item.unit}`, icon:'📦', color:'#1e40af' },
-              { label:'Reorder Point', value:`${fmt(item.minQty)} ${item.unit}`,     icon:'🔔', color:'#f97316' },
-              { label:'Max Capacity',  value:`${fmt(item.maxQty)} ${item.unit}`,     icon:'📊', color:'#7c3aed' },
+              { label:'On Hand',       value:`${fmt(item.currentQty)} ${item.unit}`, icon:'📦', color:__stc('#1e40af') },
+              { label:'Reorder Point', value:`${fmt(item.minQty)} ${item.unit}`,     icon:'🔔', color:__stc('#f97316') },
+              { label:'Max Capacity',  value:`${fmt(item.maxQty)} ${item.unit}`,     icon:'📊', color:__stc('#7c3aed') },
             ].map(c => (
-              <div key={c.label} style={{ padding:'20px', background:'#f8fafc', borderRadius:8, textAlign:'center', border:'1.5px solid #e2e8f0' }}>
+              <div key={c.label} style={{ padding:'20px', background:__sbg('#f8fafc'), borderRadius:8, textAlign:'center', border:`1.5px solid ${__sbg('#e2e8f0')}` }}>
                 <div style={{ fontSize:28 }}>{c.icon}</div>
                 <div style={{ fontSize:20, fontWeight:800, color:c.color, marginTop:8 }}>{c.value}</div>
-                <div style={{ fontSize:12, color:'#64748b', marginTop:4 }}>{c.label}</div>
+                <div style={{ fontSize:12, color:__stc('#64748b'), marginTop:4 }}>{c.label}</div>
               </div>
             ))}
           </div>
@@ -1919,7 +1944,7 @@ function EditItemModal({ open, onClose, onSave, item, warehouses }) {
           <div>
             <h3 className="inv-modal-title">Edit Item</h3>
             <p className="inv-modal-sub">
-              <span style={{ fontFamily:'monospace', background:'#f1f5f9', padding:'2px 7px', borderRadius:5, fontWeight:700 }}>
+              <span style={{ fontFamily:'monospace', background:__sbg('#f1f5f9'), padding:'2px 7px', borderRadius:5, fontWeight:700 }}>
                 {item.itemCode}
               </span>
               &nbsp;·&nbsp;{selectedWh?.name || warehouses.find(w => String(w.id) === String(item.warehouseId))?.name || 'Unknown warehouse'}
@@ -2266,15 +2291,15 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
           {loading && <div className="inv-filter-hint" style={{ margin:'12px 0' }}>Loading PO items…</div>}
           {!loading && poItems.length > 0 && (
             <div style={{ marginTop:16 }}>
-              <div style={{ fontWeight:700, fontSize:13, color:'#0f172a', marginBottom:8 }}>
+              <div style={{ fontWeight:700, fontSize:13, color:__stc('#0f172a'), marginBottom:8 }}>
                 PO Items — enter delivered quantities for this bill
               </div>
-              <div style={{ border:'1.5px solid #e2e8f0', borderRadius:10, overflow:'auto' }}>
+              <div style={{ border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:10, overflow:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:680 }}>
                   <thead>
-                    <tr style={{ background:'#f8fafc' }}>
+                    <tr style={{ background:__sbg('#f8fafc') }}>
                       {['Code','Item Name','Unit','Ordered','Received','Pending','Deliver Now','Rate (₹)','Tax%','Line Total'].map(h => (
-                        <th key={h} style={{ padding:'9px 10px', textAlign: ['Ordered','Received','Pending','Deliver Now','Rate (₹)','Tax%','Line Total'].includes(h)?'right':'left', fontWeight:700, fontSize:11, color:'#475569', borderBottom:'1.5px solid #e2e8f0' }}>{h}</th>
+                        <th key={h} style={{ padding:'9px 10px', textAlign: ['Ordered','Received','Pending','Deliver Now','Rate (₹)','Tax%','Line Total'].includes(h)?'right':'left', fontWeight:700, fontSize:11, color:__stc('#475569'), borderBottom:`1.5px solid ${__sbg('#e2e8f0')}` }}>{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -2285,34 +2310,34 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
                       const lineT = sub + sub * (Number(it.taxPercent) || 0) / 100;
                       const isComplete = it.deliveryStatus === 'COMPLETE';
                       return (
-                        <tr key={idx} style={{ borderBottom:'1px solid #f1f5f9', background: isComplete ? '#f8fafc' : '#fff' }}>
+                        <tr key={idx} style={{ borderBottom:`1px solid ${__sbg('#f1f5f9')}`, background: isComplete ? __sbg('#f8fafc') : __sbg('#fff') }}>
                           <td style={{ padding:'8px 10px', fontFamily:'monospace', fontSize:12 }}>{it.itemCode}</td>
                           <td style={{ padding:'8px 10px', fontWeight:500 }}>{it.itemName}</td>
-                          <td style={{ padding:'8px 10px', color:'#64748b' }}>{it.unit}</td>
+                          <td style={{ padding:'8px 10px', color:__stc('#64748b') }}>{it.unit}</td>
                           <td style={{ padding:'8px 10px', textAlign:'right' }}>{fmt(it.orderedQty)}</td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', color:'#166534' }}>{fmt(it.receivedQty)}</td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', color: Number(it.pendingQty)>0?'#991b1b':'#64748b', fontWeight: Number(it.pendingQty)>0?700:400 }}>{fmt(it.pendingQty)}</td>
+                          <td style={{ padding:'8px 10px', textAlign:'right', color:__stc('#166534') }}>{fmt(it.receivedQty)}</td>
+                          <td style={{ padding:'8px 10px', textAlign:'right', color: Number(it.pendingQty)>0?__stc('#991b1b'):__stc('#64748b'), fontWeight: Number(it.pendingQty)>0?700:400 }}>{fmt(it.pendingQty)}</td>
                           <td style={{ padding:'6px 10px', textAlign:'right' }}>
                             <input type="number" min="0" max={it.maxBillableQty || undefined} step="0.001"
                               value={it.deliveredQty}
                               onChange={e => setItemQty(idx, e.target.value)}
-                              style={{ width:80, padding:'5px 8px', textAlign:'right', border:`1.5px solid ${dQty>Number(it.maxBillableQty)&&it.maxBillableQty>0?'#ef4444':'#e2e8f0'}`, borderRadius:6, fontSize:13, fontFamily:'inherit' }}
+                              style={{ width:80, padding:'5px 8px', textAlign:'right', border:`1.5px solid ${dQty>Number(it.maxBillableQty)&&it.maxBillableQty>0?__sbg('#ef4444'):__sbg('#e2e8f0')}`, borderRadius:6, fontSize:13, fontFamily:'inherit' }}
                               disabled={isComplete}
                               placeholder="0"
                             />
-                            {isComplete && <div style={{ fontSize:11, color:'#94a3b8', marginTop:2 }}>Complete</div>}
+                            {isComplete && <div style={{ fontSize:11, color:__stc('#94a3b8'), marginTop:2 }}>Complete</div>}
                           </td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', color:'#64748b' }}>{fmtCcy(it.unitPrice)}</td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', color:'#64748b' }}>{it.taxPercent}%</td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, color:'#0f172a' }}>{fmtCcy(lineT)}</td>
+                          <td style={{ padding:'8px 10px', textAlign:'right', color:__stc('#64748b') }}>{fmtCcy(it.unitPrice)}</td>
+                          <td style={{ padding:'8px 10px', textAlign:'right', color:__stc('#64748b') }}>{it.taxPercent}%</td>
+                          <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, color:__stc('#0f172a') }}>{fmtCcy(lineT)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
-                    <tr style={{ background:'#f8fafc', borderTop:'2px solid #e2e8f0' }}>
-                      <td colSpan={9} style={{ padding:'10px', fontWeight:700, color:'#0f172a', fontSize:13 }}>Grand Total (incl. tax)</td>
-                      <td style={{ padding:'10px', textAlign:'right', fontWeight:800, fontSize:14, color:'#1d4ed8' }}>{fmtCcy(lineTotal)}</td>
+                    <tr style={{ background:__sbg('#f8fafc'), borderTop:`2px solid ${__sbg('#e2e8f0')}` }}>
+                      <td colSpan={9} style={{ padding:'10px', fontWeight:700, color:__stc('#0f172a'), fontSize:13 }}>Grand Total (incl. tax)</td>
+                      <td style={{ padding:'10px', textAlign:'right', fontWeight:800, fontSize:14, color:__stc('#1d4ed8') }}>{fmtCcy(lineTotal)}</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -2342,7 +2367,7 @@ function InvCreateBillModal({ open, onClose, onSave, defaultGroupName, defaultSu
         <div className="inv-modal-actions">
           <button className="inv-btn inv-btn--ghost" onClick={onClose}>Cancel</button>
           {poItems.length > 0 && (
-            <span style={{ color:'#64748b', fontSize:13, margin:'0 8px' }}>
+            <span style={{ color:__stc('#64748b'), fontSize:13, margin:'0 8px' }}>
               Total: <strong>{fmtCcy(lineTotal)}</strong>
             </span>
           )}
@@ -2475,9 +2500,9 @@ function InvRecordPaymentModal({ open, onClose, onSave, bills, warehouses, editP
             ].map(opt => (
               <label key={opt.key} style={{
                 flex:1, display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px',
-                border:`2px solid ${payType===opt.key?'#3b82f6':'#e2e8f0'}`,
+                border:`2px solid ${payType===opt.key?__sbg('#3b82f6'):__sbg('#e2e8f0')}`,
                 borderRadius:10, cursor: isEdit ? 'not-allowed' : 'pointer',
-                background: payType===opt.key ? '#eff6ff' : '#fff',
+                background: payType===opt.key ? __sbg('#eff6ff') : __sbg('#fff'),
                 opacity: isEdit && payType !== opt.key ? 0.4 : 1,
                 transition:'all .15s'
               }}>
@@ -2486,8 +2511,8 @@ function InvRecordPaymentModal({ open, onClose, onSave, bills, warehouses, editP
                   onChange={() => { if (!isEdit) { setPayType(opt.key); set('billId',''); set('vendorId',''); set('vendorName',''); set('amount',''); }}}
                   style={{ marginTop:3 }} />
                 <div>
-                  <div style={{ fontWeight:700, fontSize:13, color:'#0f172a' }}>{opt.icon} {opt.label}</div>
-                  <div style={{ fontSize:12, color:'#64748b', marginTop:2 }}>{opt.desc}</div>
+                  <div style={{ fontWeight:700, fontSize:13, color:__stc('#0f172a') }}>{opt.icon} {opt.label}</div>
+                  <div style={{ fontSize:12, color:__stc('#64748b'), marginTop:2 }}>{opt.desc}</div>
                 </div>
               </label>
             ))}
@@ -2569,15 +2594,15 @@ function InvRecordPaymentModal({ open, onClose, onSave, bills, warehouses, editP
                   placeholder={filteredBillsForPayment.length===0 ? 'No unpaid bills match filter' : 'Select bill…'}
                 />
                 {filteredBillsForPayment.length === 0 && unpaidBills.length > 0 && !isEdit && (
-                  <div style={{ fontSize:12, color:'#f59e0b', marginTop:4 }}>
+                  <div style={{ fontSize:12, color:__stc('#f59e0b'), marginTop:4 }}>
                     ⚠ No pending/unpaid bills match the selected filters — try clearing Group/Warehouse/Vendor filters above
                   </div>
                 )}
                 {selBill && (
                   <div className="inv-item-hint" style={{ marginTop:6, display:'flex', gap:16 }}>
                     <span>Total: <strong>{fmtCcy(selBill.amount)}</strong></span>
-                    <span>Paid: <strong style={{ color:'#166534' }}>{fmtCcy(selBill.paid)}</strong></span>
-                    <span>Outstanding: <strong style={{ color:'#991b1b' }}>{fmtCcy(outstanding)}</strong></span>
+                    <span>Paid: <strong style={{ color:__stc('#166534') }}>{fmtCcy(selBill.paid)}</strong></span>
+                    <span>Outstanding: <strong style={{ color:__stc('#991b1b') }}>{fmtCcy(outstanding)}</strong></span>
                   </div>
                 )}
               </div>
@@ -2636,7 +2661,7 @@ function InvRecordPaymentModal({ open, onClose, onSave, bills, warehouses, editP
                 max={payType==='BILL_PAYMENT' ? outstanding : undefined}
               />
               {payType==='BILL_PAYMENT' && selBill && Number(form.amount) > outstanding && (
-                <div style={{ color:'#ef4444', fontSize:12, marginTop:4 }}>⚠ Exceeds outstanding balance</div>
+                <div style={{ color:__stc('#ef4444'), fontSize:12, marginTop:4 }}>⚠ Exceeds outstanding balance</div>
               )}
             </div>
             <div className="inv-field">
@@ -3081,7 +3106,7 @@ function RecordPaymentModal({ open, onClose, onSave, bills }) {
               />
               {bill && (
                 <div className="inv-item-hint">
-                  Total: <strong>{fmtCcy(bill.amount)}</strong> · Paid: <strong>{fmtCcy(bill.paid)}</strong> · Outstanding: <strong style={{ color:'#991b1b' }}>{fmtCcy(due)}</strong>
+                  Total: <strong>{fmtCcy(bill.amount)}</strong> · Paid: <strong>{fmtCcy(bill.paid)}</strong> · Outstanding: <strong style={{ color:__stc('#991b1b') }}>{fmtCcy(due)}</strong>
                 </div>
               )}
             </div>
@@ -3185,9 +3210,9 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
             <h3 className="inv-modal-title">Edit Bill — {bill.billNumber}</h3>
             <p className="inv-modal-sub" style={{ display:'flex', alignItems:'center', gap:8 }}>
               {bill.vendorName}
-              <span className="inv-status-badge" style={{ background: sm.bg, color: sm.color }}>{sm.label}</span>
+              <span className="inv-status-badge" style={{ background: __sbg(sm.bg), color: __stc(sm.color) }}>{sm.label}</span>
               {bill.poNumber && bill.poNumber !== '—' && (
-                <span className="inv-cat-badge" style={{ background:'#eff6ff', color:'#1e40af', borderColor:'#bfdbfe' }}>
+                <span className="inv-cat-badge" style={{ background:__sbg('#eff6ff'), color:__stc('#1e40af'), borderColor:__sbg('#bfdbfe') }}>
                   📋 {bill.poNumber}
                 </span>
               )}
@@ -3198,15 +3223,15 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
 
         <div className="inv-modal-body">
           {isPaid && (
-            <div style={{ background:'#fef9c3', border:'1.5px solid #fde047', borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:13, color:'#854d0e' }}>
+            <div style={{ background:__sbg('#fef9c3'), border:`1.5px solid ${__sbg('#fde047')}`, borderRadius:8, padding:'10px 14px', marginBottom:14, fontSize:13, color:__stc('#854d0e') }}>
               ⚠ This bill is fully paid. Item quantities and amount cannot be changed — only dates and notes can be updated.
             </div>
           )}
 
           {/* ── Read-only scope strip ── */}
-          <div style={{ background:'#f8fafc', border:'1.5px solid #e2e8f0', borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#94a3b8', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Scope (locked)</div>
-            <div style={{ display:'flex', gap:24, flexWrap:'wrap', fontSize:13, color:'#475569' }}>
+          <div style={{ background:__sbg('#f8fafc'), border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:__stc('#94a3b8'), textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>Scope (locked)</div>
+            <div style={{ display:'flex', gap:24, flexWrap:'wrap', fontSize:13, color:__stc('#475569') }}>
               {bill.groupName    && <span>🏢 <strong>{bill.groupName}</strong></span>}
               {bill.subGroupName && <span>↳ <strong>{bill.subGroupName}</strong></span>}
               {wh                && <span>🏬 <strong>{wh.name}{wh.code ? ` (${wh.code})` : ''}</strong></span>}
@@ -3218,12 +3243,12 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
           {/* ── Payment summary ── */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:16 }}>
             {[
-              { label:'Total Amount',  val: fmtCcy(bill.amount),                   color:'#0f172a' },
-              { label:'Amount Paid',   val: fmtCcy(bill.paid),                     color:'#166534' },
-              { label:'Balance Due',   val: fmtCcy(bill.amount - bill.paid),        color: bill.paid < bill.amount ? '#991b1b' : '#166534' },
+              { label:'Total Amount',  val: fmtCcy(bill.amount),                   color:__stc('#0f172a') },
+              { label:'Amount Paid',   val: fmtCcy(bill.paid),                     color:__stc('#166534') },
+              { label:'Balance Due',   val: fmtCcy(bill.amount - bill.paid),        color: bill.paid < bill.amount ? __stc('#991b1b') : __stc('#166534') },
             ].map(k => (
-              <div key={k.label} style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px' }}>
-                <div style={{ fontSize:11, color:'#94a3b8', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{k.label}</div>
+              <div key={k.label} style={{ background:__sbg('#f8fafc'), border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:11, color:__stc('#94a3b8'), fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{k.label}</div>
                 <div style={{ fontSize:16, fontWeight:700, color: k.color }}>{k.val}</div>
               </div>
             ))}
@@ -3244,19 +3269,19 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
           {/* ── Bill items table ── */}
           {items.length > 0 && (
             <div style={{ marginBottom:16 }}>
-              <div style={{ fontWeight:700, fontSize:13, color:'#0f172a', marginBottom:8 }}>
-                Bill Items {isPaid && <span style={{ fontSize:11, color:'#94a3b8', fontWeight:400 }}>(read-only — bill is paid)</span>}
+              <div style={{ fontWeight:700, fontSize:13, color:__stc('#0f172a'), marginBottom:8 }}>
+                Bill Items {isPaid && <span style={{ fontSize:11, color:__stc('#94a3b8'), fontWeight:400 }}>(read-only — bill is paid)</span>}
               </div>
-              <div style={{ border:'1.5px solid #e2e8f0', borderRadius:10, overflow:'auto' }}>
+              <div style={{ border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:10, overflow:'auto' }}>
                 <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:680 }}>
                   <thead>
-                    <tr style={{ background:'#f8fafc' }}>
+                    <tr style={{ background:__sbg('#f8fafc') }}>
                       {['Code','Item Name','Unit','Qty','Rate (₹)','Tax %','Line Total'].map(h => (
                         <th key={h} style={{
                           padding:'9px 10px',
                           textAlign: ['Qty','Rate (₹)','Tax %','Line Total'].includes(h) ? 'right' : 'left',
-                          fontWeight:700, fontSize:11, color:'#475569',
-                          borderBottom:'1.5px solid #e2e8f0'
+                          fontWeight:700, fontSize:11, color:__stc('#475569'),
+                          borderBottom:`1.5px solid ${__sbg('#e2e8f0')}`
                         }}>{h}</th>
                       ))}
                     </tr>
@@ -3269,18 +3294,18 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                       const sub   = qty * rate;
                       const lineT = sub + sub * tax / 100;
                       return (
-                        <tr key={idx} style={{ borderBottom:'1px solid #f1f5f9' }}>
-                          <td style={{ padding:'8px 10px', fontFamily:'monospace', fontSize:12, color:'#64748b' }}>{it.itemCode || '—'}</td>
+                        <tr key={idx} style={{ borderBottom:`1px solid ${__sbg('#f1f5f9')}` }}>
+                          <td style={{ padding:'8px 10px', fontFamily:'monospace', fontSize:12, color:__stc('#64748b') }}>{it.itemCode || '—'}</td>
                           <td style={{ padding:'8px 10px', fontWeight:500 }}>{it.itemName}</td>
-                          <td style={{ padding:'8px 10px', color:'#64748b' }}>{it.unit}</td>
+                          <td style={{ padding:'8px 10px', color:__stc('#64748b') }}>{it.unit}</td>
                           <td style={{ padding:'6px 10px', textAlign:'right' }}>
                             <input type="number" min="0" step="0.001"
                               value={it.qty}
                               onChange={e => setItem(idx, 'qty', e.target.value)}
                               disabled={isPaid}
                               style={{ width:80, padding:'5px 8px', textAlign:'right',
-                                border:'1.5px solid #e2e8f0', borderRadius:6, fontSize:13,
-                                fontFamily:'inherit', background: isPaid ? '#f8fafc' : '#fff' }}
+                                border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:6, fontSize:13,
+                                fontFamily:'inherit', background: isPaid ? __sbg('#f8fafc') : __sbg('#fff') }}
                             />
                           </td>
                           <td style={{ padding:'6px 10px', textAlign:'right' }}>
@@ -3289,8 +3314,8 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                               onChange={e => setItem(idx, 'rate', e.target.value)}
                               disabled={isPaid}
                               style={{ width:90, padding:'5px 8px', textAlign:'right',
-                                border:'1.5px solid #e2e8f0', borderRadius:6, fontSize:13,
-                                fontFamily:'inherit', background: isPaid ? '#f8fafc' : '#fff' }}
+                                border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:6, fontSize:13,
+                                fontFamily:'inherit', background: isPaid ? __sbg('#f8fafc') : __sbg('#fff') }}
                             />
                           </td>
                           <td style={{ padding:'6px 10px', textAlign:'right' }}>
@@ -3299,11 +3324,11 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                               onChange={e => setItem(idx, 'taxPct', e.target.value)}
                               disabled={isPaid}
                               style={{ width:60, padding:'5px 8px', textAlign:'right',
-                                border:'1.5px solid #e2e8f0', borderRadius:6, fontSize:13,
-                                fontFamily:'inherit', background: isPaid ? '#f8fafc' : '#fff' }}
+                                border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:6, fontSize:13,
+                                fontFamily:'inherit', background: isPaid ? __sbg('#f8fafc') : __sbg('#fff') }}
                             />
                           </td>
-                          <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, color:'#0f172a' }}>
+                          <td style={{ padding:'8px 10px', textAlign:'right', fontWeight:600, color:__stc('#0f172a') }}>
                             {fmtCcy(lineT.toFixed(0))}
                           </td>
                         </tr>
@@ -3311,11 +3336,11 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
                     })}
                   </tbody>
                   <tfoot>
-                    <tr style={{ background:'#f8fafc', borderTop:'2px solid #e2e8f0' }}>
-                      <td colSpan={6} style={{ padding:'10px 10px', fontWeight:700, color:'#0f172a', fontSize:13 }}>
+                    <tr style={{ background:__sbg('#f8fafc'), borderTop:`2px solid ${__sbg('#e2e8f0')}` }}>
+                      <td colSpan={6} style={{ padding:'10px 10px', fontWeight:700, color:__stc('#0f172a'), fontSize:13 }}>
                         Grand Total (incl. tax)
                       </td>
-                      <td style={{ padding:'10px', textAlign:'right', fontWeight:800, fontSize:14, color:'#1d4ed8' }}>
+                      <td style={{ padding:'10px', textAlign:'right', fontWeight:800, fontSize:14, color:__stc('#1d4ed8') }}>
                         {fmtCcy(lineTotal.toFixed(0))}
                       </td>
                     </tr>
@@ -3350,8 +3375,8 @@ function EditBillModal({ open, onClose, onSave, bill, warehouses }) {
         <div className="inv-modal-actions">
           <button className="inv-btn inv-btn--ghost" onClick={onClose}>Cancel</button>
           {items.length > 0 && !isPaid && (
-            <span style={{ color:'#64748b', fontSize:13, margin:'0 8px' }}>
-              Total: <strong style={{ color:'#1d4ed8' }}>{fmtCcy(lineTotal.toFixed(0))}</strong>
+            <span style={{ color:__stc('#64748b'), fontSize:13, margin:'0 8px' }}>
+              Total: <strong style={{ color:__stc('#1d4ed8') }}>{fmtCcy(lineTotal.toFixed(0))}</strong>
             </span>
           )}
           <button className="inv-btn inv-btn--primary" disabled={!canSubmit}
@@ -3456,12 +3481,12 @@ function AllocateAdvanceModal({ open, onClose, onAllocate, advance, bills }) {
           {/* Advance summary */}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
             {[
-              { label:'Total Advance',   val: fmtCcy(advance.amount),  color:'#0f172a' },
-              { label:'Already Applied', val: fmtCcy(advance.appliedAmount || 0), color:'#d97706' },
-              { label:'Available',       val: fmtCcy(available),        color: available > 0 ? '#166534' : '#991b1b' },
+              { label:'Total Advance',   val: fmtCcy(advance.amount),  color:__stc('#0f172a') },
+              { label:'Already Applied', val: fmtCcy(advance.appliedAmount || 0), color:__stc('#d97706') },
+              { label:'Available',       val: fmtCcy(available),        color: available > 0 ? __stc('#166534') : __stc('#991b1b') },
             ].map(k => (
-              <div key={k.label} style={{ background:'#f8fafc', border:'1px solid #e2e8f0', borderRadius:8, padding:'10px 14px' }}>
-                <div style={{ fontSize:11, color:'#94a3b8', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{k.label}</div>
+              <div key={k.label} style={{ background:__sbg('#f8fafc'), border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:8, padding:'10px 14px' }}>
+                <div style={{ fontSize:11, color:__stc('#94a3b8'), fontWeight:700, textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:4 }}>{k.label}</div>
                 <div style={{ fontSize:16, fontWeight:700, color: k.color }}>{k.val}</div>
               </div>
             ))}
@@ -3469,11 +3494,11 @@ function AllocateAdvanceModal({ open, onClose, onAllocate, advance, bills }) {
 
           {/* Live allocation summary */}
           {totalAllocated > 0 && (
-            <div style={{ background: remaining < 0 ? '#fef2f2' : '#f0fdf4', border:`1px solid ${remaining < 0 ? '#fecaca' : '#a7f3d0'}`, borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ fontSize:13, color:'#475569' }}>
+            <div style={{ background: remaining < 0 ? __sbg('#fef2f2') : __sbg('#f0fdf4'), border:`1px solid ${remaining < 0 ? __sbg('#fecaca') : __sbg('#a7f3d0')}`, borderRadius:8, padding:'10px 14px', marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:13, color:__stc('#475569') }}>
                 Allocating <strong>{fmtCcy(totalAllocated)}</strong> across {toSave.length} bill{toSave.length !== 1 ? 's' : ''}
               </span>
-              <span style={{ fontWeight:700, color: remaining < 0 ? '#991b1b' : '#166534' }}>
+              <span style={{ fontWeight:700, color: remaining < 0 ? __stc('#991b1b') : __stc('#166534') }}>
                 Remaining: {fmtCcy(Math.max(0, remaining))}
                 {remaining < 0 && ' ⚠ EXCEEDS'}
               </span>
@@ -3485,15 +3510,15 @@ function AllocateAdvanceModal({ open, onClose, onAllocate, advance, bills }) {
             <div className="inv-empty" style={{ padding:'32px 0' }}>
               <span className="inv-empty-icon">🧾</span>
               <p>No unpaid bills found for <strong>{advance.vendorName}</strong>.</p>
-              <p style={{ fontSize:12, color:'#94a3b8', marginTop:4 }}>Bills must be in the same group/scope as the advance.</p>
+              <p style={{ fontSize:12, color:__stc('#94a3b8'), marginTop:4 }}>Bills must be in the same group/scope as the advance.</p>
             </div>
           ) : (
-            <div style={{ border:'1.5px solid #e2e8f0', borderRadius:10, overflow:'hidden' }}>
+            <div style={{ border:`1.5px solid ${__sbg('#e2e8f0')}`, borderRadius:10, overflow:'hidden' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13 }}>
                 <thead>
-                  <tr style={{ background:'#f8fafc' }}>
+                  <tr style={{ background:__sbg('#f8fafc') }}>
                     {['Bill No.', 'Date', 'Due Date', 'Bill Total', 'Paid', 'Balance', 'Allocate (₹)'].map(h => (
-                      <th key={h} style={{ padding:'9px 12px', textAlign: ['Bill Total','Paid','Balance','Allocate (₹)'].includes(h)?'right':'left', fontWeight:700, fontSize:11, color:'#475569', borderBottom:'1.5px solid #e2e8f0' }}>{h}</th>
+                      <th key={h} style={{ padding:'9px 12px', textAlign: ['Bill Total','Paid','Balance','Allocate (₹)'].includes(h)?'right':'left', fontWeight:700, fontSize:11, color:__stc('#475569'), borderBottom:`1.5px solid ${__sbg('#e2e8f0')}` }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -3509,30 +3534,30 @@ function AllocateAdvanceModal({ open, onClose, onAllocate, advance, bills }) {
                     const over = allocNum > max + 0.001;
                     const bsm = BILL_STATUS[bill.status] || BILL_STATUS.UNPAID;
                     return (
-                      <tr key={bill.id} style={{ borderBottom:'1px solid #f1f5f9', background: alloc > 0 ? '#f0fdf4' : '#fff' }}>
+                      <tr key={bill.id} style={{ borderBottom:`1px solid ${__sbg('#f1f5f9')}`, background: alloc > 0 ? __sbg('#f0fdf4') : __sbg('#fff') }}>
                         <td style={{ padding:'10px 12px' }}>
-                          <div style={{ fontFamily:'monospace', fontWeight:600, color:'#1e40af', fontSize:12 }}>{bill.billNumber}</div>
-                          <span className="inv-status-badge" style={{ background: bsm.bg, color: bsm.color, fontSize:10, marginTop:2, display:'inline-block' }}>{bsm.label}</span>
+                          <div style={{ fontFamily:'monospace', fontWeight:600, color:__stc('#1e40af'), fontSize:12 }}>{bill.billNumber}</div>
+                          <span className="inv-status-badge" style={{ background: __sbg(bsm.bg), color: __stc(bsm.color), fontSize:10, marginTop:2, display:'inline-block' }}>{bsm.label}</span>
                         </td>
-                        <td style={{ padding:'10px 12px', color:'#64748b' }}>{bill.billDate}</td>
-                        <td style={{ padding:'10px 12px', color: bill.status === 'OVERDUE' ? '#991b1b' : '#64748b', fontWeight: bill.status === 'OVERDUE' ? 600 : 400 }}>{bill.dueDate || '—'}</td>
+                        <td style={{ padding:'10px 12px', color:__stc('#64748b') }}>{bill.billDate}</td>
+                        <td style={{ padding:'10px 12px', color: bill.status === 'OVERDUE' ? __stc('#991b1b') : __stc('#64748b'), fontWeight: bill.status === 'OVERDUE' ? 600 : 400 }}>{bill.dueDate || '—'}</td>
                         <td style={{ padding:'10px 12px', textAlign:'right' }}>{fmtCcy(bill.amount)}</td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', color:'#166534' }}>{fmtCcy(bill.paid)}</td>
-                        <td style={{ padding:'10px 12px', textAlign:'right', color:'#991b1b', fontWeight:600 }}>{fmtCcy(balance)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', color:__stc('#166534') }}>{fmtCcy(bill.paid)}</td>
+                        <td style={{ padding:'10px 12px', textAlign:'right', color:__stc('#991b1b'), fontWeight:600 }}>{fmtCcy(balance)}</td>
                         <td style={{ padding:'8px 12px', textAlign:'right' }}>
                           <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3 }}>
                             <input type="number" min="0" max={max} step="0.01" placeholder="0.00"
                               value={alloc || ''}
                               onChange={e => handleAllocationChange(bill.id, e.target.value, max)}
                               style={{ width:110, padding:'6px 8px', textAlign:'right',
-                                border:`1.5px solid ${over ? '#ef4444' : alloc > 0 ? '#22c55e' : '#e2e8f0'}`,
+                                border:`1.5px solid ${over ? __sbg('#ef4444') : alloc > 0 ? __sbg('#22c55e') : __sbg('#e2e8f0')}`,
                                 borderRadius:6, fontSize:13 }}
                             />
-                            {max > 0 && <button style={{ fontSize:11, color:'#3b82f6', background:'none', border:'none', cursor:'pointer', padding:0 }}
+                            {max > 0 && <button style={{ fontSize:11, color:__stc('#3b82f6'), background:'none', border:'none', cursor:'pointer', padding:0 }}
                               onClick={() => setAlloc(String(bill.id), max.toFixed(2))}>
                               Max: {fmtCcy(max)}
                             </button>}
-                            {over && <span style={{ fontSize:11, color:'#ef4444' }}>Exceeds max</span>}
+                            {over && <span style={{ fontSize:11, color:__stc('#ef4444') }}>Exceeds max</span>}
                           </div>
                         </td>
                       </tr>
@@ -3559,6 +3584,7 @@ function AllocateAdvanceModal({ open, onClose, onAllocate, advance, bills }) {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 export default function InventoryManagementPage() {
+  useThemeVersion();
   const { user, pagePermissions } = useAuth();
   const toast = useToast();
   const { confirmState, confirm } = useConfirm();
@@ -3574,6 +3600,7 @@ export default function InventoryManagementPage() {
     const saved = localStorage.getItem(LS_TAB);
     return saved && saved !== 'alerts' ? saved : 'items';
   });
+  const switchTab = t => { setActiveTab(t); localStorage.setItem(LS_TAB, t); };
 
   // Page-level group / subgroup / project filter (synced across all pages)
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
@@ -3660,32 +3687,6 @@ export default function InventoryManagementPage() {
   const [transactions,setTransactions]= useState(MOCK_TRANSACTIONS);
   const [pos,         setPos]         = useState([]);
   const [bills,       setBills]       = useState([]);
-
-  // ── Pagination state: POs ─────────────────────────────────────────────────
-  const [poPage,      setPoPage]      = useState(0);
-  const [poPageSize,  setPoPageSize]  = useState(10);
-  const [poTotal,     setPoTotal]     = useState(0);
-  const [poTotalPages,setPoTotalPages]= useState(0);
-  const [poSearch,    setPoSearch]    = useState('');
-  const [poStatus,    setPoStatus]    = useState('');
-  const [poVendor,    setPoVendor]    = useState('');
-
-  // ── Pagination state: Bills ───────────────────────────────────────────────
-  const [billPage,      setBillPage]      = useState(0);
-  const [billPageSize,  setBillPageSize]  = useState(10);
-  const [billTotal,     setBillTotal]     = useState(0);
-  const [billTotalPages,setBillTotalPages]= useState(0);
-  const [billSearch,    setBillSearch]    = useState('');
-  const [billStatus,    setBillStatus]    = useState('');
-
-  // ── Pagination state: Payments ────────────────────────────────────────────
-  const [payPage,      setPayPage]      = useState(0);
-  const [payPageSize,  setPayPageSize]  = useState(10);
-  const [payTotal,     setPayTotal]     = useState(0);
-  const [payTotalPages,setPayTotalPages]= useState(0);
-  const [paySearch,    setPaySearch]    = useState('');
-  const [payMode,      setPayMode]      = useState('');
-  const [payType,      setPayType]      = useState('');
   const [payments,    setPayments]    = useState([]);
   const [vendors,     setVendors]     = useState([]);
 
@@ -3700,161 +3701,28 @@ export default function InventoryManagementPage() {
   }, []);
 
   // Load procurement + transactions scoped to current group/subgroup/warehouse
-  // useMemo so the object reference is stable — only changes when warehouse/group actually changes.
-  // Plain object (not a function) so reload functions read it directly without calling it.
-  const baseParams = useMemo(() => {
-    const p = {};
-    if (selectedWh)   p.warehouseId  = selectedWh;
-    if (groupName)    p.groupName     = groupName;
-    if (subGroupName) p.subGroupName  = subGroupName;
-    return p;
+  const reloadProcurement = useCallback(() => {
+    const params = {};
+    if (selectedWh)   params.warehouseId  = selectedWh;
+    if (groupName)    params.groupName     = groupName;
+    if (subGroupName) params.subGroupName  = subGroupName;
+
+    invPoApi.list({ ...params, size: 100 })
+      .then(d => setPos((d?.content || []).map(normalizePO)))
+      .catch(() => {});
+    invBillApi.list({ ...params, size: 100 })
+      .then(d => setBills((d?.content || []).map(normalizeBill)))
+      .catch(() => {});
+    invPaymentApi.list({ groupName: params.groupName, subGroupName: params.subGroupName, size: 100 })
+      .then(d => setPayments((d?.content || []).map(normalizePayment)))
+      .catch(() => {});
+    // Reload transactions from backend too
+    invTransactionApi.list({ ...params, size: 200 })
+      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
+      .catch(() => {});
   }, [selectedWh, groupName, subGroupName]);
 
-  // Plain functions — no useCallback, no memoisation needed.
-  // Each reads baseParams (stable ref) and hits the backend directly.
-  const reloadPos = (page = 0, size = 10, search = '', status = '', vendor = '') => {
-    const params = { ...baseParams, page, size };
-    if (search) params.search   = search;
-    if (status) params.status   = status;
-    if (vendor) params.vendorId = vendor;
-    invPoApi.list(params)
-      .then(d => {
-        setPos((d?.content || []).map(normalizePO));
-        setPoTotal(d?.totalElements ?? 0);
-        setPoTotalPages(d?.totalPages ?? 0);
-      })
-      .catch(() => {});
-  };
-
-  const reloadBills = (page = 0, size = 10, search = '', status = '') => {
-    const params = { ...baseParams, page, size };
-    if (search) params.search = search;
-    if (status) params.status = status;
-    invBillApi.list(params)
-      .then(d => {
-        setBills((d?.content || []).map(normalizeBill));
-        setBillTotal(d?.totalElements ?? 0);
-        setBillTotalPages(d?.totalPages ?? 0);
-      })
-      .catch(() => {});
-  };
-
-  const reloadPayments = (page = 0, size = 10, search = '', mode = '', type = '') => {
-    const params = { groupName: baseParams.groupName, subGroupName: baseParams.subGroupName, page, size };
-    if (search) params.search = search;
-    if (mode)   params.mode   = mode;
-    if (type)   params.type   = type;
-    invPaymentApi.list(params)
-      .then(d => {
-        setPayments((d?.content || []).map(normalizePayment));
-        setPayTotal(d?.totalElements ?? 0);
-        setPayTotalPages(d?.totalPages ?? 0);
-      })
-      .catch(() => {});
-  };
-
-  // Refs so the single useEffect below can always read current values without
-  // them being listed as deps (which would cause extra re-runs).
-  const activeTabRef   = useRef(activeTab);
-  const baseParamsRef  = useRef(baseParams);
-  const poPageSizeRef  = useRef(poPageSize);
-  const poSearchRef    = useRef(poSearch);
-  const poStatusRef    = useRef(poStatus);
-  const poVendorRef    = useRef(poVendor);
-  const billPageSizeRef= useRef(billPageSize);
-  const billSearchRef  = useRef(billSearch);
-  const billStatusRef  = useRef(billStatus);
-  const payPageSizeRef = useRef(payPageSize);
-  const paySearchRef   = useRef(paySearch);
-  const payModeRef     = useRef(payMode);
-  const payTypeRef     = useRef(payType);
-  activeTabRef.current   = activeTab;
-  baseParamsRef.current  = baseParams;
-  poPageSizeRef.current  = poPageSize;
-  poSearchRef.current    = poSearch;
-  poStatusRef.current    = poStatus;
-  poVendorRef.current    = poVendor;
-  billPageSizeRef.current= billPageSize;
-  billSearchRef.current  = billSearch;
-  billStatusRef.current  = billStatus;
-  payPageSizeRef.current = payPageSize;
-  paySearchRef.current   = paySearch;
-  payModeRef.current     = payMode;
-  payTypeRef.current     = payType;
-
-  // Track whether component has mounted to avoid double-firing on initial render
-  const hasMounted = useRef(false);
-
-  // Mount-only effect — runs exactly once
-  useEffect(() => {
-    hasMounted.current = true;
-    const tab = activeTabRef.current;
-    const bp  = baseParamsRef.current;
-    invTransactionApi.list({ ...bp, size: 200 })
-      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
-      .catch(() => {});
-    if (tab === 'po') {
-      invPoApi.list({ ...bp, page: 0, size: poPageSizeRef.current })
-        .then(d => { setPos((d?.content||[]).map(normalizePO)); setPoTotal(d?.totalElements??0); setPoTotalPages(d?.totalPages??0); })
-        .catch(() => {});
-    }
-    if (tab === 'bills') {
-      invBillApi.list({ ...bp, page: 0, size: billPageSizeRef.current })
-        .then(d => { setBills((d?.content||[]).map(normalizeBill)); setBillTotal(d?.totalElements??0); setBillTotalPages(d?.totalPages??0); })
-        .catch(() => {});
-      invPaymentApi.list({ groupName: bp.groupName, subGroupName: bp.subGroupName, page: 0, size: payPageSizeRef.current })
-        .then(d => { setPayments((d?.content||[]).map(normalizePayment)); setPayTotal(d?.totalElements??0); setPayTotalPages(d?.totalPages??0); })
-        .catch(() => {});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Filter-change effect — fires when warehouse/group changes, but skips the initial mount
-  useEffect(() => {
-    if (!hasMounted.current) return;
-    const tab = activeTabRef.current;
-    invTransactionApi.list({ ...baseParams, size: 200 })
-      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
-      .catch(() => {});
-    if (tab === 'po') {
-      setPoPage(0);
-      reloadPos(0, poPageSizeRef.current, poSearchRef.current, poStatusRef.current, poVendorRef.current);
-    }
-    if (tab === 'bills') {
-      setBillPage(0); setPayPage(0);
-      reloadBills(0, billPageSizeRef.current, billSearchRef.current, billStatusRef.current);
-      reloadPayments(0, payPageSizeRef.current, paySearchRef.current, payModeRef.current, payTypeRef.current);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedWh, groupName, subGroupName]);
-
-  // Reload helper called after mutations (create/update/delete).
-  // Reloads only the active tab's data — never crosses tab boundaries.
-  const reloadProcurement = () => {
-    invTransactionApi.list({ ...baseParams, size: 200 })
-      .then(d => setTransactions((d?.content || []).map(normalizeTxn)))
-      .catch(() => {});
-    const tab = activeTabRef.current;
-    if (tab === 'po')    reloadPos(0, poPageSizeRef.current, poSearchRef.current, poStatusRef.current, poVendorRef.current);
-    if (tab === 'bills') {
-      reloadBills(0, billPageSizeRef.current, billSearchRef.current, billStatusRef.current);
-      reloadPayments(0, payPageSizeRef.current, paySearchRef.current, payModeRef.current, payTypeRef.current);
-    }
-  };
-
-  const switchTab = t => {
-    setActiveTab(t);
-    localStorage.setItem(LS_TAB, t);
-    if (t === 'po') {
-      setPoPage(0);
-      reloadPos(0, poPageSize, poSearch, poStatus, poVendor);
-    }
-    if (t === 'bills') {
-      setBillPage(0); setPayPage(0);
-      reloadBills(0, billPageSize, billSearch, billStatus);
-      reloadPayments(0, payPageSize, paySearch, payMode, payType);
-    }
-  };
+  useEffect(() => { reloadProcurement(); }, [reloadProcurement]);
 
   const handleCreatePO = async (form) => {
     try {
@@ -4609,14 +4477,7 @@ export default function InventoryManagementPage() {
                 onCreate={() => setPoOpen(true)}
                 onEdit={po => { setEditingPO(po); setEditPoOpen(true); }}
                 onDelete={handleDeletePO}
-                canCreate={canCreate}
-                page={poPage} pageSize={poPageSize} total={poTotal} totalPages={poTotalPages}
-                search={poSearch} status={poStatus} vendor={poVendor}
-                onPageChange={p => { setPoPage(p); reloadPos(p, poPageSize, poSearch, poStatus, poVendor); }}
-                onPageSizeChange={s => { setPoPageSize(s); setPoPage(0); reloadPos(0, s, poSearch, poStatus, poVendor); }}
-                onSearchChange={v => { setPoSearch(v); setPoPage(0); reloadPos(0, poPageSize, v, poStatus, poVendor); }}
-                onStatusChange={v => { setPoStatus(v); setPoPage(0); reloadPos(0, poPageSize, poSearch, v, poVendor); }}
-                onVendorChange={v => { setPoVendor(v); setPoPage(0); reloadPos(0, poPageSize, poSearch, poStatus, v); }} />
+                canCreate={canCreate} />
             )}
             {activeTab === 'bills' && (
               <BillsPaymentsTab bills={bills} payments={payments} vendors={vendors} pos={pos}
@@ -4625,22 +4486,7 @@ export default function InventoryManagementPage() {
                 onEditPayment={p => { setEditingPay(p); setPayOpen(true); }}
                 onAllocateAdvance={p => setAllocatingAdv(p)}
                 onDeleteBill={handleDeleteBill} onDeletePayment={handleDeletePayment}
-                canCreate={canCreate}
-                billPage={billPage} billPageSize={billPageSize} billTotal={billTotal} billTotalPages={billTotalPages}
-                billSearch={billSearch} billStatus={billStatus}
-                onBillPageChange={p => { setBillPage(p); reloadBills(p, billPageSize, billSearch, billStatus); }}
-                onBillPageSizeChange={s => { setBillPageSize(s); setBillPage(0); reloadBills(0, s, billSearch, billStatus); }}
-                onBillSearchChange={v => { setBillSearch(v); setBillPage(0); reloadBills(0, billPageSize, v, billStatus); }}
-                onBillStatusChange={v => { setBillStatus(v); setBillPage(0); reloadBills(0, billPageSize, billSearch, v); }}
-                onGetBillPayments={invBillApi.getPayments}
-                payPage={payPage} payPageSize={payPageSize} payTotal={payTotal} payTotalPages={payTotalPages}
-                paySearch={paySearch} payMode={payMode} payType={payType}
-                onPayPageChange={p => { setPayPage(p); reloadPayments(p, payPageSize, paySearch, payMode, payType); }}
-                onPayPageSizeChange={s => { setPayPageSize(s); setPayPage(0); reloadPayments(0, s, paySearch, payMode, payType); }}
-                onPaySearchChange={v => { setPaySearch(v); setPayPage(0); reloadPayments(0, payPageSize, v, payMode, payType); }}
-                onPayModeChange={v => { setPayMode(v); setPayPage(0); reloadPayments(0, payPageSize, paySearch, v, payType); }}
-                onPayTypeChange={v => { setPayType(v); setPayPage(0); reloadPayments(0, payPageSize, paySearch, payMode, v); }}
-                onGetAdvanceAllocations={invPaymentApi.getAllocations} />
+                canCreate={canCreate} />
             )}
           </>
         )}
