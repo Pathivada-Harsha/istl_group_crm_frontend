@@ -63,7 +63,13 @@
   border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
   font-size: 13px;
+  background-color: var(--c-white, white);
+  color: var(--ct-374151, #374151);
   transition: all 0.2s;
+}
+
+.Invoices-page-search::placeholder {
+  color: var(--ct-94a3b8, #94a3b8);
 }
 
 .Invoices-page-search:focus {
@@ -78,6 +84,7 @@
   border-radius: 6px;
   font-size: 13px;
   background-color: var(--c-white, white);
+  color: var(--ct-374151, #374151);
   cursor: pointer;
   transition: all 0.2s;
   min-width: 140px;

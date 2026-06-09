@@ -4,6 +4,43 @@ import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters';
 import { useAuth } from '../hooks/useAuth';
 
+/* Inline-style theme mappers (dark mode) */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714','#fcd34d':'#5a4714','#fca5a5':'#5a2a2e','#fdf4ff':'#2e2147','#fff0f0':'#2b1d20',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#cbd5e0':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+  '#ffedd5':'#2c1f12','#fb923c':'#7a3a10',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#14532d':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#9a3412':'#fb923c','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a','#be123c':'#f0708a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8','#0c4a6e':'#7cc3f0','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#6b21a8':'#c4b5fd','#4c1d95':'#a78bfa','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+  '#7f1d1d':'#f08a8a',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const fmt = (n) =>
@@ -15,16 +52,17 @@ const fmtDate = (d) =>
 // Ageing buckets — from vendor POV (AP ageing):
 // how long has each bill been outstanding since due date
 const BUCKETS = [
-  { key: 'not-due',  label: 'Not Yet Due',           color: '#15803d', bg: '#f0fdf4', border: '#86efac' },
-  { key: '1-30',     label: '1 – 30 Days Overdue',   color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-  { key: '31-60',    label: '31 – 60 Days Overdue',  color: '#9a3412', bg: '#ffedd5', border: '#fb923c' },
-  { key: '61-90',    label: '61 – 90 Days Overdue',  color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
-  { key: '90+',      label: 'Over 90 Days Overdue',  color: '#7f1d1d', bg: '#fecaca', border: '#ef4444' },
-  { key: 'no-due',   label: 'No Due Date',            color: '#374151', bg: '#f3f4f6', border: '#d1d5db' },
+  { key: 'not-due',  label: 'Not Yet Due',           color: __stc('#15803d'), bg: __sbg('#f0fdf4'), border: __sbg('#86efac') },
+  { key: '1-30',     label: '1 – 30 Days Overdue',   color: __stc('#92400e'), bg: __sbg('#fef3c7'), border: __sbg('#fcd34d') },
+  { key: '31-60',    label: '31 – 60 Days Overdue',  color: __stc('#9a3412'), bg: __sbg('#ffedd5'), border: __sbg('#fb923c') },
+  { key: '61-90',    label: '61 – 90 Days Overdue',  color: __stc('#991b1b'), bg: __sbg('#fee2e2'), border: __sbg('#fca5a5') },
+  { key: '90+',      label: 'Over 90 Days Overdue',  color: __stc('#7f1d1d'), bg: __sbg('#fecaca'), border: __sbg('#ef4444') },
+  { key: 'no-due',   label: 'No Due Date',            color: __stc('#374151'), bg: __sbg('#f3f4f6'), border: __sbg('#d1d5db') },
 ];
 
 // Sticky scrollable table wrapper — caps height so page doesn't overflow
 function ScrollTable({ children, maxRows = 8 }) {
+  useThemeVersion();
   const maxH = 38 + maxRows * 38 + 2;
   return (
     <div style={{
@@ -36,16 +74,17 @@ function ScrollTable({ children, maxRows = 8 }) {
   );
 }
 
-const Th = ({ children, right, color, bg = '#f8fafc' }) => (
+const Th = ({ children, right, color, bg = __sbg('#f8fafc') }) => (
   <th style={{
     padding: '8px 12px', textAlign: right ? 'right' : 'left',
     fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px',
-    color: color || '#475569', whiteSpace: 'nowrap',
-    position: 'sticky', top: 0, background: bg, zIndex: 2, boxShadow: '0 1px 0 #e2e8f0',
+    color: __stc(color || '#475569'), whiteSpace: 'nowrap',
+    position: 'sticky', top: 0, background: __sbg(bg), zIndex: 2, boxShadow: `0 1px 0 ${__sbg('#e2e8f0')}`,
   }}>{children}</th>
 );
 
 export default function BillsOutstandingsTab() {
+  useThemeVersion();
   const { user } = useAuth();
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
 
@@ -316,16 +355,16 @@ export default function BillsOutstandingsTab() {
   const toggleBucket = (key) => setExpandedBkt(p => ({ ...p, [key]: !p[key] }));
 
   return (
-    <div style={{ padding: 'clamp(14px, 2vw, 24px) clamp(16px, 2.5vw, 28px)', background: '#f8fafc', minHeight: '100vh', boxSizing: 'border-box' }}>
+    <div style={{ padding: 'clamp(14px, 2vw, 24px) clamp(16px, 2.5vw, 28px)', background: __sbg('#f8fafc'), minHeight: '100vh', boxSizing: 'border-box' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 'clamp(15px, 1.5vw, 20px)', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <h2 style={{ margin: 0, fontSize: 'clamp(15px, 1.5vw, 20px)', fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
             <TrendingDown size={20} color="#dc2626" />
             Accounts Payable — Outstandings
           </h2>
-          <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+          <div style={{ fontSize: 11, color: __stc('#64748b'), marginTop: 3 }}>
             Bills you owe to vendors · As of {today.toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })}
             {lastRefresh && <span style={{ marginLeft: 8 }}>· Refreshed {lastRefresh.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
@@ -333,14 +372,14 @@ export default function BillsOutstandingsTab() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <button
             onClick={exportToExcel} disabled={exporting || loading || (bills.length === 0 && advances.length === 0)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#16a34a', border: '1px solid #15803d', borderRadius: 8, fontSize: 12, fontWeight: 600, color: '#fff', cursor: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 'not-allowed' : 'pointer', opacity: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 0.55 : 1, whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#16a34a'), border: `1px solid ${__sbg('#15803d')}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: __stc('#fff'), cursor: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 'not-allowed' : 'pointer', opacity: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 0.55 : 1, whiteSpace: 'nowrap' }}
           >
             <Download size={13} />
             {exporting ? 'Exporting…' : 'Export Excel'}
           </button>
           <button
             onClick={fetchData} disabled={loading}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, fontWeight: 500, color: '#374151', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 8, fontSize: 12, fontWeight: 500, color: __stc('#374151'), cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
           >
             <RefreshCw size={13} style={loading ? { animation: 'bos-spin 1s linear infinite' } : {}} />
             {loading ? 'Refreshing…' : 'Refresh'}
@@ -349,8 +388,8 @@ export default function BillsOutstandingsTab() {
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>Filter by:</span>
+      <div style={{ background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: __stc('#374151'), whiteSpace: 'nowrap' }}>Filter by:</span>
         <GroupProjectFilter
           groupValue={groupName}
           subGroupValue={subGroupName}
@@ -361,16 +400,16 @@ export default function BillsOutstandingsTab() {
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {error && (
-        <div style={{ padding: '20px', textAlign: 'center', color: '#dc2626', background: '#fff', borderRadius: 10, border: '1px solid #fca5a5', marginBottom: 16 }}>
+        <div style={{ padding: '20px', textAlign: 'center', color: __stc('#dc2626'), background: __sbg('#fff'), borderRadius: 10, border: `1px solid ${__sbg('#fca5a5')}`, marginBottom: 16 }}>
           <AlertCircle size={24} style={{ marginBottom: 6 }} />
           <div style={{ fontWeight: 600, fontSize: 13 }}>{error}</div>
-          <button onClick={fetchData} style={{ marginTop: 10, padding: '7px 18px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Retry</button>
+          <button onClick={fetchData} style={{ marginTop: 10, padding: '7px 18px', background: __sbg('#dc2626'), color: __stc('#fff'), border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>Retry</button>
         </div>
       )}
 
       {/* ── Loading ─────────────────────────────────────────────────────────── */}
       {loading && !error && (
-        <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748b' }}>
+        <div style={{ padding: '40px 0', textAlign: 'center', color: __stc('#64748b') }}>
           <RefreshCw size={26} style={{ animation: 'bos-spin 1s linear infinite', marginBottom: 10 }} />
           <div style={{ fontSize: 13 }}>Loading payables…</div>
         </div>
@@ -381,26 +420,26 @@ export default function BillsOutstandingsTab() {
           {/* ── KPI cards ──────────────────────────────────────────────────────── */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
             {[
-              { label: 'Total Payable',         value: fmt(totalPayable),   sub: `${bills.length} bill${bills.length !== 1 ? 's' : ''} unpaid`,          color: '#dc2626', bg: '#fff5f5', border: '#fca5a5', icon: '📋' },
-              { label: 'Already Paid',           value: fmt(totalPaid),      sub: `of ${fmt(totalBilled)} total billed`,                                   color: '#15803d', bg: '#f0fdf4', border: '#86efac', icon: '✅' },
-              { label: 'Vendor Advances (Avail)',value: fmt(totalUnapplied), sub: `${advances.length} advance${advances.length !== 1 ? 's' : ''} unused`,  color: '#2563eb', bg: '#eff6ff', border: '#93c5fd', icon: '💳' },
-              { label: 'Net Payable',            value: fmt(netPayable),     sub: 'After netting advances',                                               color: '#7c3aed', bg: '#f5f3ff', border: '#c4b5fd', icon: '⚡' },
-              { label: 'Overdue to Vendors',     value: fmt(overdueBalance), sub: `${overdueCount} bill${overdueCount !== 1 ? 's' : ''} past due`,         color: '#991b1b', bg: '#fff1f2', border: '#fca5a5', icon: '⚠️' },
+              { label: 'Total Payable',         value: fmt(totalPayable),   sub: `${bills.length} bill${bills.length !== 1 ? 's' : ''} unpaid`,          color: __stc('#dc2626'), bg: __sbg('#fff5f5'), border: __sbg('#fca5a5'), icon: '📋' },
+              { label: 'Already Paid',           value: fmt(totalPaid),      sub: `of ${fmt(totalBilled)} total billed`,                                   color: __stc('#15803d'), bg: __sbg('#f0fdf4'), border: __sbg('#86efac'), icon: '✅' },
+              { label: 'Vendor Advances (Avail)',value: fmt(totalUnapplied), sub: `${advances.length} advance${advances.length !== 1 ? 's' : ''} unused`,  color: __stc('#2563eb'), bg: __sbg('#eff6ff'), border: __sbg('#93c5fd'), icon: '💳' },
+              { label: 'Net Payable',            value: fmt(netPayable),     sub: 'After netting advances',                                               color: __stc('#7c3aed'), bg: __sbg('#f5f3ff'), border: __sbg('#c4b5fd'), icon: '⚡' },
+              { label: 'Overdue to Vendors',     value: fmt(overdueBalance), sub: `${overdueCount} bill${overdueCount !== 1 ? 's' : ''} past due`,         color: __stc('#991b1b'), bg: __sbg('#fff1f2'), border: __sbg('#fca5a5'), icon: '⚠️' },
             ].map(k => (
-              <div key={k.label} style={{ background: k.bg, border: `1px solid ${k.border}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div key={k.label} style={{ background: __sbg(k.bg), border: `1px solid ${__sbg(k.border)}`, borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ fontSize: 20, marginBottom: 4 }}>{k.icon}</div>
-                <div style={{ fontSize: 'clamp(13px, 1.3vw, 17px)', fontWeight: 800, color: k.color }}>{k.value}</div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginTop: 2 }}>{k.label}</div>
-                <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{k.sub}</div>
+                <div style={{ fontSize: 'clamp(13px, 1.3vw, 17px)', fontWeight: 800, color: __stc(k.color) }}>{k.value}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: __stc('#374151'), marginTop: 2 }}>{k.label}</div>
+                <div style={{ fontSize: 10, color: __stc('#64748b'), marginTop: 2 }}>{k.sub}</div>
               </div>
             ))}
           </div>
 
           {/* ── AP Ageing Analysis ─────────────────────────────────────────────── */}
           <div style={{ marginBottom: 24 }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 'clamp(12px, 1.2vw, 15px)', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 'clamp(12px, 1.2vw, 15px)', fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
               <Clock size={15} /> AP Ageing Analysis
-              <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>Click a bucket to expand</span>
+              <span style={{ fontSize: 11, fontWeight: 400, color: __stc('#94a3b8') }}>Click a bucket to expand</span>
             </h3>
 
             {/* Summary bar */}
@@ -413,10 +452,10 @@ export default function BillsOutstandingsTab() {
                   const pct  = totalPayable > 0 ? (bTot / totalPayable * 100).toFixed(1) : 0;
                   return (
                     <div key={b.key} onClick={() => toggleBucket(b.key)}
-                      style={{ flex: '1 1 130px', padding: '9px 12px', background: b.bg, border: `1px solid ${b.border}`, borderRadius: 8, cursor: 'pointer', minWidth: 110, maxWidth: 220 }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: b.color, textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.3 }}>{b.label}</div>
-                      <div style={{ fontSize: 'clamp(12px, 1.1vw, 15px)', fontWeight: 800, color: b.color, marginTop: 3 }}>{fmt(bTot)}</div>
-                      <div style={{ fontSize: 10, color: '#64748b', marginTop: 2 }}>{rows.length} bill{rows.length !== 1 ? 's' : ''} · {pct}%</div>
+                      style={{ flex: '1 1 130px', padding: '9px 12px', background: __sbg(b.bg), border: `1px solid ${__sbg(b.border)}`, borderRadius: 8, cursor: 'pointer', minWidth: 110, maxWidth: 220 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: __stc(b.color), textTransform: 'uppercase', letterSpacing: '0.4px', lineHeight: 1.3 }}>{b.label}</div>
+                      <div style={{ fontSize: 'clamp(12px, 1.1vw, 15px)', fontWeight: 800, color: __stc(b.color), marginTop: 3 }}>{fmt(bTot)}</div>
+                      <div style={{ fontSize: 10, color: __stc('#64748b'), marginTop: 2 }}>{rows.length} bill{rows.length !== 1 ? 's' : ''} · {pct}%</div>
                     </div>
                   );
                 })}
@@ -431,20 +470,20 @@ export default function BillsOutstandingsTab() {
               const isOpen    = !!expandedBkt[bucket.key];
 
               return (
-                <div key={bucket.key} style={{ marginBottom: 8, border: `1px solid ${bucket.border}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                <div key={bucket.key} style={{ marginBottom: 8, border: `1px solid ${__sbg(bucket.border)}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                   {/* Header */}
                   <div onClick={() => toggleBucket(bucket.key)}
-                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: bucket.bg, cursor: 'pointer', userSelect: 'none' }}>
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: __sbg(bucket.bg), cursor: 'pointer', userSelect: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: bucket.color, flexShrink: 0 }} />
-                      <span style={{ fontWeight: 700, fontSize: 'clamp(11px, 1.1vw, 13px)', color: bucket.color, whiteSpace: 'nowrap' }}>{bucket.label}</span>
-                      <span style={{ fontSize: 11, color: '#64748b', background: '#fff', borderRadius: 10, padding: '1px 8px', border: `1px solid ${bucket.border}`, whiteSpace: 'nowrap' }}>
+                      <span style={{ width: 9, height: 9, borderRadius: '50%', background: __sbg(bucket.color), flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, fontSize: 'clamp(11px, 1.1vw, 13px)', color: __stc(bucket.color), whiteSpace: 'nowrap' }}>{bucket.label}</span>
+                      <span style={{ fontSize: 11, color: __stc('#64748b'), background: __sbg('#fff'), borderRadius: 10, padding: '1px 8px', border: `1px solid ${__sbg(bucket.border)}`, whiteSpace: 'nowrap' }}>
                         {rows.length} bill{rows.length !== 1 ? 's' : ''}
                       </span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                      <span style={{ fontWeight: 800, fontSize: 'clamp(12px, 1.2vw, 14px)', color: bucket.color }}>{fmt(bucketTot)}</span>
-                      {isOpen ? <ChevronUp size={15} color={bucket.color} /> : <ChevronDown size={15} color={bucket.color} />}
+                      <span style={{ fontWeight: 800, fontSize: 'clamp(12px, 1.2vw, 14px)', color: __stc(bucket.color) }}>{fmt(bucketTot)}</span>
+                      {isOpen ? <ChevronUp size={15} color={__stc(bucket.color)} /> : <ChevronDown size={15} color={__stc(bucket.color)} />}
                     </div>
                   </div>
 
@@ -452,7 +491,7 @@ export default function BillsOutstandingsTab() {
                   {isOpen && (
                     <ScrollTable maxRows={8}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                        <thead style={{ background: '#f8fafc' }}>
+                        <thead style={{ background: __sbg('#f8fafc') }}>
                           <tr>
                             <Th>Bill No.</Th>
                             <Th>Vendor</Th>
@@ -471,33 +510,33 @@ export default function BillsOutstandingsTab() {
                             const bal  = getBalance(bill);
                             const days = bill._days;
                             return (
-                              <tr key={bill.id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfd', borderBottom: '1px solid #f1f5f9' }}>
+                              <tr key={bill.id} style={{ background: __sbg('#fff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}>
                                 <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>
-                                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#2563eb', fontWeight: 700 }}>
+                                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: __stc('#2563eb'), fontWeight: 700 }}>
                                     {bill.billNo || bill.billRefId || '—'}
                                   </span>
                                 </td>
-                                <td style={{ padding: '7px 12px', color: '#0f172a', fontWeight: 500, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                <td style={{ padding: '7px 12px', color: __stc('#0f172a'), fontWeight: 500, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                   {bill.vendorName || '—'}
                                 </td>
-                                <td style={{ padding: '7px 12px', color: '#64748b', fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap' }}>
+                                <td style={{ padding: '7px 12px', color: __stc('#64748b'), fontFamily: 'monospace', fontSize: 10, whiteSpace: 'nowrap' }}>
                                   {bill.poNumber || bill.poRefId || '—'}
                                 </td>
-                                <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(bill.billDate)}</td>
-                                <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(bill.dueDate)}</td>
+                                <td style={{ padding: '7px 12px', color: __stc('#64748b'), whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(bill.billDate)}</td>
+                                <td style={{ padding: '7px 12px', color: __stc('#64748b'), whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(bill.dueDate)}</td>
                                 <td style={{ padding: '7px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                                  {days === null ? <span style={{ color: '#94a3b8' }}>—</span>
-                                    : days <= 0   ? <span style={{ color: '#15803d', fontWeight: 600, fontSize: 11 }}>in {Math.abs(days)}d</span>
-                                    : <span style={{ color: bucket.color, fontWeight: 700, fontSize: 11 }}>{days}d</span>}
+                                  {days === null ? <span style={{ color: __stc('#94a3b8') }}>—</span>
+                                    : days <= 0   ? <span style={{ color: __stc('#15803d'), fontWeight: 600, fontSize: 11 }}>in {Math.abs(days)}d</span>
+                                    : <span style={{ color: __stc(bucket.color), fontWeight: 700, fontSize: 11 }}>{days}d</span>}
                                 </td>
-                                <td style={{ padding: '7px 12px', textAlign: 'right', color: '#374151', whiteSpace: 'nowrap' }}>{fmt(parseFloat(bill.totalAmount) || 0)}</td>
-                                <td style={{ padding: '7px 12px', textAlign: 'right', color: '#15803d', whiteSpace: 'nowrap' }}>{fmt(parseFloat(bill.paidAmount) || 0)}</td>
-                                <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: bucket.color, whiteSpace: 'nowrap' }}>{fmt(bal)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: __stc('#374151'), whiteSpace: 'nowrap' }}>{fmt(parseFloat(bill.totalAmount) || 0)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', color: __stc('#15803d'), whiteSpace: 'nowrap' }}>{fmt(parseFloat(bill.paidAmount) || 0)}</td>
+                                <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc(bucket.color), whiteSpace: 'nowrap' }}>{fmt(bal)}</td>
                                 <td style={{ padding: '7px 12px', whiteSpace: 'nowrap' }}>
                                   <span style={{
                                     fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                                    background: bill.status === 'Paid' ? '#dcfce7' : bill.status === 'Partially Paid' ? '#fef3c7' : '#fee2e2',
-                                    color:      bill.status === 'Paid' ? '#166534' : bill.status === 'Partially Paid' ? '#92400e' : '#991b1b',
+                                    background: bill.status === 'Paid' ? __sbg('#dcfce7') : bill.status === 'Partially Paid' ? __sbg('#fef3c7') : __sbg('#fee2e2'),
+                                    color:      bill.status === 'Paid' ? __stc('#166534') : bill.status === 'Partially Paid' ? __stc('#92400e') : __stc('#991b1b'),
                                   }}>
                                     {bill.status || 'Pending'}
                                   </span>
@@ -507,13 +546,13 @@ export default function BillsOutstandingsTab() {
                           })}
                         </tbody>
                         <tfoot>
-                          <tr style={{ background: bucket.bg, position: 'sticky', bottom: 0 }}>
-                            <td colSpan={6} style={{ padding: '7px 12px', fontWeight: 700, fontSize: 11, color: bucket.color }}>
+                          <tr style={{ background: __sbg(bucket.bg), position: 'sticky', bottom: 0 }}>
+                            <td colSpan={6} style={{ padding: '7px 12px', fontWeight: 700, fontSize: 11, color: __stc(bucket.color) }}>
                               Subtotal — {rows.length} bill{rows.length !== 1 ? 's' : ''}
                             </td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#374151' }}>{fmt(rows.reduce((s, b) => s + (parseFloat(b.totalAmount) || 0), 0))}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#15803d' }}>{fmt(rows.reduce((s, b) => s + (parseFloat(b.paidAmount) || 0), 0))}</td>
-                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: bucket.color }}>{fmt(bucketTot)}</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc('#374151') }}>{fmt(rows.reduce((s, b) => s + (parseFloat(b.totalAmount) || 0), 0))}</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc('#15803d') }}>{fmt(rows.reduce((s, b) => s + (parseFloat(b.paidAmount) || 0), 0))}</td>
+                            <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: __stc(bucket.color) }}>{fmt(bucketTot)}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -526,10 +565,10 @@ export default function BillsOutstandingsTab() {
 
             {/* Empty state */}
             {bills.length === 0 && (
-              <div style={{ textAlign: 'center', padding: '40px 0', background: '#fff', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                <CheckCircle size={32} style={{ color: '#22c55e', marginBottom: 8 }} />
-                <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>All bills are fully paid!</div>
-                <div style={{ fontSize: 12, color: '#64748b', marginTop: 4 }}>No outstanding payables for the selected filters.</div>
+              <div style={{ textAlign: 'center', padding: '40px 0', background: __sbg('#fff'), borderRadius: 10, border: `1px solid ${__sbg('#e2e8f0')}` }}>
+                <CheckCircle size={32} style={{ color: __stc('#22c55e'), marginBottom: 8 }} />
+                <div style={{ fontWeight: 700, fontSize: 14, color: __stc('#0f172a') }}>All bills are fully paid!</div>
+                <div style={{ fontSize: 12, color: __stc('#64748b'), marginTop: 4 }}>No outstanding payables for the selected filters.</div>
               </div>
             )}
           </div>
@@ -537,14 +576,14 @@ export default function BillsOutstandingsTab() {
           {/* ── Unapplied Vendor Advances ──────────────────────────────────────── */}
           {advances.length > 0 && (
             <div>
-              <h3 style={{ margin: '0 0 12px', fontSize: 'clamp(12px, 1.2vw, 15px)', fontWeight: 700, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <h3 style={{ margin: '0 0 12px', fontSize: 'clamp(12px, 1.2vw, 15px)', fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 💳 Unapplied Vendor Advances
-                <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>Advances paid to vendors not yet matched to a bill</span>
+                <span style={{ fontSize: 11, fontWeight: 400, color: __stc('#94a3b8') }}>Advances paid to vendors not yet matched to a bill</span>
               </h3>
-              <div style={{ background: '#fff', border: '1px solid #93c5fd', borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+              <div style={{ background: __sbg('#fff'), border: `1px solid ${__sbg('#93c5fd')}`, borderRadius: 10, overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
                 <ScrollTable maxRows={8}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                    <thead style={{ background: '#eff6ff' }}>
+                    <thead style={{ background: __sbg('#eff6ff') }}>
                       <tr>
                         <Th color="#1e40af" bg="#eff6ff">Advance No.</Th>
                         <Th color="#1e40af" bg="#eff6ff">Vendor</Th>
@@ -558,26 +597,26 @@ export default function BillsOutstandingsTab() {
                     </thead>
                     <tbody>
                       {advances.map((adv, idx) => (
-                        <tr key={adv.id} style={{ background: idx % 2 === 0 ? '#fff' : '#fafbfd', borderBottom: '1px solid #f1f5f9' }}>
-                          <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11, color: '#2563eb', fontWeight: 700, whiteSpace: 'nowrap' }}>{adv.advanceNo || '—'}</td>
-                          <td style={{ padding: '7px 12px', color: '#0f172a', fontWeight: 500, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.vendorName || '—'}</td>
-                          <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(adv.advanceDate)}</td>
-                          <td style={{ padding: '7px 12px', color: '#64748b', whiteSpace: 'nowrap' }}>{adv.paymentMode || '—'}</td>
-                          <td style={{ padding: '7px 12px', color: '#64748b', fontFamily: 'monospace', fontSize: 10, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.transactionReference || '—'}</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', color: '#374151', whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.amount) || 0)}</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', color: '#15803d', whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.appliedAmount) || 0)}</td>
-                          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#2563eb', whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.unappliedAmount) || 0)}</td>
+                        <tr key={adv.id} style={{ background: __sbg('#fff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}>
+                          <td style={{ padding: '7px 12px', fontFamily: 'monospace', fontSize: 11, color: __stc('#2563eb'), fontWeight: 700, whiteSpace: 'nowrap' }}>{adv.advanceNo || '—'}</td>
+                          <td style={{ padding: '7px 12px', color: __stc('#0f172a'), fontWeight: 500, maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.vendorName || '—'}</td>
+                          <td style={{ padding: '7px 12px', color: __stc('#64748b'), whiteSpace: 'nowrap', fontSize: 11 }}>{fmtDate(adv.advanceDate)}</td>
+                          <td style={{ padding: '7px 12px', color: __stc('#64748b'), whiteSpace: 'nowrap' }}>{adv.paymentMode || '—'}</td>
+                          <td style={{ padding: '7px 12px', color: __stc('#64748b'), fontFamily: 'monospace', fontSize: 10, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{adv.transactionReference || '—'}</td>
+                          <td style={{ padding: '7px 12px', textAlign: 'right', color: __stc('#374151'), whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.amount) || 0)}</td>
+                          <td style={{ padding: '7px 12px', textAlign: 'right', color: __stc('#15803d'), whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.appliedAmount) || 0)}</td>
+                          <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc('#2563eb'), whiteSpace: 'nowrap' }}>{fmt(parseFloat(adv.unappliedAmount) || 0)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr style={{ background: '#eff6ff', position: 'sticky', bottom: 0 }}>
-                        <td colSpan={5} style={{ padding: '7px 12px', fontWeight: 700, fontSize: 11, color: '#1e40af' }}>
+                      <tr style={{ background: __sbg('#eff6ff'), position: 'sticky', bottom: 0 }}>
+                        <td colSpan={5} style={{ padding: '7px 12px', fontWeight: 700, fontSize: 11, color: __stc('#1e40af') }}>
                           Total — {advances.length} advance{advances.length !== 1 ? 's' : ''}
                         </td>
-                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#374151' }}>{fmt(advances.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0))}</td>
-                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: '#15803d' }}>{fmt(advances.reduce((s, a) => s + (parseFloat(a.appliedAmount) || 0), 0))}</td>
-                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#2563eb' }}>{fmt(totalUnapplied)}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc('#374151') }}>{fmt(advances.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0))}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 700, color: __stc('#15803d') }}>{fmt(advances.reduce((s, a) => s + (parseFloat(a.appliedAmount) || 0), 0))}</td>
+                        <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: __stc('#2563eb') }}>{fmt(totalUnapplied)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -587,17 +626,17 @@ export default function BillsOutstandingsTab() {
               {/* Net payable summary */}
               <div style={{
                 marginTop: 14, padding: '12px 18px',
-                background: netPayable <= 0 ? '#f0fdf4' : '#fef3c7',
-                border: `1px solid ${netPayable <= 0 ? '#86efac' : '#fcd34d'}`,
+                background: netPayable <= 0 ? __sbg('#f0fdf4') : __sbg('#fef3c7'),
+                border: `1px solid ${netPayable <= 0 ? __sbg('#86efac') : __sbg('#fcd34d')}`,
                 borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10,
               }}>
-                <div style={{ fontSize: 12, color: '#374151' }}>
+                <div style={{ fontSize: 12, color: __stc('#374151') }}>
                   <strong>Net Payable Position</strong>
-                  <span style={{ color: '#64748b', marginLeft: 8 }}>
+                  <span style={{ color: __stc('#64748b'), marginLeft: 8 }}>
                     {fmt(totalPayable)} payable − {fmt(totalUnapplied)} advances available
                   </span>
                 </div>
-                <div style={{ fontSize: 'clamp(15px, 1.5vw, 18px)', fontWeight: 800, color: netPayable <= 0 ? '#15803d' : '#92400e' }}>
+                <div style={{ fontSize: 'clamp(15px, 1.5vw, 18px)', fontWeight: 800, color: netPayable <= 0 ? __stc('#15803d') : __stc('#92400e') }}>
                   = {fmt(netPayable)}
                 </div>
               </div>
