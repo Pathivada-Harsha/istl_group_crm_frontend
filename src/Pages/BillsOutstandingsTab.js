@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle, TrendingDown } from 'lucide-react';
+import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle, TrendingDown, Download } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters';
+import { useAuth } from '../hooks/useAuth';
 
 /* Inline-style theme mappers (dark mode) — no-ops in light mode */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -13,8 +14,8 @@ const __SM = {
   '#fef3c7':'#3a3016','#fcd34d':'#5a4714','#fde68a':'#5a4714',
   '#ffedd5':'#2c2113','#fed7aa':'#3a2a13','#fb923c':'#7a3d18','#fff7ed':'#2c2113','#fffbeb':'#2a2710',
   '#fee2e2':'#3a1f22','#fca5a5':'#5a2a2e','#fecaca':'#3a1f22','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#ef4444':'#7a2a2e',
-  '#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#86efac':'#2a5a40','#bbf7d0':'#2a5a40','#d1fae5':'#14302a',
-  '#eff6ff':'#15243d','#93c5fd':'#2f5d92','#f5f3ff':'#241b3d','#c4b5fd':'#3a3d6a','#e2e8f0':'#2b3445','#e5e7eb':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456',
+  '#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#86efac':'#2a5a40','#bbf7d0':'#2a5a40',
+  '#eff6ff':'#15243d','#f5f3ff':'#241b3d','#c4b5fd':'#3a3d6a','#e2e8f0':'#2b3445','#e5e7eb':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456',
 };
 const __TM = {
   '#0f172a':'#e7ecf3','#1e293b':'#d4dbe6','#374151':'#c2cbd8','#475569':'#aab4c2','#334155':'#aab4c2',
@@ -38,10 +39,6 @@ const useThemeVersion = () => {
 
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-const getAuthHeaders = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token') || ''}`,
-});
 
 const fmt = (n) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -73,74 +70,240 @@ function ScrollTable({ children, maxRows = 8 }) {
   );
 }
 
-const Th = ({ children, right, color }) => (
+const Th = ({ children, right, color, bg = '#f8fafc' }) => (
   <th style={{
     padding: '8px 12px', textAlign: right ? 'right' : 'left',
     fontWeight: 700, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.4px',
     color: color || __stc('#475569'), whiteSpace: 'nowrap',
-    position: 'sticky', top: 0, background: 'inherit', zIndex: 2, boxShadow: '0 1px 0 #e2e8f0',
+    position: 'sticky', top: 0, background: bg, zIndex: 2, boxShadow: '0 1px 0 #e2e8f0',
   }}>{children}</th>
 );
 
 export default function BillsOutstandingsTab() {
   useThemeVersion();
+  const { user } = useAuth();
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
 
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'X-User-Id':   user?.id   || localStorage.getItem('userId'),
+    'X-User-Role': user?.role || localStorage.getItem('userRole'),
+    'User-Id':     user?.id   || localStorage.getItem('userId'),
+    'User-Role':   user?.role || localStorage.getItem('userRole'),
+  });
+
   const [bills,       setBills]       = useState([]);
+  const [allBills,    setAllBills]    = useState([]);
   const [advances,    setAdvances]    = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
   const [expandedBkt, setExpandedBkt] = useState({});
   const [lastRefresh, setLastRefresh] = useState(null);
+  const [exporting,   setExporting]   = useState(false);
+
+  // ── Excel export ────────────────────────────────────────────────────────────
+  const exportToExcel = async () => {
+    if (bills.length === 0 && advances.length === 0) return;
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      const fmtN  = (n) => parseFloat(n || 0);
+      const fmtD  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+      const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      const calcDays = (bill) => {
+        if (!bill.dueDate) return null;
+        const due = new Date(bill.dueDate); due.setHours(0,0,0,0);
+        const now = new Date();             now.setHours(0,0,0,0);
+        return Math.floor((now - due) / 86400000);
+      };
+      const getBucket = (d) => {
+        if (d === null) return 'No Due Date';
+        if (d <= 0)     return 'Not Yet Due';
+        if (d <= 30)    return '1 – 30 Days Overdue';
+        if (d <= 60)    return '31 – 60 Days Overdue';
+        if (d <= 90)    return '61 – 90 Days Overdue';
+        return 'Over 90 Days Overdue';
+      };
+      const getBalanceN = (bill) => fmtN(bill.balanceAmount ?? (fmtN(bill.totalAmount) - fmtN(bill.paidAmount)));
+
+      const wb = XLSX.utils.book_new();
+
+      // ── Sheet 1: Summary ───────────────────────────────────────────────────
+      const totalPayable   = bills.reduce((s, b) => s + getBalanceN(b), 0);
+      const totalPaid      = allBills.reduce((s, b) => s + fmtN(b.paidAmount), 0);
+      const totalBilled    = allBills.reduce((s, b) => s + fmtN(b.totalAmount), 0);
+      const totalUnapplied = advances.reduce((s, a) => s + fmtN(a.unappliedAmount), 0);
+      const netPayable     = Math.max(0, totalPayable - totalUnapplied);
+      const overdueBalance = bills.filter(b => (calcDays(b) ?? 0) > 0).reduce((s, b) => s + getBalanceN(b), 0);
+      const overdueCount   = bills.filter(b => (calcDays(b) ?? 0) > 0).length;
+
+      const summaryData = [
+        ['AP Outstandings — Summary'],
+        [`As of ${today}`],
+        [],
+        ['Metric', 'Value'],
+        ['Total Payable (₹)',           totalPayable],
+        ['Already Paid (₹)',            totalPaid],
+        ['Total Billed (₹)',            totalBilled],
+        ['Vendor Advances Available (₹)', totalUnapplied],
+        ['Net Payable (₹)',             netPayable],
+        ['Overdue to Vendors (₹)',      overdueBalance],
+        ['Overdue Bill Count',          overdueCount],
+        ['Total Outstanding Bills',     bills.length],
+        ['Total Vendor Advances',       advances.length],
+        [],
+        ['Ageing Breakdown', 'Amount (₹)', 'Count', '% of Total'],
+      ];
+      const buckets = ['Not Yet Due','1 – 30 Days Overdue','31 – 60 Days Overdue','61 – 90 Days Overdue','Over 90 Days Overdue','No Due Date'];
+      buckets.forEach(label => {
+        const rows = bills.filter(b => getBucket(calcDays(b)) === label);
+        const amt  = rows.reduce((s, b) => s + getBalanceN(b), 0);
+        if (rows.length > 0) summaryData.push([label, amt, rows.length, totalPayable > 0 ? (amt / totalPayable * 100).toFixed(1) + '%' : '0%']);
+      });
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      wsSummary['!cols'] = [{ wch: 35 }, { wch: 20 }, { wch: 10 }, { wch: 15 }];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+      // ── Sheet 2: Outstanding Bills ─────────────────────────────────────────
+      const billHeaders = ['Bill No.', 'Vendor', 'PO Reference', 'Bill Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Bill Amount (₹)', 'Paid (₹)', 'Balance (₹)'];
+      const billRows = bills.map(bill => {
+        const days = calcDays(bill);
+        return [
+          bill.billNo   || bill.billRefId || '',
+          bill.vendorName || '',
+          bill.poNumber || bill.poRefId  || '',
+          fmtD(bill.billDate),
+          fmtD(bill.dueDate),
+          days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
+          getBucket(days),
+          bill.status || 'Pending',
+          fmtN(bill.totalAmount),
+          fmtN(bill.paidAmount),
+          getBalanceN(bill),
+        ];
+      });
+      const wsOutstanding = XLSX.utils.aoa_to_sheet([billHeaders, ...billRows]);
+      wsOutstanding['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }];
+      XLSX.utils.book_append_sheet(wb, wsOutstanding, 'Outstanding Bills');
+
+      // ── Sheet 3: Ageing Detail (per bucket) ───────────────────────────────
+      buckets.forEach(label => {
+        const rows = bills.filter(b => getBucket(calcDays(b)) === label);
+        if (rows.length === 0) return;
+        const sheetName = label.length > 31 ? label.slice(0, 31) : label;
+        const headers = ['Bill No.', 'Vendor', 'PO Ref', 'Bill Date', 'Due Date', 'Days', 'Status', 'Bill Amount (₹)', 'Paid (₹)', 'Balance (₹)'];
+        const dataRows = rows.map(bill => {
+          const days = calcDays(bill);
+          return [
+            bill.billNo || bill.billRefId || '',
+            bill.vendorName || '',
+            bill.poNumber || bill.poRefId || '',
+            fmtD(bill.billDate),
+            fmtD(bill.dueDate),
+            days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
+            bill.status || 'Pending',
+            fmtN(bill.totalAmount),
+            fmtN(bill.paidAmount),
+            getBalanceN(bill),
+          ];
+        });
+        const subtotal = rows.reduce((s, b) => s + getBalanceN(b), 0);
+        const ws = XLSX.utils.aoa_to_sheet([
+          headers,
+          ...dataRows,
+          [],
+          ['', '', '', '', '', 'Subtotal', '', rows.reduce((s,b) => s + fmtN(b.totalAmount), 0), rows.reduce((s,b) => s + fmtN(b.paidAmount), 0), subtotal],
+        ]);
+        ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
+
+      // ── Sheet 4: All Bills (paid + outstanding) ────────────────────────────
+      if (allBills.length > 0) {
+        const allHeaders = ['Bill No.', 'Vendor', 'PO Reference', 'Bill Date', 'Due Date', 'Status', 'Bill Amount (₹)', 'Paid (₹)', 'Balance (₹)'];
+        const allRows = allBills.map(bill => [
+          bill.billNo || bill.billRefId || '',
+          bill.vendorName || '',
+          bill.poNumber || bill.poRefId || '',
+          fmtD(bill.billDate),
+          fmtD(bill.dueDate),
+          bill.status || '',
+          fmtN(bill.totalAmount),
+          fmtN(bill.paidAmount),
+          fmtN(bill.balanceAmount ?? (fmtN(bill.totalAmount) - fmtN(bill.paidAmount))),
+        ]);
+        const wsAll = XLSX.utils.aoa_to_sheet([allHeaders, ...allRows]);
+        wsAll['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }];
+        XLSX.utils.book_append_sheet(wb, wsAll, 'All Bills');
+      }
+
+      // ── Sheet 5: Vendor Advances ───────────────────────────────────────────
+      if (advances.length > 0) {
+        const advHeaders = ['Advance No.', 'Vendor', 'Date', 'Payment Method', 'Reference', 'Total Amount (₹)', 'Applied (₹)', 'Unapplied (₹)'];
+        const advRows = advances.map(a => [
+          a.advanceNo            || '',
+          a.vendorName           || '',
+          fmtD(a.advanceDate),
+          a.paymentMode          || '',
+          a.transactionReference || '',
+          fmtN(a.amount),
+          fmtN(a.appliedAmount),
+          fmtN(a.unappliedAmount),
+        ]);
+        const wsAdv = XLSX.utils.aoa_to_sheet([
+          advHeaders,
+          ...advRows,
+          [],
+          ['', '', '', '', 'Total Unapplied', advances.reduce((s,a) => s + fmtN(a.amount), 0), advances.reduce((s,a) => s + fmtN(a.appliedAmount), 0), totalUnapplied],
+        ]);
+        wsAdv['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, wsAdv, 'Vendor Advances');
+      }
+
+      const fileName = `AP_Outstandings_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      // 1. Unpaid / partially paid bills — status != Paid, != Cancelled
-      const billParams = new URLSearchParams({ page: 0, size: 500, sortBy: 'dueDate', sortDirection: 'ASC' });
+      const billParams = new URLSearchParams();
       if (groupName)    billParams.append('groupId',    groupName);
       if (subGroupName) billParams.append('subGroupId', subGroupName);
       if (projectId)    billParams.append('projectId',  projectId);
 
-      // 2. Unapplied vendor advances (ADVANCE type with remaining balance)
       const advParams = new URLSearchParams({ page: 0, size: 500, paymentType: 'ADVANCE' });
       if (groupName)    advParams.append('groupId',    groupName);
       if (subGroupName) advParams.append('subGroupId', subGroupName);
       if (projectId)    advParams.append('projectId',  projectId);
 
       const [billRes, advRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/bills?${billParams}`,           { credentials: 'include', headers: getAuthHeaders() }),
-        fetch(`${API_BASE_URL}/vendor-advances?${advParams}`,  { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/bills/outstandings?${billParams}`, { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/vendor-advances?${advParams}`,     { credentials: 'include', headers: getAuthHeaders() }),
       ]);
 
       const billData = billRes.ok ? await billRes.json() : {};
       const advData  = advRes.ok  ? await advRes.json()  : {};
 
-      // Filter: keep only bills that still have a balance to pay
-      const outstanding = (billData.bills || billData.content || []).filter(bill => {
-        const s = (bill.status || '').toLowerCase();
-        if (s === 'paid' || s === 'cancelled') return false;
-        const bal = parseFloat(
-          bill.balanceAmount ?? (parseFloat(bill.totalAmount || 0) - parseFloat(bill.paidAmount || 0))
-        );
-        return bal > 0.01;
-      });
-
-      // Filter: only advances with unapplied amount
-      const unapplied = (advData.content || advData.advances || []).filter(
-        a => parseFloat(a.unappliedAmount || 0) > 0.01
-      );
-
-      setBills(outstanding);
-      setAdvances(unapplied);
+      setBills(billData.outstanding || []);
+      setAllBills(billData.allBills  || []);
+      setAdvances((advData.advances || []).filter(a => parseFloat(a.unappliedAmount || 0) > 0.01));
       setLastRefresh(new Date());
     } catch {
       setError('Failed to load payables data. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [groupName, subGroupName, projectId]);
+  }, [groupName, subGroupName, projectId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -166,17 +329,15 @@ export default function BillsOutstandingsTab() {
   const getBalance = (bill) =>
     parseFloat(bill.balanceAmount ?? (parseFloat(bill.totalAmount || 0) - parseFloat(bill.paidAmount || 0)));
 
-  // Group bills
   const grouped = Object.fromEntries(BUCKETS.map(b => [b.key, []]));
   bills.forEach(bill => {
     const d = getDays(bill);
     grouped[getBucket(d)].push({ ...bill, _days: d });
   });
 
-  // Totals
   const totalPayable    = bills.reduce((s, b) => s + getBalance(b), 0);
-  const totalPaid       = bills.reduce((s, b) => s + (parseFloat(b.paidAmount) || 0), 0);
-  const totalBilled     = bills.reduce((s, b) => s + (parseFloat(b.totalAmount) || 0), 0);
+  const totalPaid       = allBills.reduce((s, b) => s + (parseFloat(b.paidAmount) || 0), 0);
+  const totalBilled     = allBills.reduce((s, b) => s + (parseFloat(b.totalAmount) || 0), 0);
   const totalUnapplied  = advances.reduce((s, a) => s + parseFloat(a.unappliedAmount || 0), 0);
   const netPayable      = Math.max(0, totalPayable - totalUnapplied);
   const overdueBalance  = bills.filter(b => (getDays(b) ?? 0) > 0).reduce((s, b) => s + getBalance(b), 0);
@@ -199,13 +360,22 @@ export default function BillsOutstandingsTab() {
             {lastRefresh && <span style={{ marginLeft: 8 }}>· Refreshed {lastRefresh.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}</span>}
           </div>
         </div>
-        <button
-          onClick={fetchData} disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 8, fontSize: 12, fontWeight: 500, color: __stc('#374151'), cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
-        >
-          <RefreshCw size={13} style={loading ? { animation: 'bos-spin 1s linear infinite' } : {}} />
-          {loading ? 'Refreshing…' : 'Refresh'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <button
+            onClick={exportToExcel} disabled={exporting || loading || (bills.length === 0 && advances.length === 0)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#16a34a'), border: `1px solid ${__sbg('#15803d')}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: __stc('#fff'), cursor: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 'not-allowed' : 'pointer', opacity: (exporting || loading || (bills.length === 0 && advances.length === 0)) ? 0.55 : 1, whiteSpace: 'nowrap' }}
+          >
+            <Download size={13} />
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+          <button
+            onClick={fetchData} disabled={loading}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 8, fontSize: 12, fontWeight: 500, color: __stc('#374151'), cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
+          >
+            <RefreshCw size={13} style={loading ? { animation: 'bos-spin 1s linear infinite' } : {}} />
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
       </div>
 
       {/* ── Filters ────────────────────────────────────────────────────────── */}
@@ -406,14 +576,14 @@ export default function BillsOutstandingsTab() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead style={{ background: __sbg('#eff6ff') }}>
                       <tr>
-                        <Th color="#1e40af">Advance No.</Th>
-                        <Th color="#1e40af">Vendor</Th>
-                        <Th color="#1e40af">Date</Th>
-                        <Th color="#1e40af">Method</Th>
-                        <Th color="#1e40af">Reference</Th>
-                        <Th color="#1e40af" right>Total Paid</Th>
-                        <Th color="#1e40af" right>Applied</Th>
-                        <Th color="#1e40af" right>Unapplied</Th>
+                        <Th color="#1e40af" bg="#eff6ff">Advance No.</Th>
+                        <Th color="#1e40af" bg="#eff6ff">Vendor</Th>
+                        <Th color="#1e40af" bg="#eff6ff">Date</Th>
+                        <Th color="#1e40af" bg="#eff6ff">Method</Th>
+                        <Th color="#1e40af" bg="#eff6ff">Reference</Th>
+                        <Th color="#1e40af" bg="#eff6ff" right>Total Paid</Th>
+                        <Th color="#1e40af" bg="#eff6ff" right>Applied</Th>
+                        <Th color="#1e40af" bg="#eff6ff" right>Unapplied</Th>
                       </tr>
                     </thead>
                     <tbody>

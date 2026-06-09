@@ -1,47 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle } from 'lucide-react';
+import { AlertCircle, Clock, ChevronDown, ChevronUp, RefreshCw, CheckCircle, Download } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter';
 import useGroupProjectFilters from '../components/Dropdowns/useGroupProjectFilters';
 
-/* Inline-style theme mappers (dark mode) — no-ops in light mode */
-const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
-const __SM = {
-  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
-  '#f8fafc':'#0f1420','#f9fafb':'#0f1420','#fafbfd':'#161b27','#fafafa':'#0f1420',
-  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b',
-  '#dbeafe':'#1d3a5f','#93c5fd':'#2f5d92','#bfdbfe':'#244b7a',
-  '#fef3c7':'#3a3016','#fcd34d':'#5a4714','#fde68a':'#5a4714',
-  '#ffedd5':'#2c2113','#fed7aa':'#3a2a13','#fb923c':'#7a3d18','#fff7ed':'#2c2113','#fffbeb':'#2a2710',
-  '#fee2e2':'#3a1f22','#fca5a5':'#5a2a2e','#fecaca':'#3a1f22','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#ef4444':'#7a2a2e',
-  '#f0fdf4':'#14301f','#86efac':'#2a5a40','#bbf7d0':'#2a5a40','#d1fae5':'#14302a',
-  '#e2e8f0':'#2b3445','#e5e7eb':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456',
-};
-const __TM = {
-  '#0f172a':'#e7ecf3','#1e293b':'#d4dbe6','#374151':'#c2cbd8','#475569':'#aab4c2','#334155':'#aab4c2',
-  '#64748b':'#94a1b3','#94a3b8':'#9aa7b8',
-  '#1e40af':'#7fb0f0','#2563eb':'#5b9bf0',
-  '#92400e':'#f0c07a','#9a3412':'#fb923c','#991b1b':'#f08a8a','#7f1d1d':'#f08a8a','#b45309':'#f0c07a','#78350f':'#f0b080',
-  '#d97706':'#f0b454','#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#059669':'#18c08a',
-  '#dc2626':'#f05252','#22c55e':'#34d39e',
-};
-const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
-const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
-const useThemeVersion = () => {
-  const [v, setV] = React.useState(0);
-  React.useEffect(() => {
-    const obs = new MutationObserver(() => setV(x => x + 1));
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-    return () => obs.disconnect();
-  }, []);
-  return v;
-};
-
-
 const API_BASE_URL = process.env.REACT_APP_API_URL;
-const getAuthHeaders = () => ({
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${localStorage.getItem('token') || sessionStorage.getItem('token') || ''}`,
-});
 
 const fmt = (n) =>
   '₹' + Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -78,7 +40,8 @@ function ScrollTable({ children, maxRows = 8 }) {
 }
 
 /* ── Th helper — sticky on scroll ────────────────────────────────────────── */
-const Th = ({ children, right, color }) => (
+/* bg must be an explicit colour (not 'inherit') so Chrome repaints correctly  */
+const Th = ({ children, right, color, bg = '#f8fafc' }) => (
   <th style={{
     padding: '8px 12px',
     textAlign: right ? 'right' : 'left',
@@ -90,15 +53,21 @@ const Th = ({ children, right, color }) => (
     whiteSpace: 'nowrap',
     position: 'sticky',
     top: 0,
-    background: 'inherit',
+    background: bg,
     zIndex: 2,
     boxShadow: '0 1px 0 #e2e8f0',
   }}>{children}</th>
 );
 
 export default function OutstandingsTab() {
-  useThemeVersion();
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
+
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
+    'x-user-id':   user?.id   || localStorage.getItem('userId'),
+    'x-user-role': user?.role || localStorage.getItem('userRole'),
+  });
 
   const [invoices,    setInvoices]    = useState([]);
   const [advances,    setAdvances]    = useState([]);
@@ -107,46 +76,190 @@ export default function OutstandingsTab() {
   const [expandedBkt, setExpandedBkt] = useState({});
   const [lastRefresh, setLastRefresh] = useState(null);
 
+  const [exporting, setExporting] = useState(false);
+
+  // ── Excel export ────────────────────────────────────────────────────────────
+  const exportToExcel = async () => {
+    if (invoices.length === 0 && advances.length === 0) return;
+    setExporting(true);
+    try {
+      const XLSX = await import('xlsx');
+
+      const fmtN  = (n) => parseFloat(n || 0);
+      const fmtD  = (d) => d ? new Date(d).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+      const today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
+
+      const calcDays = (inv) => {
+        if (!inv.dueDate) return null;
+        const due = new Date(inv.dueDate); due.setHours(0,0,0,0);
+        const now = new Date();            now.setHours(0,0,0,0);
+        return Math.floor((now - due) / 86400000);
+      };
+      const getBucket = (d) => {
+        if (d === null) return 'No Due Date';
+        if (d <= 0)     return 'Not Yet Due';
+        if (d <= 30)    return '1 – 30 Days Overdue';
+        if (d <= 60)    return '31 – 60 Days Overdue';
+        if (d <= 90)    return '61 – 90 Days Overdue';
+        return 'Over 90 Days Overdue';
+      };
+      const getBalance = (inv) => fmtN(inv.balanceAmount ?? (fmtN(inv.totalAmount) - fmtN(inv.paidAmount)));
+
+      const wb = XLSX.utils.book_new();
+
+      // ── Sheet 1: Summary ───────────────────────────────────────────────────
+      const totalOutstanding = invoices.reduce((s, i) => s + getBalance(i), 0);
+      const totalUnapplied   = advances.reduce((s, a) => s + fmtN(a.unappliedAmount), 0);
+      const netOutstanding   = Math.max(0, totalOutstanding - totalUnapplied);
+      const overdueBalance   = invoices.filter(i => (calcDays(i) ?? 0) > 0).reduce((s, i) => s + getBalance(i), 0);
+      const overdueCount     = invoices.filter(i => (calcDays(i) ?? 0) > 0).length;
+
+      const summaryData = [
+        ['AR Outstandings — Summary'],
+        [`As of ${today}`],
+        [],
+        ['Metric', 'Value'],
+        ['Total Outstanding (₹)',    totalOutstanding],
+        ['Unapplied Advances (₹)',   totalUnapplied],
+        ['Net Receivable (₹)',       netOutstanding],
+        ['Overdue Amount (₹)',       overdueBalance],
+        ['Overdue Invoice Count',    overdueCount],
+        ['Total Outstanding Invoices', invoices.length],
+        ['Total Unapplied Advances',   advances.length],
+        [],
+        ['Ageing Breakdown', 'Amount (₹)', 'Count', '% of Total'],
+      ];
+      const buckets = ['Not Yet Due','1 – 30 Days Overdue','31 – 60 Days Overdue','61 – 90 Days Overdue','Over 90 Days Overdue','No Due Date'];
+      buckets.forEach(label => {
+        const rows = invoices.filter(i => getBucket(calcDays(i)) === label);
+        const amt  = rows.reduce((s, i) => s + getBalance(i), 0);
+        if (rows.length > 0) summaryData.push([label, amt, rows.length, totalOutstanding > 0 ? (amt / totalOutstanding * 100).toFixed(1) + '%' : '0%']);
+      });
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
+      wsSummary['!cols'] = [{ wch: 35 }, { wch: 20 }, { wch: 10 }, { wch: 15 }];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Summary');
+
+      // ── Sheet 2: Outstanding Invoices ──────────────────────────────────────
+      const invHeaders = ['Invoice No.', 'Customer / Project', 'Project ID', 'Invoice Date', 'Due Date', 'Days Overdue', 'Ageing Bucket', 'Status', 'Invoice Amount (₹)', 'Paid (₹)', 'Outstanding Balance (₹)'];
+      const invRows = invoices.map(inv => {
+        const days = calcDays(inv);
+        return [
+          inv.invoiceNumber || inv.tallyInvoiceNo || '',
+          inv.customerName  || inv.projectName    || '',
+          inv.projectId     || '',
+          fmtD(inv.invoiceDate),
+          fmtD(inv.dueDate),
+          days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
+          getBucket(days),
+          (inv.status || '').replace(/_/g, ' '),
+          fmtN(inv.totalAmount),
+          fmtN(inv.paidAmount),
+          getBalance(inv),
+        ];
+      });
+      const wsInvoices = XLSX.utils.aoa_to_sheet([invHeaders, ...invRows]);
+      wsInvoices['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 24 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 22 }];
+      XLSX.utils.book_append_sheet(wb, wsInvoices, 'Outstanding Invoices');
+
+      // ── Sheet 3: Ageing Detail (one sheet per non-empty bucket) ───────────
+      buckets.forEach(label => {
+        const rows = invoices.filter(i => getBucket(calcDays(i)) === label);
+        if (rows.length === 0) return;
+        const sheetName = label.length > 31 ? label.slice(0, 31) : label;
+        const bucketHeaders = ['Invoice No.', 'Customer / Project', 'Project ID', 'Invoice Date', 'Due Date', 'Days', 'Status', 'Invoice Amount (₹)', 'Paid (₹)', 'Outstanding (₹)'];
+        const bucketRows = rows.map(inv => {
+          const days = calcDays(inv);
+          return [
+            inv.invoiceNumber || inv.tallyInvoiceNo || '',
+            inv.customerName  || inv.projectName    || '',
+            inv.projectId     || '',
+            fmtD(inv.invoiceDate),
+            fmtD(inv.dueDate),
+            days === null ? '' : days <= 0 ? `In ${Math.abs(days)}d` : `${days}d`,
+            (inv.status || '').replace(/_/g, ' '),
+            fmtN(inv.totalAmount),
+            fmtN(inv.paidAmount),
+            getBalance(inv),
+          ];
+        });
+        const subtotal = rows.reduce((s, i) => s + getBalance(i), 0);
+        const ws = XLSX.utils.aoa_to_sheet([
+          bucketHeaders,
+          ...bucketRows,
+          [],
+          ['', '', '', '', '', '', 'Subtotal', rows.reduce((s,i) => s + fmtN(i.totalAmount), 0), rows.reduce((s,i) => s + fmtN(i.paidAmount), 0), subtotal],
+        ]);
+        ws['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 20 }];
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      });
+
+      // ── Sheet 4: Unapplied Advances ────────────────────────────────────────
+      if (advances.length > 0) {
+        const advHeaders = ['Receipt No.', 'Customer', 'Receipt Date', 'Payment Method', 'Reference', 'Total Amount (₹)', 'Applied (₹)', 'Unapplied (₹)'];
+        const advRows = advances.map(a => [
+          a.receiptNo          || '',
+          a.customerName       || '',
+          fmtD(a.receiptDate),
+          a.paymentMethod      || '',
+          a.transactionReference || '',
+          fmtN(a.amount),
+          fmtN(a.appliedAmount),
+          fmtN(a.unappliedAmount),
+        ]);
+        const advSubtotal = advances.reduce((s, a) => s + fmtN(a.unappliedAmount), 0);
+        const wsAdv = XLSX.utils.aoa_to_sheet([
+          advHeaders,
+          ...advRows,
+          [],
+          ['', '', '', '', 'Total Unapplied', advances.reduce((s,a) => s + fmtN(a.amount), 0), advances.reduce((s,a) => s + fmtN(a.appliedAmount), 0), advSubtotal],
+        ]);
+        wsAdv['!cols'] = [{ wch: 18 }, { wch: 28 }, { wch: 14 }, { wch: 18 }, { wch: 20 }, { wch: 20 }, { wch: 14 }, { wch: 16 }];
+        XLSX.utils.book_append_sheet(wb, wsAdv, 'Unapplied Advances');
+      }
+
+      const fileName = `AR_Outstandings_${new Date().toISOString().slice(0,10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+    } catch (e) {
+      console.error('Export failed', e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const invParams = new URLSearchParams({ page: 0, size: 500, sortBy: 'dueDate', sortDirection: 'ASC' });
+      // ── 1. Outstanding invoices via dedicated endpoint (no pagination, stable sort) ──
+      const invParams = new URLSearchParams();
       if (groupName)    invParams.append('groupId',    groupName);
       if (subGroupName) invParams.append('subGroupId', subGroupName);
       if (projectId)    invParams.append('projectId',  projectId);
 
+      // ── 2. Unapplied customer advance receipts ────────────────────────────
       const rcpParams = new URLSearchParams({ page: 0, size: 500, receiptType: 'ADVANCE' });
       if (groupName)    rcpParams.append('groupId',    groupName);
       if (subGroupName) rcpParams.append('subGroupId', subGroupName);
       if (projectId)    rcpParams.append('projectId',  projectId);
 
       const [invRes, rcpRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/invoices?${invParams}`,          { credentials: 'include', headers: getAuthHeaders() }),
-        fetch(`${API_BASE_URL}/invoices/receipts?${rcpParams}`, { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/invoices/outstandings?${invParams}`, { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/invoices/receipts?${rcpParams}`,     { credentials: 'include', headers: getAuthHeaders() }),
       ]);
 
       const invData = invRes.ok ? await invRes.json() : {};
       const rcpData = rcpRes.ok ? await rcpRes.json() : {};
 
-      const outstanding = (invData.invoices || []).filter(inv => {
-        const s = (inv.status || '').toUpperCase().replace(' ', '_');
-        if (s === 'PAID' || s === 'CANCELLED') return false;
-        const bal = parseFloat(inv.balanceAmount ?? (parseFloat(inv.totalAmount || 0) - parseFloat(inv.paidAmount || 0)));
-        return bal > 0.01;
-      });
-
-      const unapplied = (rcpData.receipts || []).filter(r => parseFloat(r.unappliedAmount || 0) > 0.01);
-
-      setInvoices(outstanding);
-      setAdvances(unapplied);
+      // Backend already computed the split — use directly
+      setInvoices(invData.outstanding || []);
+      setAdvances((rcpData.receipts || []).filter(r => parseFloat(r.unappliedAmount || 0) > 0.01));
       setLastRefresh(new Date());
     } catch {
       setError('Failed to load outstanding data. Please try again.');
     } finally {
       setLoading(false);
     }
-  }, [groupName, subGroupName, projectId]);
+  }, [groupName, subGroupName, projectId, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -203,7 +316,7 @@ export default function OutstandingsTab() {
         </div>
         <button
           onClick={fetchData} disabled={loading}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 8, fontSize: 12, fontWeight: 500, color: __stc('#374151'), cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12, fontWeight: 500, color: '#374151', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1, whiteSpace: 'nowrap' }}
         >
           <RefreshCw size={13} style={loading ? { animation: 'outstanding-spin 1s linear infinite' } : {}} />
           {loading ? 'Refreshing…' : 'Refresh'}
@@ -395,14 +508,14 @@ export default function OutstandingsTab() {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                     <thead style={{ background: __sbg('#fffbeb') }}>
                       <tr>
-                        <Th color="#92400e">Receipt No.</Th>
-                        <Th color="#92400e">Customer</Th>
-                        <Th color="#92400e">Date</Th>
-                        <Th color="#92400e">Method</Th>
-                        <Th color="#92400e">Reference</Th>
-                        <Th color="#92400e" right>Total Amt</Th>
-                        <Th color="#92400e" right>Applied</Th>
-                        <Th color="#92400e" right>Unapplied</Th>
+                        <Th color="#92400e" bg="#fffbeb">Receipt No.</Th>
+                        <Th color="#92400e" bg="#fffbeb">Customer</Th>
+                        <Th color="#92400e" bg="#fffbeb">Date</Th>
+                        <Th color="#92400e" bg="#fffbeb">Method</Th>
+                        <Th color="#92400e" bg="#fffbeb">Reference</Th>
+                        <Th color="#92400e" bg="#fffbeb" right>Total Amt</Th>
+                        <Th color="#92400e" bg="#fffbeb" right>Applied</Th>
+                        <Th color="#92400e" bg="#fffbeb" right>Unapplied</Th>
                       </tr>
                     </thead>
                     <tbody>
