@@ -10,14 +10,15 @@ function ThemeToggle() {
   return (
     <button
       type="button"
-      className="theme-toggle-btn icon-button"
+      className={`theme-toggle-btn${isDark ? ' theme-toggle-btn--dark' : ''}`}
       onClick={toggleTheme}
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {isDark
-        ? <Sun className="icon" size={20} />
-        : <Moon className="icon" size={20} />}
+        ? <Sun className="theme-toggle-icon" size={17} />
+        : <Moon className="theme-toggle-icon" size={17} />
+      }
     </button>
   );
 }

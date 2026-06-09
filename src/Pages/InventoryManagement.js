@@ -145,6 +145,25 @@ const inventoryItemApi = {
   },
 };
 
+// ── Inventory Item Image API ──────────────────────────────────────────────────
+const invImageApi = {
+  upload: async (id, imageData) => {
+    const res = await fetch(`${API}/inventory/items/${id}/image`, {
+      method: 'POST', headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      credentials: 'include', body: JSON.stringify({ imageData }),
+    });
+    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.message || 'Failed to upload image'); }
+    return res.json();
+  },
+  remove: async (id) => {
+    const res = await fetch(`${API}/inventory/items/${id}/image`, {
+      method: 'DELETE', headers: getAuthHeaders(), credentials: 'include',
+    });
+    if (!res.ok) throw new Error('Failed to remove image');
+    return res.json();
+  },
+};
+
 // ── Inventory Procurement APIs (separate inv_* tables) ────────────────────────
 const invPoApi = {
   list: async (params = {}) => {
@@ -589,6 +608,8 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
     currentQty: '', minQty: '', maxQty: '', unitCost: '', projectId: '', note: ''
   });
   const [single, setSingle] = useState(blankSingle);
+  const [singleImage, setSingleImage] = useState(null); // base64 data URI
+  const singleImageRef = React.useRef(null);
   const setS = (k, v) => setSingle(s => ({ ...s, [k]: v }));
 
   // ── Bulk rows ─────────────────────────────────────────────────────────────
@@ -614,6 +635,7 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
     });
     setMode('single');
     setSingle(blankSingle());
+    setSingleImage(null);
     setRows(makeRows(5));
   }, [open, defaultGroupName, defaultSubGroupName, defaultWarehouseId]);
 
@@ -687,7 +709,7 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
 
   // ── Submit ────────────────────────────────────────────────────────────────
   const submitSingle = () => {
-    onSave({ ...scope, ...single });
+    onSave({ ...scope, ...single, imageData: singleImage || null });
     onClose();
   };
   const submitBulk = () => {
@@ -849,6 +871,40 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
                 <label className="inv-label">Note</label>
                 <textarea className="inv-textarea" rows={2} placeholder="Optional description..."
                   value={single.note} onChange={e => setS('note', e.target.value)} />
+              </div>
+
+              {/* ── Item Image ── */}
+              <div className="inv-field inv-field--full">
+                <label className="inv-label">Item Image <span style={{fontWeight:400,color:'#94a3b8',fontSize:12}}>(optional · max 5 MB)</span></label>
+                <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+                  {singleImage ? (
+                    <div style={{position:'relative',flexShrink:0}}>
+                      <img src={singleImage} alt="preview" style={{width:80,height:80,objectFit:'cover',borderRadius:8,border:'1.5px solid #e2e8f0'}} />
+                      <button type="button" onClick={() => { setSingleImage(null); if (singleImageRef.current) singleImageRef.current.value=''; }}
+                        style={{position:'absolute',top:-6,right:-6,width:18,height:18,borderRadius:'50%',background:'#ef4444',color:'#fff',border:'none',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>✕</button>
+                    </div>
+                  ) : (
+                    <div style={{width:80,height:80,borderRadius:8,border:'1.5px dashed #cbd5e1',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'#f8fafc'}}>
+                      <span style={{fontSize:24}}>🖼️</span>
+                    </div>
+                  )}
+                  <div style={{flex:1}}>
+                    <input ref={singleImageRef} type="file" accept="image/*" style={{display:'none'}}
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB'); e.target.value=''; return; }
+                        const reader = new FileReader();
+                        reader.onload = ev => setSingleImage(ev.target.result);
+                        reader.readAsDataURL(file);
+                      }} />
+                    <button type="button" className="inv-btn inv-btn--secondary inv-btn--sm"
+                      onClick={() => singleImageRef.current?.click()}>
+                      {singleImage ? '🔄 Replace Image' : '📁 Choose Image'}
+                    </button>
+                    <p style={{fontSize:11,color:'#94a3b8',marginTop:5,marginBottom:0}}>PNG, JPG, WEBP · max 5 MB</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1683,6 +1739,29 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
 
       {activeTab === 'overview' && (
         <>
+          {/* Item image — shown at top if present */}
+          {item.imageData && (
+            <div style={{ marginBottom:20, display:'flex', alignItems:'flex-start', gap:20 }}>
+              <img
+                src={item.imageData} alt={item.name}
+                style={{ width:120, height:120, objectFit:'cover', borderRadius:12,
+                         border:`1.5px solid ${__sbg('#e2e8f0')}`,
+                         boxShadow:'0 2px 8px rgba(0,0,0,0.08)', flexShrink:0 }}
+              />
+              <div>
+                <div style={{ fontWeight:700, fontSize:16, color:__stc('#0f172a') }}>{item.name}</div>
+                <div style={{ fontFamily:'monospace', fontSize:12, color:__stc('#64748b'), marginTop:4 }}>{item.itemCode}</div>
+                {item.category && (
+                  <span className="inv-cat-badge" style={{ marginTop:8, display:'inline-block',
+                    background:__sbg((CATEGORY_COLORS[item.category]||CATEGORY_COLORS.Other).bg),
+                    color:__stc((CATEGORY_COLORS[item.category]||CATEGORY_COLORS.Other).color),
+                    borderColor:__sbg((CATEGORY_COLORS[item.category]||CATEGORY_COLORS.Other).border) }}>
+                    {item.category}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:16, marginBottom:24 }}>
             {[
               { label:'Current Stock', value:`${fmt(item.currentQty)} ${item.unit}`, color:__stc('#1e40af'), bg:__sbg('#eff6ff') },
@@ -1838,6 +1917,8 @@ function ItemDetailContent({ item, transactions, warehouses, activeTab }) {
 function EditItemModal({ open, onClose, onSave, item, warehouses }) {
   const [form, setForm] = useState({});
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const [editImage, setEditImage] = React.useState(null);
+  const editImageRef = React.useRef(null);
 
   // Cascading scope state
   const [groups,    setGroups]    = useState([]);
@@ -1869,6 +1950,7 @@ function EditItemModal({ open, onClose, onSave, item, warehouses }) {
       isActive:    item.isActive    !== false,
       notes:       item.notes       || '',
     });
+    setEditImage(item.imageData || null);
   }, [open, item]);
 
   // Load groups on open
@@ -2067,6 +2149,40 @@ function EditItemModal({ open, onClose, onSave, item, warehouses }) {
                 onChange={e => set('notes', e.target.value)}
                 placeholder="Description, specifications, remarks…" />
             </div>
+
+            {/* Item Image */}
+            <div className="inv-field inv-field--full">
+              <label className="inv-label">Item Image <span style={{fontWeight:400,color:'#94a3b8',fontSize:12}}>(optional · max 5 MB)</span></label>
+              <div style={{display:'flex',alignItems:'flex-start',gap:12}}>
+                {editImage ? (
+                  <div style={{position:'relative',flexShrink:0}}>
+                    <img src={editImage} alt="preview" style={{width:80,height:80,objectFit:'cover',borderRadius:8,border:'1.5px solid #e2e8f0'}} />
+                    <button type="button" onClick={() => { setEditImage(null); if (editImageRef.current) editImageRef.current.value=''; }}
+                      style={{position:'absolute',top:-6,right:-6,width:18,height:18,borderRadius:'50%',background:'#ef4444',color:'#fff',border:'none',cursor:'pointer',fontSize:11,display:'flex',alignItems:'center',justifyContent:'center',lineHeight:1}}>✕</button>
+                  </div>
+                ) : (
+                  <div style={{width:80,height:80,borderRadius:8,border:'1.5px dashed #cbd5e1',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,background:'#f8fafc'}}>
+                    <span style={{fontSize:24}}>🖼️</span>
+                  </div>
+                )}
+                <div style={{flex:1}}>
+                  <input ref={editImageRef} type="file" accept="image/*" style={{display:'none'}}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 5 * 1024 * 1024) { alert('Image must be under 5 MB'); e.target.value=''; return; }
+                      const reader = new FileReader();
+                      reader.onload = ev => setEditImage(ev.target.result);
+                      reader.readAsDataURL(file);
+                    }} />
+                  <button type="button" className="inv-btn inv-btn--secondary inv-btn--sm"
+                    onClick={() => editImageRef.current?.click()}>
+                    {editImage ? '🔄 Replace Image' : '📁 Choose Image'}
+                  </button>
+                  <p style={{fontSize:11,color:'#94a3b8',marginTop:5,marginBottom:0}}>PNG, JPG, WEBP · max 5 MB</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2074,7 +2190,7 @@ function EditItemModal({ open, onClose, onSave, item, warehouses }) {
           <button className="inv-btn inv-btn--ghost" onClick={onClose}>Cancel</button>
           <button className="inv-btn inv-btn--primary"
             disabled={!form.name || !form.itemCode || !form.warehouseId}
-            onClick={() => { onSave({ ...form, id: item.id }); onClose(); }}>
+            onClick={() => { onSave({ ...form, id: item.id, imageData: editImage }); onClose(); }}>
             Save Changes
           </button>
         </div>
@@ -3909,7 +4025,12 @@ export default function InventoryManagementPage() {
         isActive:     true,
       };
       const saved = await inventoryItemApi.create(body);
-      setItems(prev => [saved, ...prev]);
+      // Upload image if one was picked
+      let finalItem = saved;
+      if (form.imageData) {
+        try { finalItem = await invImageApi.upload(saved.id, form.imageData); } catch (_) {}
+      }
+      setItems(prev => [finalItem, ...prev]);
       setItemTotal(t => t + 1);
       toast.add(`"${saved.name}" added to ${saved.location || 'inventory'}`);
     } catch (err) {
@@ -4160,8 +4281,16 @@ export default function InventoryManagementPage() {
         notes:       form.notes        || null,
       };
       const saved = await inventoryItemApi.update(form.id, body);
-      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...saved } : i));
-      if (viewItem?.id === form.id) setViewItem(prev => ({ ...prev, ...saved }));
+      // Handle image: upload new, remove if cleared, leave if unchanged
+      let finalItem = saved;
+      const hadImage = !!viewItem?.imageData || !!(items.find(i => i.id === form.id)?.imageData);
+      if (form.imageData) {
+        try { finalItem = await invImageApi.upload(form.id, form.imageData); } catch (_) {}
+      } else if (hadImage && form.imageData === null) {
+        try { finalItem = await invImageApi.remove(form.id); } catch (_) {}
+      }
+      setItems(prev => prev.map(i => i.id === form.id ? { ...i, ...finalItem } : i));
+      if (viewItem?.id === form.id) setViewItem(prev => ({ ...prev, ...finalItem }));
       toast.add(`"${saved.name}" updated`);
     } catch (err) {
       toast.add(`Update failed: ${err.message}`);

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Eye, Edit2, Trash2 } from 'lucide-react';
+import { Eye, Edit2, Trash2, Grid, List } from 'lucide-react';
 import FilterSelect from '../Dropdowns/FilterSelect.js';
 import {
   CATEGORY_COLORS, STOCK_STATUS,
@@ -52,6 +52,80 @@ function KpiCards({ items }) {
   );
 }
 
+/* ── Grid-view card ─────────────────────────────────────────────────────────── */
+function ItemGridCard({ item, index, page, pageSize, onView, onEdit, onDelete, canEdit }) {
+  const cm = CATEGORY_COLORS[item.category] || CATEGORY_COLORS.Other;
+  const sm = STOCK_STATUS[item.status]      || STOCK_STATUS.IN_STOCK;
+  const NO_IMAGE = !item.imageData;
+
+  return (
+    <div
+      className="inv-grid-card"
+      onClick={() => onView && onView(item)}
+      title={item.name}
+    >
+      {/* Image / placeholder */}
+      <div className="inv-grid-card__img-wrap">
+        {item.imageData ? (
+          <img src={item.imageData} alt={item.name} className="inv-grid-card__img" />
+        ) : (
+          <div className="inv-grid-card__img-placeholder">
+            <span style={{ fontSize: 32 }}>📦</span>
+          </div>
+        )}
+        {/* Status badge overlaid on image */}
+        <span className="inv-grid-card__status-badge inv-status-badge"
+          style={{ background: sm.bg, color: sm.color }}>
+          {sm.label}
+        </span>
+        {/* Serial number */}
+        <span className="inv-grid-card__serial">{page * pageSize + index + 1}</span>
+      </div>
+
+      {/* Body */}
+      <div className="inv-grid-card__body">
+        <div className="inv-grid-card__code inv-code-cell">{item.itemCode}</div>
+        <div className="inv-grid-card__name">{item.name}</div>
+
+        {item.category && (
+          <span className="inv-cat-badge inv-grid-card__cat"
+            style={{ background: cm.bg, color: cm.color, borderColor: cm.border }}>
+            {item.category}
+          </span>
+        )}
+
+        <div className="inv-grid-card__stats">
+          <div className="inv-grid-card__stat">
+            <span className="inv-grid-card__stat-label">Qty</span>
+            <span className="inv-grid-card__stat-value"
+              style={{ color: item.status === 'OUT_OF_STOCK' ? '#ef4444' : item.status === 'LOW_STOCK' ? '#f59e0b' : '#10b981', fontWeight: 700 }}>
+              {fmt(item.currentQty)} {item.unit}
+            </span>
+          </div>
+          <div className="inv-grid-card__stat">
+            <span className="inv-grid-card__stat-label">Value</span>
+            <span className="inv-grid-card__stat-value">{fmtCcy(item.totalValue ?? item.currentQty * item.unitCost)}</span>
+          </div>
+        </div>
+
+        {item.location && (
+          <div className="inv-grid-card__location">📍 {item.location}</div>
+        )}
+      </div>
+
+      {/* Actions footer */}
+      <div className="inv-grid-card__footer" onClick={e => e.stopPropagation()}>
+        <button className="inv-icon-action inv-icon-action--view" title="View Details"
+          onClick={() => onView && onView(item)}><Eye size={14}/></button>
+        {canEdit && <button className="inv-icon-action inv-icon-action--edit" title="Edit"
+          onClick={() => onEdit && onEdit(item)}><Edit2 size={13}/></button>}
+        {canEdit && <button className="inv-icon-action inv-icon-action--delete" title="Delete"
+          onClick={() => onDelete && onDelete(item)}><Trash2 size={13}/></button>}
+      </div>
+    </div>
+  );
+}
+
 export default function ItemsTab({
   items, transactions,
   onAddItem, onTransaction, onEditItem, onDeleteItem, onViewItem,
@@ -69,6 +143,13 @@ export default function ItemsTab({
   const [sortDirection, setSortDirection]   = useState('asc');
   const dragIndexRef                        = useRef(null);
   const [dragOverIndex, setDragOverIndex]   = useState(null);
+  const [viewMode, setViewMode] = useState(() => {
+    try { return localStorage.getItem('inv_items_viewMode') || 'list'; } catch { return 'list'; }
+  });
+  const setAndPersistViewMode = (mode) => {
+    setViewMode(mode);
+    try { localStorage.setItem('inv_items_viewMode', mode); } catch {}
+  };
 
   let filtered = statusFilter ? items.filter(i => i.status === statusFilter) : items;
   if (sortColumn) {
@@ -130,72 +211,120 @@ export default function ItemsTab({
           )}
         </div>
         <div className="inv-action-right">
-          <ColumnVisibilityDropdown columns={ITEMS_ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns} />
+          {/* View mode toggle */}
+          <div className="inv-view-toggle">
+            <button
+              className={`inv-view-toggle__btn${viewMode === 'list' ? ' inv-view-toggle__btn--active' : ''}`}
+              title="Table view" onClick={() => setAndPersistViewMode('list')}>
+              <List size={15}/>
+            </button>
+            <button
+              className={`inv-view-toggle__btn${viewMode === 'grid' ? ' inv-view-toggle__btn--active' : ''}`}
+              title="Grid view" onClick={() => setAndPersistViewMode('grid')}>
+              <Grid size={15}/>
+            </button>
+          </div>
+          {viewMode === 'list' && (
+            <ColumnVisibilityDropdown columns={ITEMS_ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns} />
+          )}
           {canCreate && <button className="inv-btn inv-btn--secondary inv-btn--icon" onClick={onTransaction}>⇄ Transaction</button>}
           {canCreate && <button className="inv-btn inv-btn--primary inv-btn--icon" onClick={onAddItem}>+ Add Item</button>}
         </div>
       </div>
 
-      {/* Table */}
-      <div className="inv-table-container" style={{ marginBottom: 0 }}>
-        <table className="inv-table">
-          <thead>
-            <tr>
-              {orderedVisibleColumns.map((col, i) => (
-                <DraggableHeaderCell key={col.key} col={col} index={i}
-                  sortColumn={sortColumn} sortDirection={sortDirection}
-                  getSortIcon={getSortIcon} handleSort={handleSort}
-                  onDragStart={handleColDragStart} onDragOver={handleColDragOver}
-                  onDrop={handleColDrop} onDragEnd={handleColDragEnd}
-                  isDragOver={dragOverIndex === i} />
+      {/* ── GRID VIEW ── */}
+      {viewMode === 'grid' && (
+        <>
+          {loading ? (
+            <div className="inv-empty"><span className="inv-empty-icon" style={{ fontSize: 20 }}>⏳</span><p>Loading items…</p></div>
+          ) : filtered.length === 0 ? (
+            <div className="inv-empty"><span className="inv-empty-icon">📋</span>
+              <p>{search || category || statusFilter ? 'No items match your filters.' : 'No items yet. Click "+ Add Item" to begin.'}</p>
+            </div>
+          ) : (
+            <div className="inv-grid-view">
+              {filtered.map((item, i) => (
+                <ItemGridCard key={item.id} item={item} index={i} page={page} pageSize={pageSize}
+                  onView={onViewItem} onEdit={onEditItem} onDelete={onDeleteItem} canEdit={canEdit} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr><td colSpan={colCount} className="inv-empty-cell"><div className="inv-empty"><span className="inv-empty-icon" style={{ fontSize: 20 }}>⏳</span><p>Loading items…</p></div></td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={colCount} className="inv-empty-cell"><div className="inv-empty"><span className="inv-empty-icon">📋</span>
-                <p>{search || category || statusFilter ? 'No items match your filters.' : 'No items yet. Click \"+ Add Item\" to begin.'}</p>
-              </div></td></tr>
-            ) : filtered.map((item, i) => {
-              const cm = CATEGORY_COLORS[item.category] || CATEGORY_COLORS.Other;
-              const sm = STOCK_STATUS[item.status]      || STOCK_STATUS.IN_STOCK;
-              return (
-                <tr key={item.id} className="inv-table-row" onClick={() => onViewItem && onViewItem(item)}>
-                  {orderedVisibleColumns.map(col => {
-                    if (col.key === 'idx')         return <td key="idx"         data-col="idx"         style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{page * pageSize + i + 1}</td>;
-                    if (col.key === 'itemCode')     return <td key="itemCode"    data-col="itemCode"    className="inv-code-cell">{item.itemCode}</td>;
-                    if (col.key === 'name')         return <td key="name"        data-col="name"        className="inv-name-cell">{item.name}</td>;
-                    if (col.key === 'category')     return <td key="category"    data-col="category"   ><span className="inv-cat-badge" style={{ background: cm.bg, color: cm.color, borderColor: cm.border }}>{item.category}</span></td>;
-                    if (col.key === 'currentQty')   return <td key="currentQty"  data-col="currentQty"  style={{ fontWeight: 600, color: item.status === 'OUT_OF_STOCK' ? '#ef4444' : item.status === 'LOW_STOCK' ? '#f59e0b' : '#0f172a' }}>{fmt(item.currentQty)}</td>;
-                    if (col.key === 'unit')         return <td key="unit"        data-col="unit"        className="inv-muted">{item.unit}</td>;
-                    if (col.key === 'unitCost')     return <td key="unitCost"    data-col="unitCost"   >{fmtCcy(item.unitCost)}</td>;
-                    if (col.key === 'totalValue')   return <td key="totalValue"  data-col="totalValue"  style={{ fontWeight: 600 }}>{fmtCcy(item.totalValue ?? item.currentQty * item.unitCost)}</td>;
-                    if (col.key === 'location')     return <td key="location"    data-col="location"    className="inv-muted">{item.location}</td>;
-                    if (col.key === 'status')       return <td key="status"      data-col="status"     ><span className="inv-status-badge" style={{ background: sm.bg, color: sm.color }}>{sm.label}</span></td>;
-                    if (col.key === 'lastUpdated')  return <td key="lastUpdated" data-col="lastUpdated" className="inv-muted">{item.lastUpdated ? String(item.lastUpdated).slice(0, 10) : '—'}</td>;
-                    if (col.key === 'actions')      return (
-                      <td key="actions" data-col="actions" onClick={e => e.stopPropagation()}>
-                        <div className="inv-row-actions">
-                          <button className="inv-icon-action inv-icon-action--view" title="View Details" onClick={() => onViewItem && onViewItem(item)}><Eye size={15}/></button>
-                          {canEdit && <button className="inv-icon-action inv-icon-action--edit" title="Edit" onClick={() => onEditItem && onEditItem(item)}><Edit2 size={14}/></button>}
-                          {canEdit && <button className="inv-icon-action inv-icon-action--delete" title="Delete" onClick={() => onDeleteItem && onDeleteItem(item)}><Trash2 size={14}/></button>}
-                        </div>
-                      </td>
-                    );
-                    return null;
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+            </div>
+          )}
+          <PaginationBar page={page} pageSize={pageSize} total={total} totalPages={totalPages}
+            onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} label="items" />
+        </>
+      )}
 
-      {/* Bottom pagination */}
-      <PaginationBar page={page} pageSize={pageSize} total={total} totalPages={totalPages}
-        onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} label="items" />
+      {/* ── TABLE VIEW ── */}
+      {viewMode === 'list' && (
+        <>
+          <div className="inv-table-container" style={{ marginBottom: 0 }}>
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  {orderedVisibleColumns.map((col, i) => (
+                    <DraggableHeaderCell key={col.key} col={col} index={i}
+                      sortColumn={sortColumn} sortDirection={sortDirection}
+                      getSortIcon={getSortIcon} handleSort={handleSort}
+                      onDragStart={handleColDragStart} onDragOver={handleColDragOver}
+                      onDrop={handleColDrop} onDragEnd={handleColDragEnd}
+                      isDragOver={dragOverIndex === i} />
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={colCount} className="inv-empty-cell"><div className="inv-empty"><span className="inv-empty-icon" style={{ fontSize: 20 }}>⏳</span><p>Loading items…</p></div></td></tr>
+                ) : filtered.length === 0 ? (
+                  <tr><td colSpan={colCount} className="inv-empty-cell"><div className="inv-empty"><span className="inv-empty-icon">📋</span>
+                    <p>{search || category || statusFilter ? 'No items match your filters.' : 'No items yet. Click \"+ Add Item\" to begin.'}</p>
+                  </div></td></tr>
+                ) : filtered.map((item, i) => {
+                  const cm = CATEGORY_COLORS[item.category] || CATEGORY_COLORS.Other;
+                  const sm = STOCK_STATUS[item.status]      || STOCK_STATUS.IN_STOCK;
+                  return (
+                    <tr key={item.id} className="inv-table-row" onClick={() => onViewItem && onViewItem(item)}>
+                      {orderedVisibleColumns.map(col => {
+                        if (col.key === 'idx')         return <td key="idx"         data-col="idx"         style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{page * pageSize + i + 1}</td>;
+                        if (col.key === 'itemCode')     return <td key="itemCode"    data-col="itemCode"    className="inv-code-cell">{item.itemCode}</td>;
+                        if (col.key === 'name')         return (
+                          <td key="name" data-col="name" className="inv-name-cell">
+                            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                              {item.imageData && (
+                                <img src={item.imageData} alt="" style={{ width:28, height:28, borderRadius:4, objectFit:'cover', flexShrink:0, border:'1px solid #e2e8f0' }} />
+                              )}
+                              {item.name}
+                            </div>
+                          </td>
+                        );
+                        if (col.key === 'category')     return <td key="category"    data-col="category"   ><span className="inv-cat-badge" style={{ background: cm.bg, color: cm.color, borderColor: cm.border }}>{item.category}</span></td>;
+                        if (col.key === 'currentQty')   return <td key="currentQty"  data-col="currentQty"  style={{ fontWeight: 600, color: item.status === 'OUT_OF_STOCK' ? '#ef4444' : item.status === 'LOW_STOCK' ? '#f59e0b' : '#0f172a' }}>{fmt(item.currentQty)}</td>;
+                        if (col.key === 'unit')         return <td key="unit"        data-col="unit"        className="inv-muted">{item.unit}</td>;
+                        if (col.key === 'unitCost')     return <td key="unitCost"    data-col="unitCost"   >{fmtCcy(item.unitCost)}</td>;
+                        if (col.key === 'totalValue')   return <td key="totalValue"  data-col="totalValue"  style={{ fontWeight: 600 }}>{fmtCcy(item.totalValue ?? item.currentQty * item.unitCost)}</td>;
+                        if (col.key === 'location')     return <td key="location"    data-col="location"    className="inv-muted">{item.location}</td>;
+                        if (col.key === 'status')       return <td key="status"      data-col="status"     ><span className="inv-status-badge" style={{ background: sm.bg, color: sm.color }}>{sm.label}</span></td>;
+                        if (col.key === 'lastUpdated')  return <td key="lastUpdated" data-col="lastUpdated" className="inv-muted">{item.lastUpdated ? String(item.lastUpdated).slice(0, 10) : '—'}</td>;
+                        if (col.key === 'actions')      return (
+                          <td key="actions" data-col="actions" onClick={e => e.stopPropagation()}>
+                            <div className="inv-row-actions">
+                              <button className="inv-icon-action inv-icon-action--view" title="View Details" onClick={() => onViewItem && onViewItem(item)}><Eye size={15}/></button>
+                              {canEdit && <button className="inv-icon-action inv-icon-action--edit" title="Edit" onClick={() => onEditItem && onEditItem(item)}><Edit2 size={14}/></button>}
+                              {canEdit && <button className="inv-icon-action inv-icon-action--delete" title="Delete" onClick={() => onDeleteItem && onDeleteItem(item)}><Trash2 size={14}/></button>}
+                            </div>
+                          </td>
+                        );
+                        return null;
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <PaginationBar page={page} pageSize={pageSize} total={total} totalPages={totalPages}
+            onPageChange={onPageChange} onPageSizeChange={onPageSizeChange} label="items" />
+        </>
+      )}
     </>
   );
 }
