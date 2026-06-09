@@ -2,7 +2,7 @@
 
 .procurement-bills-received-container {
   padding: 14px 24px 10px 24px;
-  /* background-color: #f5f7fa; */
+  /* background-color: var(--c-f5f7fa, #f5f7fa); */
   /* min-height: 100vh; */
 }
 
@@ -13,19 +13,19 @@
 
 .procurement-bills-received-breadcrumb {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   margin-bottom: 8px;
 }
 
 .procurement-bills-received-title {
   font-size: 28px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin: 0;
 }
 
 .procurement-bills-received-count {
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 400;
   font-size: 24px;
 }
@@ -51,37 +51,37 @@
   flex: 1;
   min-width: 200px;
   padding: 10px 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
-  background-color: white;
+  background-color: var(--c-white, white);
   transition: all 0.2s;
 }
 
 .procurement-bills-received-search:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .procurement-bills-received-filter {
   padding: 10px 16px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
-  background-color: white;
+  background-color: var(--c-white, white);
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
 }
 
 .procurement-bills-received-filter:hover {
-  border-color: #cbd5e1;
+  border-color: var(--c-cbd5e1, #cbd5e1);
 }
 
 .procurement-bills-received-filter:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
 }
 
 .procurement-bills-received-actions {
@@ -92,8 +92,8 @@
 
 .procurement-bills-received-btn-primary {
   padding: 10px 20px;
-  background-color: #3b82f6;
-  color: white;
+  background-color: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -106,16 +106,16 @@
 }
 
 .procurement-bills-received-btn-primary:hover {
-  background-color: #2563eb;
+  background-color: var(--c-2563eb, #2563eb);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .procurement-bills-received-btn-secondary {
   padding: 10px 20px;
-  background-color: white;
-  color: #475569;
-  border: 1px solid #e2e8f0;
+  background-color: var(--c-white, white);
+  color: var(--ct-475569, #475569);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -127,15 +127,15 @@
 }
 
 .procurement-bills-received-btn-secondary:hover {
-  background-color: #f8fafc;
-  border-color: #cbd5e1;
+  background-color: var(--c-f8fafc, #f8fafc);
+  border-color: var(--c-cbd5e1, #cbd5e1);
 }
 
 .procurement-bills-received-btn-link {
   padding: 4px 12px;
   background: none;
-  color: #3b82f6;
-  border: 1px solid #3b82f6;
+  color: var(--ct-3b82f6, #3b82f6);
+  border: 1px solid var(--c-3b82f6, #3b82f6);
   border-radius: 6px;
   font-size: 13px;
   font-weight: 500;
@@ -148,7 +148,7 @@
 }
 
 .procurement-bills-received-btn-link:hover {
-  background-color: #eff6ff;
+  background-color: var(--c-eff6ff, #eff6ff);
 }
 
 /* KPI Cards */
@@ -160,7 +160,7 @@
 }
 
 .procurement-bills-received-kpi-card {
-  background: white;
+  background: var(--c-white, white);
   padding: 20px 24px;
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
@@ -183,7 +183,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f1f5f9;
+  background-color: var(--c-f1f5f9, #f1f5f9);
   border-radius: 12px;
 }
 
@@ -195,7 +195,7 @@
 .procurement-bills-received-kpi-value {
   font-size: 18px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin-bottom: 4px;
   white-space: nowrap;
   overflow: hidden;
@@ -204,7 +204,7 @@
 
 .procurement-bills-received-kpi-label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -216,7 +216,7 @@
    ============================================= */
 
 .procurement-bills-received-table-container {
-  background: white;
+  background: var(--c-white, white);
   border-radius: 12px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -239,16 +239,16 @@
 }
 
 .procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--c-f1f5f9, #f1f5f9);
 }
 
 .procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--c-cbd5e1, #cbd5e1);
   border-radius: 4px;
 }
 
 .procurement-bills-received-table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--c-94a3b8, #94a3b8);
 }
 
 .procurement-bills-received-table {
@@ -266,7 +266,7 @@
 }
 
 .procurement-bills-received-table thead tr {
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
 }
 
 .procurement-bills-received-table th {
@@ -274,19 +274,19 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 2px solid #e2e8f0;
-  background-color: #f8fafc;
+  border-bottom: 2px solid var(--c-e2e8f0, #e2e8f0);
+  background-color: var(--c-f8fafc, #f8fafc);
   white-space: nowrap;
 }
 
 .procurement-bills-received-table td {
   padding: 13px 14px;
   font-size: 14px;
-  color: #334155;
-  border-bottom: 1px solid #f1f5f9;
+  color: var(--ct-334155, #334155);
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
 }
 
 .procurement-bills-received-table-row {
@@ -294,7 +294,7 @@
 }
 
 .procurement-bills-received-table-row:hover {
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
 }
 
 .procurement-bills-received-table-row:last-child td {
@@ -303,46 +303,46 @@
 
 .procurement-bills-received-table-id {
   font-weight: 600;
-  color: #3b82f6;
+  color: var(--ct-3b82f6, #3b82f6);
   white-space: nowrap;
 }
 
 .procurement-bills-received-table-vendor {
   font-weight: 500;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .procurement-bills-received-table-amount {
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   white-space: nowrap;
 }
 
 .procurement-bills-received-table-paid {
-  color: #059669;
+  color: var(--ct-059669, #059669);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .procurement-bills-received-table-balance {
-  color: #ea580c;
+  color: var(--ct-ea580c, #ea580c);
   font-weight: 600;
   white-space: nowrap;
 }
 
 .procurement-bills-received-link {
-  color: #3b82f6;
+  color: var(--ct-3b82f6, #3b82f6);
   cursor: pointer;
   text-decoration: underline;
   white-space: nowrap;
 }
 
 .procurement-bills-received-link:hover {
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
 }
 
 .procurement-bills-received-no-link {
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
 }
 
 /* Status Badges */
@@ -358,18 +358,18 @@
 }
 
 .procurement-bills-received-badge-pending {
-  background-color: #fef3c7;
-  color: #92400e;
+  background-color: var(--c-fef3c7, #fef3c7);
+  color: var(--ct-92400e, #92400e);
 }
 
 .procurement-bills-received-badge-partial {
-  background-color: #fed7aa;
-  color: #9a3412;
+  background-color: var(--c-fed7aa, #fed7aa);
+  color: var(--ct-9a3412, #9a3412);
 }
 
 .procurement-bills-received-badge-paid {
-  background-color: #d1fae5;
-  color: #065f46;
+  background-color: var(--c-d1fae5, #d1fae5);
+  color: var(--ct-065f46, #065f46);
 }
 
 /* Action Buttons in Table */
@@ -390,13 +390,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   flex-shrink: 0;
 }
 
 .procurement-bills-received-action-btn:hover {
-  background-color: #eff6ff;
-  color: #3b82f6;
+  background-color: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-3b82f6, #3b82f6);
   transform: scale(1.1);
 }
 
@@ -406,8 +406,8 @@
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
-  border-top: 1px solid #f1f5f9;
-  background: white;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
+  background: var(--c-white, white);
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -421,23 +421,23 @@
 
 .pagination-info span {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
 }
 
 .page-size-selector {
   padding: 6px 10px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
   font-size: 13px;
-  background-color: white;
+  background-color: var(--c-white, white);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .page-size-selector:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
 }
 
 .pagination-controls {
@@ -461,10 +461,10 @@
 .page-number {
   padding: 7px 12px;
   min-width: 36px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
-  background: white;
-  color: #475569;
+  background: var(--c-white, white);
+  color: var(--ct-475569, #475569);
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -472,14 +472,14 @@
 }
 
 .page-number:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--c-f1f5f9, #f1f5f9);
+  border-color: var(--c-cbd5e1, #cbd5e1);
 }
 
 .page-number.active {
-  background: #3b82f6;
-  color: white;
-  border-color: #3b82f6;
+  background: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
+  border-color: var(--c-3b82f6, #3b82f6);
 }
 
 /* Drawer */
@@ -503,7 +503,7 @@
 }
 
 .procurement-bills-received-drawer {
-  background: white;
+  background: var(--c-white, white);
   width: 700px;
   max-width: 90vw;
   height: 100vh;
@@ -519,26 +519,26 @@
 
 .procurement-bills-received-drawer-header {
   padding: 24px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--c-white, white);
   z-index: 10;
 }
 
 .procurement-bills-received-drawer-header h2 {
   margin: 0 0 4px 0;
   font-size: 22px;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   word-break: break-word;
 }
 
 .procurement-bills-received-drawer-vendor {
   font-size: 15px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   margin: 0;
 }
 
@@ -546,7 +546,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   padding: 4px;
   line-height: 1;
   transition: all 0.2s;
@@ -555,8 +555,8 @@
 }
 
 .procurement-bills-received-drawer-close:hover {
-  background-color: #f1f5f9;
-  color: #1e293b;
+  background-color: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .procurement-bills-received-drawer-content {
@@ -570,14 +570,14 @@
 .procurement-bills-received-drawer-section h3 {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin: 0 0 16px 0;
 }
 
 .procurement-bills-received-drawer-section h4 {
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   margin: 16px 0 12px 0;
 }
 
@@ -590,7 +590,7 @@
 
 .procurement-bills-received-drawer-date {
   font-size: 14px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
 }
 
@@ -608,7 +608,7 @@
 
 .procurement-bills-received-info-item label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -616,18 +616,18 @@
 
 .procurement-bills-received-info-item span {
   font-size: 14px;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   font-weight: 500;
 }
 
 .procurement-bills-received-amount-highlight {
-  color: #1e293b !important;
+  color: var(--ct-1e293b, #1e293b) !important;
   font-weight: 700 !important;
   font-size: 16px !important;
 }
 
 .procurement-bills-received-balance-highlight {
-  color: #ea580c !important;
+  color: var(--ct-ea580c, #ea580c) !important;
   font-weight: 700 !important;
   font-size: 16px !important;
 }
@@ -643,7 +643,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
   border-radius: 8px;
   gap: 12px;
   flex-wrap: wrap;
@@ -651,7 +651,7 @@
 
 .procurement-bills-received-trace-label {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
   min-width: 120px;
 }
@@ -661,13 +661,13 @@
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .procurement-bills-received-items-table thead {
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
 }
 
 .procurement-bills-received-items-table th {
@@ -675,16 +675,16 @@
   text-align: left;
   font-size: 12px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   text-transform: uppercase;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   white-space: nowrap;
 }
 
 .procurement-bills-received-items-table td {
   padding: 12px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-334155, #334155);
 }
 
 .procurement-bills-received-items-table tbody tr:last-child td {
@@ -701,7 +701,7 @@
 
 .procurement-bills-received-payment-stat {
   padding: 16px;
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -710,7 +710,7 @@
 
 .procurement-bills-received-payment-stat label {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -719,26 +719,26 @@
 .procurement-bills-received-paid-amount {
   font-size: 22px;
   font-weight: 700;
-  color: #059669;
+  color: var(--ct-059669, #059669);
 }
 
 .procurement-bills-received-balance-amount {
   font-size: 22px;
   font-weight: 700;
-  color: #ea580c;
+  color: var(--ct-ea580c, #ea580c);
 }
 
 .procurement-bills-received-payment-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
 }
 
 .procurement-bills-received-payment-table thead {
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
 }
 
 .procurement-bills-received-payment-table th {
@@ -746,16 +746,16 @@
   text-align: left;
   font-size: 11px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   text-transform: uppercase;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   white-space: nowrap;
 }
 
 .procurement-bills-received-payment-table td {
   padding: 10px;
-  border-bottom: 1px solid #f1f5f9;
-  color: #334155;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-334155, #334155);
 }
 
 .procurement-bills-received-payment-table tbody tr:last-child td {
@@ -774,10 +774,10 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
   border-radius: 6px;
   font-size: 14px;
-  color: #475569;
+  color: var(--ct-475569, #475569);
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -791,11 +791,11 @@
 
 .procurement-bills-received-note-item {
   padding: 10px 12px;
-  background-color: #fef3c7;
-  border-left: 3px solid #f59e0b;
+  background-color: var(--c-fef3c7, #fef3c7);
+  border-left: 3px solid var(--c-f59e0b, #f59e0b);
   border-radius: 4px;
   font-size: 14px;
-  color: #78350f;
+  color: var(--ct-78350f, #78350f);
 }
 
 /* Drawer Actions */
@@ -803,10 +803,10 @@
   display: flex;
   gap: 12px;
   padding: 20px 24px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
   position: sticky;
   bottom: 0;
-  background: white;
+  background: var(--c-white, white);
   flex-wrap: wrap;
 }
 
@@ -827,7 +827,7 @@
 }
 
 .procurement-bills-received-payment-modal {
-  background: white;
+  background: var(--c-white, white);
   border-radius: 12px;
   max-width: 600px;
   width: 100%;
@@ -844,7 +844,7 @@
 
 .procurement-bills-received-modal-header {
   padding: 24px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -853,14 +853,14 @@
 .procurement-bills-received-modal-header h2 {
   margin: 0;
   font-size: 20px;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .procurement-bills-received-modal-close {
   background: none;
   border: none;
   cursor: pointer;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   padding: 4px;
   line-height: 1;
   transition: all 0.2s;
@@ -868,8 +868,8 @@
 }
 
 .procurement-bills-received-modal-close:hover {
-  background-color: #f1f5f9;
-  color: #1e293b;
+  background-color: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-1e293b, #1e293b);
 }
 
 /* Form */
@@ -895,14 +895,14 @@
 .procurement-bills-received-form-group label {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
 }
 
 .procurement-bills-received-form-group input,
 .procurement-bills-received-form-group select,
 .procurement-bills-received-form-group textarea {
   padding: 10px 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
   font-size: 14px;
   font-family: inherit;
@@ -913,13 +913,13 @@
 .procurement-bills-received-form-group select:focus,
 .procurement-bills-received-form-group textarea:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .procurement-bills-received-payment-info {
   padding: 16px;
-  background-color: #f8fafc;
+  background-color: var(--c-f8fafc, #f8fafc);
   border-radius: 8px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -928,7 +928,7 @@
 
 .procurement-bills-received-modal-actions {
   padding: 20px 24px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
   display: flex;
   gap: 12px;
   justify-content: flex-end;
@@ -953,7 +953,7 @@
 }
 
 .procurement-bills-received-file-view-modal {
-  background: #fff;
+  background: var(--c-fff, #fff);
   border-radius: 12px;
   width: 96vw;
   max-width: 1300px;
@@ -971,8 +971,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 12px 20px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f8fafc;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+  background: var(--c-f8fafc, #f8fafc);
   gap: 12px;
   flex-shrink: 0;
   flex-wrap: wrap;
@@ -984,7 +984,7 @@
   gap: 8px;
   font-size: 15px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   white-space: nowrap;
 }
 
@@ -1010,8 +1010,8 @@
 }
 .bill-file-preview-btn:hover { filter: brightness(0.9); }
 
-.bill-file-preview-btn-open     { background: #d1fae5; color: #065f46; }
-.bill-file-preview-btn-download { background: #ede9fe; color: #5b21b6; }
+.bill-file-preview-btn-open     { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+.bill-file-preview-btn-download { background: var(--c-ede9fe, #ede9fe); color: var(--ct-5b21b6, #5b21b6); }
 
 /* ── Iframe ─────────────────────────────────────────────────── */
 .bill-file-preview-iframe {
@@ -1023,8 +1023,8 @@
 }
 
 /* ── Coloured btn-link variants ─────────────────────────────── */
-.bill-btn-link-green  { color: #059669 !important; }
-.bill-btn-link-purple { color: #7c3aed !important; }
+.bill-btn-link-green  { color: var(--ct-059669, #059669) !important; }
+.bill-btn-link-purple { color: var(--ct-7c3aed, #7c3aed) !important; }
 
 /* =============================================
    BILL FORM MODAL - UNIQUE STYLES
@@ -1047,7 +1047,7 @@
 }
 
 .bill-form-modal-container {
-  background: white;
+  background: var(--c-white, white);
   border-radius: 12px;
   width: 100%;
   max-width: 1200px;
@@ -1063,21 +1063,21 @@
   justify-content: space-between;
   align-items: center;
   padding: 20px 28px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   flex-shrink: 0;
 }
 
 .bill-form-modal-header h2 {
   font-size: 22px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin: 0;
 }
 
 .bill-form-modal-close-btn {
   background: none;
   border: none;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   cursor: pointer;
   padding: 8px;
   border-radius: 6px;
@@ -1089,8 +1089,8 @@
 }
 
 .bill-form-modal-close-btn:hover {
-  background: #f1f5f9;
-  color: #1e293b;
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .bill-form-modal-content {
@@ -1104,17 +1104,17 @@
 }
 
 .bill-form-modal-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: var(--c-f1f5f9, #f1f5f9);
   border-radius: 4px;
 }
 
 .bill-form-modal-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--c-cbd5e1, #cbd5e1);
   border-radius: 4px;
 }
 
 .bill-form-modal-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--c-94a3b8, #94a3b8);
 }
 
 .bill-form-section {
@@ -1128,10 +1128,10 @@
 .bill-form-section-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin: 0 0 16px 0;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--c-e2e8f0, #e2e8f0);
 }
 
 .bill-form-section-header {
@@ -1140,7 +1140,7 @@
   align-items: center;
   margin-bottom: 16px;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--c-e2e8f0, #e2e8f0);
   flex-wrap: wrap;
   gap: 8px;
 }
@@ -1167,7 +1167,7 @@
 .bill-form-label {
   font-size: 13px;
   font-weight: 600;
-  color: #475569;
+  color: var(--ct-475569, #475569);
 }
 
 .bill-form-input,
@@ -1175,11 +1175,11 @@
 .bill-form-textarea {
   width: 100%;
   padding: 10px 14px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--c-cbd5e1, #cbd5e1);
   border-radius: 6px;
   font-size: 14px;
-  color: #1e293b;
-  background: white;
+  color: var(--ct-1e293b, #1e293b);
+  background: var(--c-white, white);
   transition: all 0.2s;
   box-sizing: border-box;
 }
@@ -1188,38 +1188,38 @@
 .bill-form-select:focus,
 .bill-form-textarea:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .bill-form-input:disabled,
 .bill-form-select:disabled {
-  background: #f1f5f9;
+  background: var(--c-f1f5f9, #f1f5f9);
   cursor: not-allowed;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
 }
 
 .bill-form-file-input {
   padding: 8px;
   font-size: 14px;
-  border: 2px dashed #e2e8f0;
+  border: 2px dashed var(--c-e2e8f0, #e2e8f0);
   border-radius: 6px;
   cursor: pointer;
 }
 
 .bill-form-file-input:hover {
-  border-color: #3b82f6;
-  background: #f8fafc;
+  border-color: var(--c-3b82f6, #3b82f6);
+  background: var(--c-f8fafc, #f8fafc);
 }
 
-.bill-form-hint { font-size: 12px; color: #64748b; margin-top: 4px; }
-.bill-form-hint-success { font-size: 12px; color: #22c55e; margin-top: 4px; }
-.bill-form-hint-error { font-size: 12px; color: #ef4444; margin-top: 4px; }
-.bill-form-file-selected { font-size: 13px; color: #22c55e; margin-top: 8px; }
+.bill-form-hint { font-size: 12px; color: var(--ct-64748b, #64748b); margin-top: 4px; }
+.bill-form-hint-success { font-size: 12px; color: var(--ct-22c55e, #22c55e); margin-top: 4px; }
+.bill-form-hint-error { font-size: 12px; color: var(--ct-ef4444, #ef4444); margin-top: 4px; }
+.bill-form-file-selected { font-size: 13px; color: var(--ct-22c55e, #22c55e); margin-top: 8px; }
 
 .bill-form-items-table-container {
   overflow-x: auto;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   margin-bottom: 16px;
 }
@@ -1231,32 +1231,32 @@
 }
 
 .bill-form-items-table thead {
-  background: #f8fafc;
+  background: var(--c-f8fafc, #f8fafc);
 }
 
 .bill-form-items-table th {
   padding: 10px 8px;
   text-align: left;
   font-weight: 600;
-  color: #475569;
-  border-bottom: 2px solid #e2e8f0;
+  color: var(--ct-475569, #475569);
+  border-bottom: 2px solid var(--c-e2e8f0, #e2e8f0);
   white-space: nowrap;
   font-size: 12px;
 }
 
 .bill-form-items-table td {
   padding: 8px;
-  border-bottom: 1px solid #f1f5f9;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
 }
 
 .bill-form-item-row:hover {
-  background: #fafafa;
+  background: var(--c-fafafa, #fafafa);
 }
 
 .bill-form-table-input {
   width: 100%;
   padding: 6px 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--c-cbd5e1, #cbd5e1);
   border-radius: 4px;
   font-size: 13px;
   box-sizing: border-box;
@@ -1264,20 +1264,20 @@
 
 .bill-form-table-input:focus {
   outline: none;
-  border-color: #3b82f6;
+  border-color: var(--c-3b82f6, #3b82f6);
 }
 
 .bill-form-line-total {
   font-weight: 600;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   font-size: 13px;
   white-space: nowrap;
 }
 
 .bill-form-add-item-btn {
   padding: 8px 16px;
-  background: #3b82f6;
-  color: white;
+  background: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
   border: none;
   border-radius: 6px;
   font-size: 13px;
@@ -1291,15 +1291,15 @@
 }
 
 .bill-form-add-item-btn:hover {
-  background: #2563eb;
+  background: var(--c-2563eb, #2563eb);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .bill-form-remove-item-btn {
   padding: 6px;
-  background: #fee2e2;
-  color: #dc2626;
+  background: var(--c-fee2e2, #fee2e2);
+  color: var(--ct-dc2626, #dc2626);
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -1310,7 +1310,7 @@
 }
 
 .bill-form-remove-item-btn:hover {
-  background: #fecaca;
+  background: var(--c-fecaca, #fecaca);
 }
 
 .bill-form-total-row {
@@ -1319,7 +1319,7 @@
   align-items: center;
   gap: 16px;
   padding: 14px 16px;
-  background: #f8fafc;
+  background: var(--c-f8fafc, #f8fafc);
   border-radius: 8px;
   font-size: 15px;
   margin-bottom: 16px;
@@ -1329,16 +1329,16 @@
 .bill-form-total-amount {
   font-size: 20px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .bill-form-edit-warning {
   padding: 12px 16px;
-  background: #fef3c7;
-  border-left: 4px solid #f59e0b;
+  background: var(--c-fef3c7, #fef3c7);
+  border-left: 4px solid var(--c-f59e0b, #f59e0b);
   border-radius: 6px;
   font-size: 13px;
-  color: #92400e;
+  color: var(--ct-92400e, #92400e);
   line-height: 1.6;
 }
 
@@ -1347,15 +1347,15 @@
   justify-content: flex-end;
   gap: 12px;
   padding: 18px 28px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
   flex-shrink: 0;
   flex-wrap: wrap;
 }
 
 .bill-form-save-btn {
   padding: 11px 28px;
-  background: #3b82f6;
-  color: white;
+  background: var(--c-3b82f6, #3b82f6);
+  color: var(--ct-white, white);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -1365,15 +1365,15 @@
 }
 
 .bill-form-save-btn:hover {
-  background: #2563eb;
+  background: var(--c-2563eb, #2563eb);
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
 
 .bill-form-cancel-btn {
   padding: 11px 28px;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
   border: none;
   border-radius: 8px;
   font-size: 14px;
@@ -1383,7 +1383,7 @@
 }
 
 .bill-form-cancel-btn:hover {
-  background: #e2e8f0;
+  background: var(--c-e2e8f0, #e2e8f0);
 }
 
 /* =============================================
@@ -1683,8 +1683,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  background: #f0f9ff;
-  border: 1px solid #bae6fd;
+  background: var(--c-f0f9ff, #f0f9ff);
+  border: 1px solid var(--c-bae6fd, #bae6fd);
   border-radius: 8px;
   padding: 10px 14px;
   margin-bottom: 2px;
@@ -1696,12 +1696,12 @@
   gap: 8px;
   font-size: 13px;
   font-weight: 500;
-  color: #0369a1;
+  color: var(--ct-0369a1, #0369a1);
 }
 
 .bill-edit-file-size {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   font-weight: 400;
 }
 
@@ -1725,13 +1725,13 @@
 }
 .bill-edit-file-btn:hover { opacity: 0.82; }
 
-.bill-edit-file-btn-view     { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
-.bill-edit-file-btn-open     { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
-.bill-edit-file-btn-download { background: #faf5ff; color: #7c3aed; border: 1px solid #ddd6fe; }
+.bill-edit-file-btn-view     { background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb); border: 1px solid var(--c-bfdbfe, #bfdbfe); }
+.bill-edit-file-btn-open     { background: var(--c-f0fdf4, #f0fdf4); color: var(--ct-15803d, #15803d); border: 1px solid var(--c-bbf7d0, #bbf7d0); }
+.bill-edit-file-btn-download { background: var(--c-faf5ff, #faf5ff); color: var(--ct-7c3aed, #7c3aed); border: 1px solid var(--c-ddd6fe, #ddd6fe); }
 
 .bill-form-file-hint {
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   margin: 4px 0 0;
   font-style: italic;
 }
@@ -1754,12 +1754,12 @@
   gap: 6px;
   font-size: 13px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ct-374151, #374151);
 }
 
 .bill-drawer-file-size {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   font-weight: 400;
 }
 
@@ -1771,17 +1771,17 @@
 .bill-drawer-preview-iframe {
   width: 100%;
   height: 480px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--c-f8fafc, #f8fafc);
 }
 
 .bill-drawer-preview-img-wrap {
   width: 100%;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   overflow: hidden;
-  background: #f8fafc;
+  background: var(--c-f8fafc, #f8fafc);
   text-align: center;
   padding: 8px;
 }
@@ -1800,10 +1800,10 @@
   justify-content: center;
   gap: 8px;
   height: 80px;
-  border: 1px dashed #e2e8f0;
+  border: 1px dashed var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
 }
 
 /* ── Disabled action button ─────────────────────────────────────────────────── */
@@ -1826,11 +1826,11 @@ button:disabled:hover {
   align-items: center;
   gap: 8px;
   padding: 8px 14px;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
+  background: var(--c-fffbeb, #fffbeb);
+  border: 1px solid var(--c-fde68a, #fde68a);
   border-radius: 8px;
   font-size: 12px;
-  color: #92400e;
+  color: var(--ct-92400e, #92400e);
   font-weight: 500;
   margin-bottom: 12px;
 }
@@ -1843,7 +1843,7 @@ button:disabled:hover {
   background: none;
   border: none;
   cursor: pointer;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   display: flex;
   align-items: center;
   padding: 2px;
@@ -1851,15 +1851,15 @@ button:disabled:hover {
   transition: color 0.13s, background-color 0.13s;
 }
 .search-clear-btn svg {
-  stroke: #94a3b8;
+  stroke: var(--ct-94a3b8, #94a3b8);
   transition: stroke 0.13s;
 }
 .search-clear-btn:hover {
-  color: #ef4444;
-  background-color: #fee2e2;
+  color: var(--ct-ef4444, #ef4444);
+  background-color: var(--c-fee2e2, #fee2e2);
 }
 .search-clear-btn:hover svg {
-  stroke: #ef4444;
+  stroke: var(--ct-ef4444, #ef4444);
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -2130,13 +2130,13 @@ button:disabled:hover {
   padding: 0 26px 0 10px;
   display: flex;
   align-items: center;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: var(--c-ffffff, #ffffff);
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   font-size: 12px;
   font-weight: 500;
-  color: #374151;
+  color: var(--ct-374151, #374151);
   cursor: pointer;
   outline: none;
   user-select: none;
@@ -2153,13 +2153,13 @@ button:disabled:hover {
   box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--has-value {
-  color: #2563eb !important;
+  color: var(--ct-2563eb, #2563eb) !important;
   font-weight: 600 !important;
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--disabled {
-  background-color: #f8fafc;
-  border-color: #e2e8f0;
-  color: #cbd5e1;
+  background-color: var(--c-f8fafc, #f8fafc);
+  border-color: var(--c-e2e8f0, #e2e8f0);
+  color: var(--ct-cbd5e1, #cbd5e1);
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -2169,7 +2169,7 @@ button:disabled:hover {
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   display: flex;
   align-items: center;
   transition: transform 0.2s, color 0.15s;
@@ -2177,20 +2177,20 @@ button:disabled:hover {
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--open .filter-trigger__chevron {
   transform: translateY(-50%) rotate(180deg);
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
 }
 .pce-rows-dropdown .filter-trigger.filter-trigger--has-value .filter-trigger__chevron {
-  color: #2563eb !important;
+  color: var(--ct-2563eb, #2563eb) !important;
 }
 .pce-rows-dropdown .filter-trigger__text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
-  color: #2563eb
+  color: var(--ct-2563eb, #2563eb)
 }
 .pce-rows-dropdown .filter-trigger__text--placeholder {
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   font-weight: 400;
   font-style: italic;
 }

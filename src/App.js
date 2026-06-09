@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom';
 
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuth } from './hooks/useAuth.js';
 import Navbar from './components/Navbar';
@@ -43,6 +44,7 @@ import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
 import RoleHierarchyPage from './Pages/RoleHierarchyPage.js';
 import './App.css';
+import './theme.css';
 import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
@@ -241,10 +243,12 @@ function AppShell({ hideShell }) {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <AppWrapper />
-      </Router>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <AppWrapper />
+        </Router>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

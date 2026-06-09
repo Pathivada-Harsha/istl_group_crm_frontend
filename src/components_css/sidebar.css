@@ -23,9 +23,9 @@
   width: 24px;
   height: 48px;
   border-radius: 0 6px 6px 0;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
   border-left: none;
-  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+  background: linear-gradient(135deg, var(--c-0b63d6, #0b63d6) 0%, var(--c-0952b8, #0952b8) 100%);
   box-shadow: 2px 0 6px rgba(0, 0, 0, 0.1);
   display: none; /* Hidden by default */
   align-items: center;
@@ -34,12 +34,12 @@
   transition: left 0.22s ease, background 0.15s;
   z-index: 35;
   font-size: 14px;
-  color: white;
+  color: var(--ct-white, white);
   font-weight: 600;
 }
 
 .sidebar-external-collapse-btn:hover {
-  background: linear-gradient(135deg, #0952b8 0%, #073d8f 100%);
+  background: linear-gradient(135deg, var(--c-0952b8, #0952b8) 0%, var(--c-073d8f, #073d8f) 100%);
   box-shadow: 2px 0 8px rgba(11, 99, 214, 0.3);
 }
 
@@ -65,8 +65,8 @@
   top: 64px;
   height: calc(100vh - 64px);
   width: 256px;
-  background-color: white;
-  border-right: 1px solid #e5e7eb;
+  background-color: var(--c-white, white);
+  border-right: 1px solid var(--c-e5e7eb, #e5e7eb);
   z-index: 40;
   transform: translateX(-100%);
   transition: transform 0.28s ease, width 0.22s ease;
@@ -118,7 +118,7 @@
 
 .sidebar-logo-text {
   font-weight: 700;
-  color: #0b63d6;
+  color: var(--ct-0b63d6, #0b63d6);
   font-size: 18px;
 }
 
@@ -136,7 +136,7 @@
 }
 
 .sidebar-close:hover {
-  background-color: #f3f4f6;
+  background-color: var(--c-f3f4f6, #f3f4f6);
 }
 
 @media (min-width: 1024px) {
@@ -173,7 +173,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
   user-select: none;
 }
 
@@ -184,7 +184,7 @@
 }
 
 .sidebar-group-header.collapsible:hover {
-  background-color: #f9fafb;
+  background-color: var(--c-f9fafb, #f9fafb);
 }
 
 .sidebar-group-title {
@@ -198,14 +198,14 @@
   display: none;
   font-size: 16px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ct-1f2937, #1f2937);
 }
 
 /* Chevron icon */
 .sidebar-group-chevron {
   flex-shrink: 0;
   transition: transform 0.2s ease;
-  color: #9ca3af;
+  color: var(--ct-9ca3af, #9ca3af);
 }
 
 .sidebar-group-chevron.expanded {
@@ -239,7 +239,7 @@
   padding: 10px 12px;
   padding-left: 24px; /* Indent items under group */
   border-radius: 8px;
-  color: #374151;
+  color: var(--ct-374151, #374151);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -257,8 +257,8 @@
   transform: translateY(-50%);
   margin-left: 12px;
   padding: 10px 16px;
-  background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--c-1e3a8a, #1e3a8a) 0%, var(--c-1e40af, #1e40af) 100%);
+  color: var(--ct-white, white);
   font-size: 14px;
   font-weight: 600;
   border-radius: 8px;
@@ -281,7 +281,7 @@
   transform: translateY(-50%);
   margin-left: 6px;
   border: 7px solid transparent;
-  border-right-color: #1e3a8a;
+  border-right-color: var(--c-1e3a8a, #1e3a8a);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, margin-left 0.2s ease;
@@ -313,8 +313,8 @@
   transform: translateY(-50%);
   margin-left: 12px;
   padding: 10px 16px;
-  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--c-0b63d6, #0b63d6) 0%, var(--c-0952b8, #0952b8) 100%);
+  color: var(--ct-white, white);
   font-size: 14px;
   font-weight: 600;
   border-radius: 8px;
@@ -337,7 +337,7 @@
   transform: translateY(-50%);
   margin-left: 6px;
   border: 7px solid transparent;
-  border-right-color: #0b63d6;
+  border-right-color: var(--c-0b63d6, #0b63d6);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, margin-left 0.2s ease;
@@ -365,18 +365,18 @@
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  color: #9ca3af;
+  color: var(--ct-9ca3af, #9ca3af);
   opacity: 0.6;
 }
 
 .sidebar-item:hover .child-connector {
   opacity: 1;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 
 .sidebar-item.active .child-connector {
   opacity: 1;
-  color: #2563eb;
+  color: var(--ct-2563eb, #2563eb);
 }
 
 /* Icon-only layout when sidebar collapsed */
@@ -401,7 +401,7 @@
 /* Show abbreviation and hide chevron when collapsed */
 .sidebar.collapsed .sidebar-group-abbreviation {
   display: block;
-  color: #1f2937;
+  color: var(--ct-1f2937, #1f2937);
   font-size: 18px;
 }
 
@@ -413,14 +413,14 @@
 .sidebar.collapsed .sidebar-group-header {
   justify-content: center;
   padding: 12px 6px;
-  background-color: #f3f4f6;
+  background-color: var(--c-f3f4f6, #f3f4f6);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
 }
 
 .sidebar.collapsed .sidebar-group-header.collapsible:hover {
-  background-color: #e5e7eb;
-  border-color: #d1d5db;
+  background-color: var(--c-e5e7eb, #e5e7eb);
+  border-color: var(--c-d1d5db, #d1d5db);
 }
 
 /* Adjust logo alignment in collapsed mode */
@@ -430,12 +430,12 @@
 
 /* Hover / active */
 .sidebar-item:hover {
-  background-color: #f3f4f6;
+  background-color: var(--c-f3f4f6, #f3f4f6);
 }
 
 .sidebar-item.active {
-  background-color: #eff6ff;
-  color: #2563eb;
+  background-color: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-2563eb, #2563eb);
 }
 
 .sidebar-item .icon {
@@ -474,7 +474,7 @@
   
   .sidebar.collapsed .sidebar-group-chevron {
     display: block;
-    color: #9ca3af;
+    color: var(--ct-9ca3af, #9ca3af);
     margin: 0;
     width: 16px;
     height: 16px;
@@ -501,7 +501,7 @@
   }
   
   .sidebar.collapsed .sidebar-group-header.collapsible:hover {
-    background-color: #f9fafb;
+    background-color: var(--c-f9fafb, #f9fafb);
   }
   
   .sidebar-logo-text {
@@ -516,7 +516,7 @@
 
 /* Icon color */
 .sidebar .icon {
-  color: #0b63d6;
+  color: var(--ct-0b63d6, #0b63d6);
 }
 
 /* Active icon inherits active color */
@@ -541,12 +541,12 @@
 .sidebar-group-abbreviation {
   font-size: 18px;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--ct-1f2937, #1f2937);
 }
 
 /* Arrow next to abbreviation when collapsed */
 .sidebar-group-collapsed-arrow {
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
   flex-shrink: 0;
   transition: transform 0.2s ease, color 0.2s ease;
   margin-top: 2px;
@@ -555,12 +555,12 @@
 /* Rotate arrow when group is expanded */
 .sidebar-group-collapsed-arrow.expanded {
   transform: rotate(180deg);
-  color: #0b63d6;
+  color: var(--ct-0b63d6, #0b63d6);
 }
 
 /* Hover effect for collapsed group header */
 .sidebar.collapsed .sidebar-group-header.collapsible:hover .sidebar-group-collapsed-arrow {
-  color: #0b63d6;
+  color: var(--ct-0b63d6, #0b63d6);
 }
 
 /* Hide regular chevron in collapsed mode - already handled but ensure it's clear */
@@ -577,8 +577,8 @@
   transform: translateY(-50%);
   margin-left: 12px;
   padding: 10px 16px;
-  background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
-  color: white;
+  background: linear-gradient(135deg, var(--c-0b63d6, #0b63d6) 0%, var(--c-0952b8, #0952b8) 100%);
+  color: var(--ct-white, white);
   font-size: 14px;
   font-weight: 600;
   border-radius: 8px;
@@ -601,7 +601,7 @@
   transform: translateY(-50%);
   margin-left: 6px;
   border: 7px solid transparent;
-  border-right-color: #0b63d6;
+  border-right-color: var(--c-0b63d6, #0b63d6);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease, margin-left 0.2s ease;
@@ -622,17 +622,17 @@
 /* Make the collapsed group header more clickable-looking */
 .sidebar.collapsed .sidebar-group-header.collapsible {
   cursor: pointer;
-  background-color: #f3f4f6;
+  background-color: var(--c-f3f4f6, #f3f4f6);
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
   justify-content: center;
   padding: 12px 6px;
   transition: all 0.2s ease;
 }
 
 .sidebar.collapsed .sidebar-group-header.collapsible:hover {
-  background-color: #e5e7eb;
-  border-color: #d1d5db;
+  background-color: var(--c-e5e7eb, #e5e7eb);
+  border-color: var(--c-d1d5db, #d1d5db);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 

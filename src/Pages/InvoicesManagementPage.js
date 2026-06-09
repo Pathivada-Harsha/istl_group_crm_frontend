@@ -16,12 +16,49 @@ import { normalizeUnit } from './../components/Dropdowns/unitUtils';
 import { FaIndianRupeeSign } from "react-icons/fa6";
 import * as XLSX from 'xlsx';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+  '#c7d2fe':'#2e3566','#fcd34d':'#5a4714','#fef9f9':'#2b1d20','#fed7aa':'#4a2f1a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#064e3b':'#6ee7b7','#4b7a5e':'#7fbf9b','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 /* ─── Shared calendar helpers ───────────────────────────────────────────────── */
 const _INV_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const _INV_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 /* Simple date-only picker (replaces <input type="date">) */
 const InvDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }) => {
+  useThemeVersion();
   const [show, setShow]     = useState(false);
   const [calMo, setCalMo]   = useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
   const [calYr, setCalYr]   = useState(() => value ? parseInt(value.slice(0,4))   : new Date().getFullYear());
@@ -54,31 +91,31 @@ const InvDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }
     <>
       <button ref={trigRef} type="button"
         onClick={show ? () => setShow(false) : open}
-        style={{ display:'flex', alignItems:'center', gap:6, width:'100%', padding:'9px 10px', border:`1px solid ${show?'#4f46e5':'#d1d5db'}`, borderRadius:6, background: value?'#f5f3ff':'#fff', cursor:'pointer', fontSize:13, textAlign:'left' }}
+        style={{ display:'flex', alignItems:'center', gap:6, width:'100%', padding:'9px 10px', border:`1px solid ${show?__sbg('#4f46e5'):__sbg('#d1d5db')}`, borderRadius:6, background: value?__sbg('#f5f3ff'):__sbg('#fff'), cursor:'pointer', fontSize:13, textAlign:'left' }}
       >
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#9ca3af'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        {value ? <span style={{flex:1,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span> : <span style={{flex:1,color:'#9ca3af'}}>{placeholder}</span>}
-        {value && <span onClick={e=>{e.stopPropagation();onChange('');}} style={{color:'#9ca3af',cursor:'pointer',lineHeight:1}}>×</span>}
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?__stc('#4f46e5'):__stc('#9ca3af')}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value ? <span style={{flex:1,fontWeight:600,color:__stc('#0f172a')}}>{fmtD(value)}</span> : <span style={{flex:1,color:__stc('#9ca3af')}}>{placeholder}</span>}
+        {value && <span onClick={e=>{e.stopPropagation();onChange('');}} style={{color:__stc('#9ca3af'),cursor:'pointer',lineHeight:1}}>×</span>}
       </button>
       {show && (
-        <div ref={dpRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:14,minWidth:260}}>
+        <div ref={dpRef} style={{position:'fixed',top:pos.top,left:pos.left,zIndex:9999,background:__sbg('#fff'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:14,minWidth:260}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}}>
             <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
-            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_INV_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:__stc('#1e293b')}}>{_INV_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
           </div>
           {showYr ? (
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4}}>
-              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?__sbg('#4f46e5'):__sbg('transparent'),color:yr===calYr?__stc('#fff'):__stc('#1e293b'),fontSize:12}}>{yr}</div>);})}
             </div>
           ):(
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2}}>
-              {_INV_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {_INV_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:__stc('#94a3b8'),padding:'2px 0'}}>{d}</div>)}
               {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
               {Array.from({length:DIM}).map((_,i)=>{
                 const dy=i+1, ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`;
                 const isSel=ds===value, isToday=ds===tod, isMin=minDate&&ds<minDate;
-                return(<div key={ds} onClick={()=>{if(!isMin){onChange(ds);setShow(false);}}} style={{textAlign:'center',padding:'6px 0',cursor:isMin?'not-allowed':'pointer',borderRadius:4,background:isSel?'#4f46e5':'transparent',color:isSel?'#fff':isToday?'#4f46e5':isMin?'#d1d5db':'#1e293b',fontWeight:isSel||isToday?700:400,fontSize:12,opacity:isMin?.4:1}}>{dy}</div>);
+                return(<div key={ds} onClick={()=>{if(!isMin){onChange(ds);setShow(false);}}} style={{textAlign:'center',padding:'6px 0',cursor:isMin?'not-allowed':'pointer',borderRadius:4,background:isSel?__sbg('#4f46e5'):__sbg('transparent'),color:isSel?__stc('#fff'):isToday?__stc('#4f46e5'):isMin?__stc('#d1d5db'):__stc('#1e293b'),fontWeight:isSel||isToday?700:400,fontSize:12,opacity:isMin?.4:1}}>{dy}</div>);
               })}
             </div>
           )}
@@ -90,6 +127,7 @@ const InvDatePicker = ({ value, onChange, placeholder = 'Select date', minDate }
 
 /* Date range picker (same style as Clients page) */
 const InvDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,  setShow]  = useState(false);
   const [from,  setFrom]  = useState(null);
   const [to,    setTo]    = useState(null);
@@ -110,50 +148,50 @@ const InvDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
   return(
     <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
       <button type="button" onClick={()=>setShow(p=>!p)}
-        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?'#c7d2fe':'#e2e8f0'}`,borderRadius:6,background:appliedFrom?'#f5f3ff':'#fff',cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
+        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?__sbg('#c7d2fe'):__sbg('#e2e8f0')}`,borderRadius:6,background:appliedFrom?__sbg('#f5f3ff'):__sbg('#fff'),cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
       >
         <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        <span style={{fontSize:11,color:'#94a3b8'}}>FROM</span>
-        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?'#1e293b':'#94a3b8'}}>{fmt(appliedFrom)}</span>
+        <span style={{fontSize:11,color:__stc('#94a3b8')}}>FROM</span>
+        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?__stc('#1e293b'):__stc('#94a3b8')}}>{fmt(appliedFrom)}</span>
         <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-        <span style={{fontSize:11,color:'#94a3b8'}}>TO</span>
-        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?'#1e293b':'#94a3b8'}}>{fmt(appliedTo)}</span>
-        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:'#94a3b8',cursor:'pointer',lineHeight:1}}>×</span>}
+        <span style={{fontSize:11,color:__stc('#94a3b8')}}>TO</span>
+        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?__stc('#1e293b'):__stc('#94a3b8')}}>{fmt(appliedTo)}</span>
+        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:__stc('#94a3b8'),cursor:'pointer',lineHeight:1}}>×</span>}
       </button>
       {show&&(
-        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:'#fff',border:'1px solid #e2e8f0',borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:__sbg('#fff'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
           <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
             <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
-            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:'#1e293b'}}>{_INV_MONTHS[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:__stc('#1e293b')}}>{_INV_MONTHS[calMo]} {calYr}</button>
             <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
           </div>
           {showYr?(
             <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,marginBottom:10}}>
-              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?'#4f46e5':'transparent',color:yr===calYr?'#fff':'#1e293b',fontSize:12}}>{yr}</div>);})}
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?__sbg('#4f46e5'):__sbg('transparent'),color:yr===calYr?__stc('#fff'):__stc('#1e293b'),fontSize:12}}>{yr}</div>);})}
             </div>
           ):(
             <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:8}}>
-              {_INV_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:'#94a3b8',padding:'2px 0'}}>{d}</div>)}
+              {_INV_DAYS.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:__stc('#94a3b8'),padding:'2px 0'}}>{d}</div>)}
               {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
               {Array.from({length:DIM}).map((_,i)=>{
                 const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;
-                let bg='transparent',color='#1e293b',br=4;
-                if(ds===from||ds===to){bg='#4f46e5';color='#fff';}
-                else if(inR(ds)){bg='#e0e7ff';color='#3730a3';if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
-                else if(ds===tod)color='#4f46e5';
+                let bg = __sbg('transparent'),color = __stc('#1e293b'),br=4;
+                if(ds===from||ds===to){bg = __sbg('#4f46e5');color = __stc('#fff');}
+                else if(inR(ds)){bg = __sbg('#e0e7ff');color = __stc('#3730a3');if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
+                else if(ds===tod)color = __stc('#4f46e5');
                 return(<div key={ds} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)} style={{textAlign:'center',padding:'5px 0',cursor:'pointer',borderRadius:br,background:bg,color,fontSize:12,fontWeight:ds===from||ds===to?700:400}}>{dy}</div>);
               })}
             </div>
           )}
           <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'wrap'}}>
-            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?'#e0e7ff':'#f1f5f9',color:from?'#3730a3':'#94a3b8',fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?__sbg('#e0e7ff'):__sbg('#f1f5f9'),color:from?__stc('#3730a3'):__stc('#94a3b8'),fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
             <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
-            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?'#e0e7ff':'#f1f5f9',color:to?'#3730a3':'#94a3b8',fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?__sbg('#e0e7ff'):__sbg('#f1f5f9'),color:to?__stc('#3730a3'):__stc('#94a3b8'),fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
           </div>
           <div style={{display:'flex',gap:6,justifyContent:'center'}}>
-            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Clear</button>}
-            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:'1px solid #e2e8f0',borderRadius:6,background:'#fff',cursor:'pointer',fontSize:12,color:'#64748b'}}>Cancel</button>
-            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?'#4f46e5':'#e2e8f0',color:from?'#fff':'#94a3b8',cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
+            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:6,background:__sbg('#fff'),cursor:'pointer',fontSize:12,color:__stc('#64748b')}}>Clear</button>}
+            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:6,background:__sbg('#fff'),cursor:'pointer',fontSize:12,color:__stc('#64748b')}}>Cancel</button>
+            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?__sbg('#4f46e5'):__sbg('#e2e8f0'),color:from?__stc('#fff'):__stc('#94a3b8'),cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
           </div>
         </div>
       )}
@@ -164,6 +202,7 @@ const InvDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 const InvoicesManagementPage = () => {
+  useThemeVersion();
   const [invoices, setInvoices] = useState([]);
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
   const { user, pagePermissions } = useAuth();
@@ -662,7 +701,7 @@ const fetchStats = async () => {
       } else {
         setCustomerData(null);
         setOrderBookItems([]); setOrderBooks([]); setSelectedOrderBookId('');
-        showError('Customer not found for this project');
+        showWarning('Customer not found for this project');
       }
     } catch (error) {
       console.error('Failed to fetch customer:', error);
@@ -954,7 +993,7 @@ const fetchStats = async () => {
       const allInvoices = data.invoices || [];
 
       if (allInvoices.length === 0) {
-        showError('No invoices found for the selected filters.');
+        showWarning('No invoices found for the selected filters.');
         return;
       }
 
@@ -1149,7 +1188,7 @@ const fetchStats = async () => {
    */
   const handleSaveInvoice = async (status) => {
     if (!formData.customerId) {
-      showError('Please select a project to auto-fill customer details');
+      showWarning('Please select a project to auto-fill customer details');
       return;
     }
 
@@ -1159,7 +1198,7 @@ const fetchStats = async () => {
     }
 
     if (formData.items.length === 0 || !formData.items[0].description) {
-      showError('Please add at least one item');
+      showWarning('Please add at least one item');
       return;
     }
 
@@ -1307,11 +1346,11 @@ const fetchStats = async () => {
    */
   const handleSavePayment = async () => {
     if (!paymentData.amount || paymentData.amount <= 0) {
-      showError('Payment amount must be greater than zero');
+      showWarning('Payment amount must be greater than zero');
       return;
     }
     if (paymentData.amount > parseFloat(selectedInvoice.balanceAmount || 0)) {
-      showError(`Payment cannot exceed balance due of ${formatCurrency(selectedInvoice.balanceAmount)}`);
+      showWarning(`Payment cannot exceed balance due of ${formatCurrency(selectedInvoice.balanceAmount)}`);
       return;
     }
 
@@ -1474,8 +1513,8 @@ const fetchStats = async () => {
   const SortIcon = ({ colKey }) => {
     if (sortConfig.key !== colKey) return <ChevronUp size={13} style={{ opacity: 0.3, marginLeft: 3 }} />;
     return sortConfig.direction === 'asc'
-      ? <ChevronUp size={13} style={{ marginLeft: 3, color: '#6366f1' }} />
-      : <ChevronDown size={13} style={{ marginLeft: 3, color: '#6366f1' }} />;
+      ? <ChevronUp size={13} style={{ marginLeft: 3, color: __stc('#6366f1') }} />
+      : <ChevronDown size={13} style={{ marginLeft: 3, color: __stc('#6366f1') }} />;
   };
 
   // Drag-and-drop column reorder
@@ -1585,8 +1624,8 @@ const fetchStats = async () => {
               title="Toggle Columns"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '8px 14px', border: '1px solid #e2e8f0', borderRadius: '8px',
-                background: '#fff', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                padding: '8px 14px', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '8px',
+                background: __sbg('#fff'), cursor: 'pointer', fontSize: '14px', color: __stc('#374151'),
                 fontWeight: 500
               }}
             >
@@ -1596,10 +1635,10 @@ const fetchStats = async () => {
             {showColumnsPanel && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 999,
-                background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px',
+                background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '10px',
                 boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '10px 0', minWidth: '200px'
               }}>
-                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ padding: '6px 14px 10px', fontSize: '12px', fontWeight: 600, color: __stc('#6b7280'), textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: `1px solid ${__sbg('#f1f5f9')}` }}>
                   Show / Hide Columns
                 </div>
                 {INVOICE_COLUMNS.map(col => (
@@ -1608,7 +1647,7 @@ const fetchStats = async () => {
                     onClick={() => toggleColumn(col.key)}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: '#374151',
+                      padding: '8px 14px', cursor: 'pointer', fontSize: '14px', color: __stc('#374151'),
                       transition: 'background 0.15s'
                     }}
                     onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -1616,8 +1655,8 @@ const fetchStats = async () => {
                   >
                     <div style={{
                       width: 17, height: 17, borderRadius: 4, border: '1.5px solid',
-                      borderColor: visibleColumns.includes(col.key) ? '#6366f1' : '#d1d5db',
-                      background: visibleColumns.includes(col.key) ? '#6366f1' : '#fff',
+                      borderColor: visibleColumns.includes(col.key) ? __sbg('#6366f1') : __sbg('#d1d5db'),
+                      background: visibleColumns.includes(col.key) ? __sbg('#6366f1') : __sbg('#fff'),
                       display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
                     }}>
                       {visibleColumns.includes(col.key) && <Check size={11} color="#fff" strokeWidth={3} />}
@@ -1634,8 +1673,8 @@ const fetchStats = async () => {
               disabled={exportLoading}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '8px 16px', borderRadius: 7, border: '1.5px solid #059669',
-                background: exportLoading ? '#f0fdf4' : '#fff', color: '#059669',
+                padding: '8px 16px', borderRadius: 7, border: `1.5px solid ${__sbg('#059669')}`,
+                background: exportLoading ? __sbg('#f0fdf4') : __sbg('#fff'), color: __stc('#059669'),
                 fontSize: 13, fontWeight: 600, cursor: exportLoading ? 'wait' : 'pointer',
                 whiteSpace: 'nowrap', transition: 'all 0.15s'
               }}
@@ -1730,13 +1769,13 @@ const fetchStats = async () => {
             ) : (
               getSortedInvoices().map((invoice, rowIndex) => (
                 <tr key={invoice.id}>
-                  <td style={{ textAlign:'center', fontWeight:600, color:'#6b7280', fontSize:13 }}>{currentPage * pageSize + rowIndex + 1}</td>
+                  <td style={{ textAlign:'center', fontWeight:600, color:__stc('#6b7280'), fontSize:13 }}>{currentPage * pageSize + rowIndex + 1}</td>
                   {orderedVisibleCols.map(key => {
                     if (key === 'invoiceNumber')  return (
                       <td key={key}>
                         {invoice.invoiceNumber
-                          ? <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, color: '#374151' }}>{invoice.invoiceNumber}</span>
-                          : <span style={{ color: '#9ca3af', fontSize: 12 }}>—</span>}
+                          ? <span style={{ fontFamily: 'monospace', fontSize: 13, fontWeight: 600, color: __stc('#374151') }}>{invoice.invoiceNumber}</span>
+                          : <span style={{ color: __stc('#9ca3af'), fontSize: 12 }}>—</span>}
                       </td>
                     );
                     if (key === 'customerId')    return <td key={key}>{invoice.customerCompanyName || invoice.customerName || `#${invoice.customerId}`}</td>;
@@ -1831,7 +1870,7 @@ const fetchStats = async () => {
                       {isAccountsRole && (invoice.status === 'Pending Approval' || invoice.status === 'PENDING_APPROVAL') && (
                         <button
                           className="Invoices-page-action-btn"
-                          style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}
+                          style={{ background: __sbg('#fef3c7'), color: __stc('#92400e'), border: `1px solid ${__sbg('#fcd34d')}` }}
                           onClick={() => handleOpenApproveModal(invoice)}
                           title="Approve invoice & upload file"
                         >
@@ -1843,7 +1882,7 @@ const fetchStats = async () => {
                       {invoice.hasAttachment === true && (
                         <button
                           className="Invoices-page-action-btn"
-                          style={{ background: '#d1fae5', color: '#065f46', border: '1px solid #6ee7b7' }}
+                          style={{ background: __sbg('#d1fae5'), color: __stc('#065f46'), border: `1px solid ${__sbg('#6ee7b7')}` }}
                           onClick={() => handleDownloadAttachment(invoice)}
                           title={`Download approved invoice: ${invoice.attachmentFileName || ''}`}
                         >
@@ -1889,11 +1928,11 @@ const fetchStats = async () => {
               options={[{value:'5',label:'5 rows'},{value:'10',label:'10 rows'},{value:'25',label:'25 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]}
               placeholder="Rows"
             />
-            <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+            <span style={{whiteSpace:'nowrap',color:__stc('#64748b')}}>
               {totalElements === 0 ? 'No records' : `${currentPage * pageSize + 1}–${Math.min((currentPage + 1) * pageSize, totalElements)} of ${totalElements} invoices`}
             </span>
-            <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-              Page <strong style={{color:'#0f172a'}}>{currentPage + 1}</strong> of <strong style={{color:'#0f172a'}}>{totalPages}</strong>
+            <span style={{fontSize:12,color:__stc('#94a3b8'),whiteSpace:'nowrap'}}>
+              Page <strong style={{color:__stc('#0f172a')}}>{currentPage + 1}</strong> of <strong style={{color:__stc('#0f172a')}}>{totalPages}</strong>
             </span>
           </div>
           <div className="Invoices-page-pagination-buttons">
@@ -2092,18 +2131,18 @@ const fetchStats = async () => {
 
                   {/* ── Edit-mode: show pending change badge + action buttons ── */}
                   {showInvoiceProjectWarning && editMode && (
-                    <div style={{ marginTop: '12px', padding: '12px 14px', background: '#fffbeb', border: '1.5px solid #f59e0b', borderRadius: '8px' }}>
+                    <div style={{ marginTop: '12px', padding: '12px 14px', background: __sbg('#fffbeb'), border: `1.5px solid ${__sbg('#f59e0b')}`, borderRadius: '8px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
-                        <div style={{ fontSize: '13px', color: '#92400e', fontWeight: 500 }}>
+                        <div style={{ fontSize: '13px', color: __stc('#92400e'), fontWeight: 500 }}>
                           ⚠️ Project changed — items will be preserved. Confirm to apply.
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button onClick={handleConfirmInvoiceProjectChange}
-                            style={{ padding: '7px 14px', background: '#d97706', color: 'white', border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                            style={{ padding: '7px 14px', background: __sbg('#d97706'), color: __stc('white'), border: 'none', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
                             ✅ Apply
                           </button>
                           <button onClick={handleCancelInvoiceProjectChange}
-                            style={{ padding: '7px 14px', background: 'white', color: '#92400e', border: '1.5px solid #f59e0b', borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
+                            style={{ padding: '7px 14px', background: __sbg('white'), color: __stc('#92400e'), border: `1.5px solid ${__sbg('#f59e0b')}`, borderRadius: '6px', fontWeight: 600, fontSize: '12px', cursor: 'pointer' }}>
                             ✕ Revert
                           </button>
                         </div>
@@ -2115,19 +2154,19 @@ const fetchStats = async () => {
                   {modalProjectId && (
                     <div style={{ marginTop: '14px' }}>
                       {loadingOrderBookItems ? (
-                        <div style={{ padding: '12px 16px', background: '#dbeafe', borderRadius: '8px', fontSize: '13px', color: '#1e40af' }}>
+                        <div style={{ padding: '12px 16px', background: __sbg('#dbeafe'), borderRadius: '8px', fontSize: '13px', color: __stc('#1e40af') }}>
                           🔄 Loading order books…
                         </div>
                       ) : orderBooks.length === 0 ? (
                         /* No order books at all for this project */
-                        <div style={{ padding: '16px', background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '8px', textAlign: 'center' }}>
-                          <div style={{ fontSize: '15px', fontWeight: 600, color: '#991b1b', marginBottom: 4 }}>❌ No Order Book Found</div>
-                          <div style={{ fontSize: '13px', color: '#991b1b' }}>No order book is linked to this project yet.</div>
+                        <div style={{ padding: '16px', background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, borderRadius: '8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: '15px', fontWeight: 600, color: __stc('#92400e'), marginBottom: 4 }}>⚠️ No Order Book Found</div>
+                          <div style={{ fontSize: '13px', color: __stc('#b45309') }}>No Order Book Is Linked To This Project Yet.</div>
                         </div>
                       ) : (
                         /* One or more order books — show dropdown + items */
-                        <div style={{ padding: '16px', background: '#fef3c7', border: '2px solid #fbbf24', borderRadius: '8px' }}>
-                          <h4 style={{ marginBottom: '10px', color: '#92400e', fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ padding: '16px', background: __sbg('#fef3c7'), border: `2px solid ${__sbg('#fbbf24')}`, borderRadius: '8px' }}>
+                          <h4 style={{ marginBottom: '10px', color: __stc('#92400e'), fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                             📦 Select Order Book
                           </h4>
 
@@ -2136,7 +2175,7 @@ const fetchStats = async () => {
                             <select
                               value={selectedOrderBookId}
                               onChange={handleOrderBookSelect}
-                              style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '6px', border: '1px solid #fbbf24', background: 'white' }}
+                              style={{ width: '100%', padding: '10px', fontSize: '14px', borderRadius: '6px', border: `1px solid ${__sbg('#fbbf24')}`, background: __sbg('white') }}
                             >
                               <option value="">-- Select an Order Book --</option>
                               {orderBooks.map(ob => (
@@ -2150,16 +2189,16 @@ const fetchStats = async () => {
                           {/* Items preview + load button */}
                           {selectedOrderBookId && (
                             loadingOrderBookItems ? (
-                              <div style={{ fontSize: '13px', color: '#92400e' }}>🔄 Loading items…</div>
+                              <div style={{ fontSize: '13px', color: __stc('#92400e') }}>🔄 Loading items…</div>
                             ) : orderBookItems.length === 0 ? (
-                              <div style={{ fontSize: '13px', color: '#92400e' }}>No items found in this order book.</div>
+                              <div style={{ fontSize: '13px', color: __stc('#92400e') }}>No items found in this order book.</div>
                             ) : (
                               <>
                                 {/* Summary + Load button */}
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: 8 }}>
-                                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#92400e' }}>
+                                  <div style={{ fontSize: '13px', fontWeight: 600, color: __stc('#92400e') }}>
                                     📋 {orderBookItems.length} item{orderBookItems.length !== 1 ? 's' : ''} in order book
-                                    <span style={{ fontWeight: 400, color: '#6b7280', marginLeft: 8 }}>
+                                    <span style={{ fontWeight: 400, color: __stc('#6b7280'), marginLeft: 8 }}>
                                       ({orderBookItems.filter(it => Math.max(0, (parseFloat(it.quantity)||0) - (parseFloat(it.invoicedQty)||0)) > 0).length} with remaining qty)
                                     </span>
                                   </div>
@@ -2173,14 +2212,14 @@ const fetchStats = async () => {
                                 </div>
 
                                 {/* Items table */}
-                                <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid #fde68a', borderRadius: '6px', background: 'white' }}>
+                                <div style={{ maxHeight: '180px', overflowY: 'auto', border: `1px solid ${__sbg('#fde68a')}`, borderRadius: '6px', background: __sbg('white') }}>
                                   <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
                                     <thead>
-                                      <tr style={{ background: '#fef3c7', position: 'sticky', top: 0 }}>
-                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Item</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Total Qty</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Invoiced</th>
-                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: '#92400e', borderBottom: '1px solid #fde68a' }}>Remaining</th>
+                                      <tr style={{ background: __sbg('#fef3c7'), position: 'sticky', top: 0 }}>
+                                        <th style={{ padding: '7px 10px', textAlign: 'left', fontWeight: 600, color: __stc('#92400e'), borderBottom: `1px solid ${__sbg('#fde68a')}` }}>Item</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: __stc('#92400e'), borderBottom: `1px solid ${__sbg('#fde68a')}` }}>Total Qty</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: __stc('#92400e'), borderBottom: `1px solid ${__sbg('#fde68a')}` }}>Invoiced</th>
+                                        <th style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: __stc('#92400e'), borderBottom: `1px solid ${__sbg('#fde68a')}` }}>Remaining</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -2189,14 +2228,14 @@ const fetchStats = async () => {
                                         const done  = parseFloat(item.invoicedQty) || 0;
                                         const remaining = Math.max(0, total - done);
                                         return (
-                                          <tr key={idx} style={{ borderBottom: '1px solid #fef9c3', background: remaining === 0 ? '#fef9f9' : 'white' }}>
-                                            <td style={{ padding: '7px 10px', color: remaining === 0 ? '#9ca3af' : '#111827' }}>
+                                          <tr key={idx} style={{ borderBottom: `1px solid ${__sbg('#fef9c3')}`, background: remaining === 0 ? __sbg('#fef9f9') : __sbg('white') }}>
+                                            <td style={{ padding: '7px 10px', color: remaining === 0 ? __stc('#9ca3af') : __stc('#111827') }}>
                                               {item.itemName}
-                                              {remaining === 0 && <span style={{ marginLeft: 6, fontSize: '10px', color: '#ef4444', fontWeight: 600 }}>FULLY INVOICED</span>}
+                                              {remaining === 0 && <span style={{ marginLeft: 6, fontSize: '10px', color: __stc('#ef4444'), fontWeight: 600 }}>FULLY INVOICED</span>}
                                             </td>
-                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: '#374151' }}>{total} {item.unit || ''}</td>
-                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: '#f59e0b' }}>{done}</td>
-                                            <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: remaining > 0 ? '#059669' : '#ef4444' }}>{remaining}</td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: __stc('#374151') }}>{total} {item.unit || ''}</td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', color: __stc('#f59e0b') }}>{done}</td>
+                                            <td style={{ padding: '7px 10px', textAlign: 'right', fontWeight: 600, color: remaining > 0 ? __stc('#059669') : __stc('#ef4444') }}>{remaining}</td>
                                           </tr>
                                         );
                                       })}
@@ -2217,8 +2256,8 @@ const fetchStats = async () => {
                     <h3>Customer Information</h3>
                     <div style={{
                       padding: '16px',
-                      backgroundColor: '#f0f9ff',
-                      border: '1px solid #bae6fd',
+                      backgroundColor: __sbg('#f0f9ff'),
+                      border: `1px solid ${__sbg('#bae6fd')}`,
                       borderRadius: '8px',
                       fontSize: '14px'
                     }}>
@@ -2254,7 +2293,7 @@ const fetchStats = async () => {
                     <div className="Invoices-page-form-group">
                       <label>
                         Tally Invoice Number
-                        <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 400, marginLeft: 6 }}>(optional)</span>
+                        <span style={{ fontSize: 11, color: __stc('#9ca3af'), fontWeight: 400, marginLeft: 6 }}>(optional)</span>
                       </label>
                       <input
                         type="text"
@@ -2272,7 +2311,7 @@ const fetchStats = async () => {
                     <h3>Invoice Items *</h3>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                       {formData.items.some(it => it.orderBookItemId) && (
-                        <span style={{ fontSize: '12px', color: '#059669', fontWeight: 500 }}>📦 Loaded from order book</span>
+                        <span style={{ fontSize: '12px', color: __stc('#059669'), fontWeight: 500 }}>📦 Loaded from order book</span>
                       )}
                       <button className="Invoices-page-btn-add" onClick={addItem}>+ Add Item</button>
                     </div>
@@ -2309,9 +2348,9 @@ const fetchStats = async () => {
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f8fafc'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'white'}
                               >
-                                <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 2 }}>{obItem.itemName}</div>
-                                {obItem.specification && <div style={{ fontSize: 12, color: '#64748b', marginBottom: 2 }}>{obItem.specification}</div>}
-                                <div style={{ fontSize: 11, color: '#94a3b8' }}>Order: {obItem.orderBookNo} | Qty: {obItem.quantity} {obItem.unit} | ₹{parseFloat(obItem.unitPrice).toFixed(2)}</div>
+                                <div style={{ fontWeight: 600, color: __stc('#1e293b'), marginBottom: 2 }}>{obItem.itemName}</div>
+                                {obItem.specification && <div style={{ fontSize: 12, color: __stc('#64748b'), marginBottom: 2 }}>{obItem.specification}</div>}
+                                <div style={{ fontSize: 11, color: __stc('#94a3b8') }}>Order: {obItem.orderBookNo} | Qty: {obItem.quantity} {obItem.unit} | ₹{parseFloat(obItem.unitPrice).toFixed(2)}</div>
                               </div>
                             ))}
                           </div>
@@ -2438,7 +2477,7 @@ const fetchStats = async () => {
 
             <div className="Invoices-page-modal-body">
               {/* Invoice summary */}
-              <div style={{ padding: '14px 16px', backgroundColor: '#f8fafc', borderRadius: '8px', marginBottom: '20px', border: '1px solid #e2e8f0' }}>
+              <div style={{ padding: '14px 16px', backgroundColor: __sbg('#f8fafc'), borderRadius: '8px', marginBottom: '20px', border: `1px solid ${__sbg('#e2e8f0')}` }}>
                 <div className="Invoices-page-payment-row">
                   <span>System Invoice No:</span>
                   <strong>{selectedInvoice.invoiceNo}</strong>
@@ -2446,7 +2485,7 @@ const fetchStats = async () => {
                 {selectedInvoice.invoiceNumber && (
                   <div className="Invoices-page-payment-row">
                     <span>Tally Invoice No:</span>
-                    <strong style={{ fontFamily: 'monospace', color: '#374151' }}>{selectedInvoice.invoiceNumber}</strong>
+                    <strong style={{ fontFamily: 'monospace', color: __stc('#374151') }}>{selectedInvoice.invoiceNumber}</strong>
                   </div>
                 )}
                 <div className="Invoices-page-payment-row">
@@ -2474,7 +2513,7 @@ const fetchStats = async () => {
               </div>
 
               {/* Info banner */}
-              <div style={{ padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '6px', fontSize: '13px', color: '#1e40af', marginBottom: '16px' }}>
+              <div style={{ padding: '10px 14px', background: __sbg('#eff6ff'), border: `1px solid ${__sbg('#bfdbfe')}`, borderRadius: '6px', fontSize: '13px', color: __stc('#1e40af'), marginBottom: '16px' }}>
                 💡 This payment will be recorded as a Receipt (Invoice Payment) and will appear in the Receipts tab.
               </div>
 
@@ -2498,7 +2537,7 @@ const fetchStats = async () => {
                       step="0.01"
                       min="0"
                     />
-                    <small style={{ color: '#64748b' }}>Max: {formatCurrency(selectedInvoice.balanceAmount)}</small>
+                    <small style={{ color: __stc('#64748b') }}>Max: {formatCurrency(selectedInvoice.balanceAmount)}</small>
                   </div>
                 </div>
 
@@ -2562,24 +2601,24 @@ const fetchStats = async () => {
 
             <div className="Invoices-page-modal-body">
               {/* Invoice summary */}
-              <div style={{ padding: '12px 16px', background: '#f0fdf4', borderRadius: 8, marginBottom: 20, border: '1px solid #bbf7d0' }}>
+              <div style={{ padding: '12px 16px', background: __sbg('#f0fdf4'), borderRadius: 8, marginBottom: 20, border: `1px solid ${__sbg('#bbf7d0')}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#374151', fontWeight: 600 }}>Invoice No:</span>
-                  <span style={{ fontFamily: 'monospace', color: '#065f46', fontWeight: 700 }}>{approveInvoice.invoiceNo}</span>
+                  <span style={{ color: __stc('#374151'), fontWeight: 600 }}>Invoice No:</span>
+                  <span style={{ fontFamily: 'monospace', color: __stc('#065f46'), fontWeight: 700 }}>{approveInvoice.invoiceNo}</span>
                 </div>
                 {approveInvoice.invoiceNumber && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ color: '#374151', fontWeight: 600 }}>Tally Ref:</span>
+                    <span style={{ color: __stc('#374151'), fontWeight: 600 }}>Tally Ref:</span>
                     <span style={{ fontFamily: 'monospace' }}>{approveInvoice.invoiceNumber}</span>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ color: '#374151', fontWeight: 600 }}>Customer:</span>
+                  <span style={{ color: __stc('#374151'), fontWeight: 600 }}>Customer:</span>
                   <span>{approveInvoice.customerName || '—'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#374151', fontWeight: 600 }}>Total Amount:</span>
-                  <span style={{ fontWeight: 700, color: '#065f46' }}>
+                  <span style={{ color: __stc('#374151'), fontWeight: 600 }}>Total Amount:</span>
+                  <span style={{ fontWeight: 700, color: __stc('#065f46') }}>
                     ₹{parseFloat(approveInvoice.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -2587,53 +2626,53 @@ const fetchStats = async () => {
 
               {/* File upload */}
               <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
-                  Upload Invoice File <span style={{ color: '#ef4444' }}>*</span>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: __stc('#374151') }}>
+                  Upload Invoice File <span style={{ color: __stc('#ef4444') }}>*</span>
                 </label>
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xlsx"
                   onChange={e => setApproveFile(e.target.files[0] || null)}
-                  style={{ width: '100%', padding: '8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13 }}
+                  style={{ width: '100%', padding: '8px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13 }}
                 />
                 {approveFile && (
-                  <div style={{ marginTop: 6, fontSize: 12, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <div style={{ marginTop: 6, fontSize: 12, color: __stc('#059669'), display: 'flex', alignItems: 'center', gap: 4 }}>
                     <CheckCircle size={13} /> {approveFile.name} ({(approveFile.size / 1024).toFixed(1)} KB)
                   </div>
                 )}
-                <p style={{ margin: '6px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                <p style={{ margin: '6px 0 0', fontSize: 11, color: __stc('#9ca3af') }}>
                   Accepted: PDF, JPG, PNG, DOC, DOCX, XLSX
                 </p>
               </div>
 
               {/* Tally Invoice Number */}
               <div style={{ marginBottom: 18 }}>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
-                  Tally Invoice Number <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: __stc('#374151') }}>
+                  Tally Invoice Number <span style={{ color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span>
                 </label>
                 <input
                   type="text"
                   value={approveTallyNumber}
                   onChange={e => setApproveTallyNumber(e.target.value)}
                   placeholder="e.g. TAL/2026/001"
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box', fontFamily: 'monospace' }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box', fontFamily: 'monospace' }}
                 />
-                <p style={{ margin: '4px 0 0', fontSize: 11, color: '#9ca3af' }}>
+                <p style={{ margin: '4px 0 0', fontSize: 11, color: __stc('#9ca3af') }}>
                   This will be saved as the Tally reference number on the invoice.
                 </p>
               </div>
 
               {/* Notes */}
               <div>
-                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: '#374151' }}>
-                  Approval Notes <span style={{ color: '#9ca3af', fontWeight: 400 }}>(optional)</span>
+                <label style={{ display: 'block', fontWeight: 600, marginBottom: 6, color: __stc('#374151') }}>
+                  Approval Notes <span style={{ color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span>
                 </label>
                 <textarea
                   rows={3}
                   value={approveNotes}
                   onChange={e => setApproveNotes(e.target.value)}
                   placeholder="Add any notes for the approval..."
-                  style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}
                 />
               </div>
             </div>
@@ -2646,7 +2685,7 @@ const fetchStats = async () => {
                 className="Invoices-page-btn-primary"
                 onClick={handleApproveSubmit}
                 disabled={approveLoading || !approveFile}
-                style={{ background: '#10b981', borderColor: '#10b981', display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ background: __sbg('#10b981'), borderColor: __sbg('#10b981'), display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 {approveLoading
                   ? 'Approving...'

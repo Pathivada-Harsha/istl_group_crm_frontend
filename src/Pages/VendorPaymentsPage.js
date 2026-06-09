@@ -16,6 +16,39 @@ import ConfirmationModal from '../components/ConfirmationModal';
 import filterApi from '../services/filterApi';
 import '../pages-css/BillsVendorPayments.css';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#fcfcfd':'#0f1420',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#eef2ff':'#1e1f45','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547','#93c5fd':'#2f5d92',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff5f5':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a', '#fcd34d':'#5a4714',};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6','#0b1220':'#e7ecf3',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0891b2':'#22d3ee','#1e3a8a':'#7fb0f0',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3', '#0369a1':'#38bdf8', '#4c1d95':'#a78bfa',};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ── Date constants ────────────────────────────────────────────────────────────
@@ -24,6 +57,7 @@ const _VP_DAYS   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
 
 // ── VPDatePicker — compact single date (same style as PO Create Modal) ────────
 const VPDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
+  useThemeVersion();
   const [show,    setShow]    = React.useState(false);
   const [calMo,   setCalMo]   = React.useState(() => value ? parseInt(value.slice(5,7))-1 : new Date().getMonth());
   const [calYr,   setCalYr]   = React.useState(() => value ? parseInt(value.slice(0,4)) : new Date().getFullYear());
@@ -40,10 +74,10 @@ const VPDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
   return (
     <div ref={wrapRef} style={{position:'relative',width:'100%'}}>
       <button type="button" className={`po-dtp-trigger${show?' po-dtp--open':''}${value?' po-dtp--set':''}`} onClick={show?()=>setShow(false):open} style={{width:'100%'}}>
-        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?'#4f46e5':'#94a3b8'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:'#0f172a'}}>{fmtD(value)}</span>:<span className="po-dtp-ph">{placeholder}</span>}
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{flexShrink:0,color:value?__stc('#4f46e5'):__stc('#94a3b8')}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        {value?<span style={{flex:1,fontSize:13,fontWeight:600,color:__stc('#0f172a')}}>{fmtD(value)}</span>:<span className="po-dtp-ph">{placeholder}</span>}
         {value?<span className="po-dtp-x" onClick={e=>{e.stopPropagation();onChange('');}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>
-        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
+        :<svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:__stc('#94a3b8'),transform:show?'rotate(180deg)':'none',transition:'transform .2s',flexShrink:0}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>}
       </button>
       {show&&(
         <div className="po-dtp-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,width:280,zIndex:1050}}>
@@ -66,6 +100,7 @@ const VPDatePicker = ({ value, onChange, placeholder = 'Select date' }) => {
 
 // ── VPDateRangeFilter — date range picker (same style as PO page filter bar) ──
 const VPDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+  useThemeVersion();
   const [show,setShow]=React.useState(false),[from,setFrom]=React.useState(null),[to,setTo]=React.useState(null),[hover,setHover]=React.useState(null);
   const [calMo,setCalMo]=React.useState(new Date().getMonth()),[calYr,setCalYr]=React.useState(new Date().getFullYear()),[showYr,setShowYr]=React.useState(false);
   const ref=React.useRef(null);
@@ -84,7 +119,7 @@ const VPDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
         <span className="po-cal-sep">—</span>
         <span className={appliedTo&&appliedTo!==appliedFrom?'po-cal-val':'po-cal-ph'}>{appliedTo&&appliedTo!==appliedFrom?fmt(appliedTo):'dd-mm-yyyy'}</span>
         {appliedFrom&&<span className="po-cal-x" onClick={e=>{e.stopPropagation();handleClear();}}><svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12"/></svg></span>}
-        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:'#94a3b8',flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
+        <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{marginLeft:'auto',color:__stc('#94a3b8'),flexShrink:0,transform:show?'rotate(180deg)':'none',transition:'transform .2s'}}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/></svg>
       </button>
       {show&&(
         <div className="po-cal-dropdown" style={{position:'absolute',top:'calc(100% + 4px)',left:0,zIndex:9999,width:264}}>
@@ -156,11 +191,12 @@ const SORTABLE = new Set(['advanceNo','advanceDate','vendor','paymentType','amou
 const SortIcon = ({ columnId, sortConfig }) => {
   if (sortConfig.key !== columnId) return <ChevronsUpDown size={13} style={{opacity:0.4,marginLeft:4,verticalAlign:'middle'}}/>;
   return sortConfig.direction === 'asc'
-    ? <ChevronUp   size={13} style={{marginLeft:4,verticalAlign:'middle',color:'#7c3aed'}}/>
-    : <ChevronDown size={13} style={{marginLeft:4,verticalAlign:'middle',color:'#7c3aed'}}/>;
+    ? <ChevronUp   size={13} style={{marginLeft:4,verticalAlign:'middle',color:__stc('#7c3aed')}}/>
+    : <ChevronDown size={13} style={{marginLeft:4,verticalAlign:'middle',color:__stc('#7c3aed')}}/>;
 };
 
 export default function VendorPaymentsPage() {
+  useThemeVersion();
   const [advances, setAdvances] = useState([]);
   const [projectNames, setProjectNames] = useState({});
   const { groupName, subGroupName, projectId, updateFilters } = useGroupProjectFilters();
@@ -768,7 +804,7 @@ export default function VendorPaymentsPage() {
 
   // ── render column ─────────────────────────────────────────────────────────
   const renderCell = (col, adv) => {
-    const dash = <span style={{color:'#94a3b8',display:'block',textAlign:'center'}}>—</span>;
+    const dash = <span style={{color:__stc('#94a3b8'),display:'block',textAlign:'center'}}>—</span>;
     switch(col.id){
       case 'advanceNo':   return <td className="vp-advance-no">{adv.advanceNo || dash}</td>;
       case 'advanceDate': return <td>{adv.advanceDate ? fmtD(adv.advanceDate) : dash}</td>;
@@ -787,11 +823,11 @@ export default function VendorPaymentsPage() {
           <td style={{ minWidth: 180 }}>
             {adv.projectId ? (
               <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
-                <span style={{ fontWeight:600, fontSize:12, color:'#1e293b', whiteSpace:'nowrap' }}>
+                <span style={{ fontWeight:600, fontSize:12, color:__stc('#1e293b'), whiteSpace:'nowrap' }}>
                   {pName || adv.projectId}
                 </span>
                 {pName && (
-                  <span style={{ fontSize:11, color:'#64748b', fontWeight:400, whiteSpace:'nowrap' }}>
+                  <span style={{ fontSize:11, color:__stc('#64748b'), fontWeight:400, whiteSpace:'nowrap' }}>
                     {adv.projectId}
                   </span>
                 )}
@@ -1082,50 +1118,50 @@ export default function VendorPaymentsPage() {
                   <div style={{marginTop:20}}>
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
                       <Link2 size={16} color="#7c3aed"/>
-                      <strong style={{fontSize:14,color:'#4c1d95'}}>Advance Adjusted Against Bills</strong>
+                      <strong style={{fontSize:14,color:__stc('#4c1d95')}}>Advance Adjusted Against Bills</strong>
                       {!loadingViewAllocations&&(
-                        <span style={{background:'#ede9fe',color:'#6d28d9',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>
+                        <span style={{background:__sbg('#ede9fe'),color:__stc('#6d28d9'),fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>
                           {viewAllocationDetails.length} bill{viewAllocationDetails.length!==1?'s':''}
                         </span>
                       )}
                     </div>
                     {loadingViewAllocations&&(
-                      <div style={{background:'#f5f3ff',border:'1px solid #ddd6fe',borderRadius:10,padding:20,textAlign:'center',color:'#7c3aed',fontSize:13}}>Loading...</div>
+                      <div style={{background:__sbg('#f5f3ff'),border:`1px solid ${__sbg('#ddd6fe')}`,borderRadius:10,padding:20,textAlign:'center',color:__stc('#7c3aed'),fontSize:13}}>Loading...</div>
                     )}
                     {!loadingViewAllocations&&viewAllocationDetails.length===0&&(
-                      <div style={{background:'#f8fafc',border:'1px dashed #cbd5e1',borderRadius:10,padding:18,textAlign:'center',color:'#94a3b8',fontSize:13}}>
+                      <div style={{background:__sbg('#f8fafc'),border:`1px dashed ${__sbg('#cbd5e1')}`,borderRadius:10,padding:18,textAlign:'center',color:__stc('#94a3b8'),fontSize:13}}>
                         This advance has not been allocated to any bill yet.
                       </div>
                     )}
                     {!loadingViewAllocations&&viewAllocationDetails.length>0&&(
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
                         {viewAllocationDetails.map((alloc,idx)=>(
-                          <div key={alloc.allocationId||idx} style={{background:'#f5f3ff',border:'1px solid #ddd6fe',borderLeft:'4px solid #7c3aed',borderRadius:10,padding:'14px 16px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px 16px'}}>
+                          <div key={alloc.allocationId||idx} style={{background:__sbg('#f5f3ff'),border:`1px solid ${__sbg('#ddd6fe')}`,borderLeft:`4px solid ${__sbg('#7c3aed')}`,borderRadius:10,padding:'14px 16px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px 16px'}}>
                             <div>
-                              <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill</div>
-                              <div style={{fontSize:14,fontWeight:700,color:'#1e293b'}}>{alloc.billNo}</div>
+                              <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill</div>
+                              <div style={{fontSize:14,fontWeight:700,color:__stc('#1e293b')}}>{alloc.billNo}</div>
                               <div style={{marginTop:4}}>
-                                <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:99,background:'#ede9fe',color:'#6d28d9'}}>{alloc.billStatus}</span>
+                                <span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:99,background:__sbg('#ede9fe'),color:__stc('#6d28d9')}}>{alloc.billStatus}</span>
                               </div>
                             </div>
                             <div>
-                              <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Allocated</div>
-                              <div style={{fontSize:16,fontWeight:700,color:'#7c3aed'}}>{fmt(alloc.allocatedAmount)}</div>
+                              <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Allocated</div>
+                              <div style={{fontSize:16,fontWeight:700,color:__stc('#7c3aed')}}>{fmt(alloc.allocatedAmount)}</div>
                             </div>
                             <div>
-                              <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill Total</div>
-                              <div style={{fontSize:13,color:'#374151'}}>{fmt(alloc.billTotalAmount)}</div>
-                              <div style={{fontSize:11,color:'#dc2626',marginTop:2}}>Balance: {fmt(alloc.billBalance)}</div>
+                              <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill Total</div>
+                              <div style={{fontSize:13,color:__stc('#374151')}}>{fmt(alloc.billTotalAmount)}</div>
+                              <div style={{fontSize:11,color:__stc('#dc2626'),marginTop:2}}>Balance: {fmt(alloc.billBalance)}</div>
                             </div>
-                            <div style={{gridColumn:'1/-1',borderTop:'1px solid #ddd6fe',paddingTop:8,display:'flex',alignItems:'center',gap:6}}>
-                              <span style={{fontSize:11,color:'#6b7280'}}>Allocated on:</span>
-                              <span style={{fontSize:12,color:'#374151',fontWeight:500}}>{fmtDT(alloc.allocationDate)}</span>
+                            <div style={{gridColumn:'1/-1',borderTop:`1px solid ${__sbg('#ddd6fe')}`,paddingTop:8,display:'flex',alignItems:'center',gap:6}}>
+                              <span style={{fontSize:11,color:__stc('#6b7280')}}>Allocated on:</span>
+                              <span style={{fontSize:12,color:__stc('#374151'),fontWeight:500}}>{fmtDT(alloc.allocationDate)}</span>
                             </div>
                           </div>
                         ))}
-                        <div style={{background:'#ede9fe',border:'1px solid #c4b5fd',borderRadius:8,padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                          <span style={{fontSize:13,color:'#4c1d95',fontWeight:600}}>Total Allocated across {viewAllocationDetails.length} bill{viewAllocationDetails.length!==1?'s':''}</span>
-                          <span style={{fontSize:15,fontWeight:700,color:'#7c3aed'}}>{fmt(viewAllocationDetails.reduce((s,a)=>s+parseFloat(a.allocatedAmount||0),0))}</span>
+                        <div style={{background:__sbg('#ede9fe'),border:`1px solid ${__sbg('#c4b5fd')}`,borderRadius:8,padding:'10px 16px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                          <span style={{fontSize:13,color:__stc('#4c1d95'),fontWeight:600}}>Total Allocated across {viewAllocationDetails.length} bill{viewAllocationDetails.length!==1?'s':''}</span>
+                          <span style={{fontSize:15,fontWeight:700,color:__stc('#7c3aed')}}>{fmt(viewAllocationDetails.reduce((s,a)=>s+parseFloat(a.allocatedAmount||0),0))}</span>
                         </div>
                       </div>
                     )}
@@ -1137,32 +1173,32 @@ export default function VendorPaymentsPage() {
                   <div style={{marginTop:20}}>
                     <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
                       <Link2 size={16} color="#3b82f6"/>
-                      <strong style={{fontSize:14,color:'#1e3a8a'}}>Applied to Bill</strong>
-                      <span style={{background:'#dbeafe',color:'#1e40af',fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>1 bill</span>
+                      <strong style={{fontSize:14,color:__stc('#1e3a8a')}}>Applied to Bill</strong>
+                      <span style={{background:__sbg('#dbeafe'),color:__stc('#1e40af'),fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99}}>1 bill</span>
                     </div>
-                    <div style={{background:'#eff6ff',border:'1px solid #bfdbfe',borderLeft:'4px solid #3b82f6',borderRadius:10,padding:'14px 16px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px 16px'}}>
+                    <div style={{background:__sbg('#eff6ff'),border:`1px solid ${__sbg('#bfdbfe')}`,borderLeft:`4px solid ${__sbg('#3b82f6')}`,borderRadius:10,padding:'14px 16px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'10px 16px'}}>
                       <div>
-                        <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill</div>
-                        <div style={{fontSize:14,fontWeight:700,color:'#1e293b'}}>{viewBillDetails?.billNo||`Bill #${selectedAdvance.billId}`}</div>
-                        {viewBillDetails&&<div style={{marginTop:4}}><span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:99,background:'#dbeafe',color:'#1e40af'}}>{viewBillDetails.status}</span></div>}
+                        <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill</div>
+                        <div style={{fontSize:14,fontWeight:700,color:__stc('#1e293b')}}>{viewBillDetails?.billNo||`Bill #${selectedAdvance.billId}`}</div>
+                        {viewBillDetails&&<div style={{marginTop:4}}><span style={{fontSize:10,fontWeight:700,padding:'2px 7px',borderRadius:99,background:__sbg('#dbeafe'),color:__stc('#1e40af')}}>{viewBillDetails.status}</span></div>}
                       </div>
                       <div>
-                        <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Applied</div>
-                        <div style={{fontSize:16,fontWeight:700,color:'#3b82f6'}}>{fmt(selectedAdvance.amount)}</div>
+                        <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Applied</div>
+                        <div style={{fontSize:16,fontWeight:700,color:__stc('#3b82f6')}}>{fmt(selectedAdvance.amount)}</div>
                       </div>
                       <div>
-                        <div style={{fontSize:11,color:'#6b7280',fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill Total</div>
-                        <div style={{fontSize:13,color:'#374151'}}>{viewBillDetails?fmt(viewBillDetails.totalAmount):'—'}</div>
-                        <div style={{fontSize:11,color:'#dc2626',marginTop:2}}>Balance: {viewBillDetails?fmt(viewBillDetails.balanceAmount):'—'}</div>
+                        <div style={{fontSize:11,color:__stc('#6b7280'),fontWeight:600,marginBottom:3,textTransform:'uppercase',letterSpacing:'0.04em'}}>Bill Total</div>
+                        <div style={{fontSize:13,color:__stc('#374151')}}>{viewBillDetails?fmt(viewBillDetails.totalAmount):'—'}</div>
+                        <div style={{fontSize:11,color:__stc('#dc2626'),marginTop:2}}>Balance: {viewBillDetails?fmt(viewBillDetails.balanceAmount):'—'}</div>
                       </div>
-                      <div style={{gridColumn:'1/-1',borderTop:'1px solid #bfdbfe',paddingTop:8,display:'flex',alignItems:'center',gap:6}}>
-                        <span style={{fontSize:11,color:'#6b7280'}}>Payment on:</span>
-                        <span style={{fontSize:12,color:'#374151',fontWeight:500}}>{fmtD(selectedAdvance.advanceDate)}</span>
+                      <div style={{gridColumn:'1/-1',borderTop:`1px solid ${__sbg('#bfdbfe')}`,paddingTop:8,display:'flex',alignItems:'center',gap:6}}>
+                        <span style={{fontSize:11,color:__stc('#6b7280')}}>Payment on:</span>
+                        <span style={{fontSize:12,color:__stc('#374151'),fontWeight:500}}>{fmtD(selectedAdvance.advanceDate)}</span>
                       </div>
                     </div>
-                    <div style={{background:'#eff6ff',border:'1px solid #93c5fd',borderRadius:8,padding:'10px 16px',marginTop:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:13,color:'#1e3a8a',fontWeight:600}}>Total Applied to 1 bill</span>
-                      <span style={{fontSize:15,fontWeight:700,color:'#3b82f6'}}>{fmt(selectedAdvance.amount)}</span>
+                    <div style={{background:__sbg('#eff6ff'),border:`1px solid ${__sbg('#93c5fd')}`,borderRadius:8,padding:'10px 16px',marginTop:10,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:13,color:__stc('#1e3a8a'),fontWeight:600}}>Total Applied to 1 bill</span>
+                      <span style={{fontSize:15,fontWeight:700,color:__stc('#3b82f6')}}>{fmt(selectedAdvance.amount)}</span>
                     </div>
                   </div>
                 )}
@@ -1304,7 +1340,7 @@ export default function VendorPaymentsPage() {
                       <input type="number" value={formData.amount} step="0.01" placeholder="0.00"
                         onChange={e=>setFormData(f=>({...f,amount:parseFloat(e.target.value)}))}/>
                       {formData.paymentType==='BILL_PAYMENT'&&formData.billId&&(
-                        <small style={{color:'#64748b'}}>Max: {fmtFull(unpaidBills.find(b=>b.id===formData.billId)?.balanceAmount||0)}</small>
+                        <small style={{color:__stc('#64748b')}}>Max: {fmtFull(unpaidBills.find(b=>b.id===formData.billId)?.balanceAmount||0)}</small>
                       )}
                     </div>
                     <div className="receipts-page-form-group">
@@ -1382,7 +1418,7 @@ export default function VendorPaymentsPage() {
                               <div className="invoice-adjustment-details">
                                 <span>Date: {fmtD(bill.billDate)}</span>
                                 <span>Total: {fmt(bill.totalAmount)}</span>
-                                <span style={{color:'#dc2626',fontWeight:600}}>Balance: {fmt(bill.balanceAmount)}</span>
+                                <span style={{color:__stc('#dc2626'),fontWeight:600}}>Balance: {fmt(bill.balanceAmount)}</span>
                               </div>
                             </div>
                             <div className="invoice-adjustment-input">
@@ -1421,16 +1457,16 @@ export default function VendorPaymentsPage() {
 
                 {/* ── Project Assignment — ADVANCE only, locked for BILL_PAYMENT ── */}
                 {editingAdvance.paymentType==='ADVANCE' ? (
-                <div className="receipts-page-form-section" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'16px'}}>
-                  <div style={{fontSize:12,color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>
+                <div className="receipts-page-form-section" style={{background:__sbg('#f8fafc'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:8,padding:'16px'}}>
+                  <div style={{fontSize:12,color:__stc('#6b7280'),fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:12}}>
                     Project Assignment
                     {(editProjectGroupName!==(editingAdvance.groupId||'')||editProjectSubGroupName!==(editingAdvance.subGroupId||'')||editProjectId!==(editingAdvance.projectId||''))&&(
-                      <span style={{marginLeft:10,background:'#fef3c7',color:'#92400e',fontSize:11,padding:'2px 8px',borderRadius:99,fontWeight:700}}>⚠ Changed — will save on Update</span>
+                      <span style={{marginLeft:10,background:__sbg('#fef3c7'),color:__stc('#92400e'),fontSize:11,padding:'2px 8px',borderRadius:99,fontWeight:700}}>⚠ Changed — will save on Update</span>
                     )}
                   </div>
                   <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(160px,1fr))',gap:12}}>
                     <div>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Group *</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Group *</label>
                       <FilterSelect
                         value={editProjectGroupName}
                         options={editProjectGroups}
@@ -1448,7 +1484,7 @@ export default function VendorPaymentsPage() {
                       />
                     </div>
                     <div>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Sub Group</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Sub Group</label>
                       <FilterSelect
                         value={editProjectSubGroupName}
                         options={editProjectSubs}
@@ -1464,7 +1500,7 @@ export default function VendorPaymentsPage() {
                       />
                     </div>
                     <div>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Project *</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Project *</label>
                       <FilterSelect
                         value={editProjectId}
                         options={editProjectList.map(p => ({ value: p.id, label: p.name }))}
@@ -1490,27 +1526,27 @@ export default function VendorPaymentsPage() {
                     </div>
                   </div>
                   {(editProjectGroupName!==(editingAdvance.groupId||'')||editProjectSubGroupName!==(editingAdvance.subGroupId||'')||editProjectId!==(editingAdvance.projectId||''))&&parseFloat(editingAdvance.appliedAmount)>0&&(
-                    <div style={{marginTop:10,padding:'8px 12px',background:'#fef9c3',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                    <div style={{marginTop:10,padding:'8px 12px',background:__sbg('#fef9c3'),border:`1px solid ${__sbg('#fcd34d')}`,borderRadius:6,fontSize:12,color:__stc('#92400e')}}>
                       ⚠ This advance has <strong>{fmt(editingAdvance.appliedAmount)}</strong> already allocated to bills.
                       Changing the project will <strong>automatically reverse those allocations</strong> (subtract from bills) so the advance starts fresh under the new project.
                     </div>
                   )}
                   {editingAdvance.paymentType==='ADVANCE'&&parseFloat(editingAdvance.appliedAmount)>0&&
                    editProjectGroupName===(editingAdvance.groupId||'')&&editProjectId===(editingAdvance.projectId||'')&&(
-                    <div style={{marginTop:10,padding:'8px 12px',background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                    <div style={{marginTop:10,padding:'8px 12px',background:__sbg('#fef3c7'),border:`1px solid ${__sbg('#fcd34d')}`,borderRadius:6,fontSize:12,color:__stc('#92400e')}}>
                       ⚠ {fmt(editingAdvance.appliedAmount)} already allocated to bills. Cannot reduce amount below this.
                     </div>
                   )}
                 </div>
                 ) : (
-                <div className="receipts-page-form-section" style={{background:'#f8fafc',border:'1px solid #e2e8f0',borderRadius:8,padding:'14px 16px'}}>
-                  <div style={{fontSize:12,color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Project Assignment</div>
-                  <div style={{fontSize:14,fontWeight:600,color:'#1e293b'}}>
+                <div className="receipts-page-form-section" style={{background:__sbg('#f8fafc'),border:`1px solid ${__sbg('#e2e8f0')}`,borderRadius:8,padding:'14px 16px'}}>
+                  <div style={{fontSize:12,color:__stc('#6b7280'),fontWeight:600,textTransform:'uppercase',letterSpacing:'0.05em',marginBottom:8}}>Project Assignment</div>
+                  <div style={{fontSize:14,fontWeight:600,color:__stc('#1e293b')}}>
                     {editingAdvance.groupId||'—'}
                     {editingAdvance.subGroupId?` › ${editingAdvance.subGroupId}`:''}
                     {editingAdvance.projectId?` › ${editingAdvance.projectId}`:''}
                   </div>
-                  <div style={{marginTop:8,fontSize:12,color:'#6b7280'}}>Project cannot be changed for Bill Payments.</div>
+                  <div style={{marginTop:8,fontSize:12,color:__stc('#6b7280')}}>Project cannot be changed for Bill Payments.</div>
                 </div>
                 )}
 
@@ -1523,7 +1559,7 @@ export default function VendorPaymentsPage() {
                   {/* Vendor change — ADVANCE only; locked for BILL_PAYMENT */}
                   {editingAdvance.paymentType==='ADVANCE'&&(
                     <div style={{marginTop:8}}>
-                      <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Vendor *</label>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Vendor *</label>
                       <FilterSelect
                         value={editVendorId}
                         options={[
@@ -1538,7 +1574,7 @@ export default function VendorPaymentsPage() {
                         onChange={v => setEditVendorId(v || String(editingAdvance.vendorId||''))}
                       />
                       {editVendorId && editVendorId !== String(editingAdvance.vendorId||'') && (
-                        <div style={{marginTop:6,padding:'6px 10px',background:'#fef3c7',border:'1px solid #fcd34d',borderRadius:6,fontSize:12,color:'#92400e'}}>
+                        <div style={{marginTop:6,padding:'6px 10px',background:__sbg('#fef3c7'),border:`1px solid ${__sbg('#fcd34d')}`,borderRadius:6,fontSize:12,color:__stc('#92400e')}}>
                           ⚠ Vendor will change.
                           {parseFloat(editingAdvance.appliedAmount)>0 && ` ${fmt(editingAdvance.appliedAmount)} in bill allocations will be REVERSED.`}
                         </div>
@@ -1546,9 +1582,9 @@ export default function VendorPaymentsPage() {
                     </div>
                   )}
                   {editingAdvance.paymentType==='BILL_PAYMENT'&&(
-                    <div style={{marginTop:8,fontSize:13,color:'#374151'}}>
+                    <div style={{marginTop:8,fontSize:13,color:__stc('#374151')}}>
                       <strong>Vendor:</strong> {editingAdvance.vendorName||`Vendor #${editingAdvance.vendorId}`}
-                      <span style={{marginLeft:8,fontSize:11,color:'#6b7280'}}>(locked for Bill Payments)</span>
+                      <span style={{marginLeft:8,fontSize:11,color:__stc('#6b7280')}}>(locked for Bill Payments)</span>
                     </div>
                   )}
                 </div>
@@ -1569,25 +1605,25 @@ export default function VendorPaymentsPage() {
                           : undefined}
                         onChange={e=>setEditFormData(f=>({...f,amount:e.target.value===''?'':e.target.value}))}/>
                       {editingAdvance.paymentType==='BILL_PAYMENT' && editBillInfo && (
-                        <div style={{marginTop:6,padding:'8px 10px',background:'#f0f9ff',border:'1px solid #bae6fd',borderRadius:6,fontSize:12}}>
+                        <div style={{marginTop:6,padding:'8px 10px',background:__sbg('#f0f9ff'),border:`1px solid ${__sbg('#bae6fd')}`,borderRadius:6,fontSize:12}}>
                           <div style={{display:'flex',justifyContent:'space-between',gap:12}}>
-                            <span style={{color:'#0369a1'}}>Bill: <strong>{editBillInfo.billNo}</strong></span>
-                            <span style={{color:'#0369a1'}}>Total: <strong>{fmt(editBillInfo.totalAmount)}</strong></span>
+                            <span style={{color:__stc('#0369a1')}}>Bill: <strong>{editBillInfo.billNo}</strong></span>
+                            <span style={{color:__stc('#0369a1')}}>Total: <strong>{fmt(editBillInfo.totalAmount)}</strong></span>
                           </div>
                           <div style={{display:'flex',justifyContent:'space-between',gap:12,marginTop:3}}>
-                            <span style={{color:'#15803d'}}>Paid: <strong>{fmt(editBillInfo.paidAmount)}</strong></span>
-                            <span style={{color:parseFloat(editBillInfo.balanceAmount)>0?'#dc2626':'#15803d',fontWeight:600}}>
+                            <span style={{color:__stc('#15803d')}}>Paid: <strong>{fmt(editBillInfo.paidAmount)}</strong></span>
+                            <span style={{color:parseFloat(editBillInfo.balanceAmount)>0?__stc('#dc2626'):__stc('#15803d'),fontWeight:600}}>
                               Balance: {fmt(editBillInfo.balanceAmount)}
                             </span>
                           </div>
-                          <div style={{marginTop:4,color:'#64748b',fontSize:11}}>
+                          <div style={{marginTop:4,color:__stc('#64748b'),fontSize:11}}>
                             Max you can enter: <strong>{fmtFull(parseFloat(editBillInfo.balanceAmount||0) + parseFloat(editingAdvance.amount||0))}</strong>
                             <span style={{marginLeft:4}}>(current balance + your existing payment)</span>
                           </div>
                         </div>
                       )}
                       {editingAdvance.paymentType==='ADVANCE' && parseFloat(editingAdvance.appliedAmount)>0 && (
-                        <small style={{color:'#92400e'}}>Min: {fmt(editingAdvance.appliedAmount)} (already allocated)</small>
+                        <small style={{color:__stc('#92400e')}}>Min: {fmt(editingAdvance.appliedAmount)} (already allocated)</small>
                       )}
                     </div>
                     <div className="receipts-page-form-group">

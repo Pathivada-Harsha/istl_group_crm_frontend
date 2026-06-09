@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import '../components_css/Navbar.css';
 import logo from "../images/logo.png";
+import ThemeToggle from './ThemeToggle';
 
 function Navbar({ onMenuClick }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -98,6 +99,9 @@ function Navbar({ onMenuClick }) {
 
         {/* RIGHT SECTION */}
         <div className="navbar-right">
+
+          {/* Theme toggle (light / dark) */}
+          <ThemeToggle />
 
           {/* Notifications */}
           {/* <div ref={notifRef} style={{ position: "relative" }}>

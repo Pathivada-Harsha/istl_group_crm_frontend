@@ -7,9 +7,9 @@
 /* Root layout */
 .Client-Dashboard-page-root {
   /* font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; */
-  color: #1f2937;
+  color: var(--ct-1f2937, #1f2937);
   padding: 20px;
-  background: #f6f8fa;
+  background: var(--c-f6f8fa, #f6f8fa);
 }
 
 .Client-Dashboard-page-header {
@@ -23,7 +23,7 @@
   width: 64px;
   height: 64px;
   border-radius: 8px;
-  background: #e6eef8;
+  background: var(--c-e6eef8, #e6eef8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -37,14 +37,14 @@
 }
 
 .Client-Dashboard-page-client-meta {
-  color: #475569;
+  color: var(--ct-475569, #475569);
   font-size: 13px;
   margin-top: 4px;
 }
 
 .Client-Dashboard-page-contact {
   font-size: 13px;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 
 .Client-Dashboard-page-header-actions {
@@ -56,13 +56,13 @@
 .Client-Dashboard-page-btn {
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid #d1d5db;
-  background: white;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  background: var(--c-white, white);
   cursor: pointer;
 }
 .Client-Dashboard-page-btn.primary {
-  background: #0ea5e9;
-  color: white;
+  background: var(--c-0ea5e9, #0ea5e9);
+  color: var(--ct-white, white);
   border: none;
 }
 
@@ -85,7 +85,7 @@
 }
 
 .Client-Dashboard-page-side-kpi {
-  background: white;
+  background: var(--c-white, white);
   padding: 10px;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
@@ -93,7 +93,7 @@
 
 .Client-Dashboard-page-side-kpi-title {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 
 .Client-Dashboard-page-side-kpi-value {
@@ -118,7 +118,7 @@
 
 .Client-Dashboard-page-side-nav-item.active,
 .Client-Dashboard-page-side-nav-item:hover {
-  background: #e6f6ff;
+  background: var(--c-e6f6ff, #e6f6ff);
 }
 
 /* Main */
@@ -127,7 +127,7 @@
 }
 
 .Client-Dashboard-page-card {
-  background: white;
+  background: var(--c-white, white);
   padding: 14px;
   border-radius: 10px;
   box-shadow: 0 4px 10px rgba(15, 23, 42, 0.04);
@@ -144,13 +144,13 @@
 .Client-Dashboard-page-kpi-card {
   padding: 12px;
   border-radius: 8px;
-  background: white;
+  background: var(--c-white, white);
   box-shadow: 0 1px 2px rgba(15,23,42,0.04);
 }
 
 .Client-Dashboard-page-kpi-title {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ct-6b7280, #6b7280);
 }
 .Client-Dashboard-page-kpi-value {
   font-size: 18px;
@@ -171,12 +171,12 @@
 .Client-Dashboard-page-table th,
 .Client-Dashboard-page-table td {
   padding: 8px 10px;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--c-eef2f7, #eef2f7);
   text-align: left;
   font-size: 14px;
 }
 .Client-Dashboard-page-table thead th {
-  background: #fbfdff;
+  background: var(--c-fbfdff, #fbfdff);
   position: sticky;
   top: 0;
 }
@@ -185,15 +185,15 @@
 
 .Client-Dashboard-page-actions { display: flex; flex-direction: column; gap: 8px; }
 .Client-Dashboard-page-doc-list { list-style: none; padding: 0; margin: 0; }
-.Client-Dashboard-page-doc-list li { padding: 8px 0; border-bottom: 1px dashed #eef2f7; }
+.Client-Dashboard-page-doc-list li { padding: 8px 0; border-bottom: 1px dashed var(--c-eef2f7, #eef2f7); }
 .Client-Dashboard-page-doc-name { font-weight: 600; }
-.Client-Dashboard-page-doc-meta { display: block; font-size: 12px; color: #6b7280; }
+.Client-Dashboard-page-doc-meta { display: block; font-size: 12px; color: var(--ct-6b7280, #6b7280); }
 
 .Client-Dashboard-page-timeline { list-style: none; padding: 0; margin: 0; }
-.Client-Dashboard-page-timeline li { padding: 8px 0; border-left: 2px solid #e6eef8; margin-left: 6px; padding-left: 12px; }
-.Client-Dashboard-page-timeline-time { font-size: 12px; color: #6b7280; }
+.Client-Dashboard-page-timeline li { padding: 8px 0; border-left: 2px solid var(--c-e6eef8, #e6eef8); margin-left: 6px; padding-left: 12px; }
+.Client-Dashboard-page-timeline-time { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
 .Client-Dashboard-page-timeline-text { font-size: 14px; }
-.Client-Dashboard-page-muted { color: #94a3b8; font-size: 13px; }
+.Client-Dashboard-page-muted { color: var(--ct-94a3b8, #94a3b8); font-size: 13px; }
 
 /* Full width tables */
 .Client-Dashboard-page-table.full { width: 100%; }
@@ -209,7 +209,7 @@
 }
 .Client-Dashboard-page-drawer-content {
   width: 420px;
-  background: white;
+  background: var(--c-white, white);
   padding: 18px;
   overflow-y: auto;
 }

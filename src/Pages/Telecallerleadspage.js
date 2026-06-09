@@ -901,7 +901,7 @@ export default function TelecallerLeadsPage() {
       {/* ── Block 4: Stat / summary cards ── */}
       {stats && (
         <div className="tc-stats-bar">
-          <StatCard label="All"            value={stats.total}          color="#64748b" active={filter==="ALL"}            onClick={()=>applyFilter("ALL")} />
+        {/*   <StatCard label="All"            value={stats.total}          color="#64748b" active={filter==="ALL"}            onClick={()=>applyFilter("ALL")} />
           <StatCard label="New"            value={stats.pending}        color="#6366f1" active={filter==="NEW"}            onClick={()=>applyFilter("NEW")} />
           <StatCard label="Interested"     value={stats.interested}     color="#059669" active={filter==="INTERESTED"}     onClick={()=>applyFilter("INTERESTED")} />
           <StatCard label="Not Responded"  value={stats.notResponded}   color="#d97706" active={filter==="NOT_RESPONDED"}  onClick={()=>applyFilter("NOT_RESPONDED")} />
@@ -909,6 +909,15 @@ export default function TelecallerLeadsPage() {
           <StatCard label="Not Interested" value={stats.notInterested}  color="#dc2626" active={filter==="NOT_INTERESTED"} onClick={()=>applyFilter("NOT_INTERESTED")} />
           {stats.resurfacedToday>0 && (
             <StatCard label="⚡ Re-surfaced" value={stats.resurfacedToday} color="#7c3aed" onClick={()=>applyFilter("NOT_RESPONDED")} urgent />
+          )}*/}
+          <StatCard label="All"            value={stats.total}          color="#64748b" active={filter==="ALL"}  />
+          <StatCard label="New"            value={stats.pending}        color="#6366f1" active={filter==="NEW"} />
+          <StatCard label="Interested"     value={stats.interested}     color="#059669" active={filter==="INTERESTED"}  />
+          <StatCard label="Not Responded"  value={stats.notResponded}   color="#d97706" active={filter==="NOT_RESPONDED"} />
+          <StatCard label="Keep in View"   value={stats.keepInView||0}  color="#7c3aed" active={filter==="KEEP_IN_VIEW"} />
+          <StatCard label="Not Interested" value={stats.notInterested}  color="#dc2626" active={filter==="NOT_INTERESTED"} />
+          {stats.resurfacedToday>0 && (
+            <StatCard label="⚡ Re-surfaced" value={stats.resurfacedToday} color="#7c3aed"/>
           )}
         </div>
       )}
@@ -1690,7 +1699,7 @@ function StatusBadge({ status, leadStatus }) {
 function StatCard({ label, value, color, onClick, urgent, active }) {
   return (
     <div className={`tc-stat-card ${urgent?"tc-stat-card--urgent":""} ${active?"tc-stat-card--active":""}`}
-      onClick={onClick} style={{borderTopColor:color,cursor:"pointer",...(active?{boxShadow:`0 0 0 2px ${color}`}:{})}}>
+      onClick={onClick} style={{borderTopColor:color, ...(active?{boxShadow:`0 0 0 2px ${color}`}:{})}}>
       <span className="tc-stat-value" style={{color}}>{value}</span>
       <span className="tc-stat-label">{label}</span>
     </div>

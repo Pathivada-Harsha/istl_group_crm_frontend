@@ -88,6 +88,29 @@ function loadChartJS() {
 }
 
 // Shared Chart.js bar chart with zoom/pan via plugin
+/* ── Theme-aware chart palette + redraw-on-toggle hook (added for dark mode) ── */
+const getChartPalette = () => {
+  const dark = typeof document !== 'undefined'
+    && document.documentElement.getAttribute('data-theme') === 'dark';
+  return dark
+    ? { plotBg: '#1b2130', tick: '#9aa7b8', muted: '#9aa7b8', grid: '#2b3445',
+        legend: '#c2cbd8', tipBg: '#232b3b', tipBorder: '#3a4456',
+        tipTitle: '#e7ecf3', tipBody: '#c2cbd8', donutLabel: '#e7ecf3' }
+    : { plotBg: '#ffffff', tick: '#374151', muted: '#94a3b8', grid: '#e5e7eb',
+        legend: '#666', tipBg: '#ffffff', tipBorder: '#e2e8f0',
+        tipTitle: '#1e293b', tipBody: '#475569', donutLabel: '#1e293b' };
+};
+
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const ChartJSBar = ({
   data,          // [{ label, values: { Budget?, Received?, Spent?, 'Order Value'? }, color? }]
   labels,        // string[] — X axis labels
@@ -100,6 +123,7 @@ const ChartJSBar = ({
 }) => {
   const canvasRef  = React.useRef(null);
   const chartRef   = React.useRef(null);
+  const themeV = useThemeVersion();
   const [ready, setReady] = React.useState(!!window.Chart);
 
   React.useEffect(() => {
@@ -115,6 +139,7 @@ const ChartJSBar = ({
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
     const Chart = window.Chart;
+    const P = getChartPalette();
 
     // Register zoom plugin
     if (window.ChartZoom) Chart.register(window.ChartZoom);
@@ -126,7 +151,7 @@ const ChartJSBar = ({
         const { ctx: c, chartArea } = chart;
         if (!chartArea) return;
         c.save();
-        c.fillStyle = '#ffffff';
+        c.fillStyle = P.plotBg;
         c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
         c.restore();
       },
@@ -141,18 +166,18 @@ const ChartJSBar = ({
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 300 },
-        backgroundColor: '#ffffff',
+        backgroundColor: P.plotBg,
         plugins: {
           legend: {
             display: datasets.length > 1,
-            labels: { font: { size: 11 }, boxWidth: 12, padding: 12 },
+            labels: { color: P.legend, font: { size: 11 }, boxWidth: 12, padding: 12 },
           },
           tooltip: {
-            backgroundColor: '#fff',
-            borderColor: '#e2e8f0',
+            backgroundColor: P.tipBg,
+            borderColor: P.tipBorder,
             borderWidth: 1,
-            titleColor: '#1e293b',
-            bodyColor: '#475569',
+            titleColor: P.tipTitle,
+            bodyColor: P.tipBody,
             padding: 10,
             callbacks: {
               label: (ctx) => ` ${ctx.dataset.label}: ${yTickFormatter(ctx.raw)}`,
@@ -182,23 +207,23 @@ const ChartJSBar = ({
           x: {
             ticks: {
               font: { size: modal ? 11 : 10 },
-              color: '#374151',
+              color: P.tick,
               maxRotation: Math.abs(xLabelRotation),
               minRotation: labels.length > 6 ? Math.abs(xLabelRotation) : 0,
               autoSkip: false,
             },
             grid: { display: false },
-            border: { color: '#94a3b8', width: 1.5 },
+            border: { color: P.muted, width: 1.5 },
           },
           y: {
             ticks: {
               font: { size: modal ? 11 : 10 },
-              color: '#374151',
+              color: P.tick,
               callback: (v) => yTickFormatter(v),
               maxTicksLimit: 6,
             },
-            grid: { color: '#e5e7eb' },
-            border: { color: '#94a3b8', width: 1.5 },
+            grid: { color: P.grid },
+            border: { color: P.muted, width: 1.5 },
           },
         },
         onHover: (event, elements, chart) => {
@@ -219,7 +244,7 @@ const ChartJSBar = ({
       canvas.removeEventListener('wheel', stopScroll);
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
-  }, [ready, labels, datasets, yTickFormatter, modal]);
+  }, [ready, labels, datasets, yTickFormatter, modal, themeV]);
 
   const handleReset = () => {
     if (chartRef.current) chartRef.current.resetZoom();
@@ -272,6 +297,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
   const [ready, setReady] = React.useState(!!window.Chart);
   const canvasRef = React.useRef(null);
   const chartRef  = React.useRef(null);
+  const themeV = useThemeVersion();
 
   React.useEffect(() => {
     if (!window.Chart) { loadChartJS().then(() => setReady(true)); }
@@ -282,6 +308,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
     const Chart = window.Chart;
+    const P = getChartPalette();
     if (window.ChartZoom) Chart.register(window.ChartZoom);
 
     const labels  = data.map(d => d[labelKey]);
@@ -332,17 +359,17 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
           c.moveTo(x1, y1);
           c.lineTo(x2, y2);
           c.lineTo(x3, y3);
-          c.strokeStyle = '#94a3b8';
+          c.strokeStyle = P.muted;
           c.lineWidth = 1.2;
           c.stroke();
           // Dot at elbow
           c.beginPath();
           c.arc(x3, y3, 2.5, 0, Math.PI * 2);
-          c.fillStyle = '#94a3b8';
+          c.fillStyle = P.muted;
           c.fill();
           // Label text
           c.font = `600 ${modal ? 11 : 10}px system-ui,sans-serif`;
-          c.fillStyle = '#1e293b';
+          c.fillStyle = P.donutLabel;
           c.textAlign = anchor;
           c.textBaseline = 'middle';
           const labelX = x3 + (cos >= 0 ? 5 : -5);
@@ -358,7 +385,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
         const { ctx: c, chartArea } = chart;
         if (!chartArea) return;
         c.save();
-        c.fillStyle = '#ffffff';
+        c.fillStyle = P.plotBg;
         c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
         c.restore();
       },
@@ -384,12 +411,14 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
         cutout: modal ? '50%' : '45%',
         animation: { duration: 400 },
         // Extra padding on all sides so elbow labels aren't clipped
-        layout: { padding: modal ? 50 : 38 },
+        layout: { padding: { top: modal ? 44 : 30, bottom: modal ? 44 : 30, left: modal ? 24 : 16, right: modal ? 56 : 42 } },
         plugins: {
           legend: {
             display: true,
-            position: 'bottom',
+            position: 'left',
+            align: 'center',
             labels: {
+              color: P.legend,
               font: { size: modal ? 12 : 10 },
               padding: modal ? 12 : 8,
               boxWidth: 12,
@@ -401,6 +430,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
                     text: `${label} (${pct}%)`,
                     fillStyle: bgColors[i],
                     strokeStyle: bdColors[i],
+                    fontColor: P.legend,
                     lineWidth: 1,
                     hidden: false,
                     index: i,
@@ -410,11 +440,11 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
             },
           },
           tooltip: {
-            backgroundColor: '#fff',
-            borderColor: '#e2e8f0',
+            backgroundColor: P.tipBg,
+            borderColor: P.tipBorder,
             borderWidth: 1,
-            titleColor: '#1e293b',
-            bodyColor: '#475569',
+            titleColor: P.tipTitle,
+            bodyColor: P.tipBody,
             padding: 10,
             callbacks: {
               label: (ctx) => {
@@ -439,7 +469,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
       canvas.removeEventListener('wheel', stop);
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
-  }, [ready, data, modal, labelKey, valueKey, colorKey]);
+  }, [ready, data, modal, labelKey, valueKey, colorKey, themeV]);
 
   if (!data || data.length === 0) return null;
   const handleReset = () => { if (chartRef.current) chartRef.current.resetZoom(); };
@@ -483,6 +513,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
   const [ready, setReady] = React.useState(!!window.Chart);
   const canvasRef = React.useRef(null);
   const chartRef  = React.useRef(null);
+  const themeV = useThemeVersion();
 
   const fmtCurr = (v) => {
     const abs = Math.abs(Number(v));
@@ -501,6 +532,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
 
     const Chart = window.Chart;
+    const P = getChartPalette();
     if (window.ChartZoom) Chart.register(window.ChartZoom);
 
     const whiteBgPlugin = {
@@ -509,7 +541,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
         const { ctx: c, chartArea } = chart;
         if (!chartArea) return;
         c.save();
-        c.fillStyle = '#ffffff';
+        c.fillStyle = P.plotBg;
         c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
         c.restore();
       },
@@ -548,11 +580,11 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
         plugins: {
           legend: { display: false },
           tooltip: {
-            backgroundColor: '#fff',
-            borderColor: '#e2e8f0',
+            backgroundColor: P.tipBg,
+            borderColor: P.tipBorder,
             borderWidth: 1,
-            titleColor: '#1e293b',
-            bodyColor: '#475569',
+            titleColor: P.tipTitle,
+            bodyColor: P.tipBody,
             padding: 10,
             callbacks: {
               label: (tooltipCtx) => {
@@ -575,24 +607,24 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
           x: {
             ticks: {
               font: { size: modal ? 12 : 11, weight: '600' },
-              color: '#374151',
+              color: P.tick,
               maxRotation: data.length > 5 ? 30 : 0,
               minRotation: 0,
               autoSkip: false,
             },
             grid: { display: false },
-            border: { color: '#94a3b8', width: 1.5 },
+            border: { color: P.muted, width: 1.5 },
           },
           y: {
             type: yScaleType,
             ticks: {
               font: { size: modal ? 11 : 10 },
-              color: '#374151',
+              color: P.tick,
               callback: (v) => fmtCurr(v),
               maxTicksLimit: 6,
             },
-            grid: { color: '#e5e7eb' },
-            border: { color: '#94a3b8', width: 1.5 },
+            grid: { color: P.grid },
+            border: { color: P.muted, width: 1.5 },
           },
         },
         afterDraw(chart) {
@@ -609,7 +641,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
             c.fillStyle = _bdColors[i];
             c.fillText(fmtCurr(val), xPos, yPos - 16);
             c.font = `400 ${modal ? 10 : 9}px system-ui,sans-serif`;
-            c.fillStyle = '#94a3b8';
+            c.fillStyle = P.muted;
             c.fillText(`${item.pct ?? 0}%`, xPos, yPos - 4);
             c.restore();
           });
@@ -624,7 +656,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
       canvas.removeEventListener('wheel', stopScroll);
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
-  }, [ready, data, modal]);
+  }, [ready, data, modal, themeV]);
 
   // Early return AFTER all hooks
   if (!data || data.length === 0) return null;
@@ -1116,6 +1148,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
   const [statusFilter, setStatusFilter] = React.useState('ALL');
   const [statusModal, setStatusModal]   = React.useState(null); // { status, projects[] }
   const [chartModal, setChartModal]     = React.useState(null); // { type: 'statusPie'|'budgetBar'|'contributionBar'|'contributionPie', title }
+  const _themeVersion = useThemeVersion(); // re-render inline-styled modals on theme toggle
+  const isDark = React.useMemo(
+    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark',
+    [_themeVersion]
+  );
   const [updatingProject, setUpdatingProject] = React.useState(null); // projectUniqueId being updated
   const [editProgressModal, setEditProgressModal] = React.useState(null); // { project }
   const [epStatus, setEpStatus] = React.useState('IN_PROGRESS');
@@ -1642,18 +1679,18 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           zIndex:10300, display:'flex', alignItems:'center', justifyContent:'center', padding:24
         }} onClick={() => setChartModal(null)}>
           <div style={{
-            background:'#fff', borderRadius:16, width:'100%', maxWidth:900, maxHeight:'90vh',
+            background: isDark ? '#1b2130' : '#fff', borderRadius:16, width:'100%', maxWidth:900, maxHeight:'90vh',
             display:'flex', flexDirection:'column', boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden'
           }} onClick={e => e.stopPropagation()}>
             {/* Header */}
-            <div style={{ padding:'16px 24px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
-              <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:'#1e293b', display:'flex', alignItems:'center', gap:8 }}>
+            <div style={{ padding:'16px 24px', borderBottom: isDark ? '1px solid #2b3445' : '1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+              <h3 style={{ margin:0, fontSize:16, fontWeight:700, color: isDark ? '#e7ecf3' : '#1e293b', display:'flex', alignItems:'center', gap:8 }}>
                 {chartModal.type === 'statusPie' && <><PieChart size={18} /> Project Status Distribution</>}
                 {chartModal.type === 'budgetBar' && <><BarChart3 size={18} /> Top Projects — Budget vs Received</>}
                 {chartModal.type === 'contributionBar' && <><BarChart3 size={18} /> {data.scope === 'SUBGROUP' ? 'Projects' : data.scope === 'GROUP' ? 'Sub-groups' : 'Groups'} by Order Value</>}
                 {chartModal.type === 'contributionPie' && <><PieChart size={18} /> {data.scope === 'SUBGROUP' ? 'Project' : data.scope === 'GROUP' ? 'Sub-group' : 'Group'} Turnover Share (%)</>}
               </h3>
-              <button onClick={() => setChartModal(null)} style={{ background:'#f1f5f9', border:'none', cursor:'pointer', padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:16 }}>✕</button>
+              <button onClick={() => setChartModal(null)} style={{ background: isDark ? '#2b3445' : '#f1f5f9', color: isDark ? '#e7ecf3' : '#1e293b', border:'none', cursor:'pointer', padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:16 }}>✕</button>
             </div>
             {/* Chart body */}
             <div style={{ flex:1, padding:'20px 24px', overflow:'auto' }}>

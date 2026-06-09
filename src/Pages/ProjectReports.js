@@ -13,6 +13,37 @@ import CrmPreloader from '../components/preLoader';
 import '../pages-css/ProjectReports.css';
 import FilterSelect from '../components/Dropdowns/FilterSelect';
 
+/* Inline-style theme mappers (dark mode) — no-ops in light mode */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f8fafc':'#0f1420','#f9fafb':'#0f1420',
+  '#f0fdf4':'#14301f','#ecfdf5':'#102a22','#dcfce7':'#14302a',
+  '#fffbeb':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22',
+  '#eff6ff':'#15243d','#dbeafe':'#1d3a5f',
+  '#e2e8f0':'#2b3445','#e5e7eb':'#2b3445','#bbf7d0':'#2a5a40',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#1e293b':'#d4dbe6','#334155':'#aab4c2','#475569':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#78716c':'#9aa7b8','#94a3b8':'#9aa7b8',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e',
+  '#92400e':'#f0c07a','#b45309':'#f0c07a','#d97706':'#f0b454','#ca8a04':'#e3c258',
+  '#b91c1c':'#f08a8a','#dc2626':'#f05252',
+  '#2563eb':'#5b9bf0','#1d4ed8':'#5b9bf0',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
@@ -301,10 +332,10 @@ const Donut = ({ segments, size = 200 }) => {
         return el;
       })}
       {/* Center total */}
-      <text x={cx} y={cy - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e293b">
+      <text className="pr-donut-total" x={cx} y={cy - 8} textAnchor="middle" fontSize="13" fontWeight="800" fill="#1e293b">
         {fmtShort(total)}
       </text>
-      <text x={cx} y={cy + 8} textAnchor="middle" fontSize="8.5" fill="#64748b" letterSpacing="0.5">TOTAL</text>
+      <text className="pr-donut-total-label" x={cx} y={cy + 8} textAnchor="middle" fontSize="8.5" fill="#64748b" letterSpacing="0.5">TOTAL</text>
     </svg>
   );
 };
@@ -357,6 +388,7 @@ const ChartCard = ({ title, legend, className = '', children }) => {
 // MAIN COMPONENT
 // ═════════════════════════════════════════════════════════════════════════════
 export default function ProjectReports() {
+  useThemeVersion();
   const { user } = useAuth();
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
@@ -1538,25 +1570,25 @@ tbody tr:nth-child(even) td{background:#f9fafb}
     const netGST       = parseFloat(prof.additionalGST) || 0;
     const inwardRecovery = parseFloat(prof.inwardRecoveryValue) || 0;
     // Color helpers
-    const profitColor  = isLoss ? '#dc2626' : '#059669';
-    const profitBg     = isLoss ? '#fef2f2' : '#f0fdf4';
-    const profitBorder = isLoss ? '#fecaca' : '#bbf7d0';
+    const profitColor  = __stc(isLoss ? '#dc2626' : '#059669');
+    const profitBg     = __sbg(isLoss ? '#fef2f2' : '#f0fdf4');
+    const profitBorder = __sbg(isLoss ? '#fecaca' : '#bbf7d0');
     return (
       <div className="pr-section">
         {/* Formula note */}
-        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 12.5, color: '#475569' }}>
+        <div style={{ background: __sbg('#f8fafc'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 12.5, color: __stc('#475569') }}>
           <strong>Profit formula:</strong>&nbsp; Received from Clients &minus; Bills Paid to Vendors &minus; Approved Expenses &minus; Net GST
           {inwardRecovery > 0 && <> + Inward Recovery (returned materials)</>} = Net Profit
         </div>
         {/* Status-aware context note */}
         {!isCompleted && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#92400e' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: __sbg('#fffbeb'), border: `1px solid ${__sbg('#fde68a')}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: __stc('#92400e') }}>
             <span style={{ fontSize: 15 }}>⚠️</span>
             <span><strong>Project is {statusLabel || 'in progress'}</strong> — figures shown are as of now and will change as more receipts/payments are recorded. Final profit is only confirmed on project completion.</span>
           </div>
         )}
         {isCompleted && isLoss && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: '#b91c1c' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: __sbg('#fef2f2'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 12, color: __stc('#b91c1c') }}>
             <span style={{ fontSize: 15 }}>🔴</span>
             <span><strong>Project completed at a loss</strong> — total outflows (bills paid, expenses, net GST) exceeded cash received from clients.</span>
           </div>
@@ -1571,8 +1603,8 @@ tbody tr:nth-child(even) td{background:#f9fafb}
           <KPI label={isLoss ? 'Net Loss' : 'Net Profit'} value={fmtShort(Math.abs(netProfit))} sub={(isLoss ? 'In Loss — ' : '') + pct(Math.abs(parseFloat(prof.netMarginPercent)||0)) + ' margin'} color={profitColor} icon={<TrendingUp size={20}/>} />
         </div>
         <div className="pr-profit-breakdown">
-          <div className="pr-breakdown-row" style={{background:'#f0fdf4'}}>
-            <span>Received from Clients <small style={{fontWeight:400,color:'#6b7280'}}>(actual cash received)</small></span>
+          <div className="pr-breakdown-row" style={{background:__sbg('#f0fdf4')}}>
+            <span>Received from Clients <small style={{fontWeight:400,color:__stc('#6b7280')}}>(actual cash received)</small></span>
             <span className="pr-green">{fmt(prof.amountReceived ?? prof.totalRevenue)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
@@ -1580,23 +1612,23 @@ tbody tr:nth-child(even) td{background:#f9fafb}
             <span className="pr-red">− {fmt(prof.paidBillValue ?? prof.totalProcurement)}</span>
           </div>
           <div className="pr-breakdown-row pr-breakdown-sub">
-            <span>− Project Expenses <small style={{fontWeight:400,color:'#6b7280'}}>(approved employee expenses only)</small></span>
+            <span>− Project Expenses <small style={{fontWeight:400,color:__stc('#6b7280')}}>(approved employee expenses only)</small></span>
             <span className="pr-red" style={{flexShrink:0,textAlign:'right',minWidth:140}}>− {fmt(prof.projectExpenses)}</span>
           </div>
-          <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: '3px solid #d97706', background: '#fffbeb' }}>
-            <span style={{ color: '#92400e' }}>− Net GST <small style={{ fontWeight: 400, color: '#78716c' }}>(Invoice GST − Vendor GST, always deducted)</small></span>
+          <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: `3px solid ${__sbg('#d97706')}`, background: __sbg('#fffbeb') }}>
+            <span style={{ color: __stc('#92400e') }}>− Net GST <small style={{ fontWeight: 400, color: __stc('#78716c') }}>(Invoice GST − Vendor GST, always deducted)</small></span>
             <span className="pr-red" style={{flexShrink:0,textAlign:'right',minWidth:140}}>− {fmt(prof.additionalGST)}</span>
           </div>
           {inwardRecovery > 0 && (
-            <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: '3px solid #22c55e', background: '#f0fdf4' }}>
-              <span style={{ color: '#15803d' }}>+ Inward Recovery <small style={{ fontWeight: 400, color: '#6b7280' }}>(materials returned from site to warehouse)</small></span>
+            <div className="pr-breakdown-row pr-breakdown-sub" style={{ borderLeft: `3px solid ${__sbg('#22c55e')}`, background: __sbg('#f0fdf4') }}>
+              <span style={{ color: __stc('#15803d') }}>+ Inward Recovery <small style={{ fontWeight: 400, color: __stc('#6b7280') }}>(materials returned from site to warehouse)</small></span>
               <span className="pr-green" style={{flexShrink:0,textAlign:'right',minWidth:140}}>+ {fmt(inwardRecovery)}</span>
             </div>
           )}
           <div className="pr-breakdown-row pr-breakdown-final" style={{ background: profitBg, borderTop: `2px solid ${profitBorder}` }}>
             <span style={{ color: profitColor, fontWeight: 700 }}>
               {isLoss ? '= In Loss' : '= Net Profit'}
-              <small style={{ fontWeight: 400, color: '#6b7280', marginLeft: 6 }}>({pct(Math.abs(parseFloat(prof.netMarginPercent)||0))} on received{!isCompleted ? ' — as of now' : ''})</small>
+              <small style={{ fontWeight: 400, color: __stc('#6b7280'), marginLeft: 6 }}>({pct(Math.abs(parseFloat(prof.netMarginPercent)||0))} on received{!isCompleted ? ' — as of now' : ''})</small>
             </span>
             <span style={{ fontSize: 16, fontWeight: 800, color: profitColor }}>{fmt(Math.abs(netProfit))}</span>
           </div>

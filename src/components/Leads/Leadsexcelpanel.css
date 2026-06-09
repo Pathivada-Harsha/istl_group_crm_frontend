@@ -20,31 +20,31 @@
 }
 
 .lep-btn--template {
-  background: #fff;
-  border-color: #cbd5e1;
-  color: #475569;
+  background: var(--c-fff, #fff);
+  border-color: var(--c-cbd5e1, #cbd5e1);
+  color: var(--ct-475569, #475569);
 }
-.lep-btn--template:hover { border-color: #6366f1; color: #6366f1; }
+.lep-btn--template:hover { border-color: var(--c-6366f1, #6366f1); color: var(--ct-6366f1, #6366f1); }
 
 .lep-btn--import {
-  background: #6366f1;
-  color: #fff;
-  border-color: #6366f1;
+  background: var(--c-6366f1, #6366f1);
+  color: var(--ct-fff, #fff);
+  border-color: var(--c-6366f1, #6366f1);
 }
-.lep-btn--import:hover:not(:disabled) { background: #4f46e5; }
+.lep-btn--import:hover:not(:disabled) { background: var(--c-4f46e5, #4f46e5); }
 .lep-btn--import:disabled { opacity: .6; cursor: not-allowed; }
 
 .lep-btn--export {
-  background: #fff;
-  border-color: #059669;
-  color: #059669;
+  background: var(--c-fff, #fff);
+  border-color: var(--c-059669, #059669);
+  color: var(--ct-059669, #059669);
 }
-.lep-btn--export:hover { background: #ecfdf5; }
+.lep-btn--export:hover { background: var(--c-ecfdf5, #ecfdf5); }
 
 .lep-spinner {
   width: 13px; height: 13px;
   border: 2px solid rgba(255,255,255,.35);
-  border-top-color: #fff;
+  border-top-color: var(--c-fff, #fff);
   border-radius: 50%;
   animation: lepSpin .6s linear infinite;
   display: inline-block;
@@ -57,18 +57,18 @@
   top: calc(100% + 8px);
   right: 0;
   z-index: 500;
-  background: #fff;
+  background: var(--c-fff, #fff);
   border-radius: 12px;
   box-shadow: 0 8px 32px rgba(0,0,0,.14);
   padding: 16px;
   min-width: 300px;
   max-width: 440px;
   font-size: 13px;
-  border-top: 4px solid #e2e8f0;
+  border-top: 4px solid var(--c-e2e8f0, #e2e8f0);
   animation: lepDrop .2s ease;
 }
-.lep-result--ok   { border-top-color: #059669; }
-.lep-result--fail { border-top-color: #dc2626; }
+.lep-result--ok   { border-top-color: var(--c-059669, #059669); }
+.lep-result--fail { border-top-color: var(--c-dc2626, #dc2626); }
 
 @keyframes lepDrop {
   from { opacity: 0; transform: translateY(-8px); }
@@ -84,22 +84,22 @@
 }
 .lep-result-close {
   background: none; border: none;
-  cursor: pointer; color: #94a3b8; font-size: 14px; padding: 0; line-height: 1;
+  cursor: pointer; color: var(--ct-94a3b8, #94a3b8); font-size: 14px; padding: 0; line-height: 1;
 }
-.lep-result-close:hover { color: #374151; }
+.lep-result-close:hover { color: var(--ct-374151, #374151); }
 
 .lep-result-counts { display: flex; gap: 16px; margin-bottom: 8px; }
-.lep-count-ok   { color: #059669; font-weight: 700; }
-.lep-count-skip { color: #d97706; font-weight: 700; }
+.lep-count-ok   { color: var(--ct-059669, #059669); font-weight: 700; }
+.lep-count-skip { color: var(--ct-d97706, #d97706); font-weight: 700; }
 
-.lep-error-list p { margin: 4px 0 6px; font-weight: 600; color: #374151; }
+.lep-error-list p { margin: 4px 0 6px; font-weight: 600; color: var(--ct-374151, #374151); }
 .lep-error-list ul { margin: 0; padding-left: 16px; display: flex; flex-direction: column; gap: 3px; }
-.lep-error-list li { color: #dc2626; line-height: 1.4; }
+.lep-error-list li { color: var(--ct-dc2626, #dc2626); line-height: 1.4; }
 
 /* Progress bar */
 .lep-progress-bar {
   margin-top: 8px;
-  background: #e2e8f0;
+  background: var(--c-e2e8f0, #e2e8f0);
   border-radius: 20px;
   height: 8px;
   overflow: hidden;
@@ -107,7 +107,7 @@
 }
 .lep-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #6366f1, #818cf8);
+  background: linear-gradient(90deg, var(--c-6366f1, #6366f1), var(--c-818cf8, #818cf8));
   border-radius: 20px;
   transition: width .2s ease;
 }
@@ -116,7 +116,7 @@
   right: 0;
   top: 10px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   white-space: nowrap;
 }
 /* ── Template Selection Modal ────────────────────────────────────────────────── */
@@ -138,7 +138,7 @@
 }
 
 .lep-tpl-modal {
-  background: #fff;
+  background: var(--c-fff, #fff);
   border-radius: 16px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, .22);
   padding: 24px;
@@ -163,7 +163,7 @@
   margin: 0;
   font-size: 16px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
 }
 
 .lep-tpl-close {
@@ -171,17 +171,17 @@
   border: none;
   cursor: pointer;
   font-size: 18px;
-  color: #94a3b8;
+  color: var(--ct-94a3b8, #94a3b8);
   padding: 2px 6px;
   border-radius: 6px;
   line-height: 1;
   transition: background .15s, color .15s;
 }
-.lep-tpl-close:hover { background: #f1f5f9; color: #374151; }
+.lep-tpl-close:hover { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-374151, #374151); }
 
 .lep-tpl-subtitle {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   margin: 0 0 18px;
 }
 
@@ -197,14 +197,14 @@
   justify-content: space-between;
   gap: 16px;
   padding: 14px 16px;
-  border: 1.5px solid #e2e8f0;
+  border: 1.5px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 12px;
-  background: #f8fafc;
+  background: var(--c-f8fafc, #f8fafc);
   transition: border-color .15s, background .15s;
 }
 .lep-tpl-item:hover {
-  border-color: #6366f1;
-  background: #eef2ff;
+  border-color: var(--c-6366f1, #6366f1);
+  background: var(--c-eef2ff, #eef2ff);
 }
 
 .lep-tpl-item-info {
@@ -215,13 +215,13 @@
 .lep-tpl-item-name {
   font-size: 14px;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--ct-1e293b, #1e293b);
   margin-bottom: 3px;
 }
 
 .lep-tpl-item-desc {
   font-size: 12px;
-  color: #64748b;
+  color: var(--ct-64748b, #64748b);
   line-height: 1.4;
 }
 
@@ -231,9 +231,9 @@
   align-items: center;
   font-size: 11px;
   font-weight: 600;
-  color: #059669;
-  background: #ecfdf5;
-  border: 1px solid #6ee7b7;
+  color: var(--ct-059669, #059669);
+  background: var(--c-ecfdf5, #ecfdf5);
+  border: 1px solid var(--c-6ee7b7, #6ee7b7);
   border-radius: 6px;
   padding: 3px 8px;
 }
@@ -260,15 +260,15 @@
 }
 
 .lep-tpl-btn--dl {
-  background: #fff;
-  border-color: #cbd5e1;
-  color: #475569;
+  background: var(--c-fff, #fff);
+  border-color: var(--c-cbd5e1, #cbd5e1);
+  color: var(--ct-475569, #475569);
 }
-.lep-tpl-btn--dl:hover { border-color: #6366f1; color: #6366f1; }
+.lep-tpl-btn--dl:hover { border-color: var(--c-6366f1, #6366f1); color: var(--ct-6366f1, #6366f1); }
 
 .lep-tpl-btn--imp {
-  background: #6366f1;
-  color: #fff;
-  border-color: #6366f1;
+  background: var(--c-6366f1, #6366f1);
+  color: var(--ct-fff, #fff);
+  border-color: var(--c-6366f1, #6366f1);
 }
-.lep-tpl-btn--imp:hover { background: #4f46e5; }
+.lep-tpl-btn--imp:hover { background: var(--c-4f46e5, #4f46e5); }

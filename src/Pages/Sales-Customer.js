@@ -23,6 +23,43 @@ import * as XLSX from 'xlsx';
 import api from '../services/leadsapi.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
 
+/* ── Inline-style theme mappers (added for dark mode) ── */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __SM = {
+  '#fff':'#1b2130','#ffffff':'#1b2130','white':'#1b2130','transparent':'transparent',
+  '#f9fafb':'#0f1420','#f8fafc':'#0f1420','#f8f9fa':'#0f1420','#fafafa':'#0f1420','#f8fafb':'#0f1420','#f9fffe':'#161b27','#fffafa':'#2b1d20','#fafffe':'#161b27',
+  '#f3f4f6':'#232b3b','#f1f5f9':'#232b3b','#f1f1f1':'#232b3b','#f0f0f0':'#232b3b','#e9eef5':'#2b3445','#eef2f7':'#18202e',
+  '#eff6ff':'#15243d','#f0f7ff':'#15243d','#f0f9ff':'#15243d','#f0f4ff':'#1a2440','#dbeafe':'#1d3a5f','#bfdbfe':'#244b7a','#bae6fd':'#16344d','#e0f2fe':'#16344d','#e0e7ff':'#1e2547',
+  '#ecfdf5':'#102a22','#f0fdf4':'#14301f','#dcfce7':'#14302a','#d1fae5':'#14302a','#a7f3d0':'#2a5a40','#6ee7b7':'#2a5a40','#bbf7d0':'#2a5a40','#86efac':'#2a5a40',
+  '#fef2f2':'#2a1719','#fee2e2':'#3a1f22','#fecaca':'#3a1f22','#fecdd3':'#3a1f26','#fff9f9':'#2b1d20','#fff5f5':'#2b1d20','#fff0f0':'#2b1d20','#fff1f2':'#2b1d20','#fff7ed':'#2c2113','#fff7e6':'#2c2113','#fffbeb':'#2a2710','#fffdf0':'#2a2710','#fffdf5':'#2a2710','#fef9c3':'#3a3016','#fef3c7':'#3a3016','#fde68a':'#5a4714','#fef08a':'#5a4714',
+  '#f5f3ff':'#241b3d','#faf5ff':'#241b3d','#eef2ff':'#1e1f45','#ede9fe':'#2a2147','#ddd6fe':'#2e2147','#e9d5ff':'#2e2147','#ecfeff':'#103038','#fce7f3':'#3a1f30','#fdf2f8':'#3a1f30',
+  '#e5e7eb':'#2b3445','#e2e8f0':'#2b3445','#d1d5db':'#3a4456','#cbd5e1':'#3a4456','#a5b4fc':'#3a3d6a','#c4b5fd':'#3a3d6a',
+};
+const __TM = {
+  '#0f172a':'#e7ecf3','#111827':'#e7ecf3','#1e293b':'#d4dbe6','#1f2937':'#d4dbe6',
+  '#374151':'#c2cbd8','#475569':'#aab4c2','#4b5563':'#aab4c2','#334155':'#aab4c2',
+  '#64748b':'#94a1b3','#6b7280':'#94a1b3','#9ca3af':'#9aa7b8','#94a3b8':'#9aa7b8','#718096':'#9aa7b8',
+  '#0891b2':'#22d3ee',
+  '#15803d':'#46c46f','#166534':'#6ee7b7','#065f46':'#6ee7b7','#1c4532':'#6ee7b7','#059669':'#18c08a','#16a34a':'#2bc55e','#10b981':'#34d39e',
+  '#b45309':'#f0c07a','#c2410c':'#fb923c','#92400e':'#f0c07a','#78350f':'#f0b080','#d97706':'#f0b454','#ca8a04':'#e3c258','#f59e0b':'#f5b945',
+  '#b91c1c':'#f08a8a','#991b1b':'#f08a8a','#dc2626':'#f05252','#ef4444':'#f06a6a',
+  '#1d4ed8':'#5b9bf0','#2563eb':'#5b9bf0','#1e40af':'#5b9bf0','#0e7490':'#22d3ee','#3b82f6':'#5b9bf0','#0284c7':'#38bdf8','#0369a1':'#38bdf8',
+  '#7c3aed':'#a78bfa','#8b5cf6':'#b39bf7','#6d28d9':'#c4b5fd','#5b21b6':'#c4b5fd','#3730a3':'#a5b4fc','#4338ca':'#a5b4fc','#4f46e5':'#8589f3','#6366f1':'#8589f3',
+  '#9d174d':'#f0a0c0','#db2777':'#f06fad','#be185d':'#f06fad','#1b3a6b':'#7fb0f0','#1e3a5f':'#7fb0f0','#4d7ce0':'#9bbcf5',
+};
+const __sbg = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __SM[k]) ? __SM[k] : v; };
+const __stc = (v) => { const k = String(v).toLowerCase(); return (__isDarkTheme() && __TM[k]) ? __TM[k] : v; };
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // Indian Rupee formatter for amount fields
@@ -183,7 +220,7 @@ const OrderBookSummary = ({ customer, currentUser, onGoToOrderBooks }) => {
           <span className="ld-ovp-stat-val">{completed}</span>
           <span className="ld-ovp-stat-label">Completed</span>
         </div>
-        <div className="ld-ovp-stat" style={{color: totalBalance > 0 ? '#dc2626' : '#059669'}}>
+        <div className="ld-ovp-stat" style={{color: totalBalance > 0 ? __stc('#dc2626') : __stc('#059669')}}>
           <span className="ld-ovp-stat-val">₹{totalBalance.toLocaleString('en-IN')}</span>
           <span className="ld-ovp-stat-label">Balance Due</span>
         </div>
@@ -562,7 +599,7 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
   return (
     <div style={{
       borderLeft: `4px solid ${cardBorderColor}`,
-      background: '#fff',
+      background: __sbg('#fff'),
       borderRadius: 10,
       marginBottom: 8,
       padding: '10px 12px',
@@ -578,63 +615,63 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
         <span style={{ background: sm.bg, color: sm.color, borderRadius: 20, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: sm.dot, display: 'inline-block' }}/>{f.status}
         </span>
-        {overdue && <span style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 20, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>⚠ Overdue</span>}
-        <span style={{ fontSize: 11, fontWeight: 600, color: FU_PRIORITY_COLOR[f.priority] || '#F59E0B' }}>● {f.priority}</span>
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: '#6b7280' }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</span>
+        {overdue && <span style={{ background: __sbg('#FEE2E2'), color: __stc('#991B1B'), borderRadius: 20, padding: '2px 7px', fontSize: 10, fontWeight: 700 }}>⚠ Overdue</span>}
+        <span style={{ fontSize: 11, fontWeight: 600, color: FU_PRIORITY_COLOR[f.priority] || __stc('#F59E0B') }}>● {f.priority}</span>
+        <span style={{ marginLeft: 'auto', fontSize: 11, color: __stc('#6b7280') }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</span>
 
         {/* Action buttons — always visible, small */}
         <div style={{ display: 'flex', gap: 4, marginLeft: 6 }}>
           {/* View */}
           <button onClick={() => onView(f)} title="View details"
-            style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #0891b2', background: '#f0f9ff', color: '#0891b2', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${__sbg('#0891b2')}`, background: __sbg('#f0f9ff'), color: __stc('#0891b2'), fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
             👁
           </button>
           {/* Edit — only for non-completed/non-cancelled */}
           {!isCancelled && f.status !== 'Completed' && (
             <button onClick={() => onEdit(f)} title="Edit"
-              style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #6366f1', background: '#f5f3ff', color: '#6366f1', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+              style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${__sbg('#6366f1')}`, background: __sbg('#f5f3ff'), color: __stc('#6366f1'), fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
               ✏
             </button>
           )}
           {/* Cancel — pending only */}
           {isPending && (
             <button onClick={cancelFollowup} disabled={busy} title="Cancel"
-              style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #f59e0b', background: '#fffbeb', color: '#92400e', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+              style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${__sbg('#f59e0b')}`, background: __sbg('#fffbeb'), color: __stc('#92400e'), fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
               {busy ? '…' : '✕'}
             </button>
           )}
           {/* Delete — always available */}
           <button onClick={deleteFollowup} disabled={busy} title="Delete permanently"
-            style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid #ef4444', background: '#fff1f2', color: '#dc2626', fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
+            style={{ padding: '3px 7px', borderRadius: 5, border: `1px solid ${__sbg('#ef4444')}`, background: __sbg('#fff1f2'), color: __stc('#dc2626'), fontSize: 11, cursor: 'pointer', lineHeight: 1 }}>
             {busy ? '…' : '🗑'}
           </button>
         </div>
       </div>
 
       {/* Row 2: people + created */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: '#6b7280', marginTop: 5 }}>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11, color: __stc('#6b7280'), marginTop: 5 }}>
         {f.assignedToName && <span>👤 {f.assignedToName}</span>}
         <span>By {f.createdByName || '—'} · {_fmtDate(f.createdAt)}</span>
-        {f.completedAt && <span style={{ color: '#059669' }}>✓ {_fmt(f.completedAt)}</span>}
+        {f.completedAt && <span style={{ color: __stc('#059669') }}>✓ {_fmt(f.completedAt)}</span>}
       </div>
 
       {/* Notes */}
       {f.notes && (
-        <div style={{ background: '#f0f9ff', borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
-          <span style={{ fontSize: 10, color: '#0369a1', fontWeight: 700, marginRight: 4 }}>📋 Notes:</span>
-          <span style={{ color: '#374151' }}>{f.notes}</span>
+        <div style={{ background: __sbg('#f0f9ff'), borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
+          <span style={{ fontSize: 10, color: __stc('#0369a1'), fontWeight: 700, marginRight: 4 }}>📋 Notes:</span>
+          <span style={{ color: __stc('#374151') }}>{f.notes}</span>
         </div>
       )}
 
       {/* Outcome */}
       {f.outcome && (
-        <div style={{ background: '#f0fdf4', borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
-          <span style={{ fontSize: 10, color: '#15803d', fontWeight: 700, marginRight: 4 }}>📊 Outcome:</span>
-          <span style={{ color: '#374151' }}>
+        <div style={{ background: __sbg('#f0fdf4'), borderRadius: 6, padding: '6px 10px', marginTop: 6, fontSize: 12 }}>
+          <span style={{ fontSize: 10, color: __stc('#15803d'), fontWeight: 700, marginRight: 4 }}>📊 Outcome:</span>
+          <span style={{ color: __stc('#374151') }}>
             {expanded || f.outcome.length < 150 ? f.outcome : <>{f.outcome.slice(0, 150)}…</>}
           </span>
           {f.outcome.length > 150 && (
-            <button onClick={() => setExpanded(!expanded)} style={{ background: 'none', border: 'none', color: '#059669', fontSize: 11, cursor: 'pointer', padding: '0 4px' }}>
+            <button onClick={() => setExpanded(!expanded)} style={{ background: 'none', border: 'none', color: __stc('#059669'), fontSize: 11, cursor: 'pointer', padding: '0 4px' }}>
               {expanded ? '▲ less' : '▼ more'}
             </button>
           )}
@@ -645,7 +682,7 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
       {isPending && (
         <div style={{ marginTop: 8 }}>
           <button onClick={onComplete}
-            style={{ background: '#059669', color: '#fff', border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
+            style={{ background: __sbg('#059669'), color: __stc('#fff'), border: 'none', borderRadius: 6, padding: '5px 14px', fontSize: 12, cursor: 'pointer', fontWeight: 600 }}>
             ✓ Record Outcome
           </button>
         </div>
@@ -656,6 +693,7 @@ function CustomerFollowupCard({ followup: f, index, onComplete, onCancelled, onD
 
 // ── CustomerAddFollowupForm ───────────────────────────────────────────────────
 function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCancel }) {
+  useThemeVersion();
   const [saving, setSaving] = useState(false);
   const nowPlus30 = new Date(Date.now() + 30 * 60000);
   const defaultDT = new Date(nowPlus30.getTime() - nowPlus30.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -684,20 +722,20 @@ function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCa
   };
 
   return (
-    <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 10, padding: 16, marginBottom: 12 }}>
+    <div style={{ background: __sbg('#f0fdf4'), border: `1px solid ${__sbg('#bbf7d0')}`, borderRadius: 10, padding: 16, marginBottom: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <h5 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#065F46' }}>📅 Schedule New Follow-up</h5>
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: '#6b7280', lineHeight: 1 }}>✕</button>
+        <h5 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: __stc('#065F46') }}>📅 Schedule New Follow-up</h5>
+        <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 18, cursor: 'pointer', color: __stc('#6b7280'), lineHeight: 1 }}>✕</button>
       </div>
       <form onSubmit={submit}>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 6 }}>Type</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: __stc('#374151'), marginBottom: 6 }}>Type</label>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {Object.entries(FU_TYPE_META).map(([type, meta]) => (
               <button key={type} type="button"
                 onClick={() => setForm(p => ({ ...p, followupType: type }))}
-                style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${form.followupType === type ? meta.color : '#d1d5db'}`,
-                  background: form.followupType === type ? meta.bg : '#fff', color: form.followupType === type ? meta.color : '#374151',
+                style={{ padding: '5px 12px', borderRadius: 20, border: `1px solid ${form.followupType === type ? meta.color : __sbg('#d1d5db')}`,
+                  background: form.followupType === type ? meta.bg : __sbg('#fff'), color: form.followupType === type ? meta.color : __stc('#374151'),
                   fontSize: 12, cursor: 'pointer', fontWeight: form.followupType === type ? 700 : 400 }}>
                 {meta.icon} {type}
               </button>
@@ -706,29 +744,29 @@ function CustomerAddFollowupForm({ customer, currentUser, users, onCreated, onCa
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Date & Time *</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: __stc('#374151'), marginBottom: 4 }}>Date & Time *</label>
             <input type="datetime-local" required value={form.scheduledAt} onChange={set('scheduledAt')}
-              style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}/>
+              style={{ width: '100%', padding: '6px 8px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}/>
           </div>
           <div style={{ width: 130 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Priority</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: __stc('#374151'), marginBottom: 4 }}>Priority</label>
             <FilterSelect value={form.priority} options={['High','Medium','Low'].map(s=>({value:s,label:s}))} placeholder="Priority" onChange={set('priority')} />
           </div>
         </div>
         <div style={{ marginBottom: 10 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Assign To *</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: __stc('#374151'), marginBottom: 4 }}>Assign To *</label>
           <FilterSelect value={String(form.assignedTo||'')} options={users.map(u=>({value:String(u.id),label:u.name+(u.id===currentUser?.id?' (Me)':'')}))} placeholder="Assign To" onChange={set('assignedTo')} />
         </div>
         <div style={{ marginBottom: 12 }}>
-          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#374151', marginBottom: 4 }}>Notes</label>
+          <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: __stc('#374151'), marginBottom: 4 }}>Notes</label>
           <textarea rows={3} value={form.notes} onChange={set('notes')} placeholder="What to cover in this follow-up…"
-            style={{ width: '100%', padding: '6px 8px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
+            style={{ width: '100%', padding: '6px 8px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" onClick={onCancel}
-            style={{ padding: '6px 14px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            style={{ padding: '6px 14px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, background: __sbg('#fff'), fontSize: 13, cursor: 'pointer' }}>Cancel</button>
           <button type="submit" disabled={saving}
-            style={{ padding: '6px 16px', border: 'none', borderRadius: 6, background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            style={{ padding: '6px 16px', border: 'none', borderRadius: 6, background: __sbg('#059669'), color: __stc('#fff'), fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
             {saving ? 'Scheduling…' : '📅 Schedule Follow-up'}
           </button>
         </div>
@@ -757,37 +795,37 @@ function CustomerCompleteModal({ followup: f, onSaved, onCancel }) {
 
   return (
     <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, padding: 24, width: '90%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: __sbg('#fff'), borderRadius: 12, padding: 24, width: '90%', maxWidth: 520, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
             <span style={{ background: tm.bg, color: tm.color, border: `1px solid ${tm.border}`, borderRadius: 20, padding: '3px 12px', fontSize: 12, fontWeight: 600 }}>{tm.icon} {f.followupType}</span>
             <h4 style={{ margin: '8px 0 2px', fontSize: 16, fontWeight: 700 }}>Record Outcome</h4>
-            <p style={{ margin: 0, fontSize: 12, color: '#6b7280' }}>Scheduled: {_fmt(f.scheduledAt)}</p>
+            <p style={{ margin: 0, fontSize: 12, color: __stc('#6b7280') }}>Scheduled: {_fmt(f.scheduledAt)}</p>
           </div>
-          <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#6b7280' }}>✕</button>
+          <button onClick={onCancel} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: __stc('#6b7280') }}>✕</button>
         </div>
         {f.notes && (
-          <div style={{ background: '#f9fafb', borderRadius: 6, padding: '10px 12px', marginBottom: 14, fontSize: 13 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>📋 Original notes</div>
+          <div style={{ background: __sbg('#f9fafb'), borderRadius: 6, padding: '10px 12px', marginBottom: 14, fontSize: 13 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: __stc('#6b7280'), marginBottom: 4 }}>📋 Original notes</div>
             <p style={{ margin: 0 }}>{f.notes}</p>
           </div>
         )}
         <form onSubmit={submit}>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: '#374151' }}>📊 Outcome *</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 6, color: __stc('#374151') }}>📊 Outcome *</label>
             <textarea rows={5} required value={outcome} onChange={e => setOutcome(e.target.value)}
               placeholder="Describe what happened, what was discussed, next steps…"
-              style={{ width: '100%', padding: '8px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>{outcome.length} chars</span>
+              style={{ width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13, resize: 'vertical', boxSizing: 'border-box' }}/>
+            <span style={{ fontSize: 11, color: __stc('#9ca3af') }}>{outcome.length} chars</span>
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8, color: '#374151' }}>Mark as</label>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 8, color: __stc('#374151') }}>Mark as</label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {[{ v: 'Completed', icon: '✓', label: 'Completed' }, { v: 'Rescheduled', icon: '↻', label: 'Rescheduled' }, { v: 'Cancelled', icon: '✕', label: 'Cancelled' }].map(opt => {
                 const sm = FU_STATUS_META[opt.v];
                 const active = newStatus === opt.v;
                 return (
-                  <label key={opt.v} onClick={() => setNewStatus(opt.v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? sm.color : '#d1d5db'}`, background: active ? sm.bg : '#fff', cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400, color: active ? sm.color : '#374151' }}>
+                  <label key={opt.v} onClick={() => setNewStatus(opt.v)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, border: `1.5px solid ${active ? sm.color : __sbg('#d1d5db')}`, background: active ? sm.bg : __sbg('#fff'), cursor: 'pointer', fontSize: 13, fontWeight: active ? 700 : 400, color: active ? sm.color : __stc('#374151') }}>
                     <input type="radio" name="ns" value={opt.v} checked={active} onChange={() => setNewStatus(opt.v)} style={{ display: 'none' }}/>{opt.icon} {opt.label}
                   </label>
                 );
@@ -795,8 +833,8 @@ function CustomerCompleteModal({ followup: f, onSaved, onCancel }) {
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-            <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-            <button type="submit" disabled={saving} style={{ padding: '7px 18px', border: 'none', borderRadius: 6, background: '#059669', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            <button type="button" onClick={onCancel} style={{ padding: '7px 16px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, background: __sbg('#fff'), fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding: '7px 18px', border: 'none', borderRadius: 6, background: __sbg('#059669'), color: __stc('#fff'), fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {saving ? 'Saving…' : 'Save Outcome'}
             </button>
           </div>
@@ -811,69 +849,69 @@ function CustomerViewModal({ followup: f, onClose, onEdit, onComplete }) {
   const tm = FU_TYPE_META[f.followupType] || FU_TYPE_META.Call;
   const sm = FU_STATUS_META[f.status]    || FU_STATUS_META.Pending;
   const overdue = _isOverdue(f);
-  const P = { High: { bg:'#FEE2E2',color:'#991B1B' }, Medium: { bg:'#FEF3C7',color:'#92400E' }, Low: { bg:'#D1FAE5',color:'#065F46' } };
+  const P = { High: { bg:__sbg('#FEE2E2'),color:__stc('#991B1B') }, Medium: { bg:__sbg('#FEF3C7'),color:__stc('#92400E') }, Low: { bg:__sbg('#D1FAE5'),color:__stc('#065F46') } };
   const pm = P[f.priority] || P.Medium;
   return (
     <div onClick={onClose} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:14, width:'min(540px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:__sbg('#fff'), borderRadius:14, width:'min(540px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
         {/* Header */}
         <div style={{ background: tm.bg, padding:'16px 20px', borderRadius:'14px 14px 0 0', borderBottom:`2px solid ${tm.color}20`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ width:40, height:40, borderRadius:10, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, border:`1.5px solid ${tm.color}30` }}>{tm.icon}</div>
+            <div style={{ width:40, height:40, borderRadius:10, background:__sbg('#fff'), display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, border:`1.5px solid ${tm.color}30` }}>{tm.icon}</div>
             <div>
               <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap' }}>
-                <span style={{ fontWeight:700, fontSize:16, color:'#0f172a' }}>{f.followupType} Follow-up</span>
+                <span style={{ fontWeight:700, fontSize:16, color:__stc('#0f172a') }}>{f.followupType} Follow-up</span>
                 <span style={{ background:sm.bg, color:sm.color, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:700, display:'inline-flex', alignItems:'center', gap:3 }}>
                   <span style={{ width:6, height:6, borderRadius:'50%', background:sm.dot, display:'inline-block' }}/>{f.status}
                 </span>
-                {overdue && <span style={{ background:'#FEE2E2', color:'#991B1B', borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
+                {overdue && <span style={{ background:__sbg('#FEE2E2'), color:__stc('#991B1B'), borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:700 }}>⚠ OVERDUE</span>}
               </div>
-              <div style={{ fontSize:11, color:'#64748b', marginTop:2 }}>#{f.id}</div>
+              <div style={{ fontSize:11, color:__stc('#64748b'), marginTop:2 }}>#{f.id}</div>
             </div>
           </div>
-          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#6b7280', lineHeight:1 }}>✕</button>
+          <button onClick={onClose} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:__stc('#6b7280'), lineHeight:1 }}>✕</button>
         </div>
         {/* Body */}
         <div style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Priority</div>
+            <div style={{ background:__sbg('#f8fafc'), borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Priority</div>
               <span style={{ background:pm.bg, color:pm.color, borderRadius:20, padding:'3px 12px', fontSize:12, fontWeight:700 }}>{f.priority}</span>
             </div>
-            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>📅 Scheduled</div>
-              <div style={{ fontWeight:700, fontSize:13, color: overdue ? '#DC2626' : '#0f172a' }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</div>
-              {f.completedAt && <div style={{ fontSize:11, color:'#059669', marginTop:2 }}>✓ {_fmt(f.completedAt)}</div>}
+            <div style={{ background:__sbg('#f8fafc'), borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>📅 Scheduled</div>
+              <div style={{ fontWeight:700, fontSize:13, color: overdue ? __stc('#DC2626') : __stc('#0f172a') }}>{_fmtDate(f.scheduledAt)} {_fmtTime(f.scheduledAt)}</div>
+              {f.completedAt && <div style={{ fontSize:11, color:__stc('#059669'), marginTop:2 }}>✓ {_fmt(f.completedAt)}</div>}
             </div>
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Assigned To</div>
+            <div style={{ background:__sbg('#f8fafc'), borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Assigned To</div>
               <div style={{ fontWeight:600, fontSize:13 }}>{f.assignedToName || 'Unassigned'}</div>
             </div>
-            <div style={{ background:'#f8fafc', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#64748b', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Created By</div>
+            <div style={{ background:__sbg('#f8fafc'), borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#64748b'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:4 }}>Created By</div>
               <div style={{ fontWeight:600, fontSize:13 }}>{f.createdByName || '—'}</div>
-              <div style={{ fontSize:11, color:'#64748b' }}>{_fmtDate(f.createdAt)}</div>
+              <div style={{ fontSize:11, color:__stc('#64748b') }}>{_fmtDate(f.createdAt)}</div>
             </div>
           </div>
           {f.notes && (
-            <div style={{ background:'#f0f9ff', border:'1px solid #bae6fd', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#0369a1', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📋 Pre-call Notes</div>
-              <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.notes}</p>
+            <div style={{ background:__sbg('#f0f9ff'), border:`1px solid ${__sbg('#bae6fd')}`, borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#0369a1'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📋 Pre-call Notes</div>
+              <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.notes}</p>
             </div>
           )}
           {f.outcome && (
-            <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:8, padding:'10px 12px' }}>
-              <div style={{ fontSize:10, fontWeight:700, color:'#15803d', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📊 Outcome / Result</div>
-              <p style={{ margin:0, fontSize:13, color:'#0f172a', lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
+            <div style={{ background:__sbg('#f0fdf4'), border:`1px solid ${__sbg('#bbf7d0')}`, borderRadius:8, padding:'10px 12px' }}>
+              <div style={{ fontSize:10, fontWeight:700, color:__stc('#15803d'), textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:6 }}>📊 Outcome / Result</div>
+              <p style={{ margin:0, fontSize:13, color:__stc('#0f172a'), lineHeight:1.6, whiteSpace:'pre-wrap' }}>{f.outcome}</p>
             </div>
           )}
-          {!f.notes && !f.outcome && <div style={{ textAlign:'center', color:'#94a3b8', fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>}
-          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:6, borderTop:'1px solid #f1f5f9' }}>
-            <button onClick={onClose} style={{ padding:'6px 14px', border:'1px solid #e2e8f0', borderRadius:7, background:'#fff', fontSize:13, cursor:'pointer' }}>Close</button>
-            {f.status === 'Pending' && <button onClick={() => onComplete(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:'#059669', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>✓ Record Outcome</button>}
-            {f.status !== 'Cancelled' && f.status !== 'Completed' && <button onClick={() => onEdit(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>✏ Edit</button>}
+          {!f.notes && !f.outcome && <div style={{ textAlign:'center', color:__stc('#94a3b8'), fontSize:13, padding:'8px 0' }}>No notes or outcome recorded yet.</div>}
+          <div style={{ display:'flex', gap:8, justifyContent:'flex-end', paddingTop:6, borderTop:`1px solid ${__sbg('#f1f5f9')}` }}>
+            <button onClick={onClose} style={{ padding:'6px 14px', border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:7, background:__sbg('#fff'), fontSize:13, cursor:'pointer' }}>Close</button>
+            {f.status === 'Pending' && <button onClick={() => onComplete(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:__sbg('#059669'), color:__stc('#fff'), fontSize:13, fontWeight:600, cursor:'pointer' }}>✓ Record Outcome</button>}
+            {f.status !== 'Cancelled' && f.status !== 'Completed' && <button onClick={() => onEdit(f)} style={{ padding:'6px 14px', border:'none', borderRadius:7, background:__sbg('#6366f1'), color:__stc('#fff'), fontSize:13, fontWeight:600, cursor:'pointer' }}>✏ Edit</button>}
           </div>
         </div>
       </div>
@@ -919,45 +957,45 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
 
   return (
     <div onClick={onCancel} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', zIndex:1200, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
-      <div onClick={e=>e.stopPropagation()} style={{ background:'#fff', borderRadius:14, width:'min(500px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ padding:'16px 20px', borderBottom:'1px solid #f1f5f9', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+      <div onClick={e=>e.stopPropagation()} style={{ background:__sbg('#fff'), borderRadius:14, width:'min(500px,95vw)', maxHeight:'85vh', overflowY:'auto', boxShadow:'0 20px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding:'16px 20px', borderBottom:`1px solid ${__sbg('#f1f5f9')}`, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <h4 style={{ margin:0, fontSize:16, fontWeight:700 }}>✏ Edit Follow-up</h4>
-          <button onClick={onCancel} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#6b7280' }}>✕</button>
+          <button onClick={onCancel} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:__stc('#6b7280') }}>✕</button>
         </div>
         <form onSubmit={submit} style={{ padding:'16px 20px', display:'flex', flexDirection:'column', gap:12 }}>
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {Object.entries(FU_TYPE_META).map(([type, meta]) => (
               <button key={type} type="button" onClick={() => setForm(p => ({ ...p, followupType: type }))}
-                style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${form.followupType===type ? meta.color : '#d1d5db'}`, background: form.followupType===type ? meta.bg : '#fff', color: form.followupType===type ? meta.color : '#374151', fontSize:12, cursor:'pointer', fontWeight: form.followupType===type ? 700 : 400 }}>
+                style={{ padding:'5px 12px', borderRadius:20, border:`1px solid ${form.followupType===type ? meta.color : __sbg('#d1d5db')}`, background: form.followupType===type ? meta.bg : __sbg('#fff'), color: form.followupType===type ? meta.color : __stc('#374151'), fontSize:12, cursor:'pointer', fontWeight: form.followupType===type ? 700 : 400 }}>
                 {meta.icon} {type}
               </button>
             ))}
           </div>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
             <div>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Date & Time *</label>
-              <input type="datetime-local" required value={form.scheduledAt} onChange={set('scheduledAt')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13, boxSizing:'border-box' }}/>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:__stc('#374151'), marginBottom:4 }}>Date & Time *</label>
+              <input type="datetime-local" required value={form.scheduledAt} onChange={set('scheduledAt')} style={{ width:'100%', padding:'7px 10px', border:`1px solid ${__sbg('#d1d5db')}`, borderRadius:6, fontSize:13, boxSizing:'border-box' }}/>
             </div>
             <div>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Priority</label>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:__stc('#374151'), marginBottom:4 }}>Priority</label>
               <FilterSelect value={form.priority} options={['High','Medium','Low'].map(s=>({value:s,label:s}))} placeholder="Priority" onChange={set('priority')} />
             </div>
             <div>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Status</label>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:__stc('#374151'), marginBottom:4 }}>Status</label>
               <FilterSelect value={form.status} options={['Pending','Completed','Cancelled','Rescheduled'].map(s=>({value:s,label:s}))} placeholder="Status" onChange={set('status')} />
             </div>
             <div>
-              <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Assign To</label>
+              <label style={{ display:'block', fontSize:12, fontWeight:600, color:__stc('#374151'), marginBottom:4 }}>Assign To</label>
               <FilterSelect value={String(form.assignedTo||'')} options={users.map(u=>({value:String(u.id),label:u.name+(u.id===currentUser?.id?' (Me)':'')}))} placeholder="Assign To" onChange={set('assignedTo')} />
             </div>
           </div>
           <div>
-            <label style={{ display:'block', fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>Notes</label>
-            <textarea rows={3} value={form.notes} onChange={set('notes')} style={{ width:'100%', padding:'7px 10px', border:'1px solid #d1d5db', borderRadius:6, fontSize:13, resize:'vertical', boxSizing:'border-box' }}/>
+            <label style={{ display:'block', fontSize:12, fontWeight:600, color:__stc('#374151'), marginBottom:4 }}>Notes</label>
+            <textarea rows={3} value={form.notes} onChange={set('notes')} style={{ width:'100%', padding:'7px 10px', border:`1px solid ${__sbg('#d1d5db')}`, borderRadius:6, fontSize:13, resize:'vertical', boxSizing:'border-box' }}/>
           </div>
           <div style={{ display:'flex', justifyContent:'flex-end', gap:8 }}>
-            <button type="button" onClick={onCancel} style={{ padding:'7px 16px', border:'1px solid #e2e8f0', borderRadius:7, background:'#fff', fontSize:13, cursor:'pointer' }}>Cancel</button>
-            <button type="submit" disabled={saving} style={{ padding:'7px 18px', border:'none', borderRadius:7, background:'#6366f1', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer' }}>
+            <button type="button" onClick={onCancel} style={{ padding:'7px 16px', border:`1px solid ${__sbg('#e2e8f0')}`, borderRadius:7, background:__sbg('#fff'), fontSize:13, cursor:'pointer' }}>Cancel</button>
+            <button type="submit" disabled={saving} style={{ padding:'7px 18px', border:'none', borderRadius:7, background:__sbg('#6366f1'), color:__stc('#fff'), fontSize:13, fontWeight:600, cursor:'pointer' }}>
               {saving ? 'Saving…' : 'Save Changes'}
             </button>
           </div>
@@ -969,6 +1007,7 @@ function CustomerEditModal({ followup: f, users, currentUser, onSaved, onCancel 
 
 // ── Customer Detail Page ──────────────────────────────────────────────────────
 const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions, showSuccess, showError }) => {
+  useThemeVersion();
   const [activeTab, setActiveTab]       = useState(() => localStorage.getItem('cust_detail_tab') || 'overview');
   const [orderBooks, setOrderBooks]     = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
@@ -1137,9 +1176,9 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
           Back to Customers
         </button>
         <div className="ld-detail-breadcrumb">
-          <span style={{cursor:'pointer',color:'#6b7280'}} onClick={onBack}>Customers</span>
-          <span style={{margin:'0 6px',color:'#d1d5db'}}>/</span>
-          <span style={{color:'#111827',fontWeight:500}}>{customer.customerCode}</span>
+          <span style={{cursor:'pointer',color:__stc('#6b7280')}} onClick={onBack}>Customers</span>
+          <span style={{margin:'0 6px',color:__stc('#d1d5db')}}>/</span>
+          <span style={{color:__stc('#111827'),fontWeight:500}}>{customer.customerCode}</span>
         </div>
         {permissions.canEdit && (
           <button className="cust-btn cust-btn-primary" style={{marginLeft:'auto'}} onClick={() => onEdit(customer)}>
@@ -1155,7 +1194,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
           <div className="ld-hero-avatar">{customer.name?.[0]?.toUpperCase() || '?'}</div>
           <div>
             <h2 className="ld-hero-name">{customer.name}</h2>
-            {customer.companyName && <div style={{fontSize:13,color:'#6b7280'}}>{customer.companyName}</div>}
+            {customer.companyName && <div style={{fontSize:13,color:__stc('#6b7280')}}>{customer.companyName}</div>}
             <div className="ld-hero-code">{customer.customerCode}</div>
           </div>
         </div>
@@ -1190,7 +1229,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   ['Email',   customer.email || '-'],
                   ['Phone',   customer.phone || '-'],
                   ['Alt Phone', customer.altPhone || '-'],
-                  ['Website', customer.website ? <a href={customer.website} target="_blank" rel="noopener noreferrer" style={{color:'#3b82f6'}}>{customer.website}</a> : '-'],
+                  ['Website', customer.website ? <a href={customer.website} target="_blank" rel="noopener noreferrer" style={{color:__stc('#3b82f6')}}>{customer.website}</a> : '-'],
                   ['Contact Person', customer.contactPerson || '-'],
                   ['Designation', customer.designation || '-'],
                 ].map(([l,v]) => (
@@ -1223,24 +1262,24 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
 
           {/* ── Financial Overview Dashboard ── */}
           {loadingOverview ? (
-            <div style={{textAlign:'center',padding:'2rem',color:'#6b7280'}}>Loading financial summary…</div>
+            <div style={{textAlign:'center',padding:'2rem',color:__stc('#6b7280')}}>Loading financial summary…</div>
           ) : overviewData ? (
             <div style={{marginTop:'1.25rem'}}>
 
               {/* KPI Row */}
               <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))',gap:'0.75rem',marginBottom:'1.25rem'}}>
                 {[
-                  { label:'Total Order Value',  val:`₹${(overviewData.stats.totalOrderValue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, icon:'📦', color:'#eff6ff', accent:'#3b82f6' },
-                  { label:'Total Invoiced',      val:`₹${(overviewData.stats.totalInvoiced||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,   icon:'🧾', color:'#f0fdf4', accent:'#16a34a' },
-                  { label:'Total Received',      val:`₹${(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,    icon:'💰', color:'#fef3c7', accent:'#d97706' },
-                  { label:'Balance Due',         val:`₹${(overviewData.stats.totalBalanceDue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,  icon:'⚠️', color:'#fef2f2', accent:'#dc2626' },
-                  { label:'Active Orders',       val:overviewData.stats.activeOrders,    icon:'🔄', color:'#f5f3ff', accent:'#7c3aed' },
-                  { label:'Pending Invoices',    val:overviewData.stats.pendingInvoices, icon:'📋', color:'#fff7ed', accent:'#ea580c' },
+                  { label:'Total Order Value',  val:`₹${(overviewData.stats.totalOrderValue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`, icon:'📦', color:__stc('#eff6ff'), accent:'#3b82f6' },
+                  { label:'Total Invoiced',      val:`₹${(overviewData.stats.totalInvoiced||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,   icon:'🧾', color:__stc('#f0fdf4'), accent:'#16a34a' },
+                  { label:'Total Received',      val:`₹${(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,    icon:'💰', color:__stc('#fef3c7'), accent:'#d97706' },
+                  { label:'Balance Due',         val:`₹${(overviewData.stats.totalBalanceDue||0).toLocaleString('en-IN',{maximumFractionDigits:0})}`,  icon:'⚠️', color:__stc('#fef2f2'), accent:'#dc2626' },
+                  { label:'Active Orders',       val:overviewData.stats.activeOrders,    icon:'🔄', color:__stc('#f5f3ff'), accent:'#7c3aed' },
+                  { label:'Pending Invoices',    val:overviewData.stats.pendingInvoices, icon:'📋', color:__stc('#fff7ed'), accent:'#ea580c' },
                 ].map(({label,val,icon,color,accent}) => (
-                  <div key={label} style={{background:'#fff',border:`1px solid ${accent}22`,borderLeft:`3px solid ${accent}`,borderRadius:'8px',padding:'0.875rem',display:'flex',flexDirection:'column',gap:'4px'}}>
+                  <div key={label} style={{background:__sbg('#fff'),border:`1px solid ${accent}22`,borderLeft:`3px solid ${accent}`,borderRadius:'8px',padding:'0.875rem',display:'flex',flexDirection:'column',gap:'4px'}}>
                     <div style={{fontSize:'18px'}}>{icon}</div>
-                    <div style={{fontSize:'1.15rem',fontWeight:'700',color:'#111827',lineHeight:1.2}}>{val}</div>
-                    <div style={{fontSize:'11px',color:'#6b7280',fontWeight:'500'}}>{label}</div>
+                    <div style={{fontSize:'1.15rem',fontWeight:'700',color:__stc('#111827'),lineHeight:1.2}}>{val}</div>
+                    <div style={{fontSize:'11px',color:__stc('#6b7280'),fontWeight:'500'}}>{label}</div>
                   </div>
                 ))}
               </div>
@@ -1261,19 +1300,19 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                         {overviewData.orders.slice(0,5).map((o,i) => (
                           <tr key={o.id}>
                             <td>{i+1}</td>
-                            <td><span style={{color:'#3b82f6',fontWeight:500}}>{o.orderBookNo}</span><br/><span style={{color:'#6b7280',fontSize:'11px'}}>{o.orderTitle}</span></td>
+                            <td><span style={{color:__stc('#3b82f6'),fontWeight:500}}>{o.orderBookNo}</span><br/><span style={{color:__stc('#6b7280'),fontSize:'11px'}}>{o.orderTitle}</span></td>
                             <td>{o.poNumber||'-'}</td>
                             <td>{o.orderDate ? new Date(o.orderDate).toLocaleDateString('en-IN') : '-'}</td>
                             <td style={{fontWeight:600}}>₹{parseFloat(o.totalAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                             <td>₹{parseFloat(o.advanceAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                            <td style={{color:'#dc2626',fontWeight:600}}>₹{parseFloat(o.balanceAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td style={{color:__stc('#dc2626'),fontWeight:600}}>₹{parseFloat(o.balanceAmount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                             <td><span className={`orderbook-status ${getStatusClass(o.status)}`} style={{fontSize:'10px'}}>{o.status}</span></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  {overviewData.orders.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.orders.length - 5} more orders</div>}
+                  {overviewData.orders.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:__stc('#6b7280'),marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:`1px solid ${__sbg('#f3f4f6')}`}}>+{overviewData.orders.length - 5} more orders</div>}
                 </div>
               )}
 
@@ -1283,8 +1322,8 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
                     <h4 className="ld-card-title" style={{margin:0}}>🧾 Invoices ({overviewData.invoices.length})</h4>
                     <div style={{display:'flex',gap:'8px',fontSize:'12px'}}>
-                      <span style={{background:'#d1fae5',color:'#065f46',padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.paidInvoices} Paid</span>
-                      <span style={{background:'#fee2e2',color:'#991b1b',padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.pendingInvoices} Pending</span>
+                      <span style={{background:__sbg('#d1fae5'),color:__stc('#065f46'),padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.paidInvoices} Paid</span>
+                      <span style={{background:__sbg('#fee2e2'),color:__stc('#991b1b'),padding:'2px 8px',borderRadius:'9999px'}}>{overviewData.stats.pendingInvoices} Pending</span>
                     </div>
                   </div>
                   <div className="orderbook-table-wrapper">
@@ -1303,11 +1342,11 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                           return (
                             <tr key={inv.id}>
                               <td>{i+1}</td>
-                              <td><span style={{color:'#3b82f6',fontWeight:500}}>{inv.invoiceNo||inv.id}</span></td>
+                              <td><span style={{color:__stc('#3b82f6'),fontWeight:500}}>{inv.invoiceNo||inv.id}</span></td>
                               <td>{inv.invoiceDate ? new Date(inv.invoiceDate).toLocaleDateString('en-IN') : '-'}</td>
                               <td style={{fontWeight:600}}>₹{total.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                              <td style={{color:'#16a34a'}}>₹{paid.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
-                              <td style={{color: due > 0 ? '#dc2626' : '#16a34a',fontWeight:600}}>₹{due.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                              <td style={{color:__stc('#16a34a')}}>₹{paid.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                              <td style={{color: due > 0 ? __stc('#dc2626') : __stc('#16a34a'),fontWeight:600}}>₹{due.toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                               <td><span style={{background:statusBg,color:statusColor,padding:'2px 8px',borderRadius:'9999px',fontSize:'10px',fontWeight:600}}>{displayStatus}</span></td>
                             </tr>
                           );
@@ -1315,7 +1354,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                       </tbody>
                     </table>
                   </div>
-                  {overviewData.invoices.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.invoices.length - 5} more invoices</div>}
+                  {overviewData.invoices.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:__stc('#6b7280'),marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:`1px solid ${__sbg('#f3f4f6')}`}}>+{overviewData.invoices.length - 5} more invoices</div>}
                 </div>
               )}
 
@@ -1324,7 +1363,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                 <div className="orderbook-card">
                   <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'0.75rem'}}>
                     <h4 className="ld-card-title" style={{margin:0}}>💰 Receipts / Payments Received ({overviewData.receipts.length})</h4>
-                    <span style={{fontSize:'14px',fontWeight:'700',color:'#16a34a'}}>Total: ₹{(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
+                    <span style={{fontSize:'14px',fontWeight:'700',color:__stc('#16a34a')}}>Total: ₹{(overviewData.stats.totalReceived||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</span>
                   </div>
                   <div className="orderbook-table-wrapper">
                     <table className="orderbook-table" style={{fontSize:'12px'}}>
@@ -1335,18 +1374,18 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                         {overviewData.receipts.slice(0,5).map((r,i) => (
                           <tr key={r.id}>
                             <td>{i+1}</td>
-                            <td><span style={{color:'#3b82f6',fontWeight:500}}>{r.receiptNo||r.id}</span></td>
+                            <td><span style={{color:__stc('#3b82f6'),fontWeight:500}}>{r.receiptNo||r.id}</span></td>
                             <td>{r.receiptDate ? new Date(r.receiptDate).toLocaleDateString('en-IN') : '-'}</td>
-                            <td style={{color:'#16a34a',fontWeight:700}}>₹{parseFloat(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
+                            <td style={{color:__stc('#16a34a'),fontWeight:700}}>₹{parseFloat(r.amount||0).toLocaleString('en-IN',{maximumFractionDigits:0})}</td>
                             <td>{r.paymentMode||r.method||'-'}</td>
                             <td>{r.receiptType||'-'}</td>
-                            <td style={{color:'#6b7280'}}>{r.transactionReference||r.referenceNo||'-'}</td>
+                            <td style={{color:__stc('#6b7280')}}>{r.transactionReference||r.referenceNo||'-'}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                  {overviewData.receipts.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:'#6b7280',marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:'1px solid #f3f4f6'}}>+{overviewData.receipts.length - 5} more receipts</div>}
+                  {overviewData.receipts.length > 5 && <div style={{textAlign:'center',fontSize:'12px',color:__stc('#6b7280'),marginTop:'0.5rem',paddingTop:'0.5rem',borderTop:`1px solid ${__sbg('#f3f4f6')}`}}>+{overviewData.receipts.length - 5} more receipts</div>}
                 </div>
               )}
 
@@ -1383,7 +1422,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                   <div><strong>PO Date:</strong> {fmtDate(selectedOrder.poDate)}</div>
                   <div><strong>Advance Amount:</strong> ₹{parseFloat(selectedOrder.advanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
                   <div><strong>Total Amount:</strong> ₹{parseFloat(selectedOrder.totalAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</div>
-                  <div><strong>Balance:</strong> <span style={{color:'#dc2626'}}>₹{parseFloat(selectedOrder.balanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
+                  <div><strong>Balance:</strong> <span style={{color:__stc('#dc2626')}}>₹{parseFloat(selectedOrder.balanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span></div>
                 </div>
                 {selectedOrder.orderDescription && <div className="orderbook-description"><strong>Description:</strong><p>{selectedOrder.orderDescription}</p></div>}
               </div>
@@ -1456,7 +1495,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                           <span>·</span>
                           <span>Advance: ₹{parseFloat(order.advanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
                           <span>·</span>
-                          <span style={{color:'#dc2626'}}>Balance: ₹{parseFloat(order.balanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
+                          <span style={{color:__stc('#dc2626')}}>Balance: ₹{parseFloat(order.balanceAmount||0).toLocaleString('en-IN',{minimumFractionDigits:2})}</span>
                           <span>·</span>
                           <span>{fmtDate(order.orderDate)}</span>
                         </div>
@@ -1473,7 +1512,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                           <button className="ld-pact-btn ld-pact-edit" onClick={() => { setEditingOrder(order); setShowOrderForm(true); }} title="Edit">
                             <FaEdit size={13}/> Edit
                           </button>
-                          <button className="ld-pact-btn" style={{color:'#dc2626'}} onClick={() => { setDeleteOrderId(order.id); setShowDeleteOrderConfirm(true); }} title="Delete">
+                          <button className="ld-pact-btn" style={{color:__stc('#dc2626')}} onClick={() => { setDeleteOrderId(order.id); setShowDeleteOrderConfirm(true); }} title="Delete">
                             <RiDeleteBin6Line size={13}/> Del
                           </button>
                         </div>
@@ -1515,8 +1554,8 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
             {/* Toast */}
             {followupToast && (
               <div style={{ padding: '8px 14px', borderRadius: 6, marginBottom: 10, fontSize: 13, fontWeight: 600,
-                background: followupToast.type === 'error' ? '#FEE2E2' : '#D1FAE5',
-                color: followupToast.type === 'error' ? '#991B1B' : '#065F46' }}>
+                background: followupToast.type === 'error' ? __sbg('#FEE2E2') : __sbg('#D1FAE5'),
+                color: followupToast.type === 'error' ? __stc('#991B1B') : __stc('#065F46') }}>
                 {followupToast.msg}
               </div>
             )}
@@ -1525,14 +1564,14 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h4 className="ld-card-title" style={{ margin: 0 }}>Follow-up Log</h4>
-                <span style={{ background: '#e5e7eb', color: '#374151', borderRadius: 20, padding: '1px 10px', fontSize: 12, fontWeight: 700 }}>{followups.length}</span>
+                <span style={{ background: __sbg('#e5e7eb'), color: __stc('#374151'), borderRadius: 20, padding: '1px 10px', fontSize: 12, fontWeight: 700 }}>{followups.length}</span>
                 {fuCounts.Overdue > 0 && (
-                  <span style={{ background: '#FEE2E2', color: '#991B1B', borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>⚠ {fuCounts.Overdue} overdue</span>
+                  <span style={{ background: __sbg('#FEE2E2'), color: __stc('#991B1B'), borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 700 }}>⚠ {fuCounts.Overdue} overdue</span>
                 )}
               </div>
               {permissions?.CREATE !== false && (
                 <button onClick={() => { setShowAddFollowup(true); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: __sbg('#059669'), color: __stc('#fff'), border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4"/>
                   </svg>
@@ -1545,11 +1584,11 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               {['All','Upcoming','Overdue','Completed','Cancelled'].map(f => (
                 <button key={f} onClick={() => setFollowupFilter(f)}
-                  style={{ padding: '4px 12px', borderRadius: 20, border: `1.5px solid ${followupFilter === f ? '#059669' : '#d1d5db'}`,
-                    background: followupFilter === f ? '#ecfdf5' : '#fff', color: followupFilter === f ? '#065F46' : '#374151',
+                  style={{ padding: '4px 12px', borderRadius: 20, border: `1.5px solid ${followupFilter === f ? __sbg('#059669') : __sbg('#d1d5db')}`,
+                    background: followupFilter === f ? __sbg('#ecfdf5') : __sbg('#fff'), color: followupFilter === f ? __stc('#065F46') : __stc('#374151'),
                     fontSize: 12, fontWeight: followupFilter === f ? 700 : 400, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                   {f}
-                  {fuCounts[f] > 0 && <span style={{ background: followupFilter === f ? '#059669' : '#e5e7eb', color: followupFilter === f ? '#fff' : '#374151', borderRadius: 20, padding: '0 6px', fontSize: 11 }}>{fuCounts[f]}</span>}
+                  {fuCounts[f] > 0 && <span style={{ background: followupFilter === f ? __sbg('#059669') : __sbg('#e5e7eb'), color: followupFilter === f ? __stc('#fff') : __stc('#374151'), borderRadius: 20, padding: '0 6px', fontSize: 11 }}>{fuCounts[f]}</span>}
                 </button>
               ))}
             </div>
@@ -1608,7 +1647,7 @@ const CustomerDetailPage = ({ customer, currentUser, onBack, onEdit, permissions
                     'No follow-ups recorded yet.'}</p>
                 {followupFilter === 'All' && permissions?.CREATE !== false && (
                   <button onClick={() => setShowAddFollowup(true)}
-                    style={{ marginTop: 10, padding: '7px 16px', background: '#059669', color: '#fff', border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    style={{ marginTop: 10, padding: '7px 16px', background: __sbg('#059669'), color: __stc('#fff'), border: 'none', borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
                     Schedule First Follow-up
                   </button>
                 )}
@@ -1744,7 +1783,7 @@ const ClientsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) =>
           </span>
         )}
         <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          style={{ marginLeft:'auto', color:'#94a3b8', flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
+          style={{ marginLeft:'auto', color:__stc('#94a3b8'), flexShrink:0, transform:show?'rotate(180deg)':'none', transition:'transform .2s' }}>
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
         </svg>
       </button>
@@ -1831,6 +1870,7 @@ const ClientsDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) =>
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 const CustomerDatabase = () => {
+  useThemeVersion();
   // const isFirstRender = useRef(true);
   const { user, pagePermissions } = useAuth();
   const { groupName, subGroupName, updateFilters } = useGroupProjectFilters();
@@ -2199,23 +2239,23 @@ useEffect(() => {
       case 'contact': return (
         <div style={{ display:'flex', flexDirection:'column', gap:3, minWidth:0 }}>
           {customer.email
-            ? <span style={{ fontSize:12, color:'#1e293b', display:'flex', alignItems:'center', gap:4 }}>
-                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:'#6366f1' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+            ? <span style={{ fontSize:12, color:__stc('#1e293b'), display:'flex', alignItems:'center', gap:4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:__stc('#6366f1') }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
                 <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:160 }}>{customer.email}</span>
               </span>
             : null}
           {customer.phone
-            ? <span style={{ fontSize:12, color:'#374151', display:'flex', alignItems:'center', gap:4 }}>
-                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:'#10b981' }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
+            ? <span style={{ fontSize:12, color:__stc('#374151'), display:'flex', alignItems:'center', gap:4 }}>
+                <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ flexShrink:0, color:__stc('#10b981') }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/></svg>
                 {customer.phone}
               </span>
             : null}
-          {!customer.email && !customer.phone ? <span style={{ color:'#9ca3af' }}>N/A</span> : null}
+          {!customer.email && !customer.phone ? <span style={{ color:__stc('#9ca3af') }}>N/A</span> : null}
         </div>
       );
       case 'createdAt': return customer.createdAt
         ? (() => { const d = new Date(customer.createdAt); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; })()
-        : <span style={{ color:'#9ca3af' }}>—</span>;
+        : <span style={{ color:__stc('#9ca3af') }}>—</span>;
       case 'city':    return customer.city || '-';
       case 'status':  return <span className={`cust-badge badge-${getStatusColor(customer.status)}`}>{customer.status}</span>;
       case 'actions': return (
@@ -2229,7 +2269,7 @@ useEffect(() => {
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
           </button>
           {/* canCreate && (
-            <button className="cust-action-btn" onClick={e => openQuickOb(e, customer)} title="Create Order Book" style={{color:'#8b5cf6'}}>
+            <button className="cust-action-btn" onClick={e => openQuickOb(e, customer)} title="Create Order Book" style={{color:__stc('#8b5cf6')}}>
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
             </button>
           ) */}
@@ -2363,16 +2403,16 @@ useEffect(() => {
       {/* KPI Cards */}
       {/* <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'1rem', marginBottom:'0.5rem' }}>
         {[
-          {icon:'👥', bg:'#eff6ff', val:kpiData.totalCustomers,    label:'Total Customers'},
-          {icon:'✨', bg:'#fef3c7', val:kpiData.newThisMonth,      label:'New This Month'},
-          {icon:'📊', bg:'#dbeafe', val:kpiData.activeCustomers,   label:'Active Customers'},
-          {icon:'📞', bg:'#fce7f3', val:kpiData.pendingFollowups,  label:'Follow-Ups Pending'},
+          {icon:'👥', bg:__sbg('#eff6ff'), val:kpiData.totalCustomers,    label:'Total Customers'},
+          {icon:'✨', bg:__sbg('#fef3c7'), val:kpiData.newThisMonth,      label:'New This Month'},
+          {icon:'📊', bg:__sbg('#dbeafe'), val:kpiData.activeCustomers,   label:'Active Customers'},
+          {icon:'📞', bg:__sbg('#fce7f3'), val:kpiData.pendingFollowups,  label:'Follow-Ups Pending'},
         ].map(({icon,bg,val,label}) => (
-          <div key={label} style={{ background:'#fff', padding:'1rem', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.1)', display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <div key={label} style={{ background:__sbg('#fff'), padding:'1rem', borderRadius:'8px', boxShadow:'0 1px 3px rgba(0,0,0,0.1)', display:'flex', alignItems:'center', gap:'0.75rem' }}>
             <div style={{ width:'40px', height:'40px', background:bg, borderRadius:'8px', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'1.25rem' }}>{icon}</div>
             <div>
               <div style={{ fontSize:'1.5rem', fontWeight:'bold', lineHeight:'1.2' }}>{val}</div>
-              <div style={{ color:'#666', fontSize:'0.75rem', marginTop:'0.125rem' }}>{label}</div>
+              <div style={{ color:__stc('#666'), fontSize:'0.75rem', marginTop:'0.125rem' }}>{label}</div>
             </div>
           </div>
         ))}
@@ -2385,13 +2425,13 @@ useEffect(() => {
           <ColumnVisibilityDropdown columns={ALL_COLUMNS} visibleColumns={visibleColumns} onToggle={handleToggleColumn} onReset={handleResetColumns}/>
         )}
         {/* Table / Grid pill toggle */}
-        <div style={{ display:'flex', gap:'2px', background:'#f3f4f6', borderRadius:'8px', padding:'3px' }}>
+        <div style={{ display:'flex', gap:'2px', background:__sbg('#f3f4f6'), borderRadius:'8px', padding:'3px' }}>
           <button
             onClick={() => setViewMode('table')}
             title="Table View"
             style={{ display:'flex', alignItems:'center', gap:'5px', padding:'5px 12px', borderRadius:'6px', border:'none', cursor:'pointer', fontSize:'13px', fontWeight:500,
-              background: viewMode==='table' ? '#fff' : 'transparent',
-              color:       viewMode==='table' ? '#111827' : '#6b7280',
+              background: viewMode==='table' ? __sbg('#fff') : __sbg('transparent'),
+              color:       viewMode==='table' ? __stc('#111827') : __stc('#6b7280'),
               boxShadow:   viewMode==='table' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none'
             }}
           >
@@ -2402,8 +2442,8 @@ useEffect(() => {
             onClick={() => setViewMode('grid')}
             title="Grid View"
             style={{ display:'flex', alignItems:'center', gap:'5px', padding:'5px 12px', borderRadius:'6px', border:'none', cursor:'pointer', fontSize:'13px', fontWeight:500,
-              background: viewMode==='grid' ? '#fff' : 'transparent',
-              color:       viewMode==='grid' ? '#111827' : '#6b7280',
+              background: viewMode==='grid' ? __sbg('#fff') : __sbg('transparent'),
+              color:       viewMode==='grid' ? __stc('#111827') : __stc('#6b7280'),
               boxShadow:   viewMode==='grid' ? '0 1px 3px rgba(0,0,0,0.12)' : 'none'
             }}
           >
@@ -2428,12 +2468,12 @@ useEffect(() => {
               </thead>
               <tbody>
                 {currentItems.length === 0 ? (
-                  <tr><td colSpan={orderedVisibleColumns.length} style={{textAlign:'center',padding:'30px',color:'#718096'}}>{loading ? 'Loading...' : 'No customers found'}</td></tr>
+                  <tr><td colSpan={orderedVisibleColumns.length} style={{textAlign:'center',padding:'30px',color:__stc('#718096')}}>{loading ? 'Loading...' : 'No customers found'}</td></tr>
                 ) : currentItems.map((customer, rowIndex) => (
                   <tr key={customer.id} onClick={() => canView && handleViewCustomer(customer)} style={{cursor: canView ? 'pointer' : 'default'}} className="cust-clickable-row">
                     {orderedVisibleColumns.map(col => (
                       <td key={col.key} style={{textAlign:'center'}} onClick={col.key==='actions' ? e => e.stopPropagation() : undefined}>
-                        {col.key === 'sno' ? <span style={{fontWeight:600,color:'#6b7280',fontSize:13}}>{(currentPage - 1) * rowsPerPage + rowIndex + 1}</span> : renderCell(customer, col.key)}
+                        {col.key === 'sno' ? <span style={{fontWeight:600,color:__stc('#6b7280'),fontSize:13}}>{(currentPage - 1) * rowsPerPage + rowIndex + 1}</span> : renderCell(customer, col.key)}
                       </td>
                     ))}
                   </tr>
@@ -2463,7 +2503,7 @@ useEffect(() => {
                   </div>
                   <div className="cust-card-body">
                     <h3 className="cust-card-title">{customer.name}</h3>
-                    {customer.companyName && <div style={{fontSize:12,color:'#6b7280',marginBottom:6}}>{customer.companyName}</div>}
+                    {customer.companyName && <div style={{fontSize:12,color:__stc('#6b7280'),marginBottom:6}}>{customer.companyName}</div>}
                     <div className="cust-card-info">
                       {customer.email && <div className="cust-card-info-item">
                         <svg className="cust-card-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
@@ -2481,13 +2521,13 @@ useEffect(() => {
                   </div>
                 </div>
                 <div className="cust-card-footer" onClick={e => e.stopPropagation()}>
-                  <div className="cust-card-source" style={{fontSize:12,color:'#9ca3af'}}>
+                  <div className="cust-card-source" style={{fontSize:12,color:__stc('#9ca3af')}}>
                     {customer.gstNumber ? `GST: ${customer.gstNumber}` : 'No GST'}
                   </div>
                   <div className="cust-card-actions">
                     {canView && <button className="cust-card-action-btn cust-action-view" onClick={() => handleViewCustomer(customer)} title="View Customer"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg></button>}
                     {canEdit && <button className="cust-card-action-btn cust-action-edit" onClick={() => handleEdit(customer)} title="Edit Customer"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg></button>}
-                    {/* canCreate && <button className="cust-card-action-btn" onClick={e => openQuickOb(e, customer)} title="Create Order Book" style={{color:'#8b5cf6'}}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button> */}
+                    {/* canCreate && <button className="cust-card-action-btn" onClick={e => openQuickOb(e, customer)} title="Create Order Book" style={{color:__stc('#8b5cf6')}}><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg></button> */}
                     {canDelete && <button className="cust-card-action-btn cust-action-delete" onClick={() => handleDeleteClick(customer.id, customer.name)} title="Delete Customer"><svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>}
                   </div>
                 </div>
@@ -2526,7 +2566,7 @@ useEffect(() => {
             <div className="cust-modal-header">
               <div>
                 <h2 style={{margin:0}}>New Order Book</h2>
-                <div style={{fontSize:12,color:'#6b7280',marginTop:2}}>for {quickObCustomer.name}</div>
+                <div style={{fontSize:12,color:__stc('#6b7280'),marginTop:2}}>for {quickObCustomer.name}</div>
               </div>
               <button className="cust-modal-close" onClick={closeQuickOb}>
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
@@ -2534,39 +2574,39 @@ useEffect(() => {
             </div>
             <div className="cust-modal-body" style={{padding:'1.25rem 1.5rem',display:'grid',gap:'0.875rem'}}>
               <div>
-                <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Order Title <span style={{color:'red'}}>*</span></label>
+                <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Order Title <span style={{color:'red'}}>*</span></label>
                 <input className="cust-form-input" placeholder="e.g. Solar Panel Supply — Phase 1" value={quickObForm.title} onChange={e => setQuickObForm(f=>({...f,title:e.target.value}))}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>PO Number</label>
+                  <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>PO Number</label>
                   <input className="cust-form-input" placeholder="PO-2024-001" value={quickObForm.poNumber} onChange={e => setQuickObForm(f=>({...f,poNumber:e.target.value}))}/>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Status</label>
+                  <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Status</label>
                   <FilterSelect value={quickObForm.status} options={['Draft','Confirmed','In Production','Ready for Dispatch','Dispatched','Completed','Cancelled'].map(s=>({value:s,label:s}))} placeholder="Status" onChange={v=>setQuickObForm(f=>({...f,status:v}))} />
                 </div>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'0.75rem'}}>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>PO Date</label>
+                  <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>PO Date</label>
                   <input type="date" className="cust-form-input" value={quickObForm.poDate} onChange={e => setQuickObForm(f=>({...f,poDate:e.target.value}))}/>
                 </div>
                 <div>
-                  <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Delivery Date</label>
+                  <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Delivery Date</label>
                   <input type="date" className="cust-form-input" value={quickObForm.deliveryDate} onChange={e => setQuickObForm(f=>({...f,deliveryDate:e.target.value}))}/>
                 </div>
               </div>
               <div>
-                <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Total Value (₹)</label>
+                <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Total Value (₹)</label>
                 <input type="text" className="cust-form-input" placeholder="e.g. 5,00,000" value={toINR(quickObForm.totalValue)} onChange={e => setQuickObForm(f=>({...f,totalValue:e.target.value.replace(/[^0-9]/g,'')}))}/>
               </div>
               <div>
-                <label style={{fontSize:12,fontWeight:600,color:'#374151',display:'block',marginBottom:4}}>Notes</label>
+                <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Notes</label>
                 <textarea className="cust-form-input" rows={2} placeholder="Any additional notes..." value={quickObForm.notes} onChange={e => setQuickObForm(f=>({...f,notes:e.target.value}))} style={{resize:'vertical'}}/>
               </div>
             </div>
-            <div style={{padding:'1rem 1.5rem',borderTop:'1px solid #e5e7eb',display:'flex',gap:'0.75rem',justifyContent:'flex-end'}}>
+            <div style={{padding:'1rem 1.5rem',borderTop:`1px solid ${__sbg('#e5e7eb')}`,display:'flex',gap:'0.75rem',justifyContent:'flex-end'}}>
               <button className="cust-btn cust-btn-secondary" onClick={closeQuickOb}>Cancel</button>
               <button className="cust-btn cust-btn-primary" onClick={submitQuickOb} disabled={quickObLoading}>
                 {quickObLoading ? 'Creating...' : (
@@ -2657,7 +2697,7 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
         <div className="cust-form-group">
           <label>Phone *</label>
           <input type="tel" required value={formData.phone} onChange={e => handlePhoneChange(e.target.value, 'phone')} placeholder="10 digit mobile number" maxLength="10"/>
-          {phoneError && <small style={{color:'#dc2626'}}>{phoneError}</small>}
+          {phoneError && <small style={{color:__stc('#dc2626')}}>{phoneError}</small>}
         </div>
         <div className="cust-form-group">
           <label>Group</label>
@@ -2704,7 +2744,7 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
           <input type="text" value={formData.pincode}
             onChange={e => handlePincodeChange(e.target.value)}
             maxLength="6" placeholder="6-digit PINCODE — auto fills State & District"/>
-          {pincodeError && <span style={{fontSize:11, color:'#ef4444', marginTop:2, display:'block'}}>{pincodeError}</span>}
+          {pincodeError && <span style={{fontSize:11, color:__stc('#ef4444'), marginTop:2, display:'block'}}>{pincodeError}</span>}
         </div>
         <div className="cust-form-group">
           <label>State</label>
@@ -2736,6 +2776,7 @@ const CustomerFormBody = ({ formData, setFormData, phoneError, handlePhoneChange
 
 // ─── Customer Pagination Widget ──────────────────────────────────────────────
 const CustPagination = ({ startRecord, endRecord, totalRecords, currentPage, totalPages, rowsPerPage, onPageChange, onRowsPerPageChange }) => {
+  useThemeVersion();
   const getPageNumbers = () => {
     const pages = [];
     const delta = 2;
@@ -2750,13 +2791,13 @@ const CustPagination = ({ startRecord, endRecord, totalRecords, currentPage, tot
     <div className="leads-enquiries-pagination">
       <div className="leads-enquiries-pagination-info">
         {/* <span style={{whiteSpace:'nowrap'}}>Rows per page:</span> */}
-        <span style={{whiteSpace:'nowrap',fontSize:12,color:'#64748b'}}>Rows per page:</span>
+        <span style={{whiteSpace:'nowrap',fontSize:12,color:__stc('#64748b')}}>Rows per page:</span>
         <FilterSelect value={String(rowsPerPage)} onChange={v => onRowsPerPageChange(Number(v))} options={[{value:'10',label:'10 rows'},{value:'20',label:'20 rows'},{value:'50',label:'50 rows'},{value:'100',label:'100 rows'}]} placeholder="Rows" />
-        <span style={{whiteSpace:'nowrap',color:'#64748b'}}>
+        <span style={{whiteSpace:'nowrap',color:__stc('#64748b')}}>
           {totalRecords === 0 ? 'No records' : `${startRecord}–${endRecord} of ${totalRecords} customers`}
         </span>
-        <span style={{fontSize:12,color:'#94a3b8',whiteSpace:'nowrap'}}>
-          Page <strong style={{color:'#0f172a'}}>{currentPage}</strong> of <strong style={{color:'#0f172a'}}>{tp}</strong>
+        <span style={{fontSize:12,color:__stc('#94a3b8'),whiteSpace:'nowrap'}}>
+          Page <strong style={{color:__stc('#0f172a')}}>{currentPage}</strong> of <strong style={{color:__stc('#0f172a')}}>{tp}</strong>
         </span>
       </div>
       <div className="leads-enquiries-pagination-buttons">

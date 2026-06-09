@@ -3,6 +3,21 @@ import ReactDOM from 'react-dom';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/ProjectAccessPage.css';
 
+/* Dark-mode helpers: mute the per-user accent so cards aren't garish in dark */
+const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
+const __paStripe = (hue) => __isDarkTheme() ? `hsl(${hue},32%,42%)` : `hsl(${hue},55%,55%)`;
+const __paAvatar = (hue) => __isDarkTheme() ? `hsl(${hue},38%,48%)` : `hsl(${hue},55%,62%)`;
+const __paDivider = () => __isDarkTheme() ? '#2b3445' : '#f1f5f9';
+const useThemeVersion = () => {
+  const [v, setV] = React.useState(0);
+  React.useEffect(() => {
+    const obs = new MutationObserver(() => setV(x => x + 1));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    return () => obs.disconnect();
+  }, []);
+  return v;
+};
+
 const API = process.env.REACT_APP_API_URL;
 
 const STATUS_META = {
@@ -622,6 +637,7 @@ function ProjectCard({ project, users, authHeaders, toast, isAdmin }) {
 
 // ─── User Row (Users tab) ─────────────────────────────────────────────────────
 function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
+  useThemeVersion();
   const [grants,       setGrants]       = useState([]);
   const [fetched,      setFetched]      = useState(false);
   const [loading,      setLoading]      = useState(false);
@@ -734,11 +750,11 @@ function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
 
       <div className="pa-uv-row" onClick={isAdmin ? openModal : undefined} style={{ cursor: isAdmin ? "pointer" : "default" }}>
         {/* Top colour stripe — matches project card style */}
-        <div style={{ height: 5, background: `hsl(${hue},55%,55%)`, margin: '-16px -18px 4px', borderRadius: '12px 12px 0 0' }} />
+        <div style={{ height: 5, background: __paStripe(hue), margin: '-16px -18px 4px', borderRadius: '12px 12px 0 0' }} />
 
         {/* User header */}
         <div className="pa-uv-user">
-          <div className="pa-uv-avatar" style={{ background: `hsl(${hue},55%,62%)` }}>{avatar}</div>
+          <div className="pa-uv-avatar" style={{ background: __paAvatar(hue) }}>{avatar}</div>
           <div className="pa-uv-info">
             <div className="pa-uv-name">{u.full_name}</div>
             <div className="pa-uv-meta">
@@ -754,7 +770,7 @@ function UserAccessRow({ u, allProjects, authHeaders, toast, isAdmin }) {
         </div>
 
         {/* Divider */}
-        <div style={{ height: 1, background: '#f1f5f9', margin: '0 -2px' }} />
+        <div style={{ height: 1, background: __paDivider(), margin: '0 -2px' }} />
 
         {/* Project chips */}
         <div className="pa-uv-access">
