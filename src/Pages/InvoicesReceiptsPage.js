@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { FileText, IndianRupee, AlertCircle } from 'lucide-react';
 import InvoicesManagementPage from './InvoicesManagementPage';
 import ReceiptsManagementPage from './ReceiptsManagementPage';
-import OutstandingsTab from './OutstandingsTab';
+import OutstandingsTab from './InvoicesOutstandingsTab';
 import '../pages-css/InvoicesReceiptsPage.css';
 import { useAuth } from '../hooks/useAuth';
 
