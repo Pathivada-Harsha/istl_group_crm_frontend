@@ -48,6 +48,7 @@ import './theme.css';
 import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
+import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
 
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
@@ -63,7 +64,7 @@ function AppWrapper() {
       '/dashboard', '/sales', '/procurement', '/documents',
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense', '/taskmanagement','/projectaccess','/inventory-management'
+      '/project-cost-expense', '/taskmanagement','/projectaccess','/inventory-management','/notifications'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -232,6 +233,10 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><ProjectAccessManager /></ProtectedRoute>
           } />
 
+          <Route path="/notifications" element={
+            <ProtectedRoute><NotificationsPage /></ProtectedRoute>
+          } />
+
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -246,7 +251,9 @@ export default function App() {
     <ThemeProvider>
       <AuthProvider>
         <Router>
-          <AppWrapper />
+          <NotificationProvider>
+            <AppWrapper />
+          </NotificationProvider>
         </Router>
       </AuthProvider>
     </ThemeProvider>

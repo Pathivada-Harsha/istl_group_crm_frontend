@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import '../components_css/Navbar.css';
 import logo from "../images/logo.png";
 import ThemeToggle from './ThemeToggle';
+import { NotificationBell } from './Notifications/NotificationModule';
 
 function Navbar({ onMenuClick }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -102,6 +103,9 @@ function Navbar({ onMenuClick }) {
 
           {/* Theme toggle (light / dark) */}
           <ThemeToggle />
+
+          {/* Live notifications — bell, unread badge, dropdown, realtime */}
+          <NotificationBell />
 
           {/* Notifications */}
           {/* <div ref={notifRef} style={{ position: "relative" }}>
