@@ -821,8 +821,8 @@ const ProjectCostExpenseManagement = () => {
       if (filters.expenseType  !== 'all') params.append('expenseType',  filters.expenseType);
       if (filters.dateFrom) params.append('dateFrom', filters.dateFrom);
       if (filters.dateTo) params.append('dateTo', filters.dateTo);
-      // Super admin / admin / accounts team see ALL data
-      if (!isFullAccess && user?.id) params.append('createdBy', user.id);
+      // Access scoping is handled server-side via X-User-Role/X-User-Id headers (project_access table).
+      // Do NOT send createdBy — that would override the project-grant scoping in the backend.
 
       const response = await fetch(`${API_BASE_URL}/project-expenses?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
@@ -853,8 +853,8 @@ const ProjectCostExpenseManagement = () => {
       if (filters.dateFrom)              params.append('dateFrom',    filters.dateFrom);
       if (filters.dateTo)                params.append('dateTo',      filters.dateTo);
       if (filters.search)                params.append('search',      filters.search);
-      // Non-full-access users: scope stats to own records only
-      if (!isFullAccess && user?.id) params.append('createdBy', user.id);
+      // Non-full-access scoping is now handled server-side via X-User-Role/X-User-Id headers.
+      // No need to send createdBy — the backend applies the same visibility rules as getExpenses.
       const response = await fetch(`${API_BASE_URL}/project-expenses/stats?${params}`, {
         headers: getAuthHeaders(), credentials: 'include',
       });

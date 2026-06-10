@@ -7,6 +7,15 @@ import "../pages-css/Login.css";
 import heroDesktop from "../images/logo.png";
 import heroMobile from "../images/logo.png";
 
+// Returns '/project-over-view' if user has PROJECT_DASHBOARD access, else '/dashboard'
+function getLandingPath(menuPermissions) {
+  if (Array.isArray(menuPermissions) && menuPermissions.includes('PROJECT_DASHBOARD')) {
+    return '/project-over-view';
+  }
+  return '/dashboard';
+}
+
+
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const FP_OTP_KEY = "fp_otp";
 const FP_IDENTIFIER_KEY = "fp_identifier";
@@ -15,7 +24,7 @@ const RESEND_SECONDS = 30;
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, loading } = useAuth();
+  const { login, isAuthenticated, loading, menuPermissions } = useAuth();
 
   // ── Login form state ──────────────────────────────────────────────────────
   const [username, setUsername] = useState("");
@@ -54,9 +63,9 @@ export default function Login() {
   // ── Redirect if already authenticated ────────────────────────────────────
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      navigate("/dashboard", { replace: true });
+      navigate(getLandingPath(menuPermissions), { replace: true });
     }
-  }, [isAuthenticated, loading, navigate, location]);
+  }, [isAuthenticated, loading, navigate, location, menuPermissions]);
 
   // ── Resend countdown timer ────────────────────────────────────────────────
   useEffect(() => {
@@ -273,7 +282,7 @@ export default function Login() {
             return;
           }
           login(data);
-          navigate("/dashboard", { replace: true });
+          navigate(getLandingPath(data.menuPermissions), { replace: true });
         } else {
           setError(data?.message || data?.error || "Login failed. Please try again.");
         }
