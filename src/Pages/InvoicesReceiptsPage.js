@@ -10,6 +10,7 @@ const InvoicesReceiptsPage = () => {
   const { menuPermissions } = useAuth();
 
   const hasReceiptsPermission = menuPermissions.includes('RECEIPTS');
+  const hasOutstandingPermission = menuPermissions.includes('INVOICES_OUTSTANDING');
 
   const [activeTab, setActiveTab] = useState(
     () => sessionStorage.getItem('invoicesReceiptsActiveTab') || 'invoices'
@@ -23,7 +24,9 @@ const InvoicesReceiptsPage = () => {
     sessionStorage.setItem('invoicesReceiptsActiveTab', tab);
   };
 
-  const resolvedTab = activeTab === 'receipts' && !hasReceiptsPermission ? 'invoices' : activeTab;
+  const resolvedTab = activeTab === 'receipts' && !hasReceiptsPermission ? 'invoices'
+                    : activeTab === 'outstandings' && !hasOutstandingPermission ? 'invoices'
+                    : activeTab;
 
   useEffect(() => {
     const bar = tabsRef.current;
@@ -57,13 +60,15 @@ const InvoicesReceiptsPage = () => {
           </button>
         )}
 
-        <button
-          className={`tab-button ${resolvedTab === 'outstandings' ? 'active' : ''}`}
-          onClick={() => handleTabChange('outstandings')}
-        >
-          <AlertCircle size={20} />
-          <span>Outstandings</span>
-        </button>
+        {hasOutstandingPermission && (
+          <button
+            className={`tab-button ${resolvedTab === 'outstandings' ? 'active' : ''}`}
+            onClick={() => handleTabChange('outstandings')}
+          >
+            <AlertCircle size={20} />
+            <span>Outstandings</span>
+          </button>
+        )}
 
         {/* Sliding indicator */}
         <span className="tab-indicator" style={{ left: indicator.left, width: indicator.width }} />

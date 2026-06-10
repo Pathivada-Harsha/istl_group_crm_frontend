@@ -164,6 +164,7 @@ export default function NewRolePermissions() {
 
   // Delete confirm modal state
   const [deleteModal, setDeleteModal] = useState({ open: false, menuId: null, menuName: '' });
+  const [roleDeleteModal, setRoleDeleteModal] = useState({ open: false, roleId: null, roleName: '' });
 
   // ── Pagination state for Permission & Menu Item tables ────────────────────
   const [permPage, setPermPage] = useState(0);
@@ -317,6 +318,28 @@ export default function NewRolePermissions() {
       if (!res.ok) { addToast(msg || "Failed", "error"); return; }
       addToast(msg || "Role created", "success");
       setRoleName(""); setRoleDesc(""); loadData();
+    } catch { addToast("Network error", "error"); }
+  };
+
+  const handleDeleteRole = (roleId, roleName) =>
+    setRoleDeleteModal({ open: true, roleId, roleName });
+
+  const confirmDeleteRole = async () => {
+    const { roleId, roleName: rName } = roleDeleteModal;
+    setRoleDeleteModal({ open: false, roleId: null, roleName: '' });
+    try {
+      const res = await fetch(`${API}/roles/deleteRole/${roleId}`, {
+        method: "DELETE", credentials: "include",
+      });
+      const ct = res.headers.get("content-type");
+      const msg = ct?.includes("json") ? (await res.json()).message : await res.text();
+      if (!res.ok) { addToast(msg || "Failed to delete", "error"); return; }
+      addToast(msg || `Role "${rName}" deleted`, "success");
+      // Clear selection if the deleted role was selected
+      if (String(selectedRoleId) === String(roleId)) {
+        setSelectedRoleId(""); setSelectedPermIds([]); setMenuPerms([]);
+      }
+      loadData();
     } catch { addToast("Network error", "error"); }
   };
 
@@ -765,6 +788,16 @@ export default function NewRolePermissions() {
 
       <ToastContainer toasts={toasts} removeToast={removeToast} />
 
+      {/* ── Role Delete Confirm Modal ── */}
+      <ConfirmModal
+        isOpen={roleDeleteModal.open}
+        title="Delete Role"
+        message={`Delete role "${roleDeleteModal.roleName}"?`}
+        subMessage="All page permissions and menu access assigned to this role will also be removed."
+        onConfirm={confirmDeleteRole}
+        onCancel={() => setRoleDeleteModal({ open: false, roleId: null, roleName: '' })}
+      />
+
       {/* ── Permission Delete Confirm Modal ── */}
       <ConfirmModal
         isOpen={permDeleteModal.open}
@@ -806,18 +839,51 @@ export default function NewRolePermissions() {
         </div>
 
         <div className="rp-sidebar__section-label">Roles</div>
+        {selectedRoleId && (
+          <button
+            onClick={() => { setSelectedRoleId(""); setSelectedPermIds([]); setMenuPerms([]); }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+              margin: '0 0 8px', padding: '6px 10px', borderRadius: 7,
+              border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#f8fafc'),
+              color: __stc('#64748b'), fontSize: 12, fontWeight: 500, cursor: 'pointer',
+            }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+            Clear selection
+          </button>
+        )}
         <div className="rp-role-list">
           {roles.map(r => (
-            <button key={r.id}
-              className={`rp-role-item ${String(selectedRoleId) === String(r.id) ? "rp-role-item--active" : ""}`}
-              onClick={() => handleRoleChange(r.id)}>
-              <div className="rp-role-item__avatar">{r.name.charAt(0).toUpperCase()}</div>
-              <div className="rp-role-item__info">
-                <span className="rp-role-item__name">{r.name}</span>
-                {r.description && <span className="rp-role-item__desc">{r.description}</span>}
-              </div>
-              {String(selectedRoleId) === String(r.id) && <div className="rp-role-item__dot" />}
-            </button>
+            <div key={r.id} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button
+                className={`rp-role-item ${String(selectedRoleId) === String(r.id) ? "rp-role-item--active" : ""}`}
+                style={{ flex: 1, paddingRight: 32 }}
+                onClick={() => handleRoleChange(r.id)}>
+                <div className="rp-role-item__avatar">{r.name.charAt(0).toUpperCase()}</div>
+                <div className="rp-role-item__info">
+                  <span className="rp-role-item__name">{r.name}</span>
+                  {r.description && <span className="rp-role-item__desc">{r.description}</span>}
+                </div>
+                {String(selectedRoleId) === String(r.id) && <div className="rp-role-item__dot" />}
+              </button>
+              <button
+                title={`Delete ${r.name}`}
+                onClick={e => { e.stopPropagation(); handleDeleteRole(r.id, r.name); }}
+                style={{
+                  position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                  width: 22, height: 22, borderRadius: 5, border: `1px solid ${__sbg('#fecdd3')}`,
+                  background: __sbg('#fff1f2'), color: __stc('#be123c'),
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                  <polyline points="3 6 5 6 21 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+                  <path d="M19 6l-1 14H6L5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
           ))}
           {roles.length === 0 && <div className="rp-role-empty">No roles yet</div>}
         </div>
