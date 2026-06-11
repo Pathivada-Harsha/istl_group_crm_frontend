@@ -4,17 +4,9 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { AiOutlineEye, AiOutlineEyeInvisible, AiOutlineUser, AiOutlineLock } from "react-icons/ai";
 import "../pages-css/Login.css";
+import ThemeToggle from "../components/ThemeToggle";
 import heroDesktop from "../images/logo.png";
 import heroMobile from "../images/logo.png";
-
-// Returns '/project-over-view' if user has PROJECT_DASHBOARD access, else '/dashboard'
-function getLandingPath(menuPermissions) {
-  if (Array.isArray(menuPermissions) && menuPermissions.includes('PROJECT_DASHBOARD')) {
-    return '/project-over-view';
-  }
-  return '/dashboard';
-}
-
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const FP_OTP_KEY = "fp_otp";
@@ -24,7 +16,7 @@ const RESEND_SECONDS = 30;
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, isAuthenticated, loading, menuPermissions } = useAuth();
+  const { login, isAuthenticated, loading } = useAuth();
 
   // ── Login form state ──────────────────────────────────────────────────────
   const [username, setUsername] = useState("");
@@ -47,13 +39,9 @@ export default function Login() {
   const [fpSuccess, setFpSuccess] = useState("");
   const [fpLoading, setFpLoading] = useState(false);
 
-  // Login page is always LIGHT — never apply dark theme here.
-  useEffect(() => {
-    const root = document.documentElement;
-    const prev = root.getAttribute("data-theme");
-    root.setAttribute("data-theme", "light");
-    return () => { root.setAttribute("data-theme", prev || "light"); };
-  }, []);
+  // Login page follows the saved theme (managed by ThemeProvider):
+  // first-ever visit defaults to light, otherwise it uses the user's last
+  // choice persisted in localStorage. No override is applied here.
 
   // Resend timer
   const [fpTimer, setFpTimer] = useState(0);
@@ -63,9 +51,9 @@ export default function Login() {
   // ── Redirect if already authenticated ────────────────────────────────────
   useEffect(() => {
     if (!loading && isAuthenticated) {
-      navigate(getLandingPath(menuPermissions), { replace: true });
+      navigate("/dashboard", { replace: true });
     }
-  }, [isAuthenticated, loading, navigate, location, menuPermissions]);
+  }, [isAuthenticated, loading, navigate, location]);
 
   // ── Resend countdown timer ────────────────────────────────────────────────
   useEffect(() => {
@@ -282,7 +270,7 @@ export default function Login() {
             return;
           }
           login(data);
-          navigate(getLandingPath(data.menuPermissions), { replace: true });
+          navigate("/dashboard", { replace: true });
         } else {
           setError(data?.message || data?.error || "Login failed. Please try again.");
         }
@@ -320,6 +308,10 @@ export default function Login() {
       <>
         {/* ══════════════════ LOGIN PAGE ══════════════════ */}
         <div className="login-root">
+          {/* Theme toggle — fixed bottom-right */}
+          <div className="login-theme-toggle">
+            <ThemeToggle />
+          </div>
           <div className="login-container">
 
             {/* LEFT: hero */}

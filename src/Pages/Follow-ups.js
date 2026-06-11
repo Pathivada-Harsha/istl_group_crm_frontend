@@ -353,6 +353,9 @@ export default function ClientDashboardFollowUps() {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() === today.getTime();
       }).length,
     };
+    // Always show the latest record on top (newest created first)
+    filtered = [...filtered].sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
     return { filteredFollowUps: filtered, kpis };
   }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm, appliedFrom, appliedTo]);
 

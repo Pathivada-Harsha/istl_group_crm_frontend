@@ -35,7 +35,6 @@ import React, {
   useMemo,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
 import SockJS from 'sockjs-client';
 import { Client as StompClient } from '@stomp/stompjs';
 
@@ -160,10 +159,7 @@ export function NotificationProvider({ children }) {
   const [toasts, setToasts] = useState([]);      // realtime popups
   const stompRef = useRef(null);
 
-  // Use the real auth state (not raw localStorage) so notifications never
-  // connect or fetch before login, and disconnect immediately on logout.
-  const auth = useAuth();
-  const userId = auth?.user?.id ?? null;
+  const userId = getStoredUser()?.id ?? null;
 
   // ── toast helpers ──────────────────────────────────────────────────
   const pushToast = useCallback((notification) => {
@@ -424,7 +420,7 @@ export function NotificationsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(false);
-  const [size, setSize] = useState(15);
+  const size = 15;
 
   // debounce search
   useEffect(() => {
@@ -444,7 +440,7 @@ export function NotificationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, debounced, page, size]);
+  }, [filter, debounced, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -514,26 +510,8 @@ export function NotificationsPage() {
         ))}
       </div>
 
-      <div className="ntf-pagination">
-        <div className="ntf-pagination-left">
-          <span className="ntf-page-info">
-            {totalElements === 0
-              ? 'No entries'
-              : `Showing ${(page - 1) * size + 1} to ${Math.min(page * size, totalElements)} of ${totalElements} entries`}
-          </span>
-          <select
-            className="ntf-rows-select"
-            value={size}
-            onChange={(e) => { setSize(Number(e.target.value)); setPage(1); }}
-          >
-            <option value={10}>10 Rows</option>
-            <option value={20}>20 Rows</option>
-            <option value={50}>50 Rows</option>
-            <option value={100}>100 Rows</option>
-          </select>
-        </div>
-
-        <div className="ntf-pagination-buttons">
+      {totalPages > 1 && (
+        <div className="ntf-pagination">
           <button
             className="ntf-btn"
             disabled={page <= 1}
@@ -541,16 +519,16 @@ export function NotificationsPage() {
           >
             Previous
           </button>
-          <span className="ntf-page-current">Page {page} of {totalPages || 1}</span>
+          <span className="ntf-page-info">Page {page} of {totalPages}</span>
           <button
             className="ntf-btn"
-            disabled={page >= totalPages || totalPages === 0}
+            disabled={page >= totalPages}
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
           >
             Next
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -691,10 +669,13 @@ function NotificationStyles() {
 }
 .ntf-tab-active { background: var(--c-ffffff, #ffffff); color: var(--ct-2563eb, #2563eb); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 
-.ntf-list { display: flex; flex-direction: column; gap: 10px; }
+.ntf-list { display: flex; flex-direction: column; gap: 10px; max-height: 600px; overflow-y: auto; padding-right: 6px; }
+.ntf-list::-webkit-scrollbar { width: 8px; }
+.ntf-list::-webkit-scrollbar-thumb { background: var(--c-d1d5db, #d1d5db); border-radius: 8px; }
+.ntf-list::-webkit-scrollbar-track { background: transparent; }
 
 .ntf-card {
-  position: relative; display: flex; align-items: stretch; gap: 0;
+  position: relative; display: flex; align-items: stretch; gap: 0; flex-shrink: 0;
   background: var(--c-ffffff, #ffffff); border: 1px solid var(--c-e5e7eb, #e5e7eb);
   border-radius: 11px; overflow: hidden; transition: box-shadow .15s ease, transform .05s ease;
 }
@@ -721,11 +702,7 @@ function NotificationStyles() {
 .ntf-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ntf-btn-primary { background: var(--c-2563eb, #2563eb); border-color: var(--c-2563eb, #2563eb); color: #fff; }
 
-.ntf-pagination { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
-.ntf-pagination-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.ntf-rows-select { padding: 7px 10px; border-radius: 9px; border: 1px solid var(--c-e5e7eb, #e5e7eb); background: var(--c-ffffff, #ffffff); color: var(--ct-111827, #111827); font-size: 13px; cursor: pointer; }
-.ntf-pagination-buttons { display: flex; align-items: center; gap: 12px; }
-.ntf-page-current { font-size: 13px; color: var(--ct-64748b, #64748b); }
+.ntf-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 20px; }
 .ntf-page-info { font-size: 13px; color: var(--ct-64748b, #64748b); }
 
 /* ── Toasts ── */

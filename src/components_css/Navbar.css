@@ -298,7 +298,7 @@
 
 .theme-toggle-btn:hover {
   transform: scale(1.12);
-  box-shadow: 0 0 0 4px rgba(148,163,184,0.25);
+  /* box-shadow: 0 0 0 4px rgba(148,163,184,0.25); */
 }
 .theme-toggle-btn--dark:hover {
   box-shadow: 0 0 0 4px rgba(59,130,246,0.22);
