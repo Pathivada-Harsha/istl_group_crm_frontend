@@ -4,6 +4,8 @@ import "../pages-css/TelecallerLeadsPage.css";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import GroupCategoryFilter from "../components/Dropdowns/groupCategoryFilter.js";
 import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
+import useToast from "../hooks/useToast.js";
+import ToastContainer from "../components/Notification_Toast/ToastContainer.js";
 
 const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
@@ -16,12 +18,6 @@ const STATUS_CONFIG = {
   NOT_INTERESTED: { label: "Not Interested", color: "#dc2626", bg: "#fef2f2" },
   NOT_RESPONDED:  { label: "Not Responded",  color: "#d97706", bg: "#fffbeb" },
   KEEP_IN_VIEW:   { label: "Keep in View",   color: "#7c3aed", bg: "#f5f3ff" },
-  // BD-owned pipeline stages — shown as read-only info, telecaller cannot drag into these
-  CONTACTED:      { label: "Contacted",      color: "#0891b2", bg: "#ecfeff" },
-  IN_DISCUSSION:  { label: "In Discussion",  color: "#0369a1", bg: "#eff6ff" },
-  PROPOSAL_SENT:  { label: "Proposal Sent",  color: "#ea580c", bg: "#fff7ed" },
-  CLOSED_WON:     { label: "Closed Won",     color: "#16a34a", bg: "#f0fdf4" },
-  CLOSED_LOST:    { label: "Closed Lost",    color: "#9ca3af", bg: "#f9fafb" },
   ALL:            { label: "All",            color: "#64748b", bg: "#f1f5f9" },
 };
 
@@ -297,7 +293,7 @@ export default function TelecallerLeadsPage() {
   const [reason,      setReason]      = useState("");
   const [discussion,  setDiscussion]  = useState("");
   const [saving,      setSaving]      = useState(false);
-  const [toast,       setToast]       = useState(null);
+  const { toasts, removeToast, showSuccess, showError, showWarning, showInfo } = useToast();
 
   const [followupModal,  setFollowupModal]  = useState(false);
   const [followupDate,   setFollowupDate]   = useState("");
@@ -537,11 +533,6 @@ export default function TelecallerLeadsPage() {
     if (lead.leadStatus === "Closed Won") {
       showToast("Cannot move a Closed Won lead.", "info"); return;
     }
-    // Block if lead is already in a BD-owned pipeline stage
-    const BD_OWNED = ["Contacted","In Discussion","Proposal Sent","Closed Won","Closed Lost"];
-    if (BD_OWNED.includes(lead.leadStatus)) {
-      showToast(`This lead is in '${lead.leadStatus}' stage and cannot be moved by telecaller.`, "info"); return;
-    }
     if (toCol === "NOT_INTERESTED") {
       setSelected(lead); setNewStatus("NOT_INTERESTED");
       setReason(""); setDiscussion(""); setDragFromCol(fromCol); setStatusModal(true); return;
@@ -644,10 +635,6 @@ export default function TelecallerLeadsPage() {
   const openStatusModal = (lead) => {
     if (lead.leadStatus === "Closed Won") {
       showToast("This lead is Closed Won — status cannot be changed.", "info"); return;
-    }
-    const BD_OWNED = ["Contacted","In Discussion","Proposal Sent","Closed Won","Closed Lost"];
-    if (BD_OWNED.includes(lead.leadStatus)) {
-      showToast(`This lead is in '${lead.leadStatus}' stage and can only be updated by BD/Admin.`, "info"); return;
     }
     setSelected(lead); setNewStatus(""); setReason(""); setDiscussion("");
     setFollowupDate(""); setFollowupTime("09:00"); setFollowupNote("");
@@ -791,8 +778,11 @@ export default function TelecallerLeadsPage() {
     } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast("Could not load details","error"); }
   };
 
-  const showToast = (msg, type="success") => {
-    setToast({msg,type}); setTimeout(()=>setToast(null),3500);
+  const showToast = (msg, type = "success") => {
+    if (type === "error")        showError(msg);
+    else if (type === "warning") showWarning(msg);
+    else if (type === "info")    showInfo(msg);
+    else                         showSuccess(msg);
   };
 
   // Count active filters for badge
@@ -821,7 +811,7 @@ export default function TelecallerLeadsPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div className="tc-page">
-      {toast && <div className={`tc-toast tc-toast--${toast.type}`}>{toast.msg}</div>}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* ── Block 1: Page header (title only) ── */}
       <div className="tc-header">

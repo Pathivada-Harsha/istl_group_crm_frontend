@@ -1,5 +1,6 @@
 // ClientDashboardFollowUps.js
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import ReactDOM from "react-dom";
 import "../pages-css/Follow-ups.css";
 import GroupCategoryFilter from './../components/Dropdowns/groupCategoryFilter.js';
@@ -352,6 +353,9 @@ export default function ClientDashboardFollowUps() {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() === today.getTime();
       }).length,
     };
+    // Always show the latest record on top (newest created first)
+    filtered = [...filtered].sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
+
     return { filteredFollowUps: filtered, kpis };
   }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm, appliedFrom, appliedTo]);
 
@@ -920,6 +924,24 @@ export default function ClientDashboardFollowUps() {
     setViewingFollowup(followup);
     setShowViewModal(true);
   };
+
+  // ── Deep-link: open a follow-up automatically when arriving from a notification.
+  //    Route used by NotificationModule: /follow-ups?followupId=<id>
+  //    The follow-up belongs to the current user, so it is present in the
+  //    already-loaded "my-followups" list (followUps).
+  const [searchParams, setSearchParams] = useSearchParams();
+  const followupDeepLinkRef = useRef(null);
+  useEffect(() => {
+    const fid = searchParams.get('followupId');
+    if (!fid) return;
+    const match = followUps.find((f) => String(f.id) === String(fid));
+    if (!match || followupDeepLinkRef.current === fid) return; // wait until list is loaded
+    followupDeepLinkRef.current = fid;
+    handleView(match);
+    const next = new URLSearchParams(searchParams);
+    next.delete('followupId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, followUps]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = (followup) => {
     // FIX: Use the robust parser instead of simple string split

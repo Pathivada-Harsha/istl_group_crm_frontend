@@ -1,6 +1,7 @@
 // Old Invoices page
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check, CheckCircle, Clock } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { Eye, Edit2, Trash2, DollarSign, Download, Send, ChevronUp, ChevronDown, Columns, GripVertical, Check, CheckCircle, XCircle, Clock } from 'lucide-react';
 import '../pages-css/Invoices.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
@@ -846,6 +847,20 @@ const fetchStats = async () => {
     }
   };
 
+  // ── Deep-link: open an invoice automatically when arriving from a notification.
+  //    Route used by NotificationModule: /sales/invoices?invoiceId=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const invoiceDeepLinkRef = useRef(null);
+  useEffect(() => {
+    const invId = searchParams.get('invoiceId');
+    if (!invId || invoiceDeepLinkRef.current === invId) return;
+    invoiceDeepLinkRef.current = invId;
+    handleViewInvoice({ id: Number(invId) }); // fetches /invoices/{id} + history, opens modal
+    const next = new URLSearchParams(searchParams);
+    next.delete('invoiceId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /**
    * Create new invoice
    */
@@ -1304,6 +1319,39 @@ const fetchStats = async () => {
     }
   };
 
+  // ── Reject (accounts team only) — styled modal matching the delete modal ───
+  const [rejectModal, setRejectModal] = useState({ show: false, invoice: null, reason: '', loading: false });
+
+  const handleRejectInvoice = (invoice) => {
+    setRejectModal({ show: true, invoice, reason: '', loading: false });
+  };
+
+  const performRejectInvoice = async () => {
+    const invoice = rejectModal.invoice;
+    if (!invoice) return;
+    setRejectModal(prev => ({ ...prev, loading: true }));
+    try {
+      const authHeaders = getAuthHeaders();
+      const response = await fetch(`${API_BASE_URL}/invoices/${invoice.id}/reject`, {
+        credentials: 'include',
+        method: 'POST',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: rejectModal.reason }),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: 'Failed to reject invoice' }));
+        throw new Error(err.message || 'Failed to reject invoice');
+      }
+      showSuccess(`Invoice ${invoice.invoiceNo} rejected.`);
+      setRejectModal({ show: false, invoice: null, reason: '', loading: false });
+      await fetchInvoices();
+      fetchStats();
+    } catch (error) {
+      showError(error.message || 'Failed to reject invoice');
+      setRejectModal(prev => ({ ...prev, loading: false }));
+    }
+  };
+
   // ── Download attachment uploaded by accounts team ─────────────────────────
   const handleDownloadAttachment = async (invoice) => {
     try {
@@ -1559,6 +1607,53 @@ const fetchStats = async () => {
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false })}
       />
+
+      {/* ── Reject Invoice Modal (accounts team) — matches the delete modal ── */}
+      {rejectModal.show && rejectModal.invoice && (
+        <div className="cm-overlay">
+          <div className="cm-modal cm-type-error">
+            <div className="cm-icon-wrap">
+              <XCircle size={40} color="#ef4444" />
+            </div>
+            <h3 className="cm-title">Reject Invoice</h3>
+            <div className="cm-body">
+              <p className="cm-message">
+                Reject invoice {rejectModal.invoice.invoiceNo}? The creator will be
+                notified by email and in-app.
+              </p>
+              <textarea
+                placeholder="Optional: reason for rejection"
+                value={rejectModal.reason}
+                onChange={(e) => setRejectModal(prev => ({ ...prev, reason: e.target.value }))}
+                rows={3}
+                autoFocus
+                style={{
+                  width: '100%', marginTop: '14px', padding: '10px 12px',
+                  borderRadius: '8px', border: '1px solid var(--c-e5e7eb, #e5e7eb)',
+                  background: 'var(--c-ffffff, #ffffff)', color: 'var(--ct-111827, #111827)',
+                  fontFamily: 'inherit', fontSize: '14px', resize: 'vertical', boxSizing: 'border-box',
+                }}
+              />
+            </div>
+            <div className="cm-actions">
+              <button
+                className="cm-btn cm-btn-cancel"
+                disabled={rejectModal.loading}
+                onClick={() => setRejectModal({ show: false, invoice: null, reason: '', loading: false })}
+              >
+                Cancel
+              </button>
+              <button
+                className="cm-btn cm-btn-danger"
+                disabled={rejectModal.loading}
+                onClick={performRejectInvoice}
+              >
+                {rejectModal.loading ? 'Rejecting…' : 'Reject Invoice'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Breadcrumb */}
       <div className="Invoices-page-breadcrumb">
@@ -1875,6 +1970,18 @@ const fetchStats = async () => {
                           title="Approve invoice & upload file"
                         >
                           <CheckCircle size={16} />
+                        </button>
+                      )}
+
+                      {/* ── Accounts team: Reject button (only on PENDING APPROVAL) ── */}
+                      {isAccountsRole && (invoice.status === 'Pending Approval' || invoice.status === 'PENDING_APPROVAL') && (
+                        <button
+                          className="Invoices-page-action-btn"
+                          style={{ background: __sbg('#fee2e2'), color: __stc('#991b1b'), border: `1px solid ${__sbg('#fca5a5')}` }}
+                          onClick={() => handleRejectInvoice(invoice)}
+                          title="Reject invoice"
+                        >
+                          <XCircle size={16} />
                         </button>
                       )}
 
