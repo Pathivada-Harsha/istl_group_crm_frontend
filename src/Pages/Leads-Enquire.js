@@ -7,6 +7,7 @@
 // • SERVER-SIDE PAGINATION — page/size/filters are sent to backend on every change
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { GrDocumentUpdate } from 'react-icons/gr';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
@@ -2154,6 +2155,20 @@ useEffect(() => {
       }
     } catch (e) { showError(e.message || 'Error fetching lead'); }
   };
+
+  // ── Deep-link: open a lead automatically when arriving from a notification.
+  //    Route used by NotificationModule: /sales/leads?leadId=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const leadDeepLinkRef = useRef(null);
+  useEffect(() => {
+    const leadId = searchParams.get('leadId');
+    if (!leadId || leadDeepLinkRef.current === leadId) return;
+    leadDeepLinkRef.current = leadId;
+    handleView({ id: Number(leadId) });   // fetches /leads/{id} and shows the detail page
+    const next = new URLSearchParams(searchParams);
+    next.delete('leadId');                 // clean the URL so back/refresh doesn't re-open
+    setSearchParams(next, { replace: true });
+  }, [searchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleEdit = lead => {
     setFormData({

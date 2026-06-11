@@ -2,6 +2,7 @@
 // Fixes: board drag→backend, SA own-tasks default, start/end datetime,
 //        projects from DB, team view search+table+export, all edge cases
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer';
@@ -1228,7 +1229,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
             {(isSuperAdmin || isManager) && (
               <div className="tm-fg">
                 <label>Assign To {isManager && !isSuperAdmin ? <span className="tm-hint">— your team only</span> : ''}</label>
-                <FilterSelect value={String(form.assignedTo||'')} onChange={v => set('assignedTo', v)} options={[{value:String(user?.id||''),label:`Myself (${user?.name})`}, ...users.filter(u=>String(u.id)!==String(user?.id)).map(u=>({value:String(u.id),label:`${u.name} (${u.role})`}))]} placeholder="Assign To" />
+                <FilterSelect value={String(form.assignedTo||'')} onChange={v => set('assignedTo', v)} options={[{value:String(user?.id||''),label:`Myself (${user?.name})`}, ...users.filter(u=>String(u.id)!==String(user?.id)).map(u=>({value:String(u.id),label: u.role ? `${u.name} (${u.role})` : u.name}))]} placeholder="Assign To" />
               </div>
             )}
             <div className="tm-fg">
@@ -2278,6 +2279,26 @@ export default function TaskManagement() {
   const [editTask, setEditTask]   = useState(null);
   const [logTask, setLogTask]     = useState(null);
   const [detailTask, setDetail]   = useState(null);
+
+  // ── Deep-link: open a task automatically when arriving from a notification.
+  //    Route used by NotificationModule: /taskmanagement?taskId=<id>
+  const [searchParams, setSearchParams] = useSearchParams();
+  const taskDeepLinkRef = useRef(null);
+  useEffect(() => {
+    const taskId = searchParams.get('taskId');
+    if (!taskId || !user || taskDeepLinkRef.current === taskId) return;
+    taskDeepLinkRef.current = taskId;
+    (async () => {
+      try {
+        const r = await fetch(`${API}/tasks/${taskId}`, { credentials: 'include', headers: hdrs(user) });
+        const d = await r.json();
+        if (d && d.success && d.data) setDetail(d.data);   // opens the Task detail modal
+      } catch (e) { /* ignore — task may have been deleted */ }
+    })();
+    const next = new URLSearchParams(searchParams);
+    next.delete('taskId');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, user]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showDayLog, setShowDayLog] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null); // taskId to delete
 

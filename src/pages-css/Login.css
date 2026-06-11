@@ -117,7 +117,7 @@
 .login-error { background: var(--c-fff1f2, #fff1f2); color: var(--ct-9b1230, #9b1230); padding: 8px 10px; border-radius: 8px; font-size: 13px; }
 
 /* submit */
-.login-submit-row { display: flex; justify-content: flex-end; margin-top: 6px; }
+.login-submit-row { display: flex; justify-content: center; margin-top: 6px; }
 .login-btn {
   background: var(--blue);
   color: var(--ct-white, white);
@@ -167,7 +167,7 @@
   }
   .login-panel { align-items: stretch; width: 100%; }
   .login-card { padding: 24px; }
-  .login-submit-row { justify-content: flex-start; }
+  .login-submit-row { justify-content: center; }
   .login-btn { width: 100%; }
 }
 
@@ -432,4 +432,56 @@
   .fp-input { font-size: 16px; }
   .fp-otp-input { font-size: 18px; letter-spacing: 4px; }
   .fp-step-dot { margin: 0 18px; }
+}
+/* ── Dark mode: theme the login card, inputs and surfaces ─────────────────
+   Login.css defines its own --glass / --bg / --muted in :root with light
+   values that theme.css does not flip. Re-define them for dark mode and
+   override the few hard-coded light spots so the card matches the theme. */
+:root[data-theme="dark"] {
+  --muted: #9aa6b6;
+  --bg: linear-gradient(180deg, var(--c-0f141d, #0f141d), var(--c-0b0f17, #0b0f17));
+  --glass: var(--c-1b2130, #1b2130);
+  --card-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+}
+
+/* Muted subtitle / footer text — keep readable on the dark card */
+[data-theme="dark"] .login-sub,
+[data-theme="dark"] .login-footer-note {
+  color: #9aa6b6;
+}
+
+[data-theme="dark"] .login-card {
+  border: 1px solid var(--c-2a3344, #2a3344);
+}
+
+[data-theme="dark"] .login-input {
+  background: var(--c-121826, #121826);
+  border-color: var(--c-2a3344, #2a3344);
+  color: var(--ct-e5e7eb, #e5e7eb);
+}
+
+[data-theme="dark"] .login-input::placeholder {
+  color: var(--c-94a3b8, #94a3b8);
+}
+
+/* Forgot-password modal surfaces in dark mode */
+[data-theme="dark"] .fp-modal,
+[data-theme="dark"] .fp-card {
+  background: var(--c-1b2130, #1b2130);
+  color: var(--ct-e5e7eb, #e5e7eb);
+}
+
+[data-theme="dark"] .fp-input,
+[data-theme="dark"] .fp-otp-input {
+  background: var(--c-121826, #121826);
+  border-color: var(--c-2a3344, #2a3344);
+  color: var(--ct-e5e7eb, #e5e7eb);
+}
+
+/* Theme toggle on the login page — fixed top-right */
+.login-theme-toggle {
+  position: fixed;
+  right: 35px;
+  top: 22px;
+  z-index: 60;
 }
