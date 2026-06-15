@@ -49,6 +49,7 @@ import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
 import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
+import CRMAssistantBot from './components/CRMAssistantBot';
 
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
@@ -101,6 +102,8 @@ function AppShell({ hideShell }) {
 
       {!hideShell && <SessionManager />}
 
+      {!hideShell && <CRMAssistantBot />}
+      
       {!hideShell && (
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
       )}
