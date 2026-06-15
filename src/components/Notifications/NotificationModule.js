@@ -648,7 +648,7 @@ function NotificationStyles() {
 .ntf-empty { padding: 26px 14px; text-align: center; color: var(--ct-94a3b8, #94a3b8); font-size: 13px; }
 
 /* ── Page ── */
-.ntf-page { max-width: 860px; margin: 0 auto; padding: 22px 16px 60px; }
+.ntf-page { padding: 22px 24px 60px; }
 .ntf-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .ntf-page-title { font-size: 22px; font-weight: 700; color: var(--ct-111827, #111827); margin: 0; }
 .ntf-page-sub { margin: 4px 0 0; font-size: 13px; color: var(--ct-64748b, #64748b); }

@@ -184,10 +184,28 @@ const ALL_COLUMNS = [
   { key: 'priority',       label: 'Priority',      sortable: true,  required: false },
   { key: 'status',         label: 'Status',        sortable: true,  required: false },
   { key: 'source',         label: 'Source',        sortable: true,  required: false },
-  { key: 'assignedToName', label: 'Assigned To',   sortable: true,  required: false },
+  { key: 'assignedToName', label: 'Assigned To',   sortable: false, required: false },
   { key: 'leadOwner',      label: 'Lead Owner',    sortable: true,  required: false },
   { key: 'actions',        label: 'Actions',       sortable: false, required: true  },
 ];
+
+// Maps a frontend column key to the LeadsEntity field the backend can sort on.
+// Keys NOT present here are not server-sortable (e.g. assignedToName is a
+// wrapper-only field with no entity column — sorting by it would crash JPA),
+// so their headers fall back to non-interactive.
+const SORT_FIELD_MAP = {
+  name:         'name',
+  email:        'email',
+  phone:        'phone',
+  groupName:    'groupName',
+  subGroupName: 'subGroupName',
+  createdAt:    'createdAt',
+  capacity:     'capacity',
+  priority:     'priority',
+  status:       'status',
+  source:       'source',
+  leadOwner:    'leadOwner',
+};
 
 const DEFAULT_ORDER = ALL_COLUMNS.map(c => c.key);
 const DEFAULT_VISIBLE = ALL_COLUMNS
@@ -1879,6 +1897,8 @@ function LeadsEnquiries() {
 const initialFetchDone    = useRef(false);
 const isFirstGroupRender  = useRef(true);
 const isFirstFilterRender = useRef(true);
+const fetchLeadsSeq       = useRef(0); // guards against out-of-order list responses
+const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupName: '' });
   // ── Permissions ──────────────────────────────────────────────────
   const leadsPermissions = pagePermissions?.LEADS || [];
   const canView = leadsPermissions.includes('VIEW');
@@ -2002,11 +2022,24 @@ const isFirstFilterRender = useRef(true);
   // SERVER-SIDE FETCH — called whenever page / size / filters change
   // Uses POST /leads/filter so all filter params go in the body.
   // ─────────────────────────────────────────────────────────────────
-  const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason, fromDate, toDate) => {
+  const fetchLeads = async (page, size, search, status, priority, source, group, subGroup, _reason, fromDate, toDate, sortByCol, sortDir) => {
   // console.trace('🚀 fetchLeads called — reason:', _reason);
+  const seq = ++fetchLeadsSeq.current; // claim the latest-request slot
   setLoading(true);
   setError(null);
   try {
+    // Sort precedence:
+    //   1. Explicit args passed by handleSort (a fresh column click)
+    //   2. The currently-active column sort held in state (so pagination,
+    //      filtering, and refreshes keep the user's chosen order)
+    //   3. Date-filter default (createdAt asc) when a date range is active
+    //   4. null → backend default (createdAt desc)
+    const activeCol = sortByCol !== undefined ? sortByCol : sortColumn;
+    const activeDir = sortDir   !== undefined ? sortDir   : sortDirection;
+    const mappedSort = activeCol ? SORT_FIELD_MAP[activeCol] : null;
+    const effectiveSortBy = mappedSort || ((fromDate || toDate) ? 'createdAt' : null);
+    const effectiveSortDir = mappedSort ? (activeDir || 'asc') : ((fromDate || toDate) ? 'asc' : null);
+
     const filterBody = {
       searchTerm:    search   || null,
       status:        status   !== 'All' ? status : null,
@@ -2016,8 +2049,8 @@ const isFirstFilterRender = useRef(true);
       subGroupName:  subGroup || null,
       fromDate:      fromDate || null,
       toDate:        toDate   || null,
-      sortBy:        (fromDate || toDate) ? 'createdAt' : null,
-      sortDirection: (fromDate || toDate) ? 'asc'       : null,
+      sortBy:        effectiveSortBy,
+      sortDirection: effectiveSortDir,
     };
 
     const data = await fetchWithHeaders(
@@ -2025,15 +2058,20 @@ const isFirstFilterRender = useRef(true);
       { method: 'POST', body: JSON.stringify(filterBody) }
     );
 
+    // Race guard: a newer request started while this one was in flight → drop this result.
+    if (seq !== fetchLeadsSeq.current) return;
+
     if (data.success) {
       setLeads(data.data || []);
       setTotalRecords(data.count ?? 0);
       setTotalPages(data.totalPages ?? Math.ceil((data.count ?? 0) / size));
     }
   } catch (e) {
-    setError(e.message || 'Error fetching leads');
+    if (seq === fetchLeadsSeq.current) setError(e.message || 'Error fetching leads');
   } finally {
-    setLoading(false);
+    // Only the newest request controls the loading spinner, so a stale
+    // response resolving late can't prematurely hide the spinner.
+    if (seq === fetchLeadsSeq.current) setLoading(false);
   }
   // ← NO }, [...]) at the end — this is NOT a useCallback
 };
@@ -2042,21 +2080,21 @@ const isFirstFilterRender = useRef(true);
     try {
       const res = await fetch(`${API_BASE_URL}/filters/leads-users`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
-    } catch { setUsers([]); }
+    } catch (e) { console.error('fetchUsers failed:', e); setUsers([]); }
   };
 
   const fetchAllUsers = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/filters/all-users`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setAllUsers(data);
-    } catch { setAllUsers([]); }
+    } catch (e) { console.error('fetchAllUsers failed:', e); setAllUsers([]); }
   };
 
   const fetchGroups = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/filters/leads-groups`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setGroups(data);
-    } catch { setGroups([]); }
+    } catch (e) { console.error('fetchGroups failed:', e); setGroups([]); }
   };
 
   const fetchSubGroupsForForm = async g => {
@@ -2064,7 +2102,7 @@ const isFirstFilterRender = useRef(true);
     try {
       const res = await fetch(`${API_BASE_URL}/filters/leads-subgroups?groupName=${encodeURIComponent(g)}`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setSubGroups(data);
-    } catch { setSubGroups([]); }
+    } catch (e) { console.error('fetchSubGroupsForForm failed:', e); setSubGroups([]); }
   };
 // Effect 1 — initial load
 useEffect(() => {
@@ -2076,6 +2114,28 @@ useEffect(() => {
   fetchGroups();
   fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'INITIAL_LOAD', dateFrom, dateTo);
 }, [canView]); // eslint-disable-line react-hooks/exhaustive-deps
+
+// Effect 1b — refresh a cache-rehydrated detail lead on mount.
+// detailLead is seeded from localStorage for instant render, but that snapshot
+// can be stale (edited elsewhere since). Refetch by id once so the open detail
+// view reflects current server data.
+useEffect(() => {
+  if (!canView || !detailLead?.id) return;
+  let cancelled = false;
+  fetchWithHeaders(`${API_BASE_URL}/leads/${detailLead.id}`)
+    .then(d => {
+      if (!cancelled && d?.success && d.data) {
+        setDetailLead(d.data);
+        localStorage.setItem('leads_detail_lead', JSON.stringify(d.data));
+      }
+    })
+    .catch(() => {});
+  return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [canView]); // run once when view permission resolves (mount)
+
+// Keep the live ref in sync so debounced fetches read fresh page-size/group values.
+filterStateRef.current = { rowsPerPage, groupName, subGroupName };
 
 // Effect 2 — group/subGroup changes
 useEffect(() => {
@@ -2093,7 +2153,12 @@ useEffect(() => {
   if (!canView) return;
   setCurrentPage(1); // reset to page 1 whenever filters change
   const timer = setTimeout(() => {
-    fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'FILTER_CHANGE', dateFrom, dateTo);
+    // Read page-size and group/subgroup from the live ref at fire time, so a
+    // page-size change made during the 400ms debounce isn't lost to a stale
+    // closure. (Deps intentionally exclude these to avoid double-fetching —
+    // rows/group have their own immediate fetch paths.)
+    const { rowsPerPage: rpp, groupName: gn, subGroupName: sgn } = filterStateRef.current;
+    fetchLeads(1, rpp, searchTerm, statusFilter, priorityFilter, sourceFilter, gn, sgn, 'FILTER_CHANGE', dateFrom, dateTo);
   }, 400);
   return () => clearTimeout(timer);
 }, [searchTerm, statusFilter, priorityFilter, sourceFilter, dateFrom, dateTo]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -2116,11 +2181,15 @@ useEffect(() => {
     fetchLeads(1, newSize, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'ROWS_CHANGE', dateFrom, dateTo);
   };
 
-  // ── Sort (client-side on current page only — for server-side sort, extend later) ──
+  // ── Sort (server-side: sorts the FULL dataset, not just the current page) ──
   const handleSort = col => {
+    // Only columns mapped to a real entity field can be sorted server-side.
+    if (!SORT_FIELD_MAP[col]) return;
     const dir = sortColumn === col && sortDirection === 'asc' ? 'desc' : 'asc';
     setSortColumn(col); setSortDirection(dir);
-    setLeads(prev => [...prev].sort((a, b) => { const av = a[col] || '', bv = b[col] || ''; return dir === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1); }));
+    setCurrentPage(1); // re-sorted list → start from page 1
+    fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter,
+      groupName, subGroupName, 'SORT_CHANGE', dateFrom, dateTo, col, dir);
   };
 
   // ── Drag column ───────────────────────────────────────────────────
@@ -2274,6 +2343,7 @@ useEffect(() => {
   const handleSubmit = async e => {
     e.preventDefault();
     if (formData.phone && formData.phone.length !== 10) { setPhoneError('Must be exactly 10 digits'); return; }
+    if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) { showError('Please enter a valid email address'); return; }
     if (formData.id && !canEdit) { showWarning('No edit permission'); return; }
     if (!formData.id && !canCreate) { showWarning('No create permission'); return; }
     if (formData.status === 'Keep in View' && (!kivDate || !kivTime)) { showError('Please set the callback date & time for Keep in View'); return; }
@@ -2302,6 +2372,7 @@ useEffect(() => {
         if (data.success) {
           savedLeadId = formData.id;
           await scheduleKivFollowup(savedLeadId);
+          let billUploadFailed = false;
           if (billFile) {
             try {
               setBillFileUploading(true);
@@ -2312,15 +2383,21 @@ useEffect(() => {
                 body: form,
               });
               if (!uploadResp.ok) {
+                billUploadFailed = true;
                 const err = await uploadResp.json().catch(() => ({}));
                 showError('Bill upload failed: ' + (err.message || uploadResp.status));
               }
             } catch (uploadErr) {
+              billUploadFailed = true;
               showError('Bill upload failed: ' + uploadErr.message);
             } finally { setBillFileUploading(false); }
           }
           const wasClosedWon = data.data?.status === 'Closed Won';
-          showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : formData.status === 'Keep in View' ? 'Lead updated & KIV follow-up scheduled!' : 'Lead updated successfully');
+          if (!billUploadFailed) {
+            showSuccess(wasClosedWon ? 'Lead updated! ✅ Converted to Customer automatically.' : formData.status === 'Keep in View' ? 'Lead updated & KIV follow-up scheduled!' : 'Lead updated successfully');
+          } else {
+            showWarning('Lead updated, but the bill file did not upload. You can re-upload it from the lead.');
+          }
           setShowAddModal(false); resetForm(); setKivDate(''); setKivTime('09:00');
           fetchLeads(currentPage, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'EDIT_REFRESH', dateFrom, dateTo);
           if (detailLead && detailLead.id === formData.id) {
@@ -2334,6 +2411,7 @@ useEffect(() => {
         if (data.success) {
           savedLeadId = data.data?.id;
           await scheduleKivFollowup(savedLeadId);
+          let billUploadFailed = false;
           if (billFile && savedLeadId) {
             try {
               setBillFileUploading(true);
@@ -2344,19 +2422,25 @@ useEffect(() => {
                 body: form,
               });
               if (!uploadResp.ok) {
+                billUploadFailed = true;
                 const err = await uploadResp.json().catch(() => ({}));
                 showError('Bill upload failed: ' + (err.message || uploadResp.status));
               }
             } catch (uploadErr) {
+              billUploadFailed = true;
               showError('Bill upload failed: ' + uploadErr.message);
             } finally { setBillFileUploading(false); }
           }
           const wasClosedWon = data.data?.status === 'Closed Won';
-          showSuccess(wasClosedWon
-            ? 'Lead created & automatically converted to Customer! ✅'
-            : formData.status === 'Keep in View'
-            ? 'Lead created & KIV follow-up scheduled!'
-            : 'Lead created successfully');
+          if (!billUploadFailed) {
+            showSuccess(wasClosedWon
+              ? 'Lead created & automatically converted to Customer! ✅'
+              : formData.status === 'Keep in View'
+              ? 'Lead created & KIV follow-up scheduled!'
+              : 'Lead created successfully');
+          } else {
+            showWarning('Lead created, but the bill file did not upload. You can re-upload it from the lead.');
+          }
           setShowAddModal(false); resetForm(); setKivDate(''); setKivTime('09:00');
           setCurrentPage(1);
           fetchLeads(1, rowsPerPage, searchTerm, statusFilter, priorityFilter, sourceFilter, groupName, subGroupName, 'CREATE_REFRESH', dateFrom, dateTo);
