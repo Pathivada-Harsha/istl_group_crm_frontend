@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import api from "../../services/leadsapi.js";
 import "./LeadFollowupsTab.css";
 import FilterSelect from "../Dropdowns/FilterSelect.js";
+import DateTimePicker from "../DateTimePicker.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const pad = n => String(n).padStart(2, "0");
@@ -235,6 +236,7 @@ function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel }
   const submit = async e => {
     e.preventDefault();
     if (!form.outcome.trim()) { alert("Please describe what happened"); return; }
+    if (!form.visitedAt) { alert("Please select the date & time"); return; }
     setSaving(true);
     try {
       // Merge outcome + optional next action + mood into one outcome text
@@ -296,8 +298,9 @@ function DirectInteractionForm({ lead, currentUser, users, onCreated, onCancel }
         <div className="lfu-form-row">
           <div className="lfu-form-group">
             <label>When did it happen? *</label>
-            <input type="datetime-local" required value={form.visitedAt}
-              max={todayStr} onChange={set("visitedAt")} />
+            <DateTimePicker value={form.visitedAt} max={todayStr.slice(0, 10)}
+              onChange={v => setForm(p => ({ ...p, visitedAt: v }))}
+              placeholder="Select date & time" />
             <span className="lfu-form-hint">Today or a past date/time</span>
           </div>
           <div className="lfu-form-group">
@@ -530,6 +533,7 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
 
   const submit = async e => {
     e.preventDefault();
+    if (!form.scheduledAt) { alert("Please select the date & time"); return; }
     setSaving(true);
     try {
       const dt = form.scheduledAt.replace("T", " ") + ":00";
@@ -576,7 +580,9 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
         <div className="lfu-form-row">
           <div className="lfu-form-group">
             <label>Date & Time *</label>
-            <input type="datetime-local" required value={form.scheduledAt} onChange={set("scheduledAt")} />
+            <DateTimePicker value={form.scheduledAt}
+              onChange={v => setForm(p => ({ ...p, scheduledAt: v }))}
+              placeholder="Select date & time" />
           </div>
           <div className="lfu-form-group">
             <label>Priority</label>

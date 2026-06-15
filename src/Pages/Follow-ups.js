@@ -177,7 +177,8 @@ export default function ClientDashboardFollowUps() {
   const { toasts, removeToast, showSuccess, showError, showWarning } = useToast();
 
   const [followUps, setFollowUps] = useState([]);
-  // filteredFollowUps and kpis are derived via useMemo below — no useState needed
+  const [totalCount, setTotalCount] = useState(0);
+  const [kpis, setKpis] = useState({ total: 0, pending: 0, completed: 0, overdue: 0, today: 0 });
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showViewModal, setShowViewModal] = useState(false);
@@ -219,6 +220,7 @@ export default function ClientDashboardFollowUps() {
   const [typeFilter, setTypeFilter] = useState('All');
   const [assignedToFilter, setAssignedToFilter] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
+  const searchDebounceRef = useRef(null);
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -293,71 +295,21 @@ export default function ClientDashboardFollowUps() {
     fetchUsers();
     fetchAllLeads();
     fetchGroups();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Derived state — one useMemo replaces two cascading useEffects ────────
-  // Old: followUps change → applyFilters useEffect → setFilteredFollowUps (render)
-  //      → calculateKPIs useEffect → setKpis (render) — 4 renders total
-  // New: useMemo fires synchronously during render, zero extra setState, zero extra renders
-  const { filteredFollowUps, kpis } = React.useMemo(() => {
-    let filtered = followUps;
+  // Re-fetch when group/subgroup filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+    fetchFollowUps({ grp: groupName, subGrp: subGroupName, page: 1 });
+  }, [groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (statusFilter !== 'All')     filtered = filtered.filter(f => f.status === statusFilter);
-    if (priorityFilter !== 'All')   filtered = filtered.filter(f => f.priority === priorityFilter);
-    if (typeFilter !== 'All')       filtered = filtered.filter(f => f.followupType === typeFilter);
-    if (assignedToFilter !== 'All') filtered = filtered.filter(f => f.assignedTo === parseInt(assignedToFilter));
+  // Re-fetch when any filter/pagination changes (except searchTerm which is debounced)
+  useEffect(() => {
+    fetchFollowUps();
+  }, [statusFilter, priorityFilter, typeFilter, assignedToFilter, appliedFrom, appliedTo, currentPage, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(f =>
-        (f.notes && f.notes.toLowerCase().includes(term)) ||
-        (f.outcome && f.outcome.toLowerCase().includes(term)) ||
-        (f.leadCode && f.leadCode.toLowerCase().includes(term)) ||
-        (f.customerCode && f.customerCode.toLowerCase().includes(term)) ||
-        (f.assignedToName && f.assignedToName.toLowerCase().includes(term)) ||
-        (f.createdByName && f.createdByName.toLowerCase().includes(term)) ||
-        (f.followupType && f.followupType.toLowerCase().includes(term)) ||
-        (f.groupName && f.groupName.toLowerCase().includes(term))
-      );
-    }
-
-    if (appliedFrom) {
-      const from = new Date(appliedFrom); from.setHours(0, 0, 0, 0);
-      const to   = new Date(appliedTo || appliedFrom); to.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(f => {
-        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
-        return !isNaN(d.getTime()) && d >= from && d <= to;
-      });
-      filtered = [...filtered].sort((a, b) =>
-        new Date(String(a.scheduledAt || '').replace(' ', 'T')) -
-        new Date(String(b.scheduledAt || '').replace(' ', 'T'))
-      );
-    }
-
-    // KPIs in same pass — no second useEffect needed
-    const now   = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const kpis = {
-      total:     filtered.length,
-      pending:   filtered.filter(f => f.status === 'Pending').length,
-      completed: filtered.filter(f => f.status === 'Completed').length,
-      overdue:   filtered.filter(f => {
-        if (f.status !== 'Pending') return false;
-        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
-        return !isNaN(d.getTime()) && d < now;
-      }).length,
-      today: filtered.filter(f => {
-        if (f.status !== 'Pending') return false;
-        const d = new Date(String(f.scheduledAt || '').replace(' ', 'T'));
-        if (isNaN(d.getTime())) return false;
-        return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime() === today.getTime();
-      }).length,
-    };
-    // Always show the latest record on top (newest created first)
-    filtered = [...filtered].sort((a, b) => Number(b.id || 0) - Number(a.id || 0));
-
-    return { filteredFollowUps: filtered, kpis };
-  }, [followUps, statusFilter, priorityFilter, typeFilter, assignedToFilter, searchTerm, appliedFrom, appliedTo]);
+  // followUps is already the current page of data from the server.
+  // kpis come from the server response alongside the data.
 
   // Fetch leads when modal group/subgroup changes
   useEffect(() => {
@@ -376,10 +328,7 @@ export default function ClientDashboardFollowUps() {
     }
   }, [addForm.modalSubGroupName]);
 
-  // Re-fetch when group/subgroup filter changes
-  useEffect(() => {
-    fetchFollowUps(groupName, subGroupName);
-  }, [groupName, subGroupName]);
+  // (group/subgroup re-fetch moved to top useEffects above)
 
   // Close Add time picker when clicking outside
   useEffect(() => {
@@ -454,24 +403,46 @@ export default function ClientDashboardFollowUps() {
     };
   }, [openStatusDropdown, calcStatusPos]);
 
-  const fetchFollowUps = async (grp = groupName, subGrp = subGroupName) => {
+  const fetchFollowUps = async (overrides = {}) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+
+      // Group/subgroup scope
+      const grp    = overrides.grp    !== undefined ? overrides.grp    : groupName;
+      const subGrp = overrides.subGrp !== undefined ? overrides.subGrp : subGroupName;
       if (grp)    params.append('groupName',    grp);
       if (subGrp) params.append('subGroupName', subGrp);
-      const qs = params.toString() ? `?${params.toString()}` : '';
-      const response = await fetch(`${API_BASE_URL}/followups/my-followups${qs}`, {
-        credentials: "include",
+
+      // Filters
+      if (statusFilter       !== 'All') params.append('status',       statusFilter);
+      if (priorityFilter     !== 'All') params.append('priority',     priorityFilter);
+      if (typeFilter         !== 'All') params.append('followupType', typeFilter);
+      if (assignedToFilter   !== 'All') params.append('assignedTo',   assignedToFilter);
+      if (appliedFrom)                  params.append('fromDate',     appliedFrom);
+      if (appliedTo)                    params.append('toDate',       appliedTo);
+      if (searchTerm.trim())            params.append('search',       searchTerm.trim());
+
+      // Pagination
+      const pg = overrides.page !== undefined ? overrides.page : currentPage;
+      params.append('page',     pg);
+      params.append('pageSize', rowsPerPage);
+
+      const response = await fetch(`${API_BASE_URL}/followups/my-followups?${params.toString()}`, {
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'User-Id': user.id,
+          'User-Id':   user.id,
           'User-Role': user.role
         }
       });
       if (!response.ok) throw new Error('Failed to fetch follow-ups');
       const data = await response.json();
-      if (data.success) setFollowUps(data.data || []);
+      if (data.success) {
+        setFollowUps(data.data || []);
+        setTotalCount(data.totalCount || 0);
+        if (data.kpis) setKpis(data.kpis);
+      }
     } catch (err) {
       showError(err.message || 'Error fetching follow-ups');
     } finally {
@@ -642,6 +613,7 @@ export default function ClientDashboardFollowUps() {
     if (!fromDate) return;
     setAppliedFrom(fromDate);
     setAppliedTo(toDate || fromDate);
+    setCurrentPage(1);
     setShowCalendar(false);
   };
 
@@ -651,6 +623,7 @@ export default function ClientDashboardFollowUps() {
     setHoverDate(null);
     setAppliedFrom(null);
     setAppliedTo(null);
+    setCurrentPage(1);
     setShowCalendar(false);
   };
 
@@ -810,7 +783,8 @@ export default function ClientDashboardFollowUps() {
         showSuccess('Follow-up created successfully');
         setShowAddModal(false);
         resetAddForm();
-        fetchFollowUps();
+        setCurrentPage(1);
+        fetchFollowUps({ page: 1 });
       }
     } catch (err) {
       showError(err.message || 'Error creating follow-up');
@@ -1068,19 +1042,11 @@ export default function ClientDashboardFollowUps() {
     return !isNaN(scheduledDate.getTime()) && scheduledDate < new Date();
   };
 
-  // Pagination
-  // Reset to page 1 whenever the filtered set changes (filter/search applied)
-  const prevFilterKeyRef = React.useRef('');
-  const filterKey = `${statusFilter}|${priorityFilter}|${typeFilter}|${assignedToFilter}|${searchTerm}|${appliedFrom}|${appliedTo}|${groupName}|${subGroupName}`;
-  if (prevFilterKeyRef.current !== filterKey) {
-    prevFilterKeyRef.current = filterKey;
-    if (currentPage !== 1) setCurrentPage(1);
-  }
-
-  const totalPages = Math.ceil(filteredFollowUps.length / rowsPerPage);
-  const startIndex = (currentPage - 1) * rowsPerPage;
-  const endIndex = startIndex + rowsPerPage;
-  const currentFollowUps = filteredFollowUps.slice(startIndex, endIndex);
+  // Pagination — driven by server-side totalCount
+  // Reset to page 1 whenever filters change (handled in useEffect / search debounce)
+  const totalPages  = Math.ceil(totalCount / rowsPerPage) || 1;
+  const startIndex  = (currentPage - 1) * rowsPerPage;
+  const currentFollowUps = followUps; // already the correct page from the server
 
   return (
     <div className="followups-page-root">
@@ -1182,7 +1148,16 @@ export default function ClientDashboardFollowUps() {
             placeholder="Search by lead, customer, notes..."
             className={`followups-search-input${searchTerm ? ' has-value' : ''}`}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearchTerm(val);
+              // Debounce: wait 400ms after typing stops before fetching
+              clearTimeout(searchDebounceRef.current);
+              searchDebounceRef.current = setTimeout(() => {
+                setCurrentPage(1);
+                fetchFollowUps({ page: 1 });
+              }, 400);
+            }}
           />
           {searchTerm && (
             <button
@@ -1335,7 +1310,7 @@ export default function ClientDashboardFollowUps() {
               { value: 'Rescheduled', label: 'Rescheduled' },
             ]}
             placeholder="All Status"
-            onChange={(v) => setStatusFilter(v || 'All')}
+            onChange={(v) => { setStatusFilter(v || 'All'); setCurrentPage(1); }}
           />
         </div>
         <div className="fu-filter-item">
@@ -1347,7 +1322,7 @@ export default function ClientDashboardFollowUps() {
               { value: 'Low',    label: 'Low' },
             ]}
             placeholder="All Priority"
-            onChange={(v) => setPriorityFilter(v || 'All')}
+            onChange={(v) => { setPriorityFilter(v || 'All'); setCurrentPage(1); }}
           />
         </div>
         <div className="fu-filter-item">
@@ -1355,7 +1330,7 @@ export default function ClientDashboardFollowUps() {
             value={assignedToFilter === 'All' ? '' : assignedToFilter}
             options={users.map(u => ({ value: String(u.id), label: u.name }))}
             placeholder="All Assigned"
-            onChange={(v) => setAssignedToFilter(v || 'All')}
+            onChange={(v) => { setAssignedToFilter(v || 'All'); setCurrentPage(1); }}
           />
         </div>
 
@@ -1574,7 +1549,7 @@ export default function ClientDashboardFollowUps() {
         <div className="followups-pagination">
           <div className="followups-pagination-left">
             <span className="followups-pagination-info">
-              Showing {startIndex + 1} to {Math.min(endIndex, filteredFollowUps.length)} of {filteredFollowUps.length} entries
+              Showing {totalCount === 0 ? 0 : startIndex + 1} to {Math.min(startIndex + rowsPerPage, totalCount)} of {totalCount} entries
             </span>
             <div className="followups-rows-dropdown">
               <FilterSelect
