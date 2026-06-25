@@ -53,6 +53,7 @@ export const AuthContext = createContext({
   user: null,
   menuPermissions: [],
   pagePermissions: {},
+  visibleRoles: [],
   isAccountsExecutive: false,
   sessionTimeout: null,
   warningTime: null,
@@ -69,6 +70,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [menuPermissions, setMenuPermissions] = useState([]);
   const [pagePermissions, setPagePermissions] = useState({});
+  const [visibleRoles, setVisibleRoles] = useState([]);
   const [isAccountsExecutive, setIsAccountsExecutive] = useState(false);
   const [sessionTimeout, setSessionTimeout] = useState(null);
   const [warningTime, setWarningTime] = useState(null);
@@ -94,6 +96,7 @@ export const AuthProvider = ({ children }) => {
             setUser(userData.user);
             setMenuPermissions(userData.menuPermissions);
             setPagePermissions(effectivePagePermissions);
+            setVisibleRoles(userData.visibleRoles || []);
             setIsAccountsExecutive(isAccountsRole(role));
             setSessionTimeout(userData.sessionTimeout || null);
             setWarningTime(userData.warningTime || null);
@@ -131,6 +134,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData.user);
       setMenuPermissions(userData.menuPermissions);
       setPagePermissions(effectivePagePermissions);
+      setVisibleRoles(userData.visibleRoles || []);
       setIsAccountsExecutive(isAccountsRole(role));
       setSessionTimeout(userData.sessionTimeout || null);
       setWarningTime(userData.warningTime || null);
@@ -170,6 +174,7 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setMenuPermissions([]);
     setPagePermissions({});
+    setVisibleRoles([]);
     setIsAccountsExecutive(false);
     setSessionTimeout(null);
     setWarningTime(null);
@@ -192,6 +197,7 @@ export const AuthProvider = ({ children }) => {
     user,
     menuPermissions,
     pagePermissions,
+    visibleRoles,
     isAccountsExecutive,
     sessionTimeout,
     warningTime,

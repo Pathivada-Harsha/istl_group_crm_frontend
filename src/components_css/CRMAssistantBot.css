@@ -307,6 +307,34 @@
   flex-shrink: 0;
 }
 
+/* Input row icon buttons override — different from header icons
+   Header icons: white text on blue bg
+   Input row icons: dark text on white bg */
+.crm-bot-input-row .crm-bot-icon-btn {
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.crm-bot-input-row .crm-bot-icon-btn:hover {
+  background: var(--c-e2e8f0, #e2e8f0);
+  color: var(--c-0b63d6, #0b63d6);
+  border-color: var(--c-0b63d6, #0b63d6);
+}
+
+/* Mic active state — red pulse when recording */
+.crm-bot-mic-btn--active {
+  color: #ef4444 !important;
+  background: #fee2e2 !important;
+  border-color: #ef4444 !important;
+  animation: crm-mic-pulse 1s ease-in-out infinite;
+}
+
+@keyframes crm-mic-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.6; }
+}
+
 .crm-bot-input {
   flex: 1;
   padding: 9px 12px;
@@ -401,103 +429,113 @@
   background-color: var(--c-eff6ff, #15243d);
 }
 
+/* ════════════════════════════════════════════════════════════
+   v7 — Edit / Copy user message additions
+   ════════════════════════════════════════════════════════════ */
 
-/* ── v3 additions: voice, image, replay ─────────────────────────────────── */
-
-/* Image preview inside message */
-.crm-bot-img-preview {
-  max-width: 200px;
-  max-height: 140px;
-  border-radius: 10px;
-  object-fit: cover;
-  margin-bottom: 6px;
-  border: 1px solid var(--c-e5e7eb, #e5e7eb);
-  display: block;
+/* ── Message action buttons (Edit, Copy) ─────────────────────
+   Appear below the user bubble, visible only on hover of the row */
+.crm-bot-msg-row--user .crm-bot-msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 3px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.crm-bot-msg-row--user:hover .crm-bot-msg-actions {
+  opacity: 1;
 }
 
-/* Image strip above input row */
-.crm-bot-img-strip {
+.crm-bot-msg-action-btn {
+  background: none;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+  color: var(--ct-94a3b8, #94a3b8);
+  font-size: 11px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background-color: var(--c-f9fafb, #f9fafb);
-  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
-  flex-shrink: 0;
+  gap: 3px;
+  transition: background 0.13s, color 0.13s, border-color 0.13s;
+  background: var(--c-ffffff, #fff);
+}
+.crm-bot-msg-action-btn:hover {
+  color: var(--c-2563eb, #2563eb);
+  border-color: var(--c-2563eb, #2563eb);
+  background: var(--c-eff6ff, #eff6ff);
 }
 
-.crm-bot-img-thumb {
-  width: 40px;
-  height: 40px;
+/* ── Edit mode: textarea replacing the bubble ───────────────── */
+.crm-bot-edit-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  width: 100%;
+  max-width: 84%;
+  margin-left: auto;
+}
+
+.crm-bot-edit-area {
+  width: 100%;
+  min-height: 72px;
+  padding: 10px 13px;
+  border-radius: 14px 14px 4px 14px;
+  border: 2px solid var(--c-2563eb, #2563eb);
+  background: var(--c-ffffff, #fff);
+  color: var(--ct-0f172a, #0f172a);
+  font-size: 13.5px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.crm-bot-edit-area:focus {
+  border-color: #1d4ed8;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.18);
+}
+
+/* ── Save / Cancel buttons ──────────────────────────────────── */
+.crm-bot-edit-actions {
+  display: flex;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.crm-bot-edit-save,
+.crm-bot-edit-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 14px;
   border-radius: 8px;
-  object-fit: cover;
-  border: 1px solid var(--c-e5e7eb, #e5e7eb);
-  flex-shrink: 0;
-}
-
-.crm-bot-img-name {
-  font-size: 11px;
-  color: var(--ct-6b7280, #6b7280);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.crm-bot-img-remove {
-  background: none;
-  border: none;
-  color: var(--ct-9ca3af, #9ca3af);
+  font-size: 12.5px;
+  font-weight: 600;
   cursor: pointer;
-  font-size: 14px;
-  padding: 2px 4px;
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-
-.crm-bot-img-remove:hover {
-  color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.08);
-}
-
-/* Attach (camera) button */
-.crm-bot-attach-btn {
-  color: var(--ct-6b7280, #6b7280);
-  flex-shrink: 0;
-}
-
-/* Mic button */
-.crm-bot-mic-btn {
-  color: var(--ct-6b7280, #6b7280);
-  flex-shrink: 0;
-  transition: color 0.2s, background-color 0.2s;
-}
-
-.crm-bot-mic-btn--active {
-  color: #ef4444 !important;
-  background-color: rgba(239, 68, 68, 0.1) !important;
-  animation: crm-bot-pulse 1s ease-in-out infinite;
-}
-
-@keyframes crm-bot-pulse {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.5; }
-}
-
-/* Replay voice button under assistant messages */
-.crm-bot-replay-btn {
-  background: none;
   border: none;
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--ct-9ca3af, #9ca3af);
-  padding: 2px 4px;
-  border-radius: 4px;
-  margin-top: 2px;
-  align-self: flex-start;
-  transition: color 0.15s;
+  transition: all 0.15s;
 }
 
-.crm-bot-replay-btn:hover {
-  color: var(--c-0b63d6, #0b63d6);
+.crm-bot-edit-save {
+  background: var(--c-2563eb, #2563eb);
+  color: #fff;
+}
+.crm-bot-edit-save:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(37,99,235,0.25);
+}
+
+.crm-bot-edit-cancel {
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-64748b, #64748b);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+}
+.crm-bot-edit-cancel:hover {
+  background: var(--c-e2e8f0, #e2e8f0);
+  color: var(--ct-374151, #374151);
 }
