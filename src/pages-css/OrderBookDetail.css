@@ -1,0 +1,538 @@
+/* ============================================================================
+   OrderBookDetailPage styles
+   Scoped under .obd-* to avoid clashing with existing OrderBook.css.
+   Uses the app's CSS theme variables where available, with safe fallbacks.
+   ============================================================================ */
+
+.obd-page { padding: 16px 20px 40px; color: var(--text-primary, #1e293b); }
+
+/* Top bar */
+.obd-topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.obd-back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--bg-secondary, #f1f5f9); border: 1px solid var(--border-color, #e2e8f0);
+  color: var(--text-primary, #334155); padding: 7px 14px; border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
+}
+.obd-back-btn:hover { background: var(--bg-hover, #e2e8f0); }
+.obd-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-secondary, #64748b); }
+.obd-bc-sep { color: var(--text-tertiary, #94a3b8); }
+.obd-bc-active { font-weight: 700; color: var(--text-primary, #334155); }
+
+/* Header card */
+.obd-header-card {
+  background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 16px;
+  display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+}
+.obd-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
+.obd-subline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.obd-chip { font-size: 12px; font-weight: 600; background: var(--bg-secondary, #f1f5f9); border-radius: 6px; padding: 3px 10px; color: var(--text-secondary, #475569); }
+.obd-chip--proj { background: #ede9fe; color: #6d28d9; }
+.obd-chip--warn { background: #fef3c7; color: #b45309; }
+.obd-status { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 3px 10px; background: #e0f2fe; color: #0369a1; }
+.obd-status--confirmed { background: #dcfce7; color: #15803d; }
+.obd-status--draft { background: #f1f5f9; color: #64748b; }
+.obd-status--completed { background: #dbeafe; color: #1d4ed8; }
+.obd-status--cancelled { background: #fee2e2; color: #b91c1c; }
+.obd-header-meta { display: flex; gap: 28px; flex-wrap: wrap; }
+.obd-header-meta > div { display: flex; flex-direction: column; gap: 4px; }
+.obd-header-meta label { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-tertiary, #94a3b8); }
+.obd-header-meta span { font-size: 14px; font-weight: 600; }
+
+/* Tab bar */
+.obd-tabbar { display: flex; gap: 4px; border-bottom: 2px solid var(--border-color, #e2e8f0); margin-bottom: 20px; }
+.obd-tab {
+  background: none; border: none; padding: 10px 18px; font-size: 14px; font-weight: 600;
+  color: var(--text-secondary, #64748b); cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: color .15s, border-color .15s;
+}
+.obd-tab:hover { color: var(--text-primary, #334155); }
+.obd-tab.active { color: var(--accent, #6d28d9); border-bottom-color: var(--accent, #6d28d9); }
+
+/* Layout */
+.obd-stack { display: flex; flex-direction: column; gap: 16px; }
+.obd-grid { display: grid; grid-template-columns: 1fr 1.4fr; gap: 16px; }
+.obd-card--wide { grid-column: auto; }
+@media (max-width: 900px) { .obd-grid { grid-template-columns: 1fr; } }
+
+.obd-card {
+  background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 12px; padding: 18px 20px;
+}
+.obd-card-title { font-size: 15px; font-weight: 700; margin: 0 0 14px; }
+.obd-card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; gap: 12px; flex-wrap: wrap; }
+.obd-card-head .obd-card-title { margin: 0; }
+.obd-card-head-actions { display: flex; gap: 8px; }
+.obd-card-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+.obd-kv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; }
+.obd-kv-grid > div { display: flex; flex-direction: column; gap: 2px; }
+.obd-kv-grid label { font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-tertiary, #94a3b8); }
+.obd-kv-grid span { font-size: 13px; font-weight: 600; }
+.obd-desc { margin: 14px 0 0; font-size: 13px; color: var(--text-secondary, #475569); line-height: 1.5; }
+.obd-spec { color: var(--text-tertiary, #94a3b8); font-weight: 400; }
+
+/* Tables */
+.obd-table-wrap { overflow-x: auto; }
+.obd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.obd-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-tertiary, #94a3b8); padding: 8px 10px; border-bottom: 1px solid var(--border-color, #e2e8f0); white-space: nowrap; }
+.obd-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-light, #f1f5f9); vertical-align: middle; }
+.obd-table tfoot td { border-bottom: none; padding-top: 12px; }
+
+/* Forms */
+.obd-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 16px; margin-bottom: 12px; }
+@media (max-width: 760px) { .obd-form-grid { grid-template-columns: 1fr 1fr; } }
+.obd-field { display: flex; flex-direction: column; gap: 5px; }
+.obd-field > span { font-size: 12px; font-weight: 600; color: var(--text-secondary, #475569); }
+.obd-field--full { width: 100%; margin-top: 4px; }
+.obd-field input, .obd-field textarea, .obd-inp {
+  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 7px 10px;
+  font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b);
+  font-family: inherit; width: 100%;
+}
+.obd-field input:focus, .obd-field textarea:focus, .obd-inp:focus { outline: none; border-color: var(--accent, #6d28d9); }
+.obd-inp--xs { width: 64px; }
+.obd-inp--sm { width: 130px; }
+
+/* Buttons */
+.obd-btn {
+  display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 14px;
+  font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background .15s, opacity .15s;
+}
+.obd-btn--primary { background: var(--accent, #6d28d9); color: #fff; }
+.obd-btn--primary:hover { opacity: .9; }
+.obd-btn--ghost { background: var(--bg-secondary, #f1f5f9); color: var(--text-primary, #334155); border-color: var(--border-color, #e2e8f0); }
+.obd-btn--ghost:hover { background: var(--bg-hover, #e2e8f0); }
+.obd-btn:disabled { opacity: .6; cursor: not-allowed; }
+.obd-icon-btn { background: none; border: none; cursor: pointer; color: var(--text-secondary, #64748b); padding: 4px; border-radius: 6px; }
+.obd-icon-btn:hover { background: var(--bg-secondary, #f1f5f9); }
+.obd-icon-btn--danger:hover { color: #dc2626; background: #fee2e2; }
+
+.obd-empty { padding: 28px; text-align: center; color: var(--text-tertiary, #94a3b8); font-size: 13px; }
+.obd-banner { padding: 10px 14px; border-radius: 8px; font-size: 13px; margin-bottom: 14px; }
+.obd-banner--warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+
+/* Commercial summary stats */
+.obd-stat-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.obd-stat { flex: 1; min-width: 120px; background: var(--bg-secondary, #f8fafc); border: 1px solid var(--border-color, #e2e8f0); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.obd-stat label { font-size: 11px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-tertiary, #94a3b8); }
+.obd-stat span { font-size: 16px; font-weight: 700; }
+.obd-stat--ok span { color: #15803d; }
+.obd-stat--over span { color: #dc2626; }
+
+.obd-progress { position: relative; height: 22px; background: var(--bg-secondary, #f1f5f9); border-radius: 11px; overflow: hidden; }
+.obd-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #6d28d9, #8b5cf6); border-radius: 11px; transition: width .3s; }
+.obd-progress-fill--over { background: linear-gradient(90deg, #dc2626, #f87171); }
+.obd-progress-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 700; color: var(--text-primary, #1e293b); }
+
+/* Gantt */
+.obd-gantt { margin-top: 20px; border-top: 1px solid var(--border-color, #e2e8f0); padding-top: 18px; }
+.obd-gantt-head, .obd-gantt-row { display: flex; align-items: center; gap: 0; }
+.obd-gantt-label {
+  width: 160px; flex-shrink: 0; font-size: 12px; font-weight: 600; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: var(--text-secondary, #475569); padding-right: 12px;
+}
+.obd-gantt-weeks { display: flex; flex: 1; }
+.obd-gantt-wk {
+  flex: 1; display: flex; flex-direction: column; align-items: center; line-height: 1.25;
+  padding: 0 0 8px; border-left: 1px solid var(--border-light, #eef2f7);
+}
+.obd-gantt-wk:last-child { border-right: 1px solid var(--border-light, #eef2f7); }
+.obd-gantt-wk-num { font-size: 11px; font-weight: 700; color: var(--text-secondary, #475569); }
+.obd-gantt-wk-date { font-size: 8.5px; color: var(--text-tertiary, #94a3b8); white-space: nowrap; }
+
+.obd-gantt-row { margin-top: 7px; }
+.obd-gantt-row:hover .obd-gantt-label { color: var(--accent, #6d28d9); }
+/* Track carries the same column gridlines as the header so bars line up exactly */
+.obd-gantt-track {
+  position: relative; flex: 1; height: 22px; border-radius: 6px;
+  background-color: var(--bg-secondary, #f8fafc);
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc(100% / var(--cols, 12))
+  );
+}
+.obd-gantt-bar {
+  position: absolute; top: 3px; bottom: 3px; border-radius: 5px;
+  display: flex; align-items: center; justify-content: center; min-width: 22px;
+  background: linear-gradient(90deg, #2563eb, #60a5fa);
+  box-shadow: 0 1px 3px rgba(37,99,235,.35); transition: filter .15s;
+}
+.obd-gantt-row:hover .obd-gantt-bar { filter: brightness(1.08); }
+.obd-gantt-bar--planned { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+.obd-gantt-bar--not-started { background: #cbd5e1; }
+.obd-gantt-bar--in-progress { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+.obd-gantt-bar--completed { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.obd-gantt-bar--delayed { background: linear-gradient(90deg, #dc2626, #f87171); }
+.obd-gantt-pct { font-size: 9.5px; font-weight: 700; color: #fff; padding: 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Dark theme nudges (app toggles data-theme="dark" on <html>) */
+[data-theme="dark"] .obd-card,
+[data-theme="dark"] .obd-header-card { background: #1e293b; border-color: #334155; }
+[data-theme="dark"] .obd-back-btn,
+[data-theme="dark"] .obd-btn--ghost,
+[data-theme="dark"] .obd-stat,
+[data-theme="dark"] .obd-gantt-track { background: #0f172a; border-color: #334155; }
+[data-theme="dark"] .obd-inp,
+[data-theme="dark"] .obd-field input,
+[data-theme="dark"] .obd-field textarea { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .obd-progress { background: #0f172a; }
+
+/* Live project context strip */
+.obd-project-strip {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e2e8f0);
+  border-left: 4px solid var(--accent, #6d28d9);
+  border-radius: 10px; padding: 12px 18px; margin-bottom: 16px;
+}
+.obd-project-strip-tag {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--accent, #6d28d9); background: #ede9fe; padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+}
+.obd-project-strip-items { display: flex; gap: 26px; flex-wrap: wrap; flex: 1; }
+.obd-project-strip-items > div { display: flex; flex-direction: column; gap: 3px; }
+.obd-project-strip-items label { font-size: 10px; text-transform: uppercase; letter-spacing: .3px; color: var(--text-tertiary, #94a3b8); }
+.obd-project-strip-items span { font-size: 13px; font-weight: 600; }
+.obd-project-strip-progress { min-width: 140px; }
+.obd-mini-progress { height: 8px; background: var(--bg-secondary, #f1f5f9); border-radius: 4px; overflow: hidden; margin: 2px 0; }
+.obd-mini-progress-fill { height: 100%; background: linear-gradient(90deg, #6d28d9, #8b5cf6); border-radius: 4px; }
+.obd-mini-progress-label { font-size: 12px; font-weight: 700; }
+[data-theme="dark"] .obd-project-strip { background: #1e293b; border-color: #334155; border-left-color: #8b5cf6; }
+[data-theme="dark"] .obd-project-strip-tag { background: #4c1d95; color: #ddd6fe; }
+[data-theme="dark"] .obd-mini-progress { background: #0f172a; }
+
+/* Site-location map picker */
+.obd-loc { display: flex; flex-direction: column; gap: 6px; }
+.obd-loc-search {
+  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 8px 11px;
+  font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b); width: 100%;
+}
+.obd-loc-search:focus { outline: none; border-color: var(--accent, #6d28d9); }
+.obd-loc-map-wrap {
+  width: 100%; height: 320px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border-color, #e2e8f0); background: var(--bg-secondary, #f1f5f9);
+  position: relative;
+}
+.obd-loc-map { width: 100%; height: 100%; }
+.obd-loc-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text-tertiary, #94a3b8); pointer-events: none;
+}
+.obd-loc-coords {
+  display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.obd-loc-clear {
+  background: none; border: none; color: #dc2626; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0;
+}
+.obd-loc-clear:hover { text-decoration: underline; }
+[data-theme="dark"] .obd-loc-search { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .obd-loc-map { background: #0f172a; border-color: #334155; }
+
+/* Google Places Autocomplete dropdown is appended to <body>; lift it above app chrome */
+.pac-container { z-index: 100000 !important; }
+
+.obd-loc-error {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+}
+[data-theme="dark"] .obd-loc-error { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+
+/* Budget category: select-or-custom */
+.obd-cat-custom { display: flex; align-items: center; gap: 6px; }
+.obd-cat-back {
+  flex-shrink: 0; border: 1px solid var(--border-color, #cbd5e1); background: var(--bg-secondary, #f1f5f9);
+  color: var(--text-secondary, #475569); border-radius: 6px; padding: 4px 8px; cursor: pointer; font-size: 13px;
+}
+.obd-cat-back:hover { background: var(--bg-hover, #e2e8f0); }
+[data-theme="dark"] .obd-cat-back { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+
+/* ============================================================================
+   CONSOLIDATED DARK THEME — complete coverage.
+   The app's theme.css does not define the --bg/--text/--border tokens used as
+   fallbacks above, so in dark mode those var() calls resolve to the LIGHT
+   fallback. This block makes every surface, border, text and table element
+   adapt explicitly. Placed last so it wins over the partial rules above.
+   Palette: bg #0f172a / surface #1e293b / border #334155 / text #e2e8f0
+            muted #94a3b8 / accent #8b5cf6
+   ============================================================================ */
+[data-theme="dark"] .obd-page { color: #e2e8f0; }
+
+/* Surfaces */
+[data-theme="dark"] .obd-card,
+[data-theme="dark"] .obd-header-card,
+[data-theme="dark"] .obd-project-strip { background: #1e293b; border-color: #334155; }
+
+/* Secondary / inset surfaces */
+[data-theme="dark"] .obd-back-btn,
+[data-theme="dark"] .obd-btn--ghost,
+[data-theme="dark"] .obd-stat,
+[data-theme="dark"] .obd-gantt-track,
+[data-theme="dark"] .obd-progress,
+[data-theme="dark"] .obd-mini-progress,
+[data-theme="dark"] .obd-loc-map-wrap,
+[data-theme="dark"] .obd-loc-map,
+[data-theme="dark"] .obd-inp,
+[data-theme="dark"] .obd-field input,
+[data-theme="dark"] .obd-field textarea,
+[data-theme="dark"] .obd-loc-search,
+[data-theme="dark"] .obd-cat-back { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+
+/* Select dropdown options (native menu) */
+[data-theme="dark"] .obd-inp option { background: #1e293b; color: #e2e8f0; }
+
+/* Text — headings, values, labels */
+[data-theme="dark"] .obd-title,
+[data-theme="dark"] .obd-card-title,
+[data-theme="dark"] .obd-bc-active,
+[data-theme="dark"] .obd-header-meta span,
+[data-theme="dark"] .obd-kv-grid span,
+[data-theme="dark"] .obd-stat span,
+[data-theme="dark"] .obd-project-strip-items span,
+[data-theme="dark"] .obd-mini-progress-label,
+[data-theme="dark"] .obd-progress-label,
+[data-theme="dark"] .obd-table td { color: #e2e8f0; }
+
+[data-theme="dark"] .obd-desc,
+[data-theme="dark"] .obd-field > span,
+[data-theme="dark"] .obd-gantt-label,
+[data-theme="dark"] .obd-loc-coords,
+[data-theme="dark"] .obd-bc-sep,
+[data-theme="dark"] .obd-breadcrumb { color: #cbd5e1; }
+
+[data-theme="dark"] .obd-header-meta label,
+[data-theme="dark"] .obd-kv-grid label,
+[data-theme="dark"] .obd-stat label,
+[data-theme="dark"] .obd-project-strip-items label,
+[data-theme="dark"] .obd-empty,
+[data-theme="dark"] .obd-spec,
+[data-theme="dark"] .obd-loc-loading,
+[data-theme="dark"] .obd-gantt-wk,
+[data-theme="dark"] .obd-table th { color: #94a3b8; }
+
+/* Tabs */
+[data-theme="dark"] .obd-tabbar { border-bottom-color: #334155; }
+[data-theme="dark"] .obd-tab { color: #94a3b8; }
+[data-theme="dark"] .obd-tab:hover { color: #e2e8f0; }
+[data-theme="dark"] .obd-tab.active { color: #a78bfa; border-bottom-color: #a78bfa; }
+
+/* Table row dividers */
+[data-theme="dark"] .obd-table th { border-bottom-color: #334155; }
+[data-theme="dark"] .obd-table td { border-bottom-color: #1f2a3a; }
+
+/* Buttons */
+[data-theme="dark"] .obd-back-btn:hover,
+[data-theme="dark"] .obd-btn--ghost:hover { background: #334155; }
+[data-theme="dark"] .obd-icon-btn { color: #94a3b8; }
+[data-theme="dark"] .obd-icon-btn:hover { background: #334155; }
+
+/* Chips / statuses — darker tints so colored text stays legible */
+[data-theme="dark"] .obd-chip { background: #334155; color: #cbd5e1; }
+[data-theme="dark"] .obd-chip--proj { background: #4c1d95; color: #ddd6fe; }
+[data-theme="dark"] .obd-chip--warn { background: #422006; color: #fcd34d; }
+[data-theme="dark"] .obd-status { background: #0c4a6e; color: #bae6fd; }
+[data-theme="dark"] .obd-status--confirmed { background: #14532d; color: #bbf7d0; }
+[data-theme="dark"] .obd-status--draft { background: #334155; color: #cbd5e1; }
+[data-theme="dark"] .obd-status--completed { background: #1e3a8a; color: #bfdbfe; }
+[data-theme="dark"] .obd-status--cancelled { background: #7f1d1d; color: #fecaca; }
+
+/* Stat over/ok keep their semantic hue but lighter for contrast */
+[data-theme="dark"] .obd-stat--ok span { color: #4ade80; }
+[data-theme="dark"] .obd-stat--over span { color: #f87171; }
+
+/* Banners */
+[data-theme="dark"] .obd-banner--warn { background: #422006; color: #fcd34d; border-color: #854d0e; }
+
+/* Project strip accent */
+[data-theme="dark"] .obd-project-strip { border-left-color: #8b5cf6; }
+[data-theme="dark"] .obd-project-strip-tag { background: #4c1d95; color: #ddd6fe; }
+
+/* Location error */
+[data-theme="dark"] .obd-loc-error { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }
+
+/* PO file viewer modal */
+.obd-fv-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.6); z-index: 99999;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.obd-fv-modal {
+  background: var(--bg-card, #fff); border-radius: 12px; width: min(960px, 95vw);
+  height: min(85vh, 900px); display: flex; flex-direction: column; overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35);
+}
+.obd-fv-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--border-color, #e2e8f0);
+}
+.obd-fv-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; overflow: hidden; }
+.obd-fv-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.obd-fv-controls { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.obd-fv-close {
+  background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer;
+  color: var(--text-secondary, #64748b); padding: 0 4px;
+}
+.obd-fv-close:hover { color: var(--text-primary, #1e293b); }
+.obd-fv-body { flex: 1; overflow: auto; background: var(--bg-secondary, #f1f5f9); position: relative; }
+.obd-fv-iframe { width: 100%; height: 100%; border: none; }
+.obd-fv-img-wrap { display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 100%; }
+.obd-fv-img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.obd-fv-loading, .obd-fv-unsupported {
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 12px;
+  align-items: center; justify-content: center; color: var(--text-tertiary, #94a3b8); font-size: 14px;
+}
+.obd-fv-unsupported svg { font-size: 40px; }
+[data-theme="dark"] .obd-fv-modal { background: #1e293b; }
+[data-theme="dark"] .obd-fv-header { border-bottom-color: #334155; }
+[data-theme="dark"] .obd-fv-title { color: #e2e8f0; }
+[data-theme="dark"] .obd-fv-body { background: #0f172a; }
+[data-theme="dark"] .obd-fv-close { color: #94a3b8; }
+
+/* Weekly/Monthly unit toggle */
+.obd-unit-toggle { display: inline-flex; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; overflow: hidden; }
+.obd-unit-toggle button {
+  border: none; background: var(--bg-card, #fff); color: var(--text-secondary, #475569);
+  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.obd-unit-toggle button + button { border-left: 1px solid var(--border-color, #cbd5e1); }
+.obd-unit-toggle button.active { background: var(--accent, #6d28d9); color: #fff; }
+[data-theme="dark"] .obd-unit-toggle { border-color: #334155; }
+[data-theme="dark"] .obd-unit-toggle button { background: #0f172a; color: #cbd5e1; }
+[data-theme="dark"] .obd-unit-toggle button + button { border-left-color: #334155; }
+[data-theme="dark"] .obd-unit-toggle button.active { background: #7c3aed; color: #fff; }
+
+/* Dated grid header cells */
+.obd-gantt-wk { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 2px 0; }
+.obd-gantt-wk-num { font-size: 10px; font-weight: 700; color: var(--text-secondary, #475569); }
+.obd-gantt-wk-date { font-size: 8px; color: var(--text-tertiary, #94a3b8); white-space: nowrap; }
+[data-theme="dark"] .obd-gantt-wk-num { color: #cbd5e1; }
+[data-theme="dark"] .obd-gantt-wk-date { color: #94a3b8; }
+
+/* ── Chart polish: readonly field, gridlines, dark-theme alignment ── */
+.obd-readonly {
+  background: var(--bg-secondary, #f1f5f9) !important; color: var(--text-secondary, #475569) !important;
+  cursor: default;
+}
+[data-theme="dark"] .obd-readonly { background: #0f172a !important; color: #94a3b8 !important; border-color: #334155 !important; }
+
+/* Dark gridlines for the gantt header + track (override the solid-bg dark rule above) */
+[data-theme="dark"] .obd-gantt { border-top-color: #334155; }
+[data-theme="dark"] .obd-gantt-wk { border-left-color: #243043; }
+[data-theme="dark"] .obd-gantt-wk:last-child { border-right-color: #243043; }
+[data-theme="dark"] .obd-gantt-track {
+  background-color: #0f172a;
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc(100% / var(--cols, 12))
+  );
+}
+[data-theme="dark"] .obd-gantt-bar { box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+[data-theme="dark"] .obd-gantt-bar--planned { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+
+/* Schedule block's own save bar */
+.obd-schedule-footer {
+  display: flex; justify-content: flex-end; margin-top: 18px;
+  padding-top: 16px; border-top: 1px solid var(--border-color, #e2e8f0);
+}
+[data-theme="dark"] .obd-schedule-footer { border-top-color: #334155; }
+
+/* Progress tab + per-phase progress capture cell */
+.obd-progress-cell { display: flex; align-items: center; gap: 4px; }
+.obd-progress-cell-pct { font-size: 11px; color: var(--text-tertiary, #94a3b8); }
+.obd-mini-progress-fill--completed  { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.obd-mini-progress-fill--in-progress { background: linear-gradient(90deg, #2563eb, #60a5fa); }
+.obd-mini-progress-fill--delayed    { background: linear-gradient(90deg, #dc2626, #f87171); }
+.obd-mini-progress-fill--not-started { background: #cbd5e1; }
+[data-theme="dark"] .obd-mini-progress-fill--not-started { background: #334155; }
+.obd-progress-fill--paid { background: linear-gradient(90deg, #16a34a, #4ade80); }
+.obd-progress-fill--over { background: linear-gradient(90deg, #dc2626, #f87171); }
+
+/* ── Progress tab: two-bar planned/actual Gantt (ref: EPC dashboard) ── */
+.obd-gantt--progress { margin-top: 8px; }
+.obd-gantt-prow { display: flex; align-items: stretch; margin-top: 10px; }
+.obd-gantt-prow .obd-gantt-label { display: flex; align-items: center; }
+.obd-gantt-ptrack {
+  position: relative; flex: 1; display: flex; flex-direction: column; gap: 3px;
+  background-color: var(--bg-secondary, #f8fafc); border-radius: 6px; padding: 3px 0;
+  background-image: repeating-linear-gradient(
+    to right, transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc(100% / var(--cols, 12)));
+}
+.obd-gantt-prow-line { position: relative; height: 16px; }
+.obd-gbar {
+  position: absolute; top: 0; bottom: 0; border-radius: 4px; min-width: 14px;
+  display: flex; align-items: center; justify-content: flex-end; padding: 0 6px;
+}
+.obd-gbar-tag { font-size: 9px; font-weight: 700; white-space: nowrap; }
+.obd-gbar--planned { background: #d7e88a; }            /* light greenish-yellow */
+.obd-gbar--planned .obd-gbar-tag { color: #4d5a1e; }
+.obd-gbar--actual  { background: #4fb3a8; }            /* blue-green */
+.obd-gbar--actual  .obd-gbar-tag { color: #ffffff; }
+[data-theme="dark"] .obd-gantt-ptrack {
+  background-color: #0f172a;
+  background-image: repeating-linear-gradient(
+    to right, transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc(100% / var(--cols, 12)));
+}
+[data-theme="dark"] .obd-gbar--planned { background: #b7cb6a; }
+[data-theme="dark"] .obd-gbar--planned .obd-gbar-tag { color: #2b3410; }
+[data-theme="dark"] .obd-gbar--actual { background: #3d9a90; }
+
+.obd-gantt-legend { display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: var(--text-secondary, #475569); }
+.obd-gantt-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.obd-swatch { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+.obd-swatch--planned { background: #d7e88a; }
+.obd-swatch--actual { background: #4fb3a8; }
+[data-theme="dark"] .obd-gantt-legend { color: #cbd5e1; }
+[data-theme="dark"] .obd-swatch--planned { background: #b7cb6a; }
+[data-theme="dark"] .obd-swatch--actual { background: #3d9a90; }
+
+/* ── Marker timeline (billing invoice-dates / cost pay-dates) ── */
+.obd-mtl-title { font-size: 12px; font-weight: 700; color: var(--text-secondary, #475569); margin: 16px 0 8px; }
+[data-theme="dark"] .obd-mtl-title { color: #cbd5e1; }
+.obd-mtl { width: 100%; }
+.obd-mtl-head { display: flex; }
+.obd-mtl-head .obd-gantt-wk { flex: 1; }
+.obd-mtl-track {
+  position: relative; height: 70px; border-radius: 6px;
+  background-color: var(--bg-secondary, #f8fafc);
+  background-image: repeating-linear-gradient(
+    to right, transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc((100% / var(--cols, 12)) - 1px),
+    var(--border-light, #eef2f7) calc(100% / var(--cols, 12)));
+}
+[data-theme="dark"] .obd-mtl-track {
+  background-color: #0f172a;
+  background-image: repeating-linear-gradient(
+    to right, transparent 0,
+    transparent calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc((100% / var(--cols, 12)) - 1px),
+    #243043 calc(100% / var(--cols, 12)));
+}
+.obd-mtl-marker { position: absolute; top: 0; bottom: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; }
+.obd-mtl-dot { width: 12px; height: 12px; border-radius: 50%; margin-top: 8px; flex-shrink: 0; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+[data-theme="dark"] .obd-mtl-dot { border-color: #1e293b; }
+.obd-mtl-dot--bill { background: #2563eb; }
+.obd-mtl-dot--cost { background: #d97706; }
+.obd-mtl-marker::before { content: ''; position: absolute; top: 20px; bottom: 0; width: 1px; background: var(--border-color, #cbd5e1); }
+[data-theme="dark"] .obd-mtl-marker::before { background: #334155; }
+.obd-mtl-flag {
+  margin-top: 4px; font-size: 10px; font-weight: 700; white-space: nowrap;
+  background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e2e8f0);
+  border-radius: 5px; padding: 2px 6px; color: var(--text-primary, #1e293b);
+  display: flex; flex-direction: column; align-items: center; line-height: 1.3; z-index: 1;
+}
+.obd-mtl-flag em { font-style: normal; font-weight: 500; font-size: 9px; color: var(--text-tertiary, #94a3b8); max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+[data-theme="dark"] .obd-mtl-flag { background: #1e293b; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .obd-mtl-flag em { color: #94a3b8; }

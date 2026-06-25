@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import {
   Search, Plus, X, Edit2, Eye, Check, FileText, Upload,
   Calendar, DollarSign, IndianRupee, CheckCircle, AlertCircle, CreditCard,
@@ -6,6 +7,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import '../pages-css/Bills-Recieved.css';
+import '../components/OrderBook/ItemNameAutocomplete.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
@@ -210,6 +212,147 @@ const BRDateRangeFilter = ({ appliedFrom, appliedTo, onApply, onClear }) => {
 };
 
 
+/**
+ * PoItemSuggest
+ * Suggestion dropdown for the Bill edit modal item-name cell.
+ * Filters from a pre-fetched list of PO items (no API call) and reuses
+ * the same .iac-* CSS classes as ItemNameAutocomplete so the UX is identical.
+ *
+ * Props:
+ *   poItems   — full list of items from the linked PO (availablePoItems)
+ *   linkedIds — Set of poItemIds already linked in the bill (to exclude duplicates)
+ *   value     — current itemName string
+ *   onChange  — called with new string as user types
+ *   onSelect  — called with the chosen PO item object
+ */
+function PoItemSuggest({ poItems, linkedIds, value, onChange, onSelect }) {
+  const [open, setOpen]           = useState(false);
+  const [activeIdx, setActiveIdx] = useState(-1);
+  const [dropStyle, setDropStyle] = useState({});
+  const wrapRef  = useRef(null);
+  const inputRef = useRef(null);
+
+  const filtered = (poItems || []).filter(pi => {
+    if (linkedIds.has(pi.id)) return false;
+    if (!value || !value.trim()) return true;
+    const q = value.toLowerCase();
+    return (pi.itemName  || '').toLowerCase().includes(q) ||
+           (pi.description || '').toLowerCase().includes(q);
+  });
+
+  const updatePos = useCallback(() => {
+    if (!inputRef.current) return;
+    const rect        = inputRef.current.getBoundingClientRect();
+    const spaceBelow  = window.innerHeight - rect.bottom;
+    const spaceAbove  = rect.top;
+    const h           = Math.min(260, filtered.length * 60 + 12);
+    const showAbove   = spaceBelow < h + 8 && spaceAbove > h + 8;
+    setDropStyle({
+      position : 'fixed',
+      left     : rect.left,
+      width    : rect.width,
+      zIndex   : 99999,
+      ...(showAbove
+        ? { bottom: window.innerHeight - rect.top + 3 }
+        : { top   : rect.bottom + 3 }),
+    });
+  }, [filtered.length]);
+
+  /* close on outside click */
+  useEffect(() => {
+    const handle = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) {
+        setOpen(false);
+        setActiveIdx(-1);
+      }
+    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, []);
+
+  /* reposition while open */
+  useEffect(() => {
+    if (!open) return;
+    updatePos();
+    window.addEventListener('scroll', updatePos, true);
+    window.addEventListener('resize',  updatePos);
+    return () => {
+      window.removeEventListener('scroll', updatePos, true);
+      window.removeEventListener('resize',  updatePos);
+    };
+  }, [open, updatePos]);
+
+  const doSelect = (pi) => {
+    onSelect(pi);
+    setOpen(false);
+    setActiveIdx(-1);
+  };
+
+  const handleKey = (e) => {
+    if (!open) return;
+    if (e.key === 'ArrowDown')  { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp')   { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter' && activeIdx >= 0) { e.preventDefault(); doSelect(filtered[activeIdx]); }
+    else if (e.key === 'Escape')    { setOpen(false); setActiveIdx(-1); }
+  };
+
+  const dropdown = open
+    ? ReactDOM.createPortal(
+        <ul className="iac-dropdown" role="listbox" style={dropStyle}>
+          {filtered.length === 0 ? (
+            <li style={{ padding: '10px 14px', fontSize: 12, color: '#94a3b8', textAlign: 'center', listStyle: 'none' }}>
+              {value && value.trim() ? 'No matching PO items' : 'All PO items already added'}
+            </li>
+          ) : filtered.map((pi, idx) => (
+            <li
+              key={pi.id}
+              className={`iac-option${idx === activeIdx ? ' iac-option--active' : ''}`}
+              onMouseDown={() => doSelect(pi)}
+              role="option"
+              aria-selected={idx === activeIdx}
+            >
+              <div className="iac-option-name">{pi.itemName || '—'}</div>
+              <div className="iac-option-meta">
+                {pi.description && <span>{pi.description}</span>}
+                <span
+                  className="iac-badge"
+                  style={pi.pendingQty <= 0
+                    ? { background: '#fee2e2', color: '#dc2626' }
+                    : undefined}
+                >
+                  Pending: {pi.pendingQty ?? '-'}
+                </span>
+                {pi.unitPrice > 0 && (
+                  <span className="iac-price">
+                    ₹{parseFloat(pi.unitPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>,
+        document.body
+      )
+    : null;
+
+  return (
+    <div className="iac-wrapper" ref={wrapRef}>
+      <input
+        ref={inputRef}
+        type="text"
+        className="bill-form-table-input iac-input"
+        value={value}
+        onChange={(e) => { onChange(e.target.value); setOpen(true); setActiveIdx(-1); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={handleKey}
+        placeholder="Search PO items…"
+        autoComplete="off"
+      />
+      {dropdown}
+    </div>
+  );
+}
+
 const BillsManagementPage = () => {
   useThemeVersion();
   const [bills, setBills] = useState([]);
@@ -284,6 +427,8 @@ const BillsManagementPage = () => {
   const [editMode, setEditMode] = useState(false);
   const [formData, setFormData] = useState(null);
   const [paymentData, setPaymentData] = useState(null);
+  // PO-item suggestion dropdown for the Edit Bill modal
+  const [availablePoItems, setAvailablePoItems] = useState([]); // raw items from the linked PO
   const [selectedFile, setSelectedFile] = useState(null);
 
   // Modal dropdown states (completely independent)
@@ -304,12 +449,15 @@ const BillsManagementPage = () => {
   const { user, pagePermissions } = useAuth();
   const billsPerms = pagePermissions?.BILLS || [];
   // Pure DB-driven permissions — no role overrides
-  const canView = billsPerms.includes('VIEW');
-  const canCreate = billsPerms.includes('CREATE');
-  const canEdit = billsPerms.includes('EDIT');
-  const canDelete = billsPerms.includes('DELETE');
+  const canView    = billsPerms.includes('VIEW');
+  const canCreate  = billsPerms.includes('CREATE');
+  const canEdit    = billsPerms.includes('EDIT');
+  const canDelete  = billsPerms.includes('DELETE');
   const canApprove = billsPerms.includes('APPROVE');
   const isViewOnly = canView && !canCreate && !canEdit && !canDelete && !canApprove;
+
+  // Paid bills require ADMIN or SUPERADMIN to delete (role check, not DB permission check)
+  const isAdminOrSuper = ['ADMIN', 'SUPERADMIN'].includes((user?.role || '').toUpperCase());
 
   const getAuthHeaders = () => ({
     'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
@@ -531,6 +679,9 @@ const BillsManagementPage = () => {
         const data = await response.json();
 
         if (data.success && data.items && data.items.length > 0) {
+          // Store raw PO items so the "add item" suggestion dropdown can reference them
+          setAvailablePoItems(data.items);
+
           const billItems = data.items.map(item => ({
             poItemId: item.id,
             itemName: item.itemName || '',
@@ -693,6 +844,7 @@ const BillsManagementPage = () => {
 
   const handleModalPOChange = (val) => {
     const poId = val || '';
+    setAvailablePoItems([]);
     setFormData(prev => ({
       ...prev,
       poId: poId ? parseInt(poId) : null,
@@ -877,6 +1029,9 @@ const BillsManagementPage = () => {
           ...it,
           // For rows saved before the item_name migration, fall back to description
           itemName: it.itemName || (it.poItemId ? '' : it.description) || '',
+          // Always stamp the original DB quantity so the progress bar has a baseline
+          // even if the PO item enrichment below fails or the PO item is no longer found.
+          originalBillQty: it.quantity ?? 0,
         }))
         : [{
           itemName: '',
@@ -900,6 +1055,9 @@ const BillsManagementPage = () => {
             const data = await response.json();
 
             if (data.success && data.items && data.items.length > 0) {
+              // Store raw PO items so the "add item" suggestion dropdown works in edit mode
+              setAvailablePoItems(data.items);
+
               enrichedItems = bill.items.map(billItem => {
                 if (billItem.poItemId) {
                   const poItem = data.items.find(pi => pi.id === billItem.poItemId);
@@ -951,10 +1109,21 @@ const BillsManagementPage = () => {
 
   // ========== DELETE BILL ==========
   const handleDeleteBill = (billId) => {
+    const bill = bills.find(b => b.id === billId);
+    const isPaid = bill?.status === 'Paid';
+
+    // Paid bills are high-risk deletes — restricted to ADMIN / SUPERADMIN only
+    if (isPaid && !isAdminOrSuper) {
+      showError('Only Admin or Super Admin can delete a Paid bill. Contact your administrator.');
+      return;
+    }
+
     setConfirmModal({
       show: true,
-      title: 'Delete Bill',
-      message: 'Are you sure you want to delete this bill? This action cannot be undone.',
+      title: isPaid ? '⚠ Delete Paid Bill' : 'Delete Bill',
+      message: isPaid
+        ? `This bill (${bill?.billNo}) is fully PAID (₹${formatCurrency(bill?.paidAmount)}). Deleting it will permanently remove all payment records linked to it. This cannot be undone. Continue?`
+        : 'Are you sure you want to delete this bill? This action cannot be undone.',
       type: 'error',
       onConfirm: () => performDeleteBill(billId)
     });
@@ -1008,6 +1177,17 @@ const BillsManagementPage = () => {
       // Manual items (no PO linked) require an item name
       if (!item.poItemId && (!item.itemName || item.itemName.trim() === '')) {
         showWarning(`Item ${i + 1}: Please enter an item name`);
+        return;
+      }
+
+      // When editing a PO-linked bill, only newly added rows (no DB id) must come from the PO.
+      // Existing bill items already saved to the DB are never blocked even if poItemId is absent
+      // (e.g. bills created before PO linking was introduced).
+      if (editMode && formData.poId && !item.id && !item.poItemId) {
+        showError(
+          `Item ${i + 1} "${item.itemName || 'unnamed'}" is not from the linked PO. ` +
+          `Select it from the PO suggestion dropdown or remove it.`
+        );
         return;
       }
 
@@ -1329,37 +1509,74 @@ const BillsManagementPage = () => {
 
   // Add item row
   const handleAddItem = () => {
-    if (formData) {
-      setFormData({
-        ...formData,
-        items: [...formData.items, {
-          itemName: '',
-          description: '',
-          quantity: 1,
-          unitPrice: 0,
-          taxPercent: 18
-        }]
-      });
-    }
+    setFormData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: [
+          ...prev.items,
+          { itemName: '', description: '', quantity: '', unitPrice: 0, taxPercent: 18 }
+        ]
+      };
+    });
   };
 
   // Remove item row — works for all items including PO-linked
   const handleRemoveItem = (index) => {
-    if (!formData) return;
-    if (formData.items.length <= 1) {
-      setFormData({ ...formData, items: [{ itemName: '', description: '', quantity: 1, unitPrice: 0, taxPercent: 18 }] });
-      return;
-    }
-    setFormData({ ...formData, items: formData.items.filter((_, i) => i !== index) });
+    setFormData(prev => {
+      if (!prev) return prev;
+      if (prev.items.length <= 1) {
+        return { ...prev, items: [{ itemName: '', description: '', quantity: '', unitPrice: 0, taxPercent: 18 }] };
+      }
+      return { ...prev, items: prev.items.filter((_, i) => i !== index) };
+    });
   };
 
   // Update item
   const handleUpdateItem = (index, field, value) => {
-    if (formData) {
-      const newItems = [...formData.items];
-      newItems[index] = { ...newItems[index], [field]: value };
-      setFormData({ ...formData, items: newItems });
-    }
+    setFormData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((item, i) =>
+          i !== index ? item : { ...item, [field]: value }
+        )
+      };
+    });
+  };
+
+  // Select a PO item from the suggestion dropdown for a new (non-linked) row.
+  // Uses functional setState so prev is guaranteed to be the latest committed state —
+  // this prevents the stale-closure bug where existing items' orderedQty/deliveredQty/
+  // pendingQty/maxBillableQty were wiped when the portaled dropdown's onMouseDown fired
+  // before React had committed the parent's latest render.
+  const handleSelectPoItem = (index, poItem) => {
+    setFormData(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.map((item, i) => {
+          // Every item that is NOT the target row is returned as-is — identity preserved,
+          // enriched fields (orderedQty, maxBillableQty, etc.) guaranteed untouched.
+          if (i !== index) return item;
+          return {
+            ...item,
+            poItemId       : poItem.id,
+            itemName       : poItem.itemName       || '',
+            description    : poItem.description    || '',
+            orderedQty     : poItem.orderedQty,
+            deliveredQty   : poItem.deliveredQty,
+            pendingQty     : poItem.pendingQty,
+            maxBillableQty : poItem.pendingQty      ?? 0,
+            unitPrice      : poItem.unitPrice       || 0,
+            taxPercent     : poItem.taxPercent      || 18,
+            quantity       : '',
+            deliveryStatus : poItem.deliveryStatus,
+            originalBillQty: 0
+          };
+        })
+      };
+    });
   };
 
   // File input change
@@ -1816,13 +2033,26 @@ const BillsManagementPage = () => {
                           </>
                         )}
 
-                        {/* Delete */}
-                        <button
-                          className={`receipt-action-btn btn-delete${!canDelete ? ' action-btn-disabled' : ''}`}
-                          onClick={() => canDelete && handleDeleteBill(bill.id)}
-                          title={canDelete ? 'Delete' : '🔒 No delete permission'}
-                          disabled={!canDelete}
-                        ><Trash2 size={15} /></button>
+                        {/* Delete — paid bills restricted to ADMIN/SUPERADMIN */}
+                        {(() => {
+                          const isPaid = bill.status === 'Paid';
+                          const effectiveCanDelete = canDelete && (!isPaid || isAdminOrSuper);
+                          const deleteTitle = !canDelete
+                            ? '🔒 No delete permission'
+                            : isPaid && !isAdminOrSuper
+                              ? '🔒 Only Admin/Super Admin can delete paid bills'
+                              : isPaid
+                                ? 'Delete (Paid bill — irreversible)'
+                                : 'Delete';
+                          return (
+                            <button
+                              className={`receipt-action-btn btn-delete${!effectiveCanDelete ? ' action-btn-disabled' : ''}`}
+                              onClick={() => effectiveCanDelete && handleDeleteBill(bill.id)}
+                              title={deleteTitle}
+                              disabled={!effectiveCanDelete}
+                            ><Trash2 size={15} /></button>
+                          );
+                        })()}
                       </div>
                     </td>
                   </tr>
@@ -2068,34 +2298,56 @@ const BillsManagementPage = () => {
                   <table className="bill-form-items-table">
                     <thead>
                       <tr>
-                        <th style={{ width: '15%' }}>Item Name</th>
-                        <th style={{ width: '18%' }}>Description</th>
-                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Ordered</th>}
-                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Billed</th>}
-                        {formData.items && formData.items.some(i => i.poItemId) && <th style={{ width: '7%' }}>Pending</th>}
-                        <th style={{ width: formData.items && formData.items.some(i => i.poItemId) ? '10%' : '12%' }}>Bill Qty *</th>
-                        <th style={{ width: formData.items && formData.items.some(i => i.poItemId) ? '10%' : '12%' }}>Price *</th>
-                        <th style={{ width: '7%' }}>Tax %</th>
-                        <th style={{ width: '12%' }}>Line Total</th>
-                        <th style={{ width: '7%' }}>Action</th>
+                        {/* hasPoColumns: show ordered/billed/pending cols whenever the bill
+                            is tied to a PO in edit mode, OR any existing item already has a link.
+                            This ensures the columns appear immediately when a new item is picked
+                            from the dropdown even before any pre-existing PO item is in the form. */}
+                        {(() => {
+                          const hasPoColumns = (editMode && !!formData.poId) || !!(formData.items && formData.items.some(i => i.poItemId));
+                          return (
+                            <>
+                              <th style={{ width: '15%' }}>Item Name</th>
+                              <th style={{ width: '18%' }}>Description</th>
+                              {hasPoColumns && <th style={{ width: '7%' }}>Ordered</th>}
+                              {hasPoColumns && <th style={{ width: '7%' }}>Billed</th>}
+                              {hasPoColumns && <th style={{ width: '7%' }}>Pending</th>}
+                              <th style={{ width: hasPoColumns ? '10%' : '12%' }}>Bill Qty *</th>
+                              <th style={{ width: hasPoColumns ? '10%' : '12%' }}>Price *</th>
+                              <th style={{ width: '7%' }}>Tax %</th>
+                              <th style={{ width: '12%' }}>Line Total</th>
+                              <th style={{ width: '7%' }}>Action</th>
+                            </>
+                          );
+                        })()}
                       </tr>
                     </thead>
                     <tbody>
                       {formData.items && formData.items.map((item, index) => (
                         <tr key={index} className="bill-form-item-row">
+                          {/* ── Item Name — PO-item suggestion for new rows, read-only for linked rows ── */}
                           <td>
-                            <input
-                              className="bill-form-table-input"
-                              type="text"
-                              placeholder="Item name"
-                              value={item.itemName || ''}
-                              onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
-                              readOnly={!!item.poItemId}
-                              style={{
-                                backgroundColor: item.poItemId ? __sbg('#f8fafc') : __sbg('white'),
-                                cursor: item.poItemId ? 'not-allowed' : 'text'
-                              }}
-                            />
+                            {!item.poItemId && formData.poId && availablePoItems.length > 0 ? (
+                              <PoItemSuggest
+                                poItems={availablePoItems}
+                                linkedIds={new Set(formData.items.filter(r => r.poItemId).map(r => r.poItemId))}
+                                value={item.itemName || ''}
+                                onChange={(val) => handleUpdateItem(index, 'itemName', val)}
+                                onSelect={(pi) => handleSelectPoItem(index, pi)}
+                              />
+                            ) : (
+                              <input
+                                className="bill-form-table-input"
+                                type="text"
+                                placeholder="Item name"
+                                value={item.itemName || ''}
+                                onChange={(e) => handleUpdateItem(index, 'itemName', e.target.value)}
+                                readOnly={!!item.poItemId}
+                                style={{
+                                  backgroundColor: item.poItemId ? __sbg('#f8fafc') : __sbg('white'),
+                                  cursor: item.poItemId ? 'not-allowed' : 'text'
+                                }}
+                              />
+                            )}
                           </td>
                           <td>
                             <input
@@ -2116,36 +2368,42 @@ const BillsManagementPage = () => {
                               </small>
                             )}
                           </td>
-                          {item.poItemId && (
-                            <>
-                              <td style={{ color: __stc('#64748b'), fontSize: '13px', textAlign: 'center' }}>
-                                {item.orderedQty ?? '-'}
-                              </td>
-                              <td style={{ color: __stc('#f59e0b'), fontSize: '13px', textAlign: 'center', fontWeight: 600 }}>
-                                {item.deliveredQty ?? '-'}
-                              </td>
-                              <td style={{ textAlign: 'center' }}>
-                                {item.pendingQty != null ? (
-                                  <span style={{
-                                    display: 'inline-block',
-                                    background: item.pendingQty > 0 ? __sbg('#dcfce7') : __sbg('#fee2e2'),
-                                    color: item.pendingQty > 0 ? __stc('#15803d') : __stc('#dc2626'),
-                                    fontWeight: 700,
-                                    fontSize: '13px',
-                                    borderRadius: '5px',
-                                    padding: '2px 8px',
-                                    minWidth: 28,
-                                    textAlign: 'center'
-                                  }}>
-                                    {item.pendingQty}
-                                  </span>
-                                ) : '-'}
-                              </td>
-                            </>
-                          )}
-                          {!item.poItemId && formData.items && formData.items.some(i => i.poItemId) && (
-                            <><td /><td /><td /></>
-                          )}
+                          {/* ── Ordered / Billed / Pending cells ── */}
+                          {(() => {
+                            const hasPoColumns = (editMode && !!formData.poId) || !!(formData.items && formData.items.some(i => i.poItemId));
+                            if (!hasPoColumns) return null;
+                            if (item.poItemId) return (
+                              <>
+                                <td style={{ color: __stc('#64748b'), fontSize: '13px', textAlign: 'center' }}>
+                                  {item.orderedQty ?? '-'}
+                                </td>
+                                <td style={{ color: __stc('#f59e0b'), fontSize: '13px', textAlign: 'center', fontWeight: 600 }}>
+                                  {item.deliveredQty ?? '-'}
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  {item.pendingQty != null ? (
+                                    <span style={{
+                                      display: 'inline-block',
+                                      background: item.pendingQty > 0 ? __sbg('#dcfce7') : __sbg('#fee2e2'),
+                                      color: item.pendingQty > 0 ? __stc('#15803d') : __stc('#dc2626'),
+                                      fontWeight: 700, fontSize: '13px', borderRadius: '5px',
+                                      padding: '2px 8px', minWidth: 28, textAlign: 'center'
+                                    }}>
+                                      {item.pendingQty}
+                                    </span>
+                                  ) : '-'}
+                                </td>
+                              </>
+                            );
+                            // Non-PO item — show em-dash placeholders so column alignment holds
+                            return (
+                              <>
+                                <td style={{ textAlign: 'center', color: __stc('#cbd5e1'), fontSize: '13px' }}>—</td>
+                                <td style={{ textAlign: 'center', color: __stc('#cbd5e1'), fontSize: '13px' }}>—</td>
+                                <td style={{ textAlign: 'center', color: __stc('#cbd5e1'), fontSize: '13px' }}>—</td>
+                              </>
+                            );
+                          })()}
                           <td>
                             <input
                               className="bill-form-table-input"
@@ -2160,35 +2418,44 @@ const BillsManagementPage = () => {
                                 borderColor: item.maxBillableQty && item.quantity > item.maxBillableQty ? __sbg('#ef4444') : undefined
                               }}
                             />
-                            {item.poItemId && item.maxBillableQty != null && (() => {
-                              const entered = parseFloat(item.quantity) || 0;
-                              const original = item.originalBillQty || 0;
-                              const pending = item.pendingQty || 0;
-                              const max = original + pending;
-                              const over = entered > max;
-                              const pct = max > 0 ? Math.min(100, (entered / max) * 100) : 0;
-                              // Remaining pending on PO after this bill saves
-                              // = current pending - (new qty - original qty)
+                            {!!item.poItemId && (() => {
+                              const entered     = parseFloat(item.quantity)       || 0;
+                              const original    = item.originalBillQty            ?? 0;
+                              const pending     = item.pendingQty                 ?? 0;
+                              const ordered     = item.orderedQty                 ?? (original + pending);
+                              const max         = original + pending;
+                              // "over" only meaningful when we have a real limit
+                              const over        = max > 0 && entered > max;
+                              const pct         = max > 0
+                                ? Math.min(100, (entered / max) * 100)
+                                : (entered > 0 ? 100 : 0);
                               const pendingAfter = pending - (entered - original);
+                              // "fully billed" only trustworthy when max > 0 (we have baseline data)
+                              const isFullyBilled = !over && max > 0 && pendingAfter <= 0;
+                              const label = over
+                                ? `⚠ over by ${(entered - max).toFixed(2).replace(/\.?0+$/, '')}`
+                                : isFullyBilled
+                                  ? '✓ fully billed'
+                                  : max > 0
+                                    ? `${pendingAfter.toFixed(2).replace(/\.?0+$/, '')} pending after save`
+                                    : null; // no baseline — don't make a claim
                               return (
                                 <div style={{ marginTop: 4 }}>
                                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: 2 }}>
                                     <span style={{ color: __stc('#64748b') }}>
-                                      {entered} / {max}
+                                      {entered} / {max || ordered || '?'}
                                     </span>
-                                    <span style={{ fontWeight: 600, color: over ? __stc('#dc2626') : pendingAfter <= 0 ? __stc('#15803d') : __stc('#0369a1') }}>
-                                      {over
-                                        ? `⚠ over by ${entered - max}`
-                                        : pendingAfter <= 0
-                                          ? '✓ fully billed'
-                                          : `${pendingAfter} pending after save`}
-                                    </span>
+                                    {label && (
+                                      <span style={{ fontWeight: 600, color: over ? __stc('#dc2626') : isFullyBilled ? __stc('#15803d') : __stc('#0369a1') }}>
+                                        {label}
+                                      </span>
+                                    )}
                                   </div>
                                   <div style={{ height: 4, background: __sbg('#e2e8f0'), borderRadius: 999, overflow: 'hidden' }}>
                                     <div style={{
                                       height: '100%',
                                       width: `${pct}%`,
-                                      background: over ? __sbg('#ef4444') : pct >= 80 ? __sbg('#f59e0b') : __sbg('#22c55e'),
+                                      background: over ? __sbg('#ef4444') : pct >= 100 ? __sbg('#22c55e') : pct >= 80 ? __sbg('#f59e0b') : __sbg('#22c55e'),
                                       borderRadius: 999,
                                       transition: 'width 0.2s'
                                     }} />

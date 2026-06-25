@@ -3705,12 +3705,11 @@ export default function InventoryManagementPage() {
   const toast = useToast();
   const { confirmState, confirm } = useConfirm();
 
-  const invPerms  = pagePermissions?.INVENTORY || [];
-  const isAccounts = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
-  const isAdmin    = ['ADMIN', 'SUPERADMIN'].includes((user?.role || '').toUpperCase());
-  const canView    = invPerms.includes('VIEW')   || isAdmin || isAccounts;
-  const canCreate  = invPerms.includes('CREATE') || isAdmin;
-  const canEdit    = invPerms.includes('EDIT')   || isAdmin;
+  // AFTER
+const invPerms  = pagePermissions?.INVENTORY || [];
+const canView   = invPerms.includes('VIEW');
+const canCreate = invPerms.includes('CREATE');
+const canEdit   = invPerms.includes('EDIT');
 
   const [activeTab, setActiveTab] = useState(() => {
     const saved = localStorage.getItem(LS_TAB);

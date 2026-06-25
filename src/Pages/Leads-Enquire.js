@@ -65,6 +65,55 @@ const API_BASE_URL = process.env.REACT_APP_API_URL;
 // Indian Rupee formatter for amount fields
 const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
+// ─── Tender Lead Utilities ────────────────────────────────────────────────────
+const TENDER_META_PREFIX = '__TENDER_META__:';
+
+/**
+ * Encode tender metadata into the enquiry field.
+ * The field starts with the prefix, followed by JSON, then an optional
+ * human-readable description after a newline separator.
+ */
+const encodeTenderMeta = (meta, description = '') => {
+  const json = JSON.stringify(meta);
+  return `${TENDER_META_PREFIX}${json}\n${description}`.trimEnd();
+};
+
+/**
+ * Decode tender metadata from the enquiry field.
+ * Returns { meta, description } or null if not a tender lead.
+ */
+const decodeTenderMeta = (enquiry) => {
+  if (!enquiry || !enquiry.startsWith(TENDER_META_PREFIX)) return null;
+  try {
+    const body = enquiry.slice(TENDER_META_PREFIX.length);
+    const nlIdx = body.indexOf('\n');
+    const jsonStr = nlIdx === -1 ? body : body.slice(0, nlIdx);
+    const description = nlIdx === -1 ? '' : body.slice(nlIdx + 1);
+    const meta = JSON.parse(jsonStr);
+    return { meta, description };
+  } catch { return null; }
+};
+
+/** Determine if a lead is a tender lead */
+const isTenderLead = (lead) => {
+  if (!lead) return false;
+  return lead.source === 'Tender' ||
+    (lead.enquiry && lead.enquiry.startsWith(TENDER_META_PREFIX));
+};
+
+/** Tender statuses — separate lifecycle from customer leads */
+const TENDER_STATUSES = [
+  'Tender Floated',
+  'Pre-Bid Meeting',
+  'Bid Submitted',
+  'Technical Evaluation',
+  'Financial Evaluation',
+  'L1 (Lowest Bidder)',
+  'Tender Won',
+  'Tender Lost',
+  'Cancelled / Withdrawn',
+];
+
 // ─── Default Proposal Template ───────────────────────────────────────────────
 const DEFAULT_PROPOSAL_TEMPLATE = {
   companyName: 'SESOLA POWER PROJECTS PROPOSAL PVT LTD',
@@ -813,6 +862,255 @@ const OverviewProposalsSummary = ({ lead, currentUser, apiBase, onGoToProposals 
   );
 };
 
+// ─── TenderDocumentsTab ──────────────────────────────────────────────────────
+// Dedicated Documents tab for Tender leads — upload, view, download, delete PDFs
+// Uses the same /proposals/* API as the offline proposal mechanism, but surfaced
+// as "documents" so it's semantically correct for tenders.
+const TenderDocumentsTab = ({ lead, currentUser, permissions, showSuccess, showError }) => {
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploadPanel, setUploadPanel] = useState(false);
+  const [uploadTitle, setUploadTitle] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [pdfModal, setPdfModal] = useState({ open: false, url: null, name: null });
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+
+  const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
+
+  const fetchDocs = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/getAll?page=0&size=100&groupName=${lead.groupName || ''}&subGroupName=${lead.subGroupName || ''}`, { credentials: 'include', headers });
+      const data = await res.json();
+      if (data.success) {
+        const all = data.data.content || [];
+        // Only show docs for this lead that are "offline" (i.e. actual uploaded PDFs)
+        setDocs(all.filter(p => (p.leadId === lead.id || p.leadCode === lead.leadCode) && p.offlinePdfName));
+      }
+    } catch { } finally { setLoading(false); }
+  };
+
+  useEffect(() => { fetchDocs(); }, [lead.id]);
+
+  const handleUpload = async () => {
+    if (!uploadTitle.trim()) { showError('Please enter a document title'); return; }
+    if (!uploadFile) { showError('Please select a PDF file'); return; }
+    if (!uploadFile.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files allowed'); return; }
+    if (uploadFile.size > 50 * 1024 * 1024) { showError('File too large — max 50 MB'); return; }
+    setUploading(true);
+    let newId = null;
+    try {
+      const body = JSON.stringify({
+        title: uploadTitle.trim(), leadId: lead.id, status: 'Draft',
+        groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
+        totalValue: 0, description: 'Tender document',
+      });
+      const createRes = await fetch(`${API_BASE_URL}/proposals/create`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+        body,
+      });
+      const createData = await createRes.json();
+      if (!createData.success) throw new Error(createData.error || 'Failed to create doc entry');
+      newId = createData.data?.id;
+      const form = new FormData();
+      form.append('file', uploadFile);
+      const upRes = await fetch(`${API_BASE_URL}/proposals/${newId}/upload-offline`, {
+        method: 'POST', credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+        body: form,
+      });
+      const upData = await upRes.json();
+      if (!upData.success) throw new Error(upData.error || 'PDF upload failed');
+      showSuccess('Document uploaded!');
+      setUploadPanel(false); setUploadTitle(''); setUploadFile(null);
+      fetchDocs();
+    } catch (err) {
+      if (newId) {
+        try { await fetch(`${API_BASE_URL}/proposals/delete/${newId}`, { method: 'DELETE', credentials: 'include', headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role } }); } catch { /* cleanup */ }
+      }
+      showError(err.message || 'Upload failed');
+    } finally { setUploading(false); }
+  };
+
+  const handleView = async (doc) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/${doc.id}/view-offline`, {
+        credentials: 'include', headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      if (!res.ok) throw new Error('PDF not found');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      setPdfModal({ open: true, url, name: doc.title || doc.offlinePdfName });
+    } catch (err) { showError('Failed to load: ' + (err.message || 'Server error')); }
+  };
+
+  const handleDownload = async (doc) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/${doc.id}/view-offline`, {
+        credentials: 'include', headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      if (!res.ok) throw new Error('PDF not found');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = doc.offlinePdfName || `${doc.title}.pdf`; a.click();
+      setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) { showError('Download failed: ' + (err.message || 'Server error')); }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) return;
+    const { id } = deleteConfirm;
+    setDeleteConfirm(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/delete/${id}`, {
+        method: 'DELETE', credentials: 'include',
+        headers: { 'User-Id': String(currentUser.id), 'User-Role': currentUser.role },
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('Document deleted.'); fetchDocs(); }
+      else showError(data.error || 'Delete failed');
+    } catch { showError('Delete failed'); }
+  };
+
+  return (
+    <div className="ld-tab-content">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <h4 className="ld-card-title" style={{ margin: 0 }}>Tender Documents</h4>
+        {permissions.PROPOSAL_CREATE && (
+          <button className="ld-btn ld-btn-pri ld-btn-sm" onClick={() => setUploadPanel(p => !p)}>
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" /></svg>
+            {uploadPanel ? 'Cancel' : 'Upload Document'}
+          </button>
+        )}
+      </div>
+
+      {uploadPanel && (
+        <div style={{ background: __sbg('#f0f9ff'), border: `1.5px solid ${__sbg('#bae6fd')}`, borderRadius: 10, padding: '14px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 600, color: __stc('#0369a1'), fontSize: 13, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            📎 Upload New Document
+          </div>
+          <div className="ld-form-grid">
+            <div className="ld-fgroup ld-full">
+              <label style={{ fontSize: 12, fontWeight: 600, color: __stc('#374151'), display: 'block', marginBottom: 4 }}>Document Title *</label>
+              <input
+                type="text"
+                value={uploadTitle}
+                onChange={e => setUploadTitle(e.target.value)}
+                placeholder="e.g. Tender Notice, Bid Document, EMD Receipt…"
+                style={{ width: '100%', padding: '8px 12px', border: `1.5px solid ${__sbg('#d1d5db')}`, borderRadius: 7, fontSize: 13, background: __sbg('#fff'), color: __stc('#111827'), boxSizing: 'border-box' }}
+              />
+            </div>
+            <div className="ld-fgroup ld-full">
+              <label style={{ fontSize: 12, fontWeight: 600, color: __stc('#374151'), display: 'block', marginBottom: 4 }}>PDF File *</label>
+              <label style={{
+                display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                border: '1.5px dashed ' + (uploadFile ? __sbg('#0369a1') : __sbg('#93c5fd')),
+                borderRadius: 7, padding: '8px 12px', background: uploadFile ? __sbg('#eff6ff') : __sbg('#f0f9ff'),
+                fontSize: 13, color: uploadFile ? __stc('#0369a1') : __stc('#2563eb'), fontWeight: 500
+              }}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                <span>{uploadFile ? uploadFile.name : 'Choose PDF file…'}</span>
+                <input type="file" accept=".pdf,application/pdf" style={{ display: 'none' }} onChange={e => setUploadFile(e.target.files[0] || null)} />
+              </label>
+              {uploadFile && <div style={{ fontSize: 11, color: __stc('#0369a1'), marginTop: 4 }}>✓ {uploadFile.name} selected</div>}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+            <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => { setUploadPanel(false); setUploadTitle(''); setUploadFile(null); }}>Cancel</button>
+            <button className="ld-btn ld-btn-pri ld-btn-sm" onClick={handleUpload} disabled={uploading}>
+              {uploading ? 'Uploading…' : '⬆ Upload Document'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="ld-loading-row"><div className="p-loading-spinner"></div> Loading documents…</div>
+      ) : docs.length === 0 ? (
+        <div className="ld-empty-state">
+          <div className="ld-empty-icon">📁</div>
+          <p>No documents uploaded yet.</p>
+          <p style={{ fontSize: 12, color: __stc('#9ca3af') }}>Upload tender notices, bid documents, EMD receipts, extension letters, etc.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {docs.map((doc, i) => (
+            <div key={doc.id} style={{
+              background: __sbg('#fff'), border: `1px solid ${__sbg('#e5e7eb')}`,
+              borderRadius: 10, padding: '12px 16px',
+              display: 'flex', alignItems: 'center', gap: 12,
+            }}>
+              <div style={{ width: 38, height: 38, background: __sbg('#eff6ff'), borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg fill="none" stroke={__stc('#2563eb')} viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: __stc('#111827'), whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {doc.title || doc.offlinePdfName}
+                </div>
+                <div style={{ fontSize: 11, color: __stc('#6b7280'), marginTop: 2 }}>
+                  {doc.offlinePdfName && <span>📎 {doc.offlinePdfName} &nbsp;</span>}
+                  {doc.createdAt && <span>· {fmtDate(doc.createdAt)}</span>}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button onClick={() => handleView(doc)} className="ld-pact-btn" title="View PDF">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                  View
+                </button>
+                <button onClick={() => handleDownload(doc)} className="ld-pact-btn ld-pact-offline-dl" title="Download">
+                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                  Download
+                </button>
+                {permissions.PROPOSAL_DELETE && (
+                  <button onClick={() => setDeleteConfirm({ id: doc.id, title: doc.title })} className="ld-pact-btn ld-pact-delete" title="Delete">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                    Delete
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* PDF Viewer Modal */}
+      {pdfModal.open && (
+        <div className="ld-pdf-modal-overlay" onClick={() => { setPdfModal({ open: false, url: null, name: null }); if (pdfModal.url) window.URL.revokeObjectURL(pdfModal.url); }}>
+          <div className="ld-pdf-modal" onClick={e => e.stopPropagation()}>
+            <div className="ld-pdf-modal-header">
+              <span className="ld-pdf-modal-title">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                {pdfModal.name}
+              </span>
+              <button className="ld-btn ld-btn-sec ld-btn-sm" onClick={() => { setPdfModal({ open: false, url: null, name: null }); if (pdfModal.url) window.URL.revokeObjectURL(pdfModal.url); }}>✕ Close</button>
+            </div>
+            <div className="ld-pdf-modal-body">
+              <iframe src={pdfModal.url} title={pdfModal.name} width="100%" height="100%" style={{ border: 'none' }} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteConfirm && (
+        <ConfirmationModal
+          show={true}
+          type="alert"
+          title="Delete Document"
+          message={`Delete "${deleteConfirm.title}"? This cannot be undone.`}
+          confirmText="Delete"
+          cancelText="Cancel"
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteConfirm(null)}
+        />
+      )}
+    </div>
+  );
+};
+
 // ─── Lead Detail Page (full-page view inside leads container) ─────────────────
 const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions, onEdit, showSuccess, showError }) => {
   useThemeVersion();
@@ -1121,7 +1419,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       <div className="ld-tabs">
         {[
           { k: 'overview', l: 'Overview' },
-          { k: 'proposals', l: 'Proposals' },
+          { k: 'proposals', l: isTenderLead(lead) ? 'Proposals' : 'Proposals' },
+          ...(isTenderLead(lead) ? [{ k: 'documents', l: '📁 Documents' }] : []),
           { k: 'followups', l: 'Follow-ups' },
           { k: 'history', l: 'History' },
         ].map(t => (
@@ -1209,7 +1508,67 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
               </div>
             )}
 
-            {/* BD assignment info — shown when lead has been handed off */}
+            {/* ── Tender Info Card — only for Tender leads ──────────────────── */}
+            {(() => {
+              const td = decodeTenderMeta(lead.enquiry);
+              if (!td) return null;
+              const { meta } = td;
+              return (
+                <div className="ld-info-card" style={{ border: `1.5px solid ${__sbg('#bae6fd')}`, background: __sbg('#f0f9ff') }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <span style={{ fontSize: 18 }}>📋</span>
+                    <h4 className="ld-card-title" style={{ margin: 0, color: __stc('#0369a1') }}>Tender Details</h4>
+                    <span style={{ marginLeft: 'auto', background: __sbg('#e0f2fe'), color: __stc('#0369a1'), borderRadius: 20, padding: '2px 10px', fontSize: 11, fontWeight: 700 }}>TENDER</span>
+                  </div>
+                  <div className="ld-field-list">
+                    {[
+                      ['Tender Reference No.', meta.tenderRefNo],
+                      ['Tender Title', meta.tenderTitle],
+                      ['Issuing Authority', meta.issuingAuthority],
+                      ['Tender Portal / Source', meta.tenderPortal],
+                      ['Location Floated At', meta.locationFloated],
+                      ['Scope of Work', meta.scopeOfWork],
+                      ['Capacity', meta.capacity ? `${meta.capacity} ${meta.capacityUnit || 'kW'}` : null],
+                      ['Price Floated (₹)', meta.priceFloated ? `₹${Number(meta.priceFloated).toLocaleString('en-IN')}` : null],
+                      ['EMD Amount (₹)', meta.emdAmount ? `₹${Number(meta.emdAmount).toLocaleString('en-IN')}` : null],
+                      ['Bid Submission Deadline', meta.bidDeadline],
+                      ['Pre-Bid Meeting Date', meta.preBidDate],
+                      ['Original Close Date', meta.originalCloseDate],
+                    ].filter(([, v]) => v).map(([l, v]) => (
+                      <div className="ld-field-row" key={l}>
+                        <span className="ld-field-label">{l}</span>
+                        <span className="ld-field-val">{v}</span>
+                      </div>
+                    ))}
+
+                    {/* Extensions */}
+                    {meta.extensions && meta.extensions.length > 0 && (
+                      <div className="ld-field-row ld-field-row--block" key="ext">
+                        <span className="ld-field-label">Extensions</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                          {meta.extensions.map((ext, i) => (
+                            <div key={i} style={{ background: __sbg('#fff7ed'), border: `1px solid ${__sbg('#fed7aa')}`, borderRadius: 6, padding: '5px 10px', fontSize: 12 }}>
+                              <span style={{ fontWeight: 600, color: __stc('#c2410c') }}>Extension {i + 1}</span>
+                              {ext.newDeadline && <span style={{ marginLeft: 8, color: __stc('#374151') }}>→ {ext.newDeadline}</span>}
+                              {ext.reason && <span style={{ color: __stc('#6b7280'), marginLeft: 8 }}>({ext.reason})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {meta.tenderNotes && (
+                      <div className="ld-field-row ld-field-row--block" key="tnotes">
+                        <span className="ld-field-label">Notes</span>
+                        <span className="ld-field-val ld-field-val--note">{meta.tenderNotes}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+
             {lead.bdAssignedToName && (
               <div className="ld-info-card">
                 <h4 className="ld-card-title">Team Assignment</h4>
@@ -1278,9 +1637,27 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             )}
           </div>
           <div className="ld-enquiry-card">
-            <h4 className="ld-card-title">Enquiry Description</h4>
-            <p className="ld-enquiry-text">{lead.enquiry || 'No description provided.'}</p>
+            <h4 className="ld-card-title">{isTenderLead(lead) ? 'Tender Description / Notes' : 'Enquiry Description'}</h4>
+            <p className="ld-enquiry-text">
+              {(() => {
+                const td = decodeTenderMeta(lead.enquiry);
+                if (td) {
+                  const desc = td.description || td.meta?.tenderNotes || '';
+                  return desc || 'No additional description provided.';
+                }
+                return lead.enquiry || 'No description provided.';
+              })()}
+            </p>
           </div>
+          {lead.telecallerStatus === 'NOT_INTERESTED' && lead.telecallerReason && (
+            <div className="ld-enquiry-card" style={{background:__sbg('#fef2f2'),border:`1.5px solid ${__sbg('#fecaca')}`}}>
+              <h4 className="ld-card-title" style={{color:__stc('#b91c1c')}}>❌ Not Interested — Reason</h4>
+              <div>
+                <span style={{fontSize:11,fontWeight:700,color:__stc('#dc2626'),textTransform:'uppercase',letterSpacing:'0.5px'}}>Reason Given</span>
+                <p className="ld-enquiry-text" style={{marginTop:4,color:__stc('#374151')}}>{lead.telecallerReason}</p>
+              </div>
+            </div>
+          )}
           {lead.telecallerStatus === 'KEEP_IN_VIEW' && (lead.telecallerReason || lead.kivReminderDate) && (
             <div className="ld-enquiry-card" style={{background:__sbg('#f5f3ff'),border:`1.5px solid ${__sbg('#e9d5ff')}`}}>
               <h4 className="ld-card-title" style={{color:__stc('#6d28d9')}}>👁 Keep in View Details</h4>
@@ -1517,6 +1894,15 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             </div>
           ))}
         </div>
+      )}
+      {activeTab === 'documents' && isTenderLead(lead) && (
+        <TenderDocumentsTab
+          lead={lead}
+          currentUser={currentUser}
+          permissions={permissions}
+          showSuccess={showSuccess}
+          showError={showError}
+        />
       )}
       {activeTab === 'followups' && (
         <div className="ld-tab-content">
@@ -1977,6 +2363,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const [quickClosedBy, setQuickClosedBy] = useState('');
   const [quickClosedByName, setQuickClosedByName] = useState('');
   const [quickClosedLostReason, setQuickClosedLostReason] = useState('');
+  const [quickNotInterestedReason, setQuickNotInterestedReason] = useState('');
   const [quickKivDate, setQuickKivDate] = useState('');
   const [quickKivTime, setQuickKivTime] = useState('09:00');
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -1986,7 +2373,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const [formData, setFormData] = useState({
     customerId: null, name: '', email: '', phone: '', source: 'Website',
     priority: 'Medium', status: 'New', assignedTo: null, enquiry: '',
-    groupName: '', subGroupName: '', closedLostReason: '',
+    groupName: '', subGroupName: '', closedLostReason: '', notInterestedReason: '',
     closedByUserId: null, closedByName: '',
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
@@ -2246,7 +2633,7 @@ useEffect(() => {
       assignedTo: lead.assignedTo, enquiry: lead.enquiry,
       groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
       closedLostReason: '',
-      closedByUserId: lead.closedByUserId || null,
+      notInterestedReason: '',
       closedByName: lead.closedByName || '',
       // NEW fields:
       state: lead.state || '',
@@ -2300,6 +2687,7 @@ useEffect(() => {
     setQuickClosedBy(lead.closedByUserId ? String(lead.closedByUserId) : '');
     setQuickClosedByName(lead.closedByName || '');
     setQuickClosedLostReason('');
+    setQuickNotInterestedReason('');
     setQuickKivDate(''); setQuickKivTime('09:00');
     setShowQuickStatusModal(true);
   };
@@ -2308,6 +2696,7 @@ useEffect(() => {
     if (!quickStatusLead || !quickStatus) return;
     if (quickStatus === 'Closed Won' && !quickClosedBy) { showError('Please select who closed this lead'); return; }
     if (quickStatus === 'Closed Lost' && !quickClosedLostReason.trim()) { showError('Please enter a reason for closing lost'); return; }
+    if (quickStatus === 'Not Interested' && !quickNotInterestedReason.trim()) { showError('Please enter a reason for marking this lead Not Interested'); return; }
     if (quickStatus === 'Keep in View' && (!quickKivDate || !quickKivTime)) { showError('Please set the callback date & time'); return; }
     setQuickStatusSaving(true);
     try {
@@ -2315,6 +2704,7 @@ useEffect(() => {
         status: quickStatus,
         ...(quickStatus === 'Closed Won' && { closedByUserId: Number(quickClosedBy), closedByName: quickClosedByName }),
         ...(quickStatus === 'Closed Lost' && { closedLostReason: quickClosedLostReason.trim() }),
+        ...(quickStatus === 'Not Interested' && { notInterestedReason: quickNotInterestedReason.trim() }),
       };
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${quickStatusLead.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       if (data.success) {
@@ -2342,11 +2732,13 @@ useEffect(() => {
 
   const handleSubmit = async e => {
     e.preventDefault();
-    if (formData.phone && formData.phone.length !== 10) { setPhoneError('Must be exactly 10 digits'); return; }
+    const isTender = formData.source === 'Tender';
+    if (!isTender && formData.phone && formData.phone.length !== 10) { setPhoneError('Must be exactly 10 digits'); return; }
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) { showError('Please enter a valid email address'); return; }
     if (formData.id && !canEdit) { showWarning('No edit permission'); return; }
     if (!formData.id && !canCreate) { showWarning('No create permission'); return; }
     if (formData.status === 'Keep in View' && (!kivDate || !kivTime)) { showError('Please set the callback date & time for Keep in View'); return; }
+    if (formData.status === 'Not Interested' && !(formData.notInterestedReason || '').trim()) { showError('Please enter a reason for marking this lead Not Interested'); return; }
     setLoading(true);
     try {
       const payload = { ...formData };
@@ -2458,7 +2850,7 @@ useEffect(() => {
       customerId: null, name: '', email: '', phone: '',
       source: 'Website', priority: 'Medium', status: 'New',
       assignedTo: null, enquiry: '', groupName: seedGroup, subGroupName: seedSubGroup,
-      closedLostReason: '', closedByUserId: null, closedByName: '',
+      closedLostReason: '', notInterestedReason: '', closedByUserId: null, closedByName: '',
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
@@ -2488,7 +2880,20 @@ useEffect(() => {
   const renderCell = (lead, colKey) => {
     const empty = <span style={{display:'block',textAlign:'center',color:__stc('#9ca3af')}}>—</span>;
     switch (colKey) {
-      case 'name': return lead.name ? <span className="leads-enquiries-font-medium">{lead.name}</span> : empty;
+      case 'name': return lead.name
+        ? (
+          <span className="leads-enquiries-font-medium" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {lead.source === 'Tender' && (
+              <span style={{
+                background: __sbg('#e0f2fe'), color: __stc('#0369a1'),
+                borderRadius: 4, padding: '1px 6px', fontSize: 10, fontWeight: 700, flexShrink: 0,
+                border: `1px solid ${__sbg('#bae6fd')}`, letterSpacing: '0.3px',
+              }}>📋 TENDER</span>
+            )}
+            {lead.name}
+          </span>
+        )
+        : empty;
       case 'contact': return (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
           {lead.email
@@ -2774,7 +3179,7 @@ useEffect(() => {
         <div className="leads-enquiries-filters">
           <FilterSelect value={statusFilter} options={[{value:'All',label:'All Status'},...['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))]} placeholder="All Status" onChange={v=>setStatusFilter(v)} />
           <FilterSelect value={priorityFilter} options={[{value:'All',label:'All Priority'},...['High','Medium','Low'].map(s=>({value:s,label:s}))]} placeholder="All Priority" onChange={v=>setPriorityFilter(v)} />
-          <FilterSelect value={sourceFilter} options={[{value:'All',label:'All Sources'},...['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Others'].map(s=>({value:s,label:s}))]} placeholder="All Sources" onChange={v=>setSourceFilter(v)} />
+          <FilterSelect value={sourceFilter} options={[{value:'All',label:'All Sources'},...['Website','Referral','Cold Call','Email','Walk-in','Social Media','Digital Marketing','Campaign','Tender','Others'].map(s=>({value:s,label:s}))]} placeholder="All Sources" onChange={v=>setSourceFilter(v)} />
 
           {/* Date range filter */}
           <div className="leads-date-filter-group">
@@ -3005,6 +3410,15 @@ useEffect(() => {
               </div>
             )}
 
+            {quickStatus==='Not Interested' && (
+              <div className="qs-conditional qs-conditional-lost">
+                <div className="qs-conditional-label">❌ Not Interested — Reason *</div>
+                <textarea rows={3} value={quickNotInterestedReason} onChange={e=>setQuickNotInterestedReason(e.target.value)}
+                  placeholder="Why is this lead not interested?"
+                  style={{width:'100%',padding:'8px 10px',border:`1.5px solid ${__sbg('#fca5a5')}`,borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
+              </div>
+            )}
+
             {quickStatus==='Keep in View' && (
               <div className="qs-conditional qs-conditional-kiv">
                 <div className="qs-conditional-label">👁 Keep in View — Callback Date & Time *</div>
@@ -3227,8 +3641,243 @@ function LeadOwnerDropdown({ users, value, onChange }) {
   );
 }
 
+// ─── Tender Form Section ─────────────────────────────────────────────────────
+// The fields shown when "Tender Lead" mode is active.
+const TenderFormSection = ({ tenderMeta, setTenderMeta, tenderDesc, setTenderDesc, groups, subGroups, users, allUsers, canAssign, formData, setFormData }) => {
+  // Extensions: array of { newDeadline, reason }
+  const addExtension = () => setTenderMeta(m => ({ ...m, extensions: [...(m.extensions || []), { newDeadline: '', reason: '' }] }));
+  const updateExtension = (i, field, val) => setTenderMeta(m => {
+    const exts = [...(m.extensions || [])];
+    exts[i] = { ...exts[i], [field]: val };
+    return { ...m, extensions: exts };
+  });
+  const removeExtension = (i) => setTenderMeta(m => ({ ...m, extensions: (m.extensions || []).filter((_, idx) => idx !== i) }));
+
+  return (
+    <div>
+      {/* Tender notice banner */}
+      <div style={{
+        background: __sbg('#f0f9ff'), border: `1.5px solid ${__sbg('#bae6fd')}`,
+        borderRadius: 10, padding: '10px 14px', marginBottom: 16,
+        display: 'flex', alignItems: 'center', gap: 10,
+      }}>
+        <span style={{ fontSize: 20 }}>📋</span>
+        <div>
+          <div style={{ fontWeight: 700, color: __stc('#0369a1'), fontSize: 13 }}>Tender Lead Mode</div>
+          <div style={{ fontSize: 11, color: __stc('#6b7280') }}>Fill in tender-specific fields. Documents can be uploaded from the Documents tab after saving.</div>
+        </div>
+      </div>
+
+      {/* ── Tender Identity ─────────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Tender Identity</h3>
+        <div className="leads-enquiries-form-grid">
+          <div className="leads-enquiries-form-group">
+            <label>Tender Reference / NIT No.</label>
+            <input type="text" value={tenderMeta.tenderRefNo || ''} onChange={e => setTenderMeta(m => ({ ...m, tenderRefNo: e.target.value }))} placeholder="e.g. NIT/2024-25/SOLAR/042" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Tender Title *</label>
+            <input type="text" required value={tenderMeta.tenderTitle || ''} onChange={e => setTenderMeta(m => ({ ...m, tenderTitle: e.target.value }))} placeholder="e.g. Supply & Installation of 5 MW Solar Plant" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Issuing Authority / Organisation</label>
+            <input type="text" value={tenderMeta.issuingAuthority || ''} onChange={e => setTenderMeta(m => ({ ...m, issuingAuthority: e.target.value }))} placeholder="e.g. SPDCL, NREDCAP, Govt of AP…" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Tender Portal / Source</label>
+            <input type="text" value={tenderMeta.tenderPortal || ''} onChange={e => setTenderMeta(m => ({ ...m, tenderPortal: e.target.value }))} placeholder="e.g. eprocure.gov.in, GeM, TANGEDCO portal…" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Location Floated At</label>
+            <input type="text" value={tenderMeta.locationFloated || ''} onChange={e => setTenderMeta(m => ({ ...m, locationFloated: e.target.value }))} placeholder="e.g. Visakhapatnam District, AP" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Scope of Work</label>
+            <input type="text" value={tenderMeta.scopeOfWork || ''} onChange={e => setTenderMeta(m => ({ ...m, scopeOfWork: e.target.value }))} placeholder="e.g. EPC, O&M, Supply Only…" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tender Financials ───────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Financials & Capacity</h3>
+        <div className="leads-enquiries-form-grid">
+          <div className="leads-enquiries-form-group">
+            <label>Price Floated (₹)</label>
+            <input type="text" value={tenderMeta.priceFloated || ''} onChange={e => setTenderMeta(m => ({ ...m, priceFloated: e.target.value.replace(/[^0-9.]/g, '') }))} placeholder="e.g. 50000000" />
+            {tenderMeta.priceFloated && <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>= ₹{Number(tenderMeta.priceFloated || 0).toLocaleString('en-IN')}</small>}
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>EMD Amount (₹)</label>
+            <input type="text" value={tenderMeta.emdAmount || ''} onChange={e => setTenderMeta(m => ({ ...m, emdAmount: e.target.value.replace(/[^0-9.]/g, '') }))} placeholder="Earnest Money Deposit" />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Project Capacity</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input type="number" min="0" step="any" value={tenderMeta.capacity || ''} onChange={e => setTenderMeta(m => ({ ...m, capacity: e.target.value }))} placeholder="e.g. 5" style={{ flex: 1 }} />
+              <select value={tenderMeta.capacityUnit || 'MW'} onChange={e => setTenderMeta(m => ({ ...m, capacityUnit: e.target.value }))} style={{ width: 80 }}>
+                <option value="kW">kW</option>
+                <option value="kWp">kWp</option>
+                <option value="MW">MW</option>
+                <option value="kVA">kVA</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Tender Timeline ─────────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Timeline & Dates</h3>
+        <div className="leads-enquiries-form-grid">
+          <div className="leads-enquiries-form-group">
+            <label>Bid Submission Deadline *</label>
+            <input type="date" value={tenderMeta.bidDeadline || ''} onChange={e => setTenderMeta(m => ({ ...m, bidDeadline: e.target.value }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Pre-Bid Meeting Date</label>
+            <input type="date" value={tenderMeta.preBidDate || ''} onChange={e => setTenderMeta(m => ({ ...m, preBidDate: e.target.value }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Original Close Date</label>
+            <input type="date" value={tenderMeta.originalCloseDate || ''} onChange={e => setTenderMeta(m => ({ ...m, originalCloseDate: e.target.value }))} />
+          </div>
+        </div>
+
+        {/* Extensions */}
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <label style={{ fontWeight: 600, color: __stc('#374151'), fontSize: 13 }}>Extensions / Corrigendum</label>
+            <button type="button" onClick={addExtension} style={{
+              background: __sbg('#fff7ed'), color: __stc('#c2410c'), border: `1px solid ${__sbg('#fed7aa')}`,
+              borderRadius: 6, padding: '4px 10px', fontSize: 12, fontWeight: 600, cursor: 'pointer',
+            }}>+ Add Extension</button>
+          </div>
+          {(tenderMeta.extensions || []).length === 0 ? (
+            <div style={{ fontSize: 12, color: __stc('#9ca3af'), fontStyle: 'italic' }}>No extensions recorded.</div>
+          ) : (
+            (tenderMeta.extensions || []).map((ext, i) => (
+              <div key={i} style={{
+                background: __sbg('#fff7ed'), border: `1px solid ${__sbg('#fed7aa')}`, borderRadius: 8,
+                padding: '10px 12px', marginBottom: 8, display: 'flex', gap: 10, alignItems: 'flex-end',
+              }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: __stc('#c2410c'), display: 'block', marginBottom: 3 }}>Extension {i + 1} — New Deadline</label>
+                  <input type="date" value={ext.newDeadline || ''} onChange={e => updateExtension(i, 'newDeadline', e.target.value)} style={{ width: '100%', padding: '7px 10px', border: `1.5px solid ${__sbg('#fed7aa')}`, borderRadius: 6, fontSize: 12, background: __sbg('#fff'), color: __stc('#111827'), boxSizing: 'border-box' }} />
+                </div>
+                <div style={{ flex: 2 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: __stc('#c2410c'), display: 'block', marginBottom: 3 }}>Reason / Reference</label>
+                  <input type="text" value={ext.reason || ''} onChange={e => updateExtension(i, 'reason', e.target.value)} placeholder="e.g. Corrigendum No. 1 — clarifications received" style={{ width: '100%', padding: '7px 10px', border: `1.5px solid ${__sbg('#fed7aa')}`, borderRadius: 6, fontSize: 12, background: __sbg('#fff'), color: __stc('#111827'), boxSizing: 'border-box' }} />
+                </div>
+                <button type="button" onClick={() => removeExtension(i)} style={{ background: __sbg('#fef2f2'), color: __stc('#dc2626'), border: `1px solid ${__sbg('#fecaca')}`, borderRadius: 6, padding: '7px 10px', cursor: 'pointer', fontSize: 12, flexShrink: 0 }}>✕</button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* ── Lead Metadata ───────────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Lead Metadata</h3>
+        <div className="leads-enquiries-form-grid">
+          <div className="leads-enquiries-form-group">
+            <label>Group</label>
+            <FilterSelect value={formData.groupName} options={groups.map(g => ({ value: g.value || g.label, label: g.label || g.value }))} placeholder="Select Group" onChange={v => setFormData(p => ({ ...p, groupName: v, subGroupName: '' }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Category</label>
+            <FilterSelect value={formData.subGroupName} options={subGroups.map(s => ({ value: s.value || s.label, label: s.label || s.value }))} placeholder={!formData.groupName ? 'Select Group First' : 'Select Category'} disabled={!formData.groupName} onChange={v => setFormData(p => ({ ...p, subGroupName: v }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Tender Status *</label>
+            <FilterSelect value={formData.status} options={TENDER_STATUSES.map(s => ({ value: s, label: s }))} placeholder="Select Tender Status" onChange={v => setFormData(p => ({ ...p, status: v }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Priority</label>
+            <FilterSelect value={formData.priority} options={['High', 'Medium', 'Low'].map(s => ({ value: s, label: s }))} placeholder="Select Priority" onChange={v => setFormData(p => ({ ...p, priority: v }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Assign To</label>
+            <FilterSelect value={formData.assignedTo ? String(formData.assignedTo) : ''} options={users.map(u => ({ value: String(u.id), label: u.name }))} placeholder="Select Member" disabled={!canAssign} onChange={v => setFormData(p => ({ ...p, assignedTo: v ? Number(v) : null }))} />
+          </div>
+          <div className="leads-enquiries-form-group">
+            <label>Lead Owner</label>
+            <LeadOwnerDropdown users={allUsers || []} value={formData.leadOwner || ''} onChange={name => setFormData(p => ({ ...p, leadOwner: name }))} />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Additional Notes ─────────────────────────────────────────────── */}
+      <div className="leads-enquiries-form-section">
+        <h3 className="leads-enquiries-form-section-title">Notes & Remarks</h3>
+        <div className="leads-enquiries-form-group">
+          <label>Tender Notes / Remarks</label>
+          <textarea rows={4} value={tenderDesc} onChange={e => setTenderDesc(e.target.value)} placeholder="Any additional context, requirements, competitive intelligence, etc." />
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
 const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, allUsers, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime }) => {
+  // ── Detect if this is an edit of an existing tender lead ──────────────────
+  /* TENDER TYPE TEMPORARILY DISABLED — uncomment when re-enabling tender leads
+  const isEditingTender = !!(formData.id && formData.source === 'Tender');
+  const initialTenderMode = isEditingTender ||
+    (formData.enquiry && formData.enquiry.startsWith(TENDER_META_PREFIX));
+  */
+
+  // ── Lead type toggle state ─────────────────────────────────────────────────
+  // TENDER TYPE TEMPORARILY DISABLED — always customer for now
+  // const [leadType, setLeadType] = React.useState(initialTenderMode ? 'tender' : 'customer');
+  const leadType = 'customer';
+
+  // ── Tender metadata state ─────────────────────────────────────────────────
+  /* TENDER TYPE TEMPORARILY DISABLED
+  const [tenderMeta, setTenderMeta] = React.useState(() => {
+    if (!initialTenderMode) return {};
+    const td = decodeTenderMeta(formData.enquiry);
+    return td ? td.meta : {};
+  });
+  const [tenderDesc, setTenderDesc] = React.useState(() => {
+    if (!initialTenderMode) return '';
+    const td = decodeTenderMeta(formData.enquiry);
+    return td ? td.description : '';
+  });
+  */
+
+  // ── Sync tender metadata into formData.enquiry & formData.source ────────────
+  /* TENDER TYPE TEMPORARILY DISABLED
+  React.useEffect(() => {
+    if (leadType !== 'tender') return;
+    setFormData(p => ({
+      ...p,
+      source: 'Tender',
+      enquiry: encodeTenderMeta(tenderMeta, tenderDesc),
+    }));
+  }, [tenderMeta, tenderDesc, leadType]); // eslint-disable-line react-hooks/exhaustive-deps
+  */
+
+  // ── When switching lead type, reset relevant fields ───────────────────────
+  /* TENDER TYPE TEMPORARILY DISABLED
+  const switchLeadType = (type) => {
+    setLeadType(type);
+    if (type === 'customer') {
+      setFormData(p => ({ ...p, source: 'Website', enquiry: '' }));
+    } else {
+      setFormData(p => ({
+        ...p,
+        source: 'Tender',
+        status: TENDER_STATUSES[0],
+        enquiry: encodeTenderMeta(tenderMeta, tenderDesc),
+        phone: p.phone || '',
+      }));
+    }
+  };
+  */
+
   // ── Pincode auto-fill ──────────────────────────────────────────────────────
   const [pincodeError, setPincodeError] = React.useState('');
   const pincodeDebounceRef              = React.useRef(null);
@@ -3270,6 +3919,89 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
 
   return (
   <form id="ld-lead-form" onSubmit={onSubmit} className="leads-enquiries-form">
+
+    {/* ── Lead Type Toggle — TEMPORARILY DISABLED (customer only for now) ──
+    {!formData.id && (
+      <div style={{ display: 'flex', gap: 0, marginBottom: 20, borderRadius: 10, overflow: 'hidden', border: `2px solid ${__sbg('#e5e7eb')}`, width: 'fit-content' }}>
+        <button
+          type="button"
+          onClick={() => switchLeadType('customer')}
+          style={{
+            padding: '9px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none',
+            background: leadType === 'customer' ? __sbg('#2563eb') : __sbg('#f9fafb'),
+            color: leadType === 'customer' ? '#fff' : __stc('#6b7280'),
+            transition: 'all .15s',
+          }}
+        >
+          👤 Customer Lead
+        </button>
+        <button
+          type="button"
+          onClick={() => switchLeadType('tender')}
+          style={{
+            padding: '9px 22px', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: 'none',
+            borderLeft: `2px solid ${__sbg('#e5e7eb')}`,
+            background: leadType === 'tender' ? __sbg('#0369a1') : __sbg('#f9fafb'),
+            color: leadType === 'tender' ? '#fff' : __stc('#6b7280'),
+            transition: 'all .15s',
+          }}
+        >
+          📋 Tender Lead
+        </button>
+      </div>
+    )}
+    ── End Lead Type Toggle */}
+
+    {/* ── Editing Tender Badge — TEMPORARILY DISABLED
+    {formData.id && leadType === 'tender' && (
+      <div style={{ background: __sbg('#e0f2fe'), border: `1.5px solid ${__sbg('#bae6fd')}`, borderRadius: 8, padding: '8px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: __stc('#0369a1') }}>
+        📋 Editing Tender Lead
+      </div>
+    )}
+    ── End Editing Tender Badge */}
+
+    {/* ── Tender Lead Form — TEMPORARILY DISABLED
+    {leadType === 'tender' && (
+      <>
+        <div className="leads-enquiries-form-section">
+          <h3 className="leads-enquiries-form-section-title">Tender Identification</h3>
+          <div className="leads-enquiries-form-grid">
+            <div className="leads-enquiries-form-group">
+              <label>Tender Short Name / Organisation *</label>
+              <input type="text" required value={formData.name} onChange={e => setFormData(p => ({ ...p, name: e.target.value }))} placeholder="e.g. SPDCL 5MW Solar — AP" />
+              <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Used as the lead name in the list view.</small>
+            </div>
+            <div className="leads-enquiries-form-group">
+              <label>Contact Person (optional)</label>
+              <input type="text" value={formData.email} onChange={e => setFormData(p => ({ ...p, email: e.target.value }))} placeholder="Contact name or email at issuing authority" />
+            </div>
+            <div className="leads-enquiries-form-group">
+              <label>Contact Phone (optional)</label>
+              <input type="text" value={formData.phone} onChange={e => setFormData(p => ({ ...p, phone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="10-digit phone (optional)" maxLength="10" />
+            </div>
+          </div>
+        </div>
+        <TenderFormSection
+          tenderMeta={tenderMeta}
+          setTenderMeta={setTenderMeta}
+          tenderDesc={tenderDesc}
+          setTenderDesc={setTenderDesc}
+          groups={groups}
+          subGroups={subGroups}
+          users={users}
+          allUsers={allUsers}
+          canAssign={canAssign}
+          formData={formData}
+          setFormData={setFormData}
+        />
+      </>
+    )}
+    ── End Tender Lead Form */}
+
+    {/* ── Regular Customer Lead Form ─────────────────────────────────── */}
+    {/* leadType === 'customer' condition removed — always customer for now */}
+    {/* {leadType === 'customer' && ( */}
+    <>
     <div className="leads-enquiries-form-section">
       <h3 className="leads-enquiries-form-section-title">Client Information</h3>
       <div className="leads-enquiries-form-grid">
@@ -3486,6 +4218,25 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
       )}
 
+      {formData.status === 'Not Interested' && (
+        <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ background: __sbg('#fee2e2'), color: __stc('#991b1b'), borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>REQUIRED</span>
+            Reason for Not Interested *
+          </label>
+          <textarea
+            required
+            rows={3}
+            value={formData.notInterestedReason || ''}
+            onChange={e => setFormData(p => ({ ...p, notInterestedReason: e.target.value }))}
+            placeholder="Please specify why this lead is not interested…"
+            style={{ borderColor: __sbg('#fca5a5') }}
+          />
+          <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>This reason will be shown on the lead's detail page and recorded in the lead history.</small>
+        </div>
+      )}
+
+
 
 
       <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
@@ -3586,6 +4337,8 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
       </div>
     </div>
+    </> {/* end customer form — leadType condition removed temporarily */}
+    {/* )} */}
 
   </form>
   );

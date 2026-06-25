@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import '../pages-css/OrderBook.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -9,6 +10,7 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
+import OrderBookDetailPage from '../components/OrderBook/OrderBookDetailPage.js';
 import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
 import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
@@ -318,6 +320,10 @@ function OrderBook() {
 
   // Modals
   const [showViewModal, setShowViewModal] = useState(false);
+  // Full in-page detail view (Overview / Technical Scope / Commercial tabs)
+  const [detailOrderBook, setDetailOrderBook] = useState(null);
+  // URL param ?view=<id> keeps the detail view open across a browser refresh.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showPOUploadModal, setShowPOUploadModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -961,21 +967,49 @@ function OrderBook() {
     }
   };
 
+  // On load / refresh: if the URL has ?view=<id>, reopen that order's detail
+  // once the list has loaded. Runs whenever the list or the param changes.
+  useEffect(() => {
+    const viewId = searchParams.get('view');
+    if (!viewId) return;
+    if (detailOrderBook && String(detailOrderBook.id) === String(viewId)) return;
+    if (!orderBooks || orderBooks.length === 0) return; // wait for list to load
+    const match = orderBooks.find(o => String(o.id) === String(viewId));
+    if (match) handleView(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBooks, searchParams]);
+
+  // Close the detail view and remove ?view from the URL.
+  const closeDetail = () => {
+    setDetailOrderBook(null);
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('view');
+      return next;
+    }, { replace: true });
+  };
+
   const handleView = async (orderBook) => {
-    setSelectedOrderBook(orderBook);
+    // Open the full in-page detail view. Items load lazily inside the detail
+    // page, but we prefetch here so the Overview tab is instant.
+    setDetailOrderBook(orderBook);
+    // Reflect the open order in the URL so a refresh stays on this detail view.
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.set('view', String(orderBook.id));
+      return next;
+    }, { replace: true });
     try {
       const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
         credentials: "include",
         headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
-      if (!response.ok) throw new Error('Failed to fetch items');
-      const data = await response.json();
-      if (data.success) {
-        setSelectedOrderBook({ ...orderBook, items: data.data || [] });
-        setShowViewModal(true);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) setDetailOrderBook({ ...orderBook, items: data.data || [] });
       }
     } catch (err) {
-      showError(err.message || 'Error loading order book details');
+      // non-fatal: detail page will retry the items fetch itself
     }
   };
 
@@ -1419,9 +1453,20 @@ function OrderBook() {
   };
 
   return (
+    <>
+    <ToastContainer toasts={toasts} removeToast={removeToast} />
+    {detailOrderBook ? (
+      <OrderBookDetailPage
+        orderBook={detailOrderBook}
+        user={user}
+        onBack={() => closeDetail()}
+        onEdit={(ob) => { closeDetail(); handleEdit(ob); }}
+        showSuccess={showSuccess}
+        showError={showError}
+      />
+    ) : (
     <div className="orderbook-page">
       {loading && <CrmPreloader text="Loading..." />}
-      <ToastContainer toasts={toasts} removeToast={removeToast} />
 
       {/* Breadcrumb */}
       <div className="orderbook-breadcrumb">
@@ -2392,6 +2437,8 @@ function OrderBook() {
         </div>
       )}
     </div>
+    )}
+    </>
   );
 }
 
