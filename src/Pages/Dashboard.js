@@ -2,6 +2,7 @@
 // Fixed: role matching, fixed-height cards, generic dashboard for all roles
 
 import React, { useState, useEffect, useContext } from "react";
+import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import "../pages-css/Dashboard.css";
 
@@ -159,6 +160,16 @@ const TallCard = ({ title, sub, right, children }) => (
     {children}
   </Card>
 );
+
+// "View more" link that navigates to the full Team Lead Performance page.
+const ViewMoreBtn = () => {
+  const navigate = useNavigate();
+  return (
+    <button className="rd-viewmore" onClick={() => navigate('/team-performance')}>
+      View more
+    </button>
+  );
+};
 
 const MiniBarChart = ({ data = [], color = "#3b82f6" }) => {
   const max = Math.max(...data.map(d => d.value ?? d.v ?? 0), 1);
@@ -423,7 +434,7 @@ const SuperAdminDashboard = () => {
       {/* Row 2: Team Performance + Follow-up Reminders side by side */}
       <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
         {(d.teamPerformance || []).length > 0 ? (
-          <TallCard title="🏆 Team Performance" sub="All team members' activity">
+          <TallCard title="🏆 Team Performance" sub="All team members' activity" right={<ViewMoreBtn />}>
             <TeamTable members={d.teamPerformance} />
           </TallCard>
         ) : <div />}
@@ -528,7 +539,7 @@ const ManagerDashboard = () => {
 
       {/* Row 2: Team Performance + Follow-up Reminders */}
       <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <TallCard title="🏆 Your Team's Performance" sub="All team members under you">
+        <TallCard title="🏆 Your Team's Performance" sub="All team members under you" right={<ViewMoreBtn />}>
           <TeamTable members={d.teamMembers || []} />
         </TallCard>
         <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={440}>

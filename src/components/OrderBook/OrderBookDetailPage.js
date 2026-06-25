@@ -1,0 +1,1807 @@
+// ============================================================================
+//  OrderBookDetailPage
+//  Full in-page detail view for a single order book — mirrors the LeadDetailPage
+//  pattern (back button + persisted tab bar). Three tabs:
+//    • Overview        — order header, items, PO file
+//    • Technical Scope — scope-of-work + weekly EPC execution plan (editable,
+//                        with an inline Gantt-style week timeline)
+//    • Commercial      — budget allocation editor + live procurement/spend
+//                        pulled by projectId, with allocated-vs-actual analysis
+//
+//  Backend endpoints consumed (all under /order-book):
+//    GET  /{id}/items
+//    GET  /{id}/scope                  PUT /{id}/scope
+//    GET  /{id}/scope/default-plan
+//    GET  /{id}/budget                 PUT /{id}/budget
+//    GET  /{id}/commercial-summary
+//    GET  /{id}/download-po
+//    (procurement/spend lists reuse the existing project-keyed endpoints)
+// ============================================================================
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import * as XLSX from 'xlsx';
+import { ArrowLeft, Plus, Trash2, Save, Wand2, MapPin } from 'lucide-react';
+import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } from 'react-icons/fa';
+import '../../pages-css/OrderBookDetail.css';
+import ConfirmationModal from '../ConfirmationModal.js';
+import useConfirmationModal from '../HandleConfirmationModal.js';
+
+const API_BASE_URL = process.env.REACT_APP_API_URL;
+
+const fmtDate = d => { if (!d) return '-'; const dt = new Date(d); if (isNaN(dt)) return '-'; return `${String(dt.getDate()).padStart(2,'0')}-${String(dt.getMonth()+1).padStart(2,'0')}-${dt.getFullYear()}`; };
+const fmtMoney = n => {
+  const v = Number(n || 0);
+  return '₹' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
+
+// ── Schedule bucket helpers ──────────────────────────────────────────────────
+// The Work Breakdown & Schedule grid is divided into buckets (weeks or months)
+// spanning the plan's start→end dates. Phases store start/end BUCKET NUMBERS;
+// the real dates shown under the grid are computed from the plan start + unit.
+const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+// Tolerant date parser: accepts ISO (yyyy-mm-dd, what <input type=date> emits and
+// what the backend LocalDate serializes to) AND dd-mm-yyyy / dd/mm/yyyy (what may
+// have been stored earlier or come from a display layer). Returns a Date or null.
+const parseDate = (v) => {
+  if (!v) return null;
+  if (v instanceof Date) return isNaN(v) ? null : v;
+  const str = String(v).trim();
+  // ISO: yyyy-mm-dd (optionally with time)
+  let m = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) { const d = new Date(+m[1], +m[2] - 1, +m[3]); return isNaN(d) ? null : d; }
+  // dd-mm-yyyy or dd/mm/yyyy
+  m = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})$/);
+  if (m) { const d = new Date(+m[3], +m[2] - 1, +m[1]); return isNaN(d) ? null : d; }
+  const d = new Date(str); // last resort
+  return isNaN(d) ? null : d;
+};
+
+// How many buckets between start and end for the given unit. Returns 0 when the
+// dates are missing/invalid (caller treats 0 as "not set" — no misleading default).
+const bucketCount = (startStr, endStr, unit) => {
+  const s = parseDate(startStr), e = parseDate(endStr);
+  if (!s || !e || e < s) return 0;
+  if (unit === 'MONTH') {
+    return Math.max(1, (e.getFullYear() - s.getFullYear()) * 12 + (e.getMonth() - s.getMonth()) + 1);
+  }
+  const days = Math.round((e - s) / (1000 * 60 * 60 * 24));
+  return Math.max(1, Math.ceil((days + 1) / 7));
+};
+
+// Label for bucket index n (0-based): weekly → "10 Jun", monthly → "Jun 2026".
+const bucketLabel = (startStr, n, unit) => {
+  const s = parseDate(startStr);
+  if (!s) return unit === 'MONTH' ? `M${n + 1}` : `W${n + 1}`;
+  if (unit === 'MONTH') {
+    const d = new Date(s.getFullYear(), s.getMonth() + n, 1);
+    return `${MONTH_ABBR[d.getMonth()]} ${d.getFullYear()}`;
+  }
+  const d = new Date(s); d.setDate(d.getDate() + n * 7);
+  return `${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`;
+};
+
+const PHASE_SUGGESTIONS = ['Site Survey', 'System Simulation', 'Civil Design', 'Electrical Design', 'Civil Works', 'Procurement', 'Installation', 'Mechanical Installation', 'Electrical & Cabling', 'Testing & Commissioning', 'Inspection', 'Handover', 'Other'];
+
+// ISO date (yyyy-mm-dd) for the START of bucket index n (0-based). Used to
+// auto-fill finance line dates from a phase's bucket position.
+const bucketToISODate = (startStr, n, unit) => {
+  const s = parseDate(startStr);
+  if (!s || n == null || n < 0) return '';
+  const d = unit === 'MONTH'
+    ? new Date(s.getFullYear(), s.getMonth() + n, 1)
+    : (() => { const x = new Date(s); x.setDate(x.getDate() + n * 7); return x; })();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
+// Fractional grid position (0..1) of a calendar date across the plan span,
+// for placing single-date markers on the same week/month grid. null if undatable.
+const dateToGridFraction = (startStr, endStr, dateStr) => {
+  const s = parseDate(startStr), e = parseDate(endStr), d = parseDate(dateStr);
+  if (!s || !e || !d || e <= s) return null;
+  const f = (d - s) / (e - s);
+  return Math.max(0, Math.min(1, f));
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Google Maps loader — injects the JS API once, shared across all pickers.
+//  Reads REACT_APP_GOOGLE_MAPS_KEY. Loads the `places` library for search.
+//  Returns a promise that resolves when window.google.maps is ready.
+// ─────────────────────────────────────────────────────────────────────────────
+const GMAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY;
+let _gmapsPromise = null;
+// Auth failures (bad key / billing off / API not enabled / referrer blocked)
+// are reported by Google via this global callback, NOT via promise rejection.
+let _gmapsAuthFailed = false;
+if (typeof window !== 'undefined') {
+  window.gm_authFailure = () => { _gmapsAuthFailed = true; };
+}
+
+// Install Google's official inline bootstrap loader. This defines
+// google.maps.importLibrary as a queueing stub IMMEDIATELY, so importLibrary()
+// calls work regardless of when the script finishes downloading. This replaces
+// the previous onload-race approach (which rejected before maps attached).
+const installBootstrap = () => {
+  if (window.google && window.google.maps && window.google.maps.importLibrary) return;
+  ((g) => {
+    let h, a, k, p = 'The Google Maps JavaScript API';
+    const c = 'google', l = 'importLibrary', q = '__ib__', m = document;
+    let b = window;
+    b = b[c] || (b[c] = {});
+    const d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams();
+    const u = () => h || (h = new Promise(async (f, n) => {
+      a = m.createElement('script');
+      e.set('libraries', [...r] + '');
+      for (k in g) e.set(k.replace(/[A-Z]/g, t => '_' + t[0].toLowerCase()), g[k]);
+      e.set('callback', c + '.maps.' + q);
+      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+      d[q] = f;
+      a.onerror = () => h = n(Error(p + ' could not load.'));
+      a.nonce = m.querySelector('script[nonce]')?.nonce || '';
+      m.head.append(a);
+    }));
+    d[l] ? console.warn(p + ' only loads once. Ignoring:', g)
+      : (d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n)));
+  })({ key: GMAPS_KEY, v: 'weekly' });
+};
+
+const loadGoogleMaps = () => {
+  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
+  if (_gmapsPromise) return _gmapsPromise;
+  if (!GMAPS_KEY) return Promise.reject(new Error('REACT_APP_GOOGLE_MAPS_KEY is not set (check .env — no spaces/quotes — and restart npm start)'));
+
+  _gmapsPromise = (async () => {
+    installBootstrap();
+    const [{ Map }, markerLib, geo, places] = await Promise.all([
+      window.google.maps.importLibrary('maps'),
+      window.google.maps.importLibrary('marker'),
+      window.google.maps.importLibrary('geocoding'),
+      window.google.maps.importLibrary('places'),
+    ]);
+    if (_gmapsAuthFailed) {
+      throw new Error('Google rejected the key (auth failure). Check the Console for the "Google Maps JavaScript API error:" line — common codes: RefererNotAllowed, ApiNotActivated, BillingNotEnabled, InvalidKey.');
+    }
+    return {
+      Map,
+      Marker: markerLib.Marker,
+      Geocoder: geo.Geocoder,
+      LatLng: window.google.maps.LatLng,
+      places,
+    };
+  })();
+  return _gmapsPromise;
+};
+
+// Default map centre when nothing is picked yet (Hyderabad, India).
+const DEFAULT_CENTER = { lat: 17.385, lng: 78.4867 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  LocationPicker — embedded Google map below the Site Location field.
+//  • search box (Places autocomplete) to jump to an address
+//  • click on the map or drag the pin to set the exact spot
+//  • reverse-geocodes the pin to fill the address text
+//  • emits { address, lat, lng } up to the parent
+//  Degrades gracefully: if the key is missing or the script fails, it falls
+//  back to a plain text input so the field still works.
+// ─────────────────────────────────────────────────────────────────────────────
+const LocationPicker = ({ address, lat, lng, onChange, showError }) => {
+  const mapEl = useRef(null);
+  const searchEl = useRef(null);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  const geocoderRef = useRef(null);
+  const gmRef = useRef(null); // resolved { Map, Marker, Geocoder, LatLng, places }
+  const [status, setStatus] = useState('loading'); // loading | ready | unavailable
+  const [errMsg, setErrMsg] = useState('');
+
+  const hasPin = lat !== '' && lat != null && lng !== '' && lng != null;
+
+  // Reverse-geocode a LatLng → address string, pushed up via onChange.
+  const reverseGeocode = useCallback((position) => {
+    if (!geocoderRef.current) return;
+    geocoderRef.current.geocode({ location: position }, (results, st) => {
+      if (st === 'OK' && results && results[0]) {
+        onChange({ address: results[0].formatted_address, lat: position.lat(), lng: position.lng() });
+      } else {
+        onChange({ lat: position.lat(), lng: position.lng() });
+      }
+    });
+  }, [onChange]);
+
+  const placePin = useCallback((position) => {
+    if (!mapRef.current || !gmRef.current) return;
+    if (!markerRef.current) {
+      markerRef.current = new gmRef.current.Marker({
+        position, map: mapRef.current, draggable: true,
+      });
+      markerRef.current.addListener('dragend', (e) => reverseGeocode(e.latLng));
+    } else {
+      markerRef.current.setPosition(position);
+    }
+    mapRef.current.panTo(position);
+  }, [reverseGeocode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const listeners = [];
+    let autocomplete = null;
+    loadGoogleMaps()
+      .then((gm) => {
+        if (cancelled || !mapEl.current) return;
+        gmRef.current = gm;
+        const start = hasPin ? { lat: Number(lat), lng: Number(lng) } : DEFAULT_CENTER;
+        mapRef.current = new gm.Map(mapEl.current, {
+          center: start, zoom: hasPin ? 16 : 11, mapTypeControl: true, streetViewControl: false,
+        });
+        geocoderRef.current = new gm.Geocoder();
+        if (hasPin) placePin(new gm.LatLng(start.lat, start.lng));
+
+        // Click to drop / move the pin.
+        listeners.push(mapRef.current.addListener('click', (e) => { placePin(e.latLng); reverseGeocode(e.latLng); }));
+
+        // Places search box (only if the Places library loaded).
+        if (searchEl.current && gm.places && gm.places.Autocomplete) {
+          autocomplete = new gm.places.Autocomplete(searchEl.current, { fields: ['geometry', 'formatted_address'] });
+          autocomplete.bindTo('bounds', mapRef.current);
+          listeners.push(autocomplete.addListener('place_changed', () => {
+            const place = autocomplete.getPlace();
+            if (!place.geometry) return;
+            const loc = place.geometry.location;
+            mapRef.current.setZoom(16);
+            placePin(loc);
+            onChange({ address: place.formatted_address || searchEl.current.value, lat: loc.lat(), lng: loc.lng() });
+          }));
+        }
+        setStatus('ready');
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setStatus('unavailable');
+          const msg = err && err.message ? err.message : String(err);
+          setErrMsg(msg);
+          console.error('Google Maps load failed:', err);
+        }
+      });
+
+    // Cleanup: detach Google's listeners/marker and remove the Autocomplete
+    // dropdown Google appends to <body>. Without this, React's unmount can hit
+    // "removeChild ... not a child of this node" because Google mutated the DOM
+    // outside React's knowledge.
+    return () => {
+      cancelled = true;
+      try {
+        const gm = gmRef.current;
+        if (gm && window.google && window.google.maps && window.google.maps.event) {
+          listeners.forEach(l => { try { window.google.maps.event.removeListener(l); } catch {} });
+          if (autocomplete) { try { window.google.maps.event.clearInstanceListeners(autocomplete); } catch {} }
+        }
+        if (markerRef.current) { try { markerRef.current.setMap(null); } catch {} markerRef.current = null; }
+        // Remove any .pac-container dropdowns Google attached to <body>.
+        document.querySelectorAll('.pac-container').forEach(el => { try { el.remove(); } catch {} });
+      } catch { /* best-effort cleanup */ }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fallback: plain text field when maps can't load — now shows WHY.
+  if (status === 'unavailable') {
+    return (
+      <label className="obd-field obd-field--full"><span>Site Location</span>
+        <input value={address || ''} onChange={e => onChange({ address: e.target.value })}
+          placeholder="Type the site address" />
+        {errMsg && (
+          <div className="obd-loc-error">
+            <strong>Map could not load:</strong> {errMsg}
+          </div>
+        )}
+      </label>
+    );
+  }
+
+  return (
+    <div className="obd-field obd-field--full obd-loc">
+      <span><MapPin size={13} style={{ verticalAlign: '-2px' }} /> Site Location</span>
+      <input
+        ref={searchEl}
+        className="obd-loc-search"
+        defaultValue={address || ''}
+        placeholder="Search an address, or click / drag the pin on the map"
+        onChange={e => onChange({ address: e.target.value })}
+      />
+      <div className="obd-loc-map-wrap">
+        <div ref={mapEl} className="obd-loc-map" />
+        {status === 'loading' && <div className="obd-loc-loading">Loading map…</div>}
+      </div>
+      {hasPin && (
+        <div className="obd-loc-coords">
+          Pin: {Number(lat).toFixed(6)}, {Number(lng).toFixed(6)}
+          <button type="button" className="obd-loc-clear" onClick={() => {
+            if (markerRef.current) { markerRef.current.setMap(null); markerRef.current = null; }
+            onChange({ address: '', lat: null, lng: null });
+          }}>Clear pin</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TABS = [
+  { k: 'overview',   l: 'Overview' },
+  { k: 'bom',        l: 'BOM / BOQ' },
+  { k: 'technical',  l: 'Technical Scope' },
+  { k: 'commercial', l: 'Financial / Commercial' },
+  { k: 'progress',   l: 'Progress' },
+];
+
+const OrderBookDetailPage = ({ orderBook, user, onBack, onEdit, showSuccess, showError }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const switchTab = (k) => setActiveTab(k);
+
+  // Always start on Overview when a (different) order book is opened — covers the
+  // case where the component stays mounted and only the orderBook prop changes.
+  useEffect(() => { setActiveTab('overview'); }, [orderBook.id]);
+
+  const authHeaders = { 'User-Id': user.id, 'User-Role': user.role };
+
+  // Live project context (read-only). The order book and its project are one
+  // logical unit; project-level fields (status, budget, dates, progress) are
+  // owned by the Project module and surfaced here without local copies, so they
+  // never drift. Degrades silently when no project is linked or the fetch fails.
+  const [project, setProject] = useState(null);
+  useEffect(() => {
+    if (!orderBook.projectId) { setProject(null); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/projects/${encodeURIComponent(orderBook.projectId)}`, {
+          credentials: 'include', headers: authHeaders,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setProject(data || null);
+      } catch { /* non-fatal: strip just won't render */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.projectId]);
+
+  const projStatus   = project?.status ? String(project.status).replace(/_/g, ' ') : null;
+  const projProgress = project?.progressPercentage != null ? Number(project.progressPercentage) : null;
+
+  return (
+    <div className="obd-page">
+      {/* Top bar */}
+      <div className="obd-topbar">
+        <button className="obd-back-btn" onClick={onBack}><ArrowLeft size={16} /> Back to Order Book</button>
+        <div className="obd-breadcrumb">
+          <span>Order Book</span>
+          <span className="obd-bc-sep">&gt;</span>
+          <span className="obd-bc-active">{orderBook.orderBookNo}</span>
+        </div>
+      </div>
+
+      {/* Header card */}
+      <div className="obd-header-card">
+        <div className="obd-header-main">
+          <h1 className="obd-title">{orderBook.orderTitle}</h1>
+          <div className="obd-subline">
+            <span className="obd-chip">{orderBook.orderBookNo}</span>
+            <span className={`obd-status obd-status--${String(orderBook.status || '').toLowerCase().replace(/\s+/g,'-')}`}>{orderBook.status || '-'}</span>
+            {orderBook.projectId
+              ? <span className="obd-chip obd-chip--proj">Project: {orderBook.projectId}</span>
+              : <span className="obd-chip obd-chip--warn">No project linked</span>}
+          </div>
+        </div>
+        <div className="obd-header-meta">
+          <div><label>Customer</label><span>{orderBook.customerName || '-'}</span></div>
+          <div><label>Order Date</label><span>{fmtDate(orderBook.orderDate)}</span></div>
+          <div><label>Total Value</label><span>{fmtMoney(orderBook.totalAmount)}</span></div>
+        </div>
+      </div>
+
+      {/* Live project context — read-only; owned by the Project module */}
+      {project && (
+        <div className="obd-project-strip">
+          <span className="obd-project-strip-tag">Linked Project</span>
+          <div className="obd-project-strip-items">
+            <div><label>Name</label><span>{project.projectName || orderBook.projectId}</span></div>
+            <div><label>ID</label><span>{project.projectUniqueId || orderBook.projectId}</span></div>
+            {projStatus && <div><label>Status</label><span>{projStatus}</span></div>}
+            {project.budget != null && <div><label>Project Budget</label><span>{fmtMoney(project.budget)}</span></div>}
+            {project.startDate && <div><label>Planned Start</label><span>{fmtDate(project.startDate)}</span></div>}
+            {project.endDate && <div><label>Planned End</label><span>{fmtDate(project.endDate)}</span></div>}
+            {projProgress != null && (
+              <div className="obd-project-strip-progress">
+                <label>Progress</label>
+                <div className="obd-mini-progress"><div className="obd-mini-progress-fill" style={{ width: `${Math.min(100, projProgress)}%` }} /></div>
+                <span className="obd-mini-progress-label">{projProgress}%</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Tab bar */}
+      <div className="obd-tabbar">
+        {TABS.map(t => (
+          <button key={t.k} className={`obd-tab${activeTab === t.k ? ' active' : ''}`} onClick={() => switchTab(t.k)}>{t.l}</button>
+        ))}
+      </div>
+
+      <div className="obd-tab-body">
+        {activeTab === 'overview'   && <OverviewTab   orderBook={orderBook} authHeaders={authHeaders} onEdit={onEdit} showSuccess={showSuccess} showError={showError} />}
+        {activeTab === 'technical'  && <TechnicalTab  orderBook={orderBook} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
+        {activeTab === 'commercial' && <CommercialTab orderBook={orderBook} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
+        {activeTab === 'bom'        && <BomTab        orderBook={orderBook} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
+        {activeTab === 'progress'   && <ProgressTab   orderBook={orderBook} authHeaders={authHeaders} showError={showError} />}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  OVERVIEW TAB
+// ─────────────────────────────────────────────────────────────────────────────
+const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess }) => {
+  const [items, setItems] = useState(orderBook.items || []);
+  const [loading, setLoading] = useState(!orderBook.items);
+
+  // ── Site location (moved here from Technical Scope; persisted on the scope row) ──
+  const [siteLocation, setSiteLocation] = useState('');
+  const [siteLat, setSiteLat] = useState('');
+  const [siteLng, setSiteLng] = useState('');
+  const [savingLoc, setSavingLoc] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
+        const data = await res.json();
+        if (data.success && data.data && data.data.scope) {
+          const s = data.data.scope;
+          setSiteLocation(s.siteLocation || '');
+          setSiteLat(s.siteLat == null ? '' : String(s.siteLat));
+          setSiteLng(s.siteLng == null ? '' : String(s.siteLng));
+        }
+      } catch { /* non-fatal: location card just starts empty */ }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  const saveLocation = async () => {
+    setSavingLoc(true);
+    try {
+      const body = {
+        siteLocation: siteLocation || null,
+        siteLat: siteLat === '' || siteLat == null ? null : Number(siteLat),
+        siteLng: siteLng === '' || siteLng == null ? null : Number(siteLng),
+      };
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/site-location`, {
+        method: 'PATCH', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) { if (showSuccess) showSuccess('Site location saved'); }
+      else showError(data.message || 'Failed to save site location');
+    } catch { showError('Failed to save site location'); }
+    finally { setSavingLoc(false); }
+  };
+
+  useEffect(() => {
+    if (orderBook.items) { setItems(orderBook.items); return; }
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+        const data = await res.json();
+        if (data.success) setItems(data.data || []);
+      } catch (e) { showError('Failed to load items'); }
+      finally { setLoading(false); }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  // PO file viewer modal — fetch as blob (auth headers), preview in an iframe,
+  // with Download + Open-in-new-tab controls. Mirrors the original OrderBook
+  // file viewer so behaviour is consistent across the app.
+  const [showViewer, setShowViewer] = useState(false);
+  const [viewerUrl, setViewerUrl] = useState('');
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const viewerBlobRef = useRef(null);
+  const poExt = (orderBook.poFileName || '').split('.').pop().toLowerCase();
+  const isPdf = poExt === 'pdf';
+  const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(poExt);
+
+  const fetchPoBlob = async (forceDownload) => {
+    const url = `${API_BASE_URL}/order-book/${orderBook.id}/download-po${forceDownload ? '?forceDownload=true' : ''}`;
+    const res = await fetch(url, { credentials: 'include', headers: authHeaders });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    return res.blob();
+  };
+
+  const openViewer = async () => {
+    if (viewerBlobRef.current) { URL.revokeObjectURL(viewerBlobRef.current); viewerBlobRef.current = null; }
+    setViewerUrl('');
+    setViewerLoading(true);
+    setShowViewer(true);
+    try {
+      const blob = await fetchPoBlob(false);
+      const blobUrl = URL.createObjectURL(blob);
+      viewerBlobRef.current = blobUrl;
+      setViewerUrl(blobUrl);
+    } catch (e) {
+      showError('Could not load the file. Try downloading it instead.');
+      setShowViewer(false);
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
+  const closeViewer = () => {
+    setShowViewer(false);
+    if (viewerBlobRef.current) { URL.revokeObjectURL(viewerBlobRef.current); viewerBlobRef.current = null; }
+    setViewerUrl('');
+  };
+
+  const downloadPo = async () => {
+    try {
+      const blob = await fetchPoBlob(true);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = orderBook.poFileName || 'attachment';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch { showError('Failed to download the file'); }
+  };
+
+  // Clean up the blob URL on unmount.
+  useEffect(() => () => { if (viewerBlobRef.current) URL.revokeObjectURL(viewerBlobRef.current); }, []);
+
+  const poIcon = isPdf ? <FaFilePdf /> : isImg ? <FaFileImage /> : <FaFileAlt />;
+
+  return (
+    <>
+    <div className="obd-grid">
+      <div className="obd-card">
+        <h4 className="obd-card-title">Order Details</h4>
+        <div className="obd-kv-grid">
+          <div><label>Group</label><span>{orderBook.groupName || '-'}</span></div>
+          <div><label>Sub Group</label><span>{orderBook.subGroupName || '-'}</span></div>
+          <div><label>Expected Delivery</label><span>{fmtDate(orderBook.expectedDeliveryDate)}</span></div>
+          <div><label>PO Number</label><span>{orderBook.poNumber || '-'}</span></div>
+          <div><label>PO Date</label><span>{fmtDate(orderBook.poDate)}</span></div>
+          <div><label>Subtotal</label><span>{fmtMoney(orderBook.subtotal)}</span></div>
+          <div><label>Tax</label><span>{fmtMoney(orderBook.taxAmount)}</span></div>
+          <div><label>Total</label><span>{fmtMoney(orderBook.totalAmount)}</span></div>
+          <div><label>Advance</label><span>{fmtMoney(orderBook.advanceAmount)}</span></div>
+          <div><label>Balance</label><span>{fmtMoney(orderBook.balanceAmount)}</span></div>
+        </div>
+        {orderBook.orderDescription && <p className="obd-desc">{orderBook.orderDescription}</p>}
+        <div className="obd-card-actions">
+          {orderBook.poFileName && (
+            <button className="obd-btn obd-btn--ghost" onClick={openViewer}>
+              {poIcon} View PO File
+            </button>
+          )}
+          {onEdit && <button className="obd-btn obd-btn--ghost" onClick={() => onEdit(orderBook)}>Edit Order</button>}
+        </div>
+      </div>
+
+      <div className="obd-card obd-card--wide">
+        <h4 className="obd-card-title">Line Items</h4>
+        {loading ? <div className="obd-empty">Loading items…</div> : (
+          items.length === 0 ? <div className="obd-empty">No items on this order.</div> : (
+            <div className="obd-table-wrap">
+              <table className="obd-table">
+                <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit</th><th>Unit Price</th><th>Line Total</th></tr></thead>
+                <tbody>
+                  {items.map((it, i) => (
+                    <tr key={it.id || i}>
+                      <td>{it.lineNo || i + 1}</td>
+                      <td>{it.itemName}{it.specification ? <span className="obd-spec"> — {it.specification}</span> : null}</td>
+                      <td>{Number(it.quantity || 0)}</td>
+                      <td>{it.unit || '-'}</td>
+                      <td>{fmtMoney(it.unitPrice)}</td>
+                      <td>{fmtMoney(it.lineTotal != null ? it.lineTotal : (Number(it.quantity||0) * Number(it.unitPrice||0)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="obd-card obd-card--wide">
+        <div className="obd-card-head">
+          <h4 className="obd-card-title">Site Location</h4>
+          <button className="obd-btn obd-btn--primary" onClick={saveLocation} disabled={savingLoc}>
+            <Save size={14} /> {savingLoc ? 'Saving…' : 'Save Location'}
+          </button>
+        </div>
+        <LocationPicker
+          address={siteLocation}
+          lat={siteLat}
+          lng={siteLng}
+          onChange={({ address, lat, lng }) => {
+            if (address !== undefined) setSiteLocation(address);
+            if (lat !== undefined) setSiteLat(lat == null ? '' : String(lat));
+            if (lng !== undefined) setSiteLng(lng == null ? '' : String(lng));
+          }}
+          showError={showError}
+        />
+      </div>
+    </div>
+
+    {showViewer && (
+      <div className="obd-fv-overlay" onClick={closeViewer}>
+        <div className="obd-fv-modal" onClick={e => e.stopPropagation()}>
+          <div className="obd-fv-header">
+            <div className="obd-fv-title" title={orderBook.poFileName}>
+              {poIcon}<span>{orderBook.poFileName || 'Attached File'}</span>
+            </div>
+            <div className="obd-fv-controls">
+              <button type="button" className="obd-btn obd-btn--ghost" onClick={downloadPo} title="Download">
+                <FaFileDownload /> Download
+              </button>
+              <a className="obd-btn obd-btn--ghost" href={viewerUrl || '#'} target="_blank" rel="noopener noreferrer"
+                 title="Open in new tab"
+                 style={{ pointerEvents: viewerUrl ? 'auto' : 'none', opacity: viewerUrl ? 1 : 0.5 }}>
+                <FaExternalLinkAlt /> Open in new tab
+              </a>
+              <button className="obd-fv-close" onClick={closeViewer}>×</button>
+            </div>
+          </div>
+          <div className="obd-fv-body">
+            {viewerLoading && <div className="obd-fv-loading">Loading file…</div>}
+            {!viewerLoading && isPdf && viewerUrl && (
+              <iframe src={viewerUrl} title={orderBook.poFileName} className="obd-fv-iframe" />
+            )}
+            {!viewerLoading && isImg && viewerUrl && (
+              <div className="obd-fv-img-wrap"><img src={viewerUrl} alt={orderBook.poFileName} className="obd-fv-img" /></div>
+            )}
+            {!viewerLoading && !isPdf && !isImg && viewerUrl && (
+              <div className="obd-fv-unsupported">
+                {poIcon}
+                <p>This file type can't be previewed in the browser.</p>
+                <button type="button" className="obd-btn obd-btn--primary" onClick={downloadPo}>
+                  <FaFileDownload /> Download to View
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    </>
+  );
+};
+// ─────────────────────────────────────────────────────────────────────────────
+const blankPhase = (seq) => ({
+  id: null, seqNo: seq, phaseName: '', phaseDescription: '',
+  startWeek: '', endWeek: '', customName: false,
+  status: 'Not Started', progressPercent: 0,
+});
+
+const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
+
+const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+  const [scope, setScope] = useState({
+    projectType: '', scopeOfWork: '', technicalNotes: '',
+    systemCapacity: '', siteLocation: '', siteLat: '', siteLng: '',
+    plannedStartDate: '', plannedEndDate: '', totalPlannedWeeks: '', planUnit: 'WEEK',
+  });
+  const [phases, setPhases] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  // Index of a phase row the user just switched to "type your own". Only that
+  // row auto-focuses; rows loaded from the backend must NOT, or the browser
+  // scrolls their input into view on mount and jumps past the top of the tab.
+  const [focusRow, setFocusRow] = useState(null);
+  const { confirmModal, showConfirmation } = useConfirmationModal();
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      if (data.success) {
+        const s = data.data.scope;
+        // Auto-fill Project Type from the order book's sub-group (which IS the
+        // project type in this system, e.g. Solar_Rooftop / Solar_ground_mounted).
+        // Only used as a default — a saved non-empty projectType always wins, so
+        // a user edit is never overwritten.
+        const subGroupType = orderBook.subGroupName || '';
+        if (s) setScope({
+          projectType: s.projectType || subGroupType, scopeOfWork: s.scopeOfWork || '',
+          technicalNotes: s.technicalNotes || '', systemCapacity: s.systemCapacity || '',
+          siteLocation: s.siteLocation || '',
+          siteLat: s.siteLat != null ? String(s.siteLat) : '', siteLng: s.siteLng != null ? String(s.siteLng) : '',
+          plannedStartDate: s.plannedStartDate || '', plannedEndDate: s.plannedEndDate || '',
+          totalPlannedWeeks: s.totalPlannedWeeks || '', planUnit: s.planUnit || 'WEEK',
+        });
+        else setScope(prev => ({ ...prev, projectType: prev.projectType || subGroupType }));
+        setPhases((data.data.phases || []).map(p => ({
+          id: p.id, seqNo: p.seqNo, phaseName: p.phaseName, phaseDescription: p.phaseDescription || '',
+          startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
+          customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
+          status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+        })));
+      }
+    } catch (e) { showError('Failed to load technical scope'); }
+    finally { setLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const loadDefaultPlan = async () => {
+    if (phases.length) {
+      const ok = await showConfirmation({
+        title: 'Replace schedule', type: 'alert',
+        message: 'This replaces the current rows with the suggested EPC plan. Continue?',
+        confirmText: 'Yes, Replace', cancelText: 'Cancel',
+      });
+      if (!ok) return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/default-plan`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      if (data.success) {
+        const tmpl = data.data.phases || [];
+        // Distribute the template phases across the ACTUAL plan duration so a
+        // short plan doesn't get phases at months 1–12. If dates aren't set,
+        // keep the template's own numbers.
+        const u = scope.planUnit || 'WEEK';
+        const dur = bucketCount(scope.plannedStartDate, scope.plannedEndDate, u);
+        let mapped;
+        if (dur > 0 && tmpl.length > 0) {
+          mapped = tmpl.map((p, i) => {
+            // Phase i spans its proportional slice of [1..dur].
+            const start = Math.floor((i / tmpl.length) * dur) + 1;
+            const end = Math.max(start, Math.floor(((i + 1) / tmpl.length) * dur));
+            return { id: null, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: '', startWeek: start, endWeek: end, customName: !PHASE_SUGGESTIONS.includes(p.phaseName) };
+          });
+        } else {
+          mapped = tmpl.map((p, i) => ({
+            id: null, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: '',
+            startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
+            customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
+          }));
+        }
+        setPhases(mapped);
+      }
+    } catch { showError('Failed to load suggested plan'); }
+  };
+
+  const loadFromLineItems = async () => {
+    if (phases.length) {
+      const ok = await showConfirmation({
+        title: 'Load line items', type: 'confirm',
+        message: 'Add the order book line items as schedule rows? Existing rows are kept.',
+        confirmText: 'Yes, Add', cancelText: 'Cancel',
+      });
+      if (!ok) return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      if (data.success) {
+        const items = (data.data || []).map((it) => {
+          const qty = Number(it.quantity || 0);
+          const name = qty ? `${it.itemName} (${qty}${it.unit ? ' ' + it.unit : ''})` : it.itemName;
+          return { id: null, phaseName: name, phaseDescription: it.specification || '', startWeek: '', endWeek: '', customName: true };
+        });
+        setPhases(prev => [...prev, ...items].map((p, idx) => ({ ...p, seqNo: idx + 1 })));
+      }
+    } catch { showError('Failed to load line items'); }
+  };
+
+  const updatePhase = (i, field, val, extra) => setPhases(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val, ...(extra || {}) } : p));
+  const addPhase    = () => setPhases(prev => [...prev, blankPhase(prev.length + 1)]);
+  const removePhase = (i) => { setFocusRow(null); setPhases(prev => prev.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, seqNo: idx + 1 }))); };
+
+  const save = async () => {
+    // light validation
+    for (const p of phases) {
+      if (!p.phaseName.trim()) { showError('Every row needs a name'); return; }
+      if (p.startWeek && p.endWeek && Number(p.endWeek) < Number(p.startWeek)) {
+        showError(`"${p.phaseName}": end is before start`); return;
+      }
+    }
+    setSaving(true);
+    try {
+      const { siteLat: _sLat, siteLng: _sLng, ...scopeRest } = scope;
+      const body = {
+        ...scopeRest,
+        totalPlannedWeeks: hasDates ? planDuration : null,
+        planUnit: scope.planUnit || 'WEEK',
+        plannedStartDate: scope.plannedStartDate || null,
+        plannedEndDate: scope.plannedEndDate || null,
+        // Site location is owned by the Overview tab (PATCH /site-location). We
+        // still send the currently-loaded copy so this PUT does not blank it,
+        // but coerce lat/lng to numbers|null to keep BigDecimal binding happy.
+        siteLat: scope.siteLat === '' || scope.siteLat == null ? null : Number(scope.siteLat),
+        siteLng: scope.siteLng === '' || scope.siteLng == null ? null : Number(scope.siteLng),
+        phases: phases.map((p, i) => ({
+          id: p.id, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: p.phaseDescription,
+          startWeek: p.startWeek === '' ? null : Number(p.startWeek),
+          endWeek: p.endWeek === '' ? null : Number(p.endWeek),
+          status: p.status || 'Not Started',
+          progressPercent: p.progressPercent === '' || p.progressPercent == null ? 0 : Number(p.progressPercent),
+        })),
+      };
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('Technical scope saved'); load(); }
+      else showError(data.message || 'Save failed');
+    } catch { showError('Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  // Real schedule duration from the dates (0 = dates not set / invalid).
+  const unit = scope.planUnit || 'WEEK';
+  const planDuration = bucketCount(scope.plannedStartDate, scope.plannedEndDate, unit);
+  const hasDates = !!(scope.plannedStartDate && scope.plannedEndDate) && planDuration > 0;
+  // The grid and the Start/End dropdowns are bounded by the PLAN DURATION only —
+  // never stretched by a phase's stored number. (A template seeded with week
+  // numbers up to 12 must not expand a 2-month plan's grid to 12.) When dates
+  // aren't set yet, fall back to a small default so the grid still renders.
+  const nBuckets = hasDates ? planDuration : 12;
+  const unitWord = unit === 'MONTH' ? 'Month' : 'Week';
+  const unitAbbr = unit === 'MONTH' ? 'M' : 'Wk';
+  // Clamp a stored phase bucket to the visible range for display/positioning.
+  const clampBucket = (v) => {
+    const n = Number(v);
+    if (!n || n < 1) return '';
+    return Math.min(n, nBuckets);
+  };
+
+  if (loading) return <div className="obd-empty">Loading technical scope…</div>;
+
+  return (
+    <div className="obd-stack">
+      <ConfirmationModal {...confirmModal} />
+      <div className="obd-card">
+        <div className="obd-card-head">
+          <h4 className="obd-card-title">Scope of Work</h4>
+        </div>
+        <div className="obd-form-grid">
+          <label className="obd-field"><span>Project Type</span>
+            <input value={scope.projectType} onChange={e => setScope({ ...scope, projectType: e.target.value })} placeholder="Solar Rooftop / Ground Mount / Wind / EPC" />
+          </label>
+          <label className="obd-field"><span>System Capacity</span>
+            <input value={scope.systemCapacity} onChange={e => setScope({ ...scope, systemCapacity: e.target.value })} placeholder="e.g. 2.5 MWp" />
+          </label>
+          <label className="obd-field"><span>Planned Start</span>
+            <input type="date" value={scope.plannedStartDate || ''} onChange={e => setScope({ ...scope, plannedStartDate: e.target.value })} />
+          </label>
+          <label className="obd-field"><span>Planned End</span>
+            <input type="date" value={scope.plannedEndDate || ''} onChange={e => setScope({ ...scope, plannedEndDate: e.target.value })} />
+          </label>
+          <label className="obd-field"><span>Planned Duration</span>
+            <input className="obd-readonly" value={hasDates ? `${planDuration} ${unit === 'MONTH' ? 'month(s)' : 'week(s)'}` : '—'} readOnly tabIndex={-1} />
+          </label>
+        </div>
+
+        <label className="obd-field obd-field--full"><span>Scope of Work</span>
+          <textarea rows={3} value={scope.scopeOfWork} onChange={e => setScope({ ...scope, scopeOfWork: e.target.value })} placeholder="High-level description of deliverables, boundaries, exclusions…" />
+        </label>
+        <label className="obd-field obd-field--full"><span>Technical Notes</span>
+          <textarea rows={2} value={scope.technicalNotes} onChange={e => setScope({ ...scope, technicalNotes: e.target.value })} />
+        </label>
+
+        <div className="obd-schedule-footer">
+          <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}>
+            <Save size={14} /> {saving ? 'Saving…' : 'Save Scope'}
+          </button>
+        </div>
+      </div>
+
+      <div className="obd-card">
+        <div className="obd-card-head">
+          <h4 className="obd-card-title">Work Breakdown &amp; Schedule</h4>
+          <div className="obd-card-head-actions">
+            <div className="obd-unit-toggle">
+              <button type="button" className={unit === 'WEEK' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'WEEK' })}>Weekly</button>
+              <button type="button" className={unit === 'MONTH' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'MONTH' })}>Monthly</button>
+            </div>
+            <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest EPC plan</button>
+            <button className="obd-btn obd-btn--ghost" onClick={loadFromLineItems}><Plus size={14} /> Load line items</button>
+            <button className="obd-btn obd-btn--ghost" onClick={addPhase}><Plus size={14} /> Add row</button>
+          </div>
+        </div>
+
+        {!hasDates ? (
+          <div className="obd-banner obd-banner--warn">
+            {(scope.plannedStartDate && scope.plannedEndDate)
+              ? 'Planned End is on or before Planned Start — fix the dates to build the timeline.'
+              : `Set Planned Start and Planned End above to build the schedule timeline. The grid divides that range into ${unit === 'MONTH' ? 'months' : 'weeks'}.`}
+          </div>
+        ) : null}
+
+        {phases.length === 0 ? (
+          <div className="obd-empty">No rows yet. Use "Suggest EPC plan", "Load line items", or "Add row" to begin.</div>
+        ) : (
+          <>
+            <div className="obd-table-wrap">
+              <table className="obd-table obd-phase-table">
+                <thead><tr><th>#</th><th>Activity / Item</th><th>Description</th><th>Start {unitWord}</th><th>End {unitWord}</th><th>Status</th><th>Progress</th><th></th></tr></thead>
+                <tbody>
+                  {phases.map((p, i) => (
+                    <tr key={i}>
+                      <td>{i + 1}</td>
+                      <td>
+                        {p.customName ? (
+                          <div className="obd-cat-custom">
+                            <input className="obd-inp" value={p.phaseName} autoFocus={focusRow === i} placeholder="Enter phase or item name"
+                              onChange={e => updatePhase(i, 'phaseName', e.target.value)} />
+                            <button type="button" className="obd-cat-back" title="Back to list"
+                              onClick={() => { setFocusRow(null); updatePhase(i, 'customName', false, { phaseName: '' }); }}>↩</button>
+                          </div>
+                        ) : (
+                          <select className="obd-inp"
+                            value={PHASE_SUGGESTIONS.includes(p.phaseName) ? p.phaseName : ''}
+                            onChange={e => {
+                              if (e.target.value === '__OTHER__') { setFocusRow(i); updatePhase(i, 'customName', true, { phaseName: '' }); }
+                              else updatePhase(i, 'phaseName', e.target.value);
+                            }}>
+                            <option value="">Select phase / item…</option>
+                            {PHASE_SUGGESTIONS.filter(s => s !== 'Other').map(s => <option key={s} value={s}>{s}</option>)}
+                            <option value="__OTHER__">Other (type your own)…</option>
+                          </select>
+                        )}
+                      </td>
+                      <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
+                      <td>
+                        <select className="obd-inp obd-inp--sm" value={clampBucket(p.startWeek)} onChange={e => updatePhase(i, 'startWeek', e.target.value)}>
+                          <option value="">—</option>
+                          {Array.from({ length: nBuckets }).map((_, b) => (
+                            <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select className="obd-inp obd-inp--sm" value={clampBucket(p.endWeek)} onChange={e => updatePhase(i, 'endWeek', e.target.value)}>
+                          <option value="">—</option>
+                          {Array.from({ length: nBuckets }).map((_, b) => (
+                            <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <select className="obd-inp obd-inp--sm" value={p.status || 'Not Started'}
+                          onChange={e => {
+                            const st = e.target.value;
+                            const extra = st === 'Completed' ? { progressPercent: 100 } : st === 'Not Started' ? { progressPercent: 0 } : {};
+                            updatePhase(i, 'status', st, extra);
+                          }}>
+                          {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <div className="obd-progress-cell">
+                          <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" value={p.progressPercent}
+                            onChange={e => updatePhase(i, 'progressPercent', e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value))))} />
+                          <span className="obd-progress-cell-pct">%</span>
+                        </div>
+                      </td>
+                      <td><button className="obd-icon-btn obd-icon-btn--danger" onClick={() => removePhase(i)} title="Remove"><Trash2 size={14} /></button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Inline Gantt-style timeline — buckets with real dates underneath */}
+            <div className="obd-gantt" style={{ '--cols': nBuckets }}>
+              <div className="obd-gantt-head">
+                <div className="obd-gantt-label">Planned timeline</div>
+                <div className="obd-gantt-weeks">
+                  {Array.from({ length: nBuckets }).map((_, b) => (
+                    <div key={b} className="obd-gantt-wk">
+                      <span className="obd-gantt-wk-num">{b + 1}</span>
+                      <span className="obd-gantt-wk-date">{bucketLabel(scope.plannedStartDate, b, unit)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              {phases.map((p, i) => {
+                // Clamp to the visible range so bars never overflow the grid.
+                const sRaw = Number(p.startWeek) || 1;
+                const eRaw = Number(p.endWeek) || sRaw;
+                const s = Math.min(Math.max(1, sRaw), nBuckets);
+                const e = Math.min(Math.max(s, eRaw), nBuckets);
+                const left = ((s - 1) / nBuckets) * 100;
+                const width = ((e - s + 1) / nBuckets) * 100;
+                return (
+                  <div key={i} className="obd-gantt-row">
+                    <div className="obd-gantt-label" title={p.phaseName}>{p.phaseName || `Row ${i + 1}`}</div>
+                    <div className="obd-gantt-track">
+                      <div className="obd-gantt-bar obd-gantt-bar--planned" style={{ left: `${left}%`, width: `${width}%` }}>
+                        <span className="obd-gantt-pct">{s === e ? `${unitAbbr} ${s}` : `${unitAbbr} ${s}–${e}`}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        <div className="obd-schedule-footer">
+          <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}>
+            <Save size={14} /> {saving ? 'Saving…' : 'Save Schedule'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  COMMERCIAL TAB — budget allocation + live procurement/spend
+// ── Item-keyed finance block (billing receivables OR cost payables) ──────────
+const blankFinance = (seq) => ({ id: null, seqNo: seq, itemName: '', amount: '', plannedDate: '', notes: '' });
+
+const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+  const [billing, setBilling] = useState([]);
+  const [cost, setCost] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [phaseNames, setPhaseNames] = useState([]); // tech-scope items (name + bucket span) for seeding
+  const [planMeta, setPlanMeta] = useState({ start: '', unit: 'WEEK' });
+  const [loading, setLoading] = useState(true);
+  const [savingB, setSavingB] = useState(false);
+  const [savingC, setSavingC] = useState(false);
+  const { confirmModal, showConfirmation } = useConfirmationModal();
+  const xHeaders = { 'X-User-Id': authHeaders['User-Id'], 'X-User-Role': authHeaders['User-Role'] };
+  const [invoices, setInvoices] = useState([]);
+  const [pos, setPos] = useState([]);
+  const [expenses, setExpenses] = useState([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [bRes, cRes, sRes, scRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/billing`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/cost`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
+      ]);
+      const bData = await bRes.json();
+      const cData = await cRes.json();
+      const sData = await sRes.json();
+      const scData = await scRes.json();
+      if (bData.success) setBilling((bData.data.lines || []).map(l => ({ id: l.id, seqNo: l.seqNo, itemName: l.itemName, amount: l.amount ?? '', plannedDate: l.plannedDate || '', notes: l.notes || '' })));
+      if (cData.success) setCost((cData.data.lines || []).map(l => ({ id: l.id, seqNo: l.seqNo, itemName: l.itemName, amount: l.amount ?? '', plannedDate: l.plannedDate || '', notes: l.notes || '' })));
+      if (sData.success) setSummary(sData.data.summary);
+      if (scData.success) {
+        setPhaseNames((scData.data.phases || []).map(p => ({
+          name: p.phaseName, startWeek: p.startWeek, endWeek: p.endWeek,
+        })).filter(p => p.name));
+        const sc = scData.data.scope;
+        setPlanMeta({ start: sc?.plannedStartDate || '', unit: sc?.planUnit || 'WEEK' });
+      }
+
+      const pid = orderBook.projectId;
+      if (pid) {
+        try {
+          const ivRes = await fetch(`${API_BASE_URL}/invoices?projectId=${encodeURIComponent(pid)}&size=200`, { credentials: 'include', headers: xHeaders });
+          const ivData = await ivRes.json();
+          setInvoices(ivData.invoices || []);
+        } catch { /* non-fatal */ }
+        try {
+          const poRes = await fetch(`${API_BASE_URL}/purchase-orders?projectId=${encodeURIComponent(pid)}&size=100`, { credentials: 'include', headers: xHeaders });
+          const poData = await poRes.json();
+          setPos(poData.purchaseOrders || []);
+        } catch { /* non-fatal */ }
+        try {
+          const exRes = await fetch(`${API_BASE_URL}/project-expenses?projectId=${encodeURIComponent(pid)}&size=100`, { credentials: 'include', headers: xHeaders });
+          const exData = await exRes.json();
+          setExpenses(exData.content || exData.data || exData.expenses || []);
+        } catch { /* non-fatal */ }
+      }
+    } catch (e) { showError('Failed to load commercial data'); }
+    finally { setLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const seedFromScope = (setList, list, dateAnchor) => {
+    if (!phaseNames.length) { showError('No technical-scope items to seed from. Add them in the Technical Scope tab first.'); return; }
+    const existing = new Set(list.map(l => l.itemName));
+    const additions = phaseNames.filter(p => !existing.has(p.name)).map(p => {
+      // Billing → phase START bucket; Cost → phase END bucket. Buckets are 1-based.
+      const bucket = dateAnchor === 'end' ? (p.endWeek || p.startWeek) : p.startWeek;
+      const plannedDate = bucket ? bucketToISODate(planMeta.start, bucket - 1, planMeta.unit) : '';
+      return { id: null, itemName: p.name, amount: '', plannedDate, notes: '' };
+    });
+    if (!additions.length) { showError('All technical-scope items are already listed.'); return; }
+    setList(prev => [...prev, ...additions].map((l, i) => ({ ...l, seqNo: i + 1 })));
+  };
+
+  const upd = (setList) => (i, field, val) => setList(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const add = (setList) => () => setList(prev => [...prev, blankFinance(prev.length + 1)]);
+  const rm  = (setList) => (i) => setList(prev => prev.filter((_, idx) => idx !== i).map((l, idx) => ({ ...l, seqNo: idx + 1 })));
+
+  const saveBlock = async (kind) => {
+    const list = kind === 'billing' ? billing : cost;
+    for (const l of list) { if (!l.itemName || !l.itemName.trim()) { showError('Every line needs an item name'); return; } }
+    const setSaving = kind === 'billing' ? setSavingB : setSavingC;
+    setSaving(true);
+    try {
+      const body = { lines: list.map((l, i) => ({ id: l.id, seqNo: i + 1, itemName: l.itemName.trim(), amount: l.amount === '' ? 0 : Number(l.amount), plannedDate: l.plannedDate || null, notes: l.notes })) };
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/${kind}`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess(kind === 'billing' ? 'Billing plan saved' : 'Cost plan saved'); if (data.data) setSummary(data.data); }
+      else showError(data.message || 'Save failed');
+    } catch { showError('Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="obd-empty">Loading commercial data…</div>;
+
+  const billingPlanned = billing.reduce((s, l) => s + Number(l.amount || 0), 0);
+  const costPlanned = cost.reduce((s, l) => s + Number(l.amount || 0), 0);
+  const invoiced = Number(summary?.totalInvoiced || 0);
+  const paid = Number(summary?.totalPaid || 0);
+  const procurement = Number(summary?.totalProcurement || 0);
+  const spend = Number(summary?.totalSpend || 0);
+  const actualCost = procurement + spend;
+  const projectLinked = summary?.projectLinked;
+
+  const pct = (a, b) => b > 0 ? Math.min(100, (a / b) * 100) : 0;
+
+  const renderBlock = (title, list, setList, kind, saving, planned, actualLabel, actualValue) => (
+    <div className="obd-card">
+      <div className="obd-card-head">
+        <h4 className="obd-card-title">{title}</h4>
+        <div className="obd-card-head-actions">
+          <button className="obd-btn obd-btn--ghost" onClick={() => seedFromScope(setList, list, kind === 'billing' ? 'start' : 'end')}><Plus size={14} /> Seed from scope</button>
+          <button className="obd-btn obd-btn--ghost" onClick={add(setList)}><Plus size={14} /> Add line</button>
+        </div>
+      </div>
+
+      {/* planned vs actual summary strip */}
+      <div className="obd-stat-row">
+        <div className="obd-stat"><label>Planned</label><span>{fmtMoney(planned)}</span></div>
+        <div className="obd-stat"><label>{actualLabel}</label><span>{fmtMoney(actualValue)}</span></div>
+        {kind === 'billing' && <div className="obd-stat"><label>Collected</label><span>{fmtMoney(paid)}</span></div>}
+        <div className={`obd-stat ${actualValue > planned && planned > 0 ? 'obd-stat--over' : 'obd-stat--ok'}`}>
+          <label>{kind === 'billing' ? 'Yet to Invoice' : 'Remaining'}</label>
+          <span>{fmtMoney(Math.max(0, planned - actualValue))}</span>
+        </div>
+      </div>
+      {planned > 0 && (
+        <div className="obd-progress">
+          <div className={`obd-progress-fill ${actualValue > planned ? 'obd-progress-fill--over' : ''}`} style={{ width: `${pct(actualValue, planned)}%` }} />
+          <span className="obd-progress-label">{pct(actualValue, planned).toFixed(1)}% {kind === 'billing' ? 'invoiced' : 'spent'} of planned</span>
+        </div>
+      )}
+      {!projectLinked && (
+        <div className="obd-banner obd-banner--warn">No project linked — live {kind === 'billing' ? 'invoice' : 'procurement/spend'} actuals can't be shown. Planning still works.</div>
+      )}
+
+      {list.length === 0 ? (
+        <div className="obd-empty">No lines yet. "Seed from scope" pulls your technical-scope items, or "Add line" for a custom one.</div>
+      ) : (
+        <div className="obd-table-wrap">
+          <table className="obd-table">
+            <thead><tr><th>#</th><th>Item</th><th>{kind === 'billing' ? 'Amount to Bill' : 'Cost'}</th><th>{kind === 'billing' ? 'Invoice Date' : 'Pay Date'}</th><th>Notes</th><th></th></tr></thead>
+            <tbody>
+              {list.map((l, i) => (
+                <tr key={i}>
+                  <td>{i + 1}</td>
+                  <td><input className="obd-inp" value={l.itemName} onChange={e => upd(setList)(i, 'itemName', e.target.value)} placeholder="Item / scope name" /></td>
+                  <td><input className="obd-inp obd-inp--sm" type="number" min="0" value={l.amount} onChange={e => upd(setList)(i, 'amount', e.target.value)} /></td>
+                  <td><input className="obd-inp obd-inp--sm" type="date" value={l.plannedDate || ''} onChange={e => upd(setList)(i, 'plannedDate', e.target.value)} /></td>
+                  <td><input className="obd-inp" value={l.notes} onChange={e => upd(setList)(i, 'notes', e.target.value)} /></td>
+                  <td><button className="obd-icon-btn obd-icon-btn--danger" onClick={() => rm(setList)(i)}><Trash2 size={14} /></button></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td style={{ textAlign: 'right', fontWeight: 700 }}>Total</td>
+                <td /><td style={{ fontWeight: 700 }}>{fmtMoney(planned)}</td><td colSpan={3} /></tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+
+      <div className="obd-schedule-footer">
+        <button className="obd-btn obd-btn--primary" onClick={() => saveBlock(kind)} disabled={saving}>
+          <Save size={14} /> {saving ? 'Saving…' : 'Save'}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="obd-stack">
+      <ConfirmationModal {...confirmModal} />
+
+      {renderBlock('Invoices to Raise (Client Billing)', billing, setBilling, 'billing', savingB, billingPlanned, 'Invoiced', invoiced)}
+      {renderBlock('Budget Allocation (Cost to Procure)', cost, setCost, 'cost', savingC, costPlanned, 'Actual Cost', actualCost)}
+
+      {/* Live invoices for this order's project */}
+      {projectLinked && (
+        <div className="obd-card">
+          <h4 className="obd-card-title">Invoices Raised — {orderBook.projectId}</h4>
+          {invoices.length === 0 ? <div className="obd-empty">No invoices raised yet for this project.</div> : (
+            <div className="obd-table-wrap">
+              <table className="obd-table">
+                <thead><tr><th>Invoice #</th><th>Date</th><th>Status</th><th>Total</th><th>Paid</th><th>Balance</th></tr></thead>
+                <tbody>
+                  {invoices.map((iv, i) => (
+                    <tr key={iv.id || i}>
+                      <td>{iv.invoiceNumber || iv.id}</td>
+                      <td>{fmtDate(iv.invoiceDate)}</td>
+                      <td>{iv.status || '-'}</td>
+                      <td>{fmtMoney(iv.totalAmount)}</td>
+                      <td>{fmtMoney(iv.paidAmount)}</td>
+                      <td>{fmtMoney(iv.balanceAmount != null ? iv.balanceAmount : (Number(iv.totalAmount||0) - Number(iv.paidAmount||0)))}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Live procurement + spend */}
+      {projectLinked && (
+        <div className="obd-card">
+          <h4 className="obd-card-title">Procurement & Spend — {orderBook.projectId}</h4>
+          {pos.length === 0 && expenses.length === 0 ? <div className="obd-empty">No purchase orders or expenses for this project.</div> : (
+            <div className="obd-table-wrap">
+              <table className="obd-table">
+                <thead><tr><th>Type</th><th>Ref</th><th>Date</th><th>Status</th><th>Amount</th></tr></thead>
+                <tbody>
+                  {pos.map((p, i) => (
+                    <tr key={'po' + (p.id || i)}>
+                      <td>PO</td><td>{p.poNumber || p.poNo || p.id}</td><td>{fmtDate(p.orderDate)}</td><td>{p.status || '-'}</td><td>{fmtMoney(p.totalValue)}</td>
+                    </tr>
+                  ))}
+                  {expenses.map((x, i) => (
+                    <tr key={'ex' + (x.id || i)}>
+                      <td>Expense</td><td>{x.expenseCode || x.id}</td><td>{fmtDate(x.tripDate || x.date)}</td><td>{x.status || '-'}</td><td>{fmtMoney(x.totalAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  BOM / BOQ TAB — bill of materials / quantities for the order book
+//  Each line: category, item, make, unit, qty, unit rate → amount (qty × rate).
+//  amount auto-derives on the client; a manual override is still honoured by
+//  the backend if sent. PUT replaces the whole list (same pattern as cost/billing).
+// ─────────────────────────────────────────────────────────────────────────────
+const blankBom = (seq) => ({
+  id: null, seqNo: seq, category: '', itemName: '', make: '',
+  unit: '', quantity: '', unitRate: '', notes: '',
+});
+
+const lineAmount = (l) => Number(l.quantity || 0) * Number(l.unitRate || 0);
+
+// Static template lives at public/templates/bom_boq_template.xlsx (served at
+// /templates/...). The importer below accepts that template's headers and a few
+// plain-field fallbacks so a sheet exported elsewhere still maps. Amount is
+// always derived from qty * rate, never read from the sheet.
+const bomRowToLine = (row, seq) => ({
+  id: null, seqNo: seq,
+  // "Specifications" is stored in the category column (no separate spec column
+  // in the schema). "Component" is the required item_name. Old header names are
+  // kept as fallbacks so previously-downloaded sheets still import.
+  category: String(row['Specifications'] ?? row['Specification'] ?? row['Category'] ?? row['category'] ?? '').trim(),
+  itemName: String(row['Component'] ?? row['Item'] ?? row['Item Name'] ?? row['itemName'] ?? '').trim(),
+  make:     String(row['Make'] ?? row['make'] ?? '').trim(),
+  unit:     String(row['Units'] ?? row['Unit'] ?? row['unit'] ?? '').trim(),
+  quantity: row['Qty'] ?? row['Quantity'] ?? row['quantity'] ?? '',
+  unitRate: row['Unit Price'] ?? row['Unit Rate'] ?? row['unitRate'] ?? row['Rate'] ?? '',
+  notes:    String(row['Notes'] ?? row['notes'] ?? row['Remarks'] ?? '').trim(),
+});
+
+const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+  const [lines, setLines] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const fileInputRef = useRef(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      if (data.success) {
+        setLines((data.data.lines || []).map(l => ({
+          id: l.id, seqNo: l.seqNo,
+          category: l.category || '', itemName: l.itemName || '', make: l.make || '',
+          unit: l.unit || '',
+          quantity: l.quantity ?? '', unitRate: l.unitRate ?? '',
+          notes: l.notes || '',
+        })));
+      } else showError(data.message || 'Failed to load BOM');
+    } catch { showError('Failed to load BOM / BOQ'); }
+    finally { setLoading(false); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const upd = (i, field, val) => setLines(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const add = () => setLines(prev => [...prev, blankBom(prev.length + 1)]);
+  const rm  = (i) => setLines(prev => prev.filter((_, idx) => idx !== i).map((l, idx) => ({ ...l, seqNo: idx + 1 })));
+
+  // Download the pre-made template that ships in public/templates. No client-side
+  // generation — this just points the browser at the static file.
+  const downloadTemplate = () => {
+    const a = document.createElement('a');
+    a.href = `${process.env.PUBLIC_URL || ''}/templates/bom_boq_template.xlsx`;
+    a.download = 'bom_boq_template.xlsx';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  };
+
+  // Parse an uploaded .xlsx/.xls/.csv and APPEND its rows to the current list
+  // (existing lines are kept). Rows with no item name are skipped.
+  const importExcel = async (file) => {
+    if (!file) return;
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!rows.length) { showError('The file has no data rows'); return; }
+      const mapped = rows
+        .map((r, idx) => bomRowToLine(r, idx + 1))
+        .filter(l => l.itemName && l.itemName.trim() !== '');
+      if (!mapped.length) { showError('No valid rows found. Each row needs an Item.'); return; }
+      setLines(prev => [...prev, ...mapped].map((l, idx) => ({ ...l, seqNo: idx + 1 })));
+      showSuccess(`Imported ${mapped.length} row${mapped.length === 1 ? '' : 's'} from Excel. Review, then Save.`);
+    } catch {
+      showError('Could not read the file. Use the template format (.xlsx, .xls or .csv).');
+    }
+  };
+
+  const onFilePicked = (e) => {
+    const file = e.target.files && e.target.files[0];
+    importExcel(file);
+    e.target.value = ''; // allow re-importing the same file
+  };
+
+  const save = async () => {
+    for (const l of lines) { if (!l.itemName || !l.itemName.trim()) { showError('Every BOM line needs an item name'); return; } }
+    setSaving(true);
+    try {
+      const body = {
+        lines: lines.map((l, i) => ({
+          id: l.id, seqNo: i + 1,
+          category: l.category ? l.category.trim() : null,
+          itemName: l.itemName.trim(),
+          make: l.make ? l.make.trim() : null,
+          unit: l.unit ? l.unit.trim() : null,
+          quantity: l.quantity === '' ? 0 : Number(l.quantity),
+          unitRate: l.unitRate === '' ? 0 : Number(l.unitRate),
+          amount: lineAmount(l),
+          notes: l.notes,
+        })),
+      };
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('BOM / BOQ saved'); load(); }
+      else showError(data.message || 'Save failed');
+    } catch { showError('Save failed'); }
+    finally { setSaving(false); }
+  };
+
+  if (loading) return <div className="obd-empty">Loading BOM / BOQ…</div>;
+
+  const total = lines.reduce((s, l) => s + lineAmount(l), 0);
+
+  return (
+    <div className="obd-stack">
+      <div className="obd-card">
+        <div className="obd-card-head">
+          <h4 className="obd-card-title">Bill of Materials / Quantities</h4>
+          <div className="obd-card-head-actions">
+            <button className="obd-btn obd-btn--ghost" onClick={downloadTemplate}><FaFileDownload /> Download Template</button>
+            <button className="obd-btn obd-btn--ghost" onClick={() => fileInputRef.current && fileInputRef.current.click()}><Plus size={14} /> Import Excel</button>
+            <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFilePicked} />
+            <button className="obd-btn obd-btn--ghost" onClick={add}><Plus size={14} /> Add line</button>
+            <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}><Save size={14} /> {saving ? 'Saving…' : 'Save'}</button>
+          </div>
+        </div>
+
+        <div className="obd-stat-row">
+          <div className="obd-stat"><label>Line Items</label><span>{lines.length}</span></div>
+          <div className="obd-stat"><label>Total Value</label><span>{fmtMoney(total)}</span></div>
+        </div>
+
+        {lines.length === 0 ? (
+          <div className="obd-empty">No BOM / BOQ lines yet. "Add line" to start recording materials and quantities for this order book.</div>
+        ) : (
+          <div className="obd-table-wrap">
+            <table className="obd-table">
+              <thead>
+                <tr>
+                  <th>S.No</th><th>Component</th><th>Specifications</th><th>Make</th>
+                  <th>Qty</th><th>Units</th><th>Unit Price</th><th>Amount</th><th>Notes</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((l, i) => (
+                  <tr key={i}>
+                    <td>{i + 1}</td>
+                    <td><input className="obd-inp" value={l.itemName} onChange={e => upd(i, 'itemName', e.target.value)} placeholder="Component name" /></td>
+                    <td><input className="obd-inp" value={l.category} onChange={e => upd(i, 'category', e.target.value)} placeholder="Specifications" /></td>
+                    <td><input className="obd-inp" value={l.make} onChange={e => upd(i, 'make', e.target.value)} placeholder="Make / brand" /></td>
+                    <td><input className="obd-inp obd-inp--sm" type="number" min="0" step="any" value={l.quantity} onChange={e => upd(i, 'quantity', e.target.value)} /></td>
+                    <td><input className="obd-inp obd-inp--sm" value={l.unit} onChange={e => upd(i, 'unit', e.target.value)} placeholder="nos / m / kg" /></td>
+                    <td><input className="obd-inp obd-inp--sm" type="number" min="0" step="any" value={l.unitRate} onChange={e => upd(i, 'unitRate', e.target.value)} /></td>
+                    <td style={{ fontWeight: 600 }}>{fmtMoney(lineAmount(l))}</td>
+                    <td><input className="obd-inp" value={l.notes} onChange={e => upd(i, 'notes', e.target.value)} /></td>
+                    <td><button className="obd-icon-btn obd-icon-btn--danger" onClick={() => rm(i)}><Trash2 size={14} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={7} style={{ textAlign: 'right', fontWeight: 700 }}>Total</td>
+                  <td style={{ fontWeight: 700 }}>{fmtMoney(total)}</td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  PROGRESS TAB — planned vs actual across the three scopes
+//  • Schedule:  real per-phase status + % (captured in Technical Scope)
+//  • Billing:   planned-to-bill vs invoiced vs collected (live invoices)
+//  • Cost:      planned vs actual procurement + spend (live PO/expenses)
+// ─────────────────────────────────────────────────────────────────────────────
+const STATUS_CLASS = {
+  'Completed': 'completed', 'In Progress': 'in-progress',
+  'Delayed': 'delayed', 'On Hold': 'not-started', 'Not Started': 'not-started',
+};
+
+const ProgressTab = ({ orderBook, authHeaders, showError }) => {
+  const [phases, setPhases] = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [planMeta, setPlanMeta] = useState({ start: '', end: '', unit: 'WEEK' });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const [scRes, sRes] = await Promise.all([
+          fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
+          fetch(`${API_BASE_URL}/order-book/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
+        ]);
+        const scData = await scRes.json();
+        const sData = await sRes.json();
+        if (cancelled) return;
+        if (scData.success) {
+          setPhases((scData.data.phases || []).map(p => ({
+            phaseName: p.phaseName, status: p.status || 'Not Started',
+            progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+            startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
+          })));
+          const sc = scData.data.scope;
+          setPlanMeta({ start: sc?.plannedStartDate || '', end: sc?.plannedEndDate || '', unit: sc?.planUnit || 'WEEK' });
+        }
+        if (sData.success) setSummary(sData.data.summary);
+      } catch { if (!cancelled) showError('Failed to load progress'); }
+      finally { if (!cancelled) setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderBook.id]);
+
+  if (loading) return <div className="obd-empty">Loading progress…</div>;
+
+  const pct = (a, b) => b > 0 ? Math.min(100, (a / b) * 100) : 0;
+
+  // Schedule: average of per-phase progress (real captured data)
+  const schedAvg = phases.length ? phases.reduce((s, p) => s + (Number(p.progressPercent) || 0), 0) / phases.length : 0;
+  const doneCount = phases.filter(p => p.status === 'Completed').length;
+  // Gantt grid: buckets across the plan dates ONLY (not stretched by a phase's
+  // stored bucket). Bars clamp to this range — matches the Technical tab.
+  const pUnit = planMeta.unit || 'WEEK';
+  const pDuration = bucketCount(planMeta.start, planMeta.end, pUnit);
+  const pCols = pDuration > 0 ? pDuration : 12;
+  const pAbbr = pUnit === 'MONTH' ? 'M' : 'Wk';
+  const hasGrid = pDuration > 0;
+
+  // Billing + cost actuals
+  const billPlanned = Number(summary?.totalBillingPlanned || 0);
+  const billingLines = summary?.billingLines || [];
+  const costLines = summary?.costLines || [];
+  const invoiced = Number(summary?.totalInvoiced || 0);
+  const paid = Number(summary?.totalPaid || 0);
+  const costPlanned = Number(summary?.totalCostPlanned || 0);
+  const actualCost = Number(summary?.totalProcurement || 0) + Number(summary?.totalSpend || 0);
+  const projectLinked = summary?.projectLinked;
+
+  // Waterfall allocation: distribute a real actual pool across planned items in
+  // PLANNED-DATE order, filling each item up to its planned amount before moving
+  // to the next. Items without a date sort last. Attributes untagged real money
+  // (invoices / PO+spend) to scope items by schedule. Heuristic, not a tagged fact.
+  const allocateWaterfall = (lines, pool) => {
+    const ordered = lines
+      .map((l, i) => ({ _i: i, amt: Number(l.amount || 0), t: parseDate(l.plannedDate)?.getTime() ?? Infinity }))
+      .sort((a, b) => a.t - b.t);
+    let remaining = Math.max(0, pool);
+    const alloc = {};
+    for (const l of ordered) {
+      const fill = Math.min(l.amt, remaining);
+      alloc[l._i] = fill;
+      remaining -= fill;
+    }
+    return alloc;
+  };
+
+  // Timeline of single-date markers (billing invoice-dates / cost pay-dates) on
+  // the same week/month grid as the schedule. Each line is a dot at its planned
+  // date, labelled with item + amount. Items without a date are listed separately.
+  const renderMarkerTimeline = (lines, accent) => {
+    const dated = lines.map((l, i) => ({ ...l, _i: i, frac: dateToGridFraction(planMeta.start, planMeta.end, l.plannedDate) }));
+    const placed = dated.filter(l => l.frac != null);
+    const undated = dated.filter(l => l.frac == null);
+    if (!hasGrid) return <div className="obd-banner obd-banner--warn">Set Planned Start and End in Technical Scope to plot the timeline.</div>;
+    return (
+      <div className="obd-mtl" style={{ '--cols': pCols }}>
+        {/* header */}
+        <div className="obd-mtl-head">
+          {Array.from({ length: pCols }).map((_, b) => (
+            <div key={b} className="obd-gantt-wk">
+              <span className="obd-gantt-wk-num">{b + 1}</span>
+              <span className="obd-gantt-wk-date">{bucketLabel(planMeta.start, b, pUnit)}</span>
+            </div>
+          ))}
+        </div>
+        {/* marker track */}
+        <div className="obd-mtl-track">
+          {placed.map((l) => (
+            <div key={l._i} className="obd-mtl-marker" style={{ left: `${l.frac * 100}%` }} title={`${l.itemName}: ${fmtMoney(l.amount)} (${fmtDate(l.plannedDate)})`}>
+              <span className={`obd-mtl-dot obd-mtl-dot--${accent}`} />
+              <span className="obd-mtl-flag">{fmtMoney(l.amount)}<em>{l.itemName}</em></span>
+            </div>
+          ))}
+        </div>
+        {undated.length > 0 && (
+          <p className="obd-spec" style={{ marginTop: 8 }}>
+            No date set: {undated.map(l => l.itemName).join(', ')} — add a date in the Financial / Commercial tab to place these on the timeline.
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // Per-item actuals via waterfall: collected (paid) onto billing; spent onto cost.
+  const billingAlloc = allocateWaterfall(billingLines, paid);
+  const costAlloc = allocateWaterfall(costLines, actualCost);
+
+  return (
+    <div className="obd-stack">
+
+      {/* ── 1. Schedule progress — two-bar Gantt (planned vs actual) ── */}
+      <div className="obd-card">
+        <h4 className="obd-card-title">Schedule Progress (Planned vs Actual)</h4>
+        {phases.length === 0 ? (
+          <div className="obd-empty">No schedule phases yet. Add them in the Technical Scope tab.</div>
+        ) : !hasGrid ? (
+          <div className="obd-banner obd-banner--warn">Set Planned Start and End dates in Technical Scope to draw the timeline.</div>
+        ) : (
+          <>
+            <div className="obd-stat-row">
+              <div className="obd-stat"><label>Overall Actual</label><span>{schedAvg.toFixed(0)}%</span></div>
+              <div className="obd-stat"><label>Phases Done</label><span>{doneCount} / {phases.length}</span></div>
+            </div>
+
+            <div className="obd-gantt obd-gantt--progress" style={{ '--cols': pCols }}>
+              {/* header */}
+              <div className="obd-gantt-head">
+                <div className="obd-gantt-label">Phase</div>
+                <div className="obd-gantt-weeks">
+                  {Array.from({ length: pCols }).map((_, b) => (
+                    <div key={b} className="obd-gantt-wk">
+                      <span className="obd-gantt-wk-num">{b + 1}</span>
+                      <span className="obd-gantt-wk-date">{bucketLabel(planMeta.start, b, pUnit)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {phases.map((p, i) => {
+                const sRaw = Number(p.startWeek) || 1;
+                const eRaw = Number(p.endWeek) || sRaw;
+                const s = Math.min(Math.max(1, sRaw), pCols);
+                const e = Math.min(Math.max(s, eRaw), pCols);
+                const span = e - s + 1;
+                const left = ((s - 1) / pCols) * 100;
+                const plannedW = (span / pCols) * 100;
+                const prog = Math.max(0, Math.min(100, Number(p.progressPercent) || 0));
+                // Actual bar fills progress% of the planned span, from planned start.
+                const actualW = plannedW * (prog / 100);
+                return (
+                  <div key={i} className="obd-gantt-prow">
+                    <div className="obd-gantt-label" title={p.phaseName}>{p.phaseName || `Phase ${i + 1}`}</div>
+                    <div className="obd-gantt-ptrack">
+                      {/* planned (greenish-yellow) */}
+                      <div className="obd-gantt-prow-line">
+                        <div className="obd-gbar obd-gbar--planned" style={{ left: `${left}%`, width: `${plannedW}%` }}>
+                          <span className="obd-gbar-tag">{pAbbr} {s}{s !== e ? `–${e}` : ''}</span>
+                        </div>
+                      </div>
+                      {/* actual (blue-green), proportional to progress */}
+                      <div className="obd-gantt-prow-line">
+                        <div className="obd-gbar obd-gbar--actual" style={{ left: `${left}%`, width: `${actualW}%` }}>
+                          {prog > 0 && <span className="obd-gbar-tag">{prog}%</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="obd-gantt-legend">
+              <span><i className="obd-swatch obd-swatch--planned" /> Planned</span>
+              <span><i className="obd-swatch obd-swatch--actual" /> Actual</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── 2. Billing progress (receivables) — itemized ── */}
+      <div className="obd-card">
+        <h4 className="obd-card-title">Billing Progress (Receivables)</h4>
+        {!projectLinked && <div className="obd-banner obd-banner--warn">No project linked — live invoice actuals unavailable.</div>}
+        <div className="obd-stat-row">
+          <div className="obd-stat"><label>Planned to Bill</label><span>{fmtMoney(billPlanned)}</span></div>
+          <div className="obd-stat"><label>Invoiced</label><span>{fmtMoney(invoiced)}</span></div>
+          <div className="obd-stat"><label>Collected</label><span>{fmtMoney(paid)}</span></div>
+          <div className={`obd-stat ${invoiced > billPlanned && billPlanned > 0 ? 'obd-stat--over' : 'obd-stat--ok'}`}>
+            <label>Yet to Invoice</label><span>{fmtMoney(Math.max(0, billPlanned - invoiced))}</span>
+          </div>
+        </div>
+        {billingLines.length === 0 ? (
+          <div className="obd-empty">No billing items planned yet. Add them in the Financial / Commercial tab.</div>
+        ) : (
+          <div className="obd-table-wrap">
+            <table className="obd-table">
+              <thead><tr><th>Item</th><th>Planned to Bill</th><th>Collected</th><th>Progress</th></tr></thead>
+              <tbody>
+                {billingLines.map((l, i) => {
+                  const amt = Number(l.amount || 0);
+                  const got = billingAlloc[i] || 0;
+                  const p = amt > 0 ? Math.min(100, (got / amt) * 100) : 0;
+                  return (
+                    <tr key={i}>
+                      <td>{l.itemName}</td>
+                      <td>{fmtMoney(amt)}</td>
+                      <td>{fmtMoney(got)}</td>
+                      <td style={{ minWidth: 160 }}>
+                        <div className="obd-mini-progress"><div className="obd-mini-progress-fill obd-mini-progress-fill--completed" style={{ width: `${p}%` }} /></div>
+                        <span className="obd-mini-progress-label">{p.toFixed(0)}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot><tr><td style={{ fontWeight: 700 }}>Total</td><td style={{ fontWeight: 700 }}>{fmtMoney(billPlanned)}</td><td style={{ fontWeight: 700 }}>{fmtMoney(paid)}</td><td /></tr></tfoot>
+            </table>
+          </div>
+        )}
+        {billingLines.length > 0 && (
+          <>
+            <div className="obd-mtl-title">Invoice timeline (planned dates)</div>
+            {renderMarkerTimeline(billingLines, 'bill')}
+          </>
+        )}
+        {billPlanned > 0 && (
+          <>
+            <div className="obd-progress" style={{ marginTop: 12 }}>
+              <div className="obd-progress-fill" style={{ width: `${pct(invoiced, billPlanned)}%` }} />
+              <span className="obd-progress-label">{pct(invoiced, billPlanned).toFixed(1)}% invoiced of planned (total)</span>
+            </div>
+            <div className="obd-progress" style={{ marginTop: 8 }}>
+              <div className="obd-progress-fill obd-progress-fill--paid" style={{ width: `${pct(paid, billPlanned)}%` }} />
+              <span className="obd-progress-label">{pct(paid, billPlanned).toFixed(1)}% collected of planned (total)</span>
+            </div>
+            <p className="obd-spec" style={{ marginTop: 8 }}>Per-item "Collected" is the real total collected ({fmtMoney(paid)}) allocated across items by planned invoice date (earliest first), since invoices aren't tagged to individual scope items. It's an estimate from invoice data, not a tagged figure.</p>
+          </>
+        )}
+      </div>
+
+      {/* ── 3. Cost progress (payables) — itemized ── */}
+      <div className="obd-card">
+        <h4 className="obd-card-title">Cost Progress (Payables)</h4>
+        {!projectLinked && <div className="obd-banner obd-banner--warn">No project linked — live procurement/spend actuals unavailable.</div>}
+        <div className="obd-stat-row">
+          <div className="obd-stat"><label>Planned Cost</label><span>{fmtMoney(costPlanned)}</span></div>
+          <div className="obd-stat"><label>Actual (PO + Spend)</label><span>{fmtMoney(actualCost)}</span></div>
+          <div className={`obd-stat ${actualCost > costPlanned && costPlanned > 0 ? 'obd-stat--over' : 'obd-stat--ok'}`}>
+            <label>Remaining</label><span>{fmtMoney(Math.max(0, costPlanned - actualCost))}</span>
+          </div>
+        </div>
+        {costLines.length === 0 ? (
+          <div className="obd-empty">No cost items planned yet. Add them in the Financial / Commercial tab.</div>
+        ) : (
+          <div className="obd-table-wrap">
+            <table className="obd-table">
+              <thead><tr><th>Item</th><th>Planned Cost</th><th>Spent</th><th>Progress</th></tr></thead>
+              <tbody>
+                {costLines.map((l, i) => {
+                  const amt = Number(l.amount || 0);
+                  const sp = costAlloc[i] || 0;
+                  const p = amt > 0 ? Math.min(100, (sp / amt) * 100) : 0;
+                  return (
+                    <tr key={i}>
+                      <td>{l.itemName}</td>
+                      <td>{fmtMoney(amt)}</td>
+                      <td>{fmtMoney(sp)}</td>
+                      <td style={{ minWidth: 160 }}>
+                        <div className="obd-mini-progress"><div className="obd-mini-progress-fill obd-mini-progress-fill--in-progress" style={{ width: `${p}%` }} /></div>
+                        <span className="obd-mini-progress-label">{p.toFixed(0)}%</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot><tr><td style={{ fontWeight: 700 }}>Total</td><td style={{ fontWeight: 700 }}>{fmtMoney(costPlanned)}</td><td style={{ fontWeight: 700 }}>{fmtMoney(actualCost)}</td><td /></tr></tfoot>
+            </table>
+          </div>
+        )}
+        {costLines.length > 0 && (
+          <>
+            <div className="obd-mtl-title">Payment timeline (planned dates)</div>
+            {renderMarkerTimeline(costLines, 'cost')}
+          </>
+        )}
+        {costPlanned > 0 && (
+          <>
+            <div className="obd-progress" style={{ marginTop: 12 }}>
+              <div className={`obd-progress-fill ${actualCost > costPlanned ? 'obd-progress-fill--over' : ''}`} style={{ width: `${pct(actualCost, costPlanned)}%` }} />
+              <span className="obd-progress-label">{pct(actualCost, costPlanned).toFixed(1)}% spent of planned (total)</span>
+            </div>
+            <p className="obd-spec" style={{ marginTop: 8 }}>Per-item "Spent" is the real total ({fmtMoney(actualCost)}) allocated across items by planned pay date (earliest first), since POs/expenses aren't tagged to individual scope items. It's an estimate from procurement data, not a tagged figure.</p>
+          </>
+        )}
+      </div>
+
+    </div>
+  );
+};
+
+export default OrderBookDetailPage;

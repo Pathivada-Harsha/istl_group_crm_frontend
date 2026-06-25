@@ -49,7 +49,7 @@ import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
 import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
-
+import TeamLeadPerformance from "./Pages/TeamLeadPerformance.js";
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
 function AppWrapper() {
@@ -64,7 +64,8 @@ function AppWrapper() {
       '/dashboard', '/sales', '/procurement', '/documents',
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
-      '/project-cost-expense', '/taskmanagement','/projectaccess','/inventory-management','/notifications'
+      '/project-cost-expense', '/taskmanagement', '/projectaccess', '/inventory-management', '/notifications',
+      '/team-performance'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -78,7 +79,7 @@ function AppWrapper() {
 
 function AppShell({ hideShell }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [collapsed, setCollapsed]     = useState(true);
+  const [collapsed, setCollapsed] = useState(true);
 
   const { user } = useAuth();
   const userRole = user?.role || null;
@@ -118,7 +119,7 @@ function AppShell({ hideShell }) {
         <Routes>
 
           {/* ---------- PUBLIC ---------- */}
-          <Route path="/"      element={<Login />} />
+          <Route path="/" element={<Login />} />
           <Route path="/login" element={<Login />} />
 
           {/* ---------- PROTECTED ---------- */}
@@ -213,7 +214,9 @@ function AppShell({ hideShell }) {
           <Route path="/analytics" element={
             <ProtectedRoute><Analytics /></ProtectedRoute>
           } />
-
+          <Route path="/team-performance" element={
+            <ProtectedRoute><TeamLeadPerformance /></ProtectedRoute>
+          } />
           <Route path="/profile" element={
             <ProtectedRoute><Profile /></ProtectedRoute>
           } />

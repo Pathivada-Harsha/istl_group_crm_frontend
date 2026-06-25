@@ -3685,3 +3685,192 @@
 [data-theme="dark"] .col-visibility-item:hover { background: #232b3b; }
 [data-theme="dark"] .col-visibility-label { color: #c2cbd8; }
 [data-theme="dark"] .col-required-tag { color: #8893a7; }
+/* ═══════════════════════════════════════════════════════════════════════════
+   TENDER LEAD — added styles
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Lead Type Toggle ──────────────────────────────────────────────────────── */
+.lead-type-toggle {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid #e5e7eb;
+  width: fit-content;
+}
+
+.lead-type-btn {
+  padding: 9px 22px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  background: #f9fafb;
+  color: #6b7280;
+  transition: background 0.15s, color 0.15s;
+}
+.lead-type-btn.active-customer {
+  background: #2563eb;
+  color: #fff;
+}
+.lead-type-btn.active-tender {
+  background: #0369a1;
+  color: #fff;
+}
+
+/* ── Tender badge on list row name cell ────────────────────────────────────── */
+.tender-row-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid #bae6fd;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
+}
+
+/* ── Tender Info Card (detail overview) ────────────────────────────────────── */
+.ld-tender-info-card {
+  border: 1.5px solid #bae6fd !important;
+  background: #f0f9ff !important;
+}
+.ld-tender-info-card .ld-card-title {
+  color: #0369a1;
+}
+.ld-tender-badge-pill {
+  margin-left: auto;
+  background: #e0f2fe;
+  color: #0369a1;
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* ── Tender extension items ────────────────────────────────────────────────── */
+.tender-extension-item {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.tender-extension-num {
+  font-weight: 600;
+  color: #c2410c;
+  font-size: 12px;
+}
+.tender-extension-date {
+  color: #374151;
+  font-size: 12px;
+  margin-left: 8px;
+}
+.tender-extension-reason {
+  color: #6b7280;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+/* ── Tender Documents Tab ──────────────────────────────────────────────────── */
+.tender-doc-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.tender-doc-icon {
+  width: 38px;
+  height: 38px;
+  background: #eff6ff;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tender-doc-info {
+  flex: 1;
+  min-width: 0;
+}
+.tender-doc-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tender-doc-meta {
+  font-size: 11px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+.tender-doc-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── Tender upload panel ───────────────────────────────────────────────────── */
+.tender-upload-panel {
+  background: #f0f9ff;
+  border: 1.5px solid #bae6fd;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+}
+.tender-upload-panel-title {
+  font-weight: 600;
+  color: #0369a1;
+  font-size: 13px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Dark mode overrides ───────────────────────────────────────────────────── */
+[data-theme="dark"] .tender-row-badge {
+  background: #15243d;
+  color: #38bdf8;
+  border-color: #244b7a;
+}
+[data-theme="dark"] .ld-tender-info-card {
+  background: #15243d !important;
+  border-color: #244b7a !important;
+}
+[data-theme="dark"] .ld-tender-info-card .ld-card-title { color: #38bdf8; }
+[data-theme="dark"] .ld-tender-badge-pill {
+  background: #1d3a5f;
+  color: #38bdf8;
+}
+[data-theme="dark"] .tender-extension-item {
+  background: #2c2113;
+  border-color: #5a4714;
+}
+[data-theme="dark"] .tender-doc-card {
+  background: #1b2130;
+  border-color: #2b3445;
+}
+[data-theme="dark"] .tender-doc-icon { background: #1d3a5f; }
+[data-theme="dark"] .tender-upload-panel {
+  background: #15243d;
+  border-color: #244b7a;
+}
+[data-theme="dark"] .lead-type-toggle { border-color: #2b3445; }
+[data-theme="dark"] .lead-type-btn {
+  background: #1b2130;
+  color: #9aa7b8;
+}

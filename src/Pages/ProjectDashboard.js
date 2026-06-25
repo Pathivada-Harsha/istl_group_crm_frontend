@@ -2590,7 +2590,7 @@ const ProjectDashboard = () => {
                       icon: <TrendingDown size={36} />, color: '#f59e0b',
                       val: fmtKpi((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.totalEmployeeExpenses || 0)),
                       label: 'Amount Spent',
-                      sub: 'Paid to vendors + Approved Expenses',
+                      sub: 'Paid to vendors (net of returns) + Approved Expenses',
                       clickable: true,
                     },
                     ...(dashboardData.financialData.isCompleted ? [(() => {
@@ -3024,7 +3024,21 @@ const ProjectDashboard = () => {
                   <span>Procurement (Vendor Bills + Material from Warehouse)</span>
                 </div>
                 <div className="spent-row">
-                  <span className="spent-row-label">Total paid to vendors</span>
+                  <span className="spent-row-label">Gross paid to vendors (incl. warehouse issuances)</span>
+                  <span className="spent-row-amount spent-amount--procurement">
+                    {formatCurrency((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.inwardRecoveryValue || 0))}
+                  </span>
+                </div>
+                {(dashboardData.financialData.inwardRecoveryValue > 0) && (
+                  <div className="spent-row spent-row--sub" style={{ color: '#059669' }}>
+                    <span className="spent-row-label">↩ Materials returned from site to warehouse (credit)</span>
+                    <span className="spent-row-amount" style={{ color: '#059669' }}>
+                      − {formatCurrency(dashboardData.financialData.inwardRecoveryValue || 0)}
+                    </span>
+                  </div>
+                )}
+                <div className="spent-row spent-row--sub" style={{ fontWeight: 600 }}>
+                  <span className="spent-row-label">Net paid to vendors (after returns)</span>
                   <span className="spent-row-amount spent-amount--procurement">{formatCurrency(dashboardData.financialData.totalSpent || 0)}</span>
                 </div>
                 <div className="spent-row spent-row--sub">
@@ -3086,7 +3100,7 @@ const ProjectDashboard = () => {
                 )}
               </div>
               <div className="spent-grand-total">
-                <span className="spent-grand-label">Grand Total Spent</span>
+                <span className="spent-grand-label">Grand Total Spent (Net)</span>
                 <span className="spent-grand-value">{formatCurrency((dashboardData.financialData.totalSpent || 0) + (dashboardData.financialData.totalEmployeeExpenses || 0))}</span>
               </div>
               <div className="spent-util-row">
