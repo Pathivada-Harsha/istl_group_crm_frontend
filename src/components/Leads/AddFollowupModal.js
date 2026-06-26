@@ -34,8 +34,7 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
 
   const fetchUsers = async () => {
     try {
-      // Pass User-Id and User-Role so the backend applies hierarchy + team scoping
-      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/filters/followup-assignees`, {
         credentials: "include",
         headers: {
           'User-Id':   String(user.id),

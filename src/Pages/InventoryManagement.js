@@ -1279,9 +1279,17 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
               <FilterSelect
                 value={form.warehouseId}
                 onChange={v => {
-                  set('warehouseId', v);
-                  // Reset line items when warehouse changes so stale items are cleared
-                  if (isOutward) setForm(f => ({ ...f, warehouseId: v, lines: [blankLine()] }));
+                  const wh = warehouses.find(w => String(w.id) === v);
+                  // Auto-fill group + subgroup from the selected warehouse so that
+                  // subGroupName is never lost when the server warehouse has no
+                  // subGroupName in its record (mirrors InvCreateBillModal behaviour).
+                  setForm(f => ({
+                    ...f,
+                    warehouseId:  v,
+                    groupName:    wh?.groupName    || f.groupName,
+                    subGroupName: wh?.subGroupName || f.subGroupName,
+                    ...(isOutward ? { lines: [blankLine()] } : {}),
+                  }));
                 }}
                 options={warehouses.map(w => ({ value: String(w.id), label: w.name + (w.code ? ` (${w.code})` : '') }))}
                 placeholder="Select warehouse…"

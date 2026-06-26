@@ -9,15 +9,24 @@ import {
 export default function BillsPaymentsTab({
   bills, payments, vendors, pos,
   onCreateBill, onRecordPayment, onEditBill, onEditPayment, onAllocateAdvance, onDeleteBill, onDeletePayment, canCreate,
-  billPage, billPageSize, billTotal, billTotalPages, billSearch, billStatus,
-  onBillPageChange, onBillPageSizeChange, onBillSearchChange, onBillStatusChange,
   onGetBillPayments,
-  payPage, payPageSize, payTotal, payTotalPages, paySearch, payMode, payType,
-  onPayPageChange, onPayPageSizeChange, onPaySearchChange, onPayModeChange, onPayTypeChange,
   onGetAdvanceAllocations,
 }) {
   const [subTab, setSubTab] = useState(() => localStorage.getItem('inv_bp_subtab') || 'bills');
   const switchSub = (t) => { setSubTab(t); localStorage.setItem('inv_bp_subtab', t); };
+
+  // ── Internal pagination / filter state for bills ──────────────────────────
+  const [billPage,   setBillPage]   = useState(0);
+  const [billPageSize, setBillPageSize] = useState(10);
+  const [billSearch, setBillSearch] = useState('');
+  const [billStatus, setBillStatus] = useState('');
+
+  // ── Internal pagination / filter state for payments ───────────────────────
+  const [payPage,    setPayPage]    = useState(0);
+  const [payPageSize, setPayPageSize] = useState(10);
+  const [paySearch,  setPaySearch]  = useState('');
+  const [payMode,    setPayMode]    = useState('');
+  const [payType,    setPayType]    = useState('');
 
   const totalBilled    = bills.reduce((s, b) => s + b.amount, 0);
   const totalPaid      = bills.reduce((s, b) => s + b.paid, 0);
@@ -73,17 +82,17 @@ export default function BillsPaymentsTab({
 
       {subTab === 'bills'
         ? <BillsList bills={bills} onCreate={onCreateBill} onEdit={onEditBill} onDelete={onDeleteBill} canCreate={canCreate}
-            search={billSearch} onSearchChange={onBillSearchChange}
-            status={billStatus} onStatusChange={onBillStatusChange}
-            page={billPage} pageSize={billPageSize} total={billTotal} totalPages={billTotalPages}
-            onPageChange={onBillPageChange} onPageSizeChange={onBillPageSizeChange}
+            search={billSearch} onSearchChange={v => { setBillSearch(v); setBillPage(0); }}
+            status={billStatus} onStatusChange={v => { setBillStatus(v); setBillPage(0); }}
+            page={billPage} pageSize={billPageSize}
+            onPageChange={p => setBillPage(p)} onPageSizeChange={s => { setBillPageSize(Number(s)); setBillPage(0); }}
             onGetPayments={onGetBillPayments} />
         : <PaymentsList payments={payments} onRecord={onRecordPayment} onEdit={onEditPayment} onAllocate={onAllocateAdvance} onDelete={onDeletePayment} canCreate={canCreate}
-            search={paySearch} onSearchChange={onPaySearchChange}
-            mode={payMode} onModeChange={onPayModeChange}
-            type={payType} onTypeChange={onPayTypeChange}
-            page={payPage} pageSize={payPageSize} total={payTotal} totalPages={payTotalPages}
-            onPageChange={onPayPageChange} onPageSizeChange={onPayPageSizeChange}
+            search={paySearch} onSearchChange={v => { setPaySearch(v); setPayPage(0); }}
+            mode={payMode} onModeChange={v => { setPayMode(v); setPayPage(0); }}
+            type={payType} onTypeChange={v => { setPayType(v); setPayPage(0); }}
+            page={payPage} pageSize={payPageSize}
+            onPageChange={p => setPayPage(p)} onPageSizeChange={s => { setPayPageSize(Number(s)); setPayPage(0); }}
             onGetAllocations={onGetAdvanceAllocations} />}
     </>
   );
@@ -109,7 +118,7 @@ const BILLS_DEFAULT_VISIBLE = BILLS_ALL_COLUMNS.map(c => c.key);
 function BillsList({
   bills, onCreate, onEdit, onDelete, canCreate,
   search, onSearchChange, status, onStatusChange,
-  page, pageSize, total, totalPages,
+  page, pageSize,
   onPageChange, onPageSizeChange,
   onGetPayments,
 }) {
@@ -122,15 +131,30 @@ function BillsList({
   const dragIndexRef = useRef(null);
   const [dragOverIndex, setDragOverIndex]   = useState(null);
 
-  // Sorting is client-side on the current page (server returns page slice)
-  let displayed = [...bills];
+  // Client-side filter
+  let displayed = bills.filter(b => {
+    if (status && b.status !== status) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!(b.billNumber?.toLowerCase().includes(q) || b.vendorName?.toLowerCase().includes(q) || b.poNumber?.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
+  // Sorting
   if (sortColumn) {
-    displayed.sort((a, b) => {
+    displayed = [...displayed].sort((a, b) => {
       const av = sortColumn === 'balance' ? (a.amount - a.paid) : (a[sortColumn] ?? '');
       const bv = sortColumn === 'balance' ? (b.amount - b.paid) : (b[sortColumn] ?? '');
       return sortDirection === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
   }
+
+  // Pagination derived values
+  const total      = displayed.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage   = Math.min(page, totalPages - 1);
+  const paged      = displayed.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const orderedVisibleBillsCols = columnOrder
     .map(k => BILLS_ALL_COLUMNS.find(c => c.key === k))
@@ -202,13 +226,13 @@ function BillsList({
                   <p>{search || status ? 'No bills match your filters.' : 'No bills yet. Click "+ Add Bill" to begin.'}</p>
                 </div>
               </td></tr>
-            ) : displayed.map((b, idx) => {
+            ) : paged.map((b, idx) => {
               const sm = BILL_STATUS[b.status] || BILL_STATUS.UNPAID;
               const balance = Number(b.balance ?? b.balanceAmount ?? (b.amount - b.paid));
               return (
                 <tr key={b.id} className="inv-table-row" onClick={() => setSelectedBill(b)}>
                   {orderedVisibleBillsCols.map(col => {
-                    if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{page * pageSize + idx + 1}</td>;
+                    if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{safePage * pageSize + idx + 1}</td>;
                     if (col.key === 'billNumber') return <td key="billNumber" data-col="billNumber" className="inv-code-cell">{b.billNumber}</td>;
                     if (col.key === 'vendorName') return <td key="vendorName" data-col="vendorName" className="inv-name-cell">{b.vendorName}</td>;
                     if (col.key === 'poNumber') return <td key="poNumber" data-col="poNumber" className="inv-code-cell">{b.poNumber || '—'}</td>;
@@ -237,7 +261,7 @@ function BillsList({
         </table>
       </div>
 
-      <PaginationBar page={page} pageSize={pageSize} total={total} totalPages={totalPages}
+      <PaginationBar page={safePage} pageSize={pageSize} total={total} totalPages={totalPages}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
         label="bills" />
@@ -267,7 +291,7 @@ const PAYMENTS_DEFAULT_VISIBLE = PAYMENTS_ALL_COLUMNS.map(c => c.key);
 function PaymentsList({
   payments, onRecord, onEdit, onAllocate, onDelete, canCreate,
   search, onSearchChange, mode, onModeChange, type, onTypeChange,
-  page, pageSize, total, totalPages,
+  page, pageSize,
   onPageChange, onPageSizeChange,
   onGetAllocations,
 }) {
@@ -280,17 +304,31 @@ function PaymentsList({
   const dragIndexRef = useRef(null);
   const [dragOverIndex, setDragOverIndex]   = useState(null);
 
-  // Client-side sort on current page only.
-  // Hide allocation-child rows (advanceId != null) - they are internal accounting
-  // entries. The parent advance row already shows appliedAmount.
-  // Per-bill breakdown is visible inside the PaymentModal view.
-  let displayed = [...payments].filter(p => !p.advanceId);
+  // Client-side filter + sort
+  // Hide allocation-child rows (advanceId != null) - internal accounting entries.
+  let displayed = payments.filter(p => {
+    if (p.advanceId) return false;
+    if (mode   && p.paymentMode   !== mode)   return false;
+    if (type   && p.type          !== type)   return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!(p.paymentNo?.toLowerCase().includes(q) || p.vendorName?.toLowerCase().includes(q) || p.billRef?.toLowerCase().includes(q) || p.reference?.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
   if (sortColumn) {
-    displayed.sort((a, b) => {
+    displayed = [...displayed].sort((a, b) => {
       const av = a[sortColumn] ?? '', bv = b[sortColumn] ?? '';
       return sortDirection === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
     });
   }
+
+  // Pagination derived values
+  const total      = displayed.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage   = Math.min(page, totalPages - 1);
+  const paged      = displayed.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const orderedVisiblePayCols = columnOrder
     .map(k => PAYMENTS_ALL_COLUMNS.find(c => c.key === k))
@@ -362,16 +400,16 @@ function PaymentsList({
             </tr>
           </thead>
           <tbody>
-            {payments.length === 0 ? (
+            {displayed.length === 0 ? (
               <tr><td colSpan={orderedVisiblePayCols.length} className="inv-empty-cell">
                 <div className="inv-empty"><span className="inv-empty-icon">💸</span>
                   <p>{search || mode || type ? 'No payments match your filters.' : 'No payments recorded yet.'}</p>
                 </div>
               </td></tr>
-            ) : displayed.map((p, idx) => (
+            ) : paged.map((p, idx) => (
               <tr key={p.id} className="inv-table-row" onClick={() => setSelectedPayment(p)}>
                 {orderedVisiblePayCols.map(col => {
-                  if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{page * pageSize + idx + 1}</td>;
+                  if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{safePage * pageSize + idx + 1}</td>;
                   if (col.key === 'paymentNumber') return <td key="paymentNumber" data-col="paymentNumber" className="inv-code-cell">{p.paymentNumber}</td>;
                   if (col.key === 'type') return <td key="type" data-col="type">{p.billId ? <span className="inv-status-badge" style={{ background:'#dcfce7', color:'#166534' }}>Bill Payment</span> : <span className="inv-status-badge" style={{ background:'#eff6ff', color:'#1e40af' }}>Advance</span>}</td>;
                   if (col.key === 'date') return <td key="date" data-col="date" className="inv-muted">{p.date}</td>;
@@ -411,7 +449,7 @@ function PaymentsList({
         </table>
       </div>
 
-      <PaginationBar page={page} pageSize={pageSize} total={total} totalPages={totalPages}
+      <PaginationBar page={safePage} pageSize={pageSize} total={total} totalPages={totalPages}
         onPageChange={onPageChange}
         onPageSizeChange={onPageSizeChange}
         label="payments" />

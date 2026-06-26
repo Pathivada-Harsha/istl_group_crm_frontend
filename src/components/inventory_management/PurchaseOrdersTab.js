@@ -128,12 +128,15 @@ const PO_DEFAULT_VISIBLE = PO_ALL_COLUMNS.map(c => c.key);
 export default function PurchaseOrdersTab({
   pos, vendors, items, bills, payments, warehouses,
   onCreate, onEdit, onDelete, canCreate,
-  page, pageSize, total, totalPages,
-  search, status, vendor,
-  onPageChange, onPageSizeChange,
-  onSearchChange, onStatusChange, onVendorChange,
 }) {
   const [selectedPo, setSelectedPo] = useState(null);
+
+  // ── Internal pagination, search, filters ─────────────────────────────────
+  const [page,      setPage]     = useState(0);
+  const [pageSize,  setPageSize] = useState(10);
+  const [search,    setSearch]   = useState('');
+  const [status,    setStatus]   = useState('');
+  const [vendor,    setVendor]   = useState('');
 
   const [columnOrder, setColumnOrder]       = useState(PO_DEFAULT_ORDER);
   const [visibleColumns, setVisibleColumns] = useState(PO_DEFAULT_VISIBLE);
@@ -142,7 +145,7 @@ export default function PurchaseOrdersTab({
   const dragIndexRef = useRef(null);
   const [dragOverIndex, setDragOverIndex]   = useState(null);
 
-  // KPI aggregates from current page (backend-filtered)
+  // KPI aggregates from ALL pos (not filtered) so KPI cards are always accurate
   const agg = pos.reduce((acc, p) => {
     const m = getPoMetrics(p, bills, payments);
     acc.totalValue  += m.total;
@@ -153,18 +156,38 @@ export default function PurchaseOrdersTab({
     return acc;
   }, { totalValue: 0, totalBilled: 0, totalPaid: 0, openCount: 0, receivedCount: 0 });
 
-  // Client-side sort on current page only
+  // Client-side filter
+  const filteredPos = pos.filter(p => {
+    if (status) {
+      const m = getPoMetrics(p, bills, payments);
+      if (m.derivedStatus !== status) return false;
+    }
+    if (vendor && String(p.vendorId) !== vendor) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!(p.poNumber?.toLowerCase().includes(q) || p.vendorName?.toLowerCase().includes(q))) return false;
+    }
+    return true;
+  });
+
+  // Client-side sort
   const sortedPos = sortColumn
-    ? [...pos].sort((a, b) => {
+    ? [...filteredPos].sort((a, b) => {
         let av, bv;
         if (sortColumn === 'total') { const ma = getPoMetrics(a, bills, payments); const mb = getPoMetrics(b, bills, payments); av = ma.total; bv = mb.total; }
         else if (sortColumn === 'status') { const ma = getPoMetrics(a, bills, payments); const mb = getPoMetrics(b, bills, payments); av = ma.derivedStatus; bv = mb.derivedStatus; }
         else { av = a[sortColumn] ?? ''; bv = b[sortColumn] ?? ''; }
         return sortDirection === 'asc' ? (av > bv ? 1 : -1) : (av < bv ? 1 : -1);
       })
-    : pos;
+    : filteredPos;
 
-  const paginatedPos = sortedPos;
+  // Pagination derived values
+  const total      = sortedPos.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const safePage   = Math.min(page, totalPages - 1);
+
+  // Slice for current page
+  const paginatedPos = sortedPos.slice(safePage * pageSize, (safePage + 1) * pageSize);
 
   const orderedVisiblePoCols = columnOrder
     .map(k => PO_ALL_COLUMNS.find(c => c.key === k))
@@ -233,24 +256,24 @@ export default function PurchaseOrdersTab({
           <div className="inv-search-wrap">
             <span className="inv-search-icon">🔍</span>
             <input className="inv-search" placeholder="Search by PO number or vendor…"
-              value={search} onChange={e => onSearchChange(e.target.value)} />
-            {search && <button className="inv-search-clear" onClick={() => onSearchChange('')}>✕</button>}
+              value={search} onChange={e => { setSearch(e.target.value); setPage(0); }} />
+            {search && <button className="inv-search-clear" onClick={() => { setSearch(''); setPage(0); }}>✕</button>}
           </div>
           <FilterSelect
             value={status}
-            onChange={v => onStatusChange(v)}
+            onChange={v => { setStatus(v); setPage(0); }}
             options={Object.entries(PO_STATUS).map(([k, v]) => ({ value: k, label: v.label }))}
             placeholder="All Status"
           />
           <FilterSelect
             value={vendor}
-            onChange={v => onVendorChange(v)}
+            onChange={v => { setVendor(v); setPage(0); }}
             options={vendors.map(v => ({ value: String(v.id), label: v.name }))}
             placeholder="All Vendors"
           />
           {(search || status || vendor) && (
             <button className="inv-btn inv-btn--ghost inv-btn--sm"
-              onClick={() => { onSearchChange(''); onStatusChange(''); onVendorChange(''); }}>
+              onClick={() => { setSearch(''); setStatus(''); setVendor(''); setPage(0); }}>
               ✕ Clear
             </button>
           )}
@@ -292,7 +315,7 @@ export default function PurchaseOrdersTab({
               return (
                 <tr key={p.id} className="inv-table-row" onClick={() => setSelectedPo(p)}>
                   {orderedVisiblePoCols.map(col => {
-                    if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{page * pageSize + idx + 1}</td>;
+                    if (col.key === 'idx') return <td key="idx" data-col="idx" style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>{safePage * pageSize + idx + 1}</td>;
                     if (col.key === 'poNumber') return <td key="poNumber" data-col="poNumber" className="inv-code-cell">{p.poNo || p.poNumber || '—'}</td>;
                     if (col.key === 'vendor') return <td key="vendor" data-col="vendor" className="inv-name-cell">{p.vendorName}</td>;
                     if (col.key === 'date') return <td key="date" data-col="date" className="inv-muted">{p.date}</td>;
@@ -336,9 +359,9 @@ export default function PurchaseOrdersTab({
       </div>
 
       <PaginationBar
-        page={page} pageSize={pageSize} total={total} totalPages={totalPages}
-        onPageChange={onPageChange}
-        onPageSizeChange={onPageSizeChange}
+        page={safePage} pageSize={pageSize} total={total} totalPages={totalPages}
+        onPageChange={p => setPage(p)}
+        onPageSizeChange={s => { setPageSize(Number(s)); setPage(0); }}
         label="purchase orders"
       />
 

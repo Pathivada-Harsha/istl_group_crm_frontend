@@ -452,7 +452,7 @@ export default function ClientDashboardFollowUps() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/filters/leads-users`, {
+      const response = await fetch(`${API_BASE_URL}/filters/followup-assignees`, {
         credentials: "include",
         headers: {
           'User-Id':   String(user.id),
