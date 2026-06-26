@@ -37,6 +37,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import SockJS from 'sockjs-client';
 import { Client as StompClient } from '@stomp/stompjs';
+import { useAuth } from '../../hooks/useAuth';
 
 /* ============================================================================
  * 1. CONFIG & HELPERS
@@ -159,7 +160,13 @@ export function NotificationProvider({ children }) {
   const [toasts, setToasts] = useState([]);      // realtime popups
   const stompRef = useRef(null);
 
-  const userId = getStoredUser()?.id ?? null;
+  // FIX: read userId from AuthContext (reactive state) instead of localStorage
+  // getStoredUser()?.id is read once at render and never updates after login,
+  // so the WebSocket useEffect never re-fires. useAuth() is reactive — when the
+  // user logs in, isAuthenticated flips to true, userId updates, and the effect
+  // connects the STOMP socket so real-time toasts start working immediately.
+  const { user: authUser, isAuthenticated } = useAuth();
+  const userId = isAuthenticated ? (authUser?.id ?? null) : null;
 
   // ── toast helpers ──────────────────────────────────────────────────
   const pushToast = useCallback((notification) => {
@@ -177,7 +184,7 @@ export function NotificationProvider({ children }) {
 
   // ── initial load ───────────────────────────────────────────────────
   const refresh = useCallback(async () => {
-    if (!getStoredUser()?.id) return;
+    if (!userId) return;
     try {
       const data = await notificationApi.getLatest();
       setLatest(data.data || []);
@@ -185,7 +192,7 @@ export function NotificationProvider({ children }) {
     } catch (e) {
       if (e.message !== 'SESSION_EXPIRED') console.error('Notification load failed', e);
     }
-  }, []);
+  }, [userId]);
 
   // ── apply a realtime payload from the socket ───────────────────────
   const onRealtime = useCallback((msg) => {
@@ -304,7 +311,8 @@ export function NotificationBadge({ count }) {
 
 // ── Navbar bell + dropdown of latest 10 ───────────────────────────────
 export function NotificationBell() {
-  const { latest, unreadCount } = useNotifications();
+  const { latest, unreadCount, markRead, markAllRead } = useNotifications();
+  const [hoveredId, setHoveredId] = useState(null);
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const navigate = useNavigate();
@@ -339,7 +347,18 @@ export function NotificationBell() {
         <div className="ntf-dropdown">
           <div className="ntf-dropdown-head">
             <span>Notifications</span>
-            {unreadCount > 0 && <span className="ntf-dropdown-count">{unreadCount} unread</span>}
+            <div className="ntf-dropdown-head-right">
+              {unreadCount > 0 && <span className="ntf-dropdown-count">{unreadCount} unread</span>}
+              {unreadCount > 0 && (
+                <button
+                  className="ntf-mark-all-btn"
+                  onClick={(e) => { e.stopPropagation(); markAllRead(); }}
+                  title="Mark all as read"
+                >
+                  Mark all as read
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="ntf-dropdown-list">
@@ -347,21 +366,41 @@ export function NotificationBell() {
               <div className="ntf-empty">You're all caught up 🎉</div>
             )}
             {latest.map((n) => (
-              <button
+              <div
                 key={n.id}
                 className={`ntf-drop-item ${n.isRead ? '' : 'ntf-unread'}`}
-                onClick={goToNotifications}
+                onMouseEnter={() => setHoveredId(n.id)}
+                onMouseLeave={() => setHoveredId(null)}
               >
-                <span
-                  className="ntf-dot"
-                  style={{ background: MODULE_META[n.module]?.color || '#2563eb' }}
-                />
-                <span className="ntf-drop-body">
-                  <span className="ntf-drop-title">{n.title}</span>
-                  <span className="ntf-drop-msg">{n.message}</span>
-                  <span className="ntf-drop-time">{timeAgo(n.createdAt)}</span>
-                </span>
-              </button>
+                <button
+                  className="ntf-drop-item-main"
+                  onClick={goToNotifications}
+                >
+                  <span
+                    className="ntf-dot"
+                    style={{ background: MODULE_META[n.module]?.color || '#2563eb' }}
+                  />
+                  <span className="ntf-drop-body">
+                    <span className="ntf-drop-title">{n.title}</span>
+                    <span className="ntf-drop-msg">{n.message}</span>
+                    <span className="ntf-drop-time">{timeAgo(n.createdAt)}</span>
+                  </span>
+                </button>
+                {!n.isRead && hoveredId === n.id && (
+                  <button
+                    className="ntf-drop-mark-read"
+                    title="Mark as read"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      markRead(n.id);
+                    }}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             ))}
           </div>
 
@@ -378,8 +417,10 @@ export function NotificationBell() {
 }
 
 // ── A single card (used on the page) ──────────────────────────────────
-function NotificationCard({ n, onOpen, onToggleRead, onDelete }) {
+function NotificationCard({ n, onOpen, onToggleRead, onDelete, confirmId, onRequestDelete, onCancelDelete }) {
   const meta = MODULE_META[n.module] || { label: n.module, color: '#2563eb' };
+  const isPendingConfirm = confirmId === n.id;
+
   return (
     <div className={`ntf-card ${n.isRead ? '' : 'ntf-card-unread'}`}>
       <span className="ntf-card-accent" style={{ background: meta.color }} />
@@ -399,9 +440,17 @@ function NotificationCard({ n, onOpen, onToggleRead, onDelete }) {
             Mark read
           </button>
         )}
-        <button className="ntf-link ntf-danger" title="Delete" onClick={() => onDelete(n)}>
-          Delete
-        </button>
+        {isPendingConfirm ? (
+          <div className="ntf-delete-confirm">
+            <span className="ntf-delete-confirm-text">Delete?</span>
+            <button className="ntf-link ntf-danger" onClick={() => onDelete(n)}>Yes</button>
+            <button className="ntf-link" onClick={() => onCancelDelete()}>No</button>
+          </div>
+        ) : (
+          <button className="ntf-link ntf-danger" title="Delete" onClick={() => onRequestDelete(n.id)}>
+            Delete
+          </button>
+        )}
       </div>
     </div>
   );
@@ -451,7 +500,10 @@ export function NotificationsPage() {
   };
 
   const toggleRead = async (n) => { await markRead(n.id); load(); };
-  const del = async (n) => { await remove(n.id); load(); };
+  const [confirmId, setConfirmId] = useState(null);
+  const requestDelete = (id) => setConfirmId(id);
+  const cancelDelete  = ()  => setConfirmId(null);
+  const del = async (n) => { setConfirmId(null); await remove(n.id); load(); };
   const handleMarkAll = async () => { await markAllRead(); load(); };
 
   return (
@@ -506,6 +558,9 @@ export function NotificationsPage() {
             onOpen={openRecord}
             onToggleRead={toggleRead}
             onDelete={del}
+            confirmId={confirmId}
+            onRequestDelete={requestDelete}
+            onCancelDelete={cancelDelete}
           />
         ))}
       </div>
@@ -645,6 +700,51 @@ function NotificationStyles() {
 }
 .ntf-viewall:hover { background: var(--c-f8fafc, #f8fafc); }
 
+/* ── Dropdown header with Mark All button ── */
+.ntf-dropdown-head-right { display: flex; align-items: center; gap: 8px; }
+.ntf-mark-all-btn {
+  background: none; border: none; cursor: pointer;
+  font-size: 11.5px; font-weight: 600;
+  color: var(--ct-2563eb, #2563eb);
+  padding: 3px 8px; border-radius: 6px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.ntf-mark-all-btn:hover { background: var(--c-eff6ff, #eff6ff); }
+
+/* ── Per-notification hover Mark as Read ── */
+.ntf-drop-item {
+  position: relative; display: flex; align-items: center;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  transition: background .12s ease;
+}
+.ntf-drop-item:hover { background: var(--c-f8fafc, #f8fafc); }
+.ntf-drop-item.ntf-unread { background: var(--c-eff6ff, #eff6ff); }
+.ntf-drop-item.ntf-unread:hover { background: #dbeafe; }
+
+.ntf-drop-item-main {
+  display: flex; gap: 10px; flex: 1; text-align: left;
+  background: transparent; border: none; padding: 11px 14px;
+  cursor: pointer; min-width: 0;
+}
+
+.ntf-drop-mark-read {
+  flex-shrink: 0; width: 30px; height: 30px; margin-right: 8px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-ffffff, #ffffff);
+  border: 1.5px solid var(--c-2563eb, #2563eb);
+  border-radius: 50%; cursor: pointer;
+  color: var(--ct-2563eb, #2563eb);
+  transition: background 0.15s, transform 0.1s;
+  animation: ntf-pop .15s ease;
+}
+.ntf-drop-mark-read:hover {
+  background: var(--c-2563eb, #2563eb);
+  color: #fff;
+  transform: scale(1.1);
+}
+@keyframes ntf-pop { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: scale(1); } }
+
 .ntf-empty { padding: 26px 14px; text-align: center; color: var(--ct-94a3b8, #94a3b8); font-size: 13px; }
 
 /* ── Page ── */
@@ -693,6 +793,15 @@ function NotificationStyles() {
 .ntf-link { background: transparent; border: none; cursor: pointer; font-size: 12.5px; font-weight: 600; color: var(--ct-2563eb, #2563eb); padding: 2px 0; white-space: nowrap; }
 .ntf-link:hover { text-decoration: underline; }
 .ntf-danger { color: var(--ct-ef4444, #ef4444); }
+
+.ntf-delete-confirm {
+  display: flex; align-items: center; gap: 4px;
+  animation: ntf-pop .15s ease;
+}
+.ntf-delete-confirm-text {
+  font-size: 12px; font-weight: 600;
+  color: var(--ct-ef4444, #ef4444); white-space: nowrap;
+}
 
 .ntf-btn {
   padding: 8px 14px; border-radius: 9px; border: 1px solid var(--c-e5e7eb, #e5e7eb);

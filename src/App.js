@@ -49,11 +49,70 @@ import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
 import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
+import CRMAssistantBot from './components/CRMAssistantBot';
 import TeamLeadPerformance from "./Pages/TeamLeadPerformance.js";
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * useModalScrollLock
+ * Watches the DOM with a MutationObserver. Whenever any element with
+ * position:fixed covering the full viewport (inset:0) is added or removed,
+ * it toggles body.modal-open which applies overflow:hidden via App.css.
+ * This prevents the background page from scrolling while ANY modal, drawer,
+ * dialog, or overlay is open — across the ENTIRE application in one place.
+ * ───────────────────────────────────────────────────────────────────────── */
+function isModalOverlay(el) {
+  if (!(el instanceof HTMLElement)) return false;
+  const s = window.getComputedStyle(el);
+  return (
+    s.position === 'fixed' &&
+    s.top      === '0px'   &&
+    s.right    === '0px'   &&
+    s.bottom   === '0px'   &&
+    s.left     === '0px'
+  );
+}
+
+function hasOpenModal() {
+  const candidates = document.querySelectorAll(
+    '[style*="fixed"], [class*="modal"], [class*="overlay"], [class*="backdrop"], [class*="dialog"]'
+  );
+  for (const el of candidates) {
+    if (isModalOverlay(el)) return true;
+  }
+  return false;
+}
+
+function useModalScrollLock() {
+  useEffect(() => {
+    // Measure scrollbar width once so layout doesn't shift when overflow:hidden
+    // removes the scrollbar.
+    const sbWidth = window.innerWidth - document.documentElement.clientWidth;
+    document.documentElement.style.setProperty('--scrollbar-width', `${sbWidth}px`);
+
+    function syncBodyClass() {
+      document.body.classList.toggle('modal-open', hasOpenModal());
+    }
+
+    // childList + subtree catches portals rendered anywhere in the tree.
+    const observer = new MutationObserver(syncBodyClass);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    syncBodyClass(); // sync once on mount
+
+    return () => {
+      observer.disconnect();
+      document.body.classList.remove('modal-open');
+    };
+  }, []);
+}
+
 /* ---------------- APP WRAPPER ---------------- */
 setupFetchInterceptor();
 function AppWrapper() {
   const location = useLocation();
+
+  // Prevent background page scrolling whenever any modal/overlay is open
+  useModalScrollLock();
 
   const hideShell =
     location.pathname === '/login' ||
@@ -102,6 +161,8 @@ function AppShell({ hideShell }) {
 
       {!hideShell && <SessionManager />}
 
+      {!hideShell && <CRMAssistantBot />}
+      
       {!hideShell && (
         <Navbar onMenuClick={() => setSidebarOpen(true)} />
       )}

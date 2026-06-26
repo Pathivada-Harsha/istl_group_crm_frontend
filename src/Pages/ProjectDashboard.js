@@ -1056,9 +1056,10 @@ const CapacityBlock = ({ subGroups }) => {
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
             onClick={() => setActiveModal(null)}>
-            <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+            <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
               onClick={e => e.stopPropagation()}>
-              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: m.bg, borderRadius: '14px 14px 0 0' }}>
+              {/* Sticky header */}
+              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: m.bg, borderRadius: '14px 14px 0 0', flexShrink: 0 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Capacity Breakdown</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: m.text, marginTop: 2 }}>{m.icon} {m.label || activeModal.subGroupName}</div>
@@ -1077,7 +1078,10 @@ const CapacityBlock = ({ subGroups }) => {
                 </div>
                 <button onClick={() => setActiveModal(null)} style={{ background: '#fff', border: `1px solid ${m.border}`, borderRadius: 7, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: m.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
               </div>
-              <div style={{ padding: '4px 0 8px' }}>
+              {/* Scrollable list */}
+              <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0 8px' }}
+                onWheel={e => e.stopPropagation()}
+                onTouchMove={e => e.stopPropagation()}>
                 {activeModal.projects.map((p, i) => {
                   const pct = activeModal.totalQuantity > 0 ? (p.quantity / activeModal.totalQuantity) * 100 : 0;
                   const breakdown = p.unitBreakdown || [];
@@ -1088,11 +1092,19 @@ const CapacityBlock = ({ subGroups }) => {
                     <div key={i} style={{ padding: '12px 22px', borderBottom: i < activeModal.projects.length - 1 ? '1px solid #f8fafc' : 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#3b82f6', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {p.orderBookNo || p.projectId}
+                          {/* Customer name — primary bold dark */}
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.customerName || p.orderTitle || p.orderBookNo}
                           </div>
+                          {/* Order book number — secondary small blue */}
+                          {p.orderBookNo && (
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {p.orderBookNo}
+                            </div>
+                          )}
+                          {/* Order title — grey subtitle */}
                           {p.orderTitle && (
-                            <div style={{ fontSize: 12, color: '#1e293b', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {p.orderTitle}
                             </div>
                           )}
