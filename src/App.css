@@ -5,6 +5,16 @@
   overflow-x: hidden;
 }
 
+/* ── Global modal scroll lock ────────────────────────────────────────────────
+   Applied to <body> by App.js whenever any fixed full-screen overlay is open.
+   Prevents the background page from scrolling on ANY page in the application.
+   padding-right compensates for the scrollbar disappearing so layout
+   does not shift. ─────────────────────────────────────────────────────────── */
+body.modal-open {
+  overflow: hidden;
+  padding-right: var(--scrollbar-width, 0px);
+}
+
 /* Main content default */
 .main-content {
   margin-left: 0;
