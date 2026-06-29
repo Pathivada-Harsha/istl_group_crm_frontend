@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './AddFollowupModal.css';
 import { useAuth } from "../../hooks/useAuth.js";
 import useToast from '../../hooks/useToast';
+import FilterSelect from '../Dropdowns/FilterSelect.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -34,6 +35,7 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
 
   const fetchUsers = async () => {
     try {
+      // Pass User-Id and User-Role so the backend applies hierarchy + team scoping
       const response = await fetch(`${API_BASE_URL}/filters/followup-assignees`, {
         credentials: "include",
         headers: {
@@ -150,16 +152,20 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
           <div className="add-followup-form-grid">
             <div className="add-followup-form-group">
               <label>Follow-up Type *</label>
-              <select required value={formData.followupType}
-                onChange={(e) => setFormData({ ...formData, followupType: e.target.value })}>
-                <option value="Call">Call</option>
-                <option value="Email">Email</option>
-                <option value="Meeting">Meeting</option>
-                <option value="Visit">Site Visit</option>
-                <option value="Demo">Demo</option>
-                <option value="Proposal">Send Proposal</option>
-                <option value="Other">Other</option>
-              </select>
+              <FilterSelect
+                value={formData.followupType}
+                onChange={v => setFormData({ ...formData, followupType: v })}
+                options={[
+                  { value: 'Call',     label: 'Call' },
+                  { value: 'Email',    label: 'Email' },
+                  { value: 'Meeting',  label: 'Meeting' },
+                  { value: 'Visit',    label: 'Site Visit' },
+                  { value: 'Demo',     label: 'Demo' },
+                  { value: 'Proposal', label: 'Send Proposal' },
+                  { value: 'Other',    label: 'Other' },
+                ]}
+                placeholder="Select Type"
+              />
             </div>
 
             <div className="add-followup-form-group">
@@ -177,27 +183,30 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
 
             <div className="add-followup-form-group">
               <label>Priority *</label>
-              <select required value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}>
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
+              <FilterSelect
+                value={formData.priority}
+                onChange={v => setFormData({ ...formData, priority: v })}
+                options={[
+                  { value: 'High',   label: 'High' },
+                  { value: 'Medium', label: 'Medium' },
+                  { value: 'Low',    label: 'Low' },
+                ]}
+                placeholder="Select Priority"
+              />
             </div>
 
             <div className="add-followup-form-group">
               <label>Assign To *</label>
-              <select required value={formData.assignedTo}
-                onChange={(e) => setFormData({ ...formData, assignedTo: Number(e.target.value) })}>
-                {users.length === 0 && (
-                  <option value={user.id}>{user.name || 'Me'} (Me)</option>
-                )}
-                {users.map(u => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} {Number(u.id) === Number(user.id) ? '(Me)' : ''}
-                  </option>
-                ))}
-              </select>
+              <FilterSelect
+                value={String(formData.assignedTo)}
+                onChange={v => setFormData({ ...formData, assignedTo: Number(v) })}
+                options={
+                  users.length > 0
+                    ? users.map(u => ({ value: String(u.id), label: u.name + (Number(u.id) === Number(user.id) ? ' (Me)' : '') }))
+                    : [{ value: String(user.id), label: (user.name || 'Me') + ' (Me)' }]
+                }
+                placeholder="Select User"
+              />
               {users.length === 0 && (
                 <span style={{ fontSize: 11, color: '#9ca3af', marginTop: 4, display: 'block' }}>
                   Loading assignable users…
@@ -207,13 +216,17 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
 
             <div className="add-followup-form-group">
               <label>Status</label>
-              <select value={formData.status}
-                onChange={(e) => setFormData({ ...formData, status: e.target.value })}>
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-                <option value="Rescheduled">Rescheduled</option>
-              </select>
+              <FilterSelect
+                value={formData.status}
+                onChange={v => setFormData({ ...formData, status: v })}
+                options={[
+                  { value: 'Pending',     label: 'Pending' },
+                  { value: 'Completed',   label: 'Completed' },
+                  { value: 'Cancelled',   label: 'Cancelled' },
+                  { value: 'Rescheduled', label: 'Rescheduled' },
+                ]}
+                placeholder="Select Status"
+              />
             </div>
           </div>
 

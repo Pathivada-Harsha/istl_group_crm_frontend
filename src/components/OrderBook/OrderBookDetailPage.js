@@ -683,7 +683,11 @@ const blankPhase = (seq) => ({
   id: null, seqNo: seq, phaseName: '', phaseDescription: '',
   startWeek: '', endWeek: '', customName: false,
   status: 'Not Started', progressPercent: 0,
+  subItems: [],    // sub-work-packages under this activity
+  expanded: false, // UI-only: collapse/expand sub-items
 });
+
+const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, description: '', startDate: '', endDate: '' });
 
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
 
@@ -728,6 +732,8 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
           customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
           status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+          subItems: Array.isArray(p.subItems) ? p.subItems : [],
+          expanded: false,
         })));
       }
     } catch (e) { showError('Failed to load technical scope'); }
@@ -831,7 +837,17 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           endWeek: p.endWeek === '' ? null : Number(p.endWeek),
           status: p.status || 'Not Started',
           progressPercent: p.progressPercent === '' || p.progressPercent == null ? 0 : Number(p.progressPercent),
-        })),
+          subItems: (p.subItems || []).filter(si => si.name && si.name.trim()),
+        })).map(p => {
+          // If phase has sub-items, override progressPercent with their average
+          // so the DB always holds the real current value (Progress tab reads from DB)
+          if (p.subItems && p.subItems.length > 0) {
+            p.progressPercent = Math.round(
+              p.subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / p.subItems.length
+            );
+          }
+          return p;
+        }),
       };
       const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, {
         method: 'PUT', credentials: 'include',
@@ -932,69 +948,184 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           <>
             <div className="obd-table-wrap">
               <table className="obd-table obd-phase-table">
-                <thead><tr><th>#</th><th>Activity / Item</th><th>Description</th><th>Start {unitWord}</th><th>End {unitWord}</th><th>Status</th><th>Progress</th><th></th></tr></thead>
+                <thead>
+                  <tr>
+                    <th style={{width:28}}></th>
+                    <th>#</th>
+                    <th>Activity / Item</th>
+                    <th>Description</th>
+                    <th>Start {unitWord}</th>
+                    <th>End {unitWord}</th>
+                    <th>Status</th>
+                    <th>Progress</th>
+                    <th></th>
+                  </tr>
+                </thead>
                 <tbody>
-                  {phases.map((p, i) => (
-                    <tr key={i}>
-                      <td>{i + 1}</td>
-                      <td>
-                        {p.customName ? (
-                          <div className="obd-cat-custom">
-                            <input className="obd-inp" value={p.phaseName} autoFocus={focusRow === i} placeholder="Enter phase or item name"
-                              onChange={e => updatePhase(i, 'phaseName', e.target.value)} />
-                            <button type="button" className="obd-cat-back" title="Back to list"
-                              onClick={() => { setFocusRow(null); updatePhase(i, 'customName', false, { phaseName: '' }); }}>↩</button>
-                          </div>
-                        ) : (
-                          <select className="obd-inp"
-                            value={PHASE_SUGGESTIONS.includes(p.phaseName) ? p.phaseName : ''}
-                            onChange={e => {
-                              if (e.target.value === '__OTHER__') { setFocusRow(i); updatePhase(i, 'customName', true, { phaseName: '' }); }
-                              else updatePhase(i, 'phaseName', e.target.value);
-                            }}>
-                            <option value="">Select phase / item…</option>
-                            {PHASE_SUGGESTIONS.filter(s => s !== 'Other').map(s => <option key={s} value={s}>{s}</option>)}
-                            <option value="__OTHER__">Other (type your own)…</option>
-                          </select>
-                        )}
-                      </td>
-                      <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
-                      <td>
-                        <select className="obd-inp obd-inp--sm" value={clampBucket(p.startWeek)} onChange={e => updatePhase(i, 'startWeek', e.target.value)}>
-                          <option value="">—</option>
-                          {Array.from({ length: nBuckets }).map((_, b) => (
-                            <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <select className="obd-inp obd-inp--sm" value={clampBucket(p.endWeek)} onChange={e => updatePhase(i, 'endWeek', e.target.value)}>
-                          <option value="">—</option>
-                          {Array.from({ length: nBuckets }).map((_, b) => (
-                            <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td>
-                        <select className="obd-inp obd-inp--sm" value={p.status || 'Not Started'}
-                          onChange={e => {
-                            const st = e.target.value;
-                            const extra = st === 'Completed' ? { progressPercent: 100 } : st === 'Not Started' ? { progressPercent: 0 } : {};
-                            updatePhase(i, 'status', st, extra);
-                          }}>
-                          {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        <div className="obd-progress-cell">
-                          <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" value={p.progressPercent}
-                            onChange={e => updatePhase(i, 'progressPercent', e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value))))} />
-                          <span className="obd-progress-cell-pct">%</span>
-                        </div>
-                      </td>
-                      <td><button className="obd-icon-btn obd-icon-btn--danger" onClick={() => removePhase(i)} title="Remove"><Trash2 size={14} /></button></td>
-                    </tr>
-                  ))}
+                  {phases.map((p, i) => {
+                    const hasSubItems = p.subItems && p.subItems.length > 0;
+                    // auto-derive parent progress from sub-items when all named
+                    const autoProgress = hasSubItems
+                      ? Math.round(p.subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / p.subItems.length)
+                      : null;
+                    return (
+                      <React.Fragment key={i}>
+                        {/* ── Parent phase row ─────────────────────────── */}
+                        <tr style={{ background: hasSubItems ? '#f8fafc' : undefined }}>
+                          {/* expand/collapse toggle */}
+                          <td style={{ textAlign: 'center', padding: '0 4px' }}>
+                            <button
+                              type="button"
+                              title={p.expanded ? 'Collapse sub-items' : 'Expand sub-items'}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6366f1', padding: 2 }}
+                              onClick={() => updatePhase(i, 'expanded', !p.expanded)}
+                            >
+                              {hasSubItems ? (p.expanded ? '▾' : '▸') : <span style={{ color: '#cbd5e1' }}>—</span>}
+                            </button>
+                          </td>
+                          <td>{i + 1}</td>
+                          <td>
+                            {p.customName ? (
+                              <div className="obd-cat-custom">
+                                <input className="obd-inp" value={p.phaseName} autoFocus={focusRow === i} placeholder="Enter phase or item name"
+                                  onChange={e => updatePhase(i, 'phaseName', e.target.value)} />
+                                <button type="button" className="obd-cat-back" title="Back to list"
+                                  onClick={() => { setFocusRow(null); updatePhase(i, 'customName', false, { phaseName: '' }); }}>↩</button>
+                              </div>
+                            ) : (
+                              <select className="obd-inp"
+                                value={PHASE_SUGGESTIONS.includes(p.phaseName) ? p.phaseName : ''}
+                                onChange={e => {
+                                  if (e.target.value === '__OTHER__') { setFocusRow(i); updatePhase(i, 'customName', true, { phaseName: '' }); }
+                                  else updatePhase(i, 'phaseName', e.target.value);
+                                }}>
+                                <option value="">Select phase / item…</option>
+                                {PHASE_SUGGESTIONS.filter(s => s !== 'Other').map(s => <option key={s} value={s}>{s}</option>)}
+                                <option value="__OTHER__">Other (type your own)…</option>
+                              </select>
+                            )}
+                          </td>
+                          <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
+                          <td>
+                            <select className="obd-inp obd-inp--sm" value={clampBucket(p.startWeek)} onChange={e => updatePhase(i, 'startWeek', e.target.value)}>
+                              <option value="">—</option>
+                              {Array.from({ length: nBuckets }).map((_, b) => (
+                                <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select className="obd-inp obd-inp--sm" value={clampBucket(p.endWeek)} onChange={e => updatePhase(i, 'endWeek', e.target.value)}>
+                              <option value="">—</option>
+                              {Array.from({ length: nBuckets }).map((_, b) => (
+                                <option key={b} value={b + 1}>{unitAbbr} {b + 1} · {bucketLabel(scope.plannedStartDate, b, unit)}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td>
+                            <select className="obd-inp obd-inp--sm" value={p.status || 'Not Started'}
+                              onChange={e => {
+                                const st = e.target.value;
+                                const extra = st === 'Completed' ? { progressPercent: 100 } : st === 'Not Started' ? { progressPercent: 0 } : {};
+                                updatePhase(i, 'status', st, extra);
+                              }}>
+                              {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </td>
+                          <td>
+                            <div className="obd-progress-cell">
+                              <input className="obd-inp obd-inp--xs" type="number" min="0" max="100"
+                                value={autoProgress !== null ? autoProgress : p.progressPercent}
+                                title={autoProgress !== null ? 'Auto-calculated from sub-items' : undefined}
+                                readOnly={autoProgress !== null}
+                                style={autoProgress !== null ? { background: '#f1f5f9', color: '#64748b' } : undefined}
+                                onChange={e => autoProgress === null && updatePhase(i, 'progressPercent', e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value))))} />
+                              <span className="obd-progress-cell-pct">%</span>
+                            </div>
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>
+                            <button className="obd-icon-btn" title="Add sub-item"
+                              style={{ color: '#6366f1', marginRight: 4 }}
+                              onClick={() => {
+                                updatePhase(i, 'subItems', [...(p.subItems || []), blankSubItem()], { expanded: true });
+                              }}>＋</button>
+                            <button className="obd-icon-btn obd-icon-btn--danger" onClick={() => removePhase(i)} title="Remove row"><Trash2 size={14} /></button>
+                          </td>
+                        </tr>
+
+                        {/* ── Sub-item rows (visible when expanded) ────── */}
+                        {p.expanded && (p.subItems || []).map((si, si_i) => (
+                          <tr key={`${i}-si-${si_i}`} style={{ background: '#f0f4ff' }}>
+                            <td colSpan={2} style={{ paddingLeft: 28, color: '#94a3b8', fontSize: 12 }}>└ {si_i + 1}</td>
+                            <td>
+                              <input className="obd-inp" value={si.name} placeholder="Sub-item name (e.g. Site Mobilisation)"
+                                onChange={e => {
+                                  const updated = [...p.subItems];
+                                  updated[si_i] = { ...si, name: e.target.value };
+                                  updatePhase(i, 'subItems', updated);
+                                }} />
+                            </td>
+                            <td>
+                              <input className="obd-inp" value={si.description || ''} placeholder="Optional"
+                                onChange={e => {
+                                  const updated = [...p.subItems];
+                                  updated[si_i] = { ...si, description: e.target.value };
+                                  updatePhase(i, 'subItems', updated);
+                                }} />
+                            </td>
+                            <td>
+                              <input type="date" className="obd-inp obd-inp--sm" value={si.startDate || ''}
+                                min={scope.plannedStartDate || undefined}
+                                max={scope.plannedEndDate || undefined}
+                                onChange={e => {
+                                  const updated = [...p.subItems];
+                                  updated[si_i] = { ...si, startDate: e.target.value };
+                                  updatePhase(i, 'subItems', updated);
+                                }} />
+                            </td>
+                            <td>
+                              <input type="date" className="obd-inp obd-inp--sm" value={si.endDate || ''}
+                                min={si.startDate || scope.plannedStartDate || undefined}
+                                max={scope.plannedEndDate || undefined}
+                                onChange={e => {
+                                  const updated = [...p.subItems];
+                                  updated[si_i] = { ...si, endDate: e.target.value };
+                                  updatePhase(i, 'subItems', updated);
+                                }} />
+                            </td>                            <td>
+                              <select className="obd-inp obd-inp--sm" value={si.status || 'Not Started'}
+                                onChange={e => {
+                                  const st = e.target.value;
+                                  const updated = [...p.subItems];
+                                  updated[si_i] = { ...si, status: st, progressPercent: st === 'Completed' ? 100 : st === 'Not Started' ? 0 : si.progressPercent };
+                                  updatePhase(i, 'subItems', updated);
+                                }}>
+                                {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                              </select>
+                            </td>
+                            <td>
+                              <div className="obd-progress-cell">
+                                <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" value={si.progressPercent ?? 0}
+                                  onChange={e => {
+                                    const updated = [...p.subItems];
+                                    updated[si_i] = { ...si, progressPercent: e.target.value === '' ? 0 : Math.max(0, Math.min(100, Number(e.target.value))) };
+                                    updatePhase(i, 'subItems', updated);
+                                  }} />
+                                <span className="obd-progress-cell-pct">%</span>
+                              </div>
+                            </td>
+                            <td>
+                              <button className="obd-icon-btn obd-icon-btn--danger" title="Remove sub-item"
+                                onClick={() => {
+                                  const updated = p.subItems.filter((_, idx) => idx !== si_i);
+                                  updatePhase(i, 'subItems', updated);
+                                }}><Trash2 size={13} /></button>
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1511,11 +1642,20 @@ const ProgressTab = ({ orderBook, authHeaders, showError }) => {
         const sData = await sRes.json();
         if (cancelled) return;
         if (scData.success) {
-          setPhases((scData.data.phases || []).map(p => ({
-            phaseName: p.phaseName, status: p.status || 'Not Started',
-            progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
-            startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
-          })));
+          setPhases((scData.data.phases || []).map(p => {
+            const subItems = Array.isArray(p.subItems) ? p.subItems : [];
+            // Use sub-item average as effective progress when sub-items exist;
+            // fall back to the stored value for phases without sub-items.
+            const effectiveProgress = subItems.length > 0
+              ? Math.round(subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / subItems.length)
+              : (p.progressPercent != null ? Number(p.progressPercent) : 0);
+            return {
+              phaseName: p.phaseName, status: p.status || 'Not Started',
+              progressPercent: effectiveProgress,
+              startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
+              subItems,
+            };
+          }));
           const sc = scData.data.scope;
           setPlanMeta({ start: sc?.plannedStartDate || '', end: sc?.plannedEndDate || '', unit: sc?.planUnit || 'WEEK' });
         }
@@ -1651,19 +1791,19 @@ const ProgressTab = ({ orderBook, authHeaders, showError }) => {
                 const left = ((s - 1) / pCols) * 100;
                 const plannedW = (span / pCols) * 100;
                 const prog = Math.max(0, Math.min(100, Number(p.progressPercent) || 0));
-                // Actual bar fills progress% of the planned span, from planned start.
                 const actualW = plannedW * (prog / 100);
                 return (
                   <div key={i} className="obd-gantt-prow">
-                    <div className="obd-gantt-label" title={p.phaseName}>{p.phaseName || `Phase ${i + 1}`}</div>
+                    <div className="obd-gantt-label" title={p.phaseName}>
+                      {p.phaseName || `Phase ${i + 1}`}
+                      {p.subItems?.length > 0 && <span style={{ marginLeft: 5, fontSize: 10, color: '#94a3b8' }}>({p.subItems.length} items)</span>}
+                    </div>
                     <div className="obd-gantt-ptrack">
-                      {/* planned (greenish-yellow) */}
                       <div className="obd-gantt-prow-line">
                         <div className="obd-gbar obd-gbar--planned" style={{ left: `${left}%`, width: `${plannedW}%` }}>
                           <span className="obd-gbar-tag">{pAbbr} {s}{s !== e ? `–${e}` : ''}</span>
                         </div>
                       </div>
-                      {/* actual (blue-green), proportional to progress */}
                       <div className="obd-gantt-prow-line">
                         <div className="obd-gbar obd-gbar--actual" style={{ left: `${left}%`, width: `${actualW}%` }}>
                           {prog > 0 && <span className="obd-gbar-tag">{prog}%</span>}
