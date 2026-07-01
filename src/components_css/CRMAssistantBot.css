@@ -539,3 +539,71 @@
   background: var(--c-e2e8f0, #e2e8f0);
   color: var(--ct-374151, #374151);
 }
+/* ════════════════════════════════════════════════════════════
+   Resize handle — top-left corner of the open panel
+   ════════════════════════════════════════════════════════════ */
+.crm-bot-resize-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28px;
+  height: 28px;
+  cursor: nwse-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 10px 0;
+  background: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.85);
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+.crm-bot-resize-handle:hover {
+  background: rgba(255, 255, 255, 0.32);
+  color: #fff;
+}
+.crm-bot-resize-handle::after {
+  content: 'Drag to resize';
+  position: absolute;
+  top: 32px;
+  left: 0;
+  background: rgba(15, 23, 42, 0.85);
+  color: #fff;
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+.crm-bot-resize-handle:hover::after {
+  opacity: 1;
+}
+
+/* Prevent text selection while resizing */
+.crm-bot-panel {
+  user-select: none;
+}
+
+/* Voice replay button */
+.crm-bot-replay-btn {
+  background: none;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 6px;
+  padding: 3px 7px;
+  cursor: pointer;
+  color: var(--ct-94a3b8, #94a3b8);
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  transition: background 0.13s, color 0.13s;
+  background: var(--c-ffffff, #fff);
+  margin-top: 3px;
+}
+.crm-bot-replay-btn:hover {
+  color: var(--c-2563eb, #2563eb);
+  border-color: var(--c-2563eb, #2563eb);
+  background: var(--c-eff6ff, #eff6ff);
+}
