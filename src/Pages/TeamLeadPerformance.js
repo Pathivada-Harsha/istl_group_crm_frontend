@@ -128,7 +128,7 @@ const TeamLeadPerformance = () => {
             </div>
           )}
           <p className="tlp-note">
-            Created = who entered the lead. Owned = lead owner field. Handling = currently assigned. These are different people for the same lead.
+            Created = who entered the lead. Owned = lead owner field. Handling = assigned to OR closed by this user. Won = closed by this user (or assigned to them if no closer recorded). Conv% = Won ÷ Handling.
           </p>
         </div>
       )}
