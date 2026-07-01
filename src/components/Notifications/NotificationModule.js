@@ -720,7 +720,7 @@ function NotificationStyles() {
 }
 .ntf-drop-item:hover { background: var(--c-f8fafc, #f8fafc); }
 .ntf-drop-item.ntf-unread { background: var(--c-eff6ff, #eff6ff); }
-.ntf-drop-item.ntf-unread:hover { background: #dbeafe; }
+.ntf-drop-item.ntf-unread:hover { background: var(--c-dbeafe, #dbeafe); }
 
 .ntf-drop-item-main {
   display: flex; gap: 10px; flex: 1; text-align: left;
