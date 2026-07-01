@@ -258,7 +258,7 @@ const SORT_FIELD_MAP = {
 
 const DEFAULT_ORDER = ALL_COLUMNS.map(c => c.key);
 const DEFAULT_VISIBLE = ALL_COLUMNS
-  .filter(c => !['source', 'assignedToName', 'groupName'].includes(c.key))
+  .filter(c => !['source', 'assignedToName', 'groupName', 'priority'].includes(c.key))
   .map(c => c.key);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -2955,6 +2955,11 @@ useEffect(() => {
                 🔔 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
               </span>
             )}
+            {unified==='Closed Won' && lead.closedByName && (
+              <span title="Closed by" style={{fontSize:10,fontWeight:600,color:__stc('#15803d'),background:__sbg('#f0fdf4'),border:`1px solid ${__sbg('#bbf7d0')}`,borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
+                ✓ by {lead.closedByName}
+              </span>
+            )}
           </div>
         );
       }
@@ -3290,8 +3295,12 @@ useEffect(() => {
                   <div className="leads-enquiries-card-header">
                     <div className="leads-enquiries-card-id">{lead.leadCode}</div>
                     <div className="leads-enquiries-card-badges">
-                      <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
                       <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>{getUnifiedStatus(lead)}</span>
+                      {getUnifiedStatus(lead) === 'Closed Won' && lead.closedByName && (
+                        <span title="Closed by" style={{fontSize:10,fontWeight:600,color:'#15803d',background:'#f0fdf4',border:'1px solid #bbf7d0',borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
+                          ✓ {lead.closedByName}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="leads-enquiries-card-body">

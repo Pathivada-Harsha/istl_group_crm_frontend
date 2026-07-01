@@ -396,8 +396,8 @@ export default function Login() {
 
         {/* ══════════════════ FORGOT PASSWORD MODAL ══════════════════ */}
         {fpOpen && (
-          <div className="fp-overlay" onClick={(e) => { if (e.target.classList.contains("fp-overlay")) closeFpModal(); }}>
-            <div className="fp-modal">
+          <div className="fp-overlay">
+            <div className="fp-modal" onClick={(e) => e.stopPropagation()}>
 
               {/* Modal header */}
               <div className="fp-modal-header">

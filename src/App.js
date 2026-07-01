@@ -37,7 +37,7 @@ import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import NewRolePermissions from './Pages/NewRolePermissions';
-import Projectdashboard from "./Pages/ProjectDashboard.js";
+import Projectdashboard from "./Pages/ProjectDashboard2.js";
 import OrderBook from "./Pages/OrderBook.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import NotFound from "./Pages/NotFound";
