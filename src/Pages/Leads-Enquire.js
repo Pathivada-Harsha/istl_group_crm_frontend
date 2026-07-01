@@ -372,7 +372,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
   const [showBomDropdown, setShowBomDropdown] = useState({});
 
   // Offline PDF edit state
-  const isOfflineProposal = !!(existingProposal?.offlinePdfPath);
+  const isOfflineProposal = !!(existingProposal?.offlinePdfName || existingProposal?.offlinePdfPath);
   const [offlineReplaceFile, setOfflineReplaceFile] = useState(null);
   const [offlineReplacing, setOfflineReplacing] = useState(false);
 
@@ -436,7 +436,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     if (!formData.title.trim()) { alert('Please enter a title'); return; }
     setSaving(true);
     try {
-      const body = JSON.stringify({ title: formData.title.trim(), totalValue: parseFloat(formData.totalValue) || 0 });
+      const body = JSON.stringify({ title: formData.title.trim(), totalValue: parseFloat(formData.totalValue) || 0, status: formData.status || 'Draft' });
       const res = await fetch(`${apiBase}/proposals/update/${existingProposal.id}`, {
         method: 'PUT', headers, credentials: 'include', body,
       });
@@ -493,6 +493,15 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
           <div className="ld-fgroup">
             <label>Total Value (₹)</label>
             <input type="number" value={formData.totalValue} onChange={e => setFormData({ ...formData, totalValue: e.target.value })} placeholder="0.00" min="0" step="0.01" />
+          </div>
+          <div className="ld-fgroup">
+            <label>Status</label>
+            <FilterSelect
+              value={formData.status}
+              options={['Draft','Sent','Approved','Rejected','On Hold'].map(s => ({ value: s, label: s }))}
+              placeholder="Select Status"
+              onChange={v => setFormData({ ...formData, status: v })}
+            />
           </div>
           <div className="ld-fgroup">
             <label>Replace PDF <span style={{ fontSize: 11, color: __stc('#9ca3af'), fontWeight: 400 }}>(optional)</span></label>
@@ -1131,6 +1140,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const [offlineTitle, setOfflineTitle] = useState('');
   const [offlineFile, setOfflineFile] = useState(null);
   const [offlineTotalValue, setOfflineTotalValue] = useState('');
+  const [offlineStatus, setOfflineStatus] = useState('Draft');
   const [offlineUploading, setOfflineUploading] = useState(false);
 
   // ── Lead access: user has direct access if they are the assignee, creator,
@@ -1276,7 +1286,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     let newId = null;
     try {
       const body = JSON.stringify({
-        title: offlineTitle.trim(), leadId: lead.id, status: 'Draft',
+        title: offlineTitle.trim(), leadId: lead.id, status: offlineStatus || 'Draft',
         groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
         totalValue: parseFloat(offlineTotalValue) || 0, description: 'Offline proposal uploaded',
       });
@@ -1299,7 +1309,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       const upData = await upRes.json();
       if (!upData.success) throw new Error(upData.error || 'PDF upload failed');
       showSuccess('Offline proposal uploaded successfully!');
-      setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue('');
+      setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue(''); setOfflineStatus('Draft');
       fetchProposals();
       markProposalSent();
     } catch (err) {
@@ -1399,6 +1409,11 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         <div className="ld-hero-badges">
           <span className={`leads-enquiries-badge ${getPriorityClass(lead.priority)}`}>{lead.priority}</span>
           <span className={`leads-enquiries-badge ${getStatusClass(getUnifiedStatus(lead))}`}>{getUnifiedStatus(lead)}</span>
+          {getUnifiedStatus(lead) === 'Closed Won' && lead.closedByName && (
+            <span title="Closed by" style={{fontSize:11,fontWeight:600,color:__stc('#15803d'),background:__sbg('#f0fdf4'),border:`1px solid ${__sbg('#bbf7d0')}`,borderRadius:20,padding:'3px 10px',whiteSpace:'nowrap'}}>
+              ✓ by {lead.closedByName}
+            </span>
+          )}
         </div>
         <div className="ld-hero-actions">
           {permissions.CREATE && (
@@ -1760,6 +1775,15 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                         style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#d1d5db')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}
                       />
                     </div>
+                    <div style={{flex:'1 1 0',minWidth:0}}>
+                      <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Status</label>
+                      <FilterSelect
+                        value={offlineStatus}
+                        options={['Draft','Sent','Approved','Rejected','On Hold'].map(s => ({ value: s, label: s }))}
+                        placeholder="Select Status"
+                        onChange={v => setOfflineStatus(v)}
+                      />
+                    </div>
                     <div style={{flex:'2 1 0',minWidth:0}}>
                       <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>PDF File *</label>
                       <label style={{
@@ -1783,7 +1807,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                       <button className="ld-btn ld-btn-pri" onClick={handleUploadOfflineNew} disabled={offlineUploading || !offlineTitle.trim() || !offlineFile} style={{whiteSpace:'nowrap'}}>
                         {offlineUploading ? 'Uploading…' : 'Save & Upload'}
                       </button>
-                      <button className="ld-btn ld-btn-sec" onClick={() => { setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue(''); }}>Cancel</button>
+                      <button className="ld-btn ld-btn-sec" onClick={() => { setShowOfflinePanel(false); setOfflineTitle(''); setOfflineFile(null); setOfflineTotalValue(''); setOfflineStatus('Draft'); }}>Cancel</button>
                     </div>
                   </div>
                 </div>
@@ -1812,7 +1836,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                       <div className="ld-proposal-card-left">
                         <div className="ld-proposal-no-row" style={{display:'flex',alignItems:'center',gap:6}}>
                           <div className="ld-proposal-no">{p.proposalNo}</div>
-                          {p.offlinePdfPath && (
+                          {p.offlinePdfName && (
                             <span className="ld-offline-badge" title={`Offline PDF: ${p.offlinePdfName}`}>
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="11" height="11"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
                               Offline PDF
@@ -1832,7 +1856,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
                         <div className="ld-proposal-actions">
-                          {permissions.PROPOSAL_DOWNLOAD && (p.offlinePdfPath ? (
+                          {permissions.PROPOSAL_DOWNLOAD && (p.offlinePdfName ? (
                             /* ── Offline PDF uploaded — show View / Download / Replace only ── */
                             <>
                               <button className="ld-pact-btn ld-pact-offline-view" onClick={() => handleViewOffline(p.id, p.offlinePdfName)} title="View uploaded offline proposal">
@@ -2953,6 +2977,11 @@ useEffect(() => {
             {unified==='Keep in View' && lead.kivReminderDate && (
               <span style={{fontSize:10,fontWeight:600,color:__stc('#7c3aed'),background:__sbg('#f5f3ff'),border:`1px solid ${__sbg('#e9d5ff')}`,borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
                 🔔 {new Date(lead.kivReminderDate).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})}
+              </span>
+            )}
+            {unified==='Closed Won' && lead.closedByName && (
+              <span title="Closed by" style={{fontSize:10,fontWeight:600,color:__stc('#15803d'),background:__sbg('#f0fdf4'),border:`1px solid ${__sbg('#bbf7d0')}`,borderRadius:20,padding:'1px 8px',whiteSpace:'nowrap'}}>
+                ✓ by {lead.closedByName}
               </span>
             )}
           </div>
