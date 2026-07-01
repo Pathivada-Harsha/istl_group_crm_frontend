@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Download, Plus, X, Edit2, Eye, Truck,
+  RefreshCw, FileDown,
   CheckCircle, IndianRupee, Columns, FileText,
   Trash2, Upload, ExternalLink, File,
   ChevronUp, ChevronDown, ChevronsUpDown, GripVertical, Check
@@ -14,6 +15,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import ConfirmationModal from '../components/ConfirmationModal';
+import GeneratePoModal from './GeneratePoModal.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
@@ -476,6 +478,8 @@ const PurchaseOrders = () => {
   const [poFileModalUrl, setPoFileModalUrl] = useState('');
   const poFileInputRef = useRef(null);
   const [vendors, setVendors] = useState([]);
+  const [genPo, setGenPo] = useState(null);        // PO whose document modal is open
+  const [genVendor, setGenVendor] = useState(null); // its vendor (for prefill)
   const [vendorSearch, setVendorSearch] = useState('');
   const [vendorDropdownOpen, setVendorDropdownOpen] = useState(false);
   const [quotations, setQuotations] = useState([]);
@@ -505,7 +509,7 @@ const PurchaseOrders = () => {
     paymentTerms: '', shippingAddress: '', notes: '', poRefId: '', items: [], status: 'Draft'
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
-  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', hsnCode: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
   const [focusedPriceIndex, setFocusedPriceIndex] = useState(null);
 
   // ── Edit-mode project change state ──
@@ -972,13 +976,13 @@ const PurchaseOrders = () => {
     const tax  = (base - disc) * (newItem.gst / 100);
     const item = {
       id: `manual-${Date.now()}`, itemName: newItem.itemName,
-      itemDescription: newItem.itemDescription, quantity: newItem.quantity,
+      itemDescription: newItem.itemDescription, hsnCode: newItem.hsnCode, quantity: newItem.quantity,
       unitPrice: newItem.unitPrice, gst: newItem.gst, discount: newItem.discount,
       lineTotal: (base - disc) + tax, selected: true, isManual: true
     };
     setCreatePOFormData(prev => ({ ...prev, items: [...prev.items, item] }));
     setItemsStepUnlocked(true);
-    setNewItem({ itemName: '', itemDescription: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+    setNewItem({ itemName: '', itemDescription: '', hsnCode: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
     setShowManualItemForm(false);
     showSuccess('Manual item added');
   };
@@ -1085,6 +1089,28 @@ const PurchaseOrders = () => {
     } catch { setVendors([]); }
   };
 
+  // Open the Generate-PO-document modal for a PO: fetch its full record (with items)
+  // and its vendor (for prefill), then show the modal.
+  const openGenerateDoc = async (poLike) => {
+    try {
+      let po = poLike;
+      const r = await fetch(`${API_BASE_URL}/purchase-orders/${poLike.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      if (r.ok) { const d = await r.json(); po = d.purchaseOrder || d.data || d || poLike; }
+      let vendor = null;
+      const vid = po.vendorId || poLike.vendorId;
+      if (vid) {
+        const vr = await fetch(`${API_BASE_URL}/vendors/${vid}`, { credentials: 'include', headers: getAuthHeaders() });
+        if (vr.ok) { const vd = await vr.json(); vendor = vd.vendor || vd.data || vd || null; }
+      }
+      if (!vendor && vendors.length) vendor = vendors.find(v => v.id === vid) || vendors.find(v => v.name === po.vendorName) || null;
+      setGenVendor(vendor);
+      setGenPo(po);
+    } catch {
+      setGenVendor(null);
+      setGenPo(poLike);
+    }
+  };
+
   const handleViewPO = async (po) => {
     setLoading(true);
     try {
@@ -1123,6 +1149,7 @@ const PurchaseOrders = () => {
         const lineTotal = (base - disc) * (1 + gst / 100);
         return {
           id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
+          hsnCode: item.hsnCode || '',
           quantity: qty, unitPrice: price || '', gst,
           discount: discount || '', lineTotal, selected: true,
           quotedQuantity: item.quotedQuantity || null
@@ -1332,8 +1359,8 @@ const PurchaseOrders = () => {
     if (!createPOFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
     setLoading(true);
     try {
-      const poItems = selectedItems.map(({ itemName, itemDescription, quantity, unitPrice, gst, discount }) => ({
-        itemName, itemDescription,
+      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, quantity, unitPrice, gst, discount }) => ({
+        itemName, itemDescription, hsnCode: hsnCode || null,
         quantity: parseFloat(quantity), unitPrice: parseFloat(unitPrice) || 0,
         gst: parseFloat(gst), discount: parseFloat(discount) || 0
       }));
@@ -1375,6 +1402,12 @@ const PurchaseOrders = () => {
       showSuccess(`PO ${result.poRefId || result.data?.poRefId || result.poNo || result.data?.poNo} ${isEditMode ? 'updated' : 'created'} successfully!`);
       if (result.statusWarning) showWarning(result.statusWarning);
       handleCloseCreatePOModal(); fetchPurchaseOrders(); fetchStats();
+      // Offer document generation right after creating a new PO.
+      if (!isEditMode && savedId) {
+        const v = vendors.find(x => x.id === createPOFormData.vendorId) || null;
+        openGenerateDoc({ id: savedId, poNo: result.poNo || result.data?.poNo, vendorId: createPOFormData.vendorId, vendorName: createPOFormData.vendorName, vendorContact: createPOFormData.vendorContact });
+        if (v) setGenVendor(v);
+      }
     } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
     finally { setLoading(false); }
   };
@@ -1472,6 +1505,34 @@ const PurchaseOrders = () => {
               >
                 <Eye size={14} />
               </button>
+
+              {/* Generate / Re-generate PO document */}
+              {(() => {
+                const hasDoc = !!(po.poFileName || po.hasPoFile || po.poDocPayload);
+                return (
+                  <button
+                    className={`purchase-orders-action-btn${!canEdit ? ' action-btn-disabled' : ''}`}
+                    onClick={() => canEdit && openGenerateDoc(po)}
+                    title={canEdit ? (hasDoc ? 'Re-generate PO PDF' : 'Generate PO PDF') : '🔒 No edit permission'}
+                    style={{ color: canEdit ? __stc('#0F8A8A') : undefined }}
+                    disabled={!canEdit}
+                  >
+                    {hasDoc ? <RefreshCw size={14} /> : <FileText size={14} />}
+                  </button>
+                );
+              })()}
+
+              {/* Download generated/uploaded PO document — only when one exists */}
+              {(po.poFileName || po.hasPoFile) && (
+                <button
+                  className="purchase-orders-action-btn"
+                  onClick={() => handleDownloadPOFile(po)}
+                  title="Download PO document"
+                  style={{ color: __stc('#2563eb') }}
+                >
+                  <FileDown size={14} />
+                </button>
+              )}
 
               {/* Edit */}
               <button
@@ -1947,6 +2008,11 @@ const PurchaseOrders = () => {
                       <button className="po-doc-btn po-doc-btn-download" onClick={() => handleDownloadPOFile(selectedPO)}>
                         <Download size={14} /> Download
                       </button>
+                      {canEdit && (
+                        <button className="po-doc-btn po-doc-btn-view" onClick={() => { setShowDetailDrawer(false); openGenerateDoc(selectedPO); }} title="Re-generate the PO PDF">
+                          <RefreshCw size={14} /> Re-generate
+                        </button>
+                      )}
                     </div>
                     {/* Allow replacing the file directly from the drawer for any PO status */}
                     {canEdit && (
@@ -2017,6 +2083,9 @@ const PurchaseOrders = () => {
                         <label htmlFor="drawer-po-file-input-new" className="po-file-choose-btn" style={{ cursor: poFileUploading ? 'not-allowed' : 'pointer', opacity: poFileUploading ? 0.6 : 1 }}>
                           <Upload size={13} /> {poFileUploading ? 'Uploading…' : 'Upload PO Document'}
                         </label>
+                        <button className="po-doc-btn po-doc-btn-view" style={{ marginLeft: 8 }} onClick={() => { setShowDetailDrawer(false); openGenerateDoc(selectedPO); }} title="Generate the SESOLA PO PDF">
+                          <FileText size={14} /> Generate PO PDF
+                        </button>
                       </div>
                     )}
                   </div>
@@ -2691,7 +2760,10 @@ const PurchaseOrders = () => {
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Discount %</label><input type="number" value={newItem.discount} onChange={(e) => setNewItem(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))} min="0" max="100" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                         <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="purchase-orders-btn-primary" onClick={handleAddManualItem} style={{ width: '100%', padding: '8px', fontSize: '14px' }}>✅ Add Item</button></div>
                       </div>
-                      <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Description</label><input type="text" value={newItem.itemDescription} onChange={(e) => setNewItem(prev => ({ ...prev, itemDescription: e.target.value }))} placeholder="Enter item description (optional)" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Description</label><input type="text" value={newItem.itemDescription} onChange={(e) => setNewItem(prev => ({ ...prev, itemDescription: e.target.value }))} placeholder="Enter item description (optional)" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>HSN Code</label><input type="text" value={newItem.hsnCode} onChange={(e) => setNewItem(prev => ({ ...prev, hsnCode: e.target.value }))} placeholder="Optional" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                      </div>
                     </div>
                   )}
 
@@ -2747,6 +2819,7 @@ const PurchaseOrders = () => {
                                   <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                     {item.itemName}
                                     {item.isManual && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 5px', background: __sbg('#dbeafe'), color: __stc('#1e40af'), borderRadius: '4px', fontWeight: '600' }}>MANUAL</span>}
+                                    {item.hsnCode && <span style={{ marginLeft: '6px', fontSize: '10px', padding: '1px 5px', background: __sbg('#f1f5f9'), color: __stc('#475569'), borderRadius: '4px', fontWeight: '600' }}>HSN {item.hsnCode}</span>}
                                   </div>
                                   {item.remainingQty != null && (
                                     <div style={{ fontSize: '11px', color: item.remainingQty <= 0 ? __stc('#ef4444') : __stc('#22c55e'), marginTop: '2px', whiteSpace: 'nowrap' }}>
@@ -2825,6 +2898,17 @@ const PurchaseOrders = () => {
           </div>
         </div>
       )}
+
+      <GeneratePoModal
+        open={!!genPo}
+        po={genPo}
+        vendor={genVendor}
+        authHeaders={getAuthHeaders()}
+        onClose={() => { setGenPo(null); setGenVendor(null); }}
+        onGenerated={() => { fetchPurchaseOrders(); }}
+        showSuccess={showSuccess}
+        showError={showError}
+      />
     </div>
   );
 };

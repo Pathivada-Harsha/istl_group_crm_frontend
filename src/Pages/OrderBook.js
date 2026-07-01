@@ -14,6 +14,7 @@ import OrderBookDetailPage from '../components/OrderBook/OrderBookDetailPage.js'
 import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
 import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
+import * as XLSXStyle from 'xlsx-js-style'; // style-capable fork, used for the formatted export
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -596,32 +597,75 @@ function OrderBook() {
       }
 
       // ── Build Excel rows ─────────────────────────────────────────
-      const exportData = allRecords.map((o, idx) => ({
-        'S.No':             idx + 1,
-        'Customer':         o.customerName || '',
-        'Group':            o.groupName || '',
-        'Sub Group':        o.subGroupName || '',
-        'Order Title':      o.orderTitle || '',
-        'Order Date':       o.orderDate ? fmtOBDate(o.orderDate) : '',
-        'PO Number':        o.poNumber || '',
-        'PO Date':          o.poDate ? fmtOBDate(o.poDate) : '',
-        'Status':           o.status || '',
-        'Subtotal (₹)':     o.subtotal    ? parseFloat(o.subtotal).toFixed(2)    : '0.00',
-        'Tax Amount (₹)':   o.taxAmount   ? parseFloat(o.taxAmount).toFixed(2)   : '0.00',
-        'Total Amount (₹)': o.totalAmount ? parseFloat(o.totalAmount).toFixed(2) : '0.00',
-        'Created By':       o.createdByName || '',
-        'Has Attachment':   o.hasPoFile ? 'Yes' : 'No',
-      }));
+      // ── Build a styled, colored workbook (xlsx-js-style) ─────────────
+      const cols = ['S.No', 'Customer', 'Group', 'Sub Group', 'Order Title', 'Order Date',
+        'PO Number', 'PO Date', 'Status', 'Subtotal (₹)', 'Tax Amount (₹)', 'Total Amount (₹)',
+        'Created By', 'Has Attachment'];
+      const nCols = cols.length;
+      const titleFilterBits = [
+        statusFilter !== 'All' ? statusFilter : '',
+        groupName || '', subGroupName || '',
+        fromDate ? `from ${fromDate}` : '', toDate ? `to ${toDate}` : '',
+      ].filter(Boolean).join(' · ');
+      const title = `Order Books${titleFilterBits ? ' — ' + titleFilterBits : ''}`;
+      const aoa = [[title], cols];
+      let sumSub = 0, sumTax = 0, sumTot = 0;
+      allRecords.forEach((o, idx) => {
+        const sub = o.subtotal ? parseFloat(o.subtotal) : 0;
+        const tax = o.taxAmount ? parseFloat(o.taxAmount) : 0;
+        const tot = o.totalAmount ? parseFloat(o.totalAmount) : 0;
+        sumSub += sub; sumTax += tax; sumTot += tot;
+        aoa.push([
+          idx + 1, o.customerName || '', o.groupName || '', o.subGroupName || '', o.orderTitle || '',
+          o.orderDate ? fmtOBDate(o.orderDate) : '', o.poNumber || '', o.poDate ? fmtOBDate(o.poDate) : '',
+          o.status || '', Number(sub.toFixed(2)), Number(tax.toFixed(2)), Number(tot.toFixed(2)),
+          o.createdByName || '', o.hasPoFile ? 'Yes' : 'No',
+        ]);
+      });
+      const totalRowIdx = aoa.length;
+      aoa.push(['', '', '', '', '', '', '', '', 'TOTAL',
+        Number(sumSub.toFixed(2)), Number(sumTax.toFixed(2)), Number(sumTot.toFixed(2)), '', '']);
 
-      // ── Auto column widths ───────────────────────────────────────
-      const worksheet  = XLSX.utils.json_to_sheet(exportData);
-      const colWidths  = Object.keys(exportData[0]).map(key => ({
-        wch: Math.max(key.length, ...exportData.map(r => String(r[key] || '').length)) + 2
+      const worksheet = XLSXStyle.utils.aoa_to_sheet(aoa);
+      // Palette + helpers (mirrors the EPC tracker styling).
+      // Light & modern teal/mint palette.
+      const NAVY = '0F8A8A', LIGHTBLUE = 'D7F0EC', ZEBRA = 'F0FBF9';
+      const TOTALTEXT = '0B6E6E';
+      const border = { style: 'thin', color: { rgb: 'D9D9D9' } };
+      const allB = { top: border, bottom: border, left: border, right: border };
+      const amountCols = [9, 10, 11]; // Subtotal, Tax, Total (0-based)
+      const setS = (r, c, s) => {
+        const a = XLSXStyle.utils.encode_cell({ r, c });
+        if (!worksheet[a]) worksheet[a] = { t: 's', v: '' };
+        worksheet[a].s = { ...(worksheet[a].s || {}), ...s };
+      };
+      for (let c = 0; c < nCols; c++) {
+        // Title row
+        setS(0, c, { fill: { patternType: 'solid', fgColor: { rgb: NAVY } },
+          font: { bold: true, sz: 13, color: { rgb: 'FFFFFF' } }, alignment: { horizontal: 'left', vertical: 'center' } });
+        // Header row
+        setS(1, c, { fill: { patternType: 'solid', fgColor: { rgb: NAVY } },
+          font: { bold: true, color: { rgb: 'FFFFFF' } },
+          alignment: { horizontal: 'center', vertical: 'center', wrapText: true }, border: allB });
+        // Data rows
+        for (let r = 2; r < totalRowIdx; r++) {
+          const zebra = (r % 2 === 0);
+          setS(r, c, { ...(zebra ? { fill: { patternType: 'solid', fgColor: { rgb: ZEBRA } } } : {}),
+            border: allB, alignment: { horizontal: amountCols.includes(c) ? 'right' : 'left', vertical: 'center' } });
+        }
+        // Total row
+        setS(totalRowIdx, c, { fill: { patternType: 'solid', fgColor: { rgb: LIGHTBLUE } },
+          font: { bold: true, color: { rgb: TOTALTEXT } }, border: allB,
+          alignment: { horizontal: amountCols.includes(c) ? 'right' : 'left' } });
+      }
+      worksheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: nCols - 1 } }];
+      worksheet['!cols'] = cols.map((key, i) => ({
+        wch: Math.max(key.length, ...aoa.slice(2).map(row => String(row[i] ?? '').length)) + 2,
       }));
-      worksheet['!cols'] = colWidths;
+      worksheet['!rows'] = aoa.map((_, r) => ({ hpt: r === 0 ? 24 : (r === 1 ? 20 : 16) }));
 
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Order Books');
+      const workbook = XLSXStyle.utils.book_new();
+      XLSXStyle.utils.book_append_sheet(workbook, worksheet, 'Order Books');
 
       // ── Filename includes active filter labels ───────────────────
       const date = new Date().toISOString().split('T')[0];
@@ -633,11 +677,11 @@ function OrderBook() {
         toDate       ? `to_${toDate}`     : '',
       ].filter(Boolean).join('_');
 
-      XLSX.writeFile(
+      XLSXStyle.writeFile(
         workbook,
         `OrderBooks_${filterLabel ? filterLabel + '_' : ''}${date}.xlsx`
       );
-      showSuccess(`Exported ${exportData.length} of ${totalItems} order books to Excel`);
+      showSuccess(`Exported ${allRecords.length} of ${totalItems} order books to Excel`);
 
     } catch (err) {
       showError(err.message || 'Export failed. Please try again.');

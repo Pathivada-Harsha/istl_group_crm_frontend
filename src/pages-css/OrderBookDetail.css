@@ -4,7 +4,14 @@
    Uses the app's CSS theme variables where available, with safe fallbacks.
    ============================================================================ */
 
-.obd-page { padding: 16px 20px 40px; color: var(--text-primary, #1e293b); }
+.obd-page {
+  padding: 16px 20px 40px;
+  color: var(--text-primary, #1e293b);
+  /* Match the CRM's blue theme (same token used by inventory, vendor, project pages). */
+  --accent: var(--c-2563eb, #2563eb);
+  --accent-hover: var(--c-1d4ed8, #1d4ed8);
+  --accent-soft: var(--c-eff6ff, #eff6ff);
+}
 
 /* Top bar */
 .obd-topbar { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -28,7 +35,7 @@
 .obd-title { font-size: 20px; font-weight: 700; margin: 0 0 8px; }
 .obd-subline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .obd-chip { font-size: 12px; font-weight: 600; background: var(--bg-secondary, #f1f5f9); border-radius: 6px; padding: 3px 10px; color: var(--text-secondary, #475569); }
-.obd-chip--proj { background: #ede9fe; color: #6d28d9; }
+.obd-chip--proj { background: var(--accent-soft, #eff6ff); color: var(--accent, #2563eb); }
 .obd-chip--warn { background: #fef3c7; color: #b45309; }
 .obd-status { font-size: 12px; font-weight: 700; border-radius: 6px; padding: 3px 10px; background: #e0f2fe; color: #0369a1; }
 .obd-status--confirmed { background: #dcfce7; color: #15803d; }
@@ -48,7 +55,7 @@
   margin-bottom: -2px; transition: color .15s, border-color .15s;
 }
 .obd-tab:hover { color: var(--text-primary, #334155); }
-.obd-tab.active { color: var(--accent, #6d28d9); border-bottom-color: var(--accent, #6d28d9); }
+.obd-tab.active { color: var(--accent, #2563eb); border-bottom-color: var(--accent, #2563eb); }
 
 /* Layout */
 .obd-stack { display: flex; flex-direction: column; gap: 16px; }
@@ -91,7 +98,7 @@
   font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b);
   font-family: inherit; width: 100%;
 }
-.obd-field input:focus, .obd-field textarea:focus, .obd-inp:focus { outline: none; border-color: var(--accent, #6d28d9); }
+.obd-field input:focus, .obd-field textarea:focus, .obd-inp:focus { outline: none; border-color: var(--accent, #2563eb); }
 .obd-inp--xs { width: 64px; }
 .obd-inp--sm { width: 130px; }
 
@@ -100,8 +107,43 @@
   display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 7px 14px;
   font-size: 13px; font-weight: 600; cursor: pointer; border: 1px solid transparent; transition: background .15s, opacity .15s;
 }
-.obd-btn--primary { background: var(--accent, #6d28d9); color: #fff; }
-.obd-btn--primary:hover { opacity: .9; }
+.obd-btn--sm { padding: 4px 9px; font-size: 11px; gap: 4px; border-radius: 6px; }
+
+/* Theme-aware row backgrounds + muted text for the phase/budget tables.
+   Replaces hardcoded light hex in inline styles so dark mode renders correctly. */
+.obd-row-parent { background: var(--bg-secondary, #f8fafc); font-weight: 600; }
+.obd-row-sub    { background: var(--bg-card, #fff); }
+.obd-row-sub-alt{ background: var(--c-eff6ff, #f0f4ff); }
+.obd-cell-muted { color: var(--text-secondary, #64748b); }
+.obd-cell-faint { color: var(--text-tertiary, #94a3b8); }
+.obd-cell-locked{ background: var(--bg-secondary, #f1f5f9); color: var(--text-secondary, #64748b); }
+.obd-dash       { color: var(--border-color, #cbd5e1); }
+[data-theme="dark"] .obd-row-parent { background: #1a2231; }
+[data-theme="dark"] .obd-row-sub    { background: transparent; }
+[data-theme="dark"] .obd-row-sub-alt{ background: #15243d; }
+[data-theme="dark"] .obd-cell-locked{ background: #0f1420; color: #94a3b8; }
+.obd-cap-cell { white-space: nowrap; font-size: 12px; text-align: right; color: var(--text-primary, #334155); }
+.obd-cap-cell--actual { white-space: nowrap; font-size: 12px; text-align: right; color: #16a34a; }
+[data-theme="dark"] .obd-cap-cell--actual { color: #4ade80; }
+.obd-weight-banner {
+  display: flex; align-items: center; gap: 16px; margin-right: auto;
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+}
+.obd-weight-banner--ok   { background: var(--c-ecfdf5, #ecfdf5); color: #047857; border: 1px solid #a7f3d0; }
+.obd-weight-banner--warn { background: var(--c-fefce8, #fffbeb); color: #b45309; border: 1px solid #fde68a; }
+[data-theme="dark"] .obd-weight-banner--ok   { background: #102a22; color: #4ade80; border-color: #1d4d3c; }
+[data-theme="dark"] .obd-weight-banner--warn { background: #2a2710; color: #fbbf24; border-color: #4d4316; }
+.obd-week-modal {
+  background: var(--bg-card, #fff); border-radius: 12px; width: min(560px, 94vw);
+  max-height: 88vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] .obd-week-modal { background: #1e293b; }
+.obd-btn--primary { background: var(--accent, #2563eb); color: #fff; }
+.obd-btn--primary:hover { background: var(--accent-hover, #1d4ed8); }
+.obd-btn--primary:disabled { background: var(--c-93c5fd, #93c5fd); }
+.obd-btn--success { background: #16a34a; color: #fff; }
+.obd-btn--success:hover { opacity: .9; }
+.obd-btn--success:disabled { background: #16a34a; }
 .obd-btn--ghost { background: var(--bg-secondary, #f1f5f9); color: var(--text-primary, #334155); border-color: var(--border-color, #e2e8f0); }
 .obd-btn--ghost:hover { background: var(--bg-hover, #e2e8f0); }
 .obd-btn:disabled { opacity: .6; cursor: not-allowed; }
@@ -122,7 +164,7 @@
 .obd-stat--over span { color: #dc2626; }
 
 .obd-progress { position: relative; height: 22px; background: var(--bg-secondary, #f1f5f9); border-radius: 11px; overflow: hidden; }
-.obd-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #6d28d9, #8b5cf6); border-radius: 11px; transition: width .3s; }
+.obd-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, var(--accent, #2563eb), #60a5fa); border-radius: 11px; transition: width .3s; }
 .obd-progress-fill--over { background: linear-gradient(90deg, #dc2626, #f87171); }
 .obd-progress-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 11px; font-weight: 700; color: var(--text-primary, #1e293b); }
 
@@ -143,7 +185,7 @@
 .obd-gantt-wk-date { font-size: 8.5px; color: var(--text-tertiary, #94a3b8); white-space: nowrap; }
 
 .obd-gantt-row { margin-top: 7px; }
-.obd-gantt-row:hover .obd-gantt-label { color: var(--accent, #6d28d9); }
+.obd-gantt-row:hover .obd-gantt-label { color: var(--accent, #2563eb); }
 /* Track carries the same column gridlines as the header so bars line up exactly */
 .obd-gantt-track {
   position: relative; flex: 1; height: 22px; border-radius: 6px;
@@ -186,12 +228,12 @@
 .obd-project-strip {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   background: var(--bg-card, #fff); border: 1px solid var(--border-color, #e2e8f0);
-  border-left: 4px solid var(--accent, #6d28d9);
+  border-left: 4px solid var(--accent, #2563eb);
   border-radius: 10px; padding: 12px 18px; margin-bottom: 16px;
 }
 .obd-project-strip-tag {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
-  color: var(--accent, #6d28d9); background: #ede9fe; padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+  color: var(--accent, #2563eb); background: var(--accent-soft, #eff6ff); padding: 3px 10px; border-radius: 6px; white-space: nowrap;
 }
 .obd-project-strip-items { display: flex; gap: 26px; flex-wrap: wrap; flex: 1; }
 .obd-project-strip-items > div { display: flex; flex-direction: column; gap: 3px; }
@@ -199,9 +241,9 @@
 .obd-project-strip-items span { font-size: 13px; font-weight: 600; }
 .obd-project-strip-progress { min-width: 140px; }
 .obd-mini-progress { height: 8px; background: var(--bg-secondary, #f1f5f9); border-radius: 4px; overflow: hidden; margin: 2px 0; }
-.obd-mini-progress-fill { height: 100%; background: linear-gradient(90deg, #6d28d9, #8b5cf6); border-radius: 4px; }
+.obd-mini-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent, #2563eb), #60a5fa); border-radius: 4px; }
 .obd-mini-progress-label { font-size: 12px; font-weight: 700; }
-[data-theme="dark"] .obd-project-strip { background: #1e293b; border-color: #334155; border-left-color: #8b5cf6; }
+[data-theme="dark"] .obd-project-strip { background: #1e293b; border-color: #334155; border-left-color: var(--accent, #2563eb); }
 [data-theme="dark"] .obd-project-strip-tag { background: #4c1d95; color: #ddd6fe; }
 [data-theme="dark"] .obd-mini-progress { background: #0f172a; }
 
@@ -211,7 +253,7 @@
   border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 8px 11px;
   font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b); width: 100%;
 }
-.obd-loc-search:focus { outline: none; border-color: var(--accent, #6d28d9); }
+.obd-loc-search:focus { outline: none; border-color: var(--accent, #2563eb); }
 .obd-loc-map-wrap {
   width: 100%; height: 320px; border-radius: 10px; overflow: hidden;
   border: 1px solid var(--border-color, #e2e8f0); background: var(--bg-secondary, #f1f5f9);
@@ -258,7 +300,7 @@
    fallback. This block makes every surface, border, text and table element
    adapt explicitly. Placed last so it wins over the partial rules above.
    Palette: bg #0f172a / surface #1e293b / border #334155 / text #e2e8f0
-            muted #94a3b8 / accent #8b5cf6
+            muted #94a3b8 / accent #2563eb
    ============================================================================ */
 [data-theme="dark"] .obd-page { color: #e2e8f0; }
 
@@ -348,7 +390,7 @@
 [data-theme="dark"] .obd-banner--warn { background: #422006; color: #fcd34d; border-color: #854d0e; }
 
 /* Project strip accent */
-[data-theme="dark"] .obd-project-strip { border-left-color: #8b5cf6; }
+[data-theme="dark"] .obd-project-strip { border-left-color: var(--accent, #2563eb); }
 [data-theme="dark"] .obd-project-strip-tag { background: #4c1d95; color: #ddd6fe; }
 
 /* Location error */
@@ -393,16 +435,17 @@
 
 /* Weekly/Monthly unit toggle */
 .obd-unit-toggle { display: inline-flex; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; overflow: hidden; }
+.obd-field > .obd-unit-toggle { align-self: flex-start; }
 .obd-unit-toggle button {
   border: none; background: var(--bg-card, #fff); color: var(--text-secondary, #475569);
-  padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+  padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .obd-unit-toggle button + button { border-left: 1px solid var(--border-color, #cbd5e1); }
-.obd-unit-toggle button.active { background: var(--accent, #6d28d9); color: #fff; }
+.obd-unit-toggle button.active { background: var(--accent, #2563eb); color: #fff; }
 [data-theme="dark"] .obd-unit-toggle { border-color: #334155; }
 [data-theme="dark"] .obd-unit-toggle button { background: #0f172a; color: #cbd5e1; }
 [data-theme="dark"] .obd-unit-toggle button + button { border-left-color: #334155; }
-[data-theme="dark"] .obd-unit-toggle button.active { background: #7c3aed; color: #fff; }
+[data-theme="dark"] .obd-unit-toggle button.active { background: var(--accent, #2563eb); color: #fff; }
 
 /* Dated grid header cells */
 .obd-gantt-wk { display: flex; flex-direction: column; align-items: center; line-height: 1.2; padding: 2px 0; }
@@ -437,9 +480,11 @@
 
 /* Schedule block's own save bar */
 .obd-schedule-footer {
-  display: flex; justify-content: flex-end; margin-top: 18px;
-  padding-top: 16px; border-top: 1px solid var(--border-color, #e2e8f0);
+  display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px;
+  padding-top: 10px; border-top: 1px solid var(--border-color, #e2e8f0);
 }
+.obd-schedule-footer .obd-stat label { font-size: 10px; }
+.obd-schedule-footer .obd-stat span { font-size: 13px; }
 [data-theme="dark"] .obd-schedule-footer { border-top-color: #334155; }
 
 /* Progress tab + per-phase progress capture cell */

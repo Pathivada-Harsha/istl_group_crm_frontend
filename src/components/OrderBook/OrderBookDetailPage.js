@@ -19,7 +19,8 @@
 // ============================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { ArrowLeft, Plus, Trash2, Save, Wand2, MapPin } from 'lucide-react';
+import * as XLSXStyle from 'xlsx-js-style'; // style-capable SheetJS fork; used only for the colored export
+import { ArrowLeft, Plus, Trash2, Save, Wand2, MapPin, Check, Download } from 'lucide-react';
 import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import '../../pages-css/OrderBookDetail.css';
 import ConfirmationModal from '../ConfirmationModal.js';
@@ -80,7 +81,26 @@ const bucketLabel = (startStr, n, unit) => {
   return `${d.getDate()} ${MONTH_ABBR[d.getMonth()]}`;
 };
 
-const PHASE_SUGGESTIONS = ['Site Survey', 'System Simulation', 'Civil Design', 'Electrical Design', 'Civil Works', 'Procurement', 'Installation', 'Mechanical Installation', 'Electrical & Cabling', 'Testing & Commissioning', 'Inspection', 'Handover', 'Other'];
+const PHASE_SUGGESTIONS = [
+  // Engineering & pre-construction
+  'Site Survey', 'Topographic Survey', 'Geotechnical Investigation', 'System Simulation',
+  'Civil Design', 'Structural Design', 'Electrical Design', 'SLD & Layout Design',
+  'Detailed Engineering', 'Statutory Approvals & Permits',
+  // Civil
+  'Site Mobilization', 'Earthworks, Grading & Drainage', 'Civil Works', 'Foundation & Piling',
+  'Boundary & Fencing', 'Site Roads & Access',
+  // Mechanical / structures
+  'MMS Supply', 'MMS Erection & Alignment', 'Module Mounting Structure',
+  'Module Earthing & Row Bonding', 'Mechanical Installation', 'Module Installation',
+  // Electrical
+  'Procurement', 'DC Cabling', 'AC Cabling', 'Earthing & Lightning Protection',
+  'Inverter Installation', 'Transformer Installation', 'Electrical & Cabling',
+  'Switchgear & LT/HT Panels', 'SCADA & Monitoring', 'Substation Works',
+  // Closeout
+  'Testing & Pre-Commissioning', 'Testing & Commissioning', 'Grid Synchronization',
+  'Inspection', 'Snag Rectification', 'Documentation & As-Builts', 'Handover',
+  'Other',
+];
 
 // ISO date (yyyy-mm-dd) for the START of bucket index n (0-based). Used to
 // auto-fill finance line dates from a phase's bucket position.
@@ -683,11 +703,12 @@ const blankPhase = (seq) => ({
   id: null, seqNo: seq, phaseName: '', phaseDescription: '',
   startWeek: '', endWeek: '', customName: false,
   status: 'Not Started', progressPercent: 0,
+  weightPct: '',   // absolute project weight %; auto-summed from sub-items when present
   subItems: [],    // sub-work-packages under this activity
   expanded: false, // UI-only: collapse/expand sub-items
 });
 
-const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, description: '', startDate: '', endDate: '' });
+const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, weightPct: '', description: '', startDate: '', endDate: '', startWeek: '', endWeek: '', customName: false });
 
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
 
@@ -696,14 +717,38 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     projectType: '', scopeOfWork: '', technicalNotes: '',
     systemCapacity: '', siteLocation: '', siteLat: '', siteLng: '',
     plannedStartDate: '', plannedEndDate: '', totalPlannedWeeks: '', planUnit: 'WEEK',
+    trackingMode: 'DETAILED',
   });
   const [phases, setPhases] = useState([]);
+  // Detailed per-period progress: map keyed `${phaseId}|${subKey||''}|${periodNo}` → {plannedPct, actualPct}
+  const [progress, setProgress] = useState({});
+  const [savingProgress, setSavingProgress] = useState(false);
+  const [weekModalLeaf, setWeekModalLeaf] = useState(null); // {phaseId, subKey, label, ...} or null
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // Index of a phase row the user just switched to "type your own". Only that
   // row auto-focuses; rows loaded from the backend must NOT, or the browser
   // scrolls their input into view on mount and jumps past the top of the tab.
   const [focusRow, setFocusRow] = useState(null);
+  // Activity/item suggestions = built-in list + names users have typed before (backend).
+  const [extraSuggestions, setExtraSuggestions] = useState([]);
+  const ACTIVITY_OPTIONS = React.useMemo(() => {
+    const builtin = PHASE_SUGGESTIONS.filter(s => s !== 'Other');
+    const merged = [...builtin];
+    extraSuggestions.forEach(n => { if (n && !merged.some(m => m.toLowerCase() === n.toLowerCase())) merged.push(n); });
+    return merged;
+  }, [extraSuggestions]);
+  // Register a user-typed name so it appears in the dropdown next time (shared, backend).
+  const registerActivity = (name) => {
+    const n = (name || '').trim();
+    if (!n || ACTIVITY_OPTIONS.some(m => m.toLowerCase() === n.toLowerCase())) return;
+    setExtraSuggestions(prev => prev.includes(n) ? prev : [...prev, n]);
+    fetch(`${API_BASE_URL}/order-book/scope-activities`, {
+      method: 'POST', credentials: 'include',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: n }),
+    }).catch(() => {});
+  };
   const { confirmModal, showConfirmation } = useConfirmationModal();
 
   const load = useCallback(async () => {
@@ -725,6 +770,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           siteLat: s.siteLat != null ? String(s.siteLat) : '', siteLng: s.siteLng != null ? String(s.siteLng) : '',
           plannedStartDate: s.plannedStartDate || '', plannedEndDate: s.plannedEndDate || '',
           totalPlannedWeeks: s.totalPlannedWeeks || '', planUnit: s.planUnit || 'WEEK',
+          trackingMode: 'DETAILED',
         });
         else setScope(prev => ({ ...prev, projectType: prev.projectType || subGroupType }));
         setPhases((data.data.phases || []).map(p => ({
@@ -732,9 +778,17 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
           customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
           status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+          weightPct: p.weightPct != null ? Number(p.weightPct) : '',
           subItems: Array.isArray(p.subItems) ? p.subItems : [],
           expanded: false,
         })));
+        // Build progress map from periods
+        const pm = {};
+        (data.data.progressPeriods || []).forEach(pp => {
+          const key = `${pp.phaseId}|${pp.subItemKey || ''}|${pp.periodNo}`;
+          pm[key] = { plannedPct: Number(pp.plannedPct) || 0, actualPct: Number(pp.actualPct) || 0 };
+        });
+        setProgress(pm);
       }
     } catch (e) { showError('Failed to load technical scope'); }
     finally { setLoading(false); }
@@ -742,6 +796,15 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   }, [orderBook.id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load shared, user-contributed activity suggestions once.
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/order-book/scope-activities`, { credentials: 'include', headers: authHeaders })
+      .then(r => r.json())
+      .then(d => { if (d.success && Array.isArray(d.data?.names)) setExtraSuggestions(d.data.names); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadDefaultPlan = async () => {
     if (phases.length) {
@@ -807,6 +870,57 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 
   const updatePhase = (i, field, val, extra) => setPhases(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val, ...(extra || {}) } : p));
   const addPhase    = () => setPhases(prev => [...prev, blankPhase(prev.length + 1)]);
+
+  // Pull BOM/BOQ lines in as sub-items under a phase, segregating the parent's
+  // bucket range (start..end) across them so each sub-item gets its own slice.
+  const pullBomIntoPhase = async (i) => {
+    const p = phases[i];
+    const ps = num(p.startWeek) || 1;
+    const pe = num(p.endWeek) || ps;
+    if (!p.startWeek || !p.endWeek) {
+      showError('Set this phase\u2019s start and end first, so dates can be split across BOM items.');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      const lines = (data.success && Array.isArray(data.lines)) ? data.lines : (Array.isArray(data.data?.lines) ? data.data.lines : []);
+      if (!lines.length) { showError('No BOM / BOQ items found. Add them in the BOM / BOQ tab first.'); return; }
+
+      // Segregate [ps..pe] across N items: contiguous, near-equal slices.
+      const span = Math.max(1, pe - ps + 1);
+      const nItems = lines.length;
+      const slice = (idx) => {
+        const s = ps + Math.floor((idx * span) / nItems);
+        const e = ps + Math.ceil(((idx + 1) * span) / nItems) - 1;
+        return { startWeek: s, endWeek: Math.max(s, e) };
+      };
+      const bomSubs = lines.map((l, idx) => {
+        const { startWeek, endWeek } = slice(idx);
+        return {
+          ...blankSubItem(),
+          name: l.itemName + (l.make ? ` (${l.make})` : ''),
+          description: [l.category, l.quantity ? `${l.quantity} ${l.unit || ''}`.trim() : ''].filter(Boolean).join(' \u00b7 '),
+          startWeek, endWeek,
+          weightPct: '', // left blank by design — user sets weights
+        };
+      });
+
+      const existing = (p.subItems || []).filter(si => si.name && si.name.trim());
+      let mode = 'replace';
+      if (existing.length > 0) {
+        const append = await showConfirmation({
+          title: 'Existing sub-items found', type: 'confirm',
+          message: `This phase already has ${existing.length} sub-item(s). Append the ${bomSubs.length} BOM item(s), or replace?`,
+          confirmText: 'Append', cancelText: 'Replace',
+        });
+        mode = append ? 'append' : 'replace';
+      }
+      const next = mode === 'append' ? [...(p.subItems || []), ...bomSubs] : bomSubs;
+      updatePhase(i, 'subItems', next, { expanded: true });
+      showSuccess(`${bomSubs.length} BOM item(s) added as sub-items with date ranges.`);
+    } catch { showError('Failed to fetch BOM / BOQ items.'); }
+  };
   const removePhase = (i) => { setFocusRow(null); setPhases(prev => prev.filter((_, idx) => idx !== i).map((p, idx) => ({ ...p, seqNo: idx + 1 }))); };
 
   const save = async () => {
@@ -817,6 +931,8 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
         showError(`"${p.phaseName}": end is before start`); return;
       }
     }
+    // Weight totals are NOT enforced on save — partial scope entry is allowed.
+    // The 100% rule is enforced separately at the "Approve scope" step.
     setSaving(true);
     try {
       const { siteLat: _sLat, siteLng: _sLng, ...scopeRest } = scope;
@@ -824,6 +940,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
         ...scopeRest,
         totalPlannedWeeks: hasDates ? planDuration : null,
         planUnit: scope.planUnit || 'WEEK',
+        trackingMode: 'DETAILED',
         plannedStartDate: scope.plannedStartDate || null,
         plannedEndDate: scope.plannedEndDate || null,
         // Site location is owned by the Overview tab (PATCH /site-location). We
@@ -836,17 +953,18 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           startWeek: p.startWeek === '' ? null : Number(p.startWeek),
           endWeek: p.endWeek === '' ? null : Number(p.endWeek),
           status: p.status || 'Not Started',
-          progressPercent: p.progressPercent === '' || p.progressPercent == null ? 0 : Number(p.progressPercent),
-          subItems: (p.subItems || []).filter(si => si.name && si.name.trim()),
-        })).map(p => {
-          // If phase has sub-items, override progressPercent with their average
-          // so the DB always holds the real current value (Progress tab reads from DB)
-          if (p.subItems && p.subItems.length > 0) {
-            p.progressPercent = Math.round(
-              p.subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / p.subItems.length
-            );
-          }
-          return p;
+          progressPercent: 0, // set below from weeks data
+          weightPct: (p.subItems && p.subItems.filter(si => si.name && si.name.trim()).length > 0)
+            ? p.subItems.filter(si => si.name && si.name.trim()).reduce((s, si) => s + (Number(si.weightPct) || 0), 0)
+            : (p.weightPct === '' || p.weightPct == null ? null : Number(p.weightPct)),
+          // Persist each sub-item's actual progress (from its weeks) into progressPercent.
+          subItems: (p.subItems || []).filter(si => si.name && si.name.trim()).map(si => ({
+            ...si, progressPercent: Math.round(leafActual(leafForSub(p, si))),
+          })),
+        })).map((pay, i) => {
+          // Phase actual progress derived from weeks (weighted roll-up for parents).
+          pay.progressPercent = Math.round(phaseActualProgress(phases[i]));
+          return pay;
         }),
       };
       const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, {
@@ -859,6 +977,176 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       else showError(data.message || 'Save failed');
     } catch { showError('Save failed'); }
     finally { setSaving(false); }
+  };
+
+  // Final approval: enforces that all weights total exactly 100% (±tolerance).
+  // Saves the scope first so the approved figures are what's persisted.
+  const approve = async () => {
+    if (!hasAnyWeight) { showError('Enter item weights before approving.'); return; }
+    if (!weightOk) {
+      showError(`Total weight is ${fmtW(grandTotalWeight)}% — it must equal 100% to approve the full scope.`);
+      return;
+    }
+    const ok = await showConfirmation({
+      title: 'Approve full scope', type: 'confirm',
+      message: 'All item weights total 100%. Approve and save the complete scope?',
+      confirmText: 'Yes, Approve', cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    await save();
+    showSuccess('Scope approved — weights total 100%.');
+  };
+
+  // ── Excel export — EPC-tracker style sheet built from the scope data ────────
+  // Layout mirrors EPC_Hybrid_80MW_Tracker: S.No | Category | Item | Unit | Qty |
+  // Weight% | Unit Rate | Package Budget | [per-bucket Plan%/Act%/PlanCap/ActCap] |
+  // Cum Plan% | Cum Act% | Total Plan Cap | Total Act Cap. Category = parent phase;
+  // its sub-items are the line items beneath it (parent shown as a subtotal band).
+  const exportExcel = () => {
+    const u = scope.planUnit || 'WEEK';
+    const n = nBuckets;
+    const bucketHdr = (b) => (u === 'MONTH' ? bucketLabel(scope.plannedStartDate, b, u) : `${unitAbbr} ${b + 1}`);
+    // ── Build header rows ──
+    const title = `${scope.projectType || orderBook.orderTitle || 'EPC'} — Progress Tracker`;
+    const meta = `Project: ${orderBook.orderTitle || ''} | Total Value: ${fmtMoney(projectTotal)} | ` +
+                 `Plan: ${scope.plannedStartDate || '—'} to ${scope.plannedEndDate || '—'}`;
+    const fixedCols = ['S.No', 'Category', 'Scope of Work Item', 'Unit', 'Qty', 'Weight (%)', 'Unit Rate', 'Package Budget'];
+    const perBucket = ['Plan Phy%', 'Act Phy%', 'Plan Budget', 'Act Budget'];
+    const cumCols = ['Cum Plan Phy%', 'Cum Act Phy%', 'Total Plan Budget', 'Total Act Budget'];
+    const header2 = [...fixedCols.map(() => ''), ...Array.from({ length: n }).flatMap(() => perBucket), ...cumCols];
+    const header1 = [...fixedCols, ...Array.from({ length: n }).flatMap((_, b) => [bucketHdr(b), '', '', '']), 'CUMULATIVE', '', '', ''];
+
+    const rows = [[title], [meta], [], header1, header2];
+    // Track row roles by index for styling. 0=title,1=meta,2=blank,3=header1,4=header2.
+    const rowMeta = ['title', 'meta', 'blank', 'header1', 'header2'];
+
+    // Build a row from real data: per-week planned/actual come from the weeks grid;
+    // planned budget comes from Cost-to-Procure (plannedBudget); actual budget left blank.
+    const itemRow = (sno, category, name, unit, qty, weightPct, lf, plannedBudgetVal) => {
+      const w = num(weightPct);
+      const pBudget = num(plannedBudgetVal); // Cost-to-Procure planned budget for this item
+      const s = Math.max(1, Math.min(lf.start, n));
+      const e = Math.max(s, Math.min(lf.end, n));
+      const row = [sno, category, name, unit || 'LS', qty || 1, w, '', pBudget ? Number(pBudget.toFixed(2)) : ''];
+      let cumPlan = 0, cumAct = 0;
+      for (let b = 1; b <= n; b++) {
+        const cell = getCell(lf.phaseId, lf.subKey, b);
+        const planPct = num(cell.plannedPct);
+        const actPct = num(cell.actualPct);
+        if (planPct !== 0 || actPct !== 0) {
+          cumPlan += planPct; cumAct += actPct;
+          // Planned capital this period = budget × (period planned % / 100). Actual budget left blank.
+          const planCap = pBudget ? (pBudget * planPct / 100) : '';
+          row.push(planPct || '', actPct || '', planCap === '' ? '' : Number(planCap.toFixed(2)), '');
+        } else { row.push('', '', '', ''); }
+      }
+      // Cumulative columns: cum planned %, cum actual %, total planned budget, actual budget (blank).
+      row.push(Number(cumPlan.toFixed(2)), Number(cumAct.toFixed(2)), pBudget ? Number(pBudget.toFixed(2)) : '', '');
+      return row;
+    };
+
+    // Cycle category band colors across parents (amber, teal, then repeat).
+    const bandColors = ['FFB800', '00B0A0', 'C0504D', '8064A2', '4F81BD'];
+    let bandIdx = 0;
+    let sno = 1;
+    phases.forEach((p) => {
+      const hasSub = p.subItems && p.subItems.length > 0;
+      if (hasSub) {
+        rows.push([`${p.phaseName.toUpperCase()} (${fmtW(subWeightSum(p))}%)`]);
+        rowMeta.push({ role: 'band', color: bandColors[bandIdx % bandColors.length] });
+        bandIdx++;
+        p.subItems.filter(si => si.name && si.name.trim()).forEach((si) => {
+          rows.push(itemRow(sno++, p.phaseName, si.name, '', '', si.weightPct, leafForSub(p, si), si.plannedBudget));
+          rowMeta.push('item');
+        });
+      } else {
+        rows.push(itemRow(sno++, p.phaseName, p.phaseName, '', '', p.weightPct, leafForPhase(p), p.plannedBudget));
+        rowMeta.push('phase'); // childless parent — styled distinctly from sub-items
+      }
+    });
+
+    // Grand total row — planned budget = sum of Cost-to-Procure budgets; actual budget blank.
+    const totalCostBudget = phases.reduce((s, p) => {
+      const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
+      if (subs.length) return s + subs.reduce((a, si) => a + num(si.plannedBudget), 0);
+      return s + num(p.plannedBudget);
+    }, 0);
+    const totalRow = ['', 'GRAND TOTAL', '', '', '', Number(grandTotalWeight.toFixed(4)), '', Number(totalCostBudget.toFixed(2))];
+    for (let b = 0; b < n; b++) totalRow.push('', '', '', '');
+    totalRow.push(Number(weightedProgress.toFixed(2)), Number(detailedWeightedActual.toFixed(2)),
+                  Number(totalCostBudget.toFixed(2)), '');
+    rows.push([]); rowMeta.push('blank');
+    rows.push(totalRow); rowMeta.push('total');
+
+    const ws = XLSXStyle.utils.aoa_to_sheet(rows);
+    const totalCols = fixedCols.length + n * 4 + cumCols.length;
+
+    // ── Palette (matches the attached EPC tracker) ──
+    const NAVY = '1F3864', MIDBLUE = '2E5FA3', LIGHTBLUE = 'BDD7EE', ZEBRA = 'F2F2F2';
+    const border = { style: 'thin', color: { rgb: 'D9D9D9' } };
+    const allBorders = { top: border, bottom: border, left: border, right: border };
+    const setCell = (r, c, style) => {
+      const addr = XLSXStyle.utils.encode_cell({ r, c });
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      ws[addr].s = { ...(ws[addr].s || {}), ...style };
+    };
+    const fill = (rgb) => ({ fill: { patternType: 'solid', fgColor: { rgb } } });
+    const fontW = (bold = true) => ({ font: { bold, color: { rgb: 'FFFFFF' } } });
+    const fontDark = (bold = false) => ({ font: { bold, color: { rgb: NAVY } } });
+    const center = { alignment: { horizontal: 'center', vertical: 'center', wrapText: true } };
+
+    rowMeta.forEach((rm, r) => {
+      const role = typeof rm === 'string' ? rm : rm.role;
+      for (let c = 0; c < totalCols; c++) {
+        if (role === 'title') {
+          setCell(r, c, { ...fill(NAVY), ...fontW(true), alignment: { horizontal: 'left', vertical: 'center' } });
+        } else if (role === 'meta') {
+          setCell(r, c, { ...fill(MIDBLUE), font: { bold: false, color: { rgb: 'FFFFFF' } }, alignment: { horizontal: 'left' } });
+        } else if (role === 'header1' || role === 'header2') {
+          const isSub = role === 'header2';
+          setCell(r, c, { ...fill(isSub ? LIGHTBLUE : NAVY), font: { bold: true, color: { rgb: isSub ? NAVY : 'FFFFFF' } }, ...center, border: allBorders });
+        } else if (role === 'band') {
+          setCell(r, c, { ...fill(rm.color), ...fontW(true), border: allBorders });
+        } else if (role === 'total') {
+          setCell(r, c, { ...fill(NAVY), ...fontW(true), border: allBorders });
+        } else if (role === 'phase') {
+          // Childless parent phase — a light steel-blue band so it reads as a top-level
+          // phase, not a sub-item of the preceding category.
+          setCell(r, c, { ...fill('DCE6F1'), font: { bold: true, color: { rgb: NAVY } }, border: allBorders });
+        } else if (role === 'item') {
+          // zebra striping for readability
+          const zebra = (r % 2 === 0);
+          setCell(r, c, { ...(zebra ? fill(ZEBRA) : {}), ...fontDark(false), border: allBorders });
+        }
+      }
+    });
+
+    // Merge title and meta across all columns
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: totalCols - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: totalCols - 1 } },
+    ];
+    // Merge each per-bucket header group (4 cols) in header1
+    let mc = fixedCols.length;
+    for (let b = 0; b < n; b++) { ws['!merges'].push({ s: { r: 3, c: mc }, e: { r: 3, c: mc + 3 } }); mc += 4; }
+    ws['!merges'].push({ s: { r: 3, c: mc }, e: { r: 3, c: mc + 3 } }); // CUMULATIVE group
+    // Merge each band row across all columns
+    rowMeta.forEach((rm, r) => {
+      if ((typeof rm === 'object' && rm.role === 'band')) ws['!merges'].push({ s: { r, c: 0 }, e: { r, c: totalCols - 1 } });
+    });
+
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 20 }, { wch: 28 }, { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 9 }, { wch: 14 },
+      ...Array.from({ length: n * 4 }).map(() => ({ wch: 9 })),
+      { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
+    ];
+    ws['!rows'] = rows.map((_, r) => ({ hpt: r === 0 ? 24 : (r === 3 || r === 4 ? 20 : 16) }));
+
+    const wb = XLSXStyle.utils.book_new();
+    XLSXStyle.utils.book_append_sheet(wb, ws, 'EPC Tracker');
+    const fname = `EPC_Tracker_${(orderBook.orderBookNo || orderBook.id || 'project')}.xlsx`;
+    XLSXStyle.writeFile(wb, fname);
+    showSuccess('Excel exported.');
   };
 
   // Real schedule duration from the dates (0 = dates not set / invalid).
@@ -877,6 +1165,162 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     const n = Number(v);
     if (!n || n < 1) return '';
     return Math.min(n, nBuckets);
+  };
+
+  // ── Weighted-average model (mirrors the EPC tracker) ───────────────────────
+  // Sub-item weights are ABSOLUTE project-level %; a parent's effective weight is
+  // the sum of its sub-items (locked), else the parent's own typed weight. All
+  // parents must sum to 100%. Project progress = Σ(leaf weight% × leaf progress%).
+  const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const subWeightSum = (p) => (p.subItems || []).reduce((s, si) => s + num(si.weightPct), 0);
+  const effectiveWeight = (p) =>
+    (p.subItems && p.subItems.length > 0) ? subWeightSum(p) : num(p.weightPct);
+  const grandTotalWeight = phases.reduce((s, p) => s + effectiveWeight(p), 0);
+  // ±0.01% tolerance so raw Excel-derived fractions still validate (exact 100.000000
+  // is unreachable with hand-typed weights and float dust).
+  const WEIGHT_TOLERANCE = 0.01;
+  const weightOk = Math.abs(grandTotalWeight - 100) <= WEIGHT_TOLERANCE;
+  const hasAnyWeight = phases.some(p => effectiveWeight(p) > 0);
+  // Weighted-average planned progress across the whole project.
+  const weightedProgress = grandTotalWeight > 0
+    ? phases.reduce((s, p) => {
+        const w = effectiveWeight(p);
+        const prog = (p.subItems && p.subItems.length > 0)
+          ? (subWeightSum(p) > 0
+              ? p.subItems.reduce((a, si) => a + num(si.weightPct) * num(si.progressPercent), 0) / subWeightSum(p)
+              : 0)
+          : num(p.progressPercent);
+        return s + (w * prog) / 100;
+      }, 0)
+    : 0;
+  const fmtW = (v) => {
+    const n = num(v);
+    // Show up to 4 decimals but trim trailing zeros, so raw fractions read cleanly.
+    return n.toFixed(4).replace(/\.?0+$/, '');
+  };
+
+  // ── Capital allocation (derived, mirrors EPC tracker) ──────────────────────
+  // Package budget = weight% × total project value (orderBook.totalAmount).
+  // Planned capital = package budget. Actual capital = planned × progress%.
+  const projectTotal = num(orderBook.totalAmount);
+  const plannedCap = (weightPct) => (num(weightPct) / 100) * projectTotal;
+  const subPlannedCap = (si) => plannedCap(si.weightPct);
+  const subActualCap = (si) => subPlannedCap(si) * (num(si.progressPercent) / 100);
+  const phasePlannedCap = (p) =>
+    (p.subItems && p.subItems.length > 0)
+      ? p.subItems.reduce((s, si) => s + subPlannedCap(si), 0)
+      : plannedCap(p.weightPct);
+  const phaseActualCap = (p) => {
+    if (p.subItems && p.subItems.length > 0)
+      return p.subItems.reduce((s, si) => s + subActualCap(si), 0);
+    return plannedCap(p.weightPct) * (num(p.progressPercent) / 100);
+  };
+  const totalPlannedCap = phases.reduce((s, p) => s + phasePlannedCap(p), 0);
+  const totalActualCap = phases.reduce((s, p) => s + phaseActualCap(p), 0);
+
+  // ── Per-period progress tracking (always on; every project uses the weeks modal) ──
+  const isDetailed = true;
+  // Flatten scope into leaf entries: {phaseId, subKey|null, label, start, end, weight}
+  const leaves = [];
+  phases.forEach(p => {
+    if (p.subItems && p.subItems.length > 0) {
+      p.subItems.filter(si => si.name && si.name.trim()).forEach(si => {
+        leaves.push({ phaseId: p.id, subKey: si.name, label: si.name, parent: p.phaseName,
+          start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(si.weightPct) });
+      });
+    } else {
+      leaves.push({ phaseId: p.id, subKey: null, label: p.phaseName, parent: null,
+        start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(p.weightPct) });
+    }
+  });
+  const pKey = (phaseId, subKey, period) => `${phaseId}|${subKey || ''}|${period}`;
+  // Build the leaf object the week-modal expects, from a schedule row.
+  const leafForPhase = (p) => ({ phaseId: p.id, subKey: null, label: p.phaseName, parent: null,
+    start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(p.weightPct) });
+  const leafForSub = (p, si) => ({ phaseId: p.id, subKey: si.name, label: si.name, parent: p.phaseName,
+    start: num(si.startWeek) || num(p.startWeek) || 1,
+    end: num(si.endWeek) || num(si.startWeek) || num(p.endWeek) || num(p.startWeek) || nBuckets,
+    weight: num(si.weightPct) });
+  const getCell = (phaseId, subKey, period) => progress[pKey(phaseId, subKey, period)] || { plannedPct: 0, actualPct: 0 };
+  const setCell = (phaseId, subKey, period, field, val) => {
+    const k = pKey(phaseId, subKey, period);
+    setProgress(prev => ({ ...prev, [k]: { ...(prev[k] || { plannedPct: 0, actualPct: 0 }), [field]: val === '' ? 0 : Math.max(0, Number(val)) } }));
+  };
+  // Even-fill the PLANNED curve for ONE leaf across its active periods.
+  const seedLeafEven = (lf) => {
+    const s = Math.max(1, Math.min(lf.start, nBuckets));
+    const e = Math.max(s, Math.min(lf.end, nBuckets));
+    const span = e - s + 1;
+    const each = 100 / span;
+    setProgress(prev => {
+      const next = { ...prev };
+      for (let b = s; b <= e; b++) {
+        const k = pKey(lf.phaseId, lf.subKey, b);
+        next[k] = { plannedPct: Number(each.toFixed(4)), actualPct: (next[k]?.actualPct ?? 0) };
+      }
+      return next;
+    });
+  };
+  // Cumulative actual % for a leaf = sum of its actual increments (capped 100).
+  const leafActual = (lf) => {
+    let sum = 0;
+    for (let b = 1; b <= nBuckets; b++) sum += num(getCell(lf.phaseId, lf.subKey, b).actualPct);
+    return Math.min(100, sum);
+  };
+  const leafPlanned = (lf) => {
+    let sum = 0;
+    for (let b = 1; b <= nBuckets; b++) sum += num(getCell(lf.phaseId, lf.subKey, b).plannedPct);
+    return Math.min(100, sum);
+  };
+
+  // Phase-level progress from the weeks data:
+  //  - childless phase → its own leaf sum
+  //  - parent with sub-items → WEIGHTED roll-up by sub-item weight (EPC standard).
+  //    Falls back to a plain average only if no sub-item has a weight set.
+  const phaseActualProgress = (p) => {
+    const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
+    if (subs.length === 0) return leafActual(leafForPhase(p));
+    const wsum = subs.reduce((s, si) => s + num(si.weightPct), 0);
+    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafActual(leafForSub(p, si)), 0) / wsum;
+    return subs.reduce((s, si) => s + leafActual(leafForSub(p, si)), 0) / subs.length;
+  };
+  const phasePlannedProgress = (p) => {
+    const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
+    if (subs.length === 0) return leafPlanned(leafForPhase(p));
+    const wsum = subs.reduce((s, si) => s + num(si.weightPct), 0);
+    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafPlanned(leafForSub(p, si)), 0) / wsum;
+    return subs.reduce((s, si) => s + leafPlanned(leafForSub(p, si)), 0) / subs.length;
+  };
+  // Project weighted progress from DETAILED actuals = Σ(leaf weight% × leaf actual%) / Σweight.
+  const detailedWeightedActual = (() => {
+    const wsum = leaves.reduce((s, lf) => s + lf.weight, 0);
+    if (wsum <= 0) return 0;
+    return leaves.reduce((s, lf) => s + lf.weight * leafActual(lf), 0) / wsum;
+  })();
+
+  const saveProgress = async () => {
+    setSavingProgress(true);
+    try {
+      const cells = [];
+      leaves.forEach(lf => {
+        for (let b = 1; b <= nBuckets; b++) {
+          const c = getCell(lf.phaseId, lf.subKey, b);
+          if (num(c.plannedPct) !== 0 || num(c.actualPct) !== 0) {
+            cells.push({ phaseId: lf.phaseId, subItemKey: lf.subKey, periodNo: b,
+              plannedPct: num(c.plannedPct), actualPct: num(c.actualPct) });
+          }
+        }
+      });
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/progress`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cells }),
+      });
+      const data = await res.json();
+      if (data.success) { showSuccess('Progress saved'); }
+      else showError(data.message || 'Save failed');
+    } catch { showError('Save failed'); }
+    finally { setSavingProgress(false); }
   };
 
   if (loading) return <div className="obd-empty">Loading technical scope…</div>;
@@ -904,6 +1348,12 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           <label className="obd-field"><span>Planned Duration</span>
             <input className="obd-readonly" value={hasDates ? `${planDuration} ${unit === 'MONTH' ? 'month(s)' : 'week(s)'}` : '—'} readOnly tabIndex={-1} />
           </label>
+          <label className="obd-field"><span>Schedule Granularity</span>
+            <div className="obd-unit-toggle">
+              <button type="button" className={unit === 'WEEK' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'WEEK' })}>Weekly</button>
+              <button type="button" className={unit === 'MONTH' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'MONTH' })}>Monthly</button>
+            </div>
+          </label>
         </div>
 
         <label className="obd-field obd-field--full"><span>Scope of Work</span>
@@ -924,10 +1374,6 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
         <div className="obd-card-head">
           <h4 className="obd-card-title">Work Breakdown &amp; Schedule</h4>
           <div className="obd-card-head-actions">
-            <div className="obd-unit-toggle">
-              <button type="button" className={unit === 'WEEK' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'WEEK' })}>Weekly</button>
-              <button type="button" className={unit === 'MONTH' ? 'active' : ''} onClick={() => setScope({ ...scope, planUnit: 'MONTH' })}>Monthly</button>
-            </div>
             <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest EPC plan</button>
             <button className="obd-btn obd-btn--ghost" onClick={loadFromLineItems}><Plus size={14} /> Load line items</button>
             <button className="obd-btn obd-btn--ghost" onClick={addPhase}><Plus size={14} /> Add row</button>
@@ -954,33 +1400,31 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                     <th>#</th>
                     <th>Activity / Item</th>
                     <th>Description</th>
+                    <th>Weight %</th>
                     <th>Start {unitWord}</th>
                     <th>End {unitWord}</th>
                     <th>Status</th>
-                    <th>Progress</th>
+                    <th>Planned %</th>
+                    <th>Actual %</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {phases.map((p, i) => {
                     const hasSubItems = p.subItems && p.subItems.length > 0;
-                    // auto-derive parent progress from sub-items when all named
-                    const autoProgress = hasSubItems
-                      ? Math.round(p.subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / p.subItems.length)
-                      : null;
                     return (
                       <React.Fragment key={i}>
                         {/* ── Parent phase row ─────────────────────────── */}
-                        <tr style={{ background: hasSubItems ? '#f8fafc' : undefined }}>
+                        <tr className={hasSubItems ? 'obd-row-parent' : undefined}>
                           {/* expand/collapse toggle */}
                           <td style={{ textAlign: 'center', padding: '0 4px' }}>
                             <button
                               type="button"
                               title={p.expanded ? 'Collapse sub-items' : 'Expand sub-items'}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#6366f1', padding: 2 }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2563eb', padding: 2 }}
                               onClick={() => updatePhase(i, 'expanded', !p.expanded)}
                             >
-                              {hasSubItems ? (p.expanded ? '▾' : '▸') : <span style={{ color: '#cbd5e1' }}>—</span>}
+                              {hasSubItems ? (p.expanded ? '▾' : '▸') : <span className="obd-dash">—</span>}
                             </button>
                           </td>
                           <td>{i + 1}</td>
@@ -988,24 +1432,36 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                             {p.customName ? (
                               <div className="obd-cat-custom">
                                 <input className="obd-inp" value={p.phaseName} autoFocus={focusRow === i} placeholder="Enter phase or item name"
-                                  onChange={e => updatePhase(i, 'phaseName', e.target.value)} />
+                                  onChange={e => updatePhase(i, 'phaseName', e.target.value)}
+                                  onBlur={e => registerActivity(e.target.value)} />
                                 <button type="button" className="obd-cat-back" title="Back to list"
                                   onClick={() => { setFocusRow(null); updatePhase(i, 'customName', false, { phaseName: '' }); }}>↩</button>
                               </div>
                             ) : (
                               <select className="obd-inp"
-                                value={PHASE_SUGGESTIONS.includes(p.phaseName) ? p.phaseName : ''}
+                                value={ACTIVITY_OPTIONS.includes(p.phaseName) ? p.phaseName : ''}
                                 onChange={e => {
                                   if (e.target.value === '__OTHER__') { setFocusRow(i); updatePhase(i, 'customName', true, { phaseName: '' }); }
                                   else updatePhase(i, 'phaseName', e.target.value);
                                 }}>
                                 <option value="">Select phase / item…</option>
-                                {PHASE_SUGGESTIONS.filter(s => s !== 'Other').map(s => <option key={s} value={s}>{s}</option>)}
+                                {ACTIVITY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                                 <option value="__OTHER__">Other (type your own)…</option>
                               </select>
                             )}
                           </td>
                           <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
+                          <td>
+                            <div className="obd-progress-cell">
+                              <input className={`obd-inp obd-inp--xs ${hasSubItems ? 'obd-cell-locked' : ''}`} type="number" min="0" max="100" step="any"
+                                value={hasSubItems ? fmtW(subWeightSum(p)) : (p.weightPct ?? '')}
+                                title={hasSubItems ? 'Auto-summed from sub-item weights' : 'Absolute project weight (%)'}
+                                readOnly={hasSubItems}
+                                placeholder="0"
+                                onChange={e => !hasSubItems && updatePhase(i, 'weightPct', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} />
+                              <span className="obd-progress-cell-pct">%</span>
+                            </div>
+                          </td>
                           <td>
                             <select className="obd-inp obd-inp--sm" value={clampBucket(p.startWeek)} onChange={e => updatePhase(i, 'startWeek', e.target.value)}>
                               <option value="">—</option>
@@ -1032,38 +1488,73 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                               {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td>
-                            <div className="obd-progress-cell">
-                              <input className="obd-inp obd-inp--xs" type="number" min="0" max="100"
-                                value={autoProgress !== null ? autoProgress : p.progressPercent}
-                                title={autoProgress !== null ? 'Auto-calculated from sub-items' : undefined}
-                                readOnly={autoProgress !== null}
-                                style={autoProgress !== null ? { background: '#f1f5f9', color: '#64748b' } : undefined}
-                                onChange={e => autoProgress === null && updatePhase(i, 'progressPercent', e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value))))} />
-                              <span className="obd-progress-cell-pct">%</span>
-                            </div>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}
+                            className={phasePlannedProgress(p) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
+                            title="Planned % — derived from the weeks modal">
+                            {fmtW(phasePlannedProgress(p))}%
+                          </td>
+                          <td style={{ textAlign: 'center', fontWeight: 600 }}
+                            className={phaseActualProgress(p) > phasePlannedProgress(p) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
+                            title="Actual % — derived from the weeks modal (amber if ahead of plan)">
+                            {fmtW(phaseActualProgress(p))}%
                           </td>
                           <td style={{ whiteSpace: 'nowrap' }}>
+                            {isDetailed && !hasSubItems && (
+                              <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
+                                title="Set week-wise planned & actual progress"
+                                onClick={() => setWeekModalLeaf(leafForPhase(p))}>Weeks</button>
+                            )}
                             <button className="obd-icon-btn" title="Add sub-item"
-                              style={{ color: '#6366f1', marginRight: 4 }}
+                              style={{ color: '#2563eb', marginRight: 4 }}
                               onClick={() => {
                                 updatePhase(i, 'subItems', [...(p.subItems || []), blankSubItem()], { expanded: true });
                               }}>＋</button>
+                            {(p.phaseName || '').trim().toLowerCase() === 'procurement' && (
+                              <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
+                                title="Pull BOM / BOQ items in as sub-items, with dates split across this phase's range"
+                                onClick={() => pullBomIntoPhase(i)}>Pull BOM</button>
+                            )}
                             <button className="obd-icon-btn obd-icon-btn--danger" onClick={() => removePhase(i)} title="Remove row"><Trash2 size={14} /></button>
                           </td>
                         </tr>
 
                         {/* ── Sub-item rows (visible when expanded) ────── */}
                         {p.expanded && (p.subItems || []).map((si, si_i) => (
-                          <tr key={`${i}-si-${si_i}`} style={{ background: '#f0f4ff' }}>
-                            <td colSpan={2} style={{ paddingLeft: 28, color: '#94a3b8', fontSize: 12 }}>└ {si_i + 1}</td>
+                          <tr key={`${i}-si-${si_i}`} className="obd-row-sub-alt">
+                            <td colSpan={2} className="obd-cell-faint" style={{ paddingLeft: 28, fontSize: 12 }}>└ {si_i + 1}</td>
                             <td>
-                              <input className="obd-inp" value={si.name} placeholder="Sub-item name (e.g. Site Mobilisation)"
-                                onChange={e => {
-                                  const updated = [...p.subItems];
-                                  updated[si_i] = { ...si, name: e.target.value };
-                                  updatePhase(i, 'subItems', updated);
-                                }} />
+                              {si.customName ? (
+                                <div className="obd-cat-custom">
+                                  <input className="obd-inp" value={si.name} autoFocus placeholder="Enter sub-item name"
+                                    onChange={e => {
+                                      const updated = [...p.subItems];
+                                      updated[si_i] = { ...si, name: e.target.value };
+                                      updatePhase(i, 'subItems', updated);
+                                    }}
+                                    onBlur={e => registerActivity(e.target.value)} />
+                                  <button type="button" className="obd-cat-back" title="Back to list"
+                                    onClick={() => {
+                                      const updated = [...p.subItems];
+                                      updated[si_i] = { ...si, customName: false, name: '' };
+                                      updatePhase(i, 'subItems', updated);
+                                    }}>↩</button>
+                                </div>
+                              ) : (
+                                <select className="obd-inp"
+                                  value={ACTIVITY_OPTIONS.includes(si.name) ? si.name : (si.name ? '__CURRENT__' : '')}
+                                  onChange={e => {
+                                    const updated = [...p.subItems];
+                                    if (e.target.value === '__OTHER__') updated[si_i] = { ...si, customName: true, name: '' };
+                                    else if (e.target.value === '__CURRENT__') return;
+                                    else updated[si_i] = { ...si, name: e.target.value };
+                                    updatePhase(i, 'subItems', updated);
+                                  }}>
+                                  <option value="">Select sub-item…</option>
+                                  {si.name && !ACTIVITY_OPTIONS.includes(si.name) && <option value="__CURRENT__">{si.name}</option>}
+                                  {ACTIVITY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                                  <option value="__OTHER__">Other (type your own)…</option>
+                                </select>
+                              )}
                             </td>
                             <td>
                               <input className="obd-inp" value={si.description || ''} placeholder="Optional"
@@ -1072,6 +1563,19 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                                   updated[si_i] = { ...si, description: e.target.value };
                                   updatePhase(i, 'subItems', updated);
                                 }} />
+                            </td>
+                            <td>
+                              <div className="obd-progress-cell">
+                                <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                  value={si.weightPct ?? ''} placeholder="0"
+                                  title="Absolute project weight (%) — sub-item weights sum into the parent"
+                                  onChange={e => {
+                                    const updated = [...p.subItems];
+                                    updated[si_i] = { ...si, weightPct: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) };
+                                    updatePhase(i, 'subItems', updated);
+                                  }} />
+                                <span className="obd-progress-cell-pct">%</span>
+                              </div>
                             </td>
                             <td>
                               <input type="date" className="obd-inp obd-inp--sm" value={si.startDate || ''}
@@ -1103,18 +1607,22 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                                 {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                               </select>
                             </td>
-                            <td>
-                              <div className="obd-progress-cell">
-                                <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" value={si.progressPercent ?? 0}
-                                  onChange={e => {
-                                    const updated = [...p.subItems];
-                                    updated[si_i] = { ...si, progressPercent: e.target.value === '' ? 0 : Math.max(0, Math.min(100, Number(e.target.value))) };
-                                    updatePhase(i, 'subItems', updated);
-                                  }} />
-                                <span className="obd-progress-cell-pct">%</span>
-                              </div>
+                            <td style={{ textAlign: 'center' }}
+                              className={leafPlanned(leafForSub(p, si)) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
+                              title="Planned % — from this item's weeks">
+                              {fmtW(leafPlanned(leafForSub(p, si)))}%
                             </td>
-                            <td>
+                            <td style={{ textAlign: 'center' }}
+                              className={leafActual(leafForSub(p, si)) > leafPlanned(leafForSub(p, si)) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
+                              title="Actual % — from this item's weeks">
+                              {fmtW(leafActual(leafForSub(p, si)))}%
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {isDetailed && si.name && si.name.trim() && (
+                                <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
+                                  title="Set week-wise planned & actual progress"
+                                  onClick={() => setWeekModalLeaf(leafForSub(p, si))}>Weeks</button>
+                              )}
                               <button className="obd-icon-btn obd-icon-btn--danger" title="Remove sub-item"
                                 onClick={() => {
                                   const updated = p.subItems.filter((_, idx) => idx !== si_i);
@@ -1128,6 +1636,33 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                   })}
                 </tbody>
               </table>
+            </div>
+
+            {/* Save / Approve — placed directly under the table for easy reach */}
+            <div className="obd-schedule-footer">
+              {hasAnyWeight && (
+                <div className={`obd-weight-banner ${weightOk ? 'obd-weight-banner--ok' : 'obd-weight-banner--warn'}`}>
+                  <span>Total weight: {fmtW(grandTotalWeight)}% {weightOk ? '✓ ready to approve' : '(needs 100% to approve)'}</span>
+                  <span className="obd-cell-muted" style={{ fontWeight: 500 }}>
+                    Weighted progress: {fmtW(weightedProgress)}%
+                  </span>
+                  {isDetailed && (
+                    <span className="obd-cap-cell--actual" style={{ fontWeight: 600 }}>
+                      Actual (from weeks): {fmtW(detailedWeightedActual)}%
+                    </span>
+                  )}
+                </div>
+              )}
+              <button className="obd-btn obd-btn--ghost" onClick={exportExcel} title="Export EPC tracker to Excel">
+                <Download size={14} /> Export Excel
+              </button>
+              <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}>
+                <Save size={14} /> {saving ? 'Saving…' : 'Save Schedule'}
+              </button>
+              <button className="obd-btn obd-btn--success" onClick={approve} disabled={saving || !weightOk}
+                title={weightOk ? 'Approve the full scope (weights = 100%)' : 'Weights must total 100% to approve'}>
+                <Check size={14} /> Approve scope
+              </button>
             </div>
 
             {/* Inline Gantt-style timeline — buckets with real dates underneath */}
@@ -1165,19 +1700,91 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
             </div>
           </>
         )}
-
-        <div className="obd-schedule-footer">
-          <button className="obd-btn obd-btn--primary" onClick={save} disabled={saving}>
-            <Save size={14} /> {saving ? 'Saving…' : 'Save Schedule'}
-          </button>
-        </div>
       </div>
+
+      {/* Per-item week-by-week entry modal (opened from schedule rows in DETAILED mode) */}
+      {weekModalLeaf && (() => {
+        const lf = weekModalLeaf;
+        const s = Math.max(1, Math.min(lf.start, nBuckets));
+        const e = Math.max(s, Math.min(lf.end, nBuckets));
+        const planTot = leafPlanned(lf);
+        const actTot = leafActual(lf);
+        return (
+          <div className="obd-fv-overlay" onClick={() => setWeekModalLeaf(null)}>
+            <div className="obd-week-modal" onClick={ev => ev.stopPropagation()}>
+              <div className="obd-fv-header">
+                <div className="obd-fv-title">
+                  {lf.parent && <span className="obd-cell-faint" style={{ fontWeight: 400, marginRight: 6 }}>{lf.parent} ·</span>}
+                  {lf.label}
+                  <span className="obd-cell-faint" style={{ fontWeight: 400, marginLeft: 8 }}>wt {fmtW(lf.weight)}%</span>
+                </div>
+                <button className="obd-fv-close" onClick={() => setWeekModalLeaf(null)}>×</button>
+              </div>
+              <div style={{ padding: '12px 16px' }}>
+                <p className="obd-cell-muted" style={{ fontSize: 12, marginTop: 0 }}>
+                  Enter the % completed <strong>in</strong> each {unitWord.toLowerCase()} (incremental). Planned cells should add up to 100%.
+                </p>
+                <div style={{ marginBottom: 8 }}>
+                  <button className="obd-btn obd-btn--ghost obd-btn--sm" onClick={() => seedLeafEven(lf)}
+                    title="Spread 100% evenly across this item's periods">
+                    <Wand2 size={13} /> Auto-fill planned evenly
+                  </button>
+                </div>
+                <div className="obd-table-wrap" style={{ maxHeight: '50vh' }}>
+                  <table className="obd-table">
+                    <thead>
+                      <tr><th>{unitWord}</th><th>Date</th><th>Planned %</th><th>Actual %</th></tr>
+                    </thead>
+                    <tbody>
+                      {Array.from({ length: nBuckets }).map((_, b) => {
+                        const period = b + 1;
+                        const active = period >= s && period <= e;
+                        const c = getCell(lf.phaseId, lf.subKey, period);
+                        return (
+                          <tr key={b} style={active ? undefined : { opacity: 0.5 }}>
+                            <td style={{ fontWeight: 600 }}>{unitAbbr} {period}</td>
+                            <td className="obd-cell-faint" style={{ fontSize: 11 }}>{bucketLabel(scope.plannedStartDate, b, unit)}</td>
+                            <td>
+                              <input className="obd-inp obd-inp--sm" type="number" min="0" max="100" step="any"
+                                style={{ width: 80 }} value={c.plannedPct || ''} placeholder={active ? '0' : '—'}
+                                onChange={ev => setCell(lf.phaseId, lf.subKey, period, 'plannedPct', ev.target.value)} />
+                            </td>
+                            <td>
+                              <input className="obd-inp obd-inp--sm" type="number" min="0" max="100" step="any"
+                                style={{ width: 80, ...(num(c.actualPct) > num(c.plannedPct) + 0.01 ? { borderColor: '#f59e0b', background: 'rgba(245,158,11,0.08)' } : {}) }}
+                                title={num(c.actualPct) > num(c.plannedPct) + 0.01 ? 'Actual exceeds planned for this period (ahead of schedule)' : undefined}
+                                value={c.actualPct || ''} placeholder={active ? '0' : '—'}
+                                onChange={ev => setCell(lf.phaseId, lf.subKey, period, 'actualPct', ev.target.value)} />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ fontWeight: 700 }}>
+                        <td colSpan={2} style={{ textAlign: 'right' }}>Total</td>
+                        <td className={Math.abs(planTot - 100) > 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
+                          title={Math.abs(planTot - 100) > 0.01 ? 'Planned weekly %s should add up to 100% for this item' : 'Planned total is 100%'}>
+                          {fmtW(planTot)}%</td>
+                        <td className="obd-cap-cell--actual">{fmtW(actTot)}%</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="obd-schedule-footer" style={{ marginTop: 10 }}>
+                  <button className="obd-btn obd-btn--ghost obd-btn--sm" onClick={() => setWeekModalLeaf(null)}>Close</button>
+                  <button className="obd-btn obd-btn--primary obd-btn--sm" onClick={async () => { await saveProgress(); setWeekModalLeaf(null); }} disabled={savingProgress}>
+                    <Save size={13} /> {savingProgress ? 'Saving…' : 'Save Progress'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  COMMERCIAL TAB — budget allocation + live procurement/spend
 // ── Item-keyed finance block (billing receivables OR cost payables) ──────────
 const blankFinance = (seq) => ({ id: null, seqNo: seq, itemName: '', amount: '', plannedDate: '', notes: '' });
 
@@ -1186,6 +1793,8 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [cost, setCost] = useState([]);
   const [summary, setSummary] = useState(null);
   const [phaseNames, setPhaseNames] = useState([]); // tech-scope items (name + bucket span) for seeding
+  const [scopeTree, setScopeTree] = useState([]);    // full scope phases incl. weight + budget + subItems
+  const [savingBudget, setSavingBudget] = useState(false);
   const [planMeta, setPlanMeta] = useState({ start: '', unit: 'WEEK' });
   const [loading, setLoading] = useState(true);
   const [savingB, setSavingB] = useState(false);
@@ -1213,9 +1822,17 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       if (cData.success) setCost((cData.data.lines || []).map(l => ({ id: l.id, seqNo: l.seqNo, itemName: l.itemName, amount: l.amount ?? '', plannedDate: l.plannedDate || '', notes: l.notes || '' })));
       if (sData.success) setSummary(sData.data.summary);
       if (scData.success) {
-        setPhaseNames((scData.data.phases || []).map(p => ({
-          name: p.phaseName, startWeek: p.startWeek, endWeek: p.endWeek,
-        })).filter(p => p.name));
+        const tree = (scData.data.phases || []).map(p => ({
+          id: p.id, phaseName: p.phaseName, startWeek: p.startWeek, endWeek: p.endWeek,
+          weightPct: p.weightPct, plannedBudget: p.plannedBudget,
+          subItems: Array.isArray(p.subItems) ? p.subItems.map(si => ({ ...si })) : [],
+          expanded: false, // UI-only: collapse children by default (like Technical Scope)
+          // carry through all phase fields needed for a faithful scope re-save
+          phaseDescription: p.phaseDescription, status: p.status,
+          progressPercent: p.progressPercent, seqNo: p.seqNo, responsibleUserId: p.responsibleUserId,
+        }));
+        setScopeTree(tree);
+        setPhaseNames(tree.map(p => ({ name: p.phaseName, startWeek: p.startWeek, endWeek: p.endWeek })).filter(p => p.name));
         const sc = scData.data.scope;
         setPlanMeta({ start: sc?.plannedStartDate || '', unit: sc?.planUnit || 'WEEK' });
       }
@@ -1279,6 +1896,69 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       else showError(data.message || 'Save failed');
     } catch { showError('Save failed'); }
     finally { setSaving(false); }
+  };
+
+  // ── Scope-based budget allocation (Cost to Procure) ────────────────────────
+  // Mirrors the Technical Scope tree. Budgets are entered on leaves (sub-items, or
+  // childless parents); a parent with children shows the auto-summed total (locked),
+  // exactly like the weight rollup. Saved via the surgical /scope/budgets endpoint.
+  const bnum = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  const subBudgetSum = (p) => (p.subItems || []).reduce((s, si) => s + bnum(si.plannedBudget), 0);
+  const phaseBudget = (p) => (p.subItems && p.subItems.length > 0) ? subBudgetSum(p) : bnum(p.plannedBudget);
+  const scopePartTotal = scopeTree.reduce((s, p) => s + phaseBudget(p), 0);
+  // Budget-only extras live in the existing flat `cost` list (not the scope tree).
+  const extrasTotal = cost.reduce((s, l) => s + bnum(l.amount), 0);
+  const totalScopeBudget = scopePartTotal + extrasTotal;
+
+  const setLeafBudget = (pi, val) => setScopeTree(prev => prev.map((p, idx) =>
+    idx === pi ? { ...p, plannedBudget: val === '' ? '' : Math.max(0, Number(val)) } : p));
+  const setSubBudget = (pi, si, val) => setScopeTree(prev => prev.map((p, idx) => {
+    if (idx !== pi) return p;
+    const subItems = p.subItems.map((s, j) => j === si ? { ...s, plannedBudget: val === '' ? '' : Math.max(0, Number(val)) } : s);
+    return { ...p, subItems };
+  }));
+  const toggleExpand = (pi) => setScopeTree(prev => prev.map((p, idx) =>
+    idx === pi ? { ...p, expanded: !p.expanded } : p));
+  // Extra budget-only line helpers (operate on the flat `cost` list).
+  const addExtra = () => setCost(prev => [...prev, { id: null, itemName: '', amount: '', plannedDate: '', notes: '' }]);
+  const setExtra = (i, field, val) => setCost(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const removeExtra = (i) => setCost(prev => prev.filter((_, idx) => idx !== i));
+
+  const saveScopeBudgets = async () => {
+    // Validate extras have names
+    for (const l of cost) { if ((l.amount !== '' && l.amount != null) && (!l.itemName || !l.itemName.trim())) { showError('Every extra item needs a name'); return; } }
+    setSavingBudget(true);
+    try {
+      // 1) Scope item budgets → surgical scope endpoint
+      const items = scopeTree.map(p => ({
+        phaseId: p.id,
+        plannedBudget: (p.subItems && p.subItems.length > 0) ? null
+          : (p.plannedBudget === '' || p.plannedBudget == null ? null : Number(p.plannedBudget)),
+        subBudgets: (p.subItems || []).map(si => ({
+          name: si.name,
+          plannedBudget: si.plannedBudget === '' || si.plannedBudget == null ? null : Number(si.plannedBudget),
+        })),
+      }));
+      const scopeRes = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/budgets`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      const scopeData = await scopeRes.json();
+      if (!scopeData.success) { showError(scopeData.message || 'Save failed'); setSavingBudget(false); return; }
+
+      // 2) Extra budget-only lines → existing cost endpoint
+      const extras = cost.filter(l => l.itemName && l.itemName.trim());
+      const costRes = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/cost`, {
+        method: 'PUT', credentials: 'include',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lines: extras.map((l, i) => ({ id: l.id, seqNo: i + 1, itemName: l.itemName.trim(), amount: l.amount === '' ? 0 : Number(l.amount), plannedDate: l.plannedDate || null, notes: l.notes || '' })) }),
+      });
+      const costData = await costRes.json();
+      if (costData.success) { showSuccess('Budget allocation saved'); load(); }
+      else showError(costData.message || 'Saved scope budgets, but extra lines failed');
+    } catch { showError('Save failed'); }
+    finally { setSavingBudget(false); }
   };
 
   if (loading) return <div className="obd-empty">Loading commercial data…</div>;
@@ -1363,7 +2043,135 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       <ConfirmationModal {...confirmModal} />
 
       {renderBlock('Invoices to Raise (Client Billing)', billing, setBilling, 'billing', savingB, billingPlanned, 'Invoiced', invoiced)}
-      {renderBlock('Budget Allocation (Cost to Procure)', cost, setCost, 'cost', savingC, costPlanned, 'Actual Cost', actualCost)}
+
+      {/* Budget Allocation (Cost to Procure) — scope tree + budget-only extras */}
+      <div className="obd-card">
+        <div className="obd-card-head">
+          <h4 className="obd-card-title">Budget Allocation (Cost to Procure)</h4>
+          <div className="obd-card-head-actions">
+            <div className="obd-stat" style={{ marginRight: 12 }}>
+              <label>Total Allocated</label><span>{fmtMoney(totalScopeBudget)}</span>
+            </div>
+          </div>
+        </div>
+
+        {scopeTree.length === 0 && cost.length === 0 ? (
+          <div className="obd-empty">
+            No items yet. Scope items from the Technical Scope tab appear here automatically, or add procurement costs not tied to the scope (freight, contingency, etc.).
+            <div style={{ marginTop: 12 }}>
+              <button className="obd-btn obd-btn--ghost obd-btn--sm" onClick={addExtra}><Plus size={13} /> Add extra item</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="obd-table-wrap">
+              <table className="obd-table obd-phase-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: 28 }}></th>
+                    <th>#</th><th>Item</th><th>Weight %</th>
+                    <th>Planned Budget</th><th>% of Total</th><th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {scopeTree.map((p, pi) => {
+                    const hasSub = p.subItems && p.subItems.length > 0;
+                    const pBudget = phaseBudget(p);
+                    const pctOfTotal = totalScopeBudget > 0 ? (pBudget / totalScopeBudget) * 100 : 0;
+                    return (
+                      <React.Fragment key={p.id ?? pi}>
+                        <tr className="obd-row-parent">
+                          <td style={{ textAlign: 'center' }}>
+                            {hasSub ? (
+                              <button className="obd-icon-btn" title={p.expanded ? 'Collapse sub-items' : 'Expand sub-items'}
+                                style={{ color: '#2563eb' }} onClick={() => toggleExpand(pi)}>
+                                {p.expanded ? '▾' : '▸'}
+                              </button>
+                            ) : <span className="obd-dash">—</span>}
+                          </td>
+                          <td>{pi + 1}</td>
+                          <td>{p.phaseName}</td>
+                          <td>{p.weightPct != null && p.weightPct !== '' ? `${Number(p.weightPct)}%` : (hasSub ? `${(p.subItems).reduce((s, si) => s + Number(si.weightPct || 0), 0)}%` : '—')}</td>
+                          <td>
+                            {hasSub ? (
+                              <span title="Auto-summed from sub-items" className="obd-cell-muted">{fmtMoney(pBudget)}</span>
+                            ) : (
+                              <input className="obd-inp obd-inp--sm" type="number" min="0" placeholder="0"
+                                value={p.plannedBudget ?? ''}
+                                onChange={e => setLeafBudget(pi, e.target.value)} />
+                            )}
+                          </td>
+                          <td>{pctOfTotal.toFixed(1)}%</td>
+                          <td></td>
+                        </tr>
+                        {hasSub && p.expanded && p.subItems.map((si, si_i) => {
+                          const sBudget = bnum(si.plannedBudget);
+                          const sPct = totalScopeBudget > 0 ? (sBudget / totalScopeBudget) * 100 : 0;
+                          return (
+                            <tr key={si_i}>
+                              <td></td>
+                              <td></td>
+                              <td style={{ paddingLeft: 28 }} className="obd-cell-muted">↳ {si.name}</td>
+                              <td className="obd-cell-faint">{si.weightPct != null && si.weightPct !== '' ? `${Number(si.weightPct)}%` : '—'}</td>
+                              <td>
+                                <input className="obd-inp obd-inp--sm" type="number" min="0" placeholder="0"
+                                  value={si.plannedBudget ?? ''}
+                                  onChange={e => setSubBudget(pi, si_i, e.target.value)} />
+                              </td>
+                              <td className="obd-cell-faint">{sPct.toFixed(1)}%</td>
+                              <td></td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+
+                  {/* Budget-only extra items (not part of the scope tree) */}
+                  {cost.map((l, i) => {
+                    const ePct = totalScopeBudget > 0 ? (bnum(l.amount) / totalScopeBudget) * 100 : 0;
+                    return (
+                      <tr key={'extra-' + i}>
+                        <td style={{ textAlign: 'center' }}><span title="Extra (non-scope) item" style={{ color: '#f59e0b' }}>＊</span></td>
+                        <td>{scopeTree.length + i + 1}</td>
+                        <td><input className="obd-inp obd-inp--sm" value={l.itemName} placeholder="e.g. Freight, Contingency"
+                          onChange={e => setExtra(i, 'itemName', e.target.value)} /></td>
+                        <td className="obd-dash">—</td>
+                        <td><input className="obd-inp obd-inp--sm" type="number" min="0" placeholder="0"
+                          value={l.amount} onChange={e => setExtra(i, 'amount', e.target.value)} /></td>
+                        <td>{ePct.toFixed(1)}%</td>
+                        <td><button className="obd-icon-btn obd-icon-btn--danger" title="Remove extra item"
+                          onClick={() => removeExtra(i)}><Trash2 size={14} /></button></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ fontWeight: 700 }}>
+                    <td></td><td></td><td>Total</td><td></td>
+                    <td>{fmtMoney(totalScopeBudget)}</td><td>100%</td><td></td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            {/* Add extra item: its own line below the last row, right-aligned */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 12px 4px' }}>
+              <button className="obd-btn obd-btn--ghost obd-btn--sm" onClick={addExtra}><Plus size={13} /> Add extra item</button>
+            </div>
+            <div className="obd-schedule-footer">
+              <div className="obd-stat" style={{ marginRight: 'auto' }}>
+                <label>vs Order Value</label>
+                <span>{fmtMoney(totalScopeBudget)} of {fmtMoney(Number(orderBook.totalAmount || 0))}
+                  {Number(orderBook.totalAmount) > 0 && ` (${((totalScopeBudget / Number(orderBook.totalAmount)) * 100).toFixed(1)}%)`}</span>
+              </div>
+              <button className="obd-btn obd-btn--primary obd-btn--sm" onClick={saveScopeBudgets} disabled={savingBudget}>
+                <Save size={13} /> {savingBudget ? 'Saving…' : 'Save Budget Allocation'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
 
       {/* Live invoices for this order's project */}
       {projectLinked && (
@@ -1453,6 +2261,7 @@ const bomRowToLine = (row, seq) => ({
 
 const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [lines, setLines] = useState([]);
+  const { confirmModal, showConfirmation } = useConfirmationModal();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef(null);
@@ -1518,6 +2327,38 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     e.target.value = ''; // allow re-importing the same file
   };
 
+  // Seed BOM lines from the order book's own line items (GET /{id}/items).
+  const seedFromItems = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+      const data = await res.json();
+      const items = (data.success && Array.isArray(data.data?.items)) ? data.data.items
+                  : (Array.isArray(data.items) ? data.items : (Array.isArray(data.data) ? data.data : []));
+      if (!items.length) { showError('No order book line items found to seed from.'); return; }
+      const seeded = items.map((it, idx) => ({
+        id: null, seqNo: idx + 1,
+        category: '', itemName: it.itemName || '', make: '',
+        unit: it.unit || '',
+        quantity: it.quantity ?? '', unitRate: it.unitPrice ?? '',
+        notes: it.specification || it.description || '',
+      })).filter(l => l.itemName && l.itemName.trim());
+      if (!seeded.length) { showError('Line items have no usable item names.'); return; }
+
+      let mode = 'replace';
+      if (lines.length > 0) {
+        const append = await showConfirmation({
+          title: 'BOM lines already exist', type: 'confirm',
+          message: `This BOM already has ${lines.length} line(s). Append the ${seeded.length} order-book item(s), or replace?`,
+          confirmText: 'Append', cancelText: 'Replace',
+        });
+        mode = append ? 'append' : 'replace';
+      }
+      const next = mode === 'append' ? [...lines, ...seeded] : seeded;
+      setLines(next.map((l, idx) => ({ ...l, seqNo: idx + 1 })));
+      showSuccess(`Seeded ${seeded.length} item(s) from the order book. Review, then Save.`);
+    } catch { showError('Failed to seed from order book items.'); }
+  };
+
   const save = async () => {
     for (const l of lines) { if (!l.itemName || !l.itemName.trim()) { showError('Every BOM line needs an item name'); return; } }
     setSaving(true);
@@ -1553,10 +2394,12 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 
   return (
     <div className="obd-stack">
+      <ConfirmationModal {...confirmModal} />
       <div className="obd-card">
         <div className="obd-card-head">
           <h4 className="obd-card-title">Bill of Materials / Quantities</h4>
           <div className="obd-card-head-actions">
+            <button className="obd-btn obd-btn--ghost" onClick={seedFromItems} title="Fill from the order book's line items"><Plus size={14} /> Seed line items</button>
             <button className="obd-btn obd-btn--ghost" onClick={downloadTemplate}><FaFileDownload /> Download Template</button>
             <button className="obd-btn obd-btn--ghost" onClick={() => fileInputRef.current && fileInputRef.current.click()}><Plus size={14} /> Import Excel</button>
             <input ref={fileInputRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFilePicked} />
@@ -1796,7 +2639,7 @@ const ProgressTab = ({ orderBook, authHeaders, showError }) => {
                   <div key={i} className="obd-gantt-prow">
                     <div className="obd-gantt-label" title={p.phaseName}>
                       {p.phaseName || `Phase ${i + 1}`}
-                      {p.subItems?.length > 0 && <span style={{ marginLeft: 5, fontSize: 10, color: '#94a3b8' }}>({p.subItems.length} items)</span>}
+                      {p.subItems?.length > 0 && <span className="obd-cell-faint" style={{ marginLeft: 5, fontSize: 10 }}>({p.subItems.length} items)</span>}
                     </div>
                     <div className="obd-gantt-ptrack">
                       <div className="obd-gantt-prow-line">
