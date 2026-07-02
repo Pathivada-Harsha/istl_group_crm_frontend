@@ -48,7 +48,7 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
     const t = setTimeout(onClose, duration);
     return () => clearTimeout(t);
   }, [duration, onClose]);
-  const icons = { success: '\u2713', error: '\u2713', notification: '\u2713' };
+  const icons = { success: '\u2713', error: '\u2715', warning: '!', notification: 'i' };
   return (
     <div className={`toast toast-${type}`}>
       <div className="toast-header">
@@ -798,7 +798,15 @@ useEffect(() => {
       setInactiveUsers(data.inactiveUsers || 0);
       setTotalPages(data.totalPages || 1);
       setTotalElements(data.totalUsers || 0);
-      setRoles(data.roles.map(r => ({ id: r, name: r, description: `${r} role` })));
+      // Keep the role-filter dropdown complete: merge instead of overwrite, so
+      // a filtered search response can never shrink the list and hide a newly
+      // added role while a search/role filter is active.
+      if (Array.isArray(data.roles) && data.roles.length > 0) {
+        setRoles(prev => {
+          const merged = new Set([...prev.map(r => r.name), ...data.roles]);
+          return [...merged].map(r => ({ id: r, name: r, description: `${r} role` }));
+        });
+      }
     } catch { showToast('Error searching users', 'error'); }
     finally { setLoading(false); setIsSearching(false); }
   }, [user?.id, searchTerm, filterRole, currentPage, pageSize]);
@@ -933,7 +941,12 @@ useEffect(() => {
         const errText = await res.text();
         let msg = errText;
         try { const j = JSON.parse(errText); msg = j.message || j.error || errText; } catch { }
-        showToast(msg || 'Error creating user', 'error');
+        // 409 = duplicate email → warning (expected user mistake, not a system error)
+        if (res.status === 409) {
+          showToast(msg || 'This email or mobile number is already in use.', 'warning');
+        } else {
+          showToast(msg || 'Error creating user', 'error');
+        }
       }
       setLoading(false);
     } catch (err) { setLoading(false); showToast('Network error: ' + (err.message || ''), 'error'); }
@@ -998,8 +1011,18 @@ useEffect(() => {
       if (res.ok) {
         if (searchTerm.trim() || filterRole !== 'all') await searchUsers(); else await fetchUsers();
         setShowEditUserModal(false); setSelectedUser(null);
-        showToast('User updated successfully!', 'success');
-      } else { showToast('Error updating user', 'error'); }
+        const msg = await res.text().catch(() => '');
+        showToast(msg || 'User updated successfully!', 'success');
+      } else {
+        // Toast type follows the response: 409 (duplicate email) → warning,
+        // everything else → error, always showing the backend's message.
+        const msg = await res.text().catch(() => '');
+        if (res.status === 409) {
+          showToast(msg || 'This email or mobile number is already in use.', 'warning');
+        } else {
+          showToast(msg || 'Error updating user', 'error');
+        }
+      }
       setLoading(false);
     } catch { setLoading(false); showToast('Error updating user', 'error'); }
   };
@@ -2190,7 +2213,8 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                 <div className="users-page-form-row">
                   <div className="users-page-form-group">
                     <label>Phone</label>
-                    <input type="tel" value={selectedUser.phone} onChange={e => setSelectedUser({ ...selectedUser, phone: e.target.value })} />
+                    <input type="tel" value={selectedUser.phone} maxLength={10} inputMode="numeric"
+                      onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 10); setSelectedUser({ ...selectedUser, phone: v }); }} />
                   </div>
                   <div className="users-page-form-group">
                     <label>Role</label>

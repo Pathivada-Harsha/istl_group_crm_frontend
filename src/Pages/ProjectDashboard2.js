@@ -164,16 +164,17 @@ const useThemeVersion = () => {
   return v;
 };
 
+const IDENTITY_FMT = (v) => v; // stable default — inline `(v) => v` would change identity every render and re-trigger the chart rebuild effects
 const ChartJSBar = ({
   data,          // [{ label, values: { Budget?, Received?, Spent?, 'Order Value'? }, color? }]
   labels,        // string[] — X axis labels
   datasets,      // Chart.js dataset objects (pre-built by caller)
   height = 280,
-  yTickFormatter = v => v,
+  yTickFormatter = IDENTITY_FMT,
   xLabelRotation = -30,
   modal = false,
   showValueLabels = false,        // draw the value above each bar
-  valueLabelFormatter = v => v,
+  valueLabelFormatter = IDENTITY_FMT,
   onReset,       // optional external reset trigger ref
 }) => {
   const canvasRef  = React.useRef(null);
@@ -374,7 +375,7 @@ const ChartJSBar = ({
 
 
 // ─── ProjDonutChart — Chart.js donut with external elbow labels + zoom ───────
-const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'value', colorKey = null, modal = false, showAmount = false, amountFormatter = (v) => v }) => {
+const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'value', colorKey = null, modal = false, showAmount = false, amountFormatter = IDENTITY_FMT }) => {
   const [ready, setReady] = React.useState(!!window.Chart);
   const canvasRef = React.useRef(null);
   const chartRef  = React.useRef(null);
@@ -406,12 +407,17 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
         const meta = chart.getDatasetMeta(0);
         if (!meta || !meta.data.length) return;
 
+        // Total over VISIBLE slices only — hidden (legend-toggled) slices are
+        // excluded so percentages re-flow like the bar charts do.
+        const visTotal = values.reduce((s, v, i) => s + (chart.getDataVisibility(i) ? v : 0), 0);
+
         const cx = chartArea ? (chartArea.left + chartArea.right) / 2 : width / 2;
         const cy = chartArea ? (chartArea.top + chartArea.bottom) / 2 : h * 0.44;
 
         meta.data.forEach((arc, i) => {
+          if (!chart.getDataVisibility(i)) return; // skip hidden slices
           const val = values[i];
-          const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+          const pct = visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
           if (parseFloat(pct) < 2) return; // skip slivers
 
           // Mid-angle of the arc
@@ -514,16 +520,22 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
               padding: modal ? 12 : 8,
               boxWidth: 12,
               generateLabels(chart) {
+                // Mirror the bar-chart legend behaviour: clicking toggles the
+                // slice, hidden items render with a strikethrough, and the
+                // percentages re-flow across the remaining visible slices.
+                const visTotal = chart.data.datasets[0].data.reduce(
+                  (s, v, i) => s + (chart.getDataVisibility(i) ? Number(v) : 0), 0);
                 return chart.data.labels.map((label, i) => {
+                  const isHidden = !chart.getDataVisibility(i);
                   const val = chart.data.datasets[0].data[i];
-                  const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                  const pct = !isHidden && visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
                   return {
-                    text: `${label} (${pct}%)`,
+                    text: isHidden ? `${label}` : `${label} (${pct}%)`,
                     fillStyle: bgColors[i],
                     strokeStyle: bdColors[i],
                     fontColor: P.legend,
                     lineWidth: 1,
-                    hidden: false,
+                    hidden: isHidden, // Chart.js draws the strikethrough from this flag
                     index: i,
                   };
                 });
@@ -540,7 +552,9 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
             callbacks: {
               label: (ctx) => {
                 const val = ctx.raw;
-                const pct = total > 0 ? ((val / total) * 100).toFixed(1) : '0';
+                const visTotal = ctx.chart.data.datasets[0].data.reduce(
+                  (s, v, i) => s + (ctx.chart.getDataVisibility(i) ? Number(v) : 0), 0);
+                const pct = visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
                 return ` ${ctx.label}: ${val} (${pct}%)`;
               },
             },
@@ -1012,7 +1026,7 @@ const ExpenseDashboardSection = ({ expenseData, projectId }) => {
       )}
 
       {userModal && (
-        <div className="db-modal-overlay" onClick={() => setUserModal(false)}>
+        <div className="db-modal-overlay">
           <div className="db-modal" onClick={e => e.stopPropagation()}>
             <div className="db-modal-header">
               <h3><Users size={18} /> All Employee Expenses</h3>
@@ -1091,7 +1105,10 @@ const CapacityBlock = ({ subGroups }) => {
   };
 
   const n = subGroups.length;
-  const gridCols = n === 1 ? '1fr' : n === 2 ? '1fr 1fr' : n === 3 ? '1fr 1fr 1fr' : n === 4 ? 'repeat(4,1fr)' : 'repeat(auto-fill, minmax(200px, 1fr))';
+  // auto-fit (not auto-fill) collapses unused tracks, so however many category
+  // cards exist — 4, 5, or a newly added one — they always stretch to fill the
+  // full row width, and wrap to a new line on narrow screens.
+  const gridCols = `repeat(auto-fit, minmax(min(200px, 100%), 1fr))`;
 
   return (
     <>
@@ -1145,8 +1162,7 @@ const CapacityBlock = ({ subGroups }) => {
         const wind = isWind(activeModal.subGroupName);
         const windKmTotal = wind ? (activeModal.allUnitTotals || []).find(u => u.unit?.toLowerCase() === 'km') : null;
         return (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
-            onClick={() => setActiveModal(null)}>
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
             <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
               onClick={e => e.stopPropagation()}>
               {/* Sticky header */}
@@ -1456,14 +1472,18 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     const doc = new jsPDF({ orientation:'landscape', unit:'mm', format:'a4' });
     const PW = doc.internal.pageSize.getWidth();   // 297mm
     const PH = doc.internal.pageSize.getHeight();  // 210mm
-    const M = 10;
-    // A4 landscape: usable width = 297 - 20 = 277mm
-    // 13 columns compressed to fit: total must be <= 277
-    const CW = [6, 44, 18, 14, 16, 14, 14, 10, 20, 20, 20, 20, 20]; // total = 236mm
+    const M  = 8;
+    // A4 landscape usable width = 297 - 16 = 281mm. Columns fill it fully.
+    const CW = [8, 62, 26, 14, 22, 17, 19, 14, 20, 20, 20, 20, 19]; // total = 281mm
     const TW = CW.reduce((a,b)=>a+b,0);
     const TX = (PW-TW)/2;
-    const RH = 7.5;
     const CURRENCY = new Set([8,9,10,11,12]);
+    const PAD = 1.6;                 // horizontal cell padding
+    const LH  = 3.2;                 // line height for wrapped text
+    const MIN_RH = 7;                // minimum row height
+    const FOOTER_Y = PH - 10;
+
+    // ── Header banner ──
     doc.setFillColor(30,58,95); doc.rect(0,0,PW,18,'F');
     doc.setFillColor(59,130,246); doc.rect(0,18,PW,1.2,'F');
     doc.setTextColor(255,255,255);
@@ -1475,6 +1495,8 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     const now = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
     doc.setTextColor(255,255,255);
     doc.text(`Generated: ${now}   |   ${filteredProjects.length} of ${projects.length} projects`, PW-M, 11, {align:'right'});
+
+    // ── Summary cards ──
     const stripY = 21;
     const summaryItems = [
       {label:'Contract Value', val:fmtPDF(financial.totalProjectValue), accent:[59,130,246]},
@@ -1497,50 +1519,102 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
       doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(100,116,139);
       doc.text(item.label, sx+SW/2, stripY+9.5, {align:'center'});
     });
+
     const STATUS_COL = {COMPLETED:[34,197,94],'IN PROGRESS':[59,130,246],PLANNING:[245,158,11],'ON HOLD':[139,92,246],CANCELLED:[239,68,68],'NOT STARTED':[100,116,139]};
     let Y = stripY+14;
+
+    // ── Table header (wraps 2-line labels like "Invoice Raised") ──
+    const HRH = 8.5;
     const drawTableHeader = () => {
-      doc.setFillColor(30,58,95); doc.rect(TX,Y,TW,RH+0.5,'F');
-      doc.setFont('helvetica','bold'); doc.setFontSize(6.5); doc.setTextColor(255,255,255);
-      let cx=TX; cols.forEach((col,ci)=>{ const isR=ci>=8; doc.text(col, isR?cx+CW[ci]-1.5:cx+1.5, Y+5, {align:isR?'right':'left'}); cx+=CW[ci]; });
-      Y+=RH+0.5;
+      doc.setFillColor(30,58,95); doc.rect(TX,Y,TW,HRH,'F');
+      doc.setFont('helvetica','bold'); doc.setFontSize(6.3); doc.setTextColor(255,255,255);
+      let cx=TX;
+      cols.forEach((col,ci)=>{
+        const isR = ci>=8;
+        const lines = doc.splitTextToSize(String(col), CW[ci]-PAD*2);
+        const startYh = Y + HRH/2 - ((lines.length-1)*LH)/2 + 1.1;
+        lines.forEach((ln,li)=>{
+          doc.text(ln, isR?cx+CW[ci]-PAD:cx+PAD, startYh+li*LH, {align:isR?'right':'left'});
+        });
+        cx+=CW[ci];
+      });
+      // vertical separators in header
+      doc.setDrawColor(58,90,130); doc.setLineWidth(0.1);
+      let vx=TX; CW.forEach(w=>{ vx+=w; if (vx<TX+TW-0.1) doc.line(vx,Y,vx,Y+HRH); });
+      Y+=HRH;
     };
     drawTableHeader();
+
+    // ── Data rows: wrap text, dynamic row height, cell borders ──
+    doc.setFontSize(6.3);
     rows.forEach((row,ri) => {
-      if (Y+RH>PH-10) { doc.addPage(); Y=12; drawTableHeader(); }
-      if (ri%2===0) { doc.setFillColor(248,250,252); doc.rect(TX,Y,TW,RH,'F'); }
-      doc.setDrawColor(226,232,240); doc.setLineWidth(0.12); doc.line(TX,Y+RH,TX+TW,Y+RH);
-      doc.setFont('helvetica','normal'); doc.setFontSize(6.5); doc.setTextColor(30,41,59);
+      // Pre-compute wrapped lines per cell to get row height
+      doc.setFont('helvetica','normal');
+      const cellLines = row.map((cell,ci)=>{
+        let txt;
+        if (ci===6) txt = String(cell??'');
+        else if (ci===7) txt = `${cell}%`;
+        else if (CURRENCY.has(ci)) txt = fmtPDF(cell);
+        else txt = String(cell??'');
+        return doc.splitTextToSize(txt, CW[ci]-PAD*2);
+      });
+      const maxLines = Math.max(1, ...cellLines.map(l=>l.length));
+      const rh = Math.max(MIN_RH, maxLines*LH + 3.2);
+
+      // Page break
+      if (Y+rh > FOOTER_Y) { doc.addPage(); Y=12; drawTableHeader(); doc.setFontSize(6.3); }
+
+      // Zebra background
+      if (ri%2===0) { doc.setFillColor(248,250,252); doc.rect(TX,Y,TW,rh,'F'); }
+
       let cx=TX;
       row.forEach((cell,ci) => {
-        const isR=ci>=8;
+        const isR = ci>=8;
         if (ci===6) {
-          const sc=STATUS_COL[(String(cell)).toUpperCase()]||[100,116,139];
+          // Status badge, vertically centered
+          const sc = STATUS_COL[(String(cell)).toUpperCase()]||[100,116,139];
+          const bh = 4.6, by = Y+(rh-bh)/2;
           doc.setFillColor(Math.min(sc[0]+190,255),Math.min(sc[1]+190,255),Math.min(sc[2]+190,255));
-          doc.roundedRect(cx+0.5,Y+1.2,CW[ci]-1,RH-2.4,1,1,'F');
-          doc.setTextColor(sc[0],sc[1],sc[2]); doc.setFont('helvetica','bold'); doc.setFontSize(6);
-          doc.text(String(cell), cx+CW[ci]/2, Y+5, {align:'center'});
-          doc.setTextColor(30,41,59); doc.setFont('helvetica','normal'); doc.setFontSize(6.5);
+          doc.roundedRect(cx+0.6, by, CW[ci]-1.2, bh, 1, 1, 'F');
+          doc.setTextColor(sc[0],sc[1],sc[2]); doc.setFont('helvetica','bold'); doc.setFontSize(5.6);
+          doc.text(String(cell??''), cx+CW[ci]/2, by+3.2, {align:'center'});
+          doc.setFont('helvetica','normal'); doc.setFontSize(6.3);
         } else {
-          const txt=CURRENCY.has(ci)?fmtPDF(cell):(ci===7?`${cell}%`:String(cell??''));
-          doc.text(txt, isR?cx+CW[ci]-1.5:cx+1.5, Y+5, {align:isR?'right':'left'});
+          doc.setTextColor(30,41,59);
+          const lines = cellLines[ci];
+          const startYt = Y + rh/2 - ((lines.length-1)*LH)/2 + 1.1;
+          lines.forEach((ln,li)=>{
+            doc.text(ln, isR?cx+CW[ci]-PAD:cx+PAD, startYt+li*LH, {align:isR?'right':'left'});
+          });
         }
         cx+=CW[ci];
       });
-      Y+=RH;
+
+      // Cell borders: bottom line + vertical separators
+      doc.setDrawColor(226,232,240); doc.setLineWidth(0.12);
+      doc.line(TX,Y+rh,TX+TW,Y+rh);
+      let vx=TX; CW.forEach(w=>{ vx+=w; if (vx<TX+TW-0.1) doc.line(vx,Y,vx,Y+rh); });
+      doc.line(TX,Y,TX,Y+rh); doc.line(TX+TW,Y,TX+TW,Y+rh);
+
+      Y+=rh;
     });
-    if (Y+RH+2>PH-10) { doc.addPage(); Y=12; }
-    doc.setFillColor(219,234,254); doc.rect(TX,Y,TW,RH+0.5,'F');
+
+    // ── Totals row ──
+    const TRH = 8;
+    if (Y+TRH+2 > FOOTER_Y) { doc.addPage(); Y=12; }
+    doc.setFillColor(219,234,254); doc.rect(TX,Y,TW,TRH,'F');
     doc.setDrawColor(59,130,246); doc.setLineWidth(0.6);
-    doc.line(TX,Y,TX+TW,Y); doc.line(TX,Y+RH+0.5,TX+TW,Y+RH+0.5);
-    doc.setFont('helvetica','bold'); doc.setFontSize(7); doc.setTextColor(30,64,175);
+    doc.line(TX,Y,TX+TW,Y); doc.line(TX,Y+TRH,TX+TW,Y+TRH);
+    doc.setFont('helvetica','bold'); doc.setFontSize(6.6); doc.setTextColor(30,64,175);
     let cx=TX;
     totals.forEach((cell,ci) => {
       const isR=ci>=8;
       const txt=CURRENCY.has(ci)?fmtPDF(cell):(ci===1?String(cell):'');
-      if (txt) doc.text(txt, isR?cx+CW[ci]-1.5:cx+1.5, Y+5, {align:isR?'right':'left'});
+      if (txt) doc.text(txt, isR?cx+CW[ci]-PAD:cx+PAD, Y+5.2, {align:isR?'right':'left'});
       cx+=CW[ci];
     });
+
+    // ── Footer on every page ──
     const pages=doc.internal.getNumberOfPages();
     for (let pg=1;pg<=pages;pg++) {
       doc.setPage(pg);
@@ -1630,6 +1704,26 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     .map(p => ({ name: p.projectName?.slice(0, 18) + (p.projectName?.length > 18 ? '…' : ''), budget: Number(p.budget || 0), received: Number(p.received || 0), spent: Number(p.spent || 0) })),
   [projects]);
 
+  // ── Stable chart props ─────────────────────────────────────────────────────
+  // The chart components destroy & rebuild whenever data/labels/datasets props
+  // change identity. Memoise everything so a statusFilter change (which only
+  // affects the Breakdown table) doesn't re-create these arrays and re-animate
+  // the charts.
+  const statusPieData = React.useMemo(
+    () => statusDistribution.map(d => ({ name: d.name, value: d.value, color: statusColor[d.name] })),
+    [statusDistribution] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const topBudgetLabels = React.useMemo(() => topByBudget.map(d => d.name), [topByBudget]);
+  const topBudgetDatasets = React.useMemo(() => [
+    { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+    { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+    { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+  ], [topByBudget]);
+  const contributionPieData = React.useMemo(
+    () => contributionData.map(d => ({ name: d.name, value: d.pct, label: `${d.pct}%` })),
+    [contributionData]
+  );
+
   return (
     <>
       <div>
@@ -1643,12 +1737,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           <div className="agg-scope-sub">{data.totalProjects} project{data.totalProjects !== 1 ? 's' : ''} · Aggregated view</div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          {projects.length > 0 && (
-            <button className="dashboard-refresh-btn" onClick={scrollToBreakdown}
-              style={{ background: '#3b82f6', color: '#fff', border: 'none' }}>
-              <Briefcase size={16} /> All Projects ↓
-            </button>
-          )}
           <button className="dashboard-refresh-btn" onClick={onRefresh} disabled={loading}>
             <RefreshCw size={16} /> Refresh
           </button>
@@ -2150,16 +2238,15 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 
       {/* Charts Row */}
       <div className="dashboard-charts-grid">
-        {/* Status Pie — click to expand */}
+        {/* Status Pie */}
         {statusDistribution.length > 0 ? (
-          <div className="chart-card chart-card-clickable" style={{ height: 320 }} onClick={() => setChartModal({ type: 'statusPie' })}>
+          <div className="chart-card" style={{ height: 320 }}>
             <div className="chart-header">
               <h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4>
-              <span className="chart-expand-hint">🔍 Click to expand</span>
             </div>
             <ProjDonutChart
               key="status-pie-stable"
-              data={statusDistribution.map(d => ({ name: d.name, value: d.value, color: statusColor[d.name] }))}
+              data={statusPieData}
               height={264}
               labelKey="name"
               valueKey="value"
@@ -2179,14 +2266,10 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             </div>
             <ChartJSBar
               key="top-budget-bar-stable"
-              labels={topByBudget.map(d => d.name)}
-              datasets={[
-                { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-              ]}
+              labels={topBudgetLabels}
+              datasets={topBudgetDatasets}
               height={264}
-              yTickFormatter={v => formatCurrency(v)}
+              yTickFormatter={formatCurrency}
             />
           </div>
         ) : (
@@ -2219,17 +2302,16 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             </div>
 
             {/* Pie chart — % contribution */}
-            <div className="chart-card chart-card-clickable" style={{ height: 360 }} onClick={() => setChartModal({ type: 'contributionPie' })}>
+            <div className="chart-card" style={{ height: 360 }}>
               <div className="chart-header">
                 <h4 className="chart-title">
                   <PieChart size={15} />
                   {data.scope === 'SUBGROUP' ? 'Project Turnover Share (%)' : data.scope === 'GROUP' ? 'Sub-group Turnover Share (%)' : 'Group Turnover Share (%)'}
                 </h4>
-                <span className="chart-expand-hint">🔍 Click to expand</span>
               </div>
               <ProjDonutChart
                 key="contrib-pie-stable"
-                data={contributionData.map(d => ({ name: d.name, value: d.pct, label: `${d.pct}%` }))}
+                data={contributionPieData}
                 height={304}
                 labelKey="name"
                 valueKey="value"
@@ -2316,7 +2398,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                       </span>
                       <div>
                         <div style={{ fontSize: 13, fontWeight: 700, color: isDark ? '#e2e8f0' : '#1e293b' }}>PDF Format</div>
-                        <div style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8', marginTop: 1 }}>.pdf — print-ready A3 landscape</div>
+                        <div style={{ fontSize: 11, color: isDark ? '#64748b' : '#94a3b8', marginTop: 1 }}>.pdf — print-ready A4 landscape</div>
                       </div>
                     </button>
                   </div>
@@ -2468,7 +2550,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
         <div style={{
           position:'fixed', inset:0, background:'rgba(15,23,42,0.72)', backdropFilter:'blur(6px)',
           zIndex:10300, display:'flex', alignItems:'center', justifyContent:'center', padding:24
-        }} onClick={() => setChartModal(null)}>
+        }}>
           <div style={{
             background: isDark ? '#1b2130' : '#fff', borderRadius:16, width:'100%', maxWidth:900, maxHeight:'90vh',
             display:'flex', flexDirection:'column', boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden'
@@ -2574,7 +2656,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           <div style={{
             position:'fixed', inset:0, background:'rgba(15,23,42,0.6)', backdropFilter:'blur(4px)',
             zIndex:10400, display:'flex', alignItems:'center', justifyContent:'center', padding:24
-          }} onClick={() => setEditProgressModal(null)}>
+          }}>
             <div style={{
               background:'#fff', borderRadius:16, width:'100%', maxWidth:480,
               boxShadow:'0 24px 60px rgba(0,0,0,0.22)', overflow:'hidden'
@@ -2666,7 +2748,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           <div style={{
             position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
             zIndex:10200, display:'flex', alignItems:'center', justifyContent:'center', padding:20
-          }} onClick={() => setStatusModal(null)}>
+          }}>
             <div style={{
               background:'#fff', borderRadius:16, width:'100%', maxWidth:960,
               maxHeight:'88vh', display:'flex', flexDirection:'column',
@@ -3072,8 +3154,7 @@ function WarehouseIssuanceBlock({ wi, siteReturn, formatCurrency }) {
       {/* ── Outward detail modal ─────────────────────────────────────────────── */}
       {modal === 'outward' && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
-          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={() => setModal(null)}>
+          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
           <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:900,
             maxHeight:'88vh', display:'flex', flexDirection:'column',
             boxShadow:'0 24px 64px rgba(0,0,0,0.22)' }}
@@ -3117,8 +3198,7 @@ function WarehouseIssuanceBlock({ wi, siteReturn, formatCurrency }) {
       {/* ── Inward detail modal ──────────────────────────────────────────────── */}
       {modal === 'inward' && (
         <div style={{ position:'fixed', inset:0, background:'rgba(15,23,42,0.65)', backdropFilter:'blur(4px)',
-          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}
-          onClick={() => setModal(null)}>
+          zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
           <div style={{ background:'#fff', borderRadius:14, width:'100%', maxWidth:860,
             maxHeight:'88vh', display:'flex', flexDirection:'column',
             boxShadow:'0 24px 64px rgba(0,0,0,0.22)' }}
@@ -3306,9 +3386,6 @@ const ProjectDashboard = () => {
               groupValue={groupName} subGroupValue={subGroupName}
               projectValue={projectId} onChange={updateFilters}
             />
-            <button className="dashboard-refresh-btn" onClick={handleRefresh} disabled={loading}>
-              <RefreshCw size={18} /> Refresh
-            </button>
           </div>
         </div>
       </div>
@@ -3749,7 +3826,7 @@ const ProjectDashboard = () => {
         <div style={{
           position:'fixed', inset:0, background:'rgba(15,23,42,0.72)', backdropFilter:'blur(6px)',
           zIndex:10300, display:'flex', alignItems:'center', justifyContent:'center', padding:24
-        }} onClick={() => setProjChartModal(null)}>
+        }}>
           <div style={{
             background:'#fff', borderRadius:16, width:'100%', maxWidth:940, maxHeight:'90vh',
             display:'flex', flexDirection:'column', boxShadow:'0 32px 80px rgba(0,0,0,0.28)', overflow:'hidden'
@@ -3830,7 +3907,7 @@ const ProjectDashboard = () => {
 
       {/* ─── Amount Spent Breakdown Modal ──────────────────────────────────── */}
       {showSpentModal && dashboardData?.financialData && (
-        <div className="spent-modal-overlay" onClick={() => setShowSpentModal(false)}>
+        <div className="spent-modal-overlay">
           <div className="spent-modal" onClick={e => e.stopPropagation()}>
             <div className="spent-modal-header">
               <div className="spent-modal-title-row">
