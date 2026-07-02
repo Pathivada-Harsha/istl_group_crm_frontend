@@ -324,6 +324,9 @@
 .users-page-table {
   width: 100%;
   border-collapse: collapse;
+  /* Prevent columns from crushing/overlapping on narrower viewports —
+     the wrapper scrolls horizontally instead */
+  min-width: 1080px;
 }
 
 .users-page-table thead {
@@ -335,19 +338,42 @@
 .users-page-table th {
   font-size: 13px;
   font-weight: 600;       /* was 700 */
-  color: var(--ct-475569, #475569);   
+  color: var(--ct-475569, #475569);
   position: sticky;
   top: 0;
   z-index: 10;
   background: var(--c-f8fafc, #f8fafc);       /* must match thead bg so rows don't bleed through */
   border-bottom: 2px solid var(--c-e2e8f0, #e2e8f0);
+  padding: 12px 14px;
+  text-align: left;
+  white-space: nowrap;
 }
 .users-page-table td {
-  padding: 13px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
   font-size: 14px;
-  color: var(--ct-0f172a, #0f172a); 
+  color: var(--ct-0f172a, #0f172a);
+  text-align: left;          /* was center — clashed with left-anchored flex content (avatars, badges, '--') */
+  vertical-align: middle;
+}
+
+/* Centered columns: Page Perms(6), Menu Perms(7), Status(8), Actions(10) */
+.users-page-table th:nth-child(6), .users-page-table td:nth-child(6),
+.users-page-table th:nth-child(7), .users-page-table td:nth-child(7),
+.users-page-table th:nth-child(8), .users-page-table td:nth-child(8),
+.users-page-table th:nth-child(10), .users-page-table td:nth-child(10) {
   text-align: center;
+}
+
+/* Keep phone numbers and timestamps on one line */
+.users-page-table td:nth-child(2) > div:first-child,
+.users-page-table td:nth-child(9) {
+  white-space: nowrap;
+}
+/* Long emails wrap within their cell instead of stretching the column */
+.users-page-table td:nth-child(2) > div:last-child {
+  word-break: break-word;
+  max-width: 220px;
 }
 
 .users-page-table tbody tr {
@@ -1070,6 +1096,10 @@ font-size: 14px;        /* was 15px */
   border-left: 4px solid var(--c-3b82f6, #3b82f6);
 }
 
+.toast-warning {
+  border-left: 4px solid var(--c-f59e0b, #f59e0b);
+}
+
 .toast-header {
   display: flex;
   align-items: center;
@@ -1103,6 +1133,11 @@ font-size: 14px;        /* was 15px */
 .toast-notification .toast-icon {
   background: var(--c-dbeafe, #dbeafe);
   color: var(--ct-2563eb, #2563eb);
+}
+
+.toast-warning .toast-icon {
+  background: var(--c-fef3c7, #fef3c7);
+  color: var(--ct-d97706, #d97706);
 }
 
 .toast-title {
