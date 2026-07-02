@@ -553,7 +553,7 @@ const ProjectCostExpenseManagement = () => {
     search: '', category: 'all', status: 'all', paymentMode: 'all', dateFrom: '', dateTo: '', expenseType: 'all',
   });
   const [activeKpi, setActiveKpi] = useState(null); // tracks which KPI card is active
-  const [sortBy, setSortBy] = useState('tripDate');
+  const [sortBy, setSortBy] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
 
   const [columns, setColumns] = useState(DEFAULT_COLUMNS);
@@ -805,6 +805,23 @@ const ProjectCostExpenseManagement = () => {
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  // Deep-link from a notification: /project-cost-expense?expenseId=<id> opens the
+  // view modal for that expense directly. handleViewExpense fetches the record by
+  // id from the API, so the expense need NOT be on the currently loaded page.
+  // Runs once on mount; strips the param afterwards so a refresh won't reopen it.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const expenseId = params.get('expenseId');
+    if (!expenseId) return;
+    handleViewExpense({ id: expenseId });
+    // Remove the param without adding a history entry / reloading.
+    params.delete('expenseId');
+    const qs = params.toString();
+    window.history.replaceState({}, '',
+      window.location.pathname + (qs ? `?${qs}` : ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchExpenses = async () => {

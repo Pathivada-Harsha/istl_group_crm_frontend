@@ -708,7 +708,7 @@ const blankPhase = (seq) => ({
   expanded: false, // UI-only: collapse/expand sub-items
 });
 
-const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, weightPct: '', description: '', startDate: '', endDate: '', startWeek: '', endWeek: '', customName: false });
+const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, weightPct: '', weightManual: false, description: '', startDate: '', endDate: '', startWeek: '', endWeek: '', customName: false });
 
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
 
@@ -773,15 +773,31 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           trackingMode: 'DETAILED',
         });
         else setScope(prev => ({ ...prev, projectType: prev.projectType || subGroupType }));
-        setPhases((data.data.phases || []).map(p => ({
-          id: p.id, seqNo: p.seqNo, phaseName: p.phaseName, phaseDescription: p.phaseDescription || '',
-          startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
-          customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
-          status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
-          weightPct: p.weightPct != null ? Number(p.weightPct) : '',
-          subItems: Array.isArray(p.subItems) ? p.subItems : [],
-          expanded: false,
-        })));
+        setPhases((data.data.phases || []).map(p => {
+          let subItems = Array.isArray(p.subItems) ? p.subItems : [];
+          if (subItems.length > 0) {
+            const sum = subItems.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+            const anyManual = subItems.some(si => si.weightManual === true);
+            // Legacy scopes stored sub-item weights as ABSOLUTE project %, so a
+            // group won't sum to ~100. If nothing was flagged manual and the
+            // group is off-target, re-distribute equally (100 / count).
+            if (!anyManual && Math.abs(sum - 100) > 0.5) {
+              const each = Number((100 / subItems.length).toFixed(4));
+              subItems = subItems.map(si => ({ ...si, weightPct: each, weightManual: false }));
+            } else {
+              subItems = subItems.map(si => ({ ...si, weightManual: si.weightManual === true }));
+            }
+          }
+          return {
+            id: p.id, seqNo: p.seqNo, phaseName: p.phaseName, phaseDescription: p.phaseDescription || '',
+            startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
+            customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
+            status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+            weightPct: p.weightPct != null ? Number(p.weightPct) : '',
+            subItems,
+            expanded: false,
+          };
+        }));
         // Build progress map from periods
         const pm = {};
         (data.data.progressPeriods || []).forEach(pp => {
@@ -869,6 +885,90 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   };
 
   const updatePhase = (i, field, val, extra) => setPhases(prev => prev.map((p, idx) => idx === i ? { ...p, [field]: val, ...(extra || {}) } : p));
+
+  // ── Auto weight distribution for sub-items (relative-to-parent, sum = 100) ──
+  // Manually-edited sub-items (weightManual === true) keep their value; the rest
+  // share whatever is left of 100 equally. This is what makes the system
+  // "auto-calc first, editable after" without clobbering the user's inputs.
+  const distributeSubWeights = (subItems) => {
+    const named = subItems.filter(si => si != null);
+    if (named.length === 0) return subItems;
+    const manual = named.filter(si => si.weightManual === true);
+    const manualSum = manual.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+    const remaining = Math.max(0, 100 - manualSum);
+    // Indices (within subItems) of the auto sub-items, in order.
+    const autoIdx = subItems.map((si, idx) => ({ si, idx }))
+      .filter(x => x.si != null && x.si.weightManual !== true)
+      .map(x => x.idx);
+    const nAuto = autoIdx.length;
+    if (nAuto === 0) return subItems;
+    // Base share rounded to 2 decimals; the LAST auto sub absorbs the remainder
+    // so the auto portion sums to exactly `remaining` (and the group to 100).
+    const base = Number((remaining / nAuto).toFixed(2));
+    const lastAuto = autoIdx[autoIdx.length - 1];
+    const allButLast = base * (nAuto - 1);
+    const lastShare = Number((remaining - allButLast).toFixed(2));
+    return subItems.map((si, idx) => {
+      if (si == null || si.weightManual === true) return si;
+      return { ...si, weightPct: idx === lastAuto ? lastShare : base };
+    });
+  };
+  // Add a sub-item, then re-even the auto-weighted ones so the group targets 100.
+  const addSubItem = (i) => {
+    const p = phases[i];
+    const next = distributeSubWeights([...(p.subItems || []), blankSubItem()]);
+    updatePhase(i, 'subItems', next, { expanded: true });
+  };
+  // Remove a sub-item, then re-even the remaining auto-weighted ones.
+  const removeSubItem = (i, si_i) => {
+    const p = phases[i];
+    const next = distributeSubWeights((p.subItems || []).filter((_, idx) => idx !== si_i));
+    updatePhase(i, 'subItems', next);
+  };
+  // Live edit while typing: mark the sub manual, update its value, and warn if
+  // the group is off 100 in EITHER direction. No snapping yet — snapping while
+  // the user is mid-type would make digits jump. Snap happens on blur.
+  const setSubWeight = (i, si_i, raw) => {
+    const p = phases[i];
+    const val = raw === '' ? '' : Math.max(0, Number(raw));
+    const updated = (p.subItems || []).map((si, idx) =>
+      idx === si_i ? { ...si, weightPct: val, weightManual: raw !== '' } : si);
+    const sum = updated.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+    if (sum > 100.005) {
+      showError(`Sub-item weights under "${p.phaseName || 'this item'}" total ${sum.toFixed(2)}% — reduce to 100%.`);
+    } else if (sum < 99.995 && sum > 0) {
+      showError(`Sub-item weights under "${p.phaseName || 'this item'}" total ${sum.toFixed(2)}% — must add up to 100%.`);
+    }
+    updatePhase(i, 'subItems', updated);
+  };
+  // On blur: if the group is within a rounding whisker of 100 (±0.5), snap it
+  // to EXACTLY 100 by putting the delta on the last AUTO sub (or, if all subs
+  // are manual, on the one just edited). This is what lets a user type
+  // 33.33/33.33/33.33 and still save — the last one becomes 33.34. If the group
+  // is genuinely wrong (e.g. 90 or 110), it is left alone so save rejects it.
+  const snapSubGroup = (i, editedIdx) => {
+    const p = phases[i];
+    const subs = p.subItems || [];
+    if (subs.length === 0) return;
+    const sum = subs.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+    if (sum === 0) return;
+    const delta = 100 - sum;
+    if (Math.abs(delta) > 0.5) return; // real mismatch — let the save gate catch it
+    if (Math.abs(delta) < 0.0001) return; // already exact
+    const autoIdxs = subs.map((si, idx) => ({ si, idx }))
+      .filter(x => x.si.weightManual !== true).map(x => x.idx);
+    const target = autoIdxs.length > 0 ? autoIdxs[autoIdxs.length - 1] : editedIdx;
+    const updated = subs.map((si, idx) => idx === target
+      ? { ...si, weightPct: Number(((Number(si.weightPct) || 0) + delta).toFixed(2)) }
+      : si);
+    updatePhase(i, 'subItems', updated);
+  };
+  // Reset a parent's sub-item weights back to equal auto-split.
+  const resetSubWeights = (i) => {
+    const p = phases[i];
+    const cleared = (p.subItems || []).map(si => ({ ...si, weightManual: false }));
+    updatePhase(i, 'subItems', distributeSubWeights(cleared));
+  };
   const addPhase    = () => setPhases(prev => [...prev, blankPhase(prev.length + 1)]);
 
   // Pull BOM/BOQ lines in as sub-items under a phase, segregating the parent's
@@ -931,11 +1031,24 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
         showError(`"${p.phaseName}": end is before start`); return;
       }
     }
-    // Weight totals are NOT enforced on save — partial scope entry is allowed.
-    // The 100% rule is enforced separately at the "Approve scope" step.
+    // A sub-item group MUST total 100% (it is relative-to-parent). Because
+    // auto-split and the blur-snap both resolve to exactly 100, a genuine
+    // rounding case never reaches here; only a real mismatch (e.g. 90 or 110)
+    // gets blocked. Tiny epsilon guards against float noise.
+    for (const p of phases) {
+      const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
+      if (subs.length > 0) {
+        const sum = subs.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+        if (Math.abs(sum - 100) > 0.01) {
+          showError(`Sub-item weights under "${p.phaseName}" total ${sum.toFixed(2)}% — they must add up to exactly 100% before saving.`);
+          return;
+        }
+      }
+    }
     setSaving(true);
     try {
       const { siteLat: _sLat, siteLng: _sLng, ...scopeRest } = scope;
+      const projectSlice = phases.length > 0 ? 100 / phases.length : 0;
       const body = {
         ...scopeRest,
         totalPlannedWeeks: hasDates ? planDuration : null,
@@ -954,10 +1067,9 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           endWeek: p.endWeek === '' ? null : Number(p.endWeek),
           status: p.status || 'Not Started',
           progressPercent: 0, // set below from weeks data
-          weightPct: (p.subItems && p.subItems.filter(si => si.name && si.name.trim()).length > 0)
-            ? p.subItems.filter(si => si.name && si.name.trim()).reduce((s, si) => s + (Number(si.weightPct) || 0), 0)
-            : (p.weightPct === '' || p.weightPct == null ? null : Number(p.weightPct)),
-          // Persist each sub-item's actual progress (from its weeks) into progressPercent.
+          // Every parent owns an equal project slice (100 / parentCount).
+          weightPct: Number(projectSlice.toFixed(4)),
+          // Sub-item weightPct is RELATIVE to the parent (sums to 100 within it).
           subItems: (p.subItems || []).filter(si => si.name && si.name.trim()).map(si => ({
             ...si, progressPercent: Math.round(leafActual(leafForSub(p, si))),
           })),
@@ -1010,7 +1122,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     const title = `${scope.projectType || orderBook.orderTitle || 'EPC'} — Progress Tracker`;
     const meta = `Project: ${orderBook.orderTitle || ''} | Total Value: ${fmtMoney(projectTotal)} | ` +
                  `Plan: ${scope.plannedStartDate || '—'} to ${scope.plannedEndDate || '—'}`;
-    const fixedCols = ['S.No', 'Category', 'Scope of Work Item', 'Unit', 'Qty', 'Weight (%)', 'Unit Rate', 'Package Budget'];
+    const fixedCols = ['S.No', 'S.No', 'Category', 'Scope of Work Item', 'Unit', 'Qty', 'Weight (%)', 'Unit Rate', 'Package Budget'];
     const perBucket = ['Plan Phy%', 'Act Phy%', 'Plan Budget', 'Act Budget'];
     const cumCols = ['Cum Plan Phy%', 'Cum Act Phy%', 'Total Plan Budget', 'Total Act Budget'];
     const header2 = [...fixedCols.map(() => ''), ...Array.from({ length: n }).flatMap(() => perBucket), ...cumCols];
@@ -1022,12 +1134,15 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 
     // Build a row from real data: per-week planned/actual come from the weeks grid;
     // planned budget comes from Cost-to-Procure (plannedBudget); actual budget left blank.
-    const itemRow = (sno, category, name, unit, qty, weightPct, lf, plannedBudgetVal) => {
+    // parentNo goes in col A (numbered per parent, blank on sub-item rows),
+    // childNo goes in col B (numbered per sub-item, restarting under each parent,
+    // blank on parent rows). Pass '' for whichever does not apply to the row.
+    const itemRow = (parentNo, childNo, category, name, unit, qty, weightPct, lf, plannedBudgetVal) => {
       const w = num(weightPct);
       const pBudget = num(plannedBudgetVal); // Cost-to-Procure planned budget for this item
       const s = Math.max(1, Math.min(lf.start, n));
       const e = Math.max(s, Math.min(lf.end, n));
-      const row = [sno, category, name, unit || 'LS', qty || 1, w, '', pBudget ? Number(pBudget.toFixed(2)) : ''];
+      const row = [parentNo, childNo, category, name, unit || 'LS', qty || 1, w, '', pBudget ? Number(pBudget.toFixed(2)) : ''];
       let cumPlan = 0, cumAct = 0;
       for (let b = 1; b <= n; b++) {
         const cell = getCell(lf.phaseId, lf.subKey, b);
@@ -1048,20 +1163,32 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     // Cycle category band colors across parents (amber, teal, then repeat).
     const bandColors = ['FFB800', '00B0A0', 'C0504D', '8064A2', '4F81BD'];
     let bandIdx = 0;
-    let sno = 1;
+    let parentNo = 0;
     phases.forEach((p) => {
-      const hasSub = p.subItems && p.subItems.length > 0;
+      const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
+      const hasSub = subs.length > 0;
+      parentNo += 1;
       if (hasSub) {
-        rows.push([`${p.phaseName.toUpperCase()} (${fmtW(subWeightSum(p))}%)`]);
+        // Colored category band spanning the row.
+        rows.push([`${p.phaseName.toUpperCase()} (${fmtW(parentSlice())}%)`]);
         rowMeta.push({ role: 'band', color: bandColors[bandIdx % bandColors.length] });
         bandIdx++;
-        p.subItems.filter(si => si.name && si.name.trim()).forEach((si) => {
-          rows.push(itemRow(sno++, p.phaseName, si.name, '', '', si.weightPct, leafForSub(p, si), si.plannedBudget));
+        // Parent data row: col A = parent number, col B blank, weight = parent
+        // slice, carries the parent's own schedule/budget.
+        rows.push(itemRow(parentNo, '', p.phaseName, p.phaseName, 'LS', 1, parentSlice(), leafForPhase(p), p.plannedBudget));
+        rowMeta.push('phase');
+        // Child rows: col A blank, col B = 1..k (restarts under each parent),
+        // weight = the sub-item's weight RELATIVE to its parent (sums to 100).
+        let childNo = 0;
+        subs.forEach((si) => {
+          childNo += 1;
+          rows.push(itemRow('', childNo, p.phaseName, si.name, '', '', num(si.weightPct), leafForSub(p, si), si.plannedBudget));
           rowMeta.push('item');
         });
       } else {
-        rows.push(itemRow(sno++, p.phaseName, p.phaseName, '', '', p.weightPct, leafForPhase(p), p.plannedBudget));
-        rowMeta.push('phase'); // childless parent — styled distinctly from sub-items
+        // Childless parent: single row, col A numbered, col B blank.
+        rows.push(itemRow(parentNo, '', p.phaseName, p.phaseName, 'LS', 1, parentSlice(), leafForPhase(p), p.plannedBudget));
+        rowMeta.push('phase');
       }
     });
 
@@ -1071,7 +1198,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       if (subs.length) return s + subs.reduce((a, si) => a + num(si.plannedBudget), 0);
       return s + num(p.plannedBudget);
     }, 0);
-    const totalRow = ['', 'GRAND TOTAL', '', '', '', Number(grandTotalWeight.toFixed(4)), '', Number(totalCostBudget.toFixed(2))];
+    const totalRow = ['', '', 'GRAND TOTAL', '', '', '', Number(grandTotalWeight.toFixed(4)), '', Number(totalCostBudget.toFixed(2))];
     for (let b = 0; b < n; b++) totalRow.push('', '', '', '');
     totalRow.push(Number(weightedProgress.toFixed(2)), Number(detailedWeightedActual.toFixed(2)),
                   Number(totalCostBudget.toFixed(2)), '');
@@ -1136,7 +1263,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     });
 
     ws['!cols'] = [
-      { wch: 6 }, { wch: 20 }, { wch: 28 }, { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 9 }, { wch: 14 },
+      { wch: 6 }, { wch: 6 }, { wch: 20 }, { wch: 28 }, { wch: 6 }, { wch: 6 }, { wch: 10 }, { wch: 9 }, { wch: 14 },
       ...Array.from({ length: n * 4 }).map(() => ({ wch: 9 })),
       { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 14 },
     ];
@@ -1172,10 +1299,25 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   // the sum of its sub-items (locked), else the parent's own typed weight. All
   // parents must sum to 100%. Project progress = Σ(leaf weight% × leaf progress%).
   const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+  // ── NEW weight model ───────────────────────────────────────────────────────
+  // • Every PARENT gets an equal slice of the whole project:  100 / COUNT(parents).
+  // • SUB-ITEM weights are RELATIVE to their parent's slice and sum to 100 within
+  //   that parent (auto = 100 / COUNT(sub-items); user may edit, must stay ≤100).
+  // • A leaf's ABSOLUTE project weight = parentSlice × (subRelative / 100).
+  // • Childless parents are leaves whose absolute weight IS the parent slice.
+  const parentCount = phases.length;
+  // The fixed project slice each parent owns (equal split of 100%).
+  const parentSlice = () => (parentCount > 0 ? 100 / parentCount : 0);
+  const hasSubs = (p) => !!(p.subItems && p.subItems.filter(si => si.name != null).length > 0);
+  // Sum of a parent's RELATIVE sub-item weights (should be ≤100).
   const subWeightSum = (p) => (p.subItems || []).reduce((s, si) => s + num(si.weightPct), 0);
-  const effectiveWeight = (p) =>
-    (p.subItems && p.subItems.length > 0) ? subWeightSum(p) : num(p.weightPct);
-  const grandTotalWeight = phases.reduce((s, p) => s + effectiveWeight(p), 0);
+  // A single sub-item's ABSOLUTE project weight.
+  const absSubWeight = (si) => parentSlice() * (num(si.weightPct) / 100);
+  // A parent's effective ABSOLUTE project weight — always its equal slice.
+  const effectiveWeight = (p) => parentSlice();
+  // The whole project must total 100% by construction; kept as a live sum so the
+  // banner and the approve gate still reflect reality if a slice is ever 0.
+  const grandTotalWeight = phases.reduce((s) => s + parentSlice(), 0);
   // ±0.01% tolerance so raw Excel-derived fractions still validate (exact 100.000000
   // is unreachable with hand-typed weights and float dust).
   const WEIGHT_TOLERANCE = 0.01;
@@ -1204,16 +1346,17 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   // Planned capital = package budget. Actual capital = planned × progress%.
   const projectTotal = num(orderBook.totalAmount);
   const plannedCap = (weightPct) => (num(weightPct) / 100) * projectTotal;
-  const subPlannedCap = (si) => plannedCap(si.weightPct);
+  // Sub-item capital uses its ABSOLUTE project weight (parentSlice × relative%).
+  const subPlannedCap = (si) => plannedCap(absSubWeight(si));
   const subActualCap = (si) => subPlannedCap(si) * (num(si.progressPercent) / 100);
   const phasePlannedCap = (p) =>
-    (p.subItems && p.subItems.length > 0)
+    hasSubs(p)
       ? p.subItems.reduce((s, si) => s + subPlannedCap(si), 0)
-      : plannedCap(p.weightPct);
+      : plannedCap(parentSlice());   // childless parent owns its full slice
   const phaseActualCap = (p) => {
-    if (p.subItems && p.subItems.length > 0)
+    if (hasSubs(p))
       return p.subItems.reduce((s, si) => s + subActualCap(si), 0);
-    return plannedCap(p.weightPct) * (num(p.progressPercent) / 100);
+    return plannedCap(parentSlice()) * (num(p.progressPercent) / 100);
   };
   const totalPlannedCap = phases.reduce((s, p) => s + phasePlannedCap(p), 0);
   const totalActualCap = phases.reduce((s, p) => s + phaseActualCap(p), 0);
@@ -1223,24 +1366,24 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   // Flatten scope into leaf entries: {phaseId, subKey|null, label, start, end, weight}
   const leaves = [];
   phases.forEach(p => {
-    if (p.subItems && p.subItems.length > 0) {
+    if (hasSubs(p)) {
       p.subItems.filter(si => si.name && si.name.trim()).forEach(si => {
         leaves.push({ phaseId: p.id, subKey: si.name, label: si.name, parent: p.phaseName,
-          start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(si.weightPct) });
+          start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: absSubWeight(si) });
       });
     } else {
       leaves.push({ phaseId: p.id, subKey: null, label: p.phaseName, parent: null,
-        start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(p.weightPct) });
+        start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: parentSlice() });
     }
   });
   const pKey = (phaseId, subKey, period) => `${phaseId}|${subKey || ''}|${period}`;
   // Build the leaf object the week-modal expects, from a schedule row.
   const leafForPhase = (p) => ({ phaseId: p.id, subKey: null, label: p.phaseName, parent: null,
-    start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: num(p.weightPct) });
+    start: num(p.startWeek) || 1, end: num(p.endWeek) || num(p.startWeek) || nBuckets, weight: parentSlice() });
   const leafForSub = (p, si) => ({ phaseId: p.id, subKey: si.name, label: si.name, parent: p.phaseName,
     start: num(si.startWeek) || num(p.startWeek) || 1,
     end: num(si.endWeek) || num(si.startWeek) || num(p.endWeek) || num(p.startWeek) || nBuckets,
-    weight: num(si.weightPct) });
+    weight: absSubWeight(si) });
   const getCell = (phaseId, subKey, period) => progress[pKey(phaseId, subKey, period)] || { plannedPct: 0, actualPct: 0 };
   const setCell = (phaseId, subKey, period, field, val) => {
     const k = pKey(phaseId, subKey, period);
@@ -1453,12 +1596,11 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                           <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
                           <td>
                             <div className="obd-progress-cell">
-                              <input className={`obd-inp obd-inp--xs ${hasSubItems ? 'obd-cell-locked' : ''}`} type="number" min="0" max="100" step="any"
-                                value={hasSubItems ? fmtW(subWeightSum(p)) : (p.weightPct ?? '')}
-                                title={hasSubItems ? 'Auto-summed from sub-item weights' : 'Absolute project weight (%)'}
-                                readOnly={hasSubItems}
-                                placeholder="0"
-                                onChange={e => !hasSubItems && updatePhase(i, 'weightPct', e.target.value === '' ? '' : Math.max(0, Number(e.target.value)))} />
+                              <input className="obd-inp obd-inp--xs obd-cell-locked" type="number" min="0" max="100" step="any"
+                                value={fmtW(parentSlice())}
+                                title={`Auto: 100% ÷ ${parentCount} parent item(s) = equal project slice`}
+                                readOnly
+                                placeholder="0" />
                               <span className="obd-progress-cell-pct">%</span>
                             </div>
                           </td>
@@ -1506,9 +1648,12 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                             )}
                             <button className="obd-icon-btn" title="Add sub-item"
                               style={{ color: '#2563eb', marginRight: 4 }}
-                              onClick={() => {
-                                updatePhase(i, 'subItems', [...(p.subItems || []), blankSubItem()], { expanded: true });
-                              }}>＋</button>
+                              onClick={() => addSubItem(i)}>＋</button>
+                            {hasSubItems && (
+                              <button className="obd-icon-btn" title="Reset sub-item weights to equal auto-split"
+                                style={{ color: '#6b7280', marginRight: 4 }}
+                                onClick={() => resetSubWeights(i)}>↺</button>
+                            )}
                             {(p.phaseName || '').trim().toLowerCase() === 'procurement' && (
                               <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
                                 title="Pull BOM / BOQ items in as sub-items, with dates split across this phase's range"
@@ -1566,14 +1711,11 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                             </td>
                             <td>
                               <div className="obd-progress-cell">
-                                <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                <input className={`obd-inp obd-inp--xs ${Math.abs(subWeightSum(p) - 100) > 0.5 ? 'obd-weight-banner--warn' : ''}`} type="number" min="0" max="100" step="any"
                                   value={si.weightPct ?? ''} placeholder="0"
-                                  title="Absolute project weight (%) — sub-item weights sum into the parent"
-                                  onChange={e => {
-                                    const updated = [...p.subItems];
-                                    updated[si_i] = { ...si, weightPct: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)) };
-                                    updatePhase(i, 'subItems', updated);
-                                  }} />
+                                  title="Weight relative to this parent (sub-items sum to 100% within the parent). Auto-filled; edit to override."
+                                  onChange={e => setSubWeight(i, si_i, e.target.value)}
+                                  onBlur={() => snapSubGroup(i, si_i)} />
                                 <span className="obd-progress-cell-pct">%</span>
                               </div>
                             </td>
@@ -1624,10 +1766,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                                   onClick={() => setWeekModalLeaf(leafForSub(p, si))}>Weeks</button>
                               )}
                               <button className="obd-icon-btn obd-icon-btn--danger" title="Remove sub-item"
-                                onClick={() => {
-                                  const updated = p.subItems.filter((_, idx) => idx !== si_i);
-                                  updatePhase(i, 'subItems', updated);
-                                }}><Trash2 size={13} /></button>
+                                onClick={() => removeSubItem(i, si_i)}><Trash2 size={13} /></button>
                             </td>
                           </tr>
                         ))}
@@ -2091,7 +2230,7 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                           </td>
                           <td>{pi + 1}</td>
                           <td>{p.phaseName}</td>
-                          <td>{p.weightPct != null && p.weightPct !== '' ? `${Number(p.weightPct)}%` : (hasSub ? `${(p.subItems).reduce((s, si) => s + Number(si.weightPct || 0), 0)}%` : '—')}</td>
+                          <td>{p.weightPct != null && p.weightPct !== '' ? `${Number(p.weightPct)}%` : (scopeTree.length > 0 ? `${Number((100 / scopeTree.length).toFixed(2))}%` : '—')}</td>
                           <td>
                             {hasSub ? (
                               <span title="Auto-summed from sub-items" className="obd-cell-muted">{fmtMoney(pBudget)}</span>

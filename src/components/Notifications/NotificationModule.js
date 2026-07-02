@@ -56,6 +56,7 @@ const MODULE_ROUTES = {
   TASK:     (id) => `/taskmanagement?taskId=${id}`,
   FOLLOWUP: (id) => `/follow-ups?followupId=${id}`,
   INVOICE:  (id) => `/sales/invoices?invoiceId=${id}`,
+  EXPENSE:  (id) => `/project-cost-expense?expenseId=${id}`,
 };
 
 function routeForNotification(n) {
@@ -131,6 +132,7 @@ const MODULE_META = {
   TASK:     { label: 'Task',      color: '#7c3aed', token: '--c-6366f1' },
   FOLLOWUP: { label: 'Follow-up', color: '#059669', token: '--c-059669' },
   INVOICE:  { label: 'Invoice',   color: '#d97706', token: '--c-dc2626' },
+  EXPENSE:  { label: 'Expense',   color: '#0891b2', token: '--c-0891b2' },
 };
 
 /* ============================================================================
@@ -637,6 +639,17 @@ function NotificationToaster() {
 function NotificationStyles() {
   return (
     <style>{`
+/* Force Poppins across every notification surface. Something in the CSS loaded
+   on this route was leaking an Arial-terminated stack into this subtree (the
+   global body Poppins rule wasn't reaching it), so we set the family explicitly
+   on each root AND its descendants to win the cascade regardless of source. */
+.ntf-page, .ntf-page *,
+.ntf-dropdown, .ntf-dropdown *,
+.ntf-bell-wrap, .ntf-bell-wrap *,
+.ntf-toaster, .ntf-toaster * {
+  font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
+    'Helvetica Neue', sans-serif;
+}
 .ntf-icon { width: 20px; height: 20px; color: var(--ct-4b5563, #4b5563); }
 .ntf-icon-button {
   position: relative; width: 38px; height: 38px; padding: 0;
