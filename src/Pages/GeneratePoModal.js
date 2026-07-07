@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 
 // ─── Dark theme helpers (mirror PurchaseOrders.js convention) ───────────────
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -142,7 +143,7 @@ const DEFAULT_TERMS = [
   'Subject to Hyderabad Jurisdiction.',
 ];
 
-const blankItem = () => ({ description: '', hsnCode: '', qty: '', pricePerUnit: '' });
+const blankItem = () => ({ description: '', unit: 'Nos', qty: '', pricePerUnit: '' });
 const blankAdj = () => ({ label: '', amount: '' });
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -171,17 +172,17 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
         const liveItems = (po.items && po.items.length)
           ? po.items.filter(it => (it.itemName || it.description)).map(it => {
               const label = it.itemName ? (it.itemName + (it.itemDescription ? ' - ' + it.itemDescription : (it.description ? ' - ' + it.description : ''))) : (it.description || '');
-              // Prefer the item's own HSN; else reuse a saved HSN for the same description.
+              // Prefer the item's own unit; else reuse a saved unit for the same description.
               const savedMatch = (saved.items || []).find(s => (s.description || '') === label);
               return {
                 description: label,
-                hsnCode: it.hsnCode || (savedMatch ? savedMatch.hsnCode : '') || '',
+                unit: it.unit || (savedMatch ? savedMatch.unit : '') || 'Nos',
                 qty: it.quantity ?? it.qty ?? '',
                 pricePerUnit: it.unitPrice ?? it.pricePerUnit ?? '',
               };
             })
           : (saved.items && saved.items.length ? saved.items.map(it => ({
-              description: it.description || '', hsnCode: it.hsnCode || '', qty: it.qty ?? '', pricePerUnit: it.pricePerUnit ?? '',
+              description: it.description || '', unit: it.unit || 'Nos', qty: it.qty ?? '', pricePerUnit: it.pricePerUnit ?? '',
             })) : [blankItem()]);
         setForm({
           poNo: saved.poNo || po.poNo || '',
@@ -215,7 +216,7 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
       .filter(it => (it.itemName || it.description))
       .map((it, i) => ({
         description: it.itemName ? (it.itemName + (it.itemDescription ? ' - ' + it.itemDescription : '')) : (it.description || ''),
-        hsnCode: it.hsnCode || '',
+        unit: it.unit || 'Nos',
         qty: it.quantity ?? it.qty ?? '',
         pricePerUnit: it.unitPrice ?? it.pricePerUnit ?? '',
       }));
@@ -312,13 +313,14 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
         }
       }
       const payload = {
+        docTitle: po?.documentType === 'WORK_ORDER' ? 'WORK ORDER' : 'PURCHASE ORDER',
         poNo: form.poNo, poDate: form.poDate, quoteRef: form.quoteRef, quoteRefDate: form.quoteRefDate,
         vendorName: form.vendorName, vendorAddress: form.vendorAddress, supplierGst: form.supplierGst,
         kindAttention: form.kindAttention, vendorPhone: form.vendorPhone, vendorEmail: form.vendorEmail,
         billToName: form.billToName, billToAddress: form.billToAddress,
         shipToName: form.shipToName, shipToAddress: form.shipToAddress, shipToPhone: form.shipToPhone,
         items: form.items.filter(it => (it.description || '').trim()).map((it, i) => ({
-          sNo: i + 1, description: it.description, hsnCode: it.hsnCode,
+          sNo: i + 1, description: it.description, unit: it.unit || 'Nos',
           qty: num(it.qty), pricePerUnit: num(it.pricePerUnit), amount: num(it.qty) * num(it.pricePerUnit),
         })),
         gstPercent: num(form.gstPercent), gstAmount, totalAmount: grandTotal,
@@ -433,7 +435,7 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
               <thead>
                 <tr style={{ textAlign: 'left', color: __stc('#64748b') }}>
                   <th style={{ padding: 4, width: 30 }}>#</th><th style={{ padding: 4 }}>Item &amp; Description</th>
-                  <th style={{ padding: 4, width: 110 }}>HSN Code</th><th style={{ padding: 4, width: 70 }}>Qty</th>
+                  <th style={{ padding: 4, width: 70 }}>Qty</th><th style={{ padding: 4, width: 90 }}>Unit</th>
                   <th style={{ padding: 4, width: 100 }}>Price/Unit</th><th style={{ padding: 4, width: 100 }}>Amount</th><th style={{ width: 30 }}></th>
                 </tr>
               </thead>
@@ -442,8 +444,26 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
                   <tr key={i}>
                     <td style={{ padding: 4, color: __stc('#94a3b8') }}>{i + 1}</td>
                     <td style={{ padding: 4 }}><input style={{ ...I, padding: '5px 7px' }} value={it.description} onChange={e => setItem(i, 'description', e.target.value)} /></td>
-                    <td style={{ padding: 4 }}><input style={{ ...I, padding: '5px 7px' }} value={it.hsnCode} onChange={e => setItem(i, 'hsnCode', e.target.value)} /></td>
                     <td style={{ padding: 4 }}><input style={{ ...I, padding: '5px 7px' }} type="number" value={it.qty} onChange={e => setItem(i, 'qty', e.target.value)} /></td>
+                    <td style={{ padding: 4 }}>
+                      <select
+                        style={{ ...I, padding: '5px 7px' }}
+                        value={it.unit === '' || it.unit == null || COMMON_UNITS.includes(it.unit) ? (it.unit || '') : 'Custom'}
+                        onChange={e => setItem(i, 'unit', e.target.value === 'Custom' ? '' : e.target.value)}
+                      >
+                        <option value="">Unit</option>
+                        {COMMON_UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                        <option value="Custom">✏️ Custom</option>
+                      </select>
+                      {(it.unit !== '' && it.unit != null && !COMMON_UNITS.includes(it.unit)) && (
+                        <input
+                          style={{ ...I, padding: '5px 7px', marginTop: 3 }}
+                          placeholder="Enter unit"
+                          value={it.unit}
+                          onChange={e => setItem(i, 'unit', e.target.value)}
+                        />
+                      )}
+                    </td>
                     <td style={{ padding: 4 }}><input style={{ ...I, padding: '5px 7px' }} type="number" value={it.pricePerUnit} onChange={e => setItem(i, 'pricePerUnit', e.target.value)} /></td>
                     <td style={{ padding: 4, textAlign: 'right', fontWeight: 600 }}>{(num(it.qty) * num(it.pricePerUnit)).toLocaleString('en-IN')}</td>
                     <td style={{ padding: 4 }}><button onClick={() => rmItem(i)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16 }}>×</button></td>
