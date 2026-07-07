@@ -2583,3 +2583,37 @@
    ============================================================ */
 .purchase-orders-action-bar { align-items: flex-start; }
 .purchase-orders-actions { margin-left: auto; align-self: flex-start; }
+/* ── Unit FilterSelect inside PO line-items table + manual form ──────────
+   Constrains the portal-rendered FilterSelect so its trigger does not collapse
+   to a thin box and its dropdown does not spill under the PO Qty column.
+   Mirrors the quotation page's .qr-unit-select-wrap. */
+.po-unit-select-wrap { display: inline-block; width: 100%; }
+.po-unit-select-wrap .filter-trigger {
+  width: 100%;
+  min-width: 0;
+  height: 32px;
+  font-size: 12px;
+  padding: 0 24px 0 6px;
+  border-radius: 6px;
+  box-sizing: border-box;
+}
+.po-unit-select-wrap .filter-trigger--disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+.po-unit-select-wrap .filter-dropdown-list {
+  min-width: 130px;
+  max-height: 200px;
+  font-size: 12px;
+}
+.po-unit-select-wrap .filter-dropdown-item {
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+/* Manual-item form: make the Unit trigger match the ~38px form inputs
+   (the base .po-unit-select-wrap trigger is 32px, sized for the table). */
+.po-manual-unit-wrap .filter-trigger {
+  height: 38px;
+  font-size: 14px;
+}

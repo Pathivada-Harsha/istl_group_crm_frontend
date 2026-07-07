@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Download, Plus, X, Edit2, Eye, Truck,
-  RefreshCw, FileDown,
+  FileOutput, FileCog,
   CheckCircle, IndianRupee, Columns, FileText,
   Trash2, Upload, ExternalLink, File,
   ChevronUp, ChevronDown, ChevronsUpDown, GripVertical, Check
@@ -9,6 +9,7 @@ import {
 import '../pages-css/PurchaseOrders.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
+import { COMMON_UNITS } from "./../components/Dropdowns/Unittypedropdown.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -319,6 +320,7 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
 // ─── Column Definitions ───────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { id: 'sNo',              label: 'S.No',               sortable: false, visible: true,  fixed: true  },
+  { id: 'documentType',     label: 'Type',               sortable: false, visible: true  },
   { id: 'poRefId',          label: 'PO REF ID',          sortable: false, visible: true  },
   { id: 'vendor',           label: 'Vendor',             sortable: true,  visible: true },
   { id: 'orderDate',        label: 'Order Date',         sortable: true,  visible: true },
@@ -450,7 +452,7 @@ const PurchaseOrders = () => {
   const dragSrcIndex = useRef(null);
   const [dragOverIndex, setDragOverIndex] = useState(null);
 
-  const [filters, setFilters] = useState({ search: '', status: 'all', paymentStatus: 'all' });
+  const [filters, setFilters] = useState({ search: '', status: 'all', paymentStatus: 'all', documentType: 'all' });
   const [orderDateFrom, setOrderDateFrom] = useState('');
   const [orderDateTo,   setOrderDateTo]   = useState('');
   const [confirmModal, setConfirmModal] = useState({
@@ -506,10 +508,11 @@ const PurchaseOrders = () => {
     quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '',
     groupName: '', subGroupName: '', projectId: '',
     orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '',
-    paymentTerms: '', shippingAddress: '', notes: '', poRefId: '', items: [], status: 'Draft'
+    paymentTerms: '', shippingAddress: '', notes: '', poRefId: '', items: [], status: 'Draft',
+    documentType: 'PURCHASE_ORDER'
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
-  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', hsnCode: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18, discount: '' });
   const [focusedPriceIndex, setFocusedPriceIndex] = useState(null);
 
   // ── Edit-mode project change state ──
@@ -596,6 +599,7 @@ const PurchaseOrders = () => {
         if (projectId)    poParams.append('projectId',    projectId);
         if (filters.status        !== 'all') poParams.append('status',        filters.status);
         if (filters.paymentStatus !== 'all') poParams.append('paymentStatus', filters.paymentStatus);
+        if (filters.documentType  !== 'all') poParams.append('documentType',  filters.documentType);
         if (filters.search)                  poParams.append('searchTerm',    filters.search.trim());
         if (orderDateFrom)                   poParams.append('orderDateFrom', orderDateFrom);
         if (orderDateTo)                     poParams.append('orderDateTo',   orderDateTo);
@@ -607,6 +611,7 @@ const PurchaseOrders = () => {
         if (projectId)    statsParams.append('projectId',    projectId);
         if (filters.status        !== 'all') statsParams.append('status',        filters.status);
         if (filters.paymentStatus !== 'all') statsParams.append('paymentStatus', filters.paymentStatus);
+        if (filters.documentType  !== 'all') statsParams.append('documentType',  filters.documentType);
         if (filters.search)                  statsParams.append('searchTerm',    filters.search.trim());
         if (orderDateFrom)                   statsParams.append('orderDateFrom', orderDateFrom);
         if (orderDateTo)                     statsParams.append('orderDateTo',   orderDateTo);
@@ -641,7 +646,7 @@ const PurchaseOrders = () => {
     loadAll();
     return () => controller.abort(); // cancel in-flight requests on re-run
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.search, sortConfig, orderDateFrom, orderDateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groupName, subGroupName, projectId, currentPage, pageSize, filters.status, filters.paymentStatus, filters.documentType, filters.search, sortConfig, orderDateFrom, orderDateTo, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchVendors(); }, []);
 
@@ -906,6 +911,7 @@ const PurchaseOrders = () => {
       allocatedQty,                       // already assigned to other POs
       remainingQty,                       // available to assign
       quantity: remainingQty,             // default to remaining
+      unit: item.unit || 'Nos',
       unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0, selected: remainingQty > 0
     };
   });
@@ -936,6 +942,7 @@ const PurchaseOrders = () => {
       const items = qData.items.map((item, i) => ({
         id: `quotation-${item.id}`, quotationItemId: item.id,
         itemName: item.itemName, itemDescription: item.description || '',
+        unit: item.unit || 'Nos',
         quotedQuantity: item.quantity, quantity: item.quantity,
         unitPrice: item.unitPrice, gst: item.taxPercent, discount: 0, lineTotal: 0, selected: true
       }));
@@ -976,13 +983,13 @@ const PurchaseOrders = () => {
     const tax  = (base - disc) * (newItem.gst / 100);
     const item = {
       id: `manual-${Date.now()}`, itemName: newItem.itemName,
-      itemDescription: newItem.itemDescription, hsnCode: newItem.hsnCode, quantity: newItem.quantity,
+      itemDescription: newItem.itemDescription, hsnCode: newItem.hsnCode, unit: newItem.unit || 'Nos', quantity: newItem.quantity,
       unitPrice: newItem.unitPrice, gst: newItem.gst, discount: newItem.discount,
       lineTotal: (base - disc) + tax, selected: true, isManual: true
     };
     setCreatePOFormData(prev => ({ ...prev, items: [...prev.items, item] }));
     setItemsStepUnlocked(true);
-    setNewItem({ itemName: '', itemDescription: '', hsnCode: '', quantity: '', unitPrice: '', gst: 18, discount: '' });
+    setNewItem({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18, discount: '' });
     setShowManualItemForm(false);
     showSuccess('Manual item added');
   };
@@ -1014,6 +1021,11 @@ const PurchaseOrders = () => {
       const base = qty * numericPrice; const disc = base * (item.discount / 100);
       item.lineTotal = (base - disc) + (base - disc) * (item.gst / 100);
     } else { item.lineTotal = 0; }
+    setCreatePOFormData(prev => ({ ...prev, items: newItems }));
+  };
+  const handleUpdatePOItemUnit = (index, unit) => {
+    const newItems = [...createPOFormData.items];
+    newItems[index] = { ...newItems[index], unit };
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
   const handleUpdatePOItemGST = (index, gst) => {
@@ -1055,6 +1067,7 @@ const PurchaseOrders = () => {
       if (projectId) params.append('projectId', projectId);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.paymentStatus !== 'all') params.append('paymentStatus', filters.paymentStatus);
+      if (filters.documentType !== 'all') params.append('documentType', filters.documentType);
       if (filters.search) params.append('searchTerm', filters.search);
       if (orderDateFrom) params.append('orderDateFrom', orderDateFrom);
       if (orderDateTo)   params.append('orderDateTo',   orderDateTo);
@@ -1162,7 +1175,8 @@ const PurchaseOrders = () => {
         orderDate: poData.orderDate ? String(poData.orderDate).slice(0, 10) : new Date().toISOString().split('T')[0],
         expectedDelivery: poData.expectedDelivery ? String(poData.expectedDelivery).slice(0, 10) : '',
         paymentTerms: poData.paymentTerms || '', shippingAddress: poData.deliveryAddress || '',
-        notes: poData.notes || '', poRefId: poData.poRefId || '', status: poData.status || 'Draft', items
+        notes: poData.notes || '', poRefId: poData.poRefId || '', status: poData.status || 'Draft',
+        documentType: poData.documentType || 'PURCHASE_ORDER', items
       });
       setShowNewVendorForm(false); setShowCreatePOModal(true);
     } catch { showError('Failed to load purchase order details'); }
@@ -1229,7 +1243,7 @@ const PurchaseOrders = () => {
     const seedSubGroup = subGroupName || '';
     const seedProject  = projectId   || '';
     setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft', documentType: 'PURCHASE_ORDER' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]);
     setCustomVendorCategory(''); setCustomVendorType('');
@@ -1260,7 +1274,7 @@ const PurchaseOrders = () => {
     setModalGroups([]); setModalSubGroups([]); setModalProjects([]);
     setQuotations([]); setOrderBookItems([]); setShowNewVendorForm(false); setShowManualItemForm(false);
     setCustomVendorCategory(''); setCustomVendorType('');
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft' });
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: '', subGroupName: '', projectId: '', orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft', documentType: 'PURCHASE_ORDER' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setItemsStepUnlocked(false);
     setPoFileUpload(null);
@@ -1359,8 +1373,8 @@ const PurchaseOrders = () => {
     if (!createPOFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
     setLoading(true);
     try {
-      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, quantity, unitPrice, gst, discount }) => ({
-        itemName, itemDescription, hsnCode: hsnCode || null,
+      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, unit, quantity, unitPrice, gst, discount }) => ({
+        itemName, itemDescription, hsnCode: hsnCode || null, unit: unit || 'Nos',
         quantity: parseFloat(quantity), unitPrice: parseFloat(unitPrice) || 0,
         gst: parseFloat(gst), discount: parseFloat(discount) || 0
       }));
@@ -1375,7 +1389,8 @@ const PurchaseOrders = () => {
         groupName: modalGroupName, subGroupName: modalSubGroupName || null, projectId: modalProjectId || null,
         orderDate: createPOFormData.orderDate, expectedDelivery: createPOFormData.expectedDelivery,
         paymentTerms: createPOFormData.paymentTerms, shippingAddress: createPOFormData.shippingAddress,
-        notes: createPOFormData.notes, poRefId: createPOFormData.poRefId || null, items: poItems, status: createPOFormData.status || 'Draft', paymentStatus: 'Pending'
+        notes: createPOFormData.notes, poRefId: createPOFormData.poRefId || null, items: poItems, status: createPOFormData.status || 'Draft', paymentStatus: 'Pending',
+        documentType: createPOFormData.documentType || 'PURCHASE_ORDER'
       };
       let response;
       if (isEditMode && editingPOId) {
@@ -1405,7 +1420,7 @@ const PurchaseOrders = () => {
       // Offer document generation right after creating a new PO.
       if (!isEditMode && savedId) {
         const v = vendors.find(x => x.id === createPOFormData.vendorId) || null;
-        openGenerateDoc({ id: savedId, poNo: result.poNo || result.data?.poNo, vendorId: createPOFormData.vendorId, vendorName: createPOFormData.vendorName, vendorContact: createPOFormData.vendorContact });
+        openGenerateDoc({ id: savedId, poNo: result.poNo || result.data?.poNo, vendorId: createPOFormData.vendorId, vendorName: createPOFormData.vendorName, vendorContact: createPOFormData.vendorContact, documentType: createPOFormData.documentType || 'PURCHASE_ORDER' });
         if (v) setGenVendor(v);
       }
     } catch (error) { showError(error.message || `Failed to ${isEditMode ? 'update' : 'create'} purchase order`); }
@@ -1468,6 +1483,22 @@ const PurchaseOrders = () => {
         return <td key={col.id} className="purchase-orders-table-id">{po.poRefId || po.poNo}</td>;
       case 'poRefId':
         return <td key={col.id}>{po.poRefId || '—'}</td>;
+      case 'documentType': {
+        const isWO = po.documentType === 'WORK_ORDER';
+        return (
+          <td key={col.id}>
+            <span
+              className="purchase-orders-badge"
+              style={{
+                background: isWO ? __stc('#fef3c7') : __stc('#e0f2fe'),
+                color:      isWO ? __stc('#92400e') : __stc('#075985'),
+              }}
+            >
+              {isWO ? 'Work Order' : 'Purchase Order'}
+            </span>
+          </td>
+        );
+      }
       case 'vendor':
         return (
           <td key={col.id}>
@@ -1517,7 +1548,7 @@ const PurchaseOrders = () => {
                     style={{ color: canEdit ? __stc('#0F8A8A') : undefined }}
                     disabled={!canEdit}
                   >
-                    {hasDoc ? <RefreshCw size={14} /> : <FileText size={14} />}
+                    {hasDoc ? <FileCog size={14} /> : <FileOutput size={14} />}
                   </button>
                 );
               })()}
@@ -1530,7 +1561,7 @@ const PurchaseOrders = () => {
                   title="Download PO document"
                   style={{ color: __stc('#2563eb') }}
                 >
-                  <FileDown size={14} />
+                  <Download size={14} />
                 </button>
               )}
 
@@ -1781,6 +1812,17 @@ const PurchaseOrders = () => {
               onChange={(v) => { setFilters(prev => ({ ...prev, paymentStatus: v || 'all' })); setCurrentPage(0); }}
             />
           </div>
+          <div className="po-filter-select-wrap">
+            <FilterSelect
+              value={filters.documentType === 'all' ? '' : filters.documentType}
+              options={[
+                { value: 'PURCHASE_ORDER', label: 'Purchase Order' },
+                { value: 'WORK_ORDER',     label: 'Work Order'     },
+              ]}
+              placeholder="All Types"
+              onChange={(v) => { setFilters(prev => ({ ...prev, documentType: v || 'all' })); setCurrentPage(0); }}
+            />
+          </div>
           {/* Order Date range filter — like Leads page */}
           <div className="po-order-date-filter">
             <span className="po-order-date-label">Order Date:</span>
@@ -2010,7 +2052,7 @@ const PurchaseOrders = () => {
                       </button>
                       {canEdit && (
                         <button className="po-doc-btn po-doc-btn-view" onClick={() => { setShowDetailDrawer(false); openGenerateDoc(selectedPO); }} title="Re-generate the PO PDF">
-                          <RefreshCw size={14} /> Re-generate
+                          <FileCog size={14} /> Re-generate
                         </button>
                       )}
                     </div>
@@ -2084,7 +2126,7 @@ const PurchaseOrders = () => {
                           <Upload size={13} /> {poFileUploading ? 'Uploading…' : 'Upload PO Document'}
                         </label>
                         <button className="po-doc-btn po-doc-btn-view" style={{ marginLeft: 8 }} onClick={() => { setShowDetailDrawer(false); openGenerateDoc(selectedPO); }} title="Generate the SESOLA PO PDF">
-                          <FileText size={14} /> Generate PO PDF
+                          <FileOutput size={14} /> Generate PO PDF
                         </button>
                       </div>
                     )}
@@ -2265,11 +2307,48 @@ const PurchaseOrders = () => {
         <div className="purchase-orders-modal-overlay">
           <div className="purchase-orders-create-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1400px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
             <div className="purchase-orders-modal-header" style={{ flexShrink: 0 }}>
-              <h2>{isEditMode ? 'Edit Purchase Order' : 'Create Purchase Order'}</h2>
+              <h2>{(() => {
+                const label = createPOFormData.documentType === 'WORK_ORDER' ? 'Work Order' : 'Purchase Order';
+                return isEditMode ? `Edit ${label}` : `Create ${label}`;
+              })()}</h2>
               <button className="purchase-orders-modal-close" onClick={handleCloseCreatePOModal}><X size={24} /></button>
             </div>
 
             <div className="purchase-orders-modal-content" style={{ flex: 1, overflowY: 'auto' }}>
+              {/* Document Type: Purchase Order vs Work Order — same form & template, only the title differs */}
+              <div className="po-form-section" style={{ background: __sbg('#f8fafc'), padding: '16px 20px', borderRadius: '8px', border: `2px solid ${__sbg('#e2e8f0')}`, marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '10px', fontWeight: 600 }}>Document Type *</label>
+                <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                  {[
+                    { value: 'PURCHASE_ORDER', label: 'Purchase Order', hint: 'Goods / materials' },
+                    { value: 'WORK_ORDER',     label: 'Work Order',     hint: 'Services, maintenance, I&C' },
+                  ].map(opt => {
+                    const active = (createPOFormData.documentType || 'PURCHASE_ORDER') === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        disabled={isEditMode}
+                        onClick={() => setCreatePOFormData(prev => ({ ...prev, documentType: opt.value }))}
+                        style={{
+                          flex: '1 1 200px', textAlign: 'left', cursor: isEditMode ? 'not-allowed' : 'pointer',
+                          padding: '12px 16px', borderRadius: '8px',
+                          border: `2px solid ${active ? __stc('#0F8A8A') : __sbg('#e2e8f0')}`,
+                          background: active ? __stc('#e6f7f7') : __sbg('#ffffff'),
+                          opacity: isEditMode && !active ? 0.5 : 1,
+                        }}
+                      >
+                        <div style={{ fontWeight: 600, fontSize: 14, color: active ? __stc('#0F8A8A') : __stc('#1e293b') }}>{opt.label}</div>
+                        <div style={{ fontSize: 12, color: __stc('#64748b'), marginTop: 2 }}>{opt.hint}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                {isEditMode && (
+                  <p style={{ fontSize: 12, color: __stc('#94a3b8'), marginTop: 8 }}>Document type can't be changed after creation.</p>
+                )}
+              </div>
+
               {/* Step 1: Project Selection */}
               <div className="po-form-section" style={{ background: __sbg('#f8fafc'), padding: '20px', borderRadius: '8px', border: `2px solid ${__sbg('#e2e8f0')}` }}>
                 <h3 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><span>📂</span> Step 1: Select Project</h3>
@@ -2753,6 +2832,19 @@ const PurchaseOrders = () => {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit</label>
+                          <div className="po-unit-select-wrap po-manual-unit-wrap" style={{ display: 'block' }}>
+                            <FilterSelect
+                              value={newItem.unit === '' || newItem.unit == null || COMMON_UNITS.includes(newItem.unit) ? (newItem.unit || 'Nos') : 'Custom'}
+                              options={[...COMMON_UNITS.map(u => ({ value: u, label: u })), { value: 'Custom', label: '✏️ Custom' }]}
+                              placeholder="Unit"
+                              onChange={(val) => setNewItem(prev => ({ ...prev, unit: val === 'Custom' ? '' : (val || 'Nos') }))}
+                            />
+                          </div>
+                          {(newItem.unit !== '' && newItem.unit != null && !COMMON_UNITS.includes(newItem.unit)) && (
+                            <input type="text" placeholder="Enter custom unit" value={newItem.unit} onChange={(e) => setNewItem(prev => ({ ...prev, unit: e.target.value }))} style={{ marginTop: 4, width: '100%', padding: '8px', fontSize: '13px' }} />
+                          )}
+                        </div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit Price (₹) *</label><input type="text" inputMode="decimal" value={formatIndianInput(newItem.unitPrice)} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, unitPrice: raw === '' ? '' : raw })); }} placeholder="0.00" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
@@ -2775,8 +2867,9 @@ const PurchaseOrders = () => {
                             <col style={{ width: '46px' }} />
                             <col style={{ width: 'auto' }} />
                             <col style={{ width: '130px' }} />
+                            <col style={{ width: '96px' }} />
                             {createPOFormData.quotationId && <col style={{ width: '90px' }} />}
-                            <col style={{ width: '90px' }} />
+                            <col style={{ width: '76px' }} />
                             <col style={{ width: '130px' }} />
                             <col style={{ width: '90px' }} />
                             <col style={{ width: '95px' }} />
@@ -2792,6 +2885,7 @@ const PurchaseOrders = () => {
                               </th>
                               <th className="po-th" style={{ textAlign: 'left' }}>Item Name</th>
                               <th className="po-th" style={{ textAlign: 'left' }}>Description</th>
+                              <th className="po-th" style={{ textAlign: 'center' }}>Unit</th>
                               {createPOFormData.quotationId && <th className="po-th" style={{ textAlign: 'center' }}>Quoted Qty</th>}
                               <th className="po-th" style={{ textAlign: 'center' }}>PO Qty *</th>
                               <th className="po-th" style={{ textAlign: 'right' }}>Unit Price (₹) *</th>
@@ -2828,6 +2922,33 @@ const PurchaseOrders = () => {
                                   )}
                                 </td>
                                 <td className="po-td po-td-clip" style={{ fontSize: '13px', color: __stc('#64748b') }}>{item.itemDescription || '—'}</td>
+                                <td className="po-td" style={{ textAlign: 'center' }}>
+                                  <div className="po-unit-select-wrap">
+                                    <FilterSelect
+                                      value={item.unit === '' || item.unit == null || COMMON_UNITS.includes(item.unit) ? (item.unit || '') : 'Custom'}
+                                      options={[
+                                        ...COMMON_UNITS.map(u => ({ value: u, label: u })),
+                                        { value: 'Custom', label: '✏️ Custom' },
+                                      ]}
+                                      placeholder="Unit"
+                                      disabled={!item.selected}
+                                      onChange={(val) => {
+                                        if (val === 'Custom') handleUpdatePOItemUnit(index, '');
+                                        else handleUpdatePOItemUnit(index, val || '');
+                                      }}
+                                    />
+                                  </div>
+                                  {(item.unit !== '' && item.unit != null && !COMMON_UNITS.includes(item.unit)) && (
+                                    <input
+                                      type="text"
+                                      placeholder="Enter custom unit"
+                                      value={item.unit}
+                                      onChange={(e) => handleUpdatePOItemUnit(index, e.target.value)}
+                                      disabled={!item.selected}
+                                      style={{ marginTop: 3, fontSize: 11, width: '100%', padding: '4px 6px', textAlign: 'center', border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: '4px', boxSizing: 'border-box' }}
+                                    />
+                                  )}
+                                </td>
                                 {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: __stc('#0284c7') }}>{item.quotedQuantity}</td>}
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <input type="text" inputMode="decimal"
@@ -2891,7 +3012,10 @@ const PurchaseOrders = () => {
                 className="purchase-orders-btn-primary po-btn-submit" onClick={handleCreatePO}
                 disabled={!modalGroupName || createPOFormData.items.filter(i => i.selected).length === 0}
               >
-                {isEditMode ? '💾 Update Purchase Order' : '✅ Create Purchase Order'}
+                {(() => {
+                  const label = createPOFormData.documentType === 'WORK_ORDER' ? 'Work Order' : 'Purchase Order';
+                  return isEditMode ? `💾 Update ${label}` : `✅ Create ${label}`;
+                })()}
               </button>
               <button className="purchase-orders-btn-secondary po-btn-cancel" onClick={handleCloseCreatePOModal}>Cancel</button>
             </div>

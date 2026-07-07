@@ -37,14 +37,25 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
     if (!triggerRef.current) return;
     const rect       = triggerRef.current.getBoundingClientRect();
     const searchBarH = searchable ? 44 : 0;
-    const listHeight = Math.min(filteredOptions.length * 36 + 8 + searchBarH, searchable ? 320 : 240);
-    const spaceBelow = window.innerHeight - rect.bottom - 8;
-    const openUp     = spaceBelow < listHeight && rect.top > listHeight;
+    const MARGIN     = 8;
+    const HARD_CAP   = searchable ? 320 : 240;
+    // Ideal height if nothing constrained us.
+    const desired    = Math.min(filteredOptions.length * 36 + 8 + searchBarH, HARD_CAP);
+    const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
+    const spaceAbove = rect.top - MARGIN;
+    // Open downward unless there is clearly more room above. Never require the
+    // FULL desired height to fit — instead open toward the larger gap and cap
+    // the list to whatever space that direction actually has, so the last item
+    // (e.g. "Custom") is always reachable by scrolling instead of being clipped.
+    const openUp     = spaceBelow < desired && spaceAbove > spaceBelow;
+    const avail      = openUp ? spaceAbove : spaceBelow;
+    const listHeight = Math.max(120, Math.min(desired, avail)); // floor so it's usable
 
     setListPos({
       left:   rect.left,
       width:  rect.width,
       openUp,
+      maxHeight: listHeight,
       top:    openUp ? rect.top - listHeight - 4 : rect.bottom + 4,
     });
   }, [filteredOptions.length, searchable]);
@@ -194,6 +205,8 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
             }
         ),
         zIndex:    99999,
+        maxHeight: listPos.maxHeight ? `${listPos.maxHeight}px` : undefined,
+        overflowY: 'auto',
         animation: listPos.openUp ? 'dropdown-up 0.12s ease' : 'dropdown-in 0.12s ease',
       }}
       role="listbox"
