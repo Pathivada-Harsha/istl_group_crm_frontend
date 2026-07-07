@@ -51,6 +51,10 @@ import InventoryManagement from './Pages/InventoryManagement.js';
 import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
 import CRMAssistantBot from './components/CRMAssistantBot';
 import TeamLeadPerformance from "./Pages/TeamLeadPerformance.js";
+// ── LOGIN ACTIVITY MODULE ──────────────────────────────────────────────
+import LoginActivityMonitor from "./Pages/LoginActivityMonitor.js";
+import { useActivityTracker } from "./hooks/useActivityTracker";
+// ───────────────────────────────────────────────────────────────────────
 
 /* ─────────────────────────────────────────────────────────────────────────────
  * useModalScrollLock
@@ -142,6 +146,10 @@ function AppShell({ hideShell }) {
 
   const { user } = useAuth();
   const userRole = user?.role || null;
+
+  // LOGIN ACTIVITY MODULE — records page views for the activity timeline
+  // (batched, fire-and-forget; adds zero latency to navigation)
+  useActivityTracker(!!user && !hideShell);
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebarCollapsed");
@@ -296,6 +304,12 @@ function AppShell({ hideShell }) {
           <Route path="/officeuse/projectaccess" element={
             <ProtectedRoute><ProjectAccessManager /></ProtectedRoute>
           } />
+
+          {/* ── LOGIN ACTIVITY MODULE ─────────────────────────────────── */}
+          <Route path="/officeuse/login-activity" element={
+            <ProtectedRoute><LoginActivityMonitor /></ProtectedRoute>
+          } />
+          {/* ──────────────────────────────────────────────────────────── */}
 
           <Route path="/notifications" element={
             <ProtectedRoute><NotificationsPage /></ProtectedRoute>

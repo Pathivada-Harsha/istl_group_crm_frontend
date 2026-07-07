@@ -14,7 +14,9 @@ import { useAuth } from '../hooks/useAuth';
 import '../components_css/CRMAssistantBot.css';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8080';
-const MCP_SERVER = process.env.REACT_APP_MCP_URL || 'http://localhost:3001';
+// Switched back to the Java backend's Groq pipeline (AiController → GroqClient).
+// The Node MCP server (:3001, Claude-based) is no longer used — its API limit was reached.
+// const MCP_SERVER = process.env.REACT_APP_MCP_URL || 'http://localhost:3001';
 // ─── Roles allowed to see the bot ────────────────────────────────────────────
 const ALLOWED_ROLES = ['SUPERADMIN', 'ADMIN'];
 
@@ -174,7 +176,7 @@ export default function CRMAssistantBot() {
         userContext: buildUserContext(),
       };
 
-      const res = await fetch(`${MCP_SERVER}/chat`, {
+      const res = await fetch(`${API_BASE}/ai-assistant/chat`, {
         method: 'POST',
         credentials: 'include',
         headers: {

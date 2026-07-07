@@ -254,6 +254,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a6.94 6.94 0 00-.1-1l2.02-1.57-2-3.46-2.38.96a7.02 7.02 0 00-1.73-1l-.36-2.54h-4l-.36 2.54a7.02 7.02 0 00-1.73 1l-2.38-.96-2 3.46 2.02 1.57a6.94 6.94 0 000 2l-2.02 1.57 2 3.46 2.38-.96a7.02 7.02 0 001.73 1l.36 2.54h4l.36-2.54a7.02 7.02 0 001.73-1l2.38.96 2-3.46-2.02-1.57c.07-.33.1-.66.1-1z',
         },
         {
+          name: 'Login & Activity Monitor',
+          path: '/officeuse/login-activity',
+          permission: 'OFFICE_USE',
+          icon: 'M22 12h-4l-3 9L9 3l-3 9H2',
+        },
+        {
           name: 'Project Access Manager',
           path: '/officeuse/projectaccess',
           permission: 'OFFICE_USE',
