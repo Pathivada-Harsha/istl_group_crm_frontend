@@ -54,6 +54,7 @@ const SortIcon = ({ columnId, sortConfig }) => {
 
 // ── Validation sets for import ───────────────────────────────────────────────
 const VALID_GST = new Set([0, 5, 12, 18, 28]);
+const GST_OPTIONS = [0, 5, 12, 18, 28];
 const CATEGORIES = [
   'Manufacturer',
   'Supplier',
@@ -843,8 +844,8 @@ const QuotationsReceived = () => {
     const vid = e.target.value ? parseInt(e.target.value) : null;
     if (vid) {
       const v = vendors.find(x => x.id === vid);
-      if (v) { setSelectedVendorDetails({ id: v.id, name: v.name, phone: v.phone || v.contact }); setQuotationFormData({ ...quotationFormData, vendorId: vid, vendorContact: v.phone || v.contact || '' }); }
-    } else { setSelectedVendorDetails(null); setQuotationFormData({ ...quotationFormData, vendorId: null, vendorContact: '' }); }
+      if (v) { setSelectedVendorDetails({ id: v.id, name: v.name, phone: v.phone || v.contact }); setQuotationFormData({ ...quotationFormData, vendorId: vid, vendorName: v.name || '', vendorContact: v.phone || v.contact || '' }); }
+    } else { setSelectedVendorDetails(null); setQuotationFormData({ ...quotationFormData, vendorId: null, vendorName: '', vendorContact: '' }); }
   };
 
   const toggleItemInclusion = (idx) => {
@@ -1019,7 +1020,7 @@ const QuotationsReceived = () => {
     const seedGroup    = groupName    || '';
     const seedSubGroup = subGroupName || '';
     const seedProject  = projectId   || '';
-    setQuotationFormData({ rfqId: '', validTill: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', gstOnTotal: 0, items: [] });
+    setQuotationFormData({ rfqId: '', validTill: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, category: 'Manufacturer', vendorId: null, vendorName: '', vendorContact: '', vendorCategory: '', vendorType: '', vendorRating: 0, deliveryTime: '', paymentTerms: '', warranty: '', notes: '', status: 'New', items: [] });
     setSelectedVendorDetails(null); setShowNewVendorForm(false); setVendors([]); setOrderBookItems([]);
     setVendorSearch(''); setVendorDropdownOpen(false);
     setCustomVendorCategory(''); setCustomVendorType('');
@@ -1105,9 +1106,12 @@ const QuotationsReceived = () => {
   const calculateQuotationTotal = () => {
     if (!quotationFormData) return { subtotal: 0, gstAmount: 0, total: 0 };
     const inc = quotationFormData.items.filter(i => i.included !== false);
-    const subtotal = inc.reduce((s, i) => s + (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0), 0);
-    const gstPct = parseFloat(quotationFormData.gstOnTotal) || 0;
-    const gstAmount = subtotal * gstPct / 100;
+    let subtotal = 0, gstAmount = 0;
+    inc.forEach(i => {
+      const base = (parseFloat(i.quantity) || 0) * (parseFloat(i.unitPrice) || 0);
+      subtotal  += base;
+      gstAmount += base * (parseFloat(i.taxPercent) || 0) / 100;
+    });
     return { subtotal, gstAmount, total: subtotal + gstAmount };
   };
 
@@ -1793,7 +1797,7 @@ const QuotationsReceived = () => {
                 <h3>Basic Information</h3>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
-                    <label>RFQ ID</label>
+                    <label>Vendor RFQ ID</label>
                     <input type="text" value={quotationFormData.rfqId} onChange={(e) => setQuotationFormData({ ...quotationFormData, rfqId: e.target.value })} placeholder="e.g., RFQ-2024-001" />
                   </div>
                   {/* Category removed — not needed in this context
@@ -1916,6 +1920,7 @@ const QuotationsReceived = () => {
                           <col style={{ width: '90px' }} />
                           <col style={{ width: '130px' }} />
                           <col style={{ width: '130px' }} />
+                          <col style={{ width: '90px' }} />
                           <col style={{ width: '120px' }} />
                           <col style={{ width: '48px' }} />
                         </colgroup>
@@ -1928,6 +1933,7 @@ const QuotationsReceived = () => {
                             <th>Qty *</th>
                             <th>Make</th>
                             <th>Rate (₹) *</th>
+                            <th>GST %</th>
                             <th>Amount</th>
                             <th>Del</th>
                           </tr>
@@ -1937,7 +1943,9 @@ const QuotationsReceived = () => {
                             const inc = item.included !== false;
                             const qty = parseFloat(item.quantity) || 0;
                             const price = parseFloat(item.unitPrice) || 0;
-                            const amount = qty * price;
+                            const taxPct = parseFloat(item.taxPercent) || 0;
+                            const base = qty * price;
+                            const amount = base + base * taxPct / 100; // GST-inclusive line total
                             return (
                               <tr key={idx} style={{ background: inc ? 'white' : '#f8fafc', opacity: inc ? 1 : 0.5 }}>
                                 <td style={{ textAlign: 'center' }}><input type="checkbox" checked={inc} onChange={() => toggleItemInclusion(idx)} style={{ width: 18, height: 18, cursor: 'pointer' }} /></td>
@@ -2024,6 +2032,16 @@ const QuotationsReceived = () => {
                                     disabled={!inc}
                                   />
                                 </td>
+                                <td>
+                                  <select
+                                    value={parseFloat(item.taxPercent) || 0}
+                                    onChange={(e) => handleUpdateQuotationItem(idx, 'taxPercent', Number(e.target.value))}
+                                    className="table-input text-center"
+                                    disabled={!inc}
+                                  >
+                                    {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
+                                  </select>
+                                </td>
                                 <td className="text-right" style={{ fontWeight: 600, color: inc ? '#1e293b' : '#94a3b8' }}>{inc && item.unitPrice ? formatCurrency(amount) : '-'}</td>
                                 <td className="text-center"><button type="button" className="procurement-quotation-received-btn-remove-item" onClick={() => handleRemoveQuotationItem(idx)} title="Remove">✕</button></td>
                               </tr>
@@ -2032,25 +2050,16 @@ const QuotationsReceived = () => {
                         </tbody>
                       </table>
                     </div>
-                    {/* Overall GST on Total */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '14px 0 6px', justifyContent: 'flex-end' }}>
-                      <label style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>GST on Total (%)</label>
-                      <input
-                        type="number"
-                        min="0"
-                        max="100"
-                        step="0.1"
-                        placeholder="e.g. 8.9"
-                        value={quotationFormData.gstOnTotal || ''}
-                        onChange={(e) => setQuotationFormData({ ...quotationFormData, gstOnTotal: e.target.value })}
-                        style={{ padding: '6px 10px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 13, width: 100, textAlign: 'right' }}
-                      />
-                    </div>
-                    <div className="procurement-quotation-received-quote-summary">
-                      <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(calculateQuotationTotal().subtotal)}</span></div>
-                      {(parseFloat(quotationFormData.gstOnTotal) > 0) && <div className="procurement-quotation-received-summary-row"><span>GST ({parseFloat(quotationFormData.gstOnTotal)}%):</span><span>{formatCurrency(calculateQuotationTotal().gstAmount)}</span></div>}
-                      <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total Value:</strong></span><span><strong>{formatCurrency(calculateQuotationTotal().total)}</strong></span></div>
-                    </div>
+                    {(() => {
+                      const totals = calculateQuotationTotal();
+                      return (
+                        <div className="procurement-quotation-received-quote-summary" style={{ marginTop: 14 }}>
+                          <div className="procurement-quotation-received-summary-row"><span>Subtotal:</span><span>{formatCurrency(totals.subtotal)}</span></div>
+                          {totals.gstAmount > 0 && <div className="procurement-quotation-received-summary-row"><span>GST:</span><span>{formatCurrency(totals.gstAmount)}</span></div>}
+                          <div className="procurement-quotation-received-summary-row procurement-quotation-received-summary-total"><span><strong>Total Value:</strong></span><span><strong>{formatCurrency(totals.total)}</strong></span></div>
+                        </div>
+                      );
+                    })()}
                   </>
                 )}
               </div>
