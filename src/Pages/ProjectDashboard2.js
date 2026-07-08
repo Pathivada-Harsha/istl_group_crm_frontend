@@ -1072,14 +1072,14 @@ const CapacityBlock = ({ subGroups }) => {
   };
 
   const META = {
-    ccms:           { bg: '#eff6ff', border: '#3b82f6', text: '#1d4ed8', icon: '📦', label: 'CCMS' },
-    mcms:           { bg: '#f0fdf4', border: '#22c55e', text: '#15803d', icon: '🔧', label: 'MCMS' },
-    itms:           { bg: '#fdf4ff', border: '#a855f7', text: '#7e22ce', icon: '🚦', label: 'ITMS' },
-    solar_rooftop:  { bg: '#fffbeb', border: '#f59e0b', text: '#b45309', icon: '☀️', label: 'Solar Rooftop' },
-    solar_ground:   { bg: '#fff7ed', border: '#f97316', text: '#c2410c', icon: '🏭', label: 'Ground Mount' },
-    solar_carports: { bg: '#f0f9ff', border: '#0ea5e9', text: '#0369a1', icon: '🅿️', label: 'Carports' },
-    solar_wind:     { bg: '#ecfdf5', border: '#10b981', text: '#065f46', icon: '💨', label: 'Solar Wind' },
-    default:        { bg: '#f8fafc', border: '#94a3b8', text: '#475569', icon: '📊', label: null },
+    ccms:           { bg: 'var(--c-eff6ff, #eff6ff)', border: '#3b82f6', text: 'var(--ct-1d4ed8, #1d4ed8)', icon: '📦', label: 'CCMS' },
+    mcms:           { bg: 'var(--c-f0fdf4, #f0fdf4)', border: '#22c55e', text: 'var(--ct-15803d, #15803d)', icon: '🔧', label: 'MCMS' },
+    itms:           { bg: 'var(--c-faf5ff, #fdf4ff)', border: '#a855f7', text: 'var(--ct-1e293b, #7e22ce)', icon: '🚦', label: 'ITMS' },
+    solar_rooftop:  { bg: 'var(--c-fffbeb, #fffbeb)', border: '#f59e0b', text: 'var(--ct-b45309, #b45309)', icon: '☀️', label: 'Solar Rooftop' },
+    solar_ground:   { bg: 'var(--c-fff7ed, #fff7ed)', border: '#f97316', text: 'var(--ct-c2410c, #c2410c)', icon: '🏭', label: 'Ground Mount' },
+    solar_carports: { bg: 'var(--c-f0f9ff, #f0f9ff)', border: '#0ea5e9', text: 'var(--ct-0369a1, #0369a1)', icon: '🅿️', label: 'Carports' },
+    solar_wind:     { bg: 'var(--c-ecfdf5, #ecfdf5)', border: '#10b981', text: 'var(--ct-065f46, #065f46)', icon: '💨', label: 'Solar Wind' },
+    default:        { bg: 'var(--c-f8fafc, #f8fafc)', border: '#94a3b8', text: '#475569', icon: '📊', label: null },
   };
 
   const getMeta = (sg) => {
@@ -1123,7 +1123,7 @@ const CapacityBlock = ({ subGroups }) => {
             const { km, kg } = wind ? getWindUnits(sg) : {};
             return (
               <div key={i} onClick={() => setActiveModal(sg)} title="Click to see project breakdown"
-                style={{ background: m.bg, border: `1.5px solid ${m.border}`, borderRadius: 8,
+                style={{ background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), border: `1.5px solid ${m.border}`, borderRadius: 8,
                   padding: '8px 12px 7px', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
                   boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}
                 onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${m.border}44`; }}
@@ -1163,27 +1163,27 @@ const CapacityBlock = ({ subGroups }) => {
         const windKmTotal = wind ? (activeModal.allUnitTotals || []).find(u => u.unit?.toLowerCase() === 'km') : null;
         return (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-            <div style={{ background: '#fff', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
+            <div style={{ background: 'var(--c-ffffff, #fff)', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
               onClick={e => e.stopPropagation()}>
               {/* Sticky header */}
-              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: m.bg, borderRadius: '14px 14px 0 0', flexShrink: 0 }}>
+              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), borderRadius: '14px 14px 0 0', flexShrink: 0 }}>
                 <div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 1 }}>Capacity Breakdown</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ct-94a3b8, #94a3b8)', textTransform: 'uppercase', letterSpacing: 1 }}>Capacity Breakdown</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: m.text, marginTop: 2 }}>{m.icon} {m.label || activeModal.subGroupName}</div>
                   {wind ? (
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ fontSize: 12, color: 'var(--ct-64748b, #64748b)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                       {(activeModal.allUnitTotals || []).map((u, i) => (
                         <span key={i}><strong>{formatQty(u.quantity, u.unit)}</strong></span>
                       ))}
                       <span>· <strong>{activeModal.projectCount}</strong> project{activeModal.projectCount !== 1 ? 's' : ''}</span>
                     </div>
                   ) : (
-                    <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                    <div style={{ fontSize: 12, color: 'var(--ct-64748b, #64748b)', marginTop: 3 }}>
                       Total <strong>{formatQty(activeModal.totalQuantity, activeModal.unit)}</strong> · <strong>{activeModal.projectCount}</strong> project{activeModal.projectCount !== 1 ? 's' : ''}
                     </div>
                   )}
                 </div>
-                <button onClick={() => setActiveModal(null)} style={{ background: '#fff', border: `1px solid ${m.border}`, borderRadius: 7, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: m.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
+                <button onClick={() => setActiveModal(null)} style={{ background: 'var(--c-ffffff, #fff)', border: `1px solid ${m.border}`, borderRadius: 7, width: 32, height: 32, cursor: 'pointer', fontSize: 16, color: m.text, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>✕</button>
               </div>
               {/* Scrollable list */}
               <div style={{ overflowY: 'auto', flex: 1, padding: '4px 0 8px' }}
@@ -1200,35 +1200,35 @@ const CapacityBlock = ({ subGroups }) => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
                           {/* Customer name — primary bold dark */}
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ct-1e293b, #1e293b)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {p.customerName || p.orderTitle || p.orderBookNo}
                           </div>
                           {/* Order book number — secondary small blue */}
                           {p.orderBookNo && (
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#3b82f6', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ct-3b82f6, #3b82f6)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {p.orderBookNo}
                             </div>
                           )}
                           {/* Order title — grey subtitle */}
                           {p.orderTitle && (
-                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <div style={{ fontSize: 11, color: 'var(--ct-64748b, #64748b)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {p.orderTitle}
                             </div>
                           )}
                           {p.projectId && (
-                            <span style={{ fontSize: 10, color: '#94a3b8', background: '#f1f5f9', borderRadius: 3, padding: '1px 5px', marginTop: 2, display: 'inline-block' }}>{p.projectId}</span>
+                            <span style={{ fontSize: 10, color: 'var(--ct-94a3b8, #94a3b8)', background: 'var(--c-f1f5f9, #f1f5f9)', borderRadius: 3, padding: '1px 5px', marginTop: 2, display: 'inline-block' }}>{p.projectId}</span>
                           )}
                         </div>
                         <div style={{ textAlign: 'right', flexShrink: 0 }}>
                           {wind && windKmEntry ? (
                             <>
                               <div style={{ fontSize: 14, fontWeight: 700, color: m.text }}>{formatQty(windKmEntry.quantity, 'Km')}</div>
-                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{windPct.toFixed(1)}% of Km</div>
+                              <div style={{ fontSize: 10, color: 'var(--ct-94a3b8, #94a3b8)' }}>{windPct.toFixed(1)}% of Km</div>
                             </>
                           ) : (
                             <>
                               <div style={{ fontSize: 14, fontWeight: 700, color: m.text }}>{formatQty(p.quantity, p.unit)}</div>
-                              <div style={{ fontSize: 10, color: '#94a3b8' }}>{pct.toFixed(1)}%</div>
+                              <div style={{ fontSize: 10, color: 'var(--ct-94a3b8, #94a3b8)' }}>{pct.toFixed(1)}%</div>
                             </>
                           )}
                         </div>
@@ -1236,13 +1236,13 @@ const CapacityBlock = ({ subGroups }) => {
                       {wind && breakdown.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginBottom: 6 }}>
                           {breakdown.map((u, bi) => (
-                            <span key={bi} style={{ fontSize: 11, background: '#f1f5f9', border: `1px solid ${m.border}33`, borderRadius: 5, padding: '2px 7px', color: '#475569', fontWeight: 500 }}>
+                            <span key={bi} style={{ fontSize: 11, background: 'var(--c-f1f5f9, #f1f5f9)', border: `1px solid ${m.border}33`, borderRadius: 5, padding: '2px 7px', color: 'var(--ct-475569, #475569)', fontWeight: 500 }}>
                               {formatQty(u.quantity, u.unit)}
                             </span>
                           ))}
                         </div>
                       )}
-                      <div style={{ height: 4, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: 4, background: 'var(--c-f1f5f9, #f1f5f9)', borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${wind ? windPct : pct}%`, background: m.border, borderRadius: 99, transition: 'width .4s' }} />
                       </div>
                     </div>

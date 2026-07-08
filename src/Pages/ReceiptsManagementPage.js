@@ -1135,14 +1135,6 @@ const ReceiptsManagementPage = () => {
     const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
     return `₹${num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
-  const formatIndianShort = (amount) => {
-    if (!amount && amount !== 0) return '₹0';
-    const num = typeof amount === 'number' ? amount : parseFloat(amount) || 0;
-    if (num >= 10000000) return `₹${(num / 10000000).toFixed(1)} CR`;
-    if (num >= 100000)   return `₹${(num / 100000).toFixed(1)} L`;
-    if (num >= 1000)     return `₹${(num / 1000).toFixed(1)} K`;
-    return `₹${num.toFixed(0)}`;
-  };
   const formatDate = (dateStr) => { if (!dateStr) return ''; const d = new Date(dateStr); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()}`; };
   const formatDateTime = (dateStr) => { if (!dateStr) return ''; const d = new Date(dateStr); return `${String(d.getDate()).padStart(2,'0')}-${String(d.getMonth()+1).padStart(2,'0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; };
   const getReceiptTypeBadgeClass = (type) => ({ 'Advance': 'receipt-type-advance', 'Invoice': 'receipt-type-invoice', 'Other': 'receipt-type-other' }[type] || '');
@@ -1339,9 +1331,9 @@ const ReceiptsManagementPage = () => {
       {stats && (
         <div className="receipts-page-stats">
           <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL RECEIPTS</div><div className="receipts-page-stat-value">{stats.totalReceipts || 0}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL AMOUNT</div><div className="receipts-page-stat-value" title={formatCurrency(stats.totalAmount)}>{formatIndianShort(stats.totalAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">APPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-success" title={formatCurrency(stats.appliedAmount)}>{formatIndianShort(stats.appliedAmount)}</div></div>
-          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">UNAPPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-warning" title={formatCurrency(stats.unappliedAmount)}>{formatIndianShort(stats.unappliedAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">TOTAL AMOUNT</div><div className="receipts-page-stat-value">{formatCurrency(stats.totalAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">APPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-success">{formatCurrency(stats.appliedAmount)}</div></div>
+          <div className="receipts-page-stat-card"><div className="receipts-page-stat-label">UNAPPLIED AMOUNT</div><div className="receipts-page-stat-value receipts-page-stat-warning">{formatCurrency(stats.unappliedAmount)}</div></div>
         </div>
       )}
 

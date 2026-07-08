@@ -7,6 +7,10 @@ import "../pages-css/Login.css";
 import ThemeToggle from "../components/ThemeToggle";
 import heroDesktop from "../images/logo.png";
 import heroMobile from "../images/logo.png";
+// ── LOGIN ACTIVITY MODULE ──────────────────────────────────────────────
+import { collectClientContext, reportGeoWhenAvailable } from "../utils/clientContext";
+import SessionLimitDialog from "../components/LoginActivity/SessionLimitDialog";
+// ───────────────────────────────────────────────────────────────────────
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 const FP_OTP_KEY = "fp_otp";
@@ -24,6 +28,26 @@ export default function Login() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // ── LOGIN ACTIVITY MODULE state ───────────────────────────────────────
+  // limitSessions !== null → the "Maximum Active Sessions Reached" dialog
+  // is open, showing the user's currently active sessions.
+  const [limitSessions, setLimitSessions] = useState(null);
+  const [forceSubmitting, setForceSubmitting] = useState(false);
+  // Message shown when this device was signed out remotely (evicted /
+  // terminated by an admin) — written by setupFetchInterceptor.
+  const [signOutNotice, setSignOutNotice] = useState("");
+
+  useEffect(() => {
+    try {
+      const notice = sessionStorage.getItem("la_logout_reason");
+      if (notice) {
+        setSignOutNotice(notice);
+        sessionStorage.removeItem("la_logout_reason");
+      }
+    } catch { /* ignore */ }
+  }, []);
+  // ───────────────────────────────────────────────────────────────────────
 
   // ── Forgot-password modal state ───────────────────────────────────────────
   const [fpOpen, setFpOpen] = useState(false);
@@ -234,18 +258,14 @@ export default function Login() {
     };
 
     // ── LOGIN submit ──────────────────────────────────────────────────────────
-    async function handleSubmit(e) {
-      e.preventDefault();
-      setError("");
-
-      if (!username || !password) {
-        setError("Please enter username and password.");
-        return;
-      }
-
-      setSubmitting(true);
-
+    // LOGIN ACTIVITY MODULE: sends device/location context with the
+    // credentials and handles 409 SESSION_LIMIT_REACHED (two-device limit).
+    async function doLogin(forceLogin) {
       try {
+        // Device, browser, screen, timezone and (if already permitted)
+        // location — collected once, never blocks login on failure.
+        const clientContext = await collectClientContext();
+
         const response = await fetch(`${API_BASE_URL}/login/userLogin`, {
           method: "POST",
           credentials: "include",
@@ -253,6 +273,8 @@ export default function Login() {
           body: JSON.stringify({
             username: username.trim(),
             password: password.trim(),
+            ...clientContext,
+            ...(forceLogin ? { forceLogin: "true" } : {}),
           }),
         });
 
@@ -269,9 +291,17 @@ export default function Login() {
             setError("Login response is invalid. Please contact support.");
             return;
           }
+          setLimitSessions(null);
           login(data);
+          // If the location permission popup is still open (or positioning
+          // was slow), report coordinates in the background once available.
+          reportGeoWhenAvailable();
           navigate("/dashboard", { replace: true });
+        } else if (response.status === 409 && data?.error === "SESSION_LIMIT_REACHED") {
+          // Two devices already active — show the professional warning dialog
+          setLimitSessions(data.sessions || []);
         } else {
+          setLimitSessions(null);
           setError(data?.message || data?.error || "Login failed. Please try again.");
         }
       } catch (err) {
@@ -280,8 +310,35 @@ export default function Login() {
         } else {
           setError("Unable to connect to server. Please try again.");
         }
+      }
+    }
+
+    async function handleSubmit(e) {
+      e.preventDefault();
+      setError("");
+      setSignOutNotice("");
+
+      if (!username || !password) {
+        setError("Please enter username and password.");
+        return;
+      }
+
+      setSubmitting(true);
+      try {
+        await doLogin(false);
       } finally {
         setSubmitting(false);
+      }
+    }
+
+    // "Continue Login" in the session-limit dialog — retries with the flag;
+    // the backend then evicts the oldest session automatically.
+    async function handleForceLogin() {
+      setForceSubmitting(true);
+      try {
+        await doLogin(true);
+      } finally {
+        setForceSubmitting(false);
       }
     }
 
@@ -381,6 +438,11 @@ export default function Login() {
                     </button>
                   </div>
 
+                  {signOutNotice && !error && (
+                    <div className="login-error" style={{ background: "#fef3c7", color: "#92400e" }}>
+                      {signOutNotice}
+                    </div>
+                  )}
                   {error && <div className="login-error">{error}</div>}
 
                   <div className="login-submit-row">
@@ -392,6 +454,16 @@ export default function Login() {
               </div>
             </div>
           </div>
+
+          {/* LOGIN ACTIVITY MODULE — Feature 2: two-device limit dialog */}
+          {limitSessions !== null && (
+            <SessionLimitDialog
+              sessions={limitSessions}
+              loading={forceSubmitting}
+              onCancel={() => setLimitSessions(null)}
+              onContinue={handleForceLogin}
+            />
+          )}
         </div>
 
         {/* ══════════════════ FORGOT PASSWORD MODAL ══════════════════ */}
