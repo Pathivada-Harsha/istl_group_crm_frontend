@@ -36,6 +36,16 @@ export const setupFetchInterceptor = () => {
     if (isBackendCall && !isAuthCall && response.status === 401) {
       console.warn('Session expired - redirecting to login');
 
+      // LOGIN ACTIVITY MODULE: if the session was ended remotely (evicted by
+      // a login on another device, or terminated by an admin), pass the exact
+      // reason to the login page so the user understands what happened.
+      try {
+        const body = await response.clone().json();
+        if (body?.error === 'SESSION_EVICTED' && body?.message) {
+          sessionStorage.setItem('la_logout_reason', body.message);
+        }
+      } catch { /* body not JSON — ignore */ }
+
       // Clear auth data
       localStorage.removeItem('bd_portal_user');
 
