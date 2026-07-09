@@ -39,6 +39,12 @@ export const loginActivityApi = {
   terminateSession: (id) => request(`/active-sessions/${id}`, { method: "DELETE" }),
   signOutAllDevices: (userId) => request(`/users/${userId}/sessions`, { method: "DELETE" }),
 
+  // Self-service — Profile page. Scoped to the logged-in user's own
+  // devices only; works for every role, not just ADMIN/SUPERADMIN.
+  mySessions: () => request("/my-sessions"),
+  terminateMySession: (id) => request(`/my-sessions/${id}`, { method: "DELETE" }),
+  signOutOtherDevices: () => request("/my-sessions", { method: "DELETE" }),
+
   userSummary: (userId) => request(`/users/${userId}/summary`),
 
   track: (events) =>

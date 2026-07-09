@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import { BsArrowReturnRight } from "react-icons/bs";
 import { IoChevronDown } from "react-icons/io5";
@@ -117,10 +118,31 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   // ── Helpers ────────────────────────────────────────────────────────────────
   const hasPermission = (permission) => liveMenuPermissions?.includes(permission);
 
-  const getGroupAbbreviation = (groupTitle) => {
-    const map = { Sales: 'S', Procurement: 'P', 'Office Use': 'O' };
-    return map[groupTitle] || groupTitle.charAt(0);
+  // Distinct icon (matches the outline style used by the rest of the sidebar)
+  // shown in place of the group title when the sidebar is collapsed.
+  const getGroupIcon = (groupTitle) => {
+    const map = {
+      Sales: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+      Procurement: 'M8 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0zM3 6h11v9H3V6zm11 3h4l3 3v3h-3',
+      'Office Use': 'M3 21h18M5 21V5a2 2 0 012-2h6a2 2 0 012 2v16M9 9h1m-1 4h1m4-4h1m-1 4h1M19 21V9a2 2 0 00-2-2h-2v14',
+    };
+    // Generic folder icon as a safe fallback for any future collapsible group.
+    return map[groupTitle] || 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z';
   };
+
+  // ── Collapsed-sidebar tooltip ────────────────────────────────────────────
+  // Rendered through a portal (like FilterSelect) instead of a CSS ::after,
+  // because .sidebar has overflow-x: hidden for its scrollbar, which was
+  // silently clipping any tooltip that tried to pop out past its right edge.
+  const [tooltip, setTooltip] = useState(null); // { label, top, left } | null
+
+  const showTooltip = (e, label) => {
+    if (!collapsed) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    setTooltip({ label, top: rect.top + rect.height / 2, left: rect.right + 10 });
+  };
+
+  const hideTooltip = () => setTooltip(null);
 
   // ── Menu definition ────────────────────────────────────────────────────────
   const menuGroups = [
@@ -302,14 +324,20 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
                     <div
                       className={`sidebar-group-header collapsible ${isExpanded ? 'expanded' : ''}`}
                       onClick={() => toggleGroup(group.title)}
-                      data-full-name={group.title}
+                      onMouseEnter={(e) => showTooltip(e, group.title)}
+                      onMouseLeave={hideTooltip}
                     >
                       <span className="sidebar-group-title">{group.title}</span>
 
                       <div className="sidebar-group-abbreviation-container">
-                        <span className="sidebar-group-abbreviation">
-                          {getGroupAbbreviation(group.title)}
-                        </span>
+                        <svg
+                          className="sidebar-group-abbreviation-icon"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeWidth={2} d={getGroupIcon(group.title)} />
+                        </svg>
                         <IoChevronDown
                           className={`sidebar-group-collapsed-arrow ${isExpanded ? 'expanded' : ''}`}
                           size={14}
@@ -338,8 +366,10 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
                           key={item.name}
                           to={item.path}
                           onClick={onClose}
+                          onMouseEnter={(e) => showTooltip(e, item.name)}
+                          onMouseLeave={hideTooltip}
                           className={`sidebar-item ${active ? "active" : ""} ${group.collapsible && showHeader ? 'child-item' : ''}`}
-                          title={item.name}
+                          title={collapsed ? item.name : undefined}
                         >
                           {group.collapsible && showHeader && (
                             <BsArrowReturnRight className="child-connector" />
@@ -362,6 +392,17 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           </nav>
         </div>
       </aside>
+
+      {tooltip && collapsed && createPortal(
+        <div
+          className="sidebar-tooltip-portal"
+          style={{ top: tooltip.top, left: tooltip.left }}
+        >
+          <span className="sidebar-tooltip-arrow" />
+          {tooltip.label}
+        </div>,
+        document.body
+      )}
     </>
   );
 }

@@ -91,6 +91,21 @@
 }
 .login-input:focus { border-color: var(--blue); }
 
+/* Chrome/Edge paint autofilled fields with their own tinted background the
+   instant a saved credential is selected, ignoring our own input styles —
+   that's the blue/lavender tint on the Username/Password fields. Force it
+   back to the app's own white background and text colour so the fields
+   (and everything below them) render exactly like a normal, un-autofilled
+   field instead of visually "jumping" when the browser's autofill kicks in. */
+.login-input:-webkit-autofill,
+.login-input:-webkit-autofill:hover,
+.login-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ct-172031, #172031);
+  -webkit-box-shadow: 0 0 0px 1000px var(--c-white, #ffffff) inset;
+  box-shadow: 0 0 0px 1000px var(--c-white, #ffffff) inset;
+  transition: background-color 9999s ease-in-out 0s;
+}
+
 /* Password row — eye icon INSIDE input */
 .login-password-row { position: relative; display: flex; align-items: center; }
 .login-showpw {
