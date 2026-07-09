@@ -2,14 +2,34 @@
 
 .page-container { padding: 24px; }
 
-/* layout */
+/* layout — single column, full-width cards stacked (was a tall 320px
+   sidebar card next to a taller main column, which left the sidebar with
+   a lot of empty space at the bottom). */
 .profile-user-page-root { width: 100%; box-sizing: border-box; }
 
-.profile-user-page-grid {
+.profile-user-page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Profile Details+Password and Active Sessions side by side, filling the
+   full page width, both stretched to the same height (whichever card has
+   less content gets a flexible spacer pushing its footer down to match). */
+.profile-two-col {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  gap: 18px;
-  align-items: start;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
+  align-items: stretch;
+}
+.profile-two-col > .card {
+  display: flex;
+  flex-direction: column;
+}
+.profile-card-spacer { flex: 1; }
+
+@media (max-width: 900px) {
+  .profile-two-col { grid-template-columns: 1fr; }
 }
 
 /* card base */
@@ -21,11 +41,49 @@
   border: 1px solid var(--c-eef2f6, #eef2f6);
 }
 
-/* LEFT CARD */
-.profile-user-page-card { display: flex; flex-direction: column; gap: 12px; }
+/* ── Identity strip — avatar + name/role/email + joined/last-login, all in
+   one horizontal row instead of a tall vertical sidebar card ── */
+.profile-identity-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+}
 
-/* top */
-.profile-user-page-top { display:flex; gap:16px; align-items:flex-start; overflow: hidden; }
+.profile-identity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.profile-identity-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.profile-role-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--ct-0b63d6, #0b63d6);
+  background: var(--c-eaf2ff, #eaf2ff);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.profile-identity-stats {
+  display: flex;
+  gap: 20px;
+  padding-left: 16px;
+  border-left: 1px solid var(--c-eef2f6, #eef2f6);
+  flex-shrink: 0;
+}
+.profile-identity-stat { display: flex; flex-direction: column; gap: 2px; }
+
+@media (max-width: 720px) {
+  .profile-identity-strip { flex-wrap: wrap; }
+  .profile-identity-stats { border-left: none; padding-left: 0; border-top: 1px solid var(--c-eef2f6, #eef2f6); padding-top: 10px; width: 100%; }
+}
 
 /* ── Avatar section ────────────────────────────────────────────────────── */
 .profile-avatar-section {
@@ -178,14 +236,18 @@
   margin-top:8px;
 }
 
-/* password card */
-.profile-user-page-password { padding:16px; }
+/* password section — same card as Profile Details now, separated by a
+   hairline instead of living in its own card */
+.profile-password-divider {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--c-eef2f6, #eef2f6);
+}
+.profile-password-divider .profile-user-page-header { margin-bottom: 0; }
+.profile-password-divider form { margin-top: 14px; }
 
 /* RESPONSIVE */
 @media (max-width: 980px) {
-  .profile-user-page-grid {
-    grid-template-columns: 1fr;
-  }
   .profile-user-page-card { 
     flex-direction:row; 
     gap:12px; 
@@ -214,6 +276,92 @@
   background:var(--c-0b63d6, #0b63d6);
   color:var(--ct-white, white);
   border-color:var(--c-0b63d6, #0b63d6);
+}
+
+.btn.danger {
+  background: var(--c-fee2e2, #fee2e2);
+  color: var(--ct-b91c1c, #b91c1c);
+  border-color: var(--c-fecaca, #fecaca);
+}
+.btn.danger:hover:not(:disabled) { background: var(--c-fecaca, #fecaca); }
+
+.btn.danger-outline {
+  background: transparent;
+  color: var(--ct-b91c1c, #b91c1c);
+  border-color: var(--c-fecaca, #fecaca);
+}
+.btn.danger-outline:hover:not(:disabled) { background: var(--c-fef2f2, #fef2f2); }
+
+/* ── Active Sessions card ─────────────────────────────────────────────── */
+.profile-sessions-title { display: flex; align-items: center; gap: 8px; color: var(--ct-0b63d6, #0b63d6); }
+.profile-sessions-title h3 { margin: 0; color: var(--ct-0b4c9d, #0b4c9d); }
+.profile-sessions-count { font-size: 12px; font-weight: 400; color: var(--ct-6b7280, #6b7280); }
+
+.profile-sessions-subtitle {
+  font-size: 13px;
+  color: var(--ct-6b7280, #6b7280);
+  margin: 0 0 12px;
+}
+
+.profile-sessions-empty {
+  padding: 20px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--ct-6b7280, #6b7280);
+}
+
+.profile-sessions-list { display: flex; flex-direction: column; }
+
+.profile-session-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
+}
+.profile-session-row:first-child { border-top: none; }
+
+.profile-session-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: var(--c-fafbfd, #fafbfd);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ct-6b7280, #6b7280);
+}
+
+.profile-session-info { flex: 1; min-width: 0; }
+
+.profile-session-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.profile-session-name { font-size: 14px; font-weight: 600; color: var(--ct-1f2937, #1f2937); }
+
+.profile-session-current-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ct-15803d, #15803d);
+  background: var(--c-dcfce7, #dcfce7);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+
+.profile-session-meta {
+  font-size: 12px;
+  color: var(--ct-6b7280, #6b7280);
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .profile-session-row { flex-wrap: wrap; }
+  .profile-session-row .btn { width: 100%; }
+}
+
+.profile-sessions-signout-all {
+  width: 100%;
+  margin-top: 12px;
 }
 
 /* Disable state for buttons */
