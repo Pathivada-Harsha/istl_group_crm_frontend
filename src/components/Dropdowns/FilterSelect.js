@@ -13,8 +13,9 @@ import ReactDOM from 'react-dom';
  *   disabled     {boolean}
  *   id           {string}          — for label htmlFor
  *   searchable   {boolean}         — enables inline search/filter input in the dropdown
+ *   searchPlaceholder {string}     — placeholder for the inline search input (searchable only)
  */
-const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', disabled = false, id, searchable = false }) => {
+const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', disabled = false, id, searchable = false, searchPlaceholder = 'Search projects...' }) => {
   const [open,        setOpen]        = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [listPos,     setListPos]     = useState({ top: 0, left: 0, width: 0, openUp: false });
@@ -224,7 +225,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
               ref={searchRef}
               type="text"
               className="filter-dropdown-search-input"
-              placeholder="Search projects..."
+              placeholder={searchPlaceholder}
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); calcPosition(); }}
               onMouseDown={e => e.stopPropagation()}

@@ -20,11 +20,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import * as XLSXStyle from 'xlsx-js-style'; // style-capable SheetJS fork; used only for the colored export
-import { ArrowLeft, Plus, Trash2, Save, Wand2, MapPin, Check, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Wand2, Check, Download } from 'lucide-react';
 import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import '../../pages-css/OrderBookDetail.css';
 import ConfirmationModal from '../ConfirmationModal.js';
 import useConfirmationModal from '../HandleConfirmationModal.js';
+import LocationPicker from '../LocationPicker.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -122,228 +123,6 @@ const dateToGridFraction = (startStr, endStr, dateStr) => {
   if (!s || !e || !d || e <= s) return null;
   const f = (d - s) / (e - s);
   return Math.max(0, Math.min(1, f));
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  Google Maps loader — injects the JS API once, shared across all pickers.
-//  Reads REACT_APP_GOOGLE_MAPS_KEY. Loads the `places` library for search.
-//  Returns a promise that resolves when window.google.maps is ready.
-// ─────────────────────────────────────────────────────────────────────────────
-const GMAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY;
-let _gmapsPromise = null;
-// Auth failures (bad key / billing off / API not enabled / referrer blocked)
-// are reported by Google via this global callback, NOT via promise rejection.
-let _gmapsAuthFailed = false;
-if (typeof window !== 'undefined') {
-  window.gm_authFailure = () => { _gmapsAuthFailed = true; };
-}
-
-// Install Google's official inline bootstrap loader. This defines
-// google.maps.importLibrary as a queueing stub IMMEDIATELY, so importLibrary()
-// calls work regardless of when the script finishes downloading. This replaces
-// the previous onload-race approach (which rejected before maps attached).
-const installBootstrap = () => {
-  if (window.google && window.google.maps && window.google.maps.importLibrary) return;
-  ((g) => {
-    let h, a, k, p = 'The Google Maps JavaScript API';
-    const c = 'google', l = 'importLibrary', q = '__ib__', m = document;
-    let b = window;
-    b = b[c] || (b[c] = {});
-    const d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams();
-    const u = () => h || (h = new Promise(async (f, n) => {
-      a = m.createElement('script');
-      e.set('libraries', [...r] + '');
-      for (k in g) e.set(k.replace(/[A-Z]/g, t => '_' + t[0].toLowerCase()), g[k]);
-      e.set('callback', c + '.maps.' + q);
-      a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
-      d[q] = f;
-      a.onerror = () => h = n(Error(p + ' could not load.'));
-      a.nonce = m.querySelector('script[nonce]')?.nonce || '';
-      m.head.append(a);
-    }));
-    d[l] ? console.warn(p + ' only loads once. Ignoring:', g)
-      : (d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n)));
-  })({ key: GMAPS_KEY, v: 'weekly' });
-};
-
-const loadGoogleMaps = () => {
-  if (typeof window === 'undefined') return Promise.reject(new Error('no window'));
-  if (_gmapsPromise) return _gmapsPromise;
-  if (!GMAPS_KEY) return Promise.reject(new Error('REACT_APP_GOOGLE_MAPS_KEY is not set (check .env — no spaces/quotes — and restart npm start)'));
-
-  _gmapsPromise = (async () => {
-    installBootstrap();
-    const [{ Map }, markerLib, geo, places] = await Promise.all([
-      window.google.maps.importLibrary('maps'),
-      window.google.maps.importLibrary('marker'),
-      window.google.maps.importLibrary('geocoding'),
-      window.google.maps.importLibrary('places'),
-    ]);
-    if (_gmapsAuthFailed) {
-      throw new Error('Google rejected the key (auth failure). Check the Console for the "Google Maps JavaScript API error:" line — common codes: RefererNotAllowed, ApiNotActivated, BillingNotEnabled, InvalidKey.');
-    }
-    return {
-      Map,
-      Marker: markerLib.Marker,
-      Geocoder: geo.Geocoder,
-      LatLng: window.google.maps.LatLng,
-      places,
-    };
-  })();
-  return _gmapsPromise;
-};
-
-// Default map centre when nothing is picked yet (Hyderabad, India).
-const DEFAULT_CENTER = { lat: 17.385, lng: 78.4867 };
-
-// ─────────────────────────────────────────────────────────────────────────────
-//  LocationPicker — embedded Google map below the Site Location field.
-//  • search box (Places autocomplete) to jump to an address
-//  • click on the map or drag the pin to set the exact spot
-//  • reverse-geocodes the pin to fill the address text
-//  • emits { address, lat, lng } up to the parent
-//  Degrades gracefully: if the key is missing or the script fails, it falls
-//  back to a plain text input so the field still works.
-// ─────────────────────────────────────────────────────────────────────────────
-const LocationPicker = ({ address, lat, lng, onChange, showError }) => {
-  const mapEl = useRef(null);
-  const searchEl = useRef(null);
-  const mapRef = useRef(null);
-  const markerRef = useRef(null);
-  const geocoderRef = useRef(null);
-  const gmRef = useRef(null); // resolved { Map, Marker, Geocoder, LatLng, places }
-  const [status, setStatus] = useState('loading'); // loading | ready | unavailable
-  const [errMsg, setErrMsg] = useState('');
-
-  const hasPin = lat !== '' && lat != null && lng !== '' && lng != null;
-
-  // Reverse-geocode a LatLng → address string, pushed up via onChange.
-  const reverseGeocode = useCallback((position) => {
-    if (!geocoderRef.current) return;
-    geocoderRef.current.geocode({ location: position }, (results, st) => {
-      if (st === 'OK' && results && results[0]) {
-        onChange({ address: results[0].formatted_address, lat: position.lat(), lng: position.lng() });
-      } else {
-        onChange({ lat: position.lat(), lng: position.lng() });
-      }
-    });
-  }, [onChange]);
-
-  const placePin = useCallback((position) => {
-    if (!mapRef.current || !gmRef.current) return;
-    if (!markerRef.current) {
-      markerRef.current = new gmRef.current.Marker({
-        position, map: mapRef.current, draggable: true,
-      });
-      markerRef.current.addListener('dragend', (e) => reverseGeocode(e.latLng));
-    } else {
-      markerRef.current.setPosition(position);
-    }
-    mapRef.current.panTo(position);
-  }, [reverseGeocode]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const listeners = [];
-    let autocomplete = null;
-    loadGoogleMaps()
-      .then((gm) => {
-        if (cancelled || !mapEl.current) return;
-        gmRef.current = gm;
-        const start = hasPin ? { lat: Number(lat), lng: Number(lng) } : DEFAULT_CENTER;
-        mapRef.current = new gm.Map(mapEl.current, {
-          center: start, zoom: hasPin ? 16 : 11, mapTypeControl: true, streetViewControl: false,
-        });
-        geocoderRef.current = new gm.Geocoder();
-        if (hasPin) placePin(new gm.LatLng(start.lat, start.lng));
-
-        // Click to drop / move the pin.
-        listeners.push(mapRef.current.addListener('click', (e) => { placePin(e.latLng); reverseGeocode(e.latLng); }));
-
-        // Places search box (only if the Places library loaded).
-        if (searchEl.current && gm.places && gm.places.Autocomplete) {
-          autocomplete = new gm.places.Autocomplete(searchEl.current, { fields: ['geometry', 'formatted_address'] });
-          autocomplete.bindTo('bounds', mapRef.current);
-          listeners.push(autocomplete.addListener('place_changed', () => {
-            const place = autocomplete.getPlace();
-            if (!place.geometry) return;
-            const loc = place.geometry.location;
-            mapRef.current.setZoom(16);
-            placePin(loc);
-            onChange({ address: place.formatted_address || searchEl.current.value, lat: loc.lat(), lng: loc.lng() });
-          }));
-        }
-        setStatus('ready');
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setStatus('unavailable');
-          const msg = err && err.message ? err.message : String(err);
-          setErrMsg(msg);
-          console.error('Google Maps load failed:', err);
-        }
-      });
-
-    // Cleanup: detach Google's listeners/marker and remove the Autocomplete
-    // dropdown Google appends to <body>. Without this, React's unmount can hit
-    // "removeChild ... not a child of this node" because Google mutated the DOM
-    // outside React's knowledge.
-    return () => {
-      cancelled = true;
-      try {
-        const gm = gmRef.current;
-        if (gm && window.google && window.google.maps && window.google.maps.event) {
-          listeners.forEach(l => { try { window.google.maps.event.removeListener(l); } catch {} });
-          if (autocomplete) { try { window.google.maps.event.clearInstanceListeners(autocomplete); } catch {} }
-        }
-        if (markerRef.current) { try { markerRef.current.setMap(null); } catch {} markerRef.current = null; }
-        // Remove any .pac-container dropdowns Google attached to <body>.
-        document.querySelectorAll('.pac-container').forEach(el => { try { el.remove(); } catch {} });
-      } catch { /* best-effort cleanup */ }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Fallback: plain text field when maps can't load — now shows WHY.
-  if (status === 'unavailable') {
-    return (
-      <label className="obd-field obd-field--full"><span>Site Location</span>
-        <input value={address || ''} onChange={e => onChange({ address: e.target.value })}
-          placeholder="Type the site address" />
-        {errMsg && (
-          <div className="obd-loc-error">
-            <strong>Map could not load:</strong> {errMsg}
-          </div>
-        )}
-      </label>
-    );
-  }
-
-  return (
-    <div className="obd-field obd-field--full obd-loc">
-      <span><MapPin size={13} style={{ verticalAlign: '-2px' }} /> Site Location</span>
-      <input
-        ref={searchEl}
-        className="obd-loc-search"
-        defaultValue={address || ''}
-        placeholder="Search an address, or click / drag the pin on the map"
-        onChange={e => onChange({ address: e.target.value })}
-      />
-      <div className="obd-loc-map-wrap">
-        <div ref={mapEl} className="obd-loc-map" />
-        {status === 'loading' && <div className="obd-loc-loading">Loading map…</div>}
-      </div>
-      {hasPin && (
-        <div className="obd-loc-coords">
-          Pin: {Number(lat).toFixed(6)}, {Number(lng).toFixed(6)}
-          <button type="button" className="obd-loc-clear" onClick={() => {
-            if (markerRef.current) { markerRef.current.setMap(null); markerRef.current = null; }
-            onChange({ address: '', lat: null, lng: null });
-          }}>Clear pin</button>
-        </div>
-      )}
-    </div>
-  );
 };
 
 const TABS = [
@@ -642,6 +421,7 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
           </button>
         </div>
         <LocationPicker
+          className="obd-field obd-field--full"
           address={siteLocation}
           lat={siteLat}
           lng={siteLng}

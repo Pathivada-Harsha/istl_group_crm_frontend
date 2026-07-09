@@ -8,6 +8,7 @@ import {
 import '../pages-css/Procurement-Quatation-Recieved.css';
 import GroupProjectFilter from "./../components/Dropdowns/GroupProjectFilter.js";
 import FilterSelect from "./../components/Dropdowns/FilterSelect.js";
+import GeneratePoModal from "./GeneratePoModal.js";
 import useGroupProjectFilters from "./../components/Dropdowns/useGroupProjectFilters.js";
 import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
@@ -294,6 +295,9 @@ const QuotationsReceived = () => {
   const [loading, setLoading] = useState(false);
   const [showCreatePOFromQuotationModal, setShowCreatePOFromQuotationModal] = useState(false);
   const [poFormData, setPOFormData] = useState(null);
+  // Generate PO-PDF modal (opened right after a PO is created, like the Purchase Orders page)
+  const [genPo, setGenPo] = useState(null);
+  const [genVendor, setGenVendor] = useState(null);
   const [filters, setFilters] = useState({ search: '', status: 'all', category: 'all' });
 
   // ── Uploaded date range filter ────────────────────────────────────────────
@@ -871,15 +875,36 @@ const QuotationsReceived = () => {
   const handleOpenCreatePOModal = async (quotation) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() });
+      const [res, remRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/quotations/${quotation.id}`, { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/purchase-orders/quotation/${quotation.id}/remaining`, { credentials: 'include', headers: getAuthHeaders() }),
+      ]);
       if (!res.ok) throw new Error();
       const qd = await res.json();
+      // Remaining qty per line = quoted − already ordered across all prior POs (by item name).
+      const remByName = {};
+      if (remRes.ok) { (await remRes.json()).forEach(r => { remByName[r.itemName] = Number(r.remainingQty); }); }
+      const items = qd.items.map(item => {
+        const remaining = remByName[item.itemName] != null ? remByName[item.itemName] : Number(item.quantity);
+        return {
+          quotationItemId: item.id, itemName: item.itemName, description: item.description,
+          unit: item.unit || 'Nos', hsnCode: item.hsnCode || null,
+          quotedQuantity: Number(item.quantity), remainingQty: remaining,
+          selectedQuantity: remaining, unitPrice: item.unitPrice, taxPercent: item.taxPercent,
+          lineTotal: remaining * item.unitPrice * (1 + (item.taxPercent || 0) / 100),
+        };
+      });
+      if (items.every(i => i.remainingQty <= 0)) {
+        showWarning('All items in this quotation have already been fully ordered.');
+        return;
+      }
       setPOFormData({
         quotationId: qd.id, quoteNo: qd.quoteNo, vendorId: qd.vendorId, vendorContact: qd.vendorContact,
-        rfqId: qd.rfqId, groupName: qd.groupName, subGroupName: qd.subGroupName, projectId: qd.projectId,
+        rfqId: qd.rfqId, poRefId: qd.rfqId || '', documentType: 'PURCHASE_ORDER', status: 'Draft',
+        groupName: qd.groupName, subGroupName: qd.subGroupName, projectId: qd.projectId,
         orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '',
         paymentTerms: qd.paymentTerms || '', shippingAddress: '', notes: qd.notes || '',
-        items: qd.items.map(item => ({ quotationItemId: item.id, itemName: item.itemName, description: item.description, quotedQuantity: item.quantity, selectedQuantity: item.quantity, unitPrice: item.unitPrice, taxPercent: item.taxPercent, lineTotal: 0 })),
+        items,
       });
       setShowCreatePOFromQuotationModal(true);
     } catch { showError('Failed to load quotation details'); }
@@ -891,7 +916,8 @@ const QuotationsReceived = () => {
     const items = [...poFormData.items];
     const item = items[index];
     const qty = parseFloat(quantity) || 0;
-    if (qty > item.quotedQuantity) { showWarning(`Cannot exceed quoted qty of ${item.quotedQuantity}`); return; }
+    const cap = item.remainingQty != null ? item.remainingQty : item.quotedQuantity;
+    if (qty > cap) { showWarning(`Only ${cap} remaining for "${item.itemName}" under this quotation`); return; }
     item.selectedQuantity = qty;
     item.lineTotal = qty * item.unitPrice * (1 + item.taxPercent / 100);
     setPOFormData({ ...poFormData, items });
@@ -912,24 +938,43 @@ const QuotationsReceived = () => {
     try {
       const poData = {
         quotationId: poFormData.quotationId, vendorId: poFormData.vendorId, rfqId: poFormData.rfqId,
+        poRefId: poFormData.poRefId || poFormData.rfqId || null,
+        documentType: poFormData.documentType || 'PURCHASE_ORDER',
         groupName: poFormData.groupName, subGroupName: poFormData.subGroupName, projectId: poFormData.projectId,
         orderDate: poFormData.orderDate, expectedDelivery: poFormData.expectedDelivery,
         paymentTerms: poFormData.paymentTerms, shippingAddress: poFormData.shippingAddress, notes: poFormData.notes,
         items: poFormData.items.filter(i => i.selectedQuantity > 0).map(i => ({
-          itemName: i.itemName, itemDescription: i.description || '', quantity: i.selectedQuantity,
-          unitPrice: i.unitPrice, gst: i.taxPercent, discount: 0,
+          itemName: i.itemName, itemDescription: i.description || '', unit: i.unit || 'Nos', hsnCode: i.hsnCode || null,
+          quantity: i.selectedQuantity, unitPrice: i.unitPrice, gst: i.taxPercent, discount: 0,
         })),
-        status: 'Draft', paymentStatus: 'Pending',
+        status: poFormData.status || 'Draft', paymentStatus: 'Pending',
       };
+      const vId = poFormData.vendorId;
       const res = await fetch(`${API_BASE_URL}/purchase-orders/from-quotation`, { credentials: 'include', method: 'POST', headers: { 'Content-Type': 'application/json', ...getAuthHeaders() }, body: JSON.stringify(poData) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       const created = await res.json();
       showSuccess(`Purchase Order ${created.poNo} created!`);
       setShowCreatePOFromQuotationModal(false); setPOFormData(null);
-      await handleUpdateStatus(poFormData.quotationId, 'PO Created');
+      // Backend sets the quotation status (Partially Ordered / PO Created) from remaining qtys.
       fetchQuotations(); fetchStats();
+      // Parity with the Purchase Orders page: open the PO-document (PDF) step after create.
+      openGeneratePODoc(created.id, vId);
     } catch (err) { showError(err.message || 'Failed to create Purchase Order'); }
     finally { setLoading(false); }
+  };
+
+  // Open the Generate PO-PDF modal for a freshly created PO (mirrors PurchaseOrders.js openGenerateDoc).
+  const openGeneratePODoc = async (poId, vendorId) => {
+    try {
+      const pRes = await fetch(`${API_BASE_URL}/purchase-orders/${poId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const po = pRes.ok ? await pRes.json() : { id: poId };
+      let vendor = null;
+      if (vendorId) {
+        const vRes = await fetch(`${API_BASE_URL}/vendors/${vendorId}`, { credentials: 'include', headers: getAuthHeaders() });
+        if (vRes.ok) vendor = await vRes.json();
+      }
+      setGenVendor(vendor); setGenPo(po);
+    } catch { /* PDF step is best-effort */ }
   };
 
   // ── Quotation CRUD ───────────────────────────────────────────────────────
@@ -1143,7 +1188,7 @@ const QuotationsReceived = () => {
   };
   const formatFileSize = (b) => { if (!b) return '0 B'; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(2) + ' KB'; return (b / 1048576).toFixed(2) + ' MB'; };
 
-  const getStatusBadgeClass = (s) => ({ 'New': 'procurement-quotation-received-badge-new', 'Under Review': 'procurement-quotation-received-badge-review', 'Shortlisted': 'procurement-quotation-received-badge-shortlisted', 'Approved': 'procurement-quotation-received-badge-approved', 'PO Created': 'procurement-quotation-received-badge-po-created', 'Rejected': 'procurement-quotation-received-badge-rejected', 'Expired': 'procurement-quotation-received-badge-expired' })[s] || '';
+  const getStatusBadgeClass = (s) => ({ 'New': 'procurement-quotation-received-badge-new', 'Under Review': 'procurement-quotation-received-badge-review', 'Shortlisted': 'procurement-quotation-received-badge-shortlisted', 'Approved': 'procurement-quotation-received-badge-approved', 'Partially Ordered': 'procurement-quotation-received-badge-shortlisted', 'PO Created': 'procurement-quotation-received-badge-po-created', 'Rejected': 'procurement-quotation-received-badge-rejected', 'Expired': 'procurement-quotation-received-badge-expired' })[s] || '';
 
   const isExpiringSoon = (validTill) => {
     if (!validTill) return false;
@@ -1186,10 +1231,10 @@ const QuotationsReceived = () => {
         <td>
           <div className="procurement-quotation-received-actions-cell">
             <button className="procurement-quotation-received-action-btn action-view" onClick={() => handleViewQuotation(q)} title="View"><Eye size={14} /></button>
-            <button className="procurement-quotation-received-action-btn action-edit" onClick={() => handleEditQuotation(q)} title="Edit" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Edit2 size={14} /></button>
+            <button className="procurement-quotation-received-action-btn action-edit" onClick={() => handleEditQuotation(q)} title="Edit"><Edit2 size={14} /></button>
             {q.status === 'New' && <button className="procurement-quotation-received-action-btn action-shortlist" onClick={() => handleUpdateStatus(q.id, 'Shortlisted')} title="Shortlist"><Star size={14} /></button>}
             {(q.status === 'Shortlisted' || q.status === 'New') && <button className="procurement-quotation-received-action-btn action-approve" onClick={() => handleUpdateStatus(q.id, 'Approved')} title="Approve"><Check size={14} /></button>}
-            {q.status === 'Approved' && <button className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn" onClick={() => handleOpenCreatePOModal(q)} title="Create PO"><ShoppingCart size={14} /></button>}
+            {(q.status === 'Approved' || q.status === 'Partially Ordered') && <button className="procurement-quotation-received-action-btn procurement-quotation-received-create-po-btn" onClick={() => handleOpenCreatePOModal(q)} title="Create PO"><ShoppingCart size={14} /></button>}
 {canDelete && <button className="procurement-quotation-received-action-btn action-delete" onClick={() => handleDeleteQuotation(q.id)} title="Delete" disabled={q.status === 'PO Created'} style={{ opacity: q.status !== 'PO Created' ? 1 : 0.4 }}><Trash2 size={14} /></button>}
           </div>
         </td>
@@ -1251,6 +1296,7 @@ const QuotationsReceived = () => {
                 { value: 'Under Review', label: 'Under Review' },
                 { value: 'Shortlisted',  label: 'Shortlisted'  },
                 { value: 'Approved',     label: 'Approved'     },
+                { value: 'Partially Ordered', label: 'Partially Ordered' },
                 { value: 'PO Created',   label: 'PO Created'   },
                 { value: 'Rejected',     label: 'Rejected'     },
                 { value: 'Expired',      label: 'Expired'      },
@@ -1537,7 +1583,7 @@ const QuotationsReceived = () => {
                 ) : <p style={{ color: '#94a3b8', fontStyle: 'italic' }}>No file attached</p>}
               </div>
               <div className="procurement-quotation-received-drawer-actions">
-                {selectedQuotation.status === 'Approved' && !selectedQuotation.poId && canCreate && (
+                {(selectedQuotation.status === 'Approved' || selectedQuotation.status === 'Partially Ordered') && canCreate && (
                   <button className="procurement-quotation-received-btn-primary" onClick={() => { setShowDetailDrawer(false); handleOpenCreatePOModal(selectedQuotation); }}><ShoppingCart size={18} /> Create Purchase Order</button>
                 )}
                 {selectedQuotation.status !== 'PO Created' && canEdit && (
@@ -1741,7 +1787,7 @@ const QuotationsReceived = () => {
                 )}
                 {showNewVendorForm && (
                   <div style={{ padding: 20, background: '#f0fdf4', border: '2px solid #86efac', borderRadius: 8 }}>
-                    <div className="procurement-quotation-received-form-row">
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 16 }}>
                       <div className="procurement-quotation-received-form-group">
                         <label>Vendor Name *</label>
                         <input type="text" value={quotationFormData.vendorName || ''} onChange={(e) => setQuotationFormData({ ...quotationFormData, vendorName: e.target.value })} placeholder="Enter vendor name" />
@@ -1752,8 +1798,6 @@ const QuotationsReceived = () => {
                         {quotationFormData.vendorContact && quotationFormData.vendorContact.length > 0 && quotationFormData.vendorContact.length < 10 &&
                           <small style={{ color: '#dc2626', fontSize: 12, marginTop: 4, display: 'block' }}>Must be exactly 10 digits</small>}
                       </div>
-                    </div>
-                    <div className="procurement-quotation-received-form-row">
                       <div className="procurement-quotation-received-form-group">
                         <label>Category *</label>
                         <FilterSelect
@@ -2190,7 +2234,27 @@ const QuotationsReceived = () => {
                 <h3>Purchase Order Details</h3>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group"><label>Vendor Contact</label><input type="text" value={poFormData.vendorContact || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
-                  <div className="procurement-quotation-received-form-group"><label>RFQ ID</label><input type="text" value={poFormData.rfqId || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
+                  <div className="procurement-quotation-received-form-group"><label>Vendor RFQ Id</label><input type="text" value={poFormData.rfqId || 'N/A'} disabled style={{ backgroundColor: '#f1f5f9' }} /></div>
+                </div>
+                <div className="procurement-quotation-received-form-row">
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Document Type</label>
+                    <FilterSelect
+                      value={poFormData.documentType || 'PURCHASE_ORDER'}
+                      options={[{ value: 'PURCHASE_ORDER', label: 'Purchase Order' }, { value: 'WORK_ORDER', label: 'Work Order' }]}
+                      placeholder="Select type"
+                      onChange={v => setPOFormData({ ...poFormData, documentType: v })}
+                    />
+                  </div>
+                  <div className="procurement-quotation-received-form-group">
+                    <label>Status</label>
+                    <FilterSelect
+                      value={poFormData.status || 'Draft'}
+                      options={[{ value: 'Draft', label: 'Draft' }, { value: 'Approved', label: 'Approved' }]}
+                      placeholder="Select status"
+                      onChange={v => setPOFormData({ ...poFormData, status: v })}
+                    />
+                  </div>
                 </div>
                 <div className="procurement-quotation-received-form-row">
                   <div className="procurement-quotation-received-form-group">
@@ -2219,21 +2283,25 @@ const QuotationsReceived = () => {
               </div>
               <div className="procurement-quotation-received-form-section">
                 <h3>Select Items & Quantities</h3>
-                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>Adjust quantities as needed (cannot exceed quoted quantities)</p>
+                <p style={{ fontSize: 14, color: '#64748b', marginBottom: 12 }}>Adjust quantities as needed — capped at the remaining qty (quoted minus already ordered on prior POs)</p>
                 <div className="procurement-quotation-received-items-table-wrapper">
                   <table className="procurement-quotation-received-items-table">
-                    <thead><tr><th>Item Name</th><th>Description</th><th>Quoted Qty</th><th>PO Qty *</th><th>Unit Price (₹)</th><th>GST %</th><th>Line Total</th></tr></thead>
+                    <thead><tr><th>Item Name</th><th>Description</th><th>Quoted Qty</th><th>Remaining</th><th>PO Qty *</th><th>Unit Price (₹)</th><th>GST %</th><th>Line Total</th></tr></thead>
                     <tbody>
-                      {poFormData.items.map((item, idx) => (
-                        <tr key={idx}>
+                      {poFormData.items.map((item, idx) => {
+                        const fullyOrdered = item.remainingQty <= 0;
+                        return (
+                        <tr key={idx} style={{ opacity: fullyOrdered ? 0.5 : 1 }}>
                           <td>{item.itemName}</td><td>{item.description || '—'}</td>
                           <td className="text-center" style={{ fontWeight: 600 }}>{formatQty(item.quotedQuantity)}</td>
-                          <td><input type="number" min="0" max={item.quotedQuantity} value={item.selectedQuantity} onChange={(e) => handleUpdatePOItemQuantity(idx, e.target.value)} className="table-input text-center" style={{ fontWeight: 600 }} /></td>
+                          <td className="text-center" style={{ fontWeight: 600, color: fullyOrdered ? '#dc2626' : '#059669' }}>{fullyOrdered ? 'Fully ordered' : formatQty(item.remainingQty)}</td>
+                          <td><input type="number" min="0" max={item.remainingQty} value={item.selectedQuantity} onChange={(e) => handleUpdatePOItemQuantity(idx, e.target.value)} className="table-input text-center" style={{ fontWeight: 600 }} disabled={fullyOrdered} title={fullyOrdered ? 'This item is already fully ordered under this quotation' : ''} /></td>
                           <td className="text-right">{formatCurrency(item.unitPrice)}</td>
                           <td className="text-center">{item.taxPercent}%</td>
                           <td className="text-right" style={{ fontWeight: 600, color: '#1e293b' }}>{formatCurrency(item.lineTotal)}</td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -2251,6 +2319,18 @@ const QuotationsReceived = () => {
           </div>
         </div>
       )}
+
+      {/* Generate PO-PDF modal — opened right after a PO is created (parity with Purchase Orders page) */}
+      <GeneratePoModal
+        open={!!genPo}
+        po={genPo}
+        vendor={genVendor}
+        authHeaders={getAuthHeaders()}
+        onClose={() => { setGenPo(null); setGenVendor(null); }}
+        onGenerated={() => { fetchQuotations(); }}
+        showSuccess={showSuccess}
+        showError={showError}
+      />
     </div>
   );
 };

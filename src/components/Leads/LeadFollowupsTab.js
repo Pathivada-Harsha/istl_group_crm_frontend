@@ -64,19 +64,18 @@ const PRIORITY_COLOR = { High: "#EF4444", Medium: "#F59E0B", Low: "#10B981" };
 // ═══════════════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
-export default function LeadFollowupsTab({ lead, currentUser, permissions, onRefreshLead }) {
+export default function LeadFollowupsTab({ lead, currentUser, permissions, onRefreshLead, showSuccess, showError }) {
   const [followups,  setFollowups]  = useState([]);
   const [loading,    setLoading]    = useState(false);
   const [filter,     setFilter]     = useState("All");
   const [showAdd,    setShowAdd]    = useState(false);
   const [showDirect, setShowDirect] = useState(false);
   const [completing, setCompleting] = useState(null);
-  const [toast,      setToast]      = useState(null);
   const [users,      setUsers]      = useState([]);
 
+  // Delegate to the app-standard notification toast (ToastContainer) instead of a local block.
   const toast$ = (msg, type = "success") => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
+    if (type === "error") showError?.(msg); else showSuccess?.(msg);
   };
 
   const fetch$ = useCallback(async () => {
@@ -124,7 +123,6 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
 
   return (
     <div className="lfu">
-      {toast && <div className={`lfu-toast lfu-toast--${toast.type}`}>{toast.msg}</div>}
 
       {/* Header */}
       <div className="lfu-head">
@@ -653,8 +651,8 @@ function CompleteModal({ followup: f, onSaved, onCancel }) {
     : "Describe what happened during this follow-up…";
 
   return (
-    <div className="lfu-modal-bg" onClick={onCancel}>
-      <div className="lfu-modal" onClick={e => e.stopPropagation()}>
+    <div className="lfu-modal-bg">
+      <div className="lfu-modal">
         <div className="lfu-modal-top">
           <div>
             <div className="lfu-type-chip" style={{ background: tm.bg, color: tm.color, borderColor: tm.border, display:"inline-flex", gap:6, padding:"4px 12px", borderRadius:20, fontSize:12 }}>

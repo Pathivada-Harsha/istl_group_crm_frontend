@@ -29,10 +29,27 @@ const BOARD_COLUMNS = [
   { key: "NOT_INTERESTED", label: "Not Interested", color: "#dc2626", bg: "#fef2f2", icon: "❌" },
 ];
 
-const isResurfaced = (lead) =>
-  lead.telecallerStatus === "NOT_RESPONDED" &&
-  lead.telecallerStatusUpdatedAt &&
-  new Date() - new Date(lead.telecallerStatusUpdatedAt.replace(" ", "T")) > 24 * 60 * 60 * 1000;
+// Coerce any value (number/null/string) to a trimmed string so `.trim()` never
+// throws on numeric fields (capacity, bill, price) that arrive from the backend.
+const trimVal = (v) => (v == null ? "" : String(v)).trim();
+
+const isResurfaced = (lead) => {
+  if (lead.telecallerStatus !== "NOT_RESPONDED" || !lead.telecallerStatusUpdatedAt) return false;
+  const d = parseBackendDate(lead.telecallerStatusUpdatedAt);
+  return !!d && !isNaN(d) && (Date.now() - d.getTime()) > 24 * 60 * 60 * 1000;
+};
+
+const dayOnly = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const isKivDueToday = (lead) => {
+  if (lead.telecallerStatus !== "KEEP_IN_VIEW" || !lead.kivReminderDate) return false;
+  const d = parseBackendDate(lead.kivReminderDate);
+  if (!d || isNaN(d)) return false;
+  return dayOnly(d) <= dayOnly(new Date());
+};
+const kivDueSort = (a, b) => {
+  const da = parseBackendDate(a.kivReminderDate), db = parseBackendDate(b.kivReminderDate);
+  return (da && !isNaN(da) ? da.getTime() : Infinity) - (db && !isNaN(db) ? db.getTime() : Infinity);
+};
 
 const PRIORITY_COLOR = { High: "#ef4444", Medium: "#f59e0b", Low: "#10b981" };
 const SOURCES   = ["Website","Referral","Walk-in","Phone","Email","Social Media","Digital Marketing","Campaign","Others"];
@@ -46,6 +63,20 @@ function parseBackendDate(str) {
     return new Date(iso);
   }
   return new Date(str);
+}
+
+// Normalise any backend date string to the yyyy-MM-dd an <input type="date"> needs.
+function toDateInput(str) {
+  const d = parseBackendDate(str);
+  if (!d || isNaN(d)) return "";
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+// Local (not UTC) today as yyyy-MM-dd — for date-input `min`, so IST early-morning
+// hours don't let a past date be picked (toISOString() is UTC).
+function todayLocalStr() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 function formatDate(str) {
@@ -388,9 +419,9 @@ export default function TelecallerLeadsPage() {
       };
       const data = await api.get("/telecaller/my-leads", { params });
       if (data.success) {
-        setLeads(data.data);
-        setTotalPages(data.totalPages);
-        setTotal(data.count);
+        setLeads(Array.isArray(data.data) ? data.data : []);
+        setTotalPages(data.totalPages || 1);
+        setTotal(data.count || 0);
         setPage(resolvedPage);
         pageRef.current = resolvedPage;
       }
@@ -421,12 +452,13 @@ export default function TelecallerLeadsPage() {
       };
       const data = await api.get("/telecaller/my-leads", { params });
       if (data.success) {
+        const rows = Array.isArray(data.data) ? data.data : [];
         setBoardData(prev => ({
           ...prev,
-          [col]: append ? [...prev[col], ...data.data] : data.data,
+          [col]: append ? [...prev[col], ...rows] : rows,
         }));
-        setBoardTotals(prev => ({ ...prev, [col]: data.count }));
-        setBoardHasMore(prev => ({ ...prev, [col]: pg + 1 < data.totalPages }));
+        setBoardTotals(prev => ({ ...prev, [col]: data.count || 0 }));
+        setBoardHasMore(prev => ({ ...prev, [col]: pg + 1 < (data.totalPages || 1) }));
         setBoardPages(prev => ({ ...prev, [col]: pg }));
       }
     } catch (e) {
@@ -459,7 +491,9 @@ export default function TelecallerLeadsPage() {
 
   // ── Initial load ───────────────────────────────────────────────────────────
   useEffect(() => {
-    fetchLeads(0, "ALL", 10);
+    // In board mode the viewMode effect below seeds the columns via resetBoard(),
+    // so skip the wasted list fetch on a board-mode reload.
+    if (viewMode !== "board") fetchLeads(0, "ALL", 10);
     fetchStats();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -468,9 +502,11 @@ export default function TelecallerLeadsPage() {
   }, [viewMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Re-fetch when group/category changes (from shared hook / sidebar) ──────
+  const didGroupChangeMount = useRef(false);
   useEffect(() => {
     groupNameRef.current    = groupName;
     subGroupNameRef.current = subGroupName;
+    if (!didGroupChangeMount.current) { didGroupChangeMount.current = true; return; }
     setPage(0); pageRef.current = 0;
     if (viewMode === "board") {
       setTimeout(() => resetBoard(), 0);
@@ -546,7 +582,7 @@ export default function TelecallerLeadsPage() {
       setSelected(lead); setNewStatus("INTERESTED");
       setReason(""); setDiscussion(lead.tcDiscussionNote||"");
       setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
-      setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
+      setIntSiteDate(toDateInput(lead.tcSiteVisitDate));
       setIntPropertyType(lead.tcPropertyType||"");
       setIntQuotedPrice(lead.tcQuotedPrice||"");
       setIntAddons(lead.tcAddons||"");
@@ -695,15 +731,16 @@ export default function TelecallerLeadsPage() {
           tcState: tcState||null, tcDistrict: tcDistrict||null,
           tcCity: tcCity||null, tcPincode: tcPincode||null,
           tcSiteVisitDate: intSiteDate||null,
-          tcPropertyType: intPropertyType||null, tcQuotedPrice: intQuotedPrice.trim()||null,
-          tcAddons: intAddons.trim()||null, tcOtherComments: intOtherComment.trim()||null,
-          capacity: intCapacity.trim()||null, capacityUnit: intCapacityUnit||"kW",
-          tcMonthlyBill: intMonthlyBill.trim()||null,
-          tcExistingContractLoad: intExistingContractLoad.trim()||null,
-          tcRequiredContractLoad: intRequiredContractLoad.trim()||null,
+          tcPropertyType: intPropertyType||null, tcQuotedPrice: trimVal(intQuotedPrice)||null,
+          tcAddons: trimVal(intAddons)||null, tcOtherComments: trimVal(intOtherComment)||null,
+          capacity: trimVal(intCapacity)||null, capacityUnit: intCapacityUnit||"kW",
+          tcMonthlyBill: trimVal(intMonthlyBill)||null,
+          tcExistingContractLoad: trimVal(intExistingContractLoad)||null,
+          tcRequiredContractLoad: trimVal(intRequiredContractLoad)||null,
           solarScheme: intSolarScheme||null, subsidyRequired: intSubsidyRequired||null,
         }),
       });
+      let billUploadFailed = false;
       if (intBillFile) {
         try {
           setIntBillUploading(true);
@@ -720,24 +757,31 @@ export default function TelecallerLeadsPage() {
             body: form,
           });
           if (!uploadResp.ok) {
+            billUploadFailed = true;
             const errData = await uploadResp.json().catch(()=>({}));
             showToast("Bill upload failed: " + (errData.message||uploadResp.status), "error");
           }
         } catch(uploadErr) {
+          billUploadFailed = true;
           showToast("Bill upload failed: " + uploadErr.message, "error");
         } finally {
           setIntBillUploading(false); setIntBillFile(null);
         }
       }
-      showToast("Status updated!","success");
+      if (!billUploadFailed) showToast("Status updated!","success");
+      else showToast("Status updated, but the bill upload failed — please re-upload.","warning");
       setStatusModal(false); setDragFromCol(null);
       if (modalOpen) {
         try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){}
       }
+    } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast(e.message||"Update failed","error"); }
+    finally {
+      setSaving(false);
+      // Always resync the board/list/stats — even if a follow-up POST failed after
+      // the status PUT succeeded — so the UI never diverges from the DB.
       if (viewMode==="board") resetBoard(); else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);
       fetchStats();
-    } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast(e.message||"Update failed","error"); }
-    finally { setSaving(false); }
+    }
   };
 
   // ── Edit modal ─────────────────────────────────────────────────────────────
@@ -1005,12 +1049,10 @@ export default function TelecallerLeadsPage() {
               </div>
               <div className="tc-board-col-body">
                 {(() => {
-                  const todayStr = new Date().toISOString().split("T")[0];
-                  const isKivDueToday = (lead) => lead.telecallerStatus==="KEEP_IN_VIEW" && lead.kivReminderDate && lead.kivReminderDate.slice(0,10)<=todayStr;
                   const colLeads = col.key === "NOT_RESPONDED"
                     ? [...boardData[col.key]].sort((a,b) => { const ar=isResurfaced(a),br=isResurfaced(b); if(ar===br)return 0; return ar?1:-1; })
                     : col.key === "KEEP_IN_VIEW"
-                    ? [...boardData[col.key]].sort((a,b) => { const ad=isKivDueToday(a),bd=isKivDueToday(b); if(ad===bd)return(a.kivReminderDate||"").localeCompare(b.kivReminderDate||""); return ad?-1:1; })
+                    ? [...boardData[col.key]].sort((a,b) => { const ad=isKivDueToday(a),bd=isKivDueToday(b); if(ad===bd)return kivDueSort(a,b); return ad?-1:1; })
                     : boardData[col.key];
                   const kivDueLeads    = col.key === "KEEP_IN_VIEW"  ? colLeads.filter(l =>  isKivDueToday(l)) : [];
                   const normalLeads    = col.key === "NOT_RESPONDED" ? colLeads.filter(l => !isResurfaced(l)) : col.key === "KEEP_IN_VIEW" ? colLeads.filter(l => !isKivDueToday(l)) : colLeads;
@@ -1295,7 +1337,7 @@ export default function TelecallerLeadsPage() {
                     <label>Call back Date &amp; Time <span className="tc-req">*</span></label>
                     <div className="tc-datetime-row">
                       <div className="tc-datetime-field"><span className="tc-datetime-icon">📅</span>
-                        <input type="date" className="tc-date-input" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+                        <input type="date" className="tc-date-input" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} min={todayLocalStr()}/></div>
                       <div className="tc-datetime-field"><span className="tc-datetime-icon">🕐</span>
                         <input type="time" className="tc-time-input" value={followupTime} onChange={e=>setFollowupTime(e.target.value)}/></div>
                     </div>
@@ -1348,7 +1390,7 @@ export default function TelecallerLeadsPage() {
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 16px"}}>
                     <div className="tc-reason-field">
                       <label>Site Visit Date</label>
-                      <input type="date" value={intSiteDate} onChange={e=>setIntSiteDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/>
+                      <input type="date" value={intSiteDate} onChange={e=>setIntSiteDate(e.target.value)} min={todayLocalStr()}/>
                     </div>
                     <div className="tc-reason-field">
                       <label>Quoted Price (₹)</label>
@@ -1484,7 +1526,7 @@ export default function TelecallerLeadsPage() {
                 <label>Date &amp; Time <span className="tc-req">*</span></label>
                 <div className="tc-datetime-row">
                   <div className="tc-datetime-field"><span className="tc-datetime-icon">📅</span>
-                    <input type="date" className="tc-date-input" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} min={new Date().toISOString().split("T")[0]}/></div>
+                    <input type="date" className="tc-date-input" value={followupDate} onChange={e=>setFollowupDate(e.target.value)} min={todayLocalStr()}/></div>
                   <div className="tc-datetime-field"><span className="tc-datetime-icon">🕐</span>
                     <input type="time" className="tc-time-input" value={followupTime} onChange={e=>setFollowupTime(e.target.value)}/></div>
                 </div>

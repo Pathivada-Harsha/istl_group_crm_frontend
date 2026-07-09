@@ -317,11 +317,16 @@ const PODatePicker = ({ value, onChange, placeholder='Select date', minDate }) =
   );
 };
 
+// ─── Vendor category / type options (shared across pages) ─────────────────────
+const VENDOR_CATEGORIES = ['Manufacturing', 'Supplier', 'Services', 'Electrical', 'Civil & Structural', 'Instrumentation', 'IoT Hardware', 'Logistics & Transport'];
+const VENDOR_TYPES      = ['Manufacturer', 'Distributor', 'Service Provider', 'Contractor', 'System Integrator', 'Trader'];
+
 // ─── Column Definitions ───────────────────────────────────────────────────────
 const DEFAULT_COLUMNS = [
   { id: 'sNo',              label: 'S.No',               sortable: false, visible: true,  fixed: true  },
   { id: 'documentType',     label: 'Type',               sortable: false, visible: true  },
-  { id: 'poRefId',          label: 'PO REF ID',          sortable: false, visible: true  },
+  { id: 'poNumber',         label: 'PO Number',          sortable: true,  visible: true  },
+  { id: 'poRefId',          label: 'Vendor RFQ Id',      sortable: false, visible: false },
   { id: 'vendor',           label: 'Vendor',             sortable: true,  visible: true },
   { id: 'orderDate',        label: 'Order Date',         sortable: true,  visible: true },
   { id: 'totalValue',       label: 'Total Value',        sortable: true,  visible: true },
@@ -381,7 +386,8 @@ const ColumnsPicker = ({ columns, onToggle, onClose }) => {
 
 // ─── Draggable TH ─────────────────────────────────────────────────────────────
 const PO_COL_WIDTHS = {
-  poNo:          140,
+  poNumber:      140,
+  poRefId:       140,
   project:       200,
   vendor:        160,
   status:        110,
@@ -512,7 +518,7 @@ const PurchaseOrders = () => {
     documentType: 'PURCHASE_ORDER'
   });
   const [showManualItemForm, setShowManualItemForm] = useState(false);
-  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18, discount: '' });
+  const [newItem, setNewItem] = useState({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18 });
   const [focusedPriceIndex, setFocusedPriceIndex] = useState(null);
 
   // ── Edit-mode project change state ──
@@ -876,7 +882,7 @@ const PurchaseOrders = () => {
           allocatedQty,
           remainingQty,
           quantity: remainingQty,
-          unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0,
+          unitPrice: 0, gst: item.taxPercent || 18, lineTotal: 0,
           selected: remainingQty > 0,
         };
       });
@@ -912,7 +918,7 @@ const PurchaseOrders = () => {
       remainingQty,                       // available to assign
       quantity: remainingQty,             // default to remaining
       unit: item.unit || 'Nos',
-      unitPrice: 0, gst: item.taxPercent || 18, discount: 0, lineTotal: 0, selected: remainingQty > 0
+      unitPrice: 0, gst: item.taxPercent || 18, lineTotal: 0, selected: remainingQty > 0
     };
   });
 
@@ -936,24 +942,32 @@ const PurchaseOrders = () => {
     }
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE_URL}/quotations/${quotationId}`, { credentials: 'include', headers: getAuthHeaders() });
+      const [r, remRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/quotations/${quotationId}`, { credentials: 'include', headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/purchase-orders/quotation/${quotationId}/remaining`, { credentials: 'include', headers: getAuthHeaders() }),
+      ]);
       if (!r.ok) throw new Error();
       const qData = await r.json();
-      const items = qData.items.map((item, i) => ({
-        id: `quotation-${item.id}`, quotationItemId: item.id,
-        itemName: item.itemName, itemDescription: item.description || '',
-        unit: item.unit || 'Nos',
-        quotedQuantity: item.quantity, quantity: item.quantity,
-        unitPrice: item.unitPrice, gst: item.taxPercent, discount: 0, lineTotal: 0, selected: true
-      }));
+      // Remaining qty per line = quoted − already ordered across prior POs (by item name).
+      const remByName = {};
+      if (remRes.ok) { (await remRes.json()).forEach(x => { remByName[x.itemName] = Number(x.remainingQty); }); }
+      const items = qData.items.map((item, i) => {
+        const remaining = remByName[item.itemName] != null ? remByName[item.itemName] : Number(item.quantity);
+        return {
+          id: `quotation-${item.id}`, quotationItemId: item.id,
+          itemName: item.itemName, itemDescription: item.description || '',
+          unit: item.unit || 'Nos',
+          quotedQuantity: Number(item.quantity), remainingQty: remaining, quantity: remaining,
+          unitPrice: item.unitPrice, gst: item.taxPercent, lineTotal: 0, selected: remaining > 0
+        };
+      });
       items.forEach(item => {
         const base = item.quantity * item.unitPrice;
-        const disc = base * (item.discount / 100);
-        const tax  = (base - disc) * (item.gst / 100);
-        item.lineTotal = (base - disc) + tax;
+        item.lineTotal = base * (1 + item.gst / 100);
       });
       setCreatePOFormData(prev => ({
         ...prev, quotationId: qData.id, quotation: qData,
+        poRefId: qData.rfqId || prev.poRefId || '',
         paymentTerms: qData.paymentTerms || '', notes: qData.notes || '', items,
         vendorId: qData.vendorId || null, vendorName: qData.vendorName || qData.vendorContact || '', vendorContact: qData.vendorContact || ''
       }));
@@ -979,17 +993,15 @@ const PurchaseOrders = () => {
     if (newItem.quantity <= 0) { showWarning('Quantity must be > 0'); return; }
     if (newItem.unitPrice <= 0) { showWarning('Unit price must be > 0'); return; }
     const base = newItem.quantity * newItem.unitPrice;
-    const disc = base * (newItem.discount / 100);
-    const tax  = (base - disc) * (newItem.gst / 100);
     const item = {
       id: `manual-${Date.now()}`, itemName: newItem.itemName,
       itemDescription: newItem.itemDescription, hsnCode: newItem.hsnCode, unit: newItem.unit || 'Nos', quantity: newItem.quantity,
-      unitPrice: newItem.unitPrice, gst: newItem.gst, discount: newItem.discount,
-      lineTotal: (base - disc) + tax, selected: true, isManual: true
+      unitPrice: newItem.unitPrice, gst: newItem.gst,
+      lineTotal: base * (1 + newItem.gst / 100), selected: true, isManual: true
     };
     setCreatePOFormData(prev => ({ ...prev, items: [...prev.items, item] }));
     setItemsStepUnlocked(true);
-    setNewItem({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18, discount: '' });
+    setNewItem({ itemName: '', itemDescription: '', hsnCode: '', unit: 'Nos', quantity: '', unitPrice: '', gst: 18 });
     setShowManualItemForm(false);
     showSuccess('Manual item added');
   };
@@ -997,17 +1009,21 @@ const PurchaseOrders = () => {
     const newItems = [...createPOFormData.items];
     const item = newItems[index];
     const qty = parseFloat(quantity) || 0;
-    // Enforce max from quotation OR from orderBook remaining qty
-    const maxQty = item.quotedQuantity || item.remainingQty;
-    if (maxQty && qty > maxQty) {
-      showWarning(`Quantity cannot exceed ${maxQty} (${item.remainingQty != null ? 'remaining from order book' : 'quoted quantity'})`);
+    // Enforce max: for quotation items cap at the remaining qty (quoted − already ordered
+    // across prior POs); for order-book items keep the existing quoted/remaining cap.
+    const maxQty = item.quotationItemId != null
+      ? item.remainingQty
+      : (item.quotedQuantity || item.remainingQty);
+    if (maxQty != null && qty > maxQty) {
+      const reason = item.quotationItemId != null ? 'remaining under this quotation'
+        : (item.remainingQty != null ? 'remaining from order book' : 'quoted quantity');
+      showWarning(`Quantity cannot exceed ${maxQty} (${reason})`);
       return;
     }
     // Store raw string to preserve mid-typing decimal (e.g. "10.")
     item.quantity = quantity;
-    const base = qty * (parseFloat(item.unitPrice) || 0); const disc = base * (item.discount / 100);
-    const tax  = (base - disc) * (item.gst / 100);
-    item.lineTotal = (base - disc) + tax;
+    const base = qty * (parseFloat(item.unitPrice) || 0);
+    item.lineTotal = base * (1 + item.gst / 100);
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
   const handleUpdatePOItemPrice = (index, price) => {
@@ -1018,8 +1034,8 @@ const PurchaseOrders = () => {
     const numericPrice = parseFloat(price) || 0;
     if (price !== '') {
       const qty = parseFloat(item.quantity) || 0;
-      const base = qty * numericPrice; const disc = base * (item.discount / 100);
-      item.lineTotal = (base - disc) + (base - disc) * (item.gst / 100);
+      const base = qty * numericPrice;
+      item.lineTotal = base * (1 + item.gst / 100);
     } else { item.lineTotal = 0; }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
@@ -1034,8 +1050,7 @@ const PurchaseOrders = () => {
     item.gst = parseFloat(gst);
     if (item.quantity && item.unitPrice) {
       const base = parseFloat(item.quantity) * parseFloat(item.unitPrice);
-      const disc = base * ((parseFloat(item.discount) || 0) / 100);
-      item.lineTotal = (base - disc) * (1 + parseFloat(gst) / 100);
+      item.lineTotal = base * (1 + parseFloat(gst) / 100);
     }
     setCreatePOFormData(prev => ({ ...prev, items: newItems }));
   };
@@ -1043,10 +1058,8 @@ const PurchaseOrders = () => {
     const qty      = parseFloat(i.quantity)  || 0;
     const price    = parseFloat(i.unitPrice) || 0;
     const gst      = parseFloat(i.gst)       || 0;
-    const discount = parseFloat(i.discount)  || 0;
     const base     = qty * price;
-    const disc     = base * (discount / 100);
-    return sum + (base - disc) * (1 + gst / 100);
+    return sum + base * (1 + gst / 100);
   }, 0);
 
   // ─── API calls ─────────────────────────────────────────────────────────────
@@ -1141,6 +1154,13 @@ const PurchaseOrders = () => {
       if (!r.ok) throw new Error();
       const poData = await r.json();
       setIsEditMode(true); setEditingPOId(poId);
+      // Kick off the linked-quotation fetch NOW (concurrently) — PO items don't store the
+      // quoted quantity, so we read it from the quotation. Running it alongside the other
+      // prefetches keeps it off the critical path so the modal isn't slower to open.
+      const quotationPromise = poData.quotationId
+        ? fetch(`${API_BASE_URL}/quotations/${poData.quotationId}`, { credentials: 'include', headers: getAuthHeaders() })
+            .then(res => (res.ok ? res.json() : null)).catch(() => null)
+        : Promise.resolve(null);
       setModalGroupName(poData.groupName || ''); setModalSubGroupName(poData.subGroupName || ''); setModalProjectId(poData.projectId || '');
       await fetchModalGroups();
       if (poData.groupName) await fetchModalSubGroups(poData.groupName);
@@ -1152,20 +1172,23 @@ const PurchaseOrders = () => {
         await fetchOrderBooks(poData.projectId, poData.groupName || '', poData.subGroupName || '');
       }
       await fetchVendors();
+      // Await the quotation started earlier (it ran concurrently with the prefetches above,
+      // so this usually resolves instantly). Used only to fill the "Quoted Qty" column.
+      const qd = await quotationPromise;
+      const quotedByName = {};
+      (qd?.items || []).forEach(qi => { const key = (qi.itemName || '').trim().toLowerCase(); if (key) quotedByName[key] = qi.quantity; });
       const items = (poData.items || []).map((item, i) => {
         const qty      = parseFloat(item.quantity)   || 0;
         const price    = parseFloat(item.unitPrice)  || 0;
         const gst      = parseFloat(item.taxPercent) || 0;
-        const discount = parseFloat(item.discount)   || 0;
         const base     = qty * price;
-        const disc     = base * (discount / 100);
-        const lineTotal = (base - disc) * (1 + gst / 100);
+        const lineTotal = base * (1 + gst / 100);
         return {
           id: item.id || `item-${i}`, itemName: item.itemName, itemDescription: item.description || '',
-          hsnCode: item.hsnCode || '',
+          hsnCode: item.hsnCode || '', unit: item.unit || 'Nos',
           quantity: qty, unitPrice: price || '', gst,
-          discount: discount || '', lineTotal, selected: true,
-          quotedQuantity: item.quotedQuantity || null
+          lineTotal, selected: true,
+          quotedQuantity: item.quotedQuantity || quotedByName[(item.itemName || '').trim().toLowerCase()] || null
         };
       });
       setCreatePOFormData({
@@ -1243,7 +1266,7 @@ const PurchaseOrders = () => {
     const seedSubGroup = subGroupName || '';
     const seedProject  = projectId   || '';
     setModalGroupName(seedGroup); setModalSubGroupName(seedSubGroup); setModalProjectId(seedProject);
-    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', items: [], status: 'Draft', documentType: 'PURCHASE_ORDER' });
+    setCreatePOFormData({ quotationId: '', quotation: null, vendorId: null, vendorName: '', vendorContact: '', groupName: seedGroup, subGroupName: seedSubGroup, projectId: seedProject, orderDate: new Date().toISOString().split('T')[0], expectedDelivery: '', paymentTerms: '', shippingAddress: '', notes: '', poRefId: '', items: [], status: 'Draft', documentType: 'PURCHASE_ORDER' });
     setOrderBooks([]); setSelectedOrderBookId(''); setOrderBookItems([]);
     setShowNewVendorForm(false); setShowManualItemForm(false); setQuotations([]);
     setCustomVendorCategory(''); setCustomVendorType('');
@@ -1373,10 +1396,10 @@ const PurchaseOrders = () => {
     if (!createPOFormData.expectedDelivery) { showWarning('Expected delivery date is required'); return; }
     setLoading(true);
     try {
-      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, unit, quantity, unitPrice, gst, discount }) => ({
+      const poItems = selectedItems.map(({ itemName, itemDescription, hsnCode, unit, quantity, unitPrice, gst }) => ({
         itemName, itemDescription, hsnCode: hsnCode || null, unit: unit || 'Nos',
         quantity: parseFloat(quantity), unitPrice: parseFloat(unitPrice) || 0,
-        gst: parseFloat(gst), discount: parseFloat(discount) || 0
+        gst: parseFloat(gst), discount: 0
       }));
       const poData = {
         quotationId: createPOFormData.quotationId || null,
@@ -1480,7 +1503,7 @@ const PurchaseOrders = () => {
       case 'sNo':
         return <td key={col.id} style={{ textAlign:'center', color:__stc('#64748b'), fontSize:13, fontWeight:500, width:50 }}>{currentPage * pageSize + rowIndex + 1}</td>;
       case 'poNumber':
-        return <td key={col.id} className="purchase-orders-table-id">{po.poRefId || po.poNo}</td>;
+        return <td key={col.id} className="purchase-orders-table-id">{po.poNo || '—'}</td>;
       case 'poRefId':
         return <td key={col.id}>{po.poRefId || '—'}</td>;
       case 'documentType': {
@@ -1955,7 +1978,7 @@ const PurchaseOrders = () => {
           <div className="purchase-orders-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="purchase-orders-drawer-header">
               <div>
-                <h2>{selectedPO.poRefId || selectedPO.poNo}</h2>
+                <h2>{selectedPO.poNo || selectedPO.poRefId}</h2>
                 <p className="purchase-orders-drawer-subtitle">
                   {selectedPO.vendorName || (selectedPO.vendorId ? `Vendor #${selectedPO.vendorId}` : 'No vendor')}
                   {selectedPO.vendorContact ? ` · ${selectedPO.vendorContact}` : ''}
@@ -1996,6 +2019,8 @@ const PurchaseOrders = () => {
               <div className="purchase-orders-drawer-section">
                 <h3>Purchase Order Details</h3>
                 <div className="po-details-grid">
+                  <div className="po-detail-item"><span className="po-detail-label">PO Number:</span><span style={{fontWeight:600}}>{selectedPO.poNo || '—'}</span></div>
+                  <div className="po-detail-item"><span className="po-detail-label">Vendor RFQ Id:</span><span>{selectedPO.poRefId || '—'}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Status:</span><span className={`purchase-orders-badge ${getStatusBadgeClass(selectedPO.status)}`}>{selectedPO.status}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Payment Status:</span><span className={`purchase-orders-badge ${getPaymentBadgeClass(selectedPO.paymentStatus)}`}>{selectedPO.paymentStatus}</span></div>
                   <div className="po-detail-item"><span className="po-detail-label">Order Date:</span><span>{formatDate(selectedPO.orderDate)}</span></div>
@@ -2168,10 +2193,8 @@ const PurchaseOrders = () => {
                       const qty      = parseFloat(item.quantity)   || 0;
                       const price    = parseFloat(item.unitPrice)  || 0;
                       const gst      = parseFloat(item.taxPercent) || 0;
-                      const discount = parseFloat(item.discount)   || 0;
                       const base     = qty * price;
-                      const disc     = base * (discount / 100);
-                      const computedLineTotal = (base - disc) * (1 + gst / 100);
+                      const computedLineTotal = base * (1 + gst / 100);
                       return (
                       <tr key={item.id}>
                         <td>
@@ -2205,10 +2228,8 @@ const PurchaseOrders = () => {
                               const qty      = parseFloat(item.quantity)   || 0;
                               const price    = parseFloat(item.unitPrice)  || 0;
                               const gst      = parseFloat(item.taxPercent) || 0;
-                              const discount = parseFloat(item.discount)   || 0;
                               const base     = qty * price;
-                              const disc     = base * (discount / 100);
-                              return sum + (base - disc) * (1 + gst / 100);
+                              return sum + base * (1 + gst / 100);
                             }, 0)
                           )}
                         </td>
@@ -2673,28 +2694,32 @@ const PurchaseOrders = () => {
                             </div>
                             <div className="po-form-group">
                               <label>Category *</label>
-                              <select value={createPOFormData.vendorCategory || ''} onChange={(e) => { setCreatePOFormData(prev => ({ ...prev, vendorCategory: e.target.value })); if (e.target.value !== 'Other') setCustomVendorCategory(''); }} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                                <option value="">Select category</option>
-                                <option value="IT Equipment">IT Equipment</option>
-                                <option value="Office Furniture">Office Furniture</option>
-                                <option value="Manufacturing">Manufacturing</option>
-                                <option value="Office Supplies">Office Supplies</option>
-                                <option value="Services">Services</option>
-                                <option value="Other">Other</option>
-                              </select>
+                              <FilterSelect
+                                value={createPOFormData.vendorCategory || ''}
+                                options={[
+                                  ...VENDOR_CATEGORIES.map(c => ({ value: c, label: c })),
+                                  ...(createPOFormData.vendorCategory && createPOFormData.vendorCategory !== 'Other' && !VENDOR_CATEGORIES.includes(createPOFormData.vendorCategory) ? [{ value: createPOFormData.vendorCategory, label: createPOFormData.vendorCategory }] : []),
+                                  { value: 'Other', label: 'Other (enter manually)' },
+                                ]}
+                                placeholder="Select category"
+                                onChange={v => { setCreatePOFormData(prev => ({ ...prev, vendorCategory: v })); if (v !== 'Other') setCustomVendorCategory(''); }}
+                              />
                               {createPOFormData.vendorCategory === 'Other' && (
                                 <input type="text" value={customVendorCategory} onChange={e => setCustomVendorCategory(e.target.value)} placeholder="Enter custom category" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13 }} />
                               )}
                             </div>
                             <div className="po-form-group">
                               <label>Vendor Type *</label>
-                              <select value={createPOFormData.vendorType || ''} onChange={(e) => { setCreatePOFormData(prev => ({ ...prev, vendorType: e.target.value })); if (e.target.value !== 'Other') setCustomVendorType(''); }} style={{ width: '100%', padding: '10px', fontSize: '14px' }}>
-                                <option value="">Select type</option>
-                                <option value="Manufacturer">Manufacturer</option>
-                                <option value="Distributor">Distributor</option>
-                                <option value="Service Provider">Service Provider</option>
-                                <option value="Other">Other</option>
-                              </select>
+                              <FilterSelect
+                                value={createPOFormData.vendorType || ''}
+                                options={[
+                                  ...VENDOR_TYPES.map(t => ({ value: t, label: t })),
+                                  ...(createPOFormData.vendorType && createPOFormData.vendorType !== 'Other' && !VENDOR_TYPES.includes(createPOFormData.vendorType) ? [{ value: createPOFormData.vendorType, label: createPOFormData.vendorType }] : []),
+                                  { value: 'Other', label: 'Other (enter manually)' },
+                                ]}
+                                placeholder="Select type"
+                                onChange={v => { setCreatePOFormData(prev => ({ ...prev, vendorType: v })); if (v !== 'Other') setCustomVendorType(''); }}
+                              />
                               {createPOFormData.vendorType === 'Other' && (
                                 <input type="text" value={customVendorType} onChange={e => setCustomVendorType(e.target.value)} placeholder="Enter custom vendor type" style={{ marginTop: 6, width: '100%', padding: '8px 10px', border: `1px solid ${__sbg('#d1d5db')}`, borderRadius: 6, fontSize: 13 }} />
                               )}
@@ -2740,8 +2765,6 @@ const PurchaseOrders = () => {
                           { value: 'Draft',      label: 'Draft' },
                           { value: 'Approved',   label: 'Approved' },
                           { value: 'Ordered',    label: 'Ordered' },
-                          { value: 'In-Transit', label: 'In-Transit' },
-                          { value: 'Delivered',  label: 'Delivered' },
                           { value: 'Cancelled',  label: 'Cancelled' },
                         ] : [
                           { value: 'Draft',    label: 'Draft' },
@@ -2758,12 +2781,12 @@ const PurchaseOrders = () => {
                   </div>
                   <div className="po-form-row">
                     <div className="po-form-group">
-                      <label>PO REF ID <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 400 }}>(optional)</span></label>
+                      <label>Vendor RFQ Id <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 400 }}>(optional)</span></label>
                       <input
                         type="text"
                         value={createPOFormData.poRefId || ''}
                         onChange={(e) => setCreatePOFormData(prev => ({ ...prev, poRefId: e.target.value }))}
-                        placeholder="e.g. REF-2026-001 (leave blank if not applicable)"
+                        placeholder="e.g. RFQ-2026-001 (auto-filled from quotation)"
                         style={{ width: '100%', padding: '10px', fontSize: '14px' }}
                         maxLength={100}
                       />
@@ -2830,7 +2853,7 @@ const PurchaseOrders = () => {
                     <div style={{ padding: '16px', background: __sbg('#f0fdf4'), border: `2px solid ${__sbg('#86efac')}`, borderRadius: '8px', marginBottom: '16px' }}>
                       <h4 style={{ marginBottom: '12px', fontSize: '14px', fontWeight: '600', color: __stc('#166534') }}>Add Manual Item</h4>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst, discount: catalogueItem.discountPercent > 0 ? catalogueItem.discountPercent : prev.discount }))} user={user} placeholder="Enter item name" /></div>
+                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Item Name *</label><ItemNameAutocomplete value={newItem.itemName} onChange={(val) => setNewItem(prev => ({ ...prev, itemName: val }))} onSelect={(catalogueItem) => setNewItem(prev => ({ ...prev, itemName: catalogueItem.itemName, itemDescription: catalogueItem.description || prev.itemDescription, unitPrice: catalogueItem.unitPrice > 0 ? catalogueItem.unitPrice : prev.unitPrice, gst: catalogueItem.taxPercent > 0 ? catalogueItem.taxPercent : prev.gst }))} user={user} placeholder="Enter item name" /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Quantity *</label><input type="text" inputMode="decimal" value={(() => { const raw = String(newItem.quantity ?? '').replace(/,/g, ''); if (raw === '' || raw === '0') return raw; const n = parseFloat(raw); return isNaN(n) ? raw : n.toLocaleString('en-IN'); })()} onChange={(e) => { const raw = e.target.value.replace(/,/g, ''); if (/^\d*\.?\d{0,3}$/.test(raw)) setNewItem(prev => ({ ...prev, quantity: raw })); }} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Unit</label>
                           <div className="po-unit-select-wrap po-manual-unit-wrap" style={{ display: 'block' }}>
@@ -2849,7 +2872,6 @@ const PurchaseOrders = () => {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '12px' }}>
                         <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>GST %</label><input type="number" value={newItem.gst} onChange={(e) => setNewItem(prev => ({ ...prev, gst: parseFloat(e.target.value) || 0 }))} min="0" max="100" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
-                        <div><label style={{ fontSize: '13px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Discount %</label><input type="number" value={newItem.discount} onChange={(e) => setNewItem(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))} min="0" max="100" style={{ width: '100%', padding: '8px', fontSize: '14px' }} /></div>
                         <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="purchase-orders-btn-primary" onClick={handleAddManualItem} style={{ width: '100%', padding: '8px', fontSize: '14px' }}>✅ Add Item</button></div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
@@ -2872,7 +2894,6 @@ const PurchaseOrders = () => {
                             <col style={{ width: '76px' }} />
                             <col style={{ width: '130px' }} />
                             <col style={{ width: '90px' }} />
-                            <col style={{ width: '95px' }} />
                             <col style={{ width: '130px' }} />
                             <col style={{ width: '56px' }} />
                           </colgroup>
@@ -2890,7 +2911,6 @@ const PurchaseOrders = () => {
                               <th className="po-th" style={{ textAlign: 'center' }}>PO Qty *</th>
                               <th className="po-th" style={{ textAlign: 'right' }}>Unit Price (₹) *</th>
                               <th className="po-th" style={{ textAlign: 'center' }}>GST %</th>
-                              <th className="po-th" style={{ textAlign: 'center' }}>Discount %</th>
                               <th className="po-th" style={{ textAlign: 'right' }}>Line Total</th>
                               <th className="po-th" style={{ textAlign: 'center' }}>Action</th>
                             </tr>
@@ -2900,10 +2920,8 @@ const PurchaseOrders = () => {
                               const qty      = parseFloat(item.quantity)  || 0;
                               const price    = parseFloat(item.unitPrice) || 0;
                               const gst      = parseFloat(item.gst)       || 0;
-                              const discount = parseFloat(item.discount)  || 0;
                               const base     = qty * price;
-                              const disc     = base * (discount / 100);
-                              const computedLineTotal = (base - disc) * (1 + gst / 100);
+                              const computedLineTotal = base * (1 + gst / 100);
                               return (
                               <tr key={index} style={{ borderTop: `1px solid ${__sbg('#e2e8f0')}`, opacity: item.selected ? 1 : 0.5, background: item.selected ? __sbg('white') : __sbg('#f9fafb'), verticalAlign: 'middle' }}>
                                 <td className="po-td" style={{ textAlign: 'center' }}>
@@ -2949,7 +2967,7 @@ const PurchaseOrders = () => {
                                     />
                                   )}
                                 </td>
-                                {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: __stc('#0284c7') }}>{item.quotedQuantity}</td>}
+                                {createPOFormData.quotationId && <td className="po-td" style={{ textAlign: 'center', fontWeight: '600', color: __stc('#0284c7') }}>{item.quotedQuantity}{item.remainingQty != null && <div style={{ fontSize: 11, fontWeight: 500, color: item.remainingQty <= 0 ? __stc('#dc2626') : __stc('#059669') }}>{item.remainingQty <= 0 ? 'fully ordered' : `${item.remainingQty} left`}</div>}</td>}
                                 <td className="po-td" style={{ textAlign: 'center' }}>
                                   <input type="text" inputMode="decimal"
                                     value={formatIndianInput(item.quantity)}
@@ -2971,7 +2989,6 @@ const PurchaseOrders = () => {
                                     {GST_OPTIONS.map(g => <option key={g} value={g}>{g}%</option>)}
                                   </select>
                                 </td>
-                                <td className="po-td" style={{ textAlign: 'center', fontSize: '13px' }}>{item.discount}%</td>
                                 <td className="po-td po-td-clip" style={{ textAlign: 'right', fontWeight: '600', color: item.selected ? __stc('#059669') : __stc('#94a3b8'), fontSize: '14px' }}>{formatCurrency(computedLineTotal)}</td>
                                 <td className="po-td" style={{ textAlign: 'center' }}><button className="remove-item-btn" onClick={() => handleRemoveItem(index)} title="Remove item"><Trash2 size={16} /></button></td>
                               </tr>

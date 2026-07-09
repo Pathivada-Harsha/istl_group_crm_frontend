@@ -122,8 +122,8 @@ function AddFollowupModal({ lead, onClose, onFollowupCreated }) {
   };
 
   return (
-    <div className="add-followup-modal-overlay" onClick={onClose}>
-      <div className="add-followup-modal" onClick={(e) => e.stopPropagation()}>
+    <div className="add-followup-modal-overlay">
+      <div className="add-followup-modal">
         <div className="add-followup-modal-header">
           <h2>Add Follow-up for {lead.name}</h2>
           <button className="add-followup-modal-close" onClick={onClose}>

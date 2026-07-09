@@ -11,6 +11,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+import { SiteVisitForm } from "../components/Leads/LeadSiteVisitTab.js";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -185,6 +186,9 @@ export default function ClientDashboardFollowUps() {
   const [viewingFollowup, setViewingFollowup] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [editingFollowup, setEditingFollowup] = useState(null);
+  const [siteVisitFollowup, setSiteVisitFollowup] = useState(null); // Visit follow-up whose Site Visit Report is being filled
+  const [siteVisitReport, setSiteVisitReport] = useState(null);     // existing report for that lead (pre-fills the form on edit)
+  const [siteVisitLoading, setSiteVisitLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [users, setUsers] = useState([]);
   const [leads, setLeads] = useState([]);
@@ -290,6 +294,11 @@ export default function ClientDashboardFollowUps() {
     outcome: ''
   });
 
+  // Skip the group/filter effects on first render — the mount effect below already
+  // does the initial fetch, so these guards avoid 2–3 duplicate requests on load.
+  const didGroupMount  = useRef(false);
+  const didFilterMount = useRef(false);
+
   useEffect(() => {
     fetchFollowUps();
     fetchUsers();
@@ -297,14 +306,33 @@ export default function ClientDashboardFollowUps() {
     fetchGroups();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // When the Site Visit Report modal opens, fetch any existing report for the lead
+  // so the form pre-fills instead of forcing the user to re-enter everything.
+  useEffect(() => {
+    if (!siteVisitFollowup?.leadId) { setSiteVisitReport(null); return; }
+    let cancelled = false;
+    setSiteVisitLoading(true);
+    fetch(`${API_BASE_URL}/site-visits/lead/${siteVisitFollowup.leadId}`, {
+      credentials: 'include',
+      headers: { 'User-Id': String(user.id), 'User-Role': user.role },
+    })
+      .then(r => r.json())
+      .then(d => { if (!cancelled && d?.success) setSiteVisitReport((d.data && d.data[0]) || null); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setSiteVisitLoading(false); });
+    return () => { cancelled = true; };
+  }, [siteVisitFollowup]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Re-fetch when group/subgroup filter changes
   useEffect(() => {
+    if (!didGroupMount.current) { didGroupMount.current = true; return; }
     setCurrentPage(1);
     fetchFollowUps({ grp: groupName, subGrp: subGroupName, page: 1 });
   }, [groupName, subGroupName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Re-fetch when any filter/pagination changes (except searchTerm which is debounced)
   useEffect(() => {
+    if (!didFilterMount.current) { didFilterMount.current = true; return; }
     fetchFollowUps();
   }, [statusFilter, priorityFilter, typeFilter, assignedToFilter, appliedFrom, appliedTo, currentPage, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -421,7 +449,10 @@ export default function ClientDashboardFollowUps() {
       if (assignedToFilter   !== 'All') params.append('assignedTo',   assignedToFilter);
       if (appliedFrom)                  params.append('fromDate',     appliedFrom);
       if (appliedTo)                    params.append('toDate',       appliedTo);
-      if (searchTerm.trim())            params.append('search',       searchTerm.trim());
+      // Honour an explicit search override (the debounce passes the live value so
+      // it isn't read one keystroke behind from a stale render's state).
+      const srch = overrides.search !== undefined ? overrides.search : searchTerm;
+      if (srch && srch.trim())          params.append('search',       srch.trim());
 
       // Pagination
       const pg = overrides.page !== undefined ? overrides.page : currentPage;
@@ -969,12 +1000,14 @@ export default function ClientDashboardFollowUps() {
   };
 
   const handleQuickStatusUpdate = async (followup, newStatus) => {
+    // "Rescheduled" needs a new date/time — route through the edit modal (which has
+    // a date picker) instead of silently flipping the status onto the old past date.
+    if (newStatus === 'Rescheduled') { handleEdit(followup); return; }
     setLoading(true);
     try {
-      const requestData = {
-        status: newStatus,
-        outcome: newStatus === 'Completed' ? 'Completed via quick action' : undefined
-      };
+      // Send only the status change — don't overwrite any real outcome captured
+      // via the complete-outcome flow. The backend sets completedAt on completion.
+      const requestData = { status: newStatus };
 
       const response = await fetch(`${API_BASE_URL}/followups/update/${followup.id}`, {
         method: 'PUT',
@@ -1151,11 +1184,12 @@ export default function ClientDashboardFollowUps() {
             onChange={(e) => {
               const val = e.target.value;
               setSearchTerm(val);
-              // Debounce: wait 400ms after typing stops before fetching
+              // Debounce: wait 400ms after typing stops before fetching.
+              // Pass the live value so the request isn't a keystroke behind.
               clearTimeout(searchDebounceRef.current);
               searchDebounceRef.current = setTimeout(() => {
                 setCurrentPage(1);
-                fetchFollowUps({ page: 1 });
+                fetchFollowUps({ page: 1, search: val });
               }, 400);
             }}
           />
@@ -1163,7 +1197,12 @@ export default function ClientDashboardFollowUps() {
             <button
               type="button"
               className="followups-search-clear"
-              onClick={() => setSearchTerm('')}
+              onClick={() => {
+                clearTimeout(searchDebounceRef.current);
+                setSearchTerm('');
+                setCurrentPage(1);
+                fetchFollowUps({ page: 1, search: '' });
+              }}
               title="Clear search"
             >
               <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1323,6 +1362,14 @@ export default function ClientDashboardFollowUps() {
             ]}
             placeholder="All Priority"
             onChange={(v) => { setPriorityFilter(v || 'All'); setCurrentPage(1); }}
+          />
+        </div>
+        <div className="fu-filter-item">
+          <FilterSelect
+            value={typeFilter === 'All' ? '' : typeFilter}
+            options={['Call','Email','Meeting','Visit','Demo','Proposal','Other'].map(t => ({ value: t, label: t }))}
+            placeholder="All Types"
+            onChange={(v) => { setTypeFilter(v || 'All'); setCurrentPage(1); }}
           />
         </div>
         <div className="fu-filter-item">
@@ -2324,8 +2371,15 @@ export default function ClientDashboardFollowUps() {
                 )}
 
                 {/* Footer */}
-                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, }}>
+                <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:6, flexWrap:'wrap' }}>
                   <button className="followups-btn followups-btn-secondary" onClick={closeFn}>Close</button>
+                  {f.followupType === 'Visit' && f.leadId && (
+                    <button className="followups-btn followups-btn-primary"
+                      style={{ background:'#D97706' }}
+                      onClick={() => { setShowViewModal(false); setSiteVisitLoading(true); setSiteVisitReport(null); setSiteVisitFollowup(f); }}>
+                      🏠 Fill Site Visit Report
+                    </button>
+                  )}
                   <button className="followups-btn followups-btn-primary" onClick={() => { closeFn(); handleEdit(f); }}>
                     <FiEdit size={13} style={{ marginRight:4 }}/> Edit
                   </button>
@@ -2335,6 +2389,40 @@ export default function ClientDashboardFollowUps() {
           </div>
         );
       })()}
+
+      {/* ── Site Visit Report Modal (from an assigned Visit follow-up) ── */}
+      {siteVisitFollowup && (
+        <div className="followup-modal-overlay">
+          <div className="followup-modal" style={{ maxWidth: 760, maxHeight: '92vh', overflow: 'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 22px', borderBottom:'1px solid #e2e8f0' }}>
+              <div>
+                <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:__stc('#0f172a') }}>🏠 Site Visit Report</h3>
+                <p style={{ margin:'3px 0 0', fontSize:12, color:__stc('#64748b') }}>
+                  {siteVisitFollowup.leadName || siteVisitFollowup.leadCode || `Lead #${siteVisitFollowup.leadId}`}
+                </p>
+              </div>
+              <button className="followup-modal-close" onClick={() => setSiteVisitFollowup(null)}>
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div style={{ padding:'18px 22px' }}>
+              {siteVisitLoading ? (
+                <div style={{ padding:40, textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>Loading report…</div>
+              ) : (
+                <SiteVisitForm
+                  leadId={siteVisitFollowup.leadId}
+                  followupId={siteVisitFollowup.id}
+                  leadInfo={{ name: siteVisitFollowup.leadName, phone: siteVisitFollowup.leadPhone, email: siteVisitFollowup.leadEmail }}
+                  visit={siteVisitReport}
+                  currentUser={user}
+                  onSaved={() => { setSiteVisitFollowup(null); fetchFollowUps(); showSuccess('Site visit report submitted'); }}
+                  onCancel={() => setSiteVisitFollowup(null)}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Bootstrap-style Delete Confirmation Modal ── */}
       {deleteConfirm && (

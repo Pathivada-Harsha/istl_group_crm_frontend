@@ -375,6 +375,13 @@
   top: 0;
   background: var(--c-f8fafc, #f8fafc);
   z-index: 20;
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: middle;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ct-475569, #475569);
+  white-space: nowrap;
 }
 
 .procurement-quotation-received-table td {

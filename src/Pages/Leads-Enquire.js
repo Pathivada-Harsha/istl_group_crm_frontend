@@ -22,6 +22,7 @@ import AddFollowupModal from '../components/Leads/AddFollowupModal.js';
 import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
+import LeadSiteVisitTab from './../components/Leads/LeadSiteVisitTab.js';
 import ConfirmationModal from '../components/ConfirmationModal.js';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
@@ -264,6 +265,9 @@ const DEFAULT_VISIBLE = ALL_COLUMNS
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const parseJSON = s => { try { return typeof s === 'string' ? JSON.parse(s) : s; } catch { return null; } };
 const fmtDate = s => s ? new Date(s).toLocaleDateString() : '-';
+// Local (not UTC) today as yyyy-MM-dd — for date-input `min` so early-morning IST
+// hours don't allow a past date (toISOString() is UTC).
+const todayLocalStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
 const fmtDT = s => { if (!s) return '-'; const d = new Date(s); return `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}-${d.getFullYear()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 
 // ─── Delete Confirmation ──────────────────────────────────────────────────────
@@ -417,7 +421,19 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     if (['quantity', 'rate', 'tax'].includes(f)) { const q = parseFloat(u[idx].quantity) || 0, r = parseFloat(u[idx].rate) || 0, t = parseFloat(u[idx].tax) || 0; u[idx].amount = ((q * r) + (q * r * t / 100)).toFixed(2); }
     setTmpl({ ...tmpl, bomItems: u });
   };
-  const rmBOM = idx => { setTmpl({ ...tmpl, bomItems: tmpl.bomItems.filter((_, i) => i !== idx) }); const n = { ...customUnitInputs }; delete n[idx]; setCustomUnitInputs(n); };
+  // Row aux-state (custom-unit inputs, search dropdowns) is keyed by row index —
+  // shift keys above the removed row down by one so they stay aligned.
+  const reindexAfterRemove = (map, removed) => {
+    const out = {};
+    Object.keys(map).forEach(k => { const i = Number(k); if (i < removed) out[i] = map[k]; else if (i > removed) out[i - 1] = map[k]; });
+    return out;
+  };
+  const rmBOM = idx => {
+    setTmpl({ ...tmpl, bomItems: tmpl.bomItems.filter((_, i) => i !== idx) });
+    setCustomUnitInputs(m => reindexAfterRemove(m, idx));
+    setShowBomDropdown(m => reindexAfterRemove(m, idx));
+    setFilteredBomItems(m => reindexAfterRemove(m, idx));
+  };
   const addBOM = () => setTmpl({ ...tmpl, bomItems: [...tmpl.bomItems, { item: '', specification: '', quantity: '', unit: 'Nos', rate: '', tax: '18', amount: '' }] });
 
   const updPricing = (idx, f, v) => { const u = [...tmpl.systemPricing]; u[idx][f] = v; setTmpl({ ...tmpl, systemPricing: u }); };
@@ -472,6 +488,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
       const res = await fetch(url, { method, headers, credentials: 'include', body });
       const data = await res.json();
       if (data.success) onSaved(data.data || data.message);
+      else alert(data.error || data.message || 'Failed to save proposal');
     } catch (e) { alert('Failed to save proposal'); }
     finally { setSaving(false); }
   };
@@ -1177,7 +1194,9 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       await fetch(`${API_BASE_URL}/leads/update/${lead.id}`, {
         method: 'PUT', credentials: 'include',
         headers,
-        body: JSON.stringify({ ...lead, status: 'Proposal Sent' }),
+        // Send only the status change — posting the whole wrapper object back
+        // (computed/echo fields) risks the backend rejecting the update.
+        body: JSON.stringify({ status: 'Proposal Sent' }),
       });
       if (onLeadUpdated) onLeadUpdated();
     } catch { /* non-blocking — proposal was still saved */ }
@@ -1347,6 +1366,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     FOLLOWUP_COMPLETED:   { icon: '✅', label: 'Follow-up Completed',       color: __stc('#16a34a'), bg: __sbg('#f0fdf4') },
     FOLLOWUP_DELETED:     { icon: '🗑', label: 'Follow-up Deleted',         color: __stc('#dc2626'), bg: __sbg('#fef2f2') },
     DIRECT_INTERACTION:   { icon: '⚡', label: 'Direct Interaction',        color: __stc('#d97706'), bg: __sbg('#fffbeb') },
+    SITE_VISIT_ADDED:     { icon: '🏠', label: 'Site Visit Recorded',       color: __stc('#d97706'), bg: __sbg('#fffbeb') },
     PROPOSAL_CREATED:     { icon: '📝', label: 'Proposal Created',          color: __stc('#7c3aed'), bg: __sbg('#f5f3ff') },
     PROPOSAL_SENT:        { icon: '📤', label: 'Proposal Sent',             color: __stc('#7c3aed'), bg: __sbg('#f5f3ff') },
     CREATED:              { icon: '✅', label: 'Lead Created',              color: __stc('#16a34a'), bg: __sbg('#f0fdf4') },
@@ -1434,6 +1454,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       <div className="ld-tabs">
         {[
           { k: 'overview', l: 'Overview' },
+          { k: 'sitevisit', l: 'Site Visit' },
           { k: 'proposals', l: isTenderLead(lead) ? 'Proposals' : 'Proposals' },
           ...(isTenderLead(lead) ? [{ k: 'documents', l: '📁 Documents' }] : []),
           { k: 'followups', l: 'Follow-ups' },
@@ -1706,6 +1727,19 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
       )}
 
+      {activeTab === 'sitevisit' && (
+        <div className="ld-tab-content">
+          <LeadSiteVisitTab
+            lead={lead}
+            currentUser={currentUser}
+            permissions={permissions}
+            onRefreshLead={() => { if (onLeadUpdated) onLeadUpdated(); }}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </div>
+      )}
+
       {activeTab === 'proposals' && (
         <div className="ld-tab-content">
           {!permissions.PROPOSAL_VIEW && (
@@ -1937,6 +1971,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             onRefreshLead={() => {
               if (onLeadUpdated) onLeadUpdated();
             }}
+            showSuccess={showSuccess}
+            showError={showError}
           />
         </div>
       )}
@@ -2409,6 +2445,9 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const [billFileUploading, setBillFileUploading] = useState(false);
   const [kivDate, setKivDate] = useState('');
   const [kivTime, setKivTime] = useState('09:00');
+  // Baseline KIV "date time" captured when opening an existing KIV lead, so we
+  // only (re)schedule a callback follow-up when it actually changes (no dupes).
+  const kivBaselineRef = useRef('');
 
   // ── Derived columns ──────────────────────────────────────────────
   const orderedVisibleColumns = columnOrder
@@ -2656,9 +2695,12 @@ useEffect(() => {
       phone: lead.phone, source: lead.source, priority: lead.priority, status: lead.status,
       assignedTo: lead.assignedTo, enquiry: lead.enquiry,
       groupName: lead.groupName || '', subGroupName: lead.subGroupName || '',
-      closedLostReason: '',
-      notInterestedReason: '',
+      // Pre-fill existing reasons / closer so editing an unrelated field doesn't
+      // force re-entry or blank out recorded values.
+      closedLostReason: lead.closedLostReason || '',
+      notInterestedReason: lead.notInterestedReason || (lead.status === 'Not Interested' ? (lead.telecallerReason || '') : ''),
       closedByName: lead.closedByName || '',
+      closedByUserId: lead.closedByUserId ?? '',
       // NEW fields:
       state: lead.state || '',
       district: lead.district || '',
@@ -2675,6 +2717,19 @@ useEffect(() => {
       tcExistingContractLoad: lead.tcExistingContractLoad || '',
       tcRequiredContractLoad: lead.tcRequiredContractLoad || '',
     });
+    // Seed the KIV callback date/time from the lead so a KIV lead can be edited
+    // without being blocked, and record the baseline to avoid duplicate follow-ups.
+    if (lead.status === 'Keep in View' && lead.kivReminderDate) {
+      const d = new Date(lead.kivReminderDate);
+      if (!isNaN(d)) {
+        const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const timeStr = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        setKivDate(dateStr); setKivTime(timeStr);
+        kivBaselineRef.current = `${dateStr} ${timeStr}`;
+      } else { setKivDate(''); setKivTime('09:00'); kivBaselineRef.current = ''; }
+    } else {
+      setKivDate(''); setKivTime('09:00'); kivBaselineRef.current = '';
+    }
     setBillFile(null);
     setPhoneError(''); setShowAddModal(true);
   };
@@ -2729,6 +2784,7 @@ useEffect(() => {
         ...(quickStatus === 'Closed Won' && { closedByUserId: Number(quickClosedBy), closedByName: quickClosedByName }),
         ...(quickStatus === 'Closed Lost' && { closedLostReason: quickClosedLostReason.trim() }),
         ...(quickStatus === 'Not Interested' && { notInterestedReason: quickNotInterestedReason.trim() }),
+        ...(quickStatus === 'Keep in View' && { kivReminderDate: quickKivDate }),
       };
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${quickStatusLead.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       if (data.success) {
@@ -2763,13 +2819,19 @@ useEffect(() => {
     if (!formData.id && !canCreate) { showWarning('No create permission'); return; }
     if (formData.status === 'Keep in View' && (!kivDate || !kivTime)) { showError('Please set the callback date & time for Keep in View'); return; }
     if (formData.status === 'Not Interested' && !(formData.notInterestedReason || '').trim()) { showError('Please enter a reason for marking this lead Not Interested'); return; }
+    if (formData.status === 'Closed Won' && !formData.closedByUserId) { showError('Please select who closed this lead'); return; }
     setLoading(true);
     try {
       const payload = { ...formData };
+      // Persist the KIV callback date on the lead (drives the callback badge).
+      if (formData.status === 'Keep in View' && kivDate) payload.kivReminderDate = kivDate;
       let savedLeadId = formData.id;
 
       const scheduleKivFollowup = async (leadId) => {
         if (formData.status !== 'Keep in View' || !kivDate) return;
+        // Only create a callback follow-up when the KIV date/time is new or changed —
+        // editing other fields on an existing KIV lead must not pile up duplicates.
+        if (kivBaselineRef.current && `${kivDate} ${kivTime}` === kivBaselineRef.current) return;
         try {
           await fetchWithHeaders(`${API_BASE_URL}/followups/create`, {
             method: 'POST',
@@ -2886,6 +2948,7 @@ useEffect(() => {
     if (seedGroup) fetchSubGroupsForForm(seedGroup);
     setPhoneError('');
     setBillFile(null);
+    setKivDate(''); setKivTime('09:00'); kivBaselineRef.current = '';
   };
 
   // ── Badge helpers ─────────────────────────────────────────────────
@@ -3452,7 +3515,7 @@ useEffect(() => {
               <div className="qs-conditional qs-conditional-kiv">
                 <div className="qs-conditional-label">👁 Keep in View — Callback Date & Time *</div>
                 <div style={{display:'flex',gap:10,flexWrap:'wrap'}}>
-                  <input type="date" value={quickKivDate} onChange={e=>setQuickKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+                  <input type="date" value={quickKivDate} onChange={e=>setQuickKivDate(e.target.value)} min={todayLocalStr()}
                     style={{flex:'1 1 140px',padding:'8px 10px',border:`1.5px solid ${__sbg('#bfdbfe')}`,borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
                   <input type="time" value={quickKivTime} onChange={e=>setQuickKivTime(e.target.value)}
                     style={{flex:'1 1 110px',padding:'8px 10px',border:`1.5px solid ${__sbg('#bfdbfe')}`,borderRadius:7,fontSize:13,fontFamily:"'Poppins',sans-serif"}}/>
@@ -4183,7 +4246,7 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end'}}>
             <div style={{flex:'1 1 160px',minWidth:140}}>
               <label style={{fontSize:12,fontWeight:600,color:__stc('#374151'),display:'block',marginBottom:4}}>Date *</label>
-              <input type="date" value={kivDate} onChange={e=>setKivDate(e.target.value)} min={new Date().toISOString().split('T')[0]}
+              <input type="date" value={kivDate} onChange={e=>setKivDate(e.target.value)} min={todayLocalStr()}
                 style={{width:'100%',padding:'8px 12px',border:`1.5px solid ${__sbg('#c4b5fd')}`,borderRadius:7,fontSize:13,outline:'none',boxSizing:'border-box'}}/>
             </div>
             <div style={{flex:'1 1 130px',minWidth:120}}>

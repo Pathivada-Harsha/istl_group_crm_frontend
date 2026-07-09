@@ -32,7 +32,7 @@ function LeadTimelineModal({ lead, onClose, onAddFollowup }) {
       
       const data = await response.json();
       if (data.success) {
-        setHistory(data.data);
+        setHistory(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
       console.error('Error fetching history:', err);
@@ -56,7 +56,7 @@ function LeadTimelineModal({ lead, onClose, onAddFollowup }) {
       
       const data = await response.json();
       if (data.success) {
-        setFollowups(data.data);
+        setFollowups(Array.isArray(data.data) ? data.data : []);
       }
     } catch (err) {
       console.error('Error fetching follow-ups:', err);

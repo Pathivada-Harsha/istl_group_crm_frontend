@@ -1,0 +1,43 @@
+/* LocationPicker — shared map picker styles (mirrors the original .obd-loc rules
+   so the Order Book detail page renders identically after extraction, and the
+   Lead Site-Visit tab gets the same look without importing OrderBookDetail.css). */
+.obd-loc { display: flex; flex-direction: column; gap: 6px; }
+.obd-loc-search {
+  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px; padding: 8px 11px;
+  font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b); width: 100%;
+}
+.obd-loc-search:focus { outline: none; border-color: var(--accent, #2563eb); }
+.obd-loc-map-wrap {
+  width: 100%; height: 320px; border-radius: 10px; overflow: hidden;
+  border: 1px solid var(--border-color, #e2e8f0); background: var(--bg-secondary, #f1f5f9);
+  position: relative;
+}
+.obd-loc-map { width: 100%; height: 100%; }
+.obd-loc-loading {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text-tertiary, #94a3b8); pointer-events: none;
+}
+.obd-loc-coords {
+  display: flex; align-items: center; gap: 12px; font-size: 12px; font-weight: 600;
+  color: var(--text-secondary, #475569);
+}
+.obd-loc-clear {
+  background: none; border: none; color: #dc2626; font-size: 12px; font-weight: 600; cursor: pointer; padding: 0;
+}
+.obd-loc-clear:hover { text-decoration: underline; }
+.obd-loc > span { font-size: 12px; font-weight: 600; color: var(--text-secondary, #475569); }
+
+[data-theme="dark"] .obd-loc-search { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+[data-theme="dark"] .obd-loc-map-wrap,
+[data-theme="dark"] .obd-loc-map { background: #0f172a; border-color: #334155; }
+[data-theme="dark"] .obd-loc-coords { color: #cbd5e1; }
+[data-theme="dark"] .obd-loc-loading { color: #94a3b8; }
+
+/* Google Places Autocomplete dropdown is appended to <body>; lift it above app chrome */
+.pac-container { z-index: 100000 !important; }
+
+.obd-loc-error {
+  margin-top: 8px; padding: 10px 12px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+  background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca;
+}
+[data-theme="dark"] .obd-loc-error { background: #450a0a; color: #fca5a5; border-color: #7f1d1d; }

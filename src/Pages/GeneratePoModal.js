@@ -143,7 +143,7 @@ const DEFAULT_TERMS = [
   'Subject to Hyderabad Jurisdiction.',
 ];
 
-const blankItem = () => ({ description: '', unit: 'Nos', qty: '', pricePerUnit: '' });
+const blankItem = () => ({ description: '', unit: 'Nos', qty: '', pricePerUnit: '', gstPercent: 18 });
 const blankAdj = () => ({ label: '', amount: '' });
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -179,10 +179,11 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
                 unit: it.unit || (savedMatch ? savedMatch.unit : '') || 'Nos',
                 qty: it.quantity ?? it.qty ?? '',
                 pricePerUnit: it.unitPrice ?? it.pricePerUnit ?? '',
+                gstPercent: it.taxPercent ?? it.gst ?? (savedMatch ? savedMatch.gstPercent : undefined) ?? 18,
               };
             })
           : (saved.items && saved.items.length ? saved.items.map(it => ({
-              description: it.description || '', unit: it.unit || 'Nos', qty: it.qty ?? '', pricePerUnit: it.pricePerUnit ?? '',
+              description: it.description || '', unit: it.unit || 'Nos', qty: it.qty ?? '', pricePerUnit: it.pricePerUnit ?? '', gstPercent: it.gstPercent ?? 18,
             })) : [blankItem()]);
         setForm({
           poNo: saved.poNo || po.poNo || '',
@@ -219,6 +220,7 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
         unit: it.unit || 'Nos',
         qty: it.quantity ?? it.qty ?? '',
         pricePerUnit: it.unitPrice ?? it.pricePerUnit ?? '',
+        gstPercent: it.taxPercent ?? it.gst ?? 18,
       }));
     setForm({
       poNo: po.poNo || '',
@@ -287,9 +289,17 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
   };
 
   const subtotal = form.items.reduce((s, it) => s + num(it.qty) * num(it.pricePerUnit), 0);
-  const gstAmount = subtotal * num(form.gstPercent) / 100;
+  const gstAmount = form.items.reduce((s, it) => s + num(it.qty) * num(it.pricePerUnit) * num(it.gstPercent) / 100, 0);
   const adjTotal = form.adjustments.reduce((s, a) => s + num(a.amount), 0);
   const grandTotal = subtotal + gstAmount + adjTotal;
+  // Group GST by rate for the summary rows (one line per distinct rate present).
+  const gstGroups = {};
+  form.items.forEach(it => {
+    const pct = num(it.gstPercent);
+    if (pct <= 0) return;
+    gstGroups[pct] = (gstGroups[pct] || 0) + num(it.qty) * num(it.pricePerUnit) * pct / 100;
+  });
+  const gstRows = Object.keys(gstGroups).map(Number).sort((a, b) => a - b).map(pct => ({ pct, amount: gstGroups[pct] }));
 
   const generate = async () => {
     if (!form.vendorName.trim()) { showError('Vendor name is required'); return; }
@@ -322,8 +332,9 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
         items: form.items.filter(it => (it.description || '').trim()).map((it, i) => ({
           sNo: i + 1, description: it.description, unit: it.unit || 'Nos',
           qty: num(it.qty), pricePerUnit: num(it.pricePerUnit), amount: num(it.qty) * num(it.pricePerUnit),
+          gstPercent: num(it.gstPercent), gstAmount: num(it.qty) * num(it.pricePerUnit) * num(it.gstPercent) / 100,
         })),
-        gstPercent: num(form.gstPercent), gstAmount, totalAmount: grandTotal,
+        gstPercent: null, gstAmount, totalAmount: grandTotal,
         adjustments: form.adjustments.filter(a => (a.label || '').trim() || a.amount).map(a => ({ label: a.label, amount: num(a.amount) })),
         bankAccountName: form.bankAccountName, bankName: form.bankName, bankBranch: form.bankBranch,
         bankAccountNo: form.bankAccountNo, bankIfsc: form.bankIfsc,
@@ -471,11 +482,12 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
                 ))}
               </tbody>
             </table>
-            <div style={{ ...grid2, marginTop: 12, alignItems: 'end' }}>
-              <div><label style={L}>GST %</label><input style={I} type="number" value={form.gstPercent} onChange={e => set('gstPercent', e.target.value)} /></div>
+            <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
               <div style={{ textAlign: 'right', fontSize: 13, color: __stc('#334155') }}>
                 <div>Subtotal: <strong>{subtotal.toLocaleString('en-IN')}</strong></div>
-                <div>GST: <strong>{gstAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></div>
+                {gstRows.map(g => (
+                  <div key={g.pct}>GST @ {g.pct}%: <strong>{g.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></div>
+                ))}
                 <div style={{ fontSize: 15, marginTop: 4 }}>Total: <strong>{grandTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</strong></div>
               </div>
             </div>

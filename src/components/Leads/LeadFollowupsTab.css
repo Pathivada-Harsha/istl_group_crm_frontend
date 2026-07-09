@@ -4,16 +4,6 @@
 
 .lfu { padding: 0; }
 
-/* Toast */
-.lfu-toast {
-  position: fixed; top: 20px; right: 24px; z-index: 9999;
-  padding: 12px 20px; border-radius: 8px; font-size: 13px; font-weight: 500;
-  box-shadow: 0 4px 20px rgba(0,0,0,.15); animation: lfu-slide-in .25s ease;
-}
-.lfu-toast--success { background: var(--c-065f46, #065F46); color: var(--ct-fff, #fff); }
-.lfu-toast--error   { background: var(--c-991b1b, #991B1B); color: var(--ct-fff, #fff); }
-@keyframes lfu-slide-in { from { transform: translateX(60px); opacity:0 } to { transform: none; opacity:1 } }
-
 /* Header */
 .lfu-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
 .lfu-head-left { display: flex; align-items: center; gap: 8px; }
