@@ -1,8 +1,10 @@
 // src/Pages/Profile.jsx
 import React, { useState, useRef, useEffect } from "react";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+import { Laptop, Monitor, Smartphone, Tablet, ShieldCheck } from "lucide-react";
 import "../pages-css/Profile.css";
 import { useAuth } from '../hooks/useAuth';
+import { loginActivityApi } from '../services/loginActivityApi';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -65,6 +67,12 @@ export default function Profile() {
 
   const [toast, setToast] = useState({ show: false, type: '', message: '' });
 
+  // ── Active Sessions (self-service — this device's own account only) ──────
+  const [sessions, setSessions] = useState([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionTerminating, setSessionTerminating] = useState(null); // id being signed out
+  const [signingOutOthers, setSigningOutOthers] = useState(false);
+
   const [profileForm, setProfileForm] = useState({
     name: user.name, email: user.email, phone: user.phone, role: user.role,
   });
@@ -82,6 +90,28 @@ export default function Profile() {
     const pad = (n) => n.toString().padStart(2, '0');
     return `${pad(d.getDate())}-${pad(d.getMonth() + 1)}-${d.getFullYear()} ` +
            `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+
+  // Short, human "2 hours ago" style timestamp for the sessions list
+  const formatRelative = (dateStr) => {
+    if (!dateStr) return '—';
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'Active now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return `${days}d ago`;
+    return formatDateTime(dateStr).split(' ')[0];
+  };
+
+  const deviceIcon = (deviceType) => {
+    const t = (deviceType || '').toLowerCase();
+    if (t === 'mobile') return <Smartphone size={18} />;
+    if (t === 'tablet') return <Tablet size={18} />;
+    if (t === 'laptop') return <Laptop size={18} />;
+    return <Monitor size={18} />;
   };
 
   // Auth headers — NOTE: never set Content-Type for FormData (multipart) requests
@@ -313,6 +343,52 @@ export default function Profile() {
     setProfileForm({ name: user.name, email: user.email, phone: user.phone, role: user.role });
   }
 
+  // ── Active Sessions ────────────────────────────────────────────────────
+  async function loadSessions() {
+    setSessionsLoading(true);
+    try {
+      const data = await loginActivityApi.mySessions();
+      const list = Array.isArray(data) ? data : [];
+      // "This device" always shown first, regardless of login order.
+      list.sort((a, b) => (b.currentSession === true) - (a.currentSession === true));
+      setSessions(list);
+    } catch (err) {
+      showToast('error', err.message || 'Could not load active sessions.');
+    } finally {
+      setSessionsLoading(false);
+    }
+  }
+
+  useEffect(() => { loadSessions(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function handleSignOutDevice(id) {
+    if (!window.confirm('Sign out this device? It will be logged out immediately.')) return;
+    setSessionTerminating(id);
+    try {
+      await loginActivityApi.terminateMySession(id);
+      showToast('success', 'Device signed out.');
+      loadSessions();
+    } catch (err) {
+      showToast('error', err.message || 'Could not sign out that device.');
+    } finally {
+      setSessionTerminating(null);
+    }
+  }
+
+  async function handleSignOutOthers() {
+    if (!window.confirm('Sign out of every other device? This device stays signed in.')) return;
+    setSigningOutOthers(true);
+    try {
+      const res = await loginActivityApi.signOutOtherDevices();
+      showToast('success', res?.message || 'Other devices signed out.');
+      loadSessions();
+    } catch (err) {
+      showToast('error', err.message || 'Could not sign out other devices.');
+    } finally {
+      setSigningOutOthers(false);
+    }
+  }
+
   const serverAvatarUrl = buildAvatarUrl(user.id, user.avatarFlag, avatarCacheBust);
   // In the modal preview view show the pending preview, or the saved photo, or nothing
   const modalDisplaySrc = localPreview || serverAvatarUrl;
@@ -339,112 +415,168 @@ export default function Profile() {
         </div>
       )}
 
-      <div className="profile-user-page-grid">
+      <div className="profile-user-page-stack">
 
-        {/* LEFT CARD */}
-        <div className="profile-user-page-card card">
-          <div className="profile-user-page-top">
-
-            {/* Avatar — single "Edit Photo" hover trigger */}
-            <div className="profile-avatar-section">
-              <div className="profile-avatar-circle" onClick={openPhotoModal} title="Edit profile photo">
-                {serverAvatarUrl ? (
-                  <img src={serverAvatarUrl} alt={user.name} className="profile-user-page-avatar-img" />
-                ) : (
-                  <div className="profile-user-page-avatar-initials">{initials(user.name)}</div>
-                )}
-                <div className="profile-avatar-overlay">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                    <circle cx="12" cy="13" r="4"/>
-                  </svg>
-                  <span>Edit Photo</span>
-                </div>
+        {/* ── Identity strip ── */}
+        <div className="profile-identity-strip card">
+          <div className="profile-avatar-section">
+            <div className="profile-avatar-circle" onClick={openPhotoModal} title="Edit profile photo">
+              {serverAvatarUrl ? (
+                <img src={serverAvatarUrl} alt={user.name} className="profile-user-page-avatar-img" />
+              ) : (
+                <div className="profile-user-page-avatar-initials">{initials(user.name)}</div>
+              )}
+              <div className="profile-avatar-overlay">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                <span>Edit Photo</span>
               </div>
-            </div>
-
-            <div className="profile-user-page-meta">
-              <h2 className="profile-user-page-name">{user.name}</h2>
-              <div className="profile-user-page-role">{user.role}</div>
-              <div className="profile-user-page-email">{user.email}</div>
             </div>
           </div>
 
-          <div className="profile-user-page-stats">
-            <div className="profile-user-page-stat">
+          <div className="profile-identity-meta">
+            <div className="profile-identity-name-row">
+              <h2 className="profile-user-page-name">{user.name}</h2>
+              <span className="profile-role-badge">{user.role}</span>
+            </div>
+            <div className="profile-user-page-email">{user.email}</div>
+          </div>
+
+          <div className="profile-identity-stats">
+            <div className="profile-identity-stat">
               <div className="profile-user-page-stat-title">Joined</div>
               <div className="profile-user-page-stat-value">{formatDateTime(user.joined)}</div>
             </div>
-            <div className="profile-user-page-stat">
+            <div className="profile-identity-stat">
               <div className="profile-user-page-stat-title">Last Login</div>
               <div className="profile-user-page-stat-value">{formatDateTime(user.lastLogin)}</div>
             </div>
           </div>
         </div>
 
-        {/* RIGHT SECTION */}
-        <div className="profile-user-page-main">
-          <form className="profile-user-page-form card" onSubmit={saveProfile}>
-            <div className="profile-user-page-header">
-              <h3>Profile Details</h3>
-              {!editing && (
-                <button type="button" className="btn primary" onClick={() => setEditing(true)} disabled={loading}>Edit Profile</button>
+        {/* ── Profile Details + Active Sessions, side by side and equal height ── */}
+        <div className="profile-two-col">
+
+          {/* Profile Details + Change Password (single card) */}
+          <div className="profile-user-page-form card">
+            <form onSubmit={saveProfile}>
+              <div className="profile-user-page-header">
+                <h3>Profile Details</h3>
+                {!editing && (
+                  <button type="button" className="btn primary" onClick={() => setEditing(true)} disabled={loading}>Edit Profile</button>
+                )}
+              </div>
+              <div className="profile-user-page-row">
+                <label>Name</label>
+                <input name="name" value={profileForm.name} onChange={(e) => setProfileForm(p => ({ ...p, name: e.target.value }))} disabled={!editing || loading} />
+              </div>
+              <div className="profile-user-page-row">
+                <label>Email</label>
+                <input name="email" type="email" value={profileForm.email} onChange={(e) => setProfileForm(p => ({ ...p, email: e.target.value }))} disabled={!editing || loading} />
+              </div>
+              <div className="profile-user-page-row">
+                <label>Phone</label>
+                <input name="phone" value={profileForm.phone} onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} disabled={!editing || loading} />
+              </div>
+              {editing && (
+                <div className="profile-user-page-actions-row">
+                  <button type="button" className="btn" onClick={cancelEdit} disabled={loading}>Cancel</button>
+                  <button type="submit" className="btn primary" disabled={loading}>{loading ? 'Saving...' : 'Save Profile'}</button>
+                </div>
+              )}
+            </form>
+
+            <div className="profile-password-divider">
+              <div className="profile-user-page-header">
+                <h3>Change Password</h3>
+                {!showPasswordForm && (
+                  <button type="button" className="btn primary" onClick={() => setShowPasswordForm(true)} disabled={passwordLoading}>Change Password</button>
+                )}
+              </div>
+              {showPasswordForm && (
+                <form onSubmit={changePassword}>
+                  {[
+                    { label: 'Current Password', key: 'current', show: showCurrentPassword, toggle: () => setShowCurrentPassword(v => !v) },
+                    { label: 'New Password', key: 'newPwd', show: showNewPassword, toggle: () => setShowNewPassword(v => !v) },
+                    { label: 'Confirm New Password', key: 'confirm', show: showConfirmPassword, toggle: () => setShowConfirmPassword(v => !v) },
+                  ].map(({ label, key, show, toggle }) => (
+                    <div className="profile-user-page-row" key={key}>
+                      <label>{label}</label>
+                      <div className="password-input-wrapper">
+                        <input type={show ? 'text' : 'password'} name={key} value={pwdForm[key]}
+                          onChange={(e) => setPwdForm(p => ({ ...p, [key]: e.target.value }))}
+                          onPaste={key === 'confirm' ? (e) => e.preventDefault() : undefined}
+                          disabled={passwordLoading} />
+                        <button type="button" className="password-toggle-btn" onClick={toggle} disabled={passwordLoading}>
+                          {show ? <AiOutlineEyeInvisible size={20} /> : <AiOutlineEye size={20} />}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="profile-user-page-actions-row">
+                    <button type="button" className="btn"
+                      onClick={() => { setShowPasswordForm(false); setPwdForm({ current: '', newPwd: '', confirm: '' }); setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false); }}
+                      disabled={passwordLoading}>Cancel</button>
+                    <button type="submit" className="btn primary" disabled={passwordLoading}>{passwordLoading ? 'Changing...' : 'Save Password'}</button>
+                  </div>
+                </form>
               )}
             </div>
-            <div className="profile-user-page-row">
-              <label>Name</label>
-              <input name="name" value={profileForm.name} onChange={(e) => setProfileForm(p => ({ ...p, name: e.target.value }))} disabled={!editing || loading} />
-            </div>
-            <div className="profile-user-page-row">
-              <label>Email</label>
-              <input name="email" type="email" value={profileForm.email} onChange={(e) => setProfileForm(p => ({ ...p, email: e.target.value }))} disabled={!editing || loading} />
-            </div>
-            <div className="profile-user-page-row">
-              <label>Phone</label>
-              <input name="phone" value={profileForm.phone} onChange={(e) => setProfileForm(p => ({ ...p, phone: e.target.value }))} disabled={!editing || loading} />
-            </div>
-            {editing && (
-              <div className="profile-user-page-actions-row">
-                <button type="button" className="btn" onClick={cancelEdit} disabled={loading}>Cancel</button>
-                <button type="submit" className="btn primary" disabled={loading}>{loading ? 'Saving...' : 'Save Profile'}</button>
-              </div>
-            )}
-          </form>
+            <div className="profile-card-spacer" />
+          </div>
 
-          <div className="profile-user-page-password card">
+          {/* Active Sessions */}
+          <div className="profile-sessions-card card">
             <div className="profile-user-page-header">
-              <h3>Change Password</h3>
-              <button type="button" className="btn primary"
-                onClick={() => { setShowPasswordForm(!showPasswordForm); if (showPasswordForm) { setPwdForm({ current: '', newPwd: '', confirm: '' }); setShowCurrentPassword(false); setShowNewPassword(false); setShowConfirmPassword(false); } }}
-                disabled={passwordLoading}
-              >{showPasswordForm ? 'Hide' : 'Show'}</button>
+              <div className="profile-sessions-title">
+                <ShieldCheck size={18} />
+                <h3>Active Sessions</h3>
+              </div>
+              {!sessionsLoading && <span className="profile-sessions-count">{sessions.length} signed in</span>}
             </div>
-            {showPasswordForm && (
-              <form onSubmit={changePassword}>
-                {[
-                  { label: 'Current Password', key: 'current', show: showCurrentPassword, toggle: () => setShowCurrentPassword(v => !v) },
-                  { label: 'New Password', key: 'newPwd', show: showNewPassword, toggle: () => setShowNewPassword(v => !v) },
-                  { label: 'Confirm New Password', key: 'confirm', show: showConfirmPassword, toggle: () => setShowConfirmPassword(v => !v) },
-                ].map(({ label, key, show, toggle }) => (
-                  <div className="profile-user-page-row" key={key}>
-                    <label>{label}</label>
-                    <div className="password-input-wrapper">
-                      <input type={show ? 'text' : 'password'} name={key} value={pwdForm[key]}
-                        onChange={(e) => setPwdForm(p => ({ ...p, [key]: e.target.value }))}
-                        onPaste={key === 'confirm' ? (e) => e.preventDefault() : undefined}
-                        disabled={passwordLoading} />
-                      <button type="button" className="password-toggle-btn" onClick={toggle} disabled={passwordLoading}>
-                        {show ? <AiOutlineEyeInvisible size={20} /> : <AiOutlineEye size={20} />}
-                      </button>
+            <p className="profile-sessions-subtitle">Devices currently signed in to your account.</p>
+
+            {sessionsLoading ? (
+              <div className="profile-sessions-empty">Loading sessions…</div>
+            ) : sessions.length === 0 ? (
+              <div className="profile-sessions-empty">No active sessions found.</div>
+            ) : (
+              <div className="profile-sessions-list">
+                {sessions.map((s) => (
+                  <div className="profile-session-row" key={s.id}>
+                    <div className="profile-session-icon">{deviceIcon(s.deviceType)}</div>
+                    <div className="profile-session-info">
+                      <div className="profile-session-name-row">
+                        <span className="profile-session-name">{s.browser || 'Unknown browser'}{s.operatingSystem ? ` on ${s.operatingSystem}` : ''}</span>
+                        {s.currentSession && <span className="profile-session-current-badge">This device</span>}
+                      </div>
+                      <div className="profile-session-meta">
+                        {[s.city, s.ipAddress, formatRelative(s.lastSeenAt || s.loginAt)].filter(Boolean).join(' · ')}
+                      </div>
                     </div>
+                    {!s.currentSession && (
+                      <button type="button" className="btn danger-outline"
+                        onClick={() => handleSignOutDevice(s.id)}
+                        disabled={sessionTerminating === s.id}>
+                        {sessionTerminating === s.id ? 'Signing out…' : 'Sign Out'}
+                      </button>
+                    )}
                   </div>
                 ))}
-                <div className="profile-user-page-actions-row">
-                  <button type="submit" className="btn primary" disabled={passwordLoading}>{passwordLoading ? 'Changing...' : 'Change Password'}</button>
-                </div>
-              </form>
+              </div>
+            )}
+
+            <div className="profile-card-spacer" />
+
+            {sessions.length > 1 && (
+              <button type="button" className="btn danger profile-sessions-signout-all" onClick={handleSignOutOthers} disabled={signingOutOthers}>
+                {signingOutOthers ? 'Signing out…' : 'Sign Out All Other Devices'}
+              </button>
             )}
           </div>
+
         </div>
       </div>
 

@@ -193,12 +193,12 @@
   text-overflow: ellipsis;
 }
 
-/* Group abbreviation - hidden by default, shown when collapsed */
-.sidebar-group-abbreviation {
+/* Group icon - hidden by default, shown when collapsed */
+.sidebar-group-abbreviation-icon {
   display: none;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--ct-1f2937, #1f2937);
+  width: 18px;
+  height: 18px;
+  color: var(--ct-0b63d6, #0b63d6);
 }
 
 /* Chevron icon */
@@ -248,112 +248,9 @@
   position: relative;
 }
 
-/* Tooltip for collapsed sidebar */
-.sidebar.collapsed .sidebar-item::after {
-  content: attr(title);
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 12px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, var(--c-1e3a8a, #1e3a8a) 0%, var(--c-1e40af, #1e40af) 100%);
-  color: var(--ct-white, white);
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  box-shadow: 0 8px 20px rgba(30, 58, 138, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
-  letter-spacing: 0.3px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-/* Arrow for tooltip */
-.sidebar.collapsed .sidebar-item::before {
-  content: '';
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 6px;
-  border: 7px solid transparent;
-  border-right-color: var(--c-1e3a8a, #1e3a8a);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
-}
-
-/* Show tooltip on hover */
-.sidebar.collapsed .sidebar-item:hover::after {
-  opacity: 1;
-  margin-left: 18px;
-}
-
-.sidebar.collapsed .sidebar-item:hover::before {
-  opacity: 1;
-  margin-left: 11px;
-}
-
-/* Group header tooltip when collapsed */
-.sidebar.collapsed .sidebar-group-header.collapsible {
-  position: relative;
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible::after {
-  content: attr(data-full-name);
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 12px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, var(--c-0b63d6, #0b63d6) 0%, var(--c-0952b8, #0952b8) 100%);
-  color: var(--ct-white, white);
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  box-shadow: 0 8px 20px rgba(11, 99, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
-  letter-spacing: 0.3px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  text-transform: none;
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible::before {
-  content: '';
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 6px;
-  border: 7px solid transparent;
-  border-right-color: var(--c-0b63d6, #0b63d6);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible:hover::after {
-  opacity: 1;
-  margin-left: 18px;
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible:hover::before {
-  opacity: 1;
-  margin-left: 11px;
-}
+/* Tooltip for collapsed sidebar items is rendered via a React portal
+   (see .sidebar-tooltip-portal below) instead of a ::after pseudo-element,
+   because .sidebar has overflow-x: hidden and was clipping it. */
 
 /* Remove left padding for items without child connector (Main group items) */
 .sidebar-item:not(.child-item) {
@@ -398,11 +295,9 @@
   display: none;
 }
 
-/* Show abbreviation and hide chevron when collapsed */
-.sidebar.collapsed .sidebar-group-abbreviation {
+/* Show icon and hide chevron when collapsed */
+.sidebar.collapsed .sidebar-group-abbreviation-icon {
   display: block;
-  color: var(--ct-1f2937, #1f2937);
-  font-size: 18px;
 }
 
 .sidebar.collapsed .sidebar-group-chevron {
@@ -468,7 +363,7 @@
     display: inline;
   }
   
-  .sidebar.collapsed .sidebar-group-abbreviation {
+  .sidebar.collapsed .sidebar-group-abbreviation-icon {
     display: none;
   }
   
@@ -537,11 +432,11 @@
   display: flex;
 }
 
-/* Abbreviation styling */
-.sidebar-group-abbreviation {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--ct-1f2937, #1f2937);
+/* Icon styling */
+.sidebar-group-abbreviation-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--ct-0b63d6, #0b63d6);
 }
 
 /* Arrow next to abbreviation when collapsed */
@@ -568,56 +463,8 @@
   display: none;
 }
 
-/* Update tooltip styling for better visibility */
-.sidebar.collapsed .sidebar-group-header.collapsible::after {
-  content: attr(data-full-name);
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 12px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, var(--c-0b63d6, #0b63d6) 0%, var(--c-0952b8, #0952b8) 100%);
-  color: var(--ct-white, white);
-  font-size: 14px;
-  font-weight: 600;
-  border-radius: 8px;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  box-shadow: 0 8px 20px rgba(11, 99, 214, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
-  letter-spacing: 0.3px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  text-transform: none;
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible::before {
-  content: '';
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  transform: translateY(-50%);
-  margin-left: 6px;
-  border: 7px solid transparent;
-  border-right-color: var(--c-0b63d6, #0b63d6);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease, margin-left 0.2s ease;
-  z-index: 1000;
-  filter: drop-shadow(-1px 0 1px rgba(0, 0, 0, 0.1));
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible:hover::after {
-  opacity: 1;
-  margin-left: 18px;
-}
-
-.sidebar.collapsed .sidebar-group-header.collapsible:hover::before {
-  opacity: 1;
-  margin-left: 11px;
-}
+/* Group header tooltip is rendered via the same React portal as item
+   tooltips — see .sidebar-tooltip-portal. */
 
 /* Make the collapsed group header more clickable-looking */
 .sidebar.collapsed .sidebar-group-header.collapsible {
@@ -654,4 +501,35 @@
 .sidebar.collapsed .sidebar-group-header.collapsible:hover .sidebar-group-collapsed-arrow.expanded {
   animation: none;
   transform: rotate(180deg);
+}
+/* ===== Portal-rendered tooltip for the collapsed sidebar ===== */
+/* Appended to document.body via createPortal, positioned with fixed
+   top/left computed on hover, so it always escapes .sidebar's
+   overflow-x: hidden clipping. */
+.sidebar-tooltip-portal {
+  position: fixed;
+  transform: translateY(-50%);
+  background-color: #1f2937;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2000;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+.sidebar-tooltip-arrow {
+  position: absolute;
+  left: -5px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+  border-right: 6px solid #1f2937;
 }

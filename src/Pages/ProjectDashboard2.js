@@ -24,7 +24,7 @@ import CrmPreloader from "../components/preLoader.js";
 import {
   BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
-  ComposedChart, Treemap, RadialBarChart, RadialBar, Brush, LabelList
+  ComposedChart, Treemap, RadialBarChart, RadialBar, Brush, LabelList, Line
 } from 'recharts';
 
 // ─── Custom 2-line X-axis tick (keeps bar names properly horizontal) ─────────
@@ -164,6 +164,25 @@ const useThemeVersion = () => {
   return v;
 };
 
+// ─── Ctrl+Scroll zoom guard — shared by every Chart.js chart on this page ─────
+// Plain wheel ALWAYS scrolls the page normally — charts never trap it.
+// Holding Ctrl (Cmd on Mac) while scrolling zooms the chart instead (same
+// pattern as embedded Google Maps). chartjs-plugin-zoom is configured with
+// modifierKey:'ctrl' so its own internal zoom logic agrees with this guard;
+// we still attach this listener ourselves so the browser's page-level scroll
+// is only ever suppressed for the exact instant a Ctrl-zoom is happening.
+const attachWheelZoomGuard = (el) => {
+  if (!el) return () => {};
+  const handler = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault(); // zoom is about to happen — don't also scroll the page
+    }
+    // no Ctrl/Cmd → do nothing, the browser scrolls the page as normal
+  };
+  el.addEventListener('wheel', handler, { passive: false });
+  return () => el.removeEventListener('wheel', handler);
+};
+
 const IDENTITY_FMT = (v) => v; // stable default — inline `(v) => v` would change identity every render and re-trigger the chart rebuild effects
 const ChartJSBar = ({
   data,          // [{ label, values: { Budget?, Received?, Spent?, 'Order Value'? }, color? }]
@@ -181,6 +200,7 @@ const ChartJSBar = ({
   const chartRef   = React.useRef(null);
   const themeV = useThemeVersion();
   const [ready, setReady] = React.useState(!!window.Chart);
+  const [logScaleActive, setLogScaleActive] = React.useState(false);
 
   React.useEffect(() => {
     if (!window.Chart) {
@@ -193,6 +213,19 @@ const ChartJSBar = ({
 
     // Destroy previous instance
     if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+
+    // When the series mixes very large and very small values (e.g. one
+    // project at ₹513 Cr next to others at ₹1-50 L), a linear y-axis makes
+    // every small bar collapse to a sliver near zero and their labels pile
+    // up on top of each other. Auto-switch to a logarithmic y-axis whenever
+    // the spread is large enough that this would happen — same convention
+    // already used by the Contribution bar chart.
+    const allVals = datasets.flatMap(ds => (ds.data || []).map(Number)).filter(v => Number.isFinite(v) && v > 0);
+    const maxVal = allVals.length ? Math.max(...allVals) : 0;
+    const minVal = allVals.length ? Math.min(...allVals) : 0;
+    const skewRatio = minVal > 0 ? maxVal / minVal : 1;
+    const yScaleType = skewRatio > 15 ? 'logarithmic' : 'linear';
+    setLogScaleActive(yScaleType === 'logarithmic');
 
     const Chart = window.Chart;
     const P = getChartPalette();
@@ -265,16 +298,22 @@ const ChartJSBar = ({
               label: (ctx) => ` ${ctx.dataset.label}: ${yTickFormatter(ctx.raw)}`,
             },
           },
+          // Modal: plain mouse wheel zooms directly (dedicated full-screen
+          // view, nothing else to scroll). Inline preview cards on the page
+          // still require Ctrl/Cmd + Scroll so the dashboard itself can be
+          // scrolled past a chart without getting trapped.
           zoom: {
             pan: {
               enabled: true,
               mode: 'x',
               threshold: 5,
+              modifierKey: modal ? undefined : 'ctrl',
             },
             zoom: {
               wheel: {
                 enabled: true,
                 speed: 0.08,
+                modifierKey: modal ? undefined : 'ctrl',
               },
               pinch: { enabled: true },
               mode: 'x',
@@ -298,6 +337,7 @@ const ChartJSBar = ({
             border: { color: P.muted, width: 1.5 },
           },
           y: {
+            type: yScaleType,
             ticks: {
               font: { size: modal ? 11 : 10 },
               color: P.tick,
@@ -308,22 +348,19 @@ const ChartJSBar = ({
             border: { color: P.muted, width: 1.5 },
           },
         },
-        onHover: (event, elements, chart) => {
-          // Prevent page scroll when mouse is inside chart
-          if (canvasRef.current) {
-            canvasRef.current.style.touchAction = 'none';
-          }
-        },
       },
     });
 
-    // Prevent page scroll on wheel inside canvas
+    // Modal: every wheel zooms, so every wheel is intercepted.
+    // Preview: only Ctrl/Cmd+wheel zooms, so only that combination is
+    // intercepted — plain scroll passes straight through to the page.
     const canvas = canvasRef.current;
-    const stopScroll = (e) => { e.preventDefault(); };
-    canvas.addEventListener('wheel', stopScroll, { passive: false });
+    const detachWheelGuard = modal
+      ? (() => { const h = (e) => e.preventDefault(); canvas.addEventListener('wheel', h, { passive: false }); return () => canvas.removeEventListener('wheel', h); })()
+      : attachWheelZoomGuard(canvas);
 
     return () => {
-      canvas.removeEventListener('wheel', stopScroll);
+      detachWheelGuard();
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
   }, [ready, labels, datasets, yTickFormatter, modal, themeV, showValueLabels, valueLabelFormatter, xLabelRotation]);
@@ -350,14 +387,22 @@ const ChartJSBar = ({
           style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
           onClick={e => e.stopPropagation()}
         >
+          {logScaleActive && (
+            <span
+              title="Values differ greatly — logarithmic scale used so all bars are visible"
+              style={{ fontSize:9, color:'#b45309', background:'rgba(255,251,235,0.95)', borderRadius:4, padding:'2px 6px', border:'1px solid #fde68a', pointerEvents:'none', lineHeight:'16px', userSelect:'none' }}
+            >
+              Log scale
+            </span>
+          )}
           <span
-            title="Scroll to zoom · Drag to pan · Double-click to reset"
+            title={modal ? 'Scroll to zoom · Drag to pan' : 'Hold Ctrl (or Cmd) + Scroll to zoom · Ctrl + Drag to pan'}
             style={{
               fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)',
               borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0',
               pointerEvents:'none', lineHeight:'16px', userSelect:'none'
             }}
-          >🖱 Zoom / Pan</span>
+          >{modal ? '🖱 Scroll to Zoom' : '🖱 Ctrl+Scroll to Zoom'}</span>
           <button
             title="Reset zoom"
             onClick={e => { e.stopPropagation(); handleReset(); }}
@@ -476,22 +521,14 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
       },
     };
 
-    const whiteBgPlugin = {
-      id: 'whiteBgDonut',
-      beforeDraw(chart) {
-        const { ctx: c, chartArea } = chart;
-        if (!chartArea) return;
-        c.save();
-        c.fillStyle = P.plotBg;
-        c.fillRect(chartArea.left, chartArea.top, chartArea.right - chartArea.left, chartArea.bottom - chartArea.top);
-        c.restore();
-      },
-    };
-
+    // No background-fill plugin here (unlike the bar charts) — a donut only
+    // covers a circle, so filling its full rectangular chartArea painted a
+    // visible box around the ring instead of blending into the card behind it.
+    // The canvas stays transparent so the card's own background shows through.
     const ctx = canvasRef.current.getContext('2d');
     chartRef.current = new Chart(ctx, {
       type: 'doughnut',
-      plugins: [whiteBgPlugin, elbowLabelPlugin],
+      plugins: [elbowLabelPlugin],
       data: {
         labels,
         datasets: [{
@@ -559,19 +596,20 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
               },
             },
           },
-          zoom: {
-            zoom: { wheel: { enabled: true, speed: 0.05 }, pinch: { enabled: true }, mode: 'xy' },
-            pan: { enabled: true, mode: 'xy' },
-          },
+          // Zoom/pan only inside the Expand & Zoom modal — preview donuts on
+          // the page stay fully static.
+          ...(modal ? { zoom: {
+            zoom: { wheel: { enabled: true, speed: 0.05, modifierKey: 'ctrl' }, pinch: { enabled: true }, mode: 'xy' },
+            pan: { enabled: true, mode: 'xy', modifierKey: 'ctrl' },
+          } } : {}),
         },
       },
     });
 
     const canvas = canvasRef.current;
-    const stop = (e) => e.preventDefault();
-    canvas.addEventListener('wheel', stop, { passive: false });
+    const detachWheelGuard = modal ? attachWheelZoomGuard(canvas) : () => {};
     return () => {
-      canvas.removeEventListener('wheel', stop);
+      detachWheelGuard();
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
   }, [ready, data, modal, labelKey, valueKey, colorKey, themeV, showAmount, amountFormatter]);
@@ -592,13 +630,13 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
         onClick={e => e.stopPropagation()}
         onMouseDown={e => e.stopPropagation()}
       />
-      {ready && (
+      {ready && modal && (
         <div
           style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
           onClick={e => e.stopPropagation()}
         >
-          <span style={{ fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)', borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0', pointerEvents:'none', lineHeight:'16px' }}>
-            🖱 Zoom / Pan
+          <span title="Hold Ctrl (or Cmd) + Scroll to zoom · Ctrl + Drag to pan" style={{ fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)', borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0', pointerEvents:'none', lineHeight:'16px' }}>
+            🖱 Ctrl+Scroll to Zoom
           </span>
           <button
             title="Reset zoom"
@@ -619,6 +657,9 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
   const canvasRef = React.useRef(null);
   const chartRef  = React.useRef(null);
   const themeV = useThemeVersion();
+  // Amount labels shown above each bar by default — same convention as the
+  // Financial Overview chart's Show/Hide Amounts toggle.
+  const [showLabels, setShowLabels] = React.useState(true);
 
   const fmtCurr = (v) => {
     const abs = Math.abs(Number(v));
@@ -652,6 +693,33 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
       },
     };
 
+    // Amount + % label above each bar — MUST be a registered plugin (a bare
+    // afterDraw sibling under `options` is silently ignored by Chart.js,
+    // which is why labels never rendered before this fix).
+    const valueLabelPlugin = {
+      id: 'contribValueLabels',
+      afterDraw(chart) {
+        if (!showLabels) return;
+        const { ctx: c, scales: { x, y } } = chart;
+        const _bdColors = data.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
+        chart.data.datasets[0].data.forEach((val, i) => {
+          const item = data[i];
+          if (!item) return;
+          const xPos = x.getPixelForValue(i);
+          const yPos = y.getPixelForValue(val);
+          c.save();
+          c.textAlign = 'center';
+          c.font = `700 ${modal ? 11 : 10}px system-ui,sans-serif`;
+          c.fillStyle = _bdColors[i];
+          c.fillText(fmtCurr(val), xPos, yPos - 16);
+          c.font = `400 ${modal ? 10 : 9}px system-ui,sans-serif`;
+          c.fillStyle = P.muted;
+          c.fillText(`${item.pct ?? 0}%`, xPos, yPos - 4);
+          c.restore();
+        });
+      },
+    };
+
     const maxBudget = Math.max(...data.map(d => d.budget));
     const minBudget = Math.min(...data.map(d => d.budget));
     const skewRatio = maxBudget / (minBudget || 1);
@@ -664,7 +732,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
     const ctx = canvasRef.current.getContext('2d');
     chartRef.current = new Chart(ctx, {
       type: 'bar',
-      plugins: [whiteBgPlugin],
+      plugins: [whiteBgPlugin, valueLabelPlugin],
       data: {
         labels,
         datasets: [{
@@ -685,6 +753,10 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
         plugins: {
           legend: { display: false },
           tooltip: {
+            // Amounts are already printed above every bar when showLabels is
+            // on — a hover tooltip repeating the same number is redundant, so
+            // it only appears once the labels are hidden.
+            enabled: !showLabels,
             backgroundColor: P.tipBg,
             borderColor: P.tipBorder,
             borderWidth: 1,
@@ -698,10 +770,12 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
               },
             },
           },
+          // Modal: plain wheel zooms. Preview: Ctrl/Cmd + wheel zooms, so the
+          // page can still be scrolled past the chart normally.
           zoom: {
-            pan: { enabled: true, mode: 'x', threshold: 5 },
+            pan: { enabled: true, mode: 'x', threshold: 5, modifierKey: modal ? undefined : 'ctrl' },
             zoom: {
-              wheel: { enabled: true, speed: 0.08 },
+              wheel: { enabled: true, speed: 0.08, modifierKey: modal ? undefined : 'ctrl' },
               pinch: { enabled: true },
               mode: 'x',
             },
@@ -711,11 +785,21 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
         scales: {
           x: {
             ticks: {
-              font: { size: modal ? 12 : 11, weight: '600' },
+              font: { size: modal ? 12 : 10, weight: '600' },
               color: P.tick,
-              maxRotation: data.length > 5 ? 30 : 0,
+              maxRotation: 0,   // names shown horizontally, never diagonal
               minRotation: 0,
               autoSkip: false,
+              // The preview card is narrow, so the full (already-shortened)
+              // project name still overflows into its neighbours at 0°
+              // rotation. Shorten further just for the axis text here — the
+              // tooltip on hover still shows the fuller name, and the modal
+              // (much wider) keeps more of the original length.
+              callback(value) {
+                const label = this.getLabelForValue(value);
+                const limit = modal ? 22 : 10;
+                return label.length > limit ? label.slice(0, limit) + '…' : label;
+              },
             },
             grid: { display: false },
             border: { color: P.muted, width: 1.5 },
@@ -732,36 +816,18 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
             border: { color: P.muted, width: 1.5 },
           },
         },
-        afterDraw(chart) {
-          const { ctx: c, scales: { x, y } } = chart;
-          const _bdColors = data.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
-          chart.data.datasets[0].data.forEach((val, i) => {
-            const item = data[i];
-            if (!item) return;
-            const xPos = x.getPixelForValue(i);
-            const yPos = y.getPixelForValue(val);
-            c.save();
-            c.textAlign = 'center';
-            c.font = `700 ${modal ? 11 : 10}px system-ui,sans-serif`;
-            c.fillStyle = _bdColors[i];
-            c.fillText(fmtCurr(val), xPos, yPos - 16);
-            c.font = `400 ${modal ? 10 : 9}px system-ui,sans-serif`;
-            c.fillStyle = P.muted;
-            c.fillText(`${item.pct ?? 0}%`, xPos, yPos - 4);
-            c.restore();
-          });
-        },
       },
     });
 
     const canvas = canvasRef.current;
-    const stopScroll = (e) => e.preventDefault();
-    canvas.addEventListener('wheel', stopScroll, { passive: false });
+    const detachWheelGuard = modal
+      ? (() => { const h = (e) => e.preventDefault(); canvas.addEventListener('wheel', h, { passive: false }); return () => canvas.removeEventListener('wheel', h); })()
+      : attachWheelZoomGuard(canvas);
     return () => {
-      canvas.removeEventListener('wheel', stopScroll);
+      detachWheelGuard();
       if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
     };
-  }, [ready, data, modal, themeV]);
+  }, [ready, data, modal, themeV, showLabels]);
 
   // Early return AFTER all hooks
   if (!data || data.length === 0) return null;
@@ -799,11 +865,18 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
             </span>
           )}
           <span
-            title="Scroll to zoom · Drag to pan · Double-click to reset"
+            title={modal ? "Scroll to zoom · Drag to pan" : "Hold Ctrl (or Cmd) + Scroll to zoom · Ctrl + Drag to pan"}
             style={{ fontSize:9, color:'#94a3b8', background:'rgba(248,250,252,0.92)', borderRadius:4, padding:'2px 6px', border:'1px solid #e2e8f0', pointerEvents:'none', lineHeight:'16px', userSelect:'none' }}
           >
-            🖱 Zoom / Pan
+            {modal ? '🖱 Scroll to Zoom' : '🖱 Ctrl+Scroll to Zoom'}
           </span>
+          <button
+            title={showLabels ? 'Hide the amount labels above each bar' : 'Show the amount labels above each bar'}
+            onClick={e => { e.stopPropagation(); setShowLabels(v => !v); }}
+            style={{ display:'flex', alignItems:'center', gap:3, fontSize:9, color:'#3b82f6', background: showLabels ? '#eff6ff' : '#f8fafc', borderRadius:4, padding:'2px 7px', border:'1px solid #e2e8f0', cursor:'pointer', lineHeight:'16px', fontWeight:600 }}
+          >
+            {showLabels ? <EyeOff size={10} /> : <Eye size={10} />} {showLabels ? 'Hide Amounts' : 'Show Amounts'}
+          </button>
           <button
             title="Reset zoom to full view"
             onClick={e => { e.stopPropagation(); handleReset(); }}
@@ -823,10 +896,7 @@ const ZoomableBarChart = ({ data, children, height, brushDataKey = 'name', datas
   const wrapRef = React.useRef(null);
   React.useEffect(() => {
     const el = wrapRef.current;
-    if (!el) return;
-    const stop = (e) => e.preventDefault();
-    el.addEventListener('wheel', stop, { passive: false });
-    return () => el.removeEventListener('wheel', stop);
+    return attachWheelZoomGuard(el);
   }, []);
 
   // After hooks: conditional render
@@ -1281,6 +1351,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
   const [chartModal, setChartModal]     = React.useState(null); // { type: 'statusPie'|'budgetBar'|'contributionBar'|'contributionPie', title }
   const [finViewMode, setFinViewMode]   = React.useState('cards'); // 'cards' | 'table' | 'graph'
   const [finBarShowLabels, setFinBarShowLabels] = React.useState(true); // toggle: amount labels on Financial Overview bars
+  const [budgetBarShowLabels, setBudgetBarShowLabels] = React.useState(true); // toggle: amount labels on Top Projects (Budget vs Received) bars
   const _themeVersion = useThemeVersion(); // re-render inline-styled modals on theme toggle
   const isDark = React.useMemo(
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark',
@@ -1868,44 +1939,59 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             : Number(financial.cashInHand || 0);
           const isDeficit   = financial.cashDeficit > 0;
           const pct = (num, den) => den > 0 ? +((num / den) * 100).toFixed(1) : 0;
+          // Shows the unit that actually matches formatCurrency's own threshold for
+          // this value, instead of a hardcoded "Cr's" label on every row.
+          const unitLabel = (v) => {
+            const abs = Math.abs(Number(v) || 0);
+            if (abs >= 10000000) return "Cr's";
+            if (abs >= 100000) return "Lc's";
+            return '₹';
+          };
 
-          // Tone palette — theme-aware, used for row bg/text/badge colors instead of
-          // hardcoded light-only hex values (this is what made dark mode look "odd").
+          // Simplified, single-accent palette: every row uses the SAME neutral
+          // text/value colour (matching the rest of the page's tables), so the
+          // list reads cleanly instead of a different colour per row. Status is
+          // still communicated — just narrowed to the small badge pill instead
+          // of being smeared across the whole row.
           const tone = (kind) => {
             const map = {
-              header:  { bg: isDark ? '#16263f' : '#1e3a5f', text: '#ffffff', val: isDark ? '#7dd3fc' : '#93c5fd', pct: isDark ? '#bae6fd' : '#bfdbfe', accent: '#3b82f6' },
-              plain:   { bg: 'transparent', text: isDark ? '#e7ecf3' : '#1e293b', val: null, pct: isDark ? '#c2cbd8' : '#475569' },
-              success: { bg: isDark ? 'rgba(34,197,94,0.14)'  : '#f0fdf4', text: isDark ? '#86efac' : '#15803d', val: isDark ? '#86efac' : '#15803d', pct: isDark ? '#4ade80' : '#16a34a', badgeBg: isDark ? 'rgba(34,197,94,0.22)'  : '#dcfce7', badgeCol: isDark ? '#86efac' : '#15803d' },
-              danger:  { bg: isDark ? 'rgba(239,68,68,0.16)'  : '#fef2f2', text: isDark ? '#fca5a5' : '#b91c1c', val: isDark ? '#fca5a5' : '#b91c1c', pct: isDark ? '#f87171' : '#dc2626', badgeBg: isDark ? 'rgba(239,68,68,0.24)'  : '#fee2e2', badgeCol: isDark ? '#fca5a5' : '#b91c1c' },
-              warning: { bg: isDark ? 'rgba(245,158,11,0.16)' : '#fffbeb', text: isDark ? '#fcd34d' : '#92400e', val: isDark ? '#fbbf24' : '#b45309', pct: isDark ? '#fbbf24' : '#d97706', badgeBg: isDark ? 'rgba(245,158,11,0.24)' : '#fef3c7', badgeCol: isDark ? '#fcd34d' : '#92400e' },
-              info:    { bg: isDark ? 'rgba(6,182,212,0.16)'  : '#ecfeff', text: isDark ? '#67e8f9' : '#0e7490', val: isDark ? '#67e8f9' : '#0e7490', pct: isDark ? '#22d3ee' : '#0891b2', badgeBg: isDark ? 'rgba(6,182,212,0.24)'  : '#cffafe', badgeCol: isDark ? '#67e8f9' : '#0e7490' },
+              header: { bg: isDark ? '#16263f' : '#1e3a5f', text: '#ffffff', val: '#ffffff', pct: '#ffffff' },
+              plain:  { bg: 'transparent', text: isDark ? '#e7ecf3' : '#1e293b', val: null, pct: isDark ? '#c2cbd8' : '#475569' },
             };
             return map[kind] || map.plain;
+          };
+          const badgeTone = (kind) => {
+            const map = {
+              success: { bg: isDark ? 'rgba(34,197,94,0.22)'  : '#dcfce7', col: isDark ? '#86efac' : '#15803d' },
+              danger:  { bg: isDark ? 'rgba(239,68,68,0.24)'  : '#fee2e2', col: isDark ? '#fca5a5' : '#b91c1c' },
+              warning: { bg: isDark ? 'rgba(245,158,11,0.24)' : '#fef3c7', col: isDark ? '#fcd34d' : '#92400e' },
+              info:    { bg: isDark ? 'rgba(6,182,212,0.24)'  : '#cffafe', col: isDark ? '#67e8f9' : '#0e7490' },
+            };
+            return map[kind] || map.success;
           };
 
           const receivedOverInvoiced = pct(received, billed) > 100;
 
           const rows = [
             // ── CLIENT BILLING ──────────────────────────────────────────────
-            { group: 'Client Billing & Collection', groupAccent: '#3b82f6', groupIcon: '💰', isGroupHeader: true },
-            { label: 'Total Contract Value',    ref: 'a',       val: totalVal,    pctVal: 100,                        accent: '#3b82f6', t: tone('header'), isHdr: true },
-            { label: 'Billed Amount',           ref: 'b',       val: billed,      pctVal: pct(billed,totalVal),       accent: '#8b5cf6', t: tone('plain') },
-            { label: 'Received Amount',         ref: 'c',       val: received,    pctVal: pct(received,billed),       accent: '#22c55e', t: tone('success'), badge: receivedOverInvoiced ? '⚠ Over-Received' : '✓ Collected' },
+            { group: 'Client Billing & Collection', groupIcon: '💰', isGroupHeader: true },
+            { label: 'Total Contract Value',    ref: 'a',       val: totalVal,    pctVal: 100,                        t: tone('header'), isHdr: true },
+            { label: 'Billed Amount',           ref: 'b',       val: billed,      pctVal: pct(billed,totalVal),       t: tone('plain') },
+            { label: 'Received Amount',         ref: 'c',       val: received,    pctVal: pct(received,billed),       t: tone('plain'), badge: receivedOverInvoiced ? '⚠ Over-Received' : '✓ Collected', badgeKind: receivedOverInvoiced ? 'warning' : 'success' },
             ...(receivedOverInvoiced ? [{
               isNote: true,
-              accent: '#f59e0b',
               noteText: 'Received More Amount Than Invoiced — client has paid more than the billed value (likely an advance receipt; raise/adjust an invoice to match).',
             }] : []),
-            { label: 'Balance Receivable',      ref: 'd = b−c', val: balRec,      pctVal: pct(balRec,billed),         accent: '#ef4444', t: tone('danger'),  badge: '⚠ Pending', bold: true },
-            { label: 'Un-Billed Contract Value',ref: 'e = a−b', val: unBilled,    pctVal: pct(unBilled,totalVal),     accent: '#f59e0b', t: tone('warning'), badge: '◷ Not Billed', bold: true },
+            { label: 'Balance Receivable',      ref: 'd = b−c', val: balRec,      pctVal: pct(balRec,billed),         t: tone('plain'), badge: '⚠ Pending', badgeKind: 'danger', bold: true },
+            { label: 'Un-Billed Contract Value',ref: 'e = a−b', val: unBilled,    pctVal: pct(unBilled,totalVal),     t: tone('plain'), badge: '◷ Not Billed', badgeKind: 'warning', bold: true },
             // ── VENDOR PAYMENTS ─────────────────────────────────────────────
-            { group: 'Vendor Procurement & Payments', groupAccent: '#ef4444', groupIcon: '🧾', isGroupHeader: true },
-            { label: 'Total Procurement',       ref: 'f',       val: procurement, pctVal: pct(procurement,totalVal),  accent: '#ef4444', t: tone('plain') },
-            { label: 'Total Paid to Vendors',   ref: 'g',       val: paid,        pctVal: pct(paid,procurement),      accent: '#06b6d4', t: tone('info'),    badge: '✓ Paid' },
-            { label: 'Pending Vendor Payments', ref: 'h = f−g', val: pendPay,     pctVal: pct(pendPay,procurement),   accent: '#f59e0b', t: tone('danger'),  badge: '⚠ Pending', bold: true },
+            { group: 'Vendor Procurement & Payments', groupIcon: '🧾', isGroupHeader: true },
+            { label: 'Total Procurement',       ref: 'f',       val: procurement, pctVal: pct(procurement,totalVal),  t: tone('plain') },
+            { label: 'Total Paid to Vendors',   ref: 'g',       val: paid,        pctVal: pct(paid,procurement),      t: tone('plain'), badge: '✓ Paid', badgeKind: 'success' },
+            { label: 'Pending Vendor Payments', ref: 'h = f−g', val: pendPay,     pctVal: pct(pendPay,procurement),   t: tone('plain'), badge: '⚠ Pending', badgeKind: 'danger', bold: true },
             // ── CASH POSITION ───────────────────────────────────────────────
-            { group: 'Cash Position',           groupAccent: isDeficit ? '#ef4444' : '#22c55e', groupIcon: isDeficit ? '🔴' : '🟢', isGroupHeader: true },
-            { label: isDeficit ? 'Cash Deficit' : 'Cash in Hand', ref: 'c − g', val: cashAbs, pctVal: pct(cashAbs,totalVal), accent: isDeficit ? '#ef4444' : '#22c55e', t: tone(isDeficit ? 'danger' : 'success'), badge: isDeficit ? '🔴 Deficit' : '🟢 Surplus', bold: true },
+            { group: 'Cash Position',           groupIcon: isDeficit ? '🔴' : '🟢', isGroupHeader: true },
+            { label: isDeficit ? 'Cash Deficit' : 'Cash in Hand', ref: 'c − g', val: cashAbs, pctVal: pct(cashAbs,totalVal), t: tone('plain'), badge: isDeficit ? '🔴 Deficit' : '🟢 Surplus', badgeKind: isDeficit ? 'danger' : 'success', bold: true },
           ];
 
           // Column header config
@@ -1928,9 +2014,9 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
               {rows.map((row, ri) => {
                 // ── Group header row ──────────────────────────────────────
                 if (row.isGroupHeader) return (
-                  <div key={ri} style={{ background: row.groupAccent + (isDark ? '26' : '18'), borderTop: ri > 0 ? `2px solid ${row.groupAccent}33` : 'none', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div key={ri} style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(30,41,59,0.05)', borderTop: ri > 0 ? `1px solid ${rowBorder}` : 'none', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ fontSize: 11 }}>{row.groupIcon}</span>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: row.groupAccent, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{row.group}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: isDark ? '#93c5fd' : '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{row.group}</span>
                   </div>
                 );
 
@@ -1941,7 +2027,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     padding: '8px 20px',
                     background: isDark ? 'rgba(245,158,11,0.10)' : '#fffbeb',
                     borderBottom: `1px solid ${rowBorder}`,
-                    borderLeft: `3px solid ${row.accent}`,
                   }}>
                     <AlertCircle size={13} style={{ color: isDark ? '#fbbf24' : '#b45309', flexShrink: 0 }} />
                     <span style={{ fontSize: 11.5, fontWeight: 600, color: isDark ? '#fcd34d' : '#92400e' }}>{row.noteText}</span>
@@ -1950,13 +2035,13 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
 
                 const isHdr = row.isHdr;
                 const t = row.t;
-                const baseBg = t.bg !== 'transparent' ? t.bg : (ri % 2 === 0 ? zebraEven : zebraOdd);
+                const baseBg = isHdr ? t.bg : (ri % 2 === 0 ? zebraEven : zebraOdd);
                 // Header row keeps its dark navy background on hover (just a touch lighter)
                 // so the white text stays legible — a light accent wash here is what made it
                 // unreadable in light theme.
                 const hoverBg = isHdr
                   ? (isDark ? '#1c3155' : '#274d80')
-                  : (isDark ? row.accent + '2a' : row.accent + '14');
+                  : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)');
                 return (
                   <div key={ri}
                     style={{
@@ -1964,7 +2049,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                       padding: '12px 20px', gap: 8,
                       background: baseBg,
                       borderBottom: `1px solid ${rowBorder}`,
-                      borderLeft: `3px solid ${row.accent}`,
                       transition: 'background 0.12s',
                     }}
                     onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
@@ -1974,40 +2058,41 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
                       <span style={{ fontSize: isHdr ? 14 : 13, fontWeight: row.bold || isHdr ? 700 : 500, color: t.text }}>{row.label}</span>
                     </div>
-                    {/* Ref — visible pill chip instead of low-contrast monospace text */}
+                    {/* Ref */}
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <span style={{
-                        fontSize: 11, fontFamily: 'monospace', fontWeight: 700,
+                        fontSize: 12.5, fontFamily: 'monospace', fontWeight: 700,
                         color: isHdr ? '#ffffff' : (isDark ? '#93c5fd' : '#1d4ed8'),
-                        background: isHdr ? 'rgba(255,255,255,0.18)' : (isDark ? 'rgba(59,130,246,0.20)' : '#eff6ff'),
-                        border: `1px solid ${isHdr ? 'rgba(255,255,255,0.3)' : (isDark ? 'rgba(96,165,250,0.35)' : '#bfdbfe')}`,
                         padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap',
                       }}>{row.ref}</span>
                     </div>
-                    {/* Units — visible chip instead of low-contrast muted text */}
+                    {/* Units — matches the actual scale of this row's value (₹ / Lacs / Cr's) */}
                     <div style={{ display: 'flex', alignItems: 'center' }}>
                       <span style={{
-                        fontSize: 10.5, fontWeight: 700,
+                        fontSize: 12.5, fontWeight: 700,
                         color: isHdr ? 'rgba(255,255,255,0.92)' : (isDark ? '#cbd5e1' : '#475569'),
-                        background: isHdr ? 'rgba(255,255,255,0.12)' : (isDark ? 'rgba(148,163,184,0.16)' : '#f1f5f9'),
                         padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap',
-                      }}>₹ Cr's</span>
+                      }}>{unitLabel(row.val)}</span>
                     </div>
-                    {/* Value */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: isHdr ? 16 : 14, fontWeight: 800, color: t.val || t.text }}>
+                    {/* Value — coloured to match this row's status badge (if any),
+                        so the figure and its status read as one signal */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: isHdr ? 16 : 14, fontWeight: 800, color: isHdr ? t.val : (row.badgeKind ? badgeTone(row.badgeKind).col : t.text) }}>
                       {formatCurrency(row.val)}
                     </div>
                     {/* % */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
                       <span style={{ fontSize: 13, fontWeight: 700, color: t.pct }}>{row.pctVal.toFixed(1)}%</span>
                     </div>
-                    {/* Badge */}
+                    {/* Status */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                      {row.badge ? (
-                        <span style={{ background: t.badgeBg, color: t.badgeCol, fontSize: 11, fontWeight: 700, padding: '4px 10px', borderRadius: 20, whiteSpace: 'nowrap', border: `1px solid ${t.badgeCol}33` }}>
-                          {row.badge}
-                        </span>
-                      ) : <span style={{ fontSize: 11, color: isDark ? '#7a869c' : 'var(--ct-94a3b8,#94a3b8)' }}>—</span>}
+                      {row.badge ? (() => {
+                        const bt = badgeTone(row.badgeKind);
+                        return (
+                          <span style={{ color: bt.col, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {row.badge}
+                          </span>
+                        );
+                      })() : <span style={{ fontSize: 11, color: isDark ? '#7a869c' : 'var(--ct-94a3b8,#94a3b8)' }}>—</span>}
                     </div>
                   </div>
                 );
@@ -2079,7 +2164,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     </button>
                   </div>
                 </div>
-                {/* Static non-zoomable preview using Recharts — labels stay horizontal (2-line wrap) */}
+                {/* Static non-zoomable preview using Recharts — labels stay horizontal (2-line wrap).
+                    minPointSize guarantees every bar a minimum visible sliver — without it, a
+                    bar like ₹19,470 next to ₹4.52 Cr rounds to 0px tall and disappears entirely,
+                    along with its label. The real amount is still shown exactly via the label
+                    and tooltip; only the drawn bar height gets a floor. */}
                 <ResponsiveContainer width="100%" height={260}>
                   <BarChart data={barLabels.map((l, i) => ({ name: l, value: barValues[i], fill: barColors[i] }))} margin={{ top: finBarShowLabels ? 26 : 10, right: 10, left: 10, bottom: 32 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -2088,7 +2177,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     {!finBarShowLabels && (
                       <Tooltip formatter={(v) => [formatCurrency(v), 'Amount']} contentStyle={{ fontSize: 12, borderRadius: 8 }} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
                     )}
-                    <Bar dataKey="value" radius={[4,4,0,0]}>
+                    <Bar dataKey="value" radius={[4,4,0,0]} minPointSize={(value) => (value === 0 ? 2 : 4)}>
                       {barLabels.map((_, i) => <Cell key={i} fill={barColors[i] + 'cc'} stroke={barColors[i]} strokeWidth={1.5} />)}
                       {finBarShowLabels && (
                         <LabelList
@@ -2262,7 +2351,15 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           <div className="chart-card chart-card-clickable" style={{ height: 320 }} onClick={() => setChartModal({ type: 'budgetBar' })}>
             <div className="chart-header">
               <h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4>
-              <span className="chart-expand-hint">🔍 Click to expand</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setBudgetBarShowLabels(v => !v); }}
+                  title="Toggle the amount label shown on top of each bar"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: budgetBarShowLabels ? '#eff6ff' : 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  {budgetBarShowLabels ? <EyeOff size={11} /> : <Eye size={11} />} {budgetBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                </button>
+                <span className="chart-expand-hint">🔍 Click to expand</span>
+              </div>
             </div>
             <ChartJSBar
               key="top-budget-bar-stable"
@@ -2270,6 +2367,8 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
               datasets={topBudgetDatasets}
               height={264}
               yTickFormatter={formatCurrency}
+              showValueLabels={budgetBarShowLabels}
+              valueLabelFormatter={formatCurrency}
             />
           </div>
         ) : (
@@ -2579,17 +2678,29 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 />
               )}
               {chartModal.type === 'budgetBar' && (
-                <ChartJSBar
-                  labels={topByBudget.map(d => d.name)}
-                  datasets={[
-                    { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                    { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                    { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                  ]}
-                  height={400}
-                  yTickFormatter={v => formatCurrency(v)}
-                  modal={true}
-                />
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                    <button
+                      onClick={() => setBudgetBarShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: isDark ? '1px solid #2b3445' : '1px solid #e2e8f0', background: budgetBarShowLabels ? (isDark ? 'rgba(59,130,246,0.18)' : '#eff6ff') : (isDark ? '#232b3b' : '#fff'), color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {budgetBarShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {budgetBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                  </div>
+                  <ChartJSBar
+                    labels={topByBudget.map(d => d.name)}
+                    datasets={[
+                      { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                      { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                      { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+                    ]}
+                    height={400}
+                    yTickFormatter={v => formatCurrency(v)}
+                    showValueLabels={budgetBarShowLabels}
+                    valueLabelFormatter={formatCurrency}
+                    modal={true}
+                  />
+                </>
               )}
               {chartModal.type === 'contributionBar' && (
                 <ContributionBarChart data={contributionData} height={Math.max(400, contributionData.length * 60 + 120)} modal={true} />
@@ -3258,6 +3369,72 @@ const ProjectDashboard = () => {
   const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
   const [showProfitModal, setShowProfitModal] = useState(false); // Profit breakdown modal
   const [projChartModal, setProjChartModal] = useState(null); // single-project chart expand modal
+  const [projFinViewMode, setProjFinViewMode] = useState('cards'); // 'cards' | 'table' | 'graph' — Project Financial Overview
+  const [projFinBarShowLabels, setProjFinBarShowLabels] = useState(true); // toggle: amount labels on Project Financial Overview bars
+  const [showActivitiesModal, setShowActivitiesModal] = useState(false); // Recent Activities — full list
+  const [showTimelineModal, setShowTimelineModal] = useState(false); // Project Timeline — full list
+  const [projSpendingShowLabels, setProjSpendingShowLabels] = useState(true); // toggle: amount labels on Monthly Spending Trend
+  const _projThemeVersion = useThemeVersion(); // re-render inline-styled financial views on theme toggle
+  const isDark = React.useMemo(
+    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark',
+    [_projThemeVersion]
+  );
+
+
+  // ── Stable chart props ─────────────────────────────────────────────────
+  // ChartJSBar destroys & rebuilds its canvas whenever labels/datasets change
+  // identity. Without memoising, these arrays were rebuilt as new objects on
+  // EVERY render of this component — including renders triggered by unrelated
+  // state like opening the Recent Activities / Project Timeline "View All"
+  // modals — which made Top Categories (and, via the same pattern, Monthly
+  // Spending Trend's modal chart) visibly flash/rebuild for no real reason.
+  const topCategoriesLabels = React.useMemo(
+    () => (dashboardData?.procurementData?.categoryDistribution || []).map(d => d.name),
+    [dashboardData?.procurementData?.categoryDistribution]
+  );
+  const topCategoriesDatasets = React.useMemo(() => {
+    const cats = dashboardData?.procurementData?.categoryDistribution || [];
+    return [{
+      label: 'Value',
+      data: cats.map(d => d.value),
+      backgroundColor: cats.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length] + 'cc'),
+      borderColor: cats.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
+      borderWidth: 1.5,
+      borderRadius: 0,
+      borderSkipped: false,
+    }];
+  }, [dashboardData?.procurementData?.categoryDistribution]);
+
+  const spendingTrendLabels = React.useMemo(
+    () => (dashboardData?.spendingTrend || []).map(d => d.month),
+    [dashboardData?.spendingTrend]
+  );
+  const spendingTrendDatasets = React.useMemo(() => {
+    const trend = dashboardData?.spendingTrend || [];
+    return [
+      {
+        label: 'Spending',
+        data: trend.map(d => d.spending),
+        type: 'line',
+        backgroundColor: 'rgba(96,165,250,0.15)',
+        borderColor: '#60a5fa',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 4,
+        pointBackgroundColor: '#60a5fa',
+      },
+      {
+        label: 'Orders',
+        data: trend.map(d => d.orders),
+        backgroundColor: '#6ee7b7',
+        borderColor: '#34d399',
+        borderWidth: 1.5,
+        borderRadius: 0,
+        borderSkipped: false,
+      },
+    ];
+  }, [dashboardData?.spendingTrend]);
 
   // Determine which mode we are in
   const mode = projectId ? 'PROJECT' : groupName ? (subGroupName ? 'SUBGROUP' : 'GROUP') : 'ALL';
@@ -3480,7 +3657,31 @@ const ProjectDashboard = () => {
           {dashboardData.financialData && (
             <>
               <div className="dashboard-section">
-                <h3 className="section-title"><IndianRupee size={20} />Project Financial Overview</h3>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                  <h3 className="section-title" style={{ margin: 0 }}><IndianRupee size={20} />Project Financial Overview</h3>
+                  <div style={{ display: 'flex', gap: 6, background: 'var(--c-f1f5f9, #f1f5f9)', borderRadius: 10, padding: 4, border: '1px solid var(--c-e2e8f0, #e2e8f0)' }} className="fin-view-toggle">
+                    {[
+                      { key: 'cards', icon: <LayoutGrid size={13} />, label: 'Tiles' },
+                      { key: 'table', icon: <ListIcon  size={13} />, label: 'List' },
+                      { key: 'graph', icon: <PieChart  size={13} />, label: 'Graphical' },
+                    ].map(tab => (
+                      <button key={tab.key}
+                        onClick={() => setProjFinViewMode(tab.key)}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          padding: '6px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
+                          fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                          background: projFinViewMode === tab.key ? 'var(--c-white, #fff)' : 'transparent',
+                          color: projFinViewMode === tab.key ? '#0b63d6' : 'var(--ct-64748b, #64748b)',
+                          boxShadow: projFinViewMode === tab.key ? '0 1px 4px rgba(0,0,0,0.10)' : 'none',
+                        }}>
+                        {tab.icon} {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {projFinViewMode === 'cards' && (
                 <div className="kpi-grid">
                   {[
                     { icon: <Wallet size={36} />, color: '#3b82f6', val: fmtKpi(dashboardData.financialData.totalProjectValue), label: 'Contract Value', sub: 'Project budget (agreed)' },
@@ -3540,6 +3741,330 @@ const ProjectDashboard = () => {
                     </div>
                   </div>
                 </div>
+                )}
+
+        {projFinViewMode === 'table' && (() => {
+          const totalVal    = Number(dashboardData.financialData.totalProjectValue  || 0);
+          const billed      = Number(dashboardData.financialData.amountToBeReceived        || 0);
+          const received    = Number(dashboardData.financialData.amountReceived      || 0);
+          const balRec      = Number(dashboardData.financialData.pendingReceipts    || 0);
+          const unBilled    = Math.max(0, totalVal - billed);
+          const procurement = Number(dashboardData.financialData.totalPayable       || 0);
+          const paid        = Number(dashboardData.financialData.amountPaid          || 0);
+          const pendPay     = Number(dashboardData.financialData.pendingPayments    || 0);
+          const cashAbs     = dashboardData.financialData.cashDeficit > 0
+            ? Number(dashboardData.financialData.cashDeficit)
+            : Number(dashboardData.financialData.cashInHand || 0);
+          const isDeficit   = dashboardData.financialData.cashDeficit > 0;
+          const pct = (num, den) => den > 0 ? +((num / den) * 100).toFixed(1) : 0;
+          // Shows the unit that actually matches formatCurrency's own threshold for
+          // this value, instead of a hardcoded "Cr's" label on every row.
+          const unitLabel = (v) => {
+            const abs = Math.abs(Number(v) || 0);
+            if (abs >= 10000000) return "Cr's";
+            if (abs >= 100000) return "Lc's";
+            return '₹';
+          };
+
+          // Simplified, single-accent palette: every row uses the SAME neutral
+          // text/value colour (matching the rest of the page's tables), so the
+          // list reads cleanly instead of a different colour per row. Status is
+          // still communicated — just narrowed to the small badge pill instead
+          // of being smeared across the whole row.
+          const tone = (kind) => {
+            const map = {
+              header: { bg: isDark ? '#16263f' : '#1e3a5f', text: '#ffffff', val: '#ffffff', pct: '#ffffff' },
+              plain:  { bg: 'transparent', text: isDark ? '#e7ecf3' : '#1e293b', val: null, pct: isDark ? '#c2cbd8' : '#475569' },
+            };
+            return map[kind] || map.plain;
+          };
+          const badgeTone = (kind) => {
+            const map = {
+              success: { bg: isDark ? 'rgba(34,197,94,0.22)'  : '#dcfce7', col: isDark ? '#86efac' : '#15803d' },
+              danger:  { bg: isDark ? 'rgba(239,68,68,0.24)'  : '#fee2e2', col: isDark ? '#fca5a5' : '#b91c1c' },
+              warning: { bg: isDark ? 'rgba(245,158,11,0.24)' : '#fef3c7', col: isDark ? '#fcd34d' : '#92400e' },
+              info:    { bg: isDark ? 'rgba(6,182,212,0.24)'  : '#cffafe', col: isDark ? '#67e8f9' : '#0e7490' },
+            };
+            return map[kind] || map.success;
+          };
+
+          const receivedOverInvoiced = pct(received, billed) > 100;
+
+          const rows = [
+            // ── CLIENT BILLING ──────────────────────────────────────────────
+            { group: 'Client Billing & Collection', groupIcon: '💰', isGroupHeader: true },
+            { label: 'Total Contract Value',    ref: 'a',       val: totalVal,    pctVal: 100,                        t: tone('header'), isHdr: true },
+            { label: 'Billed Amount',           ref: 'b',       val: billed,      pctVal: pct(billed,totalVal),       t: tone('plain') },
+            { label: 'Received Amount',         ref: 'c',       val: received,    pctVal: pct(received,billed),       t: tone('plain'), badge: receivedOverInvoiced ? '⚠ Over-Received' : '✓ Collected', badgeKind: receivedOverInvoiced ? 'warning' : 'success' },
+            ...(receivedOverInvoiced ? [{
+              isNote: true,
+              noteText: 'Received More Amount Than Invoiced — client has paid more than the billed value (likely an advance receipt; raise/adjust an invoice to match).',
+            }] : []),
+            { label: 'Balance Receivable',      ref: 'd = b−c', val: balRec,      pctVal: pct(balRec,billed),         t: tone('plain'), badge: '⚠ Pending', badgeKind: 'danger', bold: true },
+            { label: 'Un-Billed Contract Value',ref: 'e = a−b', val: unBilled,    pctVal: pct(unBilled,totalVal),     t: tone('plain'), badge: '◷ Not Billed', badgeKind: 'warning', bold: true },
+            // ── VENDOR PAYMENTS ─────────────────────────────────────────────
+            { group: 'Vendor Procurement & Payments', groupIcon: '🧾', isGroupHeader: true },
+            { label: 'Total Procurement',       ref: 'f',       val: procurement, pctVal: pct(procurement,totalVal),  t: tone('plain') },
+            { label: 'Total Paid to Vendors',   ref: 'g',       val: paid,        pctVal: pct(paid,procurement),      t: tone('plain'), badge: '✓ Paid', badgeKind: 'success' },
+            { label: 'Pending Vendor Payments', ref: 'h = f−g', val: pendPay,     pctVal: pct(pendPay,procurement),   t: tone('plain'), badge: '⚠ Pending', badgeKind: 'danger', bold: true },
+            // ── CASH POSITION ───────────────────────────────────────────────
+            { group: 'Cash Position',           groupIcon: isDeficit ? '🔴' : '🟢', isGroupHeader: true },
+            { label: isDeficit ? 'Cash Deficit' : 'Cash in Hand', ref: 'c − g', val: cashAbs, pctVal: pct(cashAbs,totalVal), t: tone('plain'), badge: isDeficit ? '🔴 Deficit' : '🟢 Surplus', badgeKind: isDeficit ? 'danger' : 'success', bold: true },
+          ];
+
+          // Column header config
+          const colHdrs = ['Particulars', 'Ref #', 'Units', 'Value (₹)', '% Share', 'Status'];
+          const headerBg   = isDark ? '#0f1726' : '#1e293b';
+          const wrapBorder = isDark ? '#2b3445' : 'var(--c-e2e8f0,#e2e8f0)';
+          const zebraEven  = isDark ? '#1b2233' : 'var(--c-white,#fff)';
+          const zebraOdd   = isDark ? '#171e2c' : 'var(--c-f8fafc,#f8fafc)';
+          const rowBorder  = isDark ? '#262f42' : 'var(--c-f1f5f9,#f1f5f9)';
+
+          return (
+            <div className="fin-list-table" style={{ borderRadius: 12, overflow: 'hidden', border: `1px solid ${wrapBorder}`, boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }}>
+              {/* Column headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 110px 90px 160px 110px 130px', background: headerBg, padding: '10px 20px', gap: 8 }}>
+                {colHdrs.map((h, i) => (
+                  <div key={i} style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.78)', textTransform: 'uppercase', letterSpacing: '0.6px', textAlign: i >= 3 ? 'right' : 'left' }}>{h}</div>
+                ))}
+              </div>
+
+              {rows.map((row, ri) => {
+                // ── Group header row ──────────────────────────────────────
+                if (row.isGroupHeader) return (
+                  <div key={ri} style={{ background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(30,41,59,0.05)', borderTop: ri > 0 ? `1px solid ${rowBorder}` : 'none', padding: '7px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 11 }}>{row.groupIcon}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: isDark ? '#93c5fd' : '#1e3a5f', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{row.group}</span>
+                  </div>
+                );
+
+                // ── Inline note row (e.g. over-received warning) ───────────
+                if (row.isNote) return (
+                  <div key={ri} style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '8px 20px',
+                    background: isDark ? 'rgba(245,158,11,0.10)' : '#fffbeb',
+                    borderBottom: `1px solid ${rowBorder}`,
+                  }}>
+                    <AlertCircle size={13} style={{ color: isDark ? '#fbbf24' : '#b45309', flexShrink: 0 }} />
+                    <span style={{ fontSize: 11.5, fontWeight: 600, color: isDark ? '#fcd34d' : '#92400e' }}>{row.noteText}</span>
+                  </div>
+                );
+
+                const isHdr = row.isHdr;
+                const t = row.t;
+                const baseBg = isHdr ? t.bg : (ri % 2 === 0 ? zebraEven : zebraOdd);
+                // Header row keeps its dark navy background on hover (just a touch lighter)
+                // so the white text stays legible — a light accent wash here is what made it
+                // unreadable in light theme.
+                const hoverBg = isHdr
+                  ? (isDark ? '#1c3155' : '#274d80')
+                  : (isDark ? 'rgba(255,255,255,0.04)' : 'rgba(15,23,42,0.035)');
+                return (
+                  <div key={ri}
+                    style={{
+                      display: 'grid', gridTemplateColumns: '2fr 110px 90px 160px 110px 130px',
+                      padding: '12px 20px', gap: 8,
+                      background: baseBg,
+                      borderBottom: `1px solid ${rowBorder}`,
+                      transition: 'background 0.12s',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background = hoverBg; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = baseBg; }}
+                  >
+                    {/* Particulars */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <span style={{ fontSize: isHdr ? 14 : 13, fontWeight: row.bold || isHdr ? 700 : 500, color: t.text }}>{row.label}</span>
+                    </div>
+                    {/* Ref — visible pill chip instead of low-contrast monospace text */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        fontSize: 12.5, fontFamily: 'monospace', fontWeight: 700,
+                        color: isHdr ? '#ffffff' : (isDark ? '#93c5fd' : '#1d4ed8'),
+                        padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap',
+                      }}>{row.ref}</span>
+                    </div>
+                    {/* Units — visible chip instead of low-contrast muted text */}
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <span style={{
+                        fontSize: 12.5, fontWeight: 700,
+                        color: isHdr ? 'rgba(255,255,255,0.92)' : (isDark ? '#cbd5e1' : '#475569'),
+                        padding: '2px 7px', borderRadius: 6, whiteSpace: 'nowrap',
+                      }}>{unitLabel(row.val)}</span>
+                    </div>
+                    {/* Value — coloured to match this row's status badge (if any),
+                        so the figure and its status read as one signal */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', fontSize: isHdr ? 16 : 14, fontWeight: 800, color: isHdr ? t.val : (row.badgeKind ? badgeTone(row.badgeKind).col : t.text) }}>
+                      {formatCurrency(row.val)}
+                    </div>
+                    {/* % */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: t.pct }}>{row.pctVal.toFixed(1)}%</span>
+                    </div>
+                    {/* Badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                      {row.badge ? (() => {
+                        const bt = badgeTone(row.badgeKind);
+                        return (
+                          <span style={{ color: bt.col, fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {row.badge}
+                          </span>
+                        );
+                      })() : <span style={{ fontSize: 11, color: isDark ? '#7a869c' : 'var(--ct-94a3b8,#94a3b8)' }}>—</span>}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Footer note */}
+              <div style={{ background: isDark ? '#171e2c' : 'var(--c-f8fafc,#f8fafc)', borderTop: `1px solid ${wrapBorder}`, padding: '8px 20px' }}>
+                <span style={{ fontSize: 11, color: isDark ? '#8a96aa' : 'var(--ct-94a3b8,#94a3b8)' }}>
+                  % — Billed/Balance as % of Contract · Received as % of Billed · Paid/Pending as % of Procurement · Cash as % of Contract
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {projFinViewMode === 'graph' && (() => {
+          const totalVal    = Number(dashboardData.financialData.totalProjectValue  || 0);
+          const billed      = Number(dashboardData.financialData.amountToBeReceived        || 0);
+          const received    = Number(dashboardData.financialData.amountReceived      || 0);
+          const balRec      = Number(dashboardData.financialData.pendingReceipts    || 0);
+          const unBilled    = Math.max(0, totalVal - billed);
+          const procurement = Number(dashboardData.financialData.totalPayable       || 0);
+          const paid        = Number(dashboardData.financialData.amountPaid          || 0);
+          const pendPay     = Number(dashboardData.financialData.pendingPayments    || 0);
+          // Computed locally (instead of trusting backend %-fields, which can use a
+          // different denominator) so the KPI strip always matches the bar amounts below.
+          const pctOf       = (num, den) => den > 0 ? (num / den) * 100 : 0;
+          const cashAbs     = dashboardData.financialData.cashDeficit > 0
+            ? Number(dashboardData.financialData.cashDeficit)
+            : Number(dashboardData.financialData.cashInHand || 0);
+          const isDeficit   = dashboardData.financialData.cashDeficit > 0;
+
+          const barLabels = ['Contract\nValue', 'Total\nBilled', 'Received', 'Balance\nReceivable', 'Un-Billed', 'Total\nProcurement', 'Paid\n(Vendors)', 'Pending\nPayments', isDeficit ? 'Cash\nDeficit' : 'Cash\nin Hand'];
+          const barColors = ['#3b82f6', '#8b5cf6', '#22c55e', '#ef4444', '#f59e0b', '#ef4444', '#06b6d4', '#f59e0b', isDeficit ? '#ef4444' : '#22c55e'];
+          const barValues = [totalVal, billed, received, balRec, unBilled, procurement, paid, pendPay, cashAbs];
+
+          const clientDonut = [
+            { name: 'Received',    value: received,  color: '#22c55e' },
+            { name: 'Balance Rec', value: balRec,    color: '#ef4444' },
+            { name: 'Un-Billed',   value: unBilled,  color: '#f59e0b' },
+          ].filter(d => d.value > 0);
+
+          const vendorDonut = [
+            { name: 'Paid',    value: paid,    color: '#06b6d4' },
+            { name: 'Pending', value: pendPay, color: '#f59e0b' },
+          ].filter(d => d.value > 0);
+
+          return (
+            <div>
+
+              {/* ── Main bar chart — static preview with Expand button ── */}
+              <div style={{ background: 'var(--c-f8fafc,#f8fafc)', border: '1px solid var(--c-e2e8f0,#e2e8f0)', borderRadius: 12, padding: 16, marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ct-1e293b,#1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <BarChart3 size={16} style={{ color: '#3b82f6' }} /> Financial Overview — All Figures (₹)
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => setProjFinBarShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: projFinBarShowLabels ? '#eff6ff' : 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {projFinBarShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {projFinBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                    <button
+                      onClick={() => setProjChartModal({ type: 'projFinOverviewBar', barLabels, barValues, barColors })}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      <Eye size={13} /> Expand & Zoom
+                    </button>
+                  </div>
+                </div>
+                {/* Static non-zoomable preview using Recharts — labels stay horizontal (2-line wrap).
+                    minPointSize guarantees every bar a minimum visible sliver — without it, a
+                    bar like ₹19,470 next to ₹4.52 Cr rounds to 0px tall and disappears entirely,
+                    along with its label. The real amount is still shown exactly via the label
+                    and tooltip; only the drawn bar height gets a floor. */}
+                <ResponsiveContainer width="100%" height={260}>
+                  <BarChart data={barLabels.map((l, i) => ({ name: l, value: barValues[i], fill: barColors[i] }))} margin={{ top: projFinBarShowLabels ? 26 : 10, right: 10, left: 10, bottom: 32 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={<MultilineAxisTick />} interval={0} height={44} />
+                    <YAxis tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10, fill: '#64748b' }} width={80} />
+                    {!projFinBarShowLabels && (
+                      <Tooltip formatter={(v) => [formatCurrency(v), 'Amount']} contentStyle={{ fontSize: 12, borderRadius: 8 }} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
+                    )}
+                    <Bar dataKey="value" radius={[4,4,0,0]} minPointSize={(value) => (value === 0 ? 2 : 4)}>
+                      {barLabels.map((_, i) => <Cell key={i} fill={barColors[i] + 'cc'} stroke={barColors[i]} strokeWidth={1.5} />)}
+                      {projFinBarShowLabels && (
+                        <LabelList
+                          dataKey="value"
+                          position="top"
+                          formatter={v => formatCurrency(v)}
+                          style={{ fontSize: 10, fontWeight: 700, fill: 'var(--ct-1e293b,#1e293b)' }}
+                        />
+                      )}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+                <p style={{ fontSize: 11, color: 'var(--ct-94a3b8,#94a3b8)', textAlign: 'center', marginTop: 4 }}>
+                  Click "Expand &amp; Zoom" to enable scroll-to-zoom and drag-to-pan · use "{projFinBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}" to toggle the value labels on the bars
+                </p>
+              </div>
+
+              {/* ── Two donuts side by side ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div style={{ background: 'var(--c-f8fafc,#f8fafc)', border: '1px solid var(--c-e2e8f0,#e2e8f0)', borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ct-1e293b,#1e293b)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <PieChart size={14} style={{ color: '#8b5cf6' }} /> Client Billing Breakdown
+                  </div>
+                  {clientDonut.length > 0 ? (
+                    <ProjDonutChart data={clientDonut} height={240} labelKey="name" valueKey="value" colorKey="color" showAmount amountFormatter={formatCurrency} />
+                  ) : (
+                    <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ct-94a3b8,#94a3b8)', fontSize: 13 }}>No data</div>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8, justifyContent: 'center' }}>
+                    {[
+                      { label: 'Received',    color: '#22c55e', val: formatCurrency(received) },
+                      { label: 'Balance Rec', color: '#ef4444', val: formatCurrency(balRec) },
+                      { label: 'Un-Billed',   color: '#f59e0b', val: formatCurrency(unBilled) },
+                    ].map((l, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color, flexShrink: 0 }} />
+                        <span style={{ color: 'var(--ct-374151,#374151)', fontWeight: 600 }}>{l.label}:</span>
+                        <span style={{ color: l.color, fontWeight: 700 }}>{l.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ background: 'var(--c-f8fafc,#f8fafc)', border: '1px solid var(--c-e2e8f0,#e2e8f0)', borderRadius: 12, padding: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ct-1e293b,#1e293b)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <PieChart size={14} style={{ color: '#06b6d4' }} /> Vendor Payment Breakdown
+                  </div>
+                  {vendorDonut.length > 0 ? (
+                    <ProjDonutChart data={vendorDonut} height={240} labelKey="name" valueKey="value" colorKey="color" showAmount amountFormatter={formatCurrency} />
+                  ) : (
+                    <div style={{ height: 240, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ct-94a3b8,#94a3b8)', fontSize: 13 }}>No data</div>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 8, justifyContent: 'center' }}>
+                    {[
+                      { label: 'Paid',    color: '#06b6d4', val: formatCurrency(paid) },
+                      { label: 'Pending', color: '#f59e0b', val: formatCurrency(pendPay) },
+                    ].map((l, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 2, background: l.color, flexShrink: 0 }} />
+                        <span style={{ color: 'var(--ct-374151,#374151)', fontWeight: 600 }}>{l.label}:</span>
+                        <span style={{ color: l.color, fontWeight: 700 }}>{l.val}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
               </div>
 
               {/* Client Billing */}
@@ -3667,54 +4192,70 @@ const ProjectDashboard = () => {
           {/* Charts */}
           {/* ── Single-project Charts Row ── */}
           <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            {/* Spending Trend — full row */}
+            {/* Spending Trend — full row, styled like "Financial Overview — All Figures":
+                boxed card, static Recharts preview, Show/Hide Amounts toggle, explicit
+                Expand & Zoom button (Chart.js, fully interactive) opens the modal. */}
             {dashboardData.spendingTrend?.length > 0 ? (
-              <div className="chart-card chart-card-clickable" style={{ gridColumn: '1 / -1' }}
-                onClick={() => setProjChartModal({ type: 'spendingTrend' })}>
-                <div className="chart-header">
-                  <h4 className="chart-title"><TrendingUp size={18} />Monthly Spending Trend</h4>
-                  <span className="chart-expand-hint">🔍 Click to expand</span>
+              <div style={{ gridColumn: '1 / -1', background: 'var(--c-f8fafc,#f8fafc)', border: '1px solid var(--c-e2e8f0,#e2e8f0)', borderRadius: 12, padding: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--ct-1e293b,#1e293b)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <TrendingUp size={16} style={{ color: '#3b82f6' }} /> Monthly Spending Trend
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={() => setProjSpendingShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: projSpendingShowLabels ? '#eff6ff' : 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {projSpendingShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {projSpendingShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                    <button
+                      onClick={() => setProjChartModal({ type: 'spendingTrend' })}
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      <Eye size={13} /> Expand & Zoom
+                    </button>
+                  </div>
                 </div>
-                <ChartJSBar
-                  labels={dashboardData.spendingTrend.map(d => d.month)}
-                  datasets={[
-                    {
-                      label: 'Spending',
-                      data: dashboardData.spendingTrend.map(d => d.spending),
-                      type: 'line',
-                      backgroundColor: 'rgba(96,165,250,0.15)',
-                      borderColor: '#60a5fa',
-                      borderWidth: 2,
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 3,
-                      pointBackgroundColor: '#60a5fa',
-                    },
-                    {
-                      label: 'Orders',
-                      data: dashboardData.spendingTrend.map(d => d.orders),
-                      backgroundColor: '#6ee7b7',
-                      borderColor: '#34d399',
-                      borderWidth: 1.5,
-                      borderRadius: 0,
-                      borderSkipped: false,
-                    },
-                  ]}
-                  height={230}
-                  yTickFormatter={v => formatCurrency(v)}
-                />
+                {/* Static non-zoomable preview using Recharts — same convention as Financial
+                    Overview. minPointSize keeps the Orders bar visible even for small counts;
+                    the Spending line and Orders bar each get their own label. */}
+                <ResponsiveContainer width="100%" height={260}>
+                  <ComposedChart data={dashboardData.spendingTrend} margin={{ top: projSpendingShowLabels ? 26 : 10, right: 10, left: 10, bottom: 10 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis yAxisId="left" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10, fill: '#64748b' }} width={80} />
+                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748b' }} width={40} allowDecimals={false} />
+                    {!projSpendingShowLabels && (
+                      <Tooltip
+                        formatter={(v, name) => [name === 'Spending' ? formatCurrency(v) : v, name]}
+                        contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      />
+                    )}
+                    <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#6ee7b7" stroke="#34d399" strokeWidth={1.5} radius={[4,4,0,0]} minPointSize={2}>
+                      {projSpendingShowLabels && (
+                        <LabelList dataKey="orders" position="top" formatter={v => v} style={{ fontSize: 9, fontWeight: 700, fill: '#059669' }} />
+                      )}
+                    </Bar>
+                    <Line yAxisId="left" type="monotone" dataKey="spending" name="Spending" stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }}>
+                      {projSpendingShowLabels && (
+                        <LabelList dataKey="spending" position="top" formatter={v => formatCurrency(v)} style={{ fontSize: 10, fontWeight: 700, fill: 'var(--ct-1e293b,#1e293b)' }} />
+                      )}
+                    </Line>
+                  </ComposedChart>
+                </ResponsiveContainer>
+                <p style={{ fontSize: 11, color: 'var(--ct-94a3b8,#94a3b8)', textAlign: 'center', marginTop: 4 }}>
+                  Click "Expand &amp; Zoom" to enable scroll-to-zoom and drag-to-pan · use "{projSpendingShowLabels ? 'Hide Amounts' : 'Show Amounts'}" to toggle the value labels
+                </p>
               </div>
             ) : (
               <div className="chart-card full-width"><div className="chart-header"><h4 className="chart-title">Monthly Spending Trend</h4></div><EmptyChart message="No spending data available" /></div>
             )}
 
-            {/* PO Status Donut — half width, Chart.js with zoom + labels */}
+            {/* PO Status Donut — static, no expand modal (simple 2-3 status
+                breakdown doesn't need a separate zoom view) */}
             {dashboardData.procurementData?.posByStatus?.length > 0 ? (
-              <div className="chart-card chart-card-clickable"
-                onClick={() => setProjChartModal({ type: 'poStatus' })}>
+              <div className="chart-card">
                 <div className="chart-header">
                   <h4 className="chart-title"><PieChart size={16} />PO Status Distribution</h4>
-                  <span className="chart-expand-hint">🔍 Click to expand</span>
                 </div>
                 <ProjDonutChart
                   data={dashboardData.procurementData.posByStatus}
@@ -3736,16 +4277,8 @@ const ProjectDashboard = () => {
                   <span className="chart-expand-hint">🔍 Click to expand</span>
                 </div>
                 <ChartJSBar
-                  labels={dashboardData.procurementData.categoryDistribution.map(d => d.name)}
-                  datasets={[{
-                    label: 'Value',
-                    data: dashboardData.procurementData.categoryDistribution.map(d => d.value),
-                    backgroundColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length] + 'cc'),
-                    borderColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
-                    borderWidth: 1.5,
-                    borderRadius: 0,
-                    borderSkipped: false,
-                  }]}
+                  labels={topCategoriesLabels}
+                  datasets={topCategoriesDatasets}
                   height={250}
                   yTickFormatter={v => formatCurrency(v)}
                 />
@@ -3774,47 +4307,78 @@ const ProjectDashboard = () => {
             </div>
           )}
 
-          {/* Recent Activities */}
-          {dashboardData.recentActivities?.length > 0 && (
+          {/* Project Timeline + Recent Activities — combined side-by-side section.
+              Timeline on the left, Activities on the right; each shows its 3 most
+              recent entries with a "View All" button opening the full list in a modal. */}
+          {(dashboardData.projectTimeline?.length > 0 || dashboardData.recentActivities?.length > 0) && (
             <div className="dashboard-section">
-              <h3 className="section-title"><Activity size={20} />Recent Activities</h3>
-              <div className="activities-timeline scrollable-block">
-                {dashboardData.recentActivities.map((a, i) => (
-                  <div key={i} className="activity-item">
-                    <div className="activity-icon" style={{ backgroundColor: a.color }}>
-                      {a.type === 'Purchase Order' ? <ShoppingCart size={16} /> : <FileText size={16} />}
-                    </div>
-                    <div className="activity-content">
-                      <div className="activity-header">
-                        <span className="activity-type">{a.type}</span>
-                        <span className="activity-date">{formatDate(a.date)}</span>
-                      </div>
-                      <div className="activity-action">{a.action}</div>
-                      {a.amount && <div className="activity-amount">{formatCurrency(a.amount)}</div>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
 
-          {/* Project Timeline */}
-          {dashboardData.projectTimeline?.length > 0 && (
-            <div className="dashboard-section">
-              <h3 className="section-title"><Clock size={20} />Project Timeline</h3>
-              <div className="project-timeline-container scrollable-block">
-                {dashboardData.projectTimeline.map((m, i) => (
-                  <div key={i} className={`timeline-milestone ${m.status}`}>
-                    <div className="milestone-marker">
-                      {m.status === 'completed' ? <CheckCircle size={18} /> : <Clock size={18} />}
+                {/* ── Project Timeline (left) ── */}
+                {dashboardData.projectTimeline?.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <h3 className="section-title" style={{ margin: 0 }}><Clock size={20} />Project Timeline</h3>
+                      {dashboardData.projectTimeline.length > 3 && (
+                        <button
+                          onClick={() => setShowTimelineModal(true)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 20, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-f8fafc,#f8fafc)', color: '#3b82f6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          View All ({dashboardData.projectTimeline.length}) <Eye size={13} />
+                        </button>
+                      )}
                     </div>
-                    <div className="milestone-content">
-                      <div className="milestone-date">{formatDate(m.date)}</div>
-                      <h4 className="milestone-title">{m.title}</h4>
-                      <p className="milestone-description">{m.description}</p>
+                    <div className="project-timeline-container" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                      {dashboardData.projectTimeline.slice(0, 3).map((m, i) => (
+                        <div key={i} className={`timeline-milestone ${m.status}`}>
+                          <div className="milestone-marker">
+                            {m.status === 'completed' ? <CheckCircle size={18} /> : <Clock size={18} />}
+                          </div>
+                          <div className="milestone-content">
+                            <div className="milestone-date">{formatDate(m.date)}</div>
+                            <h4 className="milestone-title">{m.title}</h4>
+                            <p className="milestone-description">{m.description}</p>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
+
+                {/* ── Recent Activities (right) ── */}
+                {dashboardData.recentActivities?.length > 0 && (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <h3 className="section-title" style={{ margin: 0 }}><Activity size={20} />Recent Activities</h3>
+                      {dashboardData.recentActivities.length > 3 && (
+                        <button
+                          onClick={() => setShowActivitiesModal(true)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 20, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-f8fafc,#f8fafc)', color: '#3b82f6', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                        >
+                          View All ({dashboardData.recentActivities.length}) <Eye size={13} />
+                        </button>
+                      )}
+                    </div>
+                    <div className="activities-timeline" style={{ maxHeight: 260, overflowY: 'auto' }}>
+                      {dashboardData.recentActivities.slice(0, 3).map((a, i) => (
+                        <div key={i} className="activity-item">
+                          <div className="activity-icon" style={{ backgroundColor: a.color }}>
+                            {a.type === 'Purchase Order' ? <ShoppingCart size={16} /> : <FileText size={16} />}
+                          </div>
+                          <div className="activity-content">
+                            <div className="activity-header">
+                              <span className="activity-type">{a.type}</span>
+                              <span className="activity-date">{formatDate(a.date)}</span>
+                            </div>
+                            <div className="activity-action">{a.action}</div>
+                            {a.amount && <div className="activity-amount">{formatCurrency(a.amount)}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </div>
             </div>
           )}
@@ -3835,69 +4399,72 @@ const ProjectDashboard = () => {
             <div style={{ padding:'16px 24px', borderBottom:'1px solid #f1f5f9', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
               <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:'#1e293b', display:'flex', alignItems:'center', gap:8 }}>
                 {projChartModal.type === 'spendingTrend'  && <><TrendingUp size={18} /> Monthly Spending Trend</>}
-                {projChartModal.type === 'poStatus'       && <><PieChart size={18} /> PO Status Distribution</>}
                 {projChartModal.type === 'topCategories'  && <><BarChart3 size={18} /> Top Categories</>}
+                {projChartModal.type === 'projFinOverviewBar' && <><BarChart3 size={18} /> Project Financial Overview — All Figures (₹)</>}
               </h3>
               <button onClick={() => setProjChartModal(null)} style={{ background:'#f1f5f9', border:'none', cursor:'pointer', padding:'6px 10px', borderRadius:8, fontWeight:700, fontSize:16 }}>✕</button>
             </div>
             {/* Chart body */}
             <div style={{ flex:1, padding:'20px 24px', overflow:'auto' }}>
               {projChartModal.type === 'spendingTrend' && dashboardData?.spendingTrend?.length > 0 && (
-                <ChartJSBar
-                  labels={dashboardData.spendingTrend.map(d => d.month)}
-                  datasets={[
-                    {
-                      label: 'Spending',
-                      data: dashboardData.spendingTrend.map(d => d.spending),
-                      type: 'line',
-                      backgroundColor: 'rgba(96,165,250,0.15)',
-                      borderColor: '#60a5fa',
-                      borderWidth: 2,
-                      fill: true,
-                      tension: 0.4,
-                      pointRadius: 4,
-                      pointBackgroundColor: '#60a5fa',
-                    },
-                    {
-                      label: 'Orders',
-                      data: dashboardData.spendingTrend.map(d => d.orders),
-                      backgroundColor: '#6ee7b7',
-                      borderColor: '#34d399',
-                      borderWidth: 1.5,
-                      borderRadius: 0,
-                      borderSkipped: false,
-                    },
-                  ]}
-                  height={400}
-                  yTickFormatter={v => formatCurrency(v)}
-                  modal={true}
-                />
-              )}
-              {projChartModal.type === 'poStatus' && dashboardData?.procurementData?.posByStatus?.length > 0 && (
-                <ProjDonutChart
-                  data={dashboardData.procurementData.posByStatus}
-                  height={440}
-                  labelKey="name"
-                  valueKey="value"
-                  modal={true}
-                />
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                    <button
+                      onClick={() => setProjSpendingShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: isDark ? '1px solid #2b3445' : '1px solid #e2e8f0', background: projSpendingShowLabels ? (isDark ? 'rgba(59,130,246,0.18)' : '#eff6ff') : (isDark ? '#232b3b' : '#fff'), color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {projSpendingShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {projSpendingShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                  </div>
+                  <ChartJSBar
+                    labels={spendingTrendLabels}
+                    datasets={spendingTrendDatasets}
+                    height={400}
+                    yTickFormatter={v => formatCurrency(v)}
+                    showValueLabels={projSpendingShowLabels}
+                    valueLabelFormatter={formatCurrency}
+                    modal={true}
+                  />
+                </>
               )}
               {projChartModal.type === 'topCategories' && dashboardData?.procurementData?.categoryDistribution?.length > 0 && (
                 <ChartJSBar
-                  labels={dashboardData.procurementData.categoryDistribution.map(d => d.name)}
-                  datasets={[{
-                    label: 'Value',
-                    data: dashboardData.procurementData.categoryDistribution.map(d => d.value),
-                    backgroundColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length] + 'cc'),
-                    borderColor: dashboardData.procurementData.categoryDistribution.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
-                    borderWidth: 1.5,
-                    borderRadius: 0,
-                    borderSkipped: false,
-                  }]}
+                  labels={topCategoriesLabels}
+                  datasets={topCategoriesDatasets}
                   height={420}
                   yTickFormatter={v => formatCurrency(v)}
                   modal={true}
                 />
+              )}
+              {projChartModal.type === 'projFinOverviewBar' && projChartModal.barLabels && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                    <button
+                      onClick={() => setProjFinBarShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: isDark ? '1px solid #2b3445' : '1px solid #e2e8f0', background: projFinBarShowLabels ? (isDark ? 'rgba(59,130,246,0.18)' : '#eff6ff') : (isDark ? '#232b3b' : '#fff'), color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {projFinBarShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {projFinBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                  </div>
+                  <ChartJSBar
+                    labels={projChartModal.barLabels.map(l => l.split('\n'))}
+                    datasets={[{
+                      label: 'Amount (₹)',
+                      data: projChartModal.barValues,
+                      backgroundColor: projChartModal.barColors.map(c => c + 'cc'),
+                      borderColor: projChartModal.barColors,
+                      borderWidth: 2,
+                      borderRadius: 0,
+                      borderSkipped: false,
+                    }]}
+                    height={440}
+                    yTickFormatter={v => formatCurrency(v)}
+                    xLabelRotation={0}
+                    showValueLabels={projFinBarShowLabels}
+                    valueLabelFormatter={formatCurrency}
+                    modal={true}
+                  />
+                </>
               )}
             </div>
           </div>
@@ -4321,6 +4888,71 @@ const ProjectDashboard = () => {
           </div>
         );
       })()}
+
+      {/* ─── Recent Activities — full list modal ───────────────────────────── */}
+      {showActivitiesModal && dashboardData?.recentActivities?.length > 0 && (
+        <div className="spent-modal-overlay">
+          <div className="spent-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="spent-modal-header">
+              <div className="spent-modal-title-row">
+                <Activity size={22} className="spent-modal-icon" />
+                <h2 className="spent-modal-title">All Activities ({dashboardData.recentActivities.length})</h2>
+              </div>
+              <button className="spent-modal-close" onClick={() => setShowActivitiesModal(false)}><X size={20} /></button>
+            </div>
+            <div className="spent-modal-body">
+              <div className="activities-timeline">
+                {dashboardData.recentActivities.map((a, i) => (
+                  <div key={i} className="activity-item">
+                    <div className="activity-icon" style={{ backgroundColor: a.color }}>
+                      {a.type === 'Purchase Order' ? <ShoppingCart size={16} /> : <FileText size={16} />}
+                    </div>
+                    <div className="activity-content">
+                      <div className="activity-header">
+                        <span className="activity-type">{a.type}</span>
+                        <span className="activity-date">{formatDate(a.date)}</span>
+                      </div>
+                      <div className="activity-action">{a.action}</div>
+                      {a.amount && <div className="activity-amount">{formatCurrency(a.amount)}</div>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Project Timeline — full list modal ────────────────────────────── */}
+      {showTimelineModal && dashboardData?.projectTimeline?.length > 0 && (
+        <div className="spent-modal-overlay">
+          <div className="spent-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
+            <div className="spent-modal-header">
+              <div className="spent-modal-title-row">
+                <Clock size={22} className="spent-modal-icon" />
+                <h2 className="spent-modal-title">Full Project Timeline ({dashboardData.projectTimeline.length})</h2>
+              </div>
+              <button className="spent-modal-close" onClick={() => setShowTimelineModal(false)}><X size={20} /></button>
+            </div>
+            <div className="spent-modal-body">
+              <div className="project-timeline-container">
+                {dashboardData.projectTimeline.map((m, i) => (
+                  <div key={i} className={`timeline-milestone ${m.status}`}>
+                    <div className="milestone-marker">
+                      {m.status === 'completed' ? <CheckCircle size={18} /> : <Clock size={18} />}
+                    </div>
+                    <div className="milestone-content">
+                      <div className="milestone-date">{formatDate(m.date)}</div>
+                      <h4 className="milestone-title">{m.title}</h4>
+                      <p className="milestone-description">{m.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
