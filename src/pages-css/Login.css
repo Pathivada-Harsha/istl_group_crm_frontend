@@ -134,19 +134,29 @@
 /* submit */
 .login-submit-row { display: flex; justify-content: center; margin-top: 6px; }
 .login-btn {
-  background: var(--blue);
-  color: var(--ct-white, white);
+  background: var(--c-0b63d6, #0b63d6);
+  color: #ffffff;
   border: none;
   padding: 10px 20px;
   border-radius: 12px;
   cursor: pointer;
   font-weight: 600;
   font-size: 14px;
+  min-width: 120px;               /* no width jump between "Sign in" / "Signing in..." */
   box-shadow: 0 8px 18px rgba(11,99,214,0.12);
   transition: background 0.15s;
 }
 .login-btn:hover:not(:disabled) { background: var(--c-0952b8, #0952b8); }
-.login-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+/* Loading / disabled: force a solid visible background and white text so the
+   button can never disappear while "Signing in..." is showing — regardless of
+   hover state, theme variables, or any other cascade rule. */
+.login-btn:disabled,
+.login-btn:disabled:hover {
+  background: #0b63d6 !important;
+  color: #ffffff !important;
+  opacity: 0.85;
+  cursor: wait;
+}
 
 /* small footer note */
 .login-footer-note { font-size: 12px; color: var(--muted); align-self: flex-start; margin-top: 8px; }

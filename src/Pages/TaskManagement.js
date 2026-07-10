@@ -9,7 +9,9 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import CrmPreloader from '../components/preLoader';
 import '../pages-css/TaskManagement.css';
 import FilterSelect from '../components/Dropdowns/FilterSelect';
-import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2, FiPlus, FiZap, FiClock, FiBriefcase, FiTag, FiArrowRight, FiFileText, FiList, FiAlertTriangle } from 'react-icons/fi';
+import { FiClipboard, FiCheckCircle, FiEdit, FiTrash2, FiPlus, FiZap, FiClock, FiBriefcase, FiTag, FiArrowRight, FiFileText, FiList, FiAlertTriangle, FiX, FiFolder, FiCalendar, FiAlertCircle, FiCheck, FiSearch, FiDownload, FiUsers, FiLoader, FiUser, FiSun, FiMenu, FiGrid, FiRefreshCw, FiXCircle, FiFile } from 'react-icons/fi';
+import * as XLSXStyle from 'xlsx-js-style';
+import { jsPDF } from 'jspdf';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -79,10 +81,10 @@ const PRI = {
   Critical: { c: '#7c3aed', bg: '#f5f3ff', br: '#c4b5fd' },
 };
 const STA = {
-  'Pending':     { c: '#d97706', bg: '#fffbeb', icon: '⏳' },
-  'In Progress': { c: '#2563eb', bg: '#eff6ff', icon: '🔄' },
-  'Completed':   { c: '#059669', bg: '#ecfdf5', icon: '✅' },
-  'Cancelled':   { c: '#6b7280', bg: '#f3f4f6', icon: '❌' },
+  'Pending':     { c: '#d97706', bg: '#fffbeb', icon: <FiClock size={11} /> },
+  'In Progress': { c: '#2563eb', bg: '#eff6ff', icon: <FiRefreshCw size={11} /> },
+  'Completed':   { c: '#059669', bg: '#ecfdf5', icon: <FiCheckCircle size={11} /> },
+  'Cancelled':   { c: '#6b7280', bg: '#f3f4f6', icon: <FiXCircle size={11} /> },
 };
 
 const PBadge = ({ p }) => { const c = PRI[p] || PRI.Medium; return <span className="tm-badge" style={{ color: c.c, background: c.bg, borderColor: c.br }}>{p}</span>; };
@@ -99,6 +101,122 @@ const exportCSV = (rows, filename) => {
   const a    = document.createElement('a');
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
+};
+
+/* ── Excel export (styled header) ─────────────────────────────────────────── */
+const exportExcel = (rows, filename) => {
+  if (!rows.length) { alert('No data to export'); return; }
+  const ws = XLSXStyle.utils.json_to_sheet(rows);
+  const keys = Object.keys(rows[0]);
+  // Header row: blue fill, white bold text, thin border
+  keys.forEach((k, i) => {
+    const addr = XLSXStyle.utils.encode_cell({ r: 0, c: i });
+    if (!ws[addr]) return;
+    ws[addr].s = {
+      fill: { patternType: 'solid', fgColor: { rgb: '0B63D6' } },
+      font: { color: { rgb: 'FFFFFF' }, bold: true, sz: 11 },
+      alignment: { horizontal: 'center', vertical: 'center' },
+      border: { top:{style:'thin',color:{rgb:'0952B8'}}, bottom:{style:'thin',color:{rgb:'0952B8'}},
+                left:{style:'thin',color:{rgb:'0952B8'}}, right:{style:'thin',color:{rgb:'0952B8'}} },
+    };
+  });
+  // Column widths from content
+  ws['!cols'] = keys.map(k => ({
+    wch: Math.min(40, Math.max(k.length, ...rows.map(r => String(r[k] ?? '').length)) + 2)
+  }));
+  ws['!rows'] = [{ hpt: 22 }];
+  const wb = XLSXStyle.utils.book_new();
+  XLSXStyle.utils.book_append_sheet(wb, ws, 'Export');
+  XLSXStyle.writeFile(wb, filename.replace(/\.csv$/i, '') + '.xlsx');
+};
+
+/* ── PDF export (A4 landscape, wrapped table) ─────────────────────────────── */
+const exportPDF = (rows, filename, title = 'Task Report') => {
+  if (!rows.length) { alert('No data to export'); return; }
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const keys = Object.keys(rows[0]);
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 8;
+  const usable = pageW - margin * 2;
+  // Weight wider columns for long-text fields
+  const weights = keys.map(k => /title|work|done|related|project|task$/i.test(k) ? 2 : 1);
+  const wSum = weights.reduce((a, b) => a + b, 0);
+  const colW = weights.map(w => (usable * w) / wSum);
+  const FS = keys.length > 12 ? 6 : 7;
+  const LH = FS * 0.45;
+
+  const drawHeader = (y) => {
+    doc.setFillColor(11, 99, 214);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(FS);
+    doc.setFont(undefined, 'bold');
+    let x = margin;
+    const hLines = keys.map((k, i) => doc.splitTextToSize(k, colW[i] - 2));
+    const hH = Math.max(...hLines.map(l => l.length)) * LH + 3;
+    doc.rect(margin, y, usable, hH, 'F');
+    keys.forEach((k, i) => { doc.text(hLines[i], x + 1, y + LH + 1); x += colW[i]; });
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(30, 41, 59);
+    return y + hH;
+  };
+
+  doc.setFontSize(12); doc.setTextColor(15, 23, 42); doc.setFont(undefined, 'bold');
+  doc.text(title, margin, 12);
+  doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.setTextColor(100, 116, 139);
+  doc.text('Generated: ' + new Date().toLocaleString('en-IN'), margin, 17);
+  let y = drawHeader(20);
+
+  rows.forEach((r, ri) => {
+    const cells = keys.map((k, i) => doc.splitTextToSize(String(r[k] ?? ''), colW[i] - 2));
+    const rowH = Math.max(1, ...cells.map(c => c.length)) * LH + 2.5;
+    if (y + rowH > pageH - margin) { doc.addPage(); y = drawHeader(10); }
+    if (ri % 2 === 1) { doc.setFillColor(241, 245, 249); doc.rect(margin, y, usable, rowH, 'F'); }
+    doc.setFontSize(FS);
+    let x = margin;
+    cells.forEach((c, i) => { doc.text(c, x + 1, y + LH + 0.6); x += colW[i]; });
+    doc.setDrawColor(226, 232, 240); doc.line(margin, y + rowH, margin + usable, y + rowH);
+    y += rowH;
+  });
+  doc.save(filename.replace(/\.csv$/i, '') + '.pdf');
+};
+
+/* ── Export button with Excel / PDF chooser ───────────────────────────────── */
+const ExportMenu = ({ getRows, filename, title }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    if (open) document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  return (
+    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
+      <button className="tm-btn tm-ghost" onClick={() => setOpen(o => !o)}>
+        <FiDownload size={13} style={{ marginRight: 5, verticalAlign: '-2px' }} />Export
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 500, background: bg('#fff'),
+          border: `1px solid ${bg('#e2e8f0')}`, borderRadius: 10, boxShadow: '0 10px 26px rgba(0,0,0,.14)', overflow: 'hidden', minWidth: 170 }}>
+          <button onClick={() => { setOpen(false); exportExcel(getRows(), filename); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none',
+              background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: tc('#0f172a') }}
+            onMouseEnter={e => e.currentTarget.style.background = bg('#f0fdf4')}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <FiFileText size={14} color="#059669" /> Excel (.xlsx)
+          </button>
+          <button onClick={() => { setOpen(false); exportPDF(getRows(), filename, title); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none',
+              background: 'transparent', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, color: tc('#0f172a'),
+              borderTop: `1px solid ${bg('#f1f5f9')}` }}
+            onMouseEnter={e => e.currentTarget.style.background = bg('#fef2f2')}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <FiFile size={14} color="#dc2626" /> PDF (A4)
+          </button>
+        </div>
+      )}
+    </div>
+  );
 };
 
 /* ── API calls ───────────────────────────────────────────────────────────── */
@@ -141,6 +259,73 @@ const TimePicker = ({ value, onChange }) => (
 
 
 /* DatePicker — date only */
+/* ── Date-range picker — same From→To calendar used on Receipts/Invoices pages ── */
+const _MONTHS_TMRP = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const _DAYS_TMRP   = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+
+const TmDateRangePicker = ({ appliedFrom, appliedTo, onApply, onClear }) => {
+    const [show,setShow]=useState(false),[from,setFrom]=useState(null),[to,setTo]=useState(null),[hover,setHover]=useState(null);
+  const [calMo,setCalMo]=useState(new Date().getMonth()),[calYr,setCalYr]=useState(new Date().getFullYear()),[showYr,setShowYr]=useState(false);
+  const ref=useRef(null);
+  useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setShow(false);};if(show)document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h);},[show]);
+  const DIM=new Date(calYr,calMo+1,0).getDate(),FD=new Date(calYr,calMo,1).getDay(),tod=new Date().toISOString().slice(0,10);
+  const inR=d=>{const hi=to||(from&&hover?hover:null);if(!from||!hi)return false;const[a,b]=from<=hi?[from,hi]:[hi,from];return d>a&&d<b;};
+  const clickDay=d=>{if(!from||(from&&to)){setFrom(d);setTo(null);}else if(d<from){setFrom(d);setTo(null);}else if(d===from){setFrom(null);setTo(null);}else setTo(d);};
+  const fmt=d=>{if(!d)return'dd-mm-yyyy';const[y,m,dy]=d.split('-');return`${dy}-${m}-${y}`;};
+  return(
+    <div ref={ref} style={{position:'relative',display:'inline-flex'}}>
+      <button type="button" onClick={()=>setShow(p=>!p)}
+        style={{display:'flex',alignItems:'center',gap:6,padding:'8px 12px',border:`1px solid ${appliedFrom?bg('#c7d2fe'):bg('#e2e8f0')}`,borderRadius:6,background:appliedFrom?bg('#f5f3ff'):bg('#fff'),cursor:'pointer',fontSize:12,whiteSpace:'nowrap',height:38,boxSizing:'border-box'}}
+      >
+        <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+        <span style={{fontSize:11,color:tc('#94a3b8')}}>FROM</span>
+        <span style={{fontWeight:appliedFrom?600:400,color:appliedFrom?tc('#1e293b'):tc('#94a3b8')}}>{fmt(appliedFrom)}</span>
+        <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+        <span style={{fontSize:11,color:tc('#94a3b8')}}>TO</span>
+        <span style={{fontWeight:appliedTo?600:400,color:appliedTo?tc('#1e293b'):tc('#94a3b8')}}>{fmt(appliedTo)}</span>
+        {appliedFrom&&<span onClick={e=>{e.stopPropagation();setFrom(null);setTo(null);onClear();}} style={{marginLeft:2,color:tc('#94a3b8'),cursor:'pointer',lineHeight:1}}>×</span>}
+      </button>
+      {show&&(
+        <div style={{position:'absolute',top:'calc(100% + 6px)',left:0,zIndex:9999,background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 30px rgba(0,0,0,.12)',padding:16,minWidth:280}}>
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+            <button type="button" onClick={()=>{if(calMo===0){setCalMo(11);setCalYr(y=>y-1);}else setCalMo(m=>m-1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>‹</button>
+            <button type="button" onClick={()=>setShowYr(p=>!p)} style={{background:'none',border:'none',cursor:'pointer',fontWeight:700,fontSize:13,color:tc('#1e293b')}}>{_MONTHS_TMRP[calMo]} {calYr}</button>
+            <button type="button" onClick={()=>{if(calMo===11){setCalMo(0);setCalYr(y=>y+1);}else setCalMo(m=>m+1);}} style={{background:'none',border:'none',cursor:'pointer',fontSize:16,padding:'2px 6px'}}>›</button>
+          </div>
+          {showYr?(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:4,marginBottom:10}}>
+              {Array.from({length:16},(_,i)=>{const yr=new Date().getFullYear()-4+i;return(<div key={yr} onClick={()=>{setCalYr(yr);setShowYr(false);}} style={{textAlign:'center',padding:'4px 0',borderRadius:4,cursor:'pointer',fontWeight:yr===calYr?700:400,background:yr===calYr?bg('#4f46e5'):bg('transparent'),color:yr===calYr?tc('#fff'):tc('#1e293b'),fontSize:12}}>{yr}</div>);})}
+            </div>
+          ):(
+            <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,marginBottom:8}}>
+              {_DAYS_TMRP.map(d=><div key={d} style={{textAlign:'center',fontSize:10,fontWeight:700,color:tc('#94a3b8'),padding:'2px 0'}}>{d}</div>)}
+              {Array.from({length:FD}).map((_,i)=><div key={`e${i}`}/>)}
+              {Array.from({length:DIM}).map((_,i)=>{
+                const dy=i+1,ds=`${calYr}-${String(calMo+1).padStart(2,'0')}-${String(dy).padStart(2,'0')}`,dow=(FD+i)%7;
+                let cellBg = bg('transparent'),color = tc('#1e293b'),br=4;
+                if(ds===from||ds===to){cellBg = bg('#4f46e5');color = tc('#fff');}
+                else if(inR(ds)){cellBg = bg('#e0e7ff');color = tc('#3730a3');if(dow===0)br='4px 0 0 4px';if(dow===6)br='0 4px 4px 0';}
+                else if(ds===tod)color = tc('#4f46e5');
+                return(<div key={ds} onClick={()=>clickDay(ds)} onMouseEnter={()=>from&&!to&&setHover(ds)} onMouseLeave={()=>setHover(null)} style={{textAlign:'center',padding:'5px 0',cursor:'pointer',borderRadius:br,background:cellBg,color,fontSize:12,fontWeight:ds===from||ds===to?700:400}}>{dy}</div>);
+              })}
+            </div>
+          )}
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,flexWrap:'wrap'}}>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:from?bg('#e0e7ff'):bg('#f1f5f9'),color:from?tc('#3730a3'):tc('#94a3b8'),fontWeight:from?600:400}}>{from?fmt(from):'From —'}</span>
+            <svg width="9" height="9" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14"/></svg>
+            <span style={{fontSize:11,padding:'3px 8px',borderRadius:4,background:to?bg('#e0e7ff'):bg('#f1f5f9'),color:to?tc('#3730a3'):tc('#94a3b8'),fontWeight:to?600:400}}>{to?fmt(to):'To —'}</span>
+          </div>
+          <div style={{display:'flex',gap:6,justifyContent:'center'}}>
+            {(from||appliedFrom)&&<button type="button" onClick={()=>{setFrom(null);setTo(null);onClear();setShow(false);}} style={{flex:1,padding:'6px 0',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:6,background:bg('#fff'),cursor:'pointer',fontSize:12,color:tc('#64748b')}}>Clear</button>}
+            <button type="button" onClick={()=>setShow(false)} style={{flex:1,padding:'6px 0',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:6,background:bg('#fff'),cursor:'pointer',fontSize:12,color:tc('#64748b')}}>Cancel</button>
+            <button type="button" onClick={()=>{if(!from)return;onApply(from,to||from);setShow(false);}} disabled={!from} style={{flex:1,padding:'6px 0',border:'none',borderRadius:6,background:from?bg('#4f46e5'):bg('#e2e8f0'),color:from?tc('#fff'):tc('#94a3b8'),cursor:from?'pointer':'default',fontSize:12,fontWeight:600}}>Apply</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const DatePicker = ({ value, onChange, placeholder='Select date' }) => {
   const [show, setShow] = useState(false);
   const [calMo, setCalMo] = useState(() => value?parseInt(value.slice(5,7))-1:new Date().getMonth());
@@ -372,7 +557,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
             <h2><FiClipboard size={18} style={{marginRight:8}} />Add Work Entry</h2>
             <p className="tm-msub">Describe what you did on this task — be as detailed as possible</p>
           </div>
-          <button className="tm-xbtn" onClick={onClose}>✕</button>
+          <button className="tm-xbtn" onClick={onClose}><FiX size={14} /></button>
         </div>
 
         {/* Task context strip */}
@@ -383,7 +568,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           </div>
           <div className="tm-strip-row" style={{marginTop:6}}>
             <PBadge p={task.priority} />
-            <span className="tm-chip">📁 {task.category}</span>
+            <span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{task.category}</span>
             {task.projectName && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span>}
             {task.relatedTo && <span className="tm-chip" style={{color:tc('#7c3aed'),background:bg('#f5f3ff')}}>↳ {task.relatedTo}</span>}
           </div>
@@ -392,7 +577,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
         <div className="tm-mbody">
           {/* ── Log Date ── */}
           <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14,padding:'10px 14px',background:bg('#f0f7ff'),borderRadius:8,border:`1px solid ${bg('#bfdbfe')}`}}>
-            <label style={{fontSize:12,fontWeight:700,color:tc('#1e40af'),whiteSpace:'nowrap'}}>📅 Log Date</label>
+            <label style={{fontSize:12,fontWeight:700,color:tc('#1e40af'),whiteSpace:'nowrap'}}><FiCalendar size={12} style={{marginRight:4,verticalAlign:'-2px'}} />Log Date</label>
             <input type="date" className="tm-inp" style={{maxWidth:180,fontSize:13}}
               value={form.logDate}
               max={todayStr()}
@@ -468,7 +653,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
           {/* Blocked reason — only if blocked */}
           {form.updateType === 'Blocked' && (
             <div className="tm-fg" style={{background:bg('#fef2f2'),padding:'12px',borderRadius:8,border:`1px solid ${bg('#fca5a5')}`}}>
-              <label style={{color:tc('#dc2626')}}>🔴 What is blocking this task? <span className="tm-req">*</span></label>
+              <label style={{color:tc('#dc2626')}}><FiAlertCircle size={12} style={{marginRight:4,verticalAlign:'-2px'}} />What is blocking this task? <span className="tm-req">*</span></label>
               <textarea className="tm-ta" rows={2} placeholder="Describe the blocker clearly..." value={form.blockedReason} onChange={e => set('blockedReason', e.target.value)} />
             </div>
           )}
@@ -480,7 +665,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
               <span className="tm-pval" style={{marginLeft:8,fontSize:14,fontWeight:800,color: form.completionPercent>=100?tc('#059669'):tc('#3b82f6')}}>
                 {form.completionPercent}%
               </span>
-              {form.completionPercent >= 100 && <span style={{marginLeft:6,fontSize:11,color:tc('#059669'),fontWeight:600}}>✓ Complete!</span>}
+              {form.completionPercent >= 100 && <span style={{marginLeft:6,fontSize:11,color:tc('#059669'),fontWeight:600}}><FiCheck size={11} style={{verticalAlign:'-1px'}} /> Complete!</span>}
             </label>
             <input type="range" min={0} max={100} step={5} className="tm-range" value={form.completionPercent}
               onChange={e => { const v = Number(e.target.value); set('completionPercent', v); if(v===100) set('newStatus','Completed'); }} />
@@ -500,7 +685,7 @@ const DailyLogModal = ({ task, onClose, onSave }) => {
         <div className="tm-mftr">
           <button className="tm-btn tm-ghost" onClick={onClose} disabled={saving}>Cancel</button>
           <button className="tm-btn tm-primary" onClick={submit} disabled={saving || !hasChanges}>
-            {saving ? 'Saving…' : isComplete ? '✅ Save & Mark Complete' : 'Save Work Entry'}
+            {saving ? 'Saving…' : isComplete ? <><FiCheckCircle size={13} style={{marginRight:5,verticalAlign:'-2px'}} />Save & Mark Complete</> : 'Save Work Entry'}
           </button>
         </div>
       </div>
@@ -538,11 +723,15 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
   const handleActivityTime = (key, val) => {
     setActivityDraft(prev => {
       const updated = { ...prev, [key]: val };
+      // Auto-calc hours from the FULL start & end date+time (supports
+      // overnight / multi-day activities picked in the DateTimePickers)
       if (updated.startTime && updated.endTime) {
-        const [sh, sm] = updated.startTime.split(':').map(Number);
-        const [eh, em] = updated.endTime.split(':').map(Number);
-        const h = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
-        if (h > 0) return { ...updated, hours: h.toFixed(1) };
+        const startD = updated.logDate || todayStr();
+        const endD   = updated.endDate || startD;
+        const start  = new Date(`${startD}T${updated.startTime}`);
+        const end    = new Date(`${endD}T${updated.endTime}`);
+        const h = (end - start) / 3600000;
+        if (!isNaN(h) && h > 0) return { ...updated, hours: (Math.round(h * 10) / 10).toFixed(1) };
       }
       return updated;
     });
@@ -578,15 +767,17 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
     setTaskLog(p => ({ ...p, newStatus: t.status, completionPercent: t.completionPercent || 0 }));
   };
 
-  // Auto-calc hours from start/end for task log
+  // Auto-calc hours from the full start/end date & time for task log
   useEffect(() => {
     if (taskLog.startTime && taskLog.endTime) {
-      const [sh, sm] = taskLog.startTime.split(':').map(Number);
-      const [eh, em] = taskLog.endTime.split(':').map(Number);
-      const h = ((eh * 60 + em) - (sh * 60 + sm)) / 60;
-      if (h > 0) setTL('hoursSpent', h.toFixed(1));
+      const startD = taskLog.logDate || todayStr();
+      const endD   = taskLog.endDate || startD;
+      const start  = new Date(`${startD}T${taskLog.startTime}`);
+      const end    = new Date(`${endD}T${taskLog.endTime}`);
+      const h = (end - start) / 3600000;
+      if (!isNaN(h) && h > 0) setTL('hoursSpent', (Math.round(h * 10) / 10).toFixed(1));
     }
-  }, [taskLog.startTime, taskLog.endTime]); // eslint-disable-line
+  }, [taskLog.startTime, taskLog.endTime, taskLog.logDate, taskLog.endDate]); // eslint-disable-line
 
   const taskDraftValid = selectedTask && (
     taskLog.workDone.trim() !== '' ||
@@ -723,7 +914,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
               <span style={{ fontSize: 11, color: tc('#3b82f6'), fontWeight: 600 }}>{item.completionPercent}%</span>
             )}
             {!isTask && item.category && (
-              <span style={{ fontSize: 11, color: tc('#374151'), background: bg('#f1f5f9'), padding: '1px 7px', borderRadius: 20 }}>📁 {item.category}</span>
+              <span style={{ fontSize: 11, color: tc('#374151'), background: bg('#f1f5f9'), padding: '1px 7px', borderRadius: 20 }}><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{item.category}</span>
             )}
             {(item.projectName || (isTask && item.projectName)) && (
               <span style={{ fontSize: 11, color: tc('#3b82f6'), background: bg('#eff6ff'), padding: '1px 7px', borderRadius: 20 }}>
@@ -736,7 +927,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
               </span>
             )}
             {item.logDate && item.logDate !== todayStr() && (
-              <span style={{ fontSize: 11, color: tc('#64748b') }}>📅 {item.logDate}</span>
+              <span style={{ fontSize: 11, color: tc('#64748b') }}><FiCalendar size={11} style={{marginRight:3,verticalAlign:'-1px'}} />{item.logDate}</span>
             )}
           </div>
         </div>
@@ -744,7 +935,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
           onClick={() => removeItem(item.id)}
           title="Remove"
           style={{ border: 'none', background: bg('transparent'), cursor: 'pointer', color: tc('#cbd5e1'), fontSize: 15, padding: '2px 4px', flexShrink: 0, lineHeight: 1 }}
-        >✕</button>
+        ><FiX size={14} /></button>
       </div>
     );
   };
@@ -809,7 +1000,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                 {committedItems.length} item{committedItems.length !== 1 ? 's' : ''} · {totalHours.toFixed(1)}h
               </span>
             )}
-            <button className="tm-xbtn" style={{ color: tc('#94a3b8') }} onClick={onClose}>✕</button>
+            <button className="tm-xbtn" style={{ color: tc('#94a3b8') }} onClick={onClose}><FiX size={14} /></button>
           </div>
         </div>
 
@@ -865,7 +1056,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                 disabled={saving || committedItems.length === 0}
                 style={{ minWidth: 140 }}
               >
-                {saving ? 'Saving…' : `✅ Confirm & Save (${committedItems.length})`}
+                {saving ? 'Saving…' : <><FiCheckCircle size={13} style={{marginRight:5,verticalAlign:'-2px'}} />Confirm & Save ({committedItems.length})</>}
               </button>
             </div>
           </>
@@ -920,19 +1111,29 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   />
                 </div>
 
-                {/* Date + Start + End + Auto hours */}
-                <div className="dl-time-row">
+                {/* Start / End date & time — same combined picker as Follow-ups "Add New Follow-up" */}
+                <div className="dl-time-row dl-time-row--dt">
                   <div>
-                    <label className="dl-lbl">Date</label>
-                    <input type="date" className="tm-inp" value={activityDraft.logDate || todayStr()} onChange={e => setAD('logDate', e.target.value)} style={{ fontSize: 12 }} />
+                    <label className="dl-lbl">Start Date &amp; Time</label>
+                    <DateTimePicker
+                      value={activityDraft.startTime ? `${activityDraft.logDate || todayStr()}T${activityDraft.startTime}` : ''}
+                      placeholder="Start date & time"
+                      onChange={v => {
+                        setActivityDraft(p => ({ ...p, logDate: v ? v.slice(0, 10) : todayStr() }));
+                        handleActivityTime('startTime', v ? v.slice(11, 16) : '');
+                      }}
+                    />
                   </div>
                   <div>
-                    <label className="dl-lbl">Start</label>
-                    <TimePicker value={activityDraft.startTime || ''} onChange={v => handleActivityTime('startTime', v)} />
-                  </div>
-                  <div>
-                    <label className="dl-lbl">End</label>
-                    <TimePicker value={activityDraft.endTime || ''} onChange={v => handleActivityTime('endTime', v)} />
+                    <label className="dl-lbl">End Date &amp; Time</label>
+                    <DateTimePicker
+                      value={activityDraft.endTime ? `${activityDraft.endDate || activityDraft.logDate || todayStr()}T${activityDraft.endTime}` : ''}
+                      placeholder="End date & time"
+                      onChange={v => {
+                        setActivityDraft(p => ({ ...p, endDate: v ? v.slice(0, 10) : '' }));
+                        handleActivityTime('endTime', v ? v.slice(11, 16) : '');
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="dl-lbl">
@@ -976,7 +1177,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                     onClick={commitActivity}
                     disabled={!activityDraft.title.trim()}
                   >
-                    ✓ Add to Log
+                    <FiCheck size={12} style={{marginRight:4,verticalAlign:'-2px'}} />Add to Log
                   </button>
                 </div>
               </div>
@@ -1001,7 +1202,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   {showTaskList && (
                     <div className="dl-task-list">
                       {activeTasks.length === 0
-                        ? <div style={{ padding: 16, fontSize: 12, color: tc('#94a3b8'), textAlign: 'center' }}>🎉 All tasks are done!</div>
+                        ? <div style={{ padding: 16, fontSize: 12, color: tc('#94a3b8'), textAlign: 'center' }}><FiCheckCircle size={14} color="#059669" style={{marginRight:5,verticalAlign:'-2px'}} />All tasks are done!</div>
                         : activeTasks.map(t => (
                           <div key={t.id} className={`dl-task-item ${selectedTask?.id === t.id ? 'dl-task-sel' : ''}`} onClick={() => selectTask(t)}>
                             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 2 }}>
@@ -1009,7 +1210,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                               <PBadge p={t.priority} /><SBadge s={t.status} />
                             </div>
                             <div style={{ fontSize: 12, fontWeight: 600, color: tc('#0f172a'), lineHeight: 1.3 }}>{t.title}</div>
-                            {t.projectName && <div style={{ fontSize: 11, color: tc('#3b82f6'), marginTop: 1 }}>📁 {t.projectName}</div>}
+                            {t.projectName && <div style={{ fontSize: 11, color: tc('#3b82f6'), marginTop: 1 }}><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{t.projectName}</div>}
                           </div>
                         ))}
                     </div>
@@ -1020,8 +1221,8 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                   <>
                     {/* Log date */}
                     <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '8px 12px', background: bg('#f0f7ff'), borderRadius: 7, border: `1px solid ${bg('#bfdbfe')}` }}>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: tc('#1e40af'), whiteSpace: 'nowrap' }}>📅 Log Date</span>
-                      <input type="date" className="tm-inp" style={{ maxWidth: 155, fontSize: 12 }} value={taskLog.logDate} max={todayStr()} onChange={e => setTL('logDate', e.target.value)} />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: tc('#1e40af'), whiteSpace: 'nowrap' }}><FiCalendar size={12} style={{marginRight:4,verticalAlign:'-2px'}} />Log Date</span>
+                      <div style={{ maxWidth: 175, flex: 1 }}><DatePicker value={taskLog.logDate} onChange={v => setTL('logDate', v)} placeholder="Log date" /></div>
                       <span style={{ fontSize: 11, color: tc('#64748b') }}>{taskLog.logDate === todayStr() ? 'Today' : 'Past entry'}</span>
                     </div>
 
@@ -1046,14 +1247,22 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                       </div>
                     </div>
 
-                    <div className="dl-time-row-3">
+                    <div className="dl-time-row-3 dl-time-row--dt">
                       <div className="tm-fg" style={{ margin: 0 }}>
-                        <label className="dl-lbl">Start Time</label>
-                        <TimePicker value={taskLog.startTime} onChange={v => setTL('startTime', v)} />
+                        <label className="dl-lbl">Start Date &amp; Time</label>
+                        <DateTimePicker
+                          value={taskLog.startTime ? `${taskLog.logDate || todayStr()}T${taskLog.startTime}` : ''}
+                          placeholder="Start date & time"
+                          onChange={v => { if (v) setTL('logDate', v.slice(0, 10)); setTL('startTime', v ? v.slice(11, 16) : ''); }}
+                        />
                       </div>
                       <div className="tm-fg" style={{ margin: 0 }}>
-                        <label className="dl-lbl">End Time</label>
-                        <TimePicker value={taskLog.endTime} onChange={v => setTL('endTime', v)} />
+                        <label className="dl-lbl">End Date &amp; Time</label>
+                        <DateTimePicker
+                          value={taskLog.endTime ? `${taskLog.endDate || taskLog.logDate || todayStr()}T${taskLog.endTime}` : ''}
+                          placeholder="End date & time"
+                          onChange={v => { setTL('endDate', v ? v.slice(0, 10) : ''); setTL('endTime', v ? v.slice(11, 16) : ''); }}
+                        />
                       </div>
                       <div className="tm-fg" style={{ margin: 0 }}>
                         <label className="dl-lbl">Hrs{taskLog.startTime && taskLog.endTime && <span style={{ marginLeft:4, color:tc('#059669'), fontWeight:700, fontSize:10 }}>auto</span>}</label>
@@ -1063,7 +1272,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
 
                     {taskLog.updateType === 'Blocked' && (
                       <div className="tm-fg" style={{ margin: 0, background: bg('#fef2f2'), padding: 12, borderRadius: 8, border: `1px solid ${bg('#fca5a5')}` }}>
-                        <label style={{ fontSize: 11, color: tc('#dc2626'), fontWeight: 600 }}>🔴 What is blocking this task?</label>
+                        <label style={{ fontSize: 11, color: tc('#dc2626'), fontWeight: 600 }}><FiAlertCircle size={12} style={{marginRight:4,verticalAlign:'-2px'}} />What is blocking this task?</label>
                         <textarea className="tm-ta" rows={2} placeholder="Describe the blocker clearly…" value={taskLog.blockedReason} onChange={e => setTL('blockedReason', e.target.value)} />
                       </div>
                     )}
@@ -1073,7 +1282,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                         <span>Completion Progress</span>
                         <span style={{ fontSize: 15, fontWeight: 800, color: taskLog.completionPercent >= 100 ? tc('#059669') : tc('#3b82f6') }}>
                           {taskLog.completionPercent}%
-                          {taskLog.completionPercent >= 100 && <span style={{ fontSize: 11, marginLeft: 6 }}>✓ Complete!</span>}
+                          {taskLog.completionPercent >= 100 && <span style={{ fontSize: 11, marginLeft: 6 }}><FiCheck size={11} style={{verticalAlign:'-1px'}} /> Complete!</span>}
                         </span>
                       </label>
                       <input type="range" min={0} max={100} step={5} className="tm-range" value={taskLog.completionPercent}
@@ -1097,7 +1306,7 @@ const DayLogModal = ({ user, tasks, projects, onClose, onSaveTaskLog, onSaveActi
                     onClick={commitTask}
                     disabled={!taskDraftValid}
                   >
-                    ✓ Add to Log
+                    <FiCheck size={12} style={{marginRight:4,verticalAlign:'-2px'}} />Add to Log
                   </button>
                 </div>
               </div>
@@ -1180,7 +1389,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
       <div className="tm-modal tm-modal-lg" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div><h2>{isEdit ? 'Edit Task' : 'Add New Task'}</h2><p className="tm-msub">{isEdit ? 'Update task details' : 'Create a task for yourself or a team member'}</p></div>
-          <button className="tm-xbtn" onClick={onClose}>✕</button>
+          <button className="tm-xbtn" onClick={onClose}><FiX size={14} /></button>
         </div>
         <div className="tm-mbody">
           <div className="tm-fg">
@@ -1233,7 +1442,7 @@ const TaskFormModal = ({ task, users, projects, user, isSuperAdmin, isManager, o
               </div>
             )}
             <div className="tm-fg">
-              <label>Est. Hours {form.startDate && form.endDate ? <span className="tm-hint tm-green">✓ auto-filled</span> : ''}</label>
+              <label>Est. Hours {form.startDate && form.endDate ? <span className="tm-hint tm-green"><FiCheck size={10} style={{verticalAlign:'-1px'}} /> auto-filled</span> : ''}</label>
               <input type="number" className="tm-inp" min="0" step="0.5" placeholder="e.g. 3" value={form.estimatedHours} onChange={e => set('estimatedHours', e.target.value)} />
             </div>
             {isEdit && (
@@ -1271,16 +1480,16 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
       <div className="tm-modal tm-modal-xl" onClick={e => e.stopPropagation()}>
         <div className="tm-mhdr">
           <div>
-            <div className="tm-mhdr-top"><span className="tm-tcode">{task.taskCode}</span> <SBadge s={task.status} /> <PBadge p={task.priority} /> {isOD && <span className="tm-chip tm-chip-danger">🚨 Overdue</span>}</div>
+            <div className="tm-mhdr-top"><span className="tm-tcode">{task.taskCode}</span> <SBadge s={task.status} /> <PBadge p={task.priority} /> {isOD && <span className="tm-chip tm-chip-danger"><FiAlertTriangle size={11} style={{marginRight:3,verticalAlign:'-1px'}} />Overdue</span>}</div>
             <h2 style={{ margin: '8px 0 4px', fontSize: 18 }}>{task.title}</h2>
             {task.relatedTo && <p style={{ margin: 0, fontSize: 12, color: tc('#64748b') }}>↳ {task.relatedTo}</p>}
           </div>
-          <button className="tm-xbtn" onClick={onClose}>✕</button>
+          <button className="tm-xbtn" onClick={onClose}><FiX size={14} /></button>
         </div>
         <div className="tm-mbody" style={{ maxHeight: '65vh' }}>
           {/* Meta grid */}
           <div className="tm-detail-grid">
-            <div className="tm-dg-item"><span className="tm-dg-lbl">Category</span><span className="tm-chip">📁 {task.category}</span></div>
+            <div className="tm-dg-item"><span className="tm-dg-lbl">Category</span><span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{task.category}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Project</span><span>{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Assigned To</span><span className="tm-dg-val">{task.assignedToName || '—'}</span></div>
             <div className="tm-dg-item"><span className="tm-dg-lbl">Created By</span><span className="tm-dg-val">{task.createdByName || '—'}</span></div>
@@ -1305,7 +1514,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
             {task.estimatedHours && totalH > 0 && (
               <div className="tm-time-ratio">
                 <span>Logged {totalH.toFixed(1)}h of {task.estimatedHours}h estimated</span>
-                <span className={totalH > task.estimatedHours ? 'tm-red' : 'tm-green-txt'}>{totalH > task.estimatedHours ? '⚠ Over estimate' : '✓ On track'}</span>
+                <span className={totalH > task.estimatedHours ? 'tm-red' : 'tm-green-txt'}>{totalH > task.estimatedHours ? <><FiAlertTriangle size={11} style={{verticalAlign:'-1px'}} /> Over estimate</> : <><FiCheck size={11} style={{verticalAlign:'-1px'}} /> On track</>}</span>
               </div>
             )}
           </div>
@@ -1336,7 +1545,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
                           <span className="tm-hist-who">{u.updatedByName}</span>
                           <span className="tm-type-pill">{u.updateType || 'Update'}</span>
                           <span className="tm-hist-when">{fmtDate(u.updatedAt)}</span>
-                          {(u.startTime || u.endTime) && <span className="tm-hist-time">🕐 {fmtTime(u.startTime)}{u.endTime ? ` → ${fmtTime(u.endTime)}` : ''}</span>}
+                          {(u.startTime || u.endTime) && <span className="tm-hist-time"><FiClock size={10} style={{marginRight:3,verticalAlign:'-1px'}} />{fmtTime(u.startTime)}{u.endTime ? ` → ${fmtTime(u.endTime)}` : ''}</span>}
                           {u.hoursSpent > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{u.hoursSpent}h</span>}
                           {u.statusChanged && <span className="tm-hist-sc">→ <strong>{u.newStatus}</strong></span>}
                         </div>
@@ -1352,7 +1561,7 @@ const TaskDetailModal = ({ task, onClose, onLog, isSuperAdmin }) => {
                             {detail}
                           </div>
                         )}
-                        {u.blockedReason && <p className="tm-hist-blk">🔴 Blocked: {u.blockedReason}</p>}
+                        {u.blockedReason && <p className="tm-hist-blk"><FiAlertCircle size={11} style={{marginRight:4,verticalAlign:'-1px'}} />Blocked: {u.blockedReason}</p>}
                         {u.notes && <p className="tm-hist-notes"><FiFileText size={12} style={{marginRight:4}} />{u.notes}</p>}
                       </div>
                     </div>
@@ -1438,11 +1647,11 @@ const BoardView = ({ tasks, onLog, onDetail, onEdit, onStatusChange, isSuperAdmi
                       </p>
                     )}
                     <div className="tm-ci-bot">
-                      <span className="tm-chip">📁 {task.category}</span>
-                      <span className={`tm-due-sm ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨' : '📅'} {fmtDate(task.dueDate)}</span>
+                      <span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{task.category}</span>
+                      <span className={`tm-due-sm ${isOD ? 'tm-due-od' : ''}`}>{isOD ? <FiAlertTriangle size={11} style={{marginRight:3,verticalAlign:'-1px'}} /> : <FiCalendar size={11} style={{marginRight:3,verticalAlign:'-1px'}} />}{fmtDate(task.dueDate)}</span>
                     </div>
                     {isSuperAdmin && task.assignedToName && (
-                      <div className="tm-ci-who" title={task.assignedToName}>👤 {task.assignedToName}</div>
+                      <div className="tm-ci-who" title={task.assignedToName}><FiUser size={11} style={{marginRight:3,verticalAlign:'-1px'}} />{task.assignedToName}</div>
                     )}
                     <div className="tm-ci-footer">
                       <div className="tm-mini-prog">
@@ -1679,56 +1888,39 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 20px',borderBottom:`1px solid ${bg('#f1f5f9')}`,background:bg('#f8fafc'),flexWrap:'wrap',gap:10}}>
           <div style={{display:'flex',alignItems:'center',gap:10,flex:1,flexWrap:'wrap',minWidth:0}}>
 
-            {/* Employee autocomplete */}
-            <div ref={sugRef} style={{position:'relative',minWidth:220,maxWidth:280}}>
-              <div style={{display:'flex',alignItems:'center',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:9,background:bg('#fff'),overflow:'hidden'}}>
-                <span style={{padding:'0 10px',fontSize:14,color:tc('#94a3b8'),flexShrink:0}}>🔍</span>
-                <input style={{flex:1,border:'none',outline:'none',fontSize:13,padding:'8px 0',background:bg('transparent'),color:tc('#0f172a')}}
-                  placeholder="Search employee…" value={empSearch}
-                  onChange={e => { setEmpSearch(e.target.value); setSelectedEmp(null); setShowSug(true); }}
-                  onFocus={() => setShowSug(true)} />
-                {(empSearch||selectedEmp) && (
-                  <button onClick={doClear} style={{border:'none',background:bg('transparent'),cursor:'pointer',color:tc('#94a3b8'),padding:'0 10px',fontSize:13}}>✕</button>
-                )}
-              </div>
-              {/* FIX #5: warn user to click suggestion */}
-              {empSearch && !selectedEmp && (
-                <div style={{fontSize:10,color:tc('#f59e0b'),marginTop:2}}>⚠ Click a name below to filter</div>
-              )}
-              {showSug && suggestions.length > 0 && (
-                <div style={{position:'absolute',top:'calc(100% + 4px)',left:0,right:0,background:bg('#fff'),border:`1px solid ${bg('#e2e8f0')}`,borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.12)',zIndex:300,overflow:'hidden',maxHeight:280,overflowY:'auto'}}>
-                  {suggestions.map(u => (
-                    <div key={u.id} onMouseDown={() => doSelect(u)}
-                      style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',cursor:'pointer',borderBottom:`1px solid ${bg('#f8fafc')}`}}
-                      onMouseEnter={e => e.currentTarget.style.background=bg('#f0f7ff')}
-                      onMouseLeave={e => e.currentTarget.style.background='transparent'}>
-                      <div style={{width:30,height:30,borderRadius:'50%',background:`linear-gradient(135deg,${bg('#3b82f6')},${bg('#8b5cf6')})`,color:tc('#fff'),fontSize:12,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                        {(u.name||'?').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{fontSize:13,fontWeight:600,color:tc('#0f172a')}}>{u.name}</div>
-                        <div style={{fontSize:11,color:tc('#64748b')}}>{u.role||'—'}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+            {/* Employee filter — searchable dropdown (same FilterSelect as Leads page) */}
+            <div style={{minWidth:220,maxWidth:280,flex:'0 1 260px'}}>
+              <FilterSelect
+                value={selectedEmp ? String(selectedEmp.id) : ''}
+                options={[
+                  { value: '', label: 'All Employees' },
+                  ...users.map(u => ({ value: String(u.id), label: `${u.name || '?'}${u.role ? ' — ' + u.role : ''}` })),
+                ]}
+                placeholder="All Employees"
+                searchable
+                searchPlaceholder="Search employee…"
+                onChange={(v) => {
+                  if (!v) { doClear(); return; }
+                  const u = users.find(x => String(x.id) === String(v));
+                  if (u) doSelect(u);
+                }}
+              />
             </div>
 
-            {/* Date range */}
-            <div style={{display:'flex',alignItems:'center',gap:6}}>
-              <span style={{fontSize:12,fontWeight:600,color:tc('#64748b')}}>From</span>
-              <input type="date" className="tm-filter-sel" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              <span style={{fontSize:12,fontWeight:600,color:tc('#64748b')}}>To</span>
-              <input type="date" className="tm-filter-sel" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-            </div>
+            {/* Date range — single From→To calendar (same as Receipts/Invoices pages) */}
+            <TmDateRangePicker
+              appliedFrom={dateFrom}
+              appliedTo={dateTo}
+              onApply={(fr, to) => { setDateFrom(fr); setDateTo(to); }}
+              onClear={() => { setDateFrom(''); setDateTo(''); }}
+            />
 
             {/* Task search */}
             <div style={{position:'relative',display:'flex',alignItems:'center',flex:1,minWidth:160}}>
-              <span style={{position:'absolute',left:10,fontSize:13,color:tc('#94a3b8'),pointerEvents:'none'}}>🔍</span>
+              <span style={{position:'absolute',left:10,fontSize:13,color:tc('#94a3b8'),pointerEvents:'none',display:'flex',alignItems:'center'}}><FiSearch size={13} /></span>
               <input style={{width:'100%',padding:'8px 30px 8px 32px',border:`1px solid ${bg('#e2e8f0')}`,borderRadius:8,fontSize:13,outline:'none',background:bg('#fff'),color:tc('#0f172a'),boxSizing:'border-box'}}
                 placeholder="Search tasks, work done…" onChange={e => handleTeamSearchChange(e.target.value)} />
-              {taskSearch && <button onClick={() => { setTaskSearchInput(''); setTaskSearch(''); }} style={{position:'absolute',right:8,border:'none',background:bg('transparent'),cursor:'pointer',color:tc('#94a3b8'),fontSize:12}}>✕</button>}
+              {taskSearch && <button onClick={() => { setTaskSearchInput(''); setTaskSearch(''); }} style={{position:'absolute',right:8,border:'none',background:bg('transparent'),cursor:'pointer',color:tc('#94a3b8'),fontSize:12}}><FiX size={14} /></button>}
             </div>
           </div>
 
@@ -1738,13 +1930,13 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
               <div style={{fontSize:12,fontWeight:700,color:tc('#0f172a')}}>{teamTotal} task{teamTotal!==1?'s':''} · {totalEntries} entr{totalEntries!==1?'ies':'y'}</div>
               {totalHours > 0 && <div style={{fontSize:11,color:tc('#0e7490'),fontWeight:600}}><FiClock size={11} style={{marginRight:3}} />{totalHours.toFixed(1)}h logged</div>}
             </div>
-            <button className="tm-btn tm-ghost"
-              onClick={() => logView==='logs'
-                ? onExportCSV(exportLogsRows(), `work_entries_${selectedEmp?selectedEmp.name.replace(/\s+/g,'_'):'team'}_${dateFrom||'all'}.csv`)
-                : onExportCSV(exportRows(), `tasks_${selectedEmp?selectedEmp.name.replace(/\s+/g,'_'):'team'}_${dateFrom||'all'}.csv`)
-              }>
-              📤 Export
-            </button>
+            <ExportMenu
+              getRows={() => logView==='logs' ? exportLogsRows() : exportRows()}
+              filename={logView==='logs'
+                ? `work_entries_${selectedEmp?selectedEmp.name.replace(/\s+/g,'_'):'team'}_${dateFrom||'all'}`
+                : `tasks_${selectedEmp?selectedEmp.name.replace(/\s+/g,'_'):'team'}_${dateFrom||'all'}`}
+              title={logView==='logs' ? 'Work Entries Report' : 'Team Tasks Report'}
+            />
           </div>
         </div>
 
@@ -1759,7 +1951,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                   </span>
                   {selectedEmp.name}
                 </>
-              ) : '👥 Team Overview'}
+              ) : <><FiUsers size={14} style={{marginRight:6,verticalAlign:'-2px'}} />Team Overview</>}
             </h3>
             <p style={{fontSize:11,color:tc('#64748b'),margin:0}}>
               {dateFrom && dateTo ? `${fmtDate(dateFrom)} → ${fmtDate(dateTo)}` : dateFrom ? `From ${fmtDate(dateFrom)}` : 'All time'}
@@ -1782,7 +1974,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
         <div style={{flex:1,overflowY:'auto',overflowX:'hidden',position:'relative'}}>
         {teamLoading ? (
           <div style={{padding:'48px 24px',textAlign:'center',color:tc('#94a3b8')}}>
-            <div style={{fontSize:24,marginBottom:8}}>⏳</div>
+            <div style={{fontSize:24,marginBottom:8}}><FiLoader size={24} className="tm-spin" /></div>
             <p style={{fontSize:13,margin:0}}>Loading…</p>
           </div>
         ) : rows.length === 0 ? (
@@ -1838,7 +2030,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}>
                           {r.project !== '—' ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span> : <span style={{color:tc('#94a3b8')}}>—</span>}
                         </td>
-                        <td style={{padding:'10px 12px',verticalAlign:'middle'}}><span className="tm-chip">📁 {r.category}</span></td>
+                        <td style={{padding:'10px 12px',verticalAlign:'middle'}}><span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{r.category}</span></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><PBadge p={r.priority} /></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle'}}><SBadge s={r.status} /></td>
                         <td style={{padding:'10px 12px',verticalAlign:'middle',minWidth:90}}>
@@ -1909,7 +2101,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                                             <span style={{fontSize:11,color:tc('#64748b')}}>{fmtDate(u.updatedAt)}</span>
                                             {(u.startTime||u.endTime) && (
                                               <span style={{fontSize:11,color:tc('#64748b'),background:bg('#f1f5f9'),padding:'1px 7px',borderRadius:5}}>
-                                                🕐 {fmtTime(u.startTime)}{u.endTime?` → ${fmtTime(u.endTime)}`:''}
+                                                <FiClock size={10} style={{marginRight:3,verticalAlign:'-1px'}} />{fmtTime(u.startTime)}{u.endTime?` → ${fmtTime(u.endTime)}`:''}
                                               </span>
                                             )}
                                             {parseFloat(u.hoursSpent)>0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{parseFloat(u.hoursSpent).toFixed(1)}h</span>}
@@ -1935,7 +2127,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
 
                                           {u.blockedReason && (
                                             <div style={{background:bg('#fef2f2'),border:`1px solid ${bg('#fca5a5')}`,borderRadius:6,padding:'6px 10px',fontSize:12,color:tc('#dc2626'),marginTop:4}}>
-                                              🔴 <strong>Blocked:</strong> {u.blockedReason}
+                                              <FiAlertCircle size={11} style={{marginRight:4,verticalAlign:'-1px'}} /><strong>Blocked:</strong> {u.blockedReason}
                                             </div>
                                           )}
                                           {u.notes && (
@@ -2053,7 +2245,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
 
                           {u.blockedReason && (
                             <div style={{background:bg('#fef2f2'),border:`1px solid ${bg('#fca5a5')}`,borderRadius:6,padding:'7px 12px',fontSize:12,color:tc('#dc2626'),marginTop:4}}>
-                              🔴 <strong>Blocker:</strong> {u.blockedReason}
+                              <FiAlertCircle size={11} style={{marginRight:4,verticalAlign:'-1px'}} /><strong>Blocker:</strong> {u.blockedReason}
                             </div>
                           )}
                           {u.notes && (
@@ -2098,7 +2290,7 @@ const TeamView = ({ user, users, onDetail, onExportCSV }) => {
                 </div>
                 <div style={{display:'flex',flexWrap:'wrap',gap:5,marginBottom:10}}>
                   {r.project !== '—' && <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{r.project}</span>}
-                  <span className="tm-chip">📁 {r.category}</span>
+                  <span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{r.category}</span>
                   <PBadge p={r.priority} />
                   {r.totalHours > 0 && <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{r.totalHours}h</span>}
                 </div>
@@ -2152,7 +2344,7 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
     <div className="tm-today-panel">
       <div className="tm-today-hdr">
         <div>
-          <h3>📅 {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h3>
+          <h3><FiCalendar size={15} style={{marginRight:6,verticalAlign:'-2px'}} />{new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</h3>
           <p>{todayUpds.length} update{todayUpds.length !== 1 ? 's' : ''} logged · {totalH.toFixed(1)}h tracked today</p>
         </div>
       </div>
@@ -2191,7 +2383,7 @@ const TodaySummary = ({ tasks, onLog, onDetail }) => {
         </div>
       )}
       {todayUpds.length === 0 && todayTasks.length === 0 && (
-        <div className="tm-empty" style={{ padding: '32px 24px' }}><div>☀️</div><p>No tasks or updates for today yet.</p></div>
+        <div className="tm-empty" style={{ padding: '32px 24px' }}><div><FiSun size={30} color="#f59e0b" /></div><p>No tasks or updates for today yet.</p></div>
       )}
     </div>
   );
@@ -2546,11 +2738,11 @@ export default function TaskManagement() {
     const update = { id: Date.now(), updatedByName: user?.name, updatedAt: entryDate, workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, statusChanged: tasks.find(t => t.id === taskId)?.status !== newStatus };
     try {
       const r = await fetch(`${API}/tasks/${taskId}/update`, { method: 'POST', credentials: 'include', headers: hdrs(user), body: JSON.stringify({ workDone, updateType, hoursSpent, startTime, endTime, newStatus, completionPercent, blockedReason, notes, updatedByName: user?.name, logDate: logDate || todayStr() }) });
-      if (r.ok) { showSuccess('Update logged! ✅'); loadTasks(); setLogTask(null); return; }
+      if (r.ok) { showSuccess('Update logged!'); loadTasks(); setLogTask(null); return; }
     } catch {}
     // Optimistic fallback
     setTasks(p => p.map(t => t.id === taskId ? { ...t, status: newStatus, completionPercent, closedAt: newStatus === 'Completed' ? now : t.closedAt, startedAt: t.startedAt || now, updates: [...(t.updates || []), update], totalHoursSpent: (parseFloat(t.totalHoursSpent) || 0) + (parseFloat(hoursSpent) || 0) } : t));
-    showSuccess('Update logged! ✅');
+    showSuccess('Update logged!');
     setLogTask(null);
   };
 
@@ -2575,7 +2767,7 @@ export default function TaskManagement() {
     try {
       await fetch(`${API}/tasks/${task.id}`, { method: 'PUT', credentials: 'include', headers: hdrs(user), body: JSON.stringify({ status: 'Completed', completionPercent: 100, closedAt: now }) });
     } catch {}
-    showSuccess('Marked complete! ✅');
+    showSuccess('Marked complete!');
   };
 
   const deleteTask = async (id) => {
@@ -2647,11 +2839,11 @@ export default function TaskManagement() {
         </div>
         <div className="tm-hdr-acts">
           <div className="tm-view-tgl">
-            {[['table', '☰ Table'], ['board', '⊞ Board'], ['today', '📅 Today'], canSeeTeamTab && ['team', '👥 Team']].filter(Boolean).map(([v, l]) => (
+            {[['table', <><FiMenu size={12} style={{marginRight:4,verticalAlign:'-1px'}} />Table</>], ['board', <><FiGrid size={12} style={{marginRight:4,verticalAlign:'-1px'}} />Board</>], ['today', <><FiCalendar size={12} style={{marginRight:4,verticalAlign:'-1px'}} />Today</>], canSeeTeamTab && ['team', <><FiUsers size={12} style={{marginRight:4,verticalAlign:'-1px'}} />Team</>]].filter(Boolean).map(([v, l]) => (
               <button key={v} className={`tm-vbtn ${view === v ? 'active' : ''}`} onClick={() => setViewAndStore(v)}>{l}</button>
             ))}
           </div>
-          <button className="tm-btn tm-ghost" onClick={() => exportCSV(taskExportRows(), `tasks_${todayStr()}.csv`)}>📤 Export</button>
+          
           <button className="tm-btn" style={{background:bg('#f0f9ff'),color:tc('#0369a1'),border:`1px solid ${bg('#bae6fd')}`,fontWeight:700}}
             onClick={() => setShowDayLog(true)} title="Record task progress or log today's activities">
             <FiClipboard size={14} style={{marginRight:5}} />Day Log
@@ -2663,12 +2855,12 @@ export default function TaskManagement() {
       {/* KPIs — hidden when Super Admin is in Team View */}
       {view !== 'team' && (
         <div className="tm-kpi-row">
-          <KpiCard label="Total" value={kpis.total} icon="📋" accent="#3b82f6" iconBg="#eff6ff" sub="My tasks" active={activeKpi === 'All'} onClick={() => { setActiveKpi('All'); setViewAndStore('table'); }} />
-          <KpiCard label="Due Today" value={kpis.today} icon="📅" accent="#d97706" iconBg="#fffbeb" sub="Need action today" active={activeKpi === 'Today'} onClick={() => { setActiveKpi('Today'); setViewAndStore('table'); }} />
-          <KpiCard label="Overdue" value={kpis.overdue} icon="🚨" accent="#dc2626" iconBg="#fef2f2" sub="Past due date" active={activeKpi === 'Overdue'} onClick={() => { setActiveKpi('Overdue'); setViewAndStore('table'); }} />
-          <KpiCard label="Completed" value={kpis.completed} icon="✅" accent="#059669" iconBg="#ecfdf5" sub="Done" active={activeKpi === 'Completed'} onClick={() => { setActiveKpi('Completed'); setViewAndStore('table'); }} />
-          <KpiCard label="High / Critical" value={kpis.critical} icon="🔥" accent="#7c3aed" iconBg="#f5f3ff" sub="Urgent tasks" active={activeKpi === 'Critical'} onClick={() => { setActiveKpi('Critical'); setViewAndStore('table'); }} />
-          <KpiCard label="Hours Logged" value={`${kpis.hours}h`} icon="⏱" accent="#0891b2" iconBg="#ecfeff" sub="My total" />
+          <KpiCard label="Total" value={kpis.total} icon={<FiClipboard size={18} />} accent="#3b82f6" iconBg="#eff6ff" sub="My tasks" active={activeKpi === 'All'} onClick={() => { setActiveKpi('All'); setViewAndStore('table'); }} />
+          <KpiCard label="Due Today" value={kpis.today} icon={<FiCalendar size={18} />} accent="#d97706" iconBg="#fffbeb" sub="Need action today" active={activeKpi === 'Today'} onClick={() => { setActiveKpi('Today'); setViewAndStore('table'); }} />
+          <KpiCard label="Overdue" value={kpis.overdue} icon={<FiAlertTriangle size={18} />} accent="#dc2626" iconBg="#fef2f2" sub="Past due date" active={activeKpi === 'Overdue'} onClick={() => { setActiveKpi('Overdue'); setViewAndStore('table'); }} />
+          <KpiCard label="Completed" value={kpis.completed} icon={<FiCheckCircle size={18} />} accent="#059669" iconBg="#ecfdf5" sub="Done" active={activeKpi === 'Completed'} onClick={() => { setActiveKpi('Completed'); setViewAndStore('table'); }} />
+          <KpiCard label="High / Critical" value={kpis.critical} icon={<FiZap size={18} />} accent="#7c3aed" iconBg="#f5f3ff" sub="Urgent tasks" active={activeKpi === 'Critical'} onClick={() => { setActiveKpi('Critical'); setViewAndStore('table'); }} />
+          <KpiCard label="Hours Logged" value={`${kpis.hours}h`} icon={<FiClock size={18} />} accent="#0891b2" iconBg="#ecfeff" sub="My total" />
         </div>
       )}
 
@@ -2682,7 +2874,7 @@ export default function TaskManagement() {
       {view === 'board' && (
         <>
           <div className="tm-filters-bar">
-            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
+            <div className="tm-srch-wrap"><span><FiSearch size={13} /></span><input className="tm-srch" placeholder="Search tasks…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}><FiX size={14} /></button>}</div>
             {/* Date range for board view — calls backend */}
             <DateRangeFilter
               appliedFrom={taskDateFrom} appliedTo={taskDateTo}
@@ -2701,7 +2893,7 @@ export default function TaskManagement() {
       {view === 'table' && (
         <>
           <div className="tm-filters-bar">
-            <div className="tm-srch-wrap"><span>🔍</span><input className="tm-srch" placeholder="Search tasks, projects, code…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}>✕</button>}</div>
+            <div className="tm-srch-wrap"><span><FiSearch size={13} /></span><input className="tm-srch" placeholder="Search tasks, projects, code…" ref={searchInputRef} onChange={e => handleSearchChange(e.target.value)} />{search && <button className="tm-clr" onClick={() => { if(searchInputRef.current) searchInputRef.current.value=''; setSearchInput(''); setSearch(''); }}><FiX size={14} /></button>}</div>
             {/* Date range — available to ALL users, triggers backend call */}
             <DateRangeFilter
               appliedFrom={taskDateFrom} appliedTo={taskDateTo}
@@ -2756,7 +2948,7 @@ export default function TaskManagement() {
           <div className="tm-card">
             {loading ? (
               <div style={{padding:'40px 24px',textAlign:'center',color:tc('#94a3b8')}}>
-                <div style={{fontSize:22,marginBottom:8}}>⏳</div>
+                <div style={{fontSize:22,marginBottom:8}}><FiLoader size={22} className="tm-spin" /></div>
                 <p style={{fontSize:13,margin:0}}>Loading…</p>
               </div>
             ) : filtered.length === 0 ? (
@@ -2819,14 +3011,14 @@ export default function TaskManagement() {
                               sno:      <td key="sno" style={{textAlign:'center',fontWeight:700,color:tc('#374151'),fontSize:12}}>{(page-1)*pageSize + taskIndex + 1}</td>,
                               task:     <td key="task"><div className="tm-task-cell"><span className="tm-tcode">{task.taskCode}</span><span className="tm-ttitle">{task.title}</span>{task.relatedTo && <span className="tm-trel">↳ {task.relatedTo}</span>}</div></td>,
                               project:  <td key="project">{task.projectName ? <span className="tm-chip tm-chip-blue"><FiBriefcase size={11} style={{marginRight:3}} />{task.projectName}</span> : task.otherContext ? <span className="tm-chip tm-chip-orange"><FiTag size={11} style={{marginRight:3}} />{task.otherContext}</span> : <span className="tm-nodash">—</span>}</td>,
-                              category: <td key="category"><span className="tm-chip">📁 {task.category}</span></td>,
+                              category: <td key="category"><span className="tm-chip"><FiFolder size={11} style={{marginRight:4,verticalAlign:'-1px'}} />{task.category}</span></td>,
                               priority: <td key="priority"><PBadge p={task.priority} /></td>,
                               status:   <td key="status"><SBadge s={task.status} /></td>,
                               progress: <td key="progress"><div className="tm-mini-prog"><div className="tm-mini-bar"><div className="tm-mini-fill" style={{ width: `${task.completionPercent || 0}%`, background: (task.completionPercent || 0) >= 100 ? bg('#059669') : bg('#3b82f6') }} /></div><span>{task.completionPercent || 0}%</span></div></td>,
                               dates:    <td key="dates"><div style={{ fontSize: 11, lineHeight: 1.7, color: tc('#1e293b'), fontWeight: 500 }}>{task.startDate ? <div>▶ {fmtDT(task.startDate)}</div> : <span className="tm-nodash">No start</span>}{task.endDate ? <div style={{ color: tc('#059669'), fontWeight: 600 }}>■ {fmtDT(task.endDate)}</div> : null}</div></td>,
                               hours:    <td key="hours">{totalH > 0 ? <span className="tm-hours-pill"><FiClock size={11} style={{marginRight:3}} />{totalH.toFixed(1)}h</span> : <span className="tm-nodash">—</span>}</td>,
                               assignee: <td key="assignee"><span className="tm-assignee">{task.assignedToName || '—'}</span></td>,
-                              due:      <td key="due"><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? '🚨 ' : ''}{fmtDate(task.dueDate)}</span></td>,
+                              due:      <td key="due"><span className={`tm-due ${isOD ? 'tm-due-od' : ''}`}>{isOD ? <FiAlertTriangle size={11} style={{marginRight:3,verticalAlign:'-1px'}} /> : null}{fmtDate(task.dueDate)}</span></td>,
                               actions:  <td key="actions" onClick={e => e.stopPropagation()}><div className="tm-acts"><button className="tm-act tm-act-log" title="Add Work Entry" onClick={() => setLogTask(task)}><FiClipboard size={15} /></button>{task.status !== 'Completed' && task.status !== 'Cancelled' && (<button className="tm-act tm-act-done" title="Mark Complete" onClick={() => quickComplete(task)}><FiCheckCircle size={15} /></button>)}<button className="tm-act tm-act-edit" title="Edit" onClick={() => setEditTask(task)}><FiEdit size={15} /></button>{isSA && <button className="tm-act tm-act-del" title="Delete" onClick={() => deleteTask(task.id)}><FiTrash2 size={15} /></button>}</div></td>,
                             };
                             return (

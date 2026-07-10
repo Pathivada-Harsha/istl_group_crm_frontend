@@ -433,3 +433,8 @@
   .la-search { min-width: 0; flex: 1; }
   .la-drawer { width: 100vw; max-width: 100vw; }
 }
+/* Session-limit dialog: option explanations + wrap buttons on small screens */
+.la-limit-options { margin: 8px 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.la-limit-options li { font-size: 12.5px; line-height: 1.5; }
+.la-session-limit .la-modal-actions { flex-wrap: wrap; gap: 8px; }
+.la-btn-danger:hover { background: var(--c-fecaca, #fecaca); }

@@ -600,6 +600,7 @@ function AddForm({ lead, currentUser, users, onCreated, onCancel }) {
             onChange={v => set("assignedTo")({ target: { value: v } })}
             options={users.map(u => ({ value: String(u.id), label: u.name + (u.id === currentUser?.id ? " (Me)" : "") }))}
             placeholder="Select User"
+          
           />
         </div>
 

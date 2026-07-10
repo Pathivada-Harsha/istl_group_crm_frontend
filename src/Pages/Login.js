@@ -260,7 +260,8 @@ export default function Login() {
     // ── LOGIN submit ──────────────────────────────────────────────────────────
     // LOGIN ACTIVITY MODULE: sends device/location context with the
     // credentials and handles 409 SESSION_LIMIT_REACHED (two-device limit).
-    async function doLogin(forceLogin) {
+    async function doLogin(mode) {
+      // mode: undefined/false → normal attempt; 'force' → evict oldest; 'all' → logout everywhere
       try {
         // Device, browser, screen, timezone and (if already permitted)
         // location — collected once, never blocks login on failure.
@@ -274,7 +275,8 @@ export default function Login() {
             username: username.trim(),
             password: password.trim(),
             ...clientContext,
-            ...(forceLogin ? { forceLogin: "true" } : {}),
+            ...(mode === 'force' ? { forceLogin: "true" } : {}),
+            ...(mode === 'all' ? { logoutAllDevices: "true" } : {}),
           }),
         });
 
@@ -336,7 +338,17 @@ export default function Login() {
     async function handleForceLogin() {
       setForceSubmitting(true);
       try {
-        await doLogin(true);
+        await doLogin('force');
+      } finally {
+        setForceSubmitting(false);
+      }
+    }
+
+    // "Logout from all devices" — signs out every active session, then logs in here.
+    async function handleLogoutAllLogin() {
+      setForceSubmitting(true);
+      try {
+        await doLogin('all');
       } finally {
         setForceSubmitting(false);
       }
@@ -462,6 +474,7 @@ export default function Login() {
               loading={forceSubmitting}
               onCancel={() => setLimitSessions(null)}
               onContinue={handleForceLogin}
+              onLogoutAll={handleLogoutAllLogin}
             />
           )}
         </div>
