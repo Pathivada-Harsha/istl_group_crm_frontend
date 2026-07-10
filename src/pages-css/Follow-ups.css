@@ -2397,3 +2397,30 @@
   background: #11151f !important;
   color: #8893a7 !important;
 }
+/* ── Site Visit Report modal: fixed header/footer, scrollable body ───────── */
+/* Header is fixed by the flex layout in Follow-ups.js; the form footer is
+   made sticky here so it stays pinned at the bottom while the body scrolls. */
+.svr-modal-body .lsv-form-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: var(--c-ffffff, #ffffff);
+  border-top: 1px solid var(--c-e2e8f0, #e2e8f0);
+  margin: 0 -22px;          /* stretch across the body's horizontal padding */
+  padding: 12px 22px;
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.04);
+}
+
+/* ── Add/Edit follow-up: Type / Status / Priority on one responsive row ──── */
+.followup-form-row3 {
+  grid-column: 1 / -1;            /* span the full 2-col form grid */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+@media (max-width: 768px) {
+  .followup-form-row3 { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 520px) {
+  .followup-form-row3 { grid-template-columns: 1fr; }
+}

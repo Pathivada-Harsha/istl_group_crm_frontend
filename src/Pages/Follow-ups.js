@@ -12,6 +12,7 @@ import useToast from '../hooks/useToast';
 import ToastContainer from './../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import { SiteVisitForm } from "../components/Leads/LeadSiteVisitTab.js";
+import DateTimePicker from "../components/DateTimePicker";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -1858,6 +1859,8 @@ export default function ClientDashboardFollowUps() {
               <div className="followup-form-section">
                 <h3>Follow-up Details</h3>
                 <div className="followup-form-grid">
+                  {/* Type / Status / Priority — single responsive row */}
+                  <div className="followup-form-row3">
                   <div className="followup-form-group">
                     <label>Follow-up Type *</label>
                     <FilterSelect
@@ -1877,6 +1880,21 @@ export default function ClientDashboardFollowUps() {
                   </div>
 
                   <div className="followup-form-group">
+                    <label>Status</label>
+                    <FilterSelect
+                      value={addForm.status}
+                      options={[
+                        { value: 'Pending',     label: 'Pending' },
+                        { value: 'Completed',   label: 'Completed' },
+                        { value: 'Cancelled',   label: 'Cancelled' },
+                        { value: 'Rescheduled', label: 'Rescheduled' },
+                      ]}
+                      placeholder="Select Status"
+                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'status', value: v } }); }}
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
                     <label>Priority *</label>
                     <FilterSelect
                       value={addForm.priority}
@@ -1889,82 +1907,22 @@ export default function ClientDashboardFollowUps() {
                       onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'priority', value: v } }); }}
                     />
                   </div>
-
-                  <div className="followup-form-group">
-                    <label>Scheduled Date *</label>
-                    <FollowUpDatePicker
-                      value={addForm.scheduledDate}
-                      onChange={handleAddFormChange}
-                      minDate={new Date().toISOString().split('T')[0]}
-                      placeholder="Select date"
-                      required
-                    />
                   </div>
 
-                  <div className="followup-form-group" ref={addTimeRef} style={{ position: 'relative' }}>
-                    <label>Scheduled Time</label>
-                    <button
-                      type="button"
-                      className="followup-time-trigger"
-                      onClick={() => {
-                        const { hour, minute, ampm } = parseTimeTo12h(addForm.scheduledTime);
-                        setTempAddHour(hour);
-                        setTempAddMinute(minute);
-                        setTempAddAmPm(ampm);
-                        setShowAddTimePicker(p => !p);
+                  <div className="followup-form-group">
+                    <label>Scheduled Date &amp; Time *</label>
+                    {/* Same combined picker as Task Management "Start Date & Time" */}
+                    <DateTimePicker
+                      value={addForm.scheduledDate ? `${addForm.scheduledDate}T${addForm.scheduledTime || '09:00'}` : ''}
+                      min={new Date().toISOString().split('T')[0]}
+                      placeholder="Select date & time"
+                      onChange={(v) => {
+                        // DateTimePicker emits "YYYY-MM-DDTHH:mm" (or "" on clear);
+                        // split back into the existing scheduledDate/scheduledTime state
+                        handleAddFormChange({ target: { name: 'scheduledDate', value: v ? v.slice(0, 10) : '' } });
+                        handleAddFormChange({ target: { name: 'scheduledTime', value: v ? v.slice(11, 16) : '' } });
                       }}
-                    >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/>
-                      </svg>
-                      {fmtTimeDisplay(addForm.scheduledTime)}
-                    </button>
-
-                    {showAddTimePicker && (
-                      <div className="followup-time-popover fu-hm-picker">
-                        <div className="fu-hm-ampm-row">
-                          {['AM','PM'].map(ap => (
-                            <button key={ap} type="button"
-                              className={`fu-hm-ampm-btn${tempAddAmPm === ap ? ' fu-hm-ampm-active' : ''}`}
-                              onClick={() => setTempAddAmPm(ap)}>
-                              {ap}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="fu-hm-columns">
-                          <div className="fu-hm-col">
-                            <div className="fu-hm-col-label">Hour</div>
-                            <div className="fu-hm-col-scroll">
-                              {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
-                                <button key={h} type="button"
-                                  className={`fu-hm-item${tempAddHour === h ? ' fu-hm-active' : ''}`}
-                                  onClick={() => setTempAddHour(h)}>
-                                  {String(h).padStart(2,'0')}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="fu-hm-divider">:</div>
-                          <div className="fu-hm-col">
-                            <div className="fu-hm-col-label">Min</div>
-                            <div className="fu-hm-col-scroll">
-                              {[0,5,10,15,20,25,30,35,40,45,50,55].map(m => (
-                                <button key={m} type="button"
-                                  className={`fu-hm-item${tempAddMinute === m ? ' fu-hm-active' : ''}`}
-                                  onClick={() => {
-                                    const timeStr = buildTime24(tempAddHour, m, tempAddAmPm);
-                                    setAddForm(prev => ({ ...prev, scheduledTime: timeStr }));
-                                    setShowAddTimePicker(false);
-                                  }}>
-                                  {String(m).padStart(2,'0')}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    />
                   </div>
 
                   <div className="followup-form-group">
@@ -1977,21 +1935,6 @@ export default function ClientDashboardFollowUps() {
                       ]}
                       placeholder="Select Assignee"
                       onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'assignedTo', value: v } }); }}
-                    />
-                  </div>
-
-                  <div className="followup-form-group">
-                    <label>Status</label>
-                    <FilterSelect
-                      value={addForm.status}
-                      options={[
-                        { value: 'Pending',     label: 'Pending' },
-                        { value: 'Completed',   label: 'Completed' },
-                        { value: 'Cancelled',   label: 'Cancelled' },
-                        { value: 'Rescheduled', label: 'Rescheduled' },
-                      ]}
-                      placeholder="Select Status"
-                      onChange={(v) => { if (v) handleAddFormChange({ target: { name: 'status', value: v } }); }}
                     />
                   </div>
                 </div>
@@ -2071,6 +2014,8 @@ export default function ClientDashboardFollowUps() {
               <div className="followup-form-section">
                 <h3>Follow-up Details</h3>
                 <div className="followup-form-grid">
+                  {/* Type / Status / Priority — single responsive row */}
+                  <div className="followup-form-row3">
                   <div className="followup-form-group">
                     <label>Follow-up Type *</label>
                     <FilterSelect
@@ -2090,6 +2035,21 @@ export default function ClientDashboardFollowUps() {
                   </div>
 
                   <div className="followup-form-group">
+                    <label>Status *</label>
+                    <FilterSelect
+                      value={editForm.status}
+                      options={[
+                        { value: 'Pending',     label: 'Pending' },
+                        { value: 'Completed',   label: 'Completed' },
+                        { value: 'Cancelled',   label: 'Cancelled' },
+                        { value: 'Rescheduled', label: 'Rescheduled' },
+                      ]}
+                      placeholder="Select Status"
+                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'status', value: v } }); }}
+                    />
+                  </div>
+
+                  <div className="followup-form-group">
                     <label>Priority *</label>
                     <FilterSelect
                       value={editForm.priority}
@@ -2102,82 +2062,22 @@ export default function ClientDashboardFollowUps() {
                       onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'priority', value: v } }); }}
                     />
                   </div>
-
-                  <div className="followup-form-group">
-                    <label>Scheduled Date *</label>
-                    <FollowUpDatePicker
-                      value={editForm.scheduledDate}
-                      onChange={handleEditFormChange}
-                      minDate={new Date().toISOString().split('T')[0]}
-                      placeholder="Select date"
-                      required
-                    />
                   </div>
 
-                  <div className="followup-form-group" ref={editTimeRef} style={{ position: 'relative' }}>
-                    <label>Scheduled Time</label>
-                    <button
-                      type="button"
-                      className="followup-time-trigger"
-                      onClick={() => {
-                        const { hour, minute, ampm } = parseTimeTo12h(editForm.scheduledTime);
-                        setTempEditHour(hour);
-                        setTempEditMinute(minute);
-                        setTempEditAmPm(ampm);
-                        setShowEditTimePicker(p => !p);
+                  <div className="followup-form-group">
+                    <label>Scheduled Date &amp; Time *</label>
+                    {/* Same combined picker as Task Management "Start Date & Time" */}
+                    <DateTimePicker
+                      value={editForm.scheduledDate ? `${editForm.scheduledDate}T${editForm.scheduledTime || '09:00'}` : ''}
+                      min={new Date().toISOString().split('T')[0]}
+                      placeholder="Select date & time"
+                      onChange={(v) => {
+                        // DateTimePicker emits "YYYY-MM-DDTHH:mm" (or "" on clear);
+                        // split back into the existing scheduledDate/scheduledTime state
+                        handleEditFormChange({ target: { name: 'scheduledDate', value: v ? v.slice(0, 10) : '' } });
+                        handleEditFormChange({ target: { name: 'scheduledTime', value: v ? v.slice(11, 16) : '' } });
                       }}
-                    >
-                      <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6l4 2"/>
-                      </svg>
-                      {fmtTimeDisplay(editForm.scheduledTime)}
-                    </button>
-
-                    {showEditTimePicker && (
-                      <div className="followup-time-popover fu-hm-picker">
-                        <div className="fu-hm-ampm-row">
-                          {['AM','PM'].map(ap => (
-                            <button key={ap} type="button"
-                              className={`fu-hm-ampm-btn${tempEditAmPm === ap ? ' fu-hm-ampm-active' : ''}`}
-                              onClick={() => setTempEditAmPm(ap)}>
-                              {ap}
-                            </button>
-                          ))}
-                        </div>
-                        <div className="fu-hm-columns">
-                          <div className="fu-hm-col">
-                            <div className="fu-hm-col-label">Hour</div>
-                            <div className="fu-hm-col-scroll">
-                              {[12,1,2,3,4,5,6,7,8,9,10,11].map(h => (
-                                <button key={h} type="button"
-                                  className={`fu-hm-item${tempEditHour === h ? ' fu-hm-active' : ''}`}
-                                  onClick={() => setTempEditHour(h)}>
-                                  {String(h).padStart(2,'0')}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                          <div className="fu-hm-divider">:</div>
-                          <div className="fu-hm-col">
-                            <div className="fu-hm-col-label">Min</div>
-                            <div className="fu-hm-col-scroll">
-                              {[0,5,10,15,20,25,30,35,40,45,50,55].map(m => (
-                                <button key={m} type="button"
-                                  className={`fu-hm-item${tempEditMinute === m ? ' fu-hm-active' : ''}`}
-                                  onClick={() => {
-                                    const timeStr = buildTime24(tempEditHour, m, tempEditAmPm);
-                                    setEditForm(prev => ({ ...prev, scheduledTime: timeStr }));
-                                    setShowEditTimePicker(false);
-                                  }}>
-                                  {String(m).padStart(2,'0')}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                    />
                   </div>
 
                   <div className="followup-form-group">
@@ -2190,21 +2090,6 @@ export default function ClientDashboardFollowUps() {
                       ]}
                       placeholder="Select Assignee"
                       onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'assignedTo', value: v } }); }}
-                    />
-                  </div>
-
-                  <div className="followup-form-group">
-                    <label>Status *</label>
-                    <FilterSelect
-                      value={editForm.status}
-                      options={[
-                        { value: 'Pending',     label: 'Pending' },
-                        { value: 'Completed',   label: 'Completed' },
-                        { value: 'Cancelled',   label: 'Cancelled' },
-                        { value: 'Rescheduled', label: 'Rescheduled' },
-                      ]}
-                      placeholder="Select Status"
-                      onChange={(v) => { if (v) handleEditFormChange({ target: { name: 'status', value: v } }); }}
                     />
                   </div>
                 </div>
@@ -2393,8 +2278,9 @@ export default function ClientDashboardFollowUps() {
       {/* ── Site Visit Report Modal (from an assigned Visit follow-up) ── */}
       {siteVisitFollowup && (
         <div className="followup-modal-overlay">
-          <div className="followup-modal" style={{ maxWidth: 760, maxHeight: '92vh', overflow: 'auto' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 22px', borderBottom:'1px solid #e2e8f0' }}>
+          {/* Flex column + hidden overflow: header & footer stay fixed, only the body scrolls */}
+          <div className="followup-modal svr-modal" style={{ maxWidth: 760, maxHeight: '92vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 22px', borderBottom:'1px solid #e2e8f0', flexShrink:0 }}>
               <div>
                 <h3 style={{ margin:0, fontSize:16, fontWeight:700, color:__stc('#0f172a') }}>🏠 Site Visit Report</h3>
                 <p style={{ margin:'3px 0 0', fontSize:12, color:__stc('#64748b') }}>
@@ -2405,7 +2291,7 @@ export default function ClientDashboardFollowUps() {
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             </div>
-            <div style={{ padding:'18px 22px' }}>
+            <div className="svr-modal-body" style={{ padding:'18px 22px 0', flex:1, overflowY:'auto', minHeight:0 }}>
               {siteVisitLoading ? (
                 <div style={{ padding:40, textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>Loading report…</div>
               ) : (

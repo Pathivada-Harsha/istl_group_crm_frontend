@@ -650,15 +650,22 @@ function NotificationStyles() {
   font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto',
     'Helvetica Neue', sans-serif;
 }
-.ntf-icon { width: 20px; height: 20px; color: var(--ct-4b5563, #4b5563); }
+.ntf-icon { width: 17px; height: 17px; color: var(--ct-4b5563, #4b5563); }
 .ntf-icon-button {
-  position: relative; width: 38px; height: 38px; padding: 0;
-  background: var(--c-f3f4f6, #f3f4f6); border: none; border-radius: 50%;
-  cursor: pointer; transition: background-color 0.2s;
+  /* Match .theme-toggle-btn in Navbar.css exactly */
+  position: relative; width: 34px; height: 34px; padding: 0;
+  background: var(--c-f1f5f9, #f1f5f9);
+  border: 1.5px solid var(--c-94a3b8, #94a3b8);
+  border-radius: 50%;
+  cursor: pointer; flex-shrink: 0;
   display: inline-flex; align-items: center; justify-content: center;
   color: var(--ct-4b5563, #4b5563);
+  transition: background 0.25s ease, border-color 0.25s ease,
+              box-shadow 0.25s ease, transform 0.2s ease;
 }
-.ntf-icon-button:hover { background-color: var(--c-e5e7eb, #e5e7eb); }
+.ntf-icon-button:hover { transform: scale(1.12); }
+.ntf-icon-button:active { transform: scale(0.93); }
+.ntf-icon-button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 3px; }
 
 .ntf-badge {
   position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px;

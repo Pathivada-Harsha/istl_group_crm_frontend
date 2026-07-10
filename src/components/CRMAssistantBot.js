@@ -126,6 +126,7 @@ export default function CRMAssistantBot() {
   const [editText,     setEditText]     = useState('');    // live text in the edit textarea
   const [copiedId,     setCopiedId]     = useState(null);  // index of recently copied message
   const [listening,    setListening]    = useState(false);
+  const [teaser,       setTeaser]       = useState(false);  // proactive greeting bubble
 
   // ── FAB drag / dock / hide state ──────────────────────────────────────────
   const [fab, setFab] = useState(loadFabState);           // { side, top, hidden }
@@ -144,6 +145,14 @@ export default function CRMAssistantBot() {
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+
+  // Proactive greeting teaser — appears once per session until opened/dismissed
+  useEffect(() => {
+    if (sessionStorage.getItem('crmBotTeaserSeen')) return;
+    const t = setTimeout(() => setTeaser(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+  const dismissTeaser = () => { setTeaser(false); try { sessionStorage.setItem('crmBotTeaserSeen', '1'); } catch {} };
 
   const onFabPointerDown = e => {
     // Left button / touch only
@@ -190,7 +199,7 @@ export default function CRMAssistantBot() {
         });
       } else {
         // No movement → treat as a normal click (toggle the panel)
-        setOpen(o => !o);
+        setOpen(o => { if (!o) dismissTeaser(); return !o; });
       }
     };
 
@@ -599,6 +608,16 @@ export default function CRMAssistantBot() {
         ref={fabBtnRef}
         className="crm-bot-fab-wrap"
       >
+        {/* Proactive greeting teaser bubble */}
+        {teaser && !open && !dragging && (
+          <div className={`crm-bot-teaser crm-bot-teaser--${fab.side}`}>
+            <button className="crm-bot-teaser-x" onClick={e => { e.stopPropagation(); dismissTeaser(); }} aria-label="Dismiss">
+              <FaTimes size={9} />
+            </button>
+            <div className="crm-bot-teaser-title">Hi {user?.name?.split(' ')[0] || 'there'} 👋</div>
+            <div className="crm-bot-teaser-text">I'm your CRM copilot — ask me about leads, tasks, projects & more!</div>
+          </div>
+        )}
         <button
           className={`crm-bot-fab ${open ? 'crm-bot-fab--active' : ''} ${dragging ? 'crm-bot-fab--dragging' : ''}`}
           onMouseDown={onFabPointerDown}

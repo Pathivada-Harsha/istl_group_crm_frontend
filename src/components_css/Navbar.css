@@ -291,9 +291,10 @@
 }
 
 .theme-toggle-btn--dark {
-  /* Dark mode: indigo ring — sun inside */
-  background: #1e3a5f;
-  border-color: #3b82f6;
+  /* Dark mode — match the neutral look of the notification bell:
+     no blue ring, no glow */
+  background: var(--c-f1f5f9, #1e293b);
+  border-color: var(--c-94a3b8, #475569);
 }
 
 .theme-toggle-btn:hover {
@@ -301,7 +302,7 @@
   /* box-shadow: 0 0 0 4px rgba(148,163,184,0.25); */
 }
 .theme-toggle-btn--dark:hover {
-  box-shadow: 0 0 0 4px rgba(59,130,246,0.22);
+  transform: scale(1.12);
 }
 
 .theme-toggle-btn:active {

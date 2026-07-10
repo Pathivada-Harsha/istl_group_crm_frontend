@@ -1254,3 +1254,18 @@
 .tm-kpi--static:hover  { transform: none; box-shadow: 0 1px 3px rgba(0,0,0,.06);
                          border-color: var(--c-f1f5f9, #f1f5f9); }
 [data-theme="dark"] .tm-kpi--static:hover { box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+
+/* Spinner for FiLoader loading icon */
+.tm-spin { animation: tm-spin-rot 1s linear infinite; }
+@keyframes tm-spin-rot { to { transform: rotate(360deg); } }
+/* Day Log: two combined date&time pickers side by side, wrap on small screens */
+.dl-time-row--dt { display: grid !important; grid-template-columns: minmax(180px,1fr) minmax(180px,1fr) 90px !important; gap: 10px; align-items: end; }
+.dl-time-row--dt > div { min-width: 0; }
+/* Keep the picker value on one line inside the Day Log grid */
+.dl-time-row--dt .tm-dtp-trigger { min-height: 38px; padding: 8px 10px; }
+.dl-time-row--dt .tm-dtp-val { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; overflow: hidden; }
+.dl-time-row--dt .tm-dtp-date { white-space: nowrap; }
+.dl-time-row--dt .tm-dtp-time { white-space: nowrap; }
+.dl-time-row--dt .tm-dtp-ph { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+@media (max-width: 760px) { .dl-time-row--dt { grid-template-columns: 1fr 1fr !important; } .dl-time-row--dt > div:last-child { grid-column: 1 / -1; max-width: 120px; } }
+@media (max-width: 520px) { .dl-time-row--dt { grid-template-columns: 1fr !important; } .dl-time-row--dt > div:last-child { max-width: none; } }

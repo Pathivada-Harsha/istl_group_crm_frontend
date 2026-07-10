@@ -120,9 +120,26 @@ export async function collectClientContext() {
   try {
     ctx.deviceType = await refineLaptop(ctx.deviceType);
 
-    // Soft device fingerprint — a hint for "new device" detection, never auth
+    // Soft device fingerprint — a hint for "new device" detection, never auth.
+    // IMPORTANT: hardware traits alone (UA/screen/timezone) are identical for
+    // two different browsers or profiles on the same machine, which made the
+    // backend silently close another browser's session as a "re-login".
+    // A random UUID persisted in THIS browser's localStorage makes the
+    // fingerprint unique per browser instance: same browser re-login still
+    // matches, but a different browser/profile/incognito never does.
+    let instanceId = "";
+    try {
+      const KEY = "crm_device_instance_id";
+      instanceId = localStorage.getItem(KEY) || "";
+      if (!instanceId) {
+        instanceId = (crypto.randomUUID && crypto.randomUUID()) ||
+          (Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+        localStorage.setItem(KEY, instanceId);
+      }
+    } catch { /* localStorage blocked — fall back to hardware-only traits */ }
+
     ctx.deviceFingerprint = await sha256Hex(
-      [navigator.userAgent, navigator.platform, ctx.screenResolution, ctx.timeZone,
+      [instanceId, navigator.userAgent, navigator.platform, ctx.screenResolution, ctx.timeZone,
        navigator.language, navigator.hardwareConcurrency].join("|")
     );
 

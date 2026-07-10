@@ -15,12 +15,18 @@ import ReactDOM from 'react-dom';
  *   searchable   {boolean}         — enables inline search/filter input in the dropdown
  *   searchPlaceholder {string}     — placeholder for the inline search input (searchable only)
  */
-const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', disabled = false, id, searchable = false, searchPlaceholder = 'Search projects...' }) => {
+const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', disabled = false, id, searchable = 'auto', searchPlaceholder = 'Search…' }) => {
+  // 'auto' (default): the search box appears automatically once the list is
+  // long enough to need it (>= AUTO_SEARCH_MIN options — e.g. user lists),
+  // and stays hidden for short lists like Priority / Status.
+  // Pass searchable={true} or {false} to force either behaviour.
+  const AUTO_SEARCH_MIN = 6;
+  const isSearchable = searchable === 'auto' ? options.length >= AUTO_SEARCH_MIN : !!searchable;
   const [open,        setOpen]        = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [listPos,     setListPos]     = useState({ top: 0, left: 0, width: 0, openUp: false });
 
-  // typeahead state for non-searchable dropdowns
+  // typeahead state for non-isSearchable dropdowns
   const typeaheadBuffer = useRef('');
   const typeaheadTimer  = useRef(null);
 
@@ -28,8 +34,8 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
   const listRef    = useRef(null);
   const searchRef  = useRef(null);
 
-  // Filtered options when searchable
-  const filteredOptions = searchable && searchQuery.trim()
+  // Filtered options when isSearchable
+  const filteredOptions = isSearchable && searchQuery.trim()
     ? options.filter(o => o.label.toLowerCase().includes(searchQuery.toLowerCase()))
     : options;
 
@@ -37,9 +43,9 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
   const calcPosition = useCallback(() => {
     if (!triggerRef.current) return;
     const rect       = triggerRef.current.getBoundingClientRect();
-    const searchBarH = searchable ? 44 : 0;
+    const searchBarH = isSearchable ? 44 : 0;
     const MARGIN     = 8;
-    const HARD_CAP   = searchable ? 320 : 240;
+    const HARD_CAP   = isSearchable ? 320 : 240;
     // Ideal height if nothing constrained us.
     const desired    = Math.min(filteredOptions.length * 36 + 8 + searchBarH, HARD_CAP);
     const spaceBelow = window.innerHeight - rect.bottom - MARGIN;
@@ -59,7 +65,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
       maxHeight: listHeight,
       top:    openUp ? rect.top - listHeight - 4 : rect.bottom + 4,
     });
-  }, [filteredOptions.length, searchable]);
+  }, [filteredOptions.length, isSearchable]);
 
   const handleOpen = () => {
     if (disabled) return;
@@ -70,12 +76,12 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
     setOpen(o => !o);
   };
 
-  // Focus search input when dropdown opens (searchable only)
+  // Focus search input when dropdown opens (isSearchable only)
   useEffect(() => {
-    if (open && searchable && searchRef.current) {
+    if (open && isSearchable && searchRef.current) {
       setTimeout(() => searchRef.current?.focus(), 50);
     }
-  }, [open, searchable]);
+  }, [open, isSearchable]);
 
   // Recalculate on scroll / resize while open
   useEffect(() => {
@@ -135,7 +141,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
     const isPrintable = e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey;
     if (!isPrintable) return;
 
-    if (searchable) {
+    if (isSearchable) {
       // Searchable dropdown: open it and seed the search with the typed char
       e.preventDefault();
       if (!open) {
@@ -157,7 +163,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
         searchRef.current?.focus();
       }
     } else {
-      // Non-searchable dropdown: native-select-style typeahead
+      // Non-isSearchable dropdown: native-select-style typeahead
       e.preventDefault();
       clearTimeout(typeaheadTimer.current);
       typeaheadBuffer.current += e.key.toLowerCase();
@@ -194,7 +200,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
         position:  'fixed',
         top:       listPos.top,
         // Searchable (project): anchor right edge to trigger's right edge, expand leftward
-        ...(searchable
+        ...(isSearchable
           ? {
               right: window.innerWidth - listPos.left - listPos.width,
               left:  'auto',
@@ -212,8 +218,8 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
       }}
       role="listbox"
     >
-      {/* Search input — shown only when searchable prop is true */}
-      {searchable && (
+      {/* Search input — shown only when isSearchable prop is true */}
+      {isSearchable && (
         <li className="filter-dropdown-search-wrapper" role="none">
           <div className="filter-dropdown-search-inner">
             <svg className="filter-dropdown-search-icon" viewBox="0 0 24 24" fill="none"
