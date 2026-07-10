@@ -427,8 +427,9 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
       </div>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
-          width: 'max-content', minWidth: '100%', maxWidth: 460,
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, left: 'auto',
+          width: 'max-content', minWidth: '100%',
+          maxWidth: 'min(460px, calc(100vw - 32px))',
           zIndex: 9999, background: bg('#fff'), border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 10,
           boxShadow: '0 10px 28px rgba(0,0,0,.14)', maxHeight: 260, overflowY: 'auto',
         }}>
