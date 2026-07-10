@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiSearch, FiRefreshCw, FiUsers, FiAlertCircle, FiGrid, FiUserPlus, FiCheckCircle, FiLoader } from 'react-icons/fi';
+import { FiEdit, FiTrash2, FiEye, FiEyeOff, FiX, FiSearch, FiRefreshCw, FiUsers, FiAlertCircle, FiGrid, FiUserPlus, FiCheckCircle, FiLoader, FiMinus, FiPlus, FiMaximize2, FiMinimize2 } from 'react-icons/fi';
 import { useAuth } from '../hooks/useAuth';
 import '../pages-css/UsersPage.css';
 import CrmPreloader from '../components/preLoader';
@@ -219,6 +219,251 @@ function TreeNode({ node, isLast, isRoot }) {
   );
 }
 
+// ── Zoom / pan / fullscreen wrapper for the hierarchy charts ─────────────────
+// Shared by HierarchyChart (Org Chart) and TeamsView (Team View) — each gets
+// its own independent zoom/pan/fullscreen state since it's mounted per view.
+const MIN_ZOOM = 0.4;
+const MAX_ZOOM = 2.5;
+
+function ZoomPanWrapper({ children, minHeight = 200 }) {
+  useThemeVersion();
+  // Fixed, viewport-responsive height so the container never grows/shrinks with
+  // the chart content (collapsing nodes used to make the whole page jump).
+  // clamp(min, preferred, max): at least `minHeight`+140px, scales with viewport,
+  // capped at 720px on large screens.
+  const chartHeight = `clamp(${Math.max(minHeight, 340)}px, calc(100vh - 320px), 720px)`;
+  // scale + pan are kept in one state object so a zoom-at-point update is
+  // always atomic — updating them separately caused the "zoom drifts away
+  // from the cursor" bug, since each setState could read a stale partner value.
+  const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const containerRef = useRef(null);
+  const contentRef = useRef(null);
+  const dragStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const touchState = useRef({});
+
+  const clampScale = v => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.round(v * 100) / 100));
+
+  // ── Pan bounds ─────────────────────────────────────────────────────────────
+  // Content may only be panned along an axis where it overflows the container.
+  // If it fits, that axis is locked (kept centered) — so dragging an already
+  // fully-visible chart never moves it into empty space.
+  const PAN_PAD = 24;
+  const getPanBounds = scale => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return null;
+    const cw = container.clientWidth, ch = container.clientHeight;
+    const w = content.scrollWidth * scale, h = content.scrollHeight * scale;
+    return {
+      // x: overflow → [container - content - pad, pad]; fits → centered, locked
+      minX: w > cw ? cw - w - PAN_PAD : (cw - w) / 2,
+      maxX: w > cw ? PAN_PAD : (cw - w) / 2,
+      minY: h > ch ? ch - h - PAN_PAD : (ch - h) / 2,
+      maxY: h > ch ? PAN_PAD : (ch - h) / 2,
+      pannable: w > cw || h > ch,
+    };
+  };
+  const clampPan = (x, y, scale) => {
+    const b = getPanBounds(scale);
+    if (!b) return { x, y };
+    return {
+      x: Math.min(Math.max(x, b.minX), b.maxX),
+      y: Math.min(Math.max(y, b.minY), b.maxY),
+    };
+  };
+  const isPannable = () => { const b = getPanBounds(view.scale); return b ? b.pannable : false; };
+
+  // Rescale while keeping the content point under (anchorX, anchorY) — measured
+  // relative to the container — visually fixed in place.
+  const zoomAtPoint = (anchorX, anchorY, rawNewScale) => {
+    setView(prev => {
+      const newScale = clampScale(rawNewScale);
+      if (newScale === prev.scale) return prev;
+      const ratio = newScale / prev.scale;
+      const p = clampPan(
+        anchorX - (anchorX - prev.x) * ratio,
+        anchorY - (anchorY - prev.y) * ratio,
+        newScale
+      );
+      return { scale: newScale, x: p.x, y: p.y };
+    });
+  };
+
+  const containerCenter = () => {
+    const r = containerRef.current?.getBoundingClientRect();
+    return r ? { x: r.width / 2, y: r.height / 2 } : { x: 0, y: 0 };
+  };
+
+  const zoomIn = () => { const c = containerCenter(); zoomAtPoint(c.x, c.y, view.scale + 0.15); };
+  const zoomOut = () => { const c = containerCenter(); zoomAtPoint(c.x, c.y, view.scale - 0.15); };
+
+  const fitToScreen = React.useCallback(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+    const prevTransform = content.style.transform;
+    content.style.transform = 'none';
+    const contentW = content.scrollWidth;
+    const contentH = content.scrollHeight;
+    content.style.transform = prevTransform;
+    if (!contentW || !contentH) return;
+    const availW = container.clientWidth - 32;
+    const availH = container.clientHeight - 32;
+    const fit = Math.min(availW / contentW, availH / contentH, 1);
+    const scale = clampScale(fit);
+    // Center the scaled content inside the container (never negative offsets).
+    const x = Math.max(0, (container.clientWidth - contentW * scale) / 2);
+    const y = Math.max(0, (container.clientHeight - contentH * scale) / 2);
+    setView({ scale, x, y });
+  }, []);
+
+  // Fit once on mount, and again whenever fullscreen toggles (viewport size changes).
+  React.useEffect(() => {
+    const t = setTimeout(fitToScreen, 60);
+    return () => clearTimeout(t);
+  }, [isFullscreen, fitToScreen]);
+
+  // Re-fit when the chart content resizes (e.g. a node is collapsed/expanded)
+  // or the container itself resizes (responsive breakpoints / window resize),
+  // so the tree stays centered inside the fixed-height frame instead of the
+  // frame jumping around. Skipped while the user is actively dragging.
+  const isDraggingRef = useRef(false);
+  React.useEffect(() => { isDraggingRef.current = isDragging; }, [isDragging]);
+  React.useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return;
+    let raf = null;
+    const ro = new ResizeObserver(() => {
+      if (isDraggingRef.current) return;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(fitToScreen);
+    });
+    if (contentRef.current) ro.observe(contentRef.current);
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => { ro.disconnect(); if (raf) cancelAnimationFrame(raf); };
+  }, [fitToScreen]);
+
+  // Lock page scroll while fullscreen, and let Escape close it.
+  React.useEffect(() => {
+    if (!isFullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = e => { if (e.key === 'Escape') setIsFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => { document.body.style.overflow = prevOverflow; window.removeEventListener('keydown', onKey); };
+  }, [isFullscreen]);
+
+  const onWheel = e => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    zoomAtPoint(e.clientX - rect.left, e.clientY - rect.top, view.scale + (e.deltaY > 0 ? -0.08 : 0.08));
+  };
+
+  const onMouseDown = e => {
+    if (!isPannable()) return; // chart fully visible → nothing to pan
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX, y: e.clientY, panX: view.x, panY: view.y };
+  };
+  const onMouseMove = e => {
+    if (!isDragging) return;
+    setView(prev => {
+      const p = clampPan(
+        dragStart.current.panX + (e.clientX - dragStart.current.x),
+        dragStart.current.panY + (e.clientY - dragStart.current.y),
+        prev.scale
+      );
+      return { ...prev, x: p.x, y: p.y };
+    });
+  };
+  const stopDrag = () => setIsDragging(false);
+
+  const onTouchStart = e => {
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      const rect = containerRef.current.getBoundingClientRect();
+      touchState.current = {
+        pinchDist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        startScale: view.scale,
+        anchorX: (a.clientX + b.clientX) / 2 - rect.left,
+        anchorY: (a.clientY + b.clientY) / 2 - rect.top,
+      };
+    } else if (e.touches.length === 1) {
+      if (!isPannable()) { touchState.current = {}; return; }
+      touchState.current = { panStart: { x: e.touches[0].clientX, y: e.touches[0].clientY, panX: view.x, panY: view.y } };
+    }
+  };
+  const onTouchMove = e => {
+    if (e.touches.length === 2 && touchState.current.pinchDist) {
+      e.preventDefault();
+      const [a, b] = e.touches;
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      zoomAtPoint(touchState.current.anchorX, touchState.current.anchorY, touchState.current.startScale * (dist / touchState.current.pinchDist));
+    } else if (e.touches.length === 1 && touchState.current.panStart) {
+      const p = touchState.current.panStart;
+      setView(prev => {
+        const c = clampPan(p.panX + (e.touches[0].clientX - p.x), p.panY + (e.touches[0].clientY - p.y), prev.scale);
+        return { ...prev, x: c.x, y: c.y };
+      });
+    }
+  };
+  const onTouchEnd = () => { touchState.current = {}; };
+
+  const pillBtn = {
+    width: 26, height: 26, padding: 0, border: 'none', borderRadius: 999,
+    background: 'transparent', color: __stc('#475569'), cursor: 'pointer',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  };
+
+  // Recomputed each render — refs exist after mount; view changes trigger renders.
+  const pannableNow = containerRef.current ? isPannable() : false;
+
+  return (
+    <div ref={containerRef}
+      style={{
+        position: isFullscreen ? 'fixed' : 'relative', inset: isFullscreen ? 0 : undefined,
+        zIndex: isFullscreen ? 10000 : undefined,
+        overflow: 'hidden', borderRadius: isFullscreen ? 0 : 16,
+        border: isFullscreen ? 'none' : `1px solid ${__sbg('#e2e8f0')}`,
+        background: `linear-gradient(135deg, ${__sbg('#f8fafc')} 0%, ${__sbg('#f1f5f9')} 100%)`,
+        height: isFullscreen ? '100vh' : chartHeight,
+        maxHeight: isFullscreen ? '100vh' : 720,
+        width: '100%', maxWidth: '100%',
+        cursor: isDragging ? 'grabbing' : (pannableNow ? 'grab' : 'default'),
+        touchAction: 'none',
+      }}
+      onWheel={onWheel}
+      onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={stopDrag} onMouseLeave={stopDrag}
+      onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}
+    >
+      <div ref={contentRef} style={{ display: 'inline-block', padding: '32px 24px 40px', transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`, transformOrigin: '0 0' }}>
+        {children}
+      </div>
+
+      {/* Floating zoom / fullscreen pill */}
+      <div style={{
+        position: 'absolute', top: 12, right: 12, zIndex: 2,
+        display: 'flex', alignItems: 'center', gap: 2,
+        background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 999,
+        padding: 4, boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
+      }}>
+        <button type="button" onClick={zoomOut} title="Zoom out" aria-label="Zoom out" style={pillBtn}><FiMinus size={14} /></button>
+        <span style={{ fontSize: 11, fontWeight: 600, color: __stc('#64748b'), minWidth: 36, textAlign: 'center' }}>{Math.round(view.scale * 100)}%</span>
+        <button type="button" onClick={zoomIn} title="Zoom in" aria-label="Zoom in" style={pillBtn}><FiPlus size={14} /></button>
+        <div style={{ width: 1, height: 16, background: __sbg('#e2e8f0'), margin: '0 2px' }} />
+        <button type="button" onClick={fitToScreen} title="Fit to screen" aria-label="Fit to screen" style={pillBtn}><FiRefreshCw size={13} /></button>
+        <button type="button" onClick={() => setIsFullscreen(f => !f)} title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} style={pillBtn}>
+          {isFullscreen ? <FiMinimize2 size={13} /> : <FiMaximize2 size={13} />}
+        </button>
+      </div>
+
+      <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', fontSize: 11, color: __stc('#94a3b8'), pointerEvents: 'none', whiteSpace: 'nowrap' }}>
+        {pannableNow ? 'Scroll to zoom · Drag to pan' : 'Scroll to zoom'}
+      </div>
+    </div>
+  );
+}
+
 //  Main HierarchyChart 
 // ── Teams View for Hierarchy ─────────────────────────────────────────────────
 function TeamsView({ teams }) {
@@ -234,48 +479,51 @@ function TeamsView({ teams }) {
   }
   const teamColors = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#14b8a6'];
   return (
-    <div style={{ padding: '32px 24px 40px', overflowX: 'auto' }}>
-      <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', justifyContent: 'center', minWidth: 'max-content' }}>
-        {teams.map((team, idx) => {
-          const color = teamColors[idx % teamColors.length];
-          const members = team.members || [];
-          return (
-            <div key={team.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              {/* Team bubble */}
-              <div style={{
-                background: `${color}15`, border: `2px solid ${color}`,
-                borderRadius: 14, padding: '14px 20px', textAlign: 'center',
-                boxShadow: `0 3px 12px ${color}25`, minWidth: 160,
-              }}>
-                <div style={{ width: 40, height: 40, borderRadius: '50%', background: color, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontWeight: 800, fontSize: 16 }}>
-                  {team.name.charAt(0).toUpperCase()}
+    <>
+      <ZoomPanWrapper minHeight={260}>
+        <div style={{ display: 'flex', gap: 40, flexWrap: 'wrap', justifyContent: 'center', minWidth: 'max-content' }}>
+          {teams.map((team, idx) => {
+            const color = teamColors[idx % teamColors.length];
+            const members = team.members || [];
+            return (
+              <div key={team.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                {/* Team bubble */}
+                <div style={{
+                  background: `${color}15`, border: `2px solid ${color}`,
+                  borderRadius: 14, padding: '14px 20px', textAlign: 'center',
+                  boxShadow: `0 3px 12px ${color}25`, minWidth: 160,
+                }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: color, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 8px', fontWeight: 800, fontSize: 16 }}>
+                    {team.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: __stc('#0f172a') }}>{team.name}</div>
+                  <div style={{ fontSize: 11, color: color, fontWeight: 600, marginTop: 3 }}>{members.length} member{members.length !== 1 ? 's' : ''}</div>
+                  {team.description && <div style={{ fontSize: 10, color: __stc('#94a3b8'), marginTop: 4, maxWidth: 140 }}>{team.description}</div>}
                 </div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: __stc('#0f172a') }}>{team.name}</div>
-                <div style={{ fontSize: 11, color: color, fontWeight: 600, marginTop: 3 }}>{members.length} member{members.length !== 1 ? 's' : ''}</div>
-                {team.description && <div style={{ fontSize: 10, color: __stc('#94a3b8'), marginTop: 4, maxWidth: 140 }}>{team.description}</div>}
-              </div>
-              {/* Connector line */}
-              {members.length > 0 && <div style={{ width: 2, height: 20, background: __sbg('#cbd5e1') }} />}
-              {/* Members */}
-              {members.length > 0 && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
-                  {members.map(m => (
-                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: `hsl(${(m.id * 47) % 360},55%,62%)`, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', border: `2px solid ${__sbg('#fff')}` }}>
-                        {(m.name || '?').charAt(0).toUpperCase()}
+                {/* Connector line */}
+                {members.length > 0 && <div style={{ width: 2, height: 20, background: __sbg('#cbd5e1') }} />}
+                {/* Members */}
+                {members.length > 0 && (
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', maxWidth: 320 }}>
+                    {members.map(m => (
+                      <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: `hsl(${(m.id * 47) % 360},55%,62%)`, color: __stc('#fff'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, boxShadow: '0 2px 6px rgba(0,0,0,0.12)', border: `2px solid ${__sbg('#fff')}` }}>
+                          {(m.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: 10, fontWeight: 600, color: __stc('#374151'), textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
+                        <div style={{ fontSize: 9, color: color, fontWeight: 500, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>
                       </div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: __stc('#374151'), textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.name}</div>
-                      <div style={{ fontSize: 9, color: color, fontWeight: 500, textAlign: 'center', maxWidth: 64, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.role}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-      {/* Legend */}
-      <div style={{ marginTop: 24, display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10 }}>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </ZoomPanWrapper>
+
+      {/* Legend — kept outside the zoom/pan area since it's static reference info */}
+      <div style={{ marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 14px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10 }}>
         <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>TEAMS</span>
         {teams.map((team, idx) => {
           const color = teamColors[idx % teamColors.length];
@@ -287,7 +535,7 @@ function TeamsView({ teams }) {
           );
         })}
       </div>
-    </div>
+    </>
   );
 }
 
@@ -302,24 +550,42 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
 
   return (
     <div>
-      {/* Toggle + Refresh */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 2, background: __sbg('#f1f5f9'), borderRadius: 8, padding: 3 }}>
-          {[
-            { key: 'org', label: 'Org Chart', icon: <FiGrid size={14} /> },
-            { key: 'teams', label: 'Teams View', icon: <FiUsers size={14} /> },
-          ].map(btn => (
-            <button key={btn.key} onClick={() => setViewMode(btn.key)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
-                background: viewMode === btn.key ? __sbg('#fff') : __sbg('transparent'),
-                color: viewMode === btn.key ? __stc('#4f46e5') : __stc('#6b7280'),
-                boxShadow: viewMode === btn.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
-              }}>
-              {btn.icon}
-              {btn.label}
-            </button>
-          ))}
+      {/* Toggle + Roles legend + Refresh */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 2, background: __sbg('#f1f5f9'), borderRadius: 8, padding: 3, flexShrink: 0 }}>
+            {[
+              { key: 'org', label: 'Org Chart', icon: <FiGrid size={14} /> },
+              { key: 'teams', label: 'Teams View', icon: <FiUsers size={14} /> },
+            ].map(btn => (
+              <button key={btn.key} onClick={() => setViewMode(btn.key)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+                  background: viewMode === btn.key ? __sbg('#fff') : __sbg('transparent'),
+                  color: viewMode === btn.key ? __stc('#4f46e5') : __stc('#6b7280'),
+                  boxShadow: viewMode === btn.key ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
+                }}>
+                {btn.icon}
+                {btn.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Roles legend — inline after the view tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6, minWidth: 0 }}>
+            <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 600, marginRight: 2 }}>ROLES</span>
+            {ROLE_ORDER.map(role => {
+              const s = ROLE_STYLE[role];
+              const hasUsers = users.some(u => (u.role_name || '').toUpperCase().replace(/\s+/g, '_') === role);
+              if (!hasUsers) return null;
+              return (
+                <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, background: s.bg, border: `1.5px solid ${s.border}` }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.badge }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: s.text }}>{role}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
         <button onClick={onRefresh}
           style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 14px', borderRadius: 8, border: `1px solid ${__sbg('#e2e8f0')}`, background: __sbg('#fff'), cursor: 'pointer', color: __stc('#374151'), fontWeight: 500 }}>
@@ -336,9 +602,7 @@ function HierarchySection({ users, teams, loading, onRefresh }) {
       ) : viewMode === 'org' ? (
         <HierarchyChart users={users} />
       ) : (
-        <div style={{ background: `linear-gradient(135deg,${__sbg('#f8fafc')} 0%,${__sbg('#f1f5f9')} 100%)`, borderRadius: 16, border: `1px solid ${__sbg('#e2e8f0')}`, minHeight: 200 }}>
-          <TeamsView teams={teams} />
-        </div>
+        <TeamsView teams={teams} />
       )}
     </div>
   );
@@ -455,39 +719,13 @@ function HierarchyChart({ users }) {
       )}
 
       {/* Tree */}
-      <div style={{
-        overflowX: 'auto', overflowY: 'visible',
-        padding: '32px 24px 40px',
-        background: `linear-gradient(135deg, ${__sbg('#f8fafc')} 0%, ${__sbg('#f1f5f9')} 100%)`,
-        borderRadius: 16, border: `1px solid ${__sbg('#e2e8f0')}`,
-        minHeight: 200,
-      }}>
+      <ZoomPanWrapper minHeight={260}>
         <div style={{ display: 'flex', gap: 40, justifyContent: 'center', flexWrap: 'nowrap', minWidth: 'max-content' }}>
           {tree.map(root => (
             <TreeNode key={root.id} node={root} isRoot={true} />
           ))}
         </div>
-      </div>
-
-      {/* Legend */}
-      <div style={{
-        marginTop: 16, display: 'flex', flexWrap: 'wrap', gap: 8,
-        padding: '12px 16px', background: __sbg('#fff'),
-        border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10,
-      }}>
-        <span style={{ fontSize: 11, color: __stc('#94a3b8'), fontWeight: 600, marginRight: 4, alignSelf: 'center' }}>ROLES</span>
-        {ROLE_ORDER.map(role => {
-          const s = ROLE_STYLE[role];
-          const hasUsers = users.some(u => (u.role_name || '').toUpperCase().replace(/\s+/g, '_') === role);
-          if (!hasUsers) return null;
-          return (
-            <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 99, background: s.bg, border: `1.5px solid ${s.border}` }}>
-              <div style={{ width: 8, height: 8, borderRadius: '50%', background: s.badge }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: s.text }}>{role}</span>
-            </div>
-          );
-        })}
-      </div>
+      </ZoomPanWrapper>
     </div>
   );
 }
@@ -2425,45 +2663,46 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
             <div className="users-page-modal-body" style={{ padding: 0 }}>
 
               {/* ── Summary bar ── */}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px', background: __sbg('#f8fafc'), borderBottom: `1px solid ${__sbg('#e2e8f0')}` }}>
                 <span style={{ fontSize: 13, fontWeight: 600, color: __stc('#374151') }}>Total Assigned</span>
-                <span style={{ fontSize: 12, color: __stc('#6366f1'), fontWeight: 700 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 700,
+                  color: __stc('#4338ca'), background: __sbg('#e0e7ff'), padding: '4px 12px', borderRadius: 999,
+                }}>
                   {selectedUserPermissions.length} permissions assigned
                 </span>
               </div>
 
               {/* ── Module rows — read-only chips ── */}
-              <div style={{ overflowY: 'auto', maxHeight: '60vh' }}>
+              <div style={{ overflowY: 'auto', maxHeight: '60vh', padding: '14px 20px 18px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {Object.entries(
                   groupPermissionsByModule(pagePermissionsStructure.filter(p => selectedUserPermissions.includes(p.id)))
-                ).map(([mod, perms], groupIdx, arr) => (
-                  <div key={mod} style={{ borderBottom: groupIdx === arr.length - 1 ? 'none' : '1px solid #e2e8f0' }}>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12,
-                      background: __sbg('#f5f3ff'), borderBottom: `1px solid ${__sbg('#f1f5f9')}`,
-                    }}>
-                      {/* Module name */}
-                      <div style={{ minWidth: 160, fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, display: 'inline-block', background: __sbg('#6366f1') }} />
-                        {mod.charAt(0).toUpperCase() + mod.slice(1)}
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: __sbg('#e0e7ff'), color: __stc('#4338ca') }}>
-                          {perms.length}
-                        </span>
-                      </div>
+                ).map(([mod, perms]) => (
+                  <div key={mod} style={{
+                    display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12,
+                    padding: '12px 16px', background: __sbg('#fff'), border: `1px solid ${__sbg('#e2e8f0')}`, borderRadius: 10,
+                  }}>
+                    {/* Module name */}
+                    <div style={{ minWidth: 150, fontSize: 13, fontWeight: 700, color: __stc('#0f172a'), display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, display: 'inline-block', background: __sbg('#6366f1') }} />
+                      {mod.charAt(0).toUpperCase() + mod.slice(1)}
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: __sbg('#e0e7ff'), color: __stc('#4338ca') }}>
+                        {perms.length}
+                      </span>
+                    </div>
 
-                      {/* Read-only action chips */}
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, flex: 1 }}>
-                        {perms.map(p => {
-                          const action = labelFromName(p.name);
-                          const chipStyle = actionChipStyle(action, true);
-                          return (
-                            <span key={p.id} style={{ ...chipStyle, cursor: 'default' }}>
-                              <FiCheckCircle size={11} />
-                              {action.charAt(0).toUpperCase() + action.slice(1)}
-                            </span>
-                          );
-                        })}
-                      </div>
+                    {/* Read-only action chips */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, flex: 1 }}>
+                      {perms.map(p => {
+                        const action = labelFromName(p.name);
+                        const chipStyle = actionChipStyle(action, true);
+                        return (
+                          <span key={p.id} style={{ ...chipStyle, cursor: 'default' }}>
+                            <FiCheckCircle size={11} />
+                            {action.charAt(0).toUpperCase() + action.slice(1)}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 ))}
@@ -2525,7 +2764,7 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   const isLast = groupIdx === Object.entries(assignablePagePermsGrouped).length - 1;
 
                   return (
-                    <div key={mod} style={{ borderBottom: isLast ? 'none' : '1px solid #e2e8f0' }}>
+                    <div key={mod} style={{ borderBottom: isLast ? 'none' : `1px solid ${__sbg('#e2e8f0')}` }}>
                       <div style={{
                         display: 'flex', alignItems: 'center', padding: '10px 20px', gap: 12,
                         background: allGroupOn ? __sbg('#f5f3ff') : someGroupOn ? __sbg('#fafafa') : __sbg('#fff'),

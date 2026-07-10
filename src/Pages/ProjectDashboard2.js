@@ -1149,7 +1149,7 @@ const CapacityBlock = ({ subGroups }) => {
     solar_ground:   { bg: 'var(--c-fff7ed, #fff7ed)', border: '#f97316', text: 'var(--ct-c2410c, #c2410c)', icon: '🏭', label: 'Ground Mount' },
     solar_carports: { bg: 'var(--c-f0f9ff, #f0f9ff)', border: '#0ea5e9', text: 'var(--ct-0369a1, #0369a1)', icon: '🅿️', label: 'Carports' },
     solar_wind:     { bg: 'var(--c-ecfdf5, #ecfdf5)', border: '#10b981', text: 'var(--ct-065f46, #065f46)', icon: '💨', label: 'Solar Wind' },
-    default:        { bg: 'var(--c-f8fafc, #f8fafc)', border: '#94a3b8', text: '#475569', icon: '📊', label: null },
+    default:        { bg: 'var(--c-f8fafc, #f8fafc)', border: '#94a3b8', text: 'var(--ct-475569, #475569)', icon: '📊', label: null },
   };
 
   const getMeta = (sg) => {
@@ -1193,30 +1193,30 @@ const CapacityBlock = ({ subGroups }) => {
             const { km, kg } = wind ? getWindUnits(sg) : {};
             return (
               <div key={i} onClick={() => setActiveModal(sg)} title="Click to see project breakdown"
-                style={{ background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), border: `1.5px solid ${m.border}`, borderRadius: 8,
-                  padding: '8px 12px 7px', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}
-                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 4px 12px ${m.border}44`; }}
-                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,.04)'; }}
+                style={{ background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), borderLeft: `3px solid ${m.border}`, borderRadius: 10,
+                  padding: '12px 14px 11px', cursor: 'pointer', transition: 'transform .15s, box-shadow .15s',
+                  boxShadow: '0 1px 2px rgba(0,0,0,.08)' }}
+                onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = `0 6px 16px ${m.border}33`; }}
+                onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,.08)'; }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-                  <span style={{ fontSize: 14 }}>{m.icon}</span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: m.text, textTransform: 'uppercase', letterSpacing: .5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                  <span style={{ fontSize: 15 }}>{m.icon}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: m.text, textTransform: 'uppercase', letterSpacing: .6 }}>
                     {m.label || sg.subGroupName}
                   </span>
                 </div>
                 {wind && (km || kg) ? (
-                  <div style={{ marginBottom: 5 }}>
-                    {km && <div style={{ fontSize: 17, fontWeight: 800, color: m.text, lineHeight: 1.15 }}>{formatQty(km.quantity, 'Km')}</div>}
+                  <div style={{ marginBottom: 8 }}>
+                    {km && <div style={{ fontSize: 18, fontWeight: 800, color: m.text, lineHeight: 1.15 }}>{formatQty(km.quantity, 'Km')}</div>}
                     {kg && <div style={{ fontSize: 13, fontWeight: 600, color: m.text, opacity: .75, lineHeight: 1.2 }}>{formatQty(kg.quantity, 'Kg')}</div>}
                   </div>
                 ) : (
-                  <div style={{ fontSize: 17, fontWeight: 800, color: m.text, lineHeight: 1.1, marginBottom: 5 }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: m.text, lineHeight: 1.1, marginBottom: 8 }}>
                     {formatQty(sg.totalQuantity, sg.unit)}
                   </div>
                 )}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ background: m.border, color: '#fff', borderRadius: 9999, padding: '1px 6px', fontSize: 10, fontWeight: 600 }}>
+                  <span style={{ background: m.border, color: '#fff', borderRadius: 9999, padding: '2px 7px', fontSize: 10, fontWeight: 600 }}>
                     {sg.projectCount} proj{sg.projectCount !== 1 ? 's' : ''}
                   </span>
                   <span style={{ fontSize: 9, color: m.border, fontWeight: 600 }}>Details →</span>
@@ -1236,7 +1236,7 @@ const CapacityBlock = ({ subGroups }) => {
             <div style={{ background: 'var(--c-ffffff, #fff)', borderRadius: 14, width: '100%', maxWidth: 600, maxHeight: '80vh', display: 'flex', flexDirection: 'column', boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}
               onClick={e => e.stopPropagation()}>
               {/* Sticky header */}
-              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), borderRadius: '14px 14px 0 0', flexShrink: 0 }}>
+              <div style={{ padding: '18px 22px 14px', borderBottom: '1px solid var(--c-f1f5f9, #f1f5f9)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', background: (m.bg && m.bg.startsWith('#') ? `var(--c-${m.bg.slice(1)}, ${m.bg})` : m.bg), borderRadius: '14px 14px 0 0', flexShrink: 0 }}>
                 <div>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--ct-94a3b8, #94a3b8)', textTransform: 'uppercase', letterSpacing: 1 }}>Capacity Breakdown</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: m.text, marginTop: 2 }}>{m.icon} {m.label || activeModal.subGroupName}</div>
@@ -1266,7 +1266,7 @@ const CapacityBlock = ({ subGroups }) => {
                   const windPct = windKmEntry && windKmTotal && Number(windKmTotal.quantity) > 0
                     ? (Number(windKmEntry.quantity) / Number(windKmTotal.quantity)) * 100 : pct;
                   return (
-                    <div key={i} style={{ padding: '12px 22px', borderBottom: i < activeModal.projects.length - 1 ? '1px solid #f8fafc' : 'none' }}>
+                    <div key={i} style={{ padding: '12px 22px', borderBottom: i < activeModal.projects.length - 1 ? '1px solid var(--c-f1f5f9, #f1f5f9)' : 'none' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                         <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
                           {/* Customer name — primary bold dark */}
@@ -1828,7 +1828,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
             { label: 'Cancelled',      val: data.cancelledProjects,   color: '#ef4444', icon: <XCircle size={32} />,     statusKey: 'CANCELLED' },
           ].filter(k => k.val > 0 || k.label === 'Total Projects').map((k, i) => (
             <div key={i} className="kpi-card" style={{ borderTopColor: k.color, cursor: projects.length > 0 ? 'pointer' : 'default',
-              outline: statusFilter === k.statusKey ? `2px solid ${k.color}` : 'none' }}
+              outline: (statusFilter === k.statusKey && k.statusKey !== 'ALL') ? `2px solid ${k.color}` : 'none' }}
               onClick={() => {
                 if (!projects.length) return;
                 if (k.statusKey === 'ALL') {

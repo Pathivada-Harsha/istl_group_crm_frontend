@@ -24,6 +24,59 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+/* Wrapper that carries the draggable position; the button inside is static */
+.crm-bot-fab-wrap {
+  width: 52px;
+  height: 52px;
+}
+
+.crm-bot-fab--dragging {
+  transform: scale(1.08);
+  box-shadow: 0 10px 32px rgba(11, 99, 214, 0.6);
+}
+
+/* Hide (✕) badge on the FAB — revealed on hover */
+.crm-bot-hide-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #64748b;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  z-index: 1201;
+}
+
+.crm-bot-fab-wrap:hover .crm-bot-hide-badge {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.crm-bot-hide-badge:hover {
+  background: #ef4444;
+}
+
+/* On touch devices there's no hover — keep the badge always visible */
+@media (hover: none) {
+  .crm-bot-hide-badge {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .crm-bot-fab:hover {

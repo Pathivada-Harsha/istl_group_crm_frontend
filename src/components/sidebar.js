@@ -219,7 +219,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           name: 'OrderBook',
           path: '/order-book',
           permission: 'SALES_ORDERBOOK',
-          icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z',
+          icon: 'M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zM8 8h8M8 12h8M8 16h5',
         },
         {
           name: 'Invoices',
@@ -285,7 +285,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           name: 'Project Access Manager',
           path: '/officeuse/projectaccess',
           permission: 'OFFICE_USE',
-          icon: 'M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a6.94 6.94 0 00-.1-1l2.02-1.57-2-3.46-2.38.96a7.02 7.02 0 00-1.73-1l-.36-2.54h-4l-.36 2.54a7.02 7.02 0 00-1.73 1l-2.38-.96-2 3.46 2.02 1.57a6.94 6.94 0 000 2l-2.02 1.57 2 3.46 2.38-.96a7.02 7.02 0 001.73 1l.36 2.54h4l.36-2.54a7.02 7.02 0 001.73-1l2.38.96 2-3.46-2.02-1.57c.07-.33.1-.66.1-1z',
+          icon: 'M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 10-8 0v2',
         },
       ],
     },
