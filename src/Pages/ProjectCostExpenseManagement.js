@@ -5,7 +5,7 @@ import {
   CheckCircle, Clock, XCircle, Briefcase,
   MapPin, Utensils, Plane, Hotel, Users,
   ArrowUpDown, ArrowUp, ArrowDown, GripVertical,
-  Receipt, RefreshCw, ExternalLink,
+  ReceiptIndianRupee as Receipt, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import GroupProjectFilter from '../components/Dropdowns/GroupProjectFilter.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -427,8 +427,9 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
       </div>
       {open && (
         <div style={{
-          position: 'absolute', top: 'calc(100% + 4px)', left: 0,
-          width: 'max-content', minWidth: '100%', maxWidth: 460,
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, left: 'auto',
+          width: 'max-content', minWidth: '100%',
+          maxWidth: 'min(460px, calc(100vw - 32px))',
           zIndex: 9999, background: bg('#fff'), border: `1px solid ${bg('#e5e7eb')}`, borderRadius: 10,
           boxShadow: '0 10px 28px rgba(0,0,0,.14)', maxHeight: 260, overflowY: 'auto',
         }}>
@@ -1477,21 +1478,21 @@ const ProjectCostExpenseManagement = () => {
       }
       case 'actions': return (
         <div className="exp-actions-cell">
-          <button className="exp-act-btn view-btn" title="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
-          <button className="exp-act-btn edit-btn" title="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
+          <button className="exp-act-btn view-btn" data-tooltip="View" onClick={() => handleViewExpense(exp)}><Eye size={14} /></button>
+          <button className="exp-act-btn edit-btn" data-tooltip="Edit" onClick={() => handleEditExpense(exp)}><Edit2 size={14} /></button>
           {canActOnStage(exp) && (
             <>
-              <button className="exp-act-btn approve-btn" title="Approve this expense" onClick={() => handleApproveStage(exp)}><CheckCircle size={14} /></button>
-              <button className="exp-act-btn reject-btn" title="Reject this expense" onClick={() => handleRejectStage(exp)}><XCircle size={14} /></button>
+              <button className="exp-act-btn approve-btn" data-tooltip="Approve this expense" onClick={() => handleApproveStage(exp)}><CheckCircle size={14} /></button>
+              <button className="exp-act-btn reject-btn" data-tooltip="Reject this expense" onClick={() => handleRejectStage(exp)}><XCircle size={14} /></button>
             </>
           )}
           {canMarkPaid(exp) && (
-            <button className="exp-act-btn approve-btn" title="Mark as Paid" onClick={() => handleMarkPaid(exp)}><IndianRupee size={14} /></button>
+            <button className="exp-act-btn approve-btn" data-tooltip="Mark as Paid" onClick={() => handleMarkPaid(exp)}><IndianRupee size={14} /></button>
           )}
           {(exp.hasBill || exp.receiptUrl) && (
-            <button className="exp-act-btn bill-btn" title="View Bill" onClick={() => handleViewBill(exp)}><Receipt size={14} /></button>
+            <button className="exp-act-btn bill-btn" data-tooltip="View Bill" onClick={() => handleViewBill(exp)}><Receipt size={14} /></button>
           )}
-          <button className="exp-act-btn del-btn" title="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
+          <button className="exp-act-btn del-btn" data-tooltip="Delete" onClick={() => handleDeleteExpense(exp.id)}><Trash2 size={14} /></button>
         </div>
       );
       default: return exp[col.key] || '—';
