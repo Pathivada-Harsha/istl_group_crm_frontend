@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Maximize2, X } from 'lucide-react';
+import DateRangeFilter from '../components/DateRangeFilter';
+import FilterSelect from '../components/Dropdowns/FilterSelect';
+import '../components_css/Dropdowns/GroupProjectFilter.css';
 import '../pages-css/Analytics.css';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -11,7 +14,10 @@ const RANGES = [
   { k: 'this_year',      l: 'This Year' },
   { k: 'last_year',      l: 'Last Year' },
   { k: 'last_12_months', l: 'Last 12 Months' },
+  { k: 'custom',         l: 'Custom range…' },
 ];
+
+const GRAN_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
 
 const SERIES = ['#5b8cff', '#27d3a2', '#ffb545', '#ff6b8a', '#a880ff', '#46c8ff', '#8de36a', '#ff8f5c'];
 const DOT = '\u00b7';
@@ -65,6 +71,8 @@ const useThemeVersion = () => {
 
 const Analytics = () => {
   const [range, setRange] = useState('last_12_months');
+  const [customFrom, setCustomFrom] = useState('');   // applied custom range (drives the fetch)
+  const [customTo, setCustomTo] = useState('');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -75,9 +83,13 @@ const Analytics = () => {
   }, []);
 
   const load = useCallback(async () => {
+    // A custom range needs both bounds before we can query.
+    if (range === 'custom' && (!customFrom || !customTo)) { setLoading(false); return; }
     setLoading(true); setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/analytics/leads?range=${range}`, {
+      let url = `${API_BASE_URL}/analytics/leads?range=${range}`;
+      if (range === 'custom') url += `&from=${customFrom}&to=${customTo}`;
+      const res = await fetch(url, {
         credentials: 'include',
         headers: { 'User-Id': String(user.id || 1), 'User-Role': user.role || '' },
       });
@@ -89,11 +101,19 @@ const Analytics = () => {
     } finally {
       setLoading(false);
     }
-  }, [range, user.id, user.role]);
+  }, [range, customFrom, customTo, user.id, user.role]);
 
   useEffect(() => { load(); }, [load]);
 
   const openModal = (title, render, selfZoom) => setModalChart({ title, render, selfZoom });
+
+  // Range dropdown: presets fetch immediately. "Custom range…" switches to custom
+  // mode and reveals the calendar picker beside the dropdown; the fetch only fires
+  // once the user Applies a range (load() below skips custom until both dates set),
+  // so the page keeps showing the previous data instead of blanking.
+  const onRangeChange = (v) => { if (v) setRange(v); };
+  const applyCustomRange = (from, to) => { setCustomFrom(from); setCustomTo(to); };
+  const clearCustomRange = () => { setCustomFrom(''); setCustomTo(''); setRange('last_12_months'); };
 
   return (
     <div className="anl-root">
@@ -103,11 +123,24 @@ const Analytics = () => {
           <h1 className="anl-title">Lead Analytics</h1>
           <p className="anl-sub">{data ? `${data.from} to ${data.to}` : 'Performance overview'}</p>
         </div>
-        <div className="anl-range">
-          {RANGES.map(r => (
-            <button key={r.k} className={`anl-chip ${range === r.k ? 'is-active' : ''}`}
-              onClick={() => setRange(r.k)}>{r.l}</button>
-          ))}
+        <div className="anl-filters">
+          <span className="anl-filter-label">Date Range</span>
+          <FilterSelect
+            id="anl-range"
+            value={range}
+            onChange={onRangeChange}
+            options={RANGES.map(r => ({ value: r.k, label: r.l }))}
+            placeholder="Select range"
+          />
+          {range === 'custom' && (
+            <DateRangeFilter
+              appliedFrom={customFrom}
+              appliedTo={customTo}
+              defaultOpen={!customFrom}
+              onApply={applyCustomRange}
+              onClear={clearCustomRange}
+            />
+          )}
         </div>
       </header>
 
@@ -121,13 +154,13 @@ const Analytics = () => {
             <KpiCard label="Leads Won" value={fmtInt(data.leadsWon)} accent={SERIES[1]} />
             <KpiCard label="Conversion Rate" value={fmtPct(data.conversionRate)} hint="Won of all generated" accent={SERIES[2]} />
             <KpiCard label="Weighted (Priority)" value={fmtPct(data.weightedConversionRate)} hint="High 3 / Med 2 / Low 1" accent={SERIES[4]} />
-            <KpiCard label="Weighted (Subgroup)" value={fmtPct(data.weightedConversionByGroup)} hint="By subgroup volume" accent={SERIES[5]} />
+            <KpiCard label="Weighted (Subgroup)" value={fmtPct(data.weightedConversionByGroup)} hint="Avg of subgroup rates" accent={SERIES[5]} />
             <KpiCard label="Avg Time to Convert" value={fmtDays(data.avgDaysToConvert)} hint={`n = ${data.convertedSampleSize}`} accent={SERIES[3]} />
           </section>
 
           <section className="anl-grid">
-            <Panel title="Leads Generated vs Won" subtitle="Monthly" wide selfZoom
-                   onExpand={openModal} render={(m) => <BarChart series={data.monthly} modal={m} />} />
+            <Panel title="Leads Generated vs Won" subtitle={`${GRAN_LABEL[data.granularity] || ''} ${DOT} won by close date`} wide selfZoom
+                   onExpand={openModal} render={(m) => <BarChart series={data.series} modal={m} granularity={data.granularity} />} />
 
             <Panel title="Status Distribution" subtitle="Where leads sit now"
                    onExpand={openModal} render={(m) => <PieChart data={data.byStatus} modal={m} />} />
@@ -234,7 +267,7 @@ const ChartModal = ({ title, onClose, children, selfZoom }) => {
 
 // Chart.js grouped bars with native x-axis zoom/pan — only the bars/axis zoom,
 // not the whole block (same behaviour as the Project Dashboard charts).
-const BarChart = ({ series, modal }) => {
+const BarChart = ({ series, modal, granularity }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const themeV = useThemeVersion();
@@ -248,7 +281,8 @@ const BarChart = ({ series, modal }) => {
     const Chart = window.Chart;
     if (window.ChartZoom) Chart.register(window.ChartZoom);
     const P = chartPalette();
-    const labels = series.map(d => d.month.slice(2));
+    const labels = series.map(d => d.label);
+    const isDaily = granularity === 'daily';
     const ctx = canvasRef.current.getContext('2d');
     chartRef.current = new Chart(ctx, {
       type: 'bar',
@@ -272,7 +306,10 @@ const BarChart = ({ series, modal }) => {
           },
         },
         scales: {
-          x: { ticks: { color: P.tick, font: { size: modal ? 11 : 10 }, autoSkip: false }, grid: { display: false }, border: { color: P.tick } },
+          x: { ticks: { color: P.tick, font: { size: modal ? 11 : 10 },
+                        autoSkip: isDaily, autoSkipPadding: 8,
+                        maxRotation: isDaily ? 60 : 45, minRotation: 0 },
+               grid: { display: false }, border: { color: P.tick } },
           y: { ticks: { color: P.tick, font: { size: modal ? 11 : 10 }, maxTicksLimit: 5, precision: 0 }, grid: { color: P.grid }, border: { color: P.tick } },
         },
       },
@@ -281,7 +318,7 @@ const BarChart = ({ series, modal }) => {
     const stop = e => e.preventDefault();
     canvas.addEventListener('wheel', stop, { passive: false });
     return () => { canvas.removeEventListener('wheel', stop); if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-  }, [ready, series, modal, themeV]);
+  }, [ready, series, modal, themeV, granularity]);
 
   const reset = () => { if (chartRef.current) chartRef.current.resetZoom(); };
 

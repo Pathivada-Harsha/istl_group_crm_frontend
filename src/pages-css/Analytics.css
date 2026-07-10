@@ -42,7 +42,9 @@
 }
 .anl-root > * { position: relative; z-index: 1; }
 
-.anl-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+/* z-index lifts the header above the KPI/panel sections (each of which is a
+   z-index:1 stacking context) so the inline calendar isn't clipped by the cards. */
+.anl-head { position: relative; z-index: 30; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
 .anl-title { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.3px; }
 .anl-sub { margin: 3px 0 0; color: var(--anl-muted); font-size: 12px; }
 
@@ -54,6 +56,12 @@
 }
 .anl-chip:hover { color: var(--anl-text); background: var(--anl-chip-hover); }
 .anl-chip.is-active { color: #fff; border-color: transparent; background: linear-gradient(135deg, #5b8cff, #6f6bff); box-shadow: 0 4px 12px rgba(91,140,255,0.3); }
+
+/* Filter bar: labelled range dropdown (FilterSelect) + inline custom-range calendar */
+.anl-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.anl-filter-label { font-size: 12px; font-weight: 600; color: var(--anl-muted); }
+/* The shared FilterSelect trigger is fixed at 220px by default; trim it here. */
+.anl-filters .filter-trigger { width: auto; min-width: 168px; height: 40px; }
 
 .anl-state { padding: 48px 0; text-align: center; color: var(--anl-muted); font-size: 13px; }
 .anl-state--err { color: #e23744; }
