@@ -863,7 +863,13 @@ font-size: 14px;
   border: 2px solid var(--c-e2e8f0, #e2e8f0);
   border-radius: 8px;
   font-size: 14px;
+  background: var(--c-ffffff, #fff);
+  color: var(--ct-0f172a, #0f172a);
   transition: border-color 0.2s;
+}
+
+.users-page-form-group input::placeholder {
+  color: var(--ct-94a3b8, #94a3b8);
 }
 
 .users-page-form-group input:focus,

@@ -1607,6 +1607,78 @@
 /* Row action buttons */
 .exp-actions-cell { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; }
 
+/* ── Custom tooltip for action buttons (pill with arrow) ─────────────────── */
+.exp-act-btn[data-tooltip] { position: relative; }
+.exp-act-btn[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--c-1e293b, #1e293b);
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 7px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 50;
+}
+.exp-act-btn[data-tooltip]::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 3px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  border: 5px solid transparent;
+  border-top-color: var(--c-1e293b, #1e293b);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity .15s ease, transform .15s ease;
+  z-index: 50;
+}
+.exp-act-btn[data-tooltip]:hover::after,
+.exp-act-btn[data-tooltip]:hover::before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+/* Keep tooltip inside the table for the first (left-most) buttons if needed */
+.exp-actions-cell .exp-act-btn:first-child[data-tooltip]::after { left: 0; transform: translateX(0) translateY(4px); }
+.exp-actions-cell .exp-act-btn:first-child[data-tooltip]:hover::after { transform: translateX(0) translateY(0); }
+
+/* First table row: open tooltip BELOW the button so the sticky header /
+   container edge doesn't clip it */
+.exp-mgmt-table tbody tr:first-child .exp-act-btn[data-tooltip]::after {
+  bottom: auto;
+  top: calc(100% + 8px);
+  transform: translateX(-50%) translateY(-4px);
+}
+.exp-mgmt-table tbody tr:first-child .exp-act-btn[data-tooltip]::before {
+  bottom: auto;
+  top: calc(100% + 3px);
+  border-top-color: transparent;
+  border-bottom-color: var(--c-1e293b, #1e293b);
+  transform: translateX(-50%) translateY(-4px);
+}
+.exp-mgmt-table tbody tr:first-child .exp-act-btn[data-tooltip]:hover::after,
+.exp-mgmt-table tbody tr:first-child .exp-act-btn[data-tooltip]:hover::before {
+  transform: translateX(-50%) translateY(0);
+}
+.exp-mgmt-table tbody tr:first-child .exp-actions-cell .exp-act-btn:first-child[data-tooltip]::after {
+  left: 0; transform: translateX(0) translateY(-4px);
+}
+.exp-mgmt-table tbody tr:first-child .exp-actions-cell .exp-act-btn:first-child[data-tooltip]:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
 .exp-act-btn {
   width: 28px; height: 28px;
   border-radius: 6px;
