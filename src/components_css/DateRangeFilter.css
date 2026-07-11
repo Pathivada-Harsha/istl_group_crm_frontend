@@ -1,6 +1,6 @@
-/* Shared calendar date-range filter. Uses the global --c-*/--ct-* theme tokens
-   (defined in theme.css) so it adapts to light/dark automatically. Class names
-   kept as .ld-cal-* / .ld-yr-* to match the original Leads Enquiry control. */
+/* Shared calendar date-range filter. Uses the global --c-... and --ct-... theme
+   tokens (defined in theme.css) so it adapts to light/dark automatically. Class
+   names kept as .ld-cal-... / .ld-yr-... to match the original Leads Enquiry control. */
 
 .ld-cal-trigger {
   display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px;

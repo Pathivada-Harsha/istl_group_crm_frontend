@@ -21,6 +21,10 @@ import '../pages-css/ProjectCostExpenseManagement.css';
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
+// Reserved project marker for Business Development (BD) / site-visit expenses that
+// are NOT tied to a real project. Stored as-is in project_expenses.project_id.
+const BD_PROJECT_ID = 'BD';
+const BD_PROJECT_LABEL = 'Business Development (BD)';
 const EXPENSE_CATEGORIES = ['Travel', 'Site Visit', 'Accommodation', 'Food', 'Transportation', 'Labour Charges', 'Commission', 'Miscellaneous', 'Other'];
 const PAYMENT_MODES = ['Cash', 'Bank_Transfer', 'UPI', 'Card', 'Cheque'];
 const formatPaymentMode = (mode) => mode === 'Bank_Transfer' ? 'Bank Transfer' : (mode || '');
@@ -397,9 +401,11 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
   };
 
   const labelFor = (id) => {
+    if (String(id) === BD_PROJECT_ID) return BD_PROJECT_LABEL;
     const p = (projList || []).find(p => String(p.id) === String(id));
     return p ? (p.name + (p.location ? ' – ' + p.location : '')) : '#' + id;
   };
+  const bdSelected = selectedId === BD_PROJECT_ID;
 
   return (
     <div ref={ref} style={{ position: 'relative' }}>
@@ -442,6 +448,29 @@ const ProjectMultiSelect = ({ projList, selected, onChange, disabled, loading, p
             onMouseEnter={e => e.currentTarget.style.background = bg('#f9fafb')}
             onMouseLeave={e => e.currentTarget.style.background = bg('transparent')}>
             — Select Project *
+          </div>
+          {/* Pinned Business Development (BD) option — for site-visit / BD expenses
+              not tied to any project. Always available (even before group/subgroup). */}
+          <div onClick={() => selectOne(BD_PROJECT_ID)}
+            style={{
+              padding: '8px 14px', fontSize: 11.5, cursor: 'pointer', display: 'flex',
+              alignItems: 'center', gap: 10,
+              background: bdSelected ? bg('#eff6ff') : bg('transparent'),
+              borderBottom: `1px solid ${bg('#eef2ff')}`,
+            }}
+            onMouseEnter={e => { if (!bdSelected) e.currentTarget.style.background = bg('#f9fafb'); }}
+            onMouseLeave={e => { e.currentTarget.style.background = bdSelected ? bg('#eff6ff') : bg('transparent'); }}>
+            <span style={{
+              width: 14, height: 14, borderRadius: '50%', flexShrink: 0,
+              border: '2px solid ' + (bdSelected ? bg('#2563eb') : bg('#d1d5db')),
+              background: bdSelected ? bg('#2563eb') : bg('#fff'),
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {bdSelected && <span style={{ width: 5, height: 5, borderRadius: '50%', background: tc('#fff') }} />}
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 11.5, color: bdSelected ? tc('#1d4ed8') : tc('#4338ca') }}>
+              🏢 {BD_PROJECT_LABEL}
+            </span>
           </div>
           {(projList || []).length === 0 && (
             <div style={{ padding: '10px 12px', fontSize: 12, color: tc('#9ca3af'), textAlign: 'center' }}>
@@ -552,6 +581,7 @@ const ProjectCostExpenseManagement = () => {
 
   const [filters, setFilters] = useState({
     search: '', category: 'all', status: 'all', paymentMode: 'all', dateFrom: '', dateTo: '', expenseType: 'all',
+    bdOnly: false, // Business Development (project-less) expenses only
   });
   const [activeKpi, setActiveKpi] = useState(null); // tracks which KPI card is active
   const [sortBy, setSortBy] = useState('createdAt');
@@ -796,7 +826,7 @@ const ProjectCostExpenseManagement = () => {
     fetchExpenses();
     fetchStats();
   }, [groupName, subGroupName, projectId, currentPage, filters.search, filters.status, pageSize,
-    filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, filters.expenseType, sortBy, sortDir]);
+    filters.category, filters.paymentMode, filters.dateFrom, filters.dateTo, filters.expenseType, filters.bdOnly, sortBy, sortDir]);
 
   // Close paid-by dropdown on outside click
   useEffect(() => {
@@ -829,9 +859,12 @@ const ProjectCostExpenseManagement = () => {
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: currentPage, size: pageSize, sortBy, sortDir });
-      if (groupName) params.append('groupName', groupName);
-      if (subGroupName) params.append('subGroupName', subGroupName);
-      if (projectId) params.append('projectId', projectId);
+      if (filters.bdOnly) params.append('bdOnly', 'true');   // BD-only overrides the scope filter
+      else {
+        if (groupName) params.append('groupName', groupName);
+        if (subGroupName) params.append('subGroupName', subGroupName);
+        if (projectId) params.append('projectId', projectId);
+      }
       if (filters.search) params.append('search', filters.search);
       if (filters.status !== 'all') params.append('status', filters.status);
       if (filters.category !== 'all') params.append('category', filters.category);
@@ -859,7 +892,8 @@ const ProjectCostExpenseManagement = () => {
   const fetchStats = async () => {
     try {
       const params = new URLSearchParams();
-      // Scope by group/project selection
+      // Scope by group/project selection. (The Business Development KPI value comes
+      // from a dedicated backend sum, so the bdOnly list filter doesn't scope stats.)
       if (projectId)    params.append('projectId',    projectId);
       if (groupName)    params.append('groupName',    groupName);
       if (subGroupName) params.append('subGroupName', subGroupName);
@@ -911,7 +945,10 @@ const ProjectCostExpenseManagement = () => {
 
   const handleCreateExpense = async () => {
     const { groupName: grp, subGroupName: sub, tripDate, tripReason, paidByUserId, paidByName, expenseItems } = expenseFormData || {};
-    if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
+    // Group/Sub-Group are only needed to load real project lists — a pure BD
+    // (Business Development) submission has no project, so they aren't required.
+    const allBd = (expenseItems || []).length > 0 && expenseItems.every(i => (i.projectIds || [])[0] === BD_PROJECT_ID);
+    if (!allBd && (!grp || !sub)) { showWarning('Group and Sub-Group are required'); return; }
     if (!tripDate) { showWarning('Date is required'); return; }
     if (!tripReason || !tripReason.trim()) { showWarning('Purpose / Description is required'); return; }
     if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
@@ -958,7 +995,7 @@ const ProjectCostExpenseManagement = () => {
       for (const [pid, items] of projectGroups) {
         const body = {
           groupName: grp, subGroupName: sub,
-          projectId: pid,
+          projectId: pid === BD_PROJECT_ID ? null : pid,   // BD → no project
           tripDate, tripReason: tripReason || null,
           paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
           paidByName: paidByName || '',
@@ -1037,7 +1074,8 @@ const ProjectCostExpenseManagement = () => {
     // Build items from expenseItems array; fall back to legacy single-item format
     // ExpenseItemResponse from backend does NOT include projectId on each item —
     // all items under one expense share the parent expense's projectId.
-    const parentProjectId = expense.projectId ? String(expense.projectId) : '';
+    // A null project means Business Development (project-less) — preselect the BD option.
+    const parentProjectId = expense.projectId ? String(expense.projectId) : BD_PROJECT_ID;
     const items = (expense.expenseItems && expense.expenseItems.length > 0)
       ? expense.expenseItems.map(i => ({
           id: i.id || Date.now() + Math.random(),
@@ -1048,7 +1086,7 @@ const ProjectCostExpenseManagement = () => {
           description: i.description || '',
         }))
       : [{ id: Date.now(), category: expense.category || 'Travel',
-           projectIds: [expense.projectId ? String(expense.projectId) : ''].filter(Boolean),
+           projectIds: [parentProjectId].filter(Boolean),
            amount: expense.amount?.toString() || '',
            paymentMode: expense.paymentMode || 'UPI',
            description: expense.description || '' }];
@@ -1084,7 +1122,8 @@ const ProjectCostExpenseManagement = () => {
   const handleUpdateExpense = async () => {
     const { id, groupName: grp, subGroupName: sub, tripDate, tripReason,
             paidByUserId, paidByName, expenseItems } = expenseFormData || {};
-    if (!grp || !sub) { showWarning('Group and Sub-Group are required'); return; }
+    const allBd = (expenseItems || []).length > 0 && expenseItems.every(i => (i.projectIds || [])[0] === BD_PROJECT_ID);
+    if (!allBd && (!grp || !sub)) { showWarning('Group and Sub-Group are required'); return; }
     if (!tripReason || !tripReason.trim()) { showWarning('Purpose / Description is required'); return; }
     if (!expenseItems?.length) { showWarning('Add at least one expense item'); return; }
 
@@ -1128,7 +1167,7 @@ const ProjectCostExpenseManagement = () => {
           method: 'PUT', headers: getAuthHeaders(), credentials: 'include',
           body: JSON.stringify({
             groupName: grp, subGroupName: sub,
-            projectId: projectIds[0],
+            projectId: projectIds[0] === BD_PROJECT_ID ? null : projectIds[0],
             tripDate, tripReason: tripReason || null,
             paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
             paidByName: paidByName || '',
@@ -1151,7 +1190,7 @@ const ProjectCostExpenseManagement = () => {
           const res = await fetch(`${API_BASE_URL}/project-expenses`, {
             method: 'POST', headers: getAuthHeaders(), credentials: 'include',
             body: JSON.stringify({
-              groupName: grp, subGroupName: sub, projectId: pid,
+              groupName: grp, subGroupName: sub, projectId: pid === BD_PROJECT_ID ? null : pid,
               tripDate, tripReason: tripReason || null,
               paidByUserId: paidByUserId ? parseInt(paidByUserId) : null,
               paidByName: paidByName || '',
@@ -1361,7 +1400,16 @@ const ProjectCostExpenseManagement = () => {
       );
       case 'project': return (
         <div style={{ minWidth: 160 }}>
-          {exp.projectId ? (
+          {!exp.projectId ? (
+            // No project → Business Development (project-less) expense
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px',
+              borderRadius: 999, fontSize: 11, fontWeight: 600,
+              color: tc('#4338ca'), background: bg('#eef2ff'), border: `1px solid ${bg('#c7d2fe')}`,
+            }}>
+              🏢 {BD_PROJECT_LABEL}
+            </span>
+          ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <span style={{ fontWeight: 600, fontSize: 12, color: tc('#1e293b'), wordBreak: 'break-word', lineHeight: 1.4 }}>
                 {exp.projectName || exp.projectId}
@@ -1372,8 +1420,6 @@ const ProjectCostExpenseManagement = () => {
                 </span>
               )}
             </div>
-          ) : (
-            <span style={{ color: tc('#94a3b8'), fontSize: 12 }}>—</span>
           )}
         </div>
       );
@@ -1499,6 +1545,13 @@ const ProjectCostExpenseManagement = () => {
     }
   };
 
+  // Toggle the Business Development quick-filter (project-less BD expenses only).
+  const toggleBdFilter = () => {
+    setActiveKpi(prev => (prev === 'bd' ? null : 'bd'));
+    setFilters(prev => ({ ...prev, bdOnly: !prev.bdOnly }));
+    setCurrentPage(0);
+  };
+
   // ── KPI cards ─────────────────────────────────────────────────────────────────
   // Each card carries a `filterPatch` — the exact filter values to apply when clicked.
   // Clicking again (same card) clears the filter back to 'all'.
@@ -1509,6 +1562,7 @@ const ProjectCostExpenseManagement = () => {
     { id: 'travel',     title: 'Travel & Site Visit', value: fmt(stats.travelAndSiteVisit), icon: <Plane size={32} />,    color: tc('#3b82f6'), filterPatch: { category: 'Travel', status: 'all' } },
     { id: 'commission', title: 'Total Commission',    value: fmt(stats.totalCommission),  icon: <Users size={32} />,       color: tc('#8b5cf6'), filterPatch: { category: 'Commission', status: 'all' } },
     { id: 'advances',   title: 'Total Advances',      value: fmt(stats.totalAdvances),    icon: <IndianRupee size={32} />, color: tc('#06b6d4'), filterPatch: { expenseType: 'advance', status: 'all', category: 'all' } },
+    { id: 'bd',         title: 'Business Development', value: fmt(stats.businessDevelopment), icon: <Briefcase size={32} />, color: tc('#6366f1'), clickable: true },
   ] : [];
 
   // ── RENDER ────────────────────────────────────────────────────────────────────
@@ -1572,6 +1626,17 @@ const ProjectCostExpenseManagement = () => {
             placeholder="All Modes"
             onChange={(val) => { setFilters({ ...filters, paymentMode: val || 'all' }); setCurrentPage(0); }}
           />
+          <FilterSelect
+            value={filters.bdOnly ? 'bd' : ''}
+            options={[{ value: 'bd', label: BD_PROJECT_LABEL }]}
+            placeholder="All Expenses"
+            onChange={(val) => {
+              const on = val === 'bd';
+              setFilters(prev => ({ ...prev, bdOnly: on }));
+              setActiveKpi(on ? 'bd' : (activeKpi === 'bd' ? null : activeKpi));
+              setCurrentPage(0);
+            }}
+          />
           <PCEDateRangeFilter
             appliedFrom={filters.dateFrom}
             appliedTo={filters.dateTo}
@@ -1627,7 +1692,12 @@ const ProjectCostExpenseManagement = () => {
                 <div
                   key={kpi.id}
                   className="exp-mgmt-kpi-card"
-                  style={{ borderTopColor: kpi.color }}
+                  onClick={kpi.id === 'bd' ? toggleBdFilter : undefined}
+                  style={{
+                    borderTopColor: kpi.color,
+                    cursor: kpi.clickable ? 'pointer' : 'default',
+                    outline: (kpi.id === 'bd' && activeKpi === 'bd') ? `2px solid ${kpi.color}` : 'none',
+                  }}
                 >
                   <div className="exp-mgmt-kpi-icon" style={{ color: kpi.color }}>{kpi.icon}</div>
                   <div className="exp-mgmt-kpi-content">
@@ -1644,7 +1714,7 @@ const ProjectCostExpenseManagement = () => {
               <CheckCircle size={13} />
               <span>Filtering by: <strong>{kpiData.find(k => k.id === activeKpi)?.title}</strong></span>
               <button
-                onClick={() => { setActiveKpi(null); setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all' })); setCurrentPage(0); }}
+                onClick={() => { setActiveKpi(null); setFilters(prev => ({ ...prev, status: 'all', category: 'all', expenseType: 'all', bdOnly: false })); setCurrentPage(0); }}
                 style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 8px', fontSize: 11, fontWeight: 600, color: tc('#1d4ed8'), background: bg('#dbeafe'), border: `1px solid ${bg('#93c5fd')}`, borderRadius: 5, cursor: 'pointer' }}>
                 <X size={11} /> Clear
               </button>
