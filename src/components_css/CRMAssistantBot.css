@@ -660,3 +660,94 @@
   border-color: var(--c-2563eb, #2563eb);
   background: var(--c-eff6ff, #eff6ff);
 }
+/* ═══════════════════════════════════════════════════════════════════════════
+   UNIQUE THEME v2 — aurora gradient launcher + glass panel + greeting teaser
+   (appended last so it overrides the base styles above)
+═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Launcher: animated aurora gradient ring + slow pulse ── */
+.crm-bot-fab {
+  background: linear-gradient(135deg, #0b63d6 0%, #7c3aed 55%, #06b6d4 100%) !important;
+  background-size: 220% 220% !important;
+  animation: cabAurora 6s ease infinite, cabPulse 2.6s ease-out infinite;
+  border: none !important;
+  box-shadow: 0 8px 26px rgba(59, 78, 214, .38) !important;
+}
+.crm-bot-fab--active { animation: cabAurora 6s ease infinite; }
+.crm-bot-fab--dragging { animation: none; }
+@keyframes cabAurora {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes cabPulse {
+  0%   { box-shadow: 0 8px 26px rgba(59,78,214,.38), 0 0 0 0 rgba(124,58,237,.45); }
+  70%  { box-shadow: 0 8px 26px rgba(59,78,214,.38), 0 0 0 14px rgba(124,58,237,0); }
+  100% { box-shadow: 0 8px 26px rgba(59,78,214,.38), 0 0 0 0 rgba(124,58,237,0); }
+}
+
+/* ── Proactive greeting teaser bubble ── */
+.crm-bot-teaser {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  width: 232px;
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 14px;
+  padding: 12px 14px;
+  box-shadow: 0 14px 38px rgba(15, 23, 42, .18);
+  animation: cabTeaserIn .35s cubic-bezier(.34, 1.4, .64, 1);
+  z-index: 5;
+  cursor: default;
+}
+.crm-bot-teaser--right { right: 0; }
+.crm-bot-teaser--left  { left: 0; }
+.crm-bot-teaser::after {           /* tail pointing at the launcher */
+  content: '';
+  position: absolute;
+  top: 100%;
+  border: 7px solid transparent;
+  border-top-color: var(--c-ffffff, #ffffff);
+}
+.crm-bot-teaser--right::after { right: 20px; }
+.crm-bot-teaser--left::after  { left: 20px; }
+.crm-bot-teaser-title { font-size: 13px; font-weight: 800; color: var(--ct-0f172a, #0f172a); margin-bottom: 3px; }
+.crm-bot-teaser-text  { font-size: 11.5px; line-height: 1.5; color: var(--ct-475569, #475569); }
+.crm-bot-teaser-x {
+  position: absolute; top: 6px; right: 6px;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: none; background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-64748b, #64748b);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.crm-bot-teaser-x:hover { background: var(--c-e2e8f0, #e2e8f0); }
+@keyframes cabTeaserIn {
+  from { opacity: 0; transform: translateY(8px) scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* ── Panel: glass card with aurora header ── */
+.crm-bot-panel {
+  border-radius: 18px !important;
+  border: 1px solid rgba(148, 163, 184, .25) !important;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .28) !important;
+  backdrop-filter: blur(14px);
+  overflow: hidden;
+}
+.crm-bot-header {
+  background: linear-gradient(120deg, #0b63d6 0%, #6d28d9 60%, #0891b2 120%) !important;
+  background-size: 200% 200% !important;
+  animation: cabAurora 9s ease infinite;
+  position: relative;
+}
+.crm-bot-header::after {           /* soft sheen */
+  content: '';
+  position: absolute; inset: 0;
+  background: radial-gradient(120px 60px at 85% -20%, rgba(255,255,255,.35), transparent 70%);
+  pointer-events: none;
+}
+.crm-bot-header-sub { opacity: .95; }
+.crm-bot-header-sub::before { content: ''; }
+
+/* Online dot breathing */
+@keyframes cabBreath { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
+.crm-bot-header-sub { animation: cabBreath 2.4s ease infinite; }

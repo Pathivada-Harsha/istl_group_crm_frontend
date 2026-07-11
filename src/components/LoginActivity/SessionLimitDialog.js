@@ -18,15 +18,19 @@ function formatWhen(iso) {
   }
 }
 
-export default function SessionLimitDialog({ sessions = [], loading, onCancel, onContinue }) {
+export default function SessionLimitDialog({ sessions = [], loading, onCancel, onContinue, onLogoutAll }) {
   return (
     <div className="la-modal-overlay" role="dialog" aria-modal="true">
       <div className="la-modal la-session-limit">
-        <h3 className="la-modal-title">Maximum Active Sessions Reached</h3>
+        <h3 className="la-modal-title">You Already Have 2 Active Logins</h3>
         <p className="la-modal-text">
-          Your account is already active on two devices. If you continue, your
-          oldest active session will be logged out automatically.
+          Your account is currently signed in on two devices, which is the
+          maximum allowed. Choose how you want to proceed:
         </p>
+        <ul className="la-modal-text la-limit-options">
+          <li><strong>Continue Login</strong> — your <strong>oldest</strong> session (marked below) will be logged out automatically and you will be signed in here.</li>
+          <li><strong>Logout From All Devices</strong> — both existing sessions will be signed out and only this device will stay logged in.</li>
+        </ul>
 
         {sessions.length > 0 && (
           <div className="la-session-limit-list">
@@ -54,13 +58,19 @@ export default function SessionLimitDialog({ sessions = [], loading, onCancel, o
           </div>
         )}
 
-        <p className="la-modal-text la-modal-question">Do you want to continue?</p>
+        <p className="la-modal-text la-modal-question">How do you want to continue?</p>
 
         <div className="la-modal-actions">
           <button type="button" className="la-btn la-btn-secondary"
                   onClick={onCancel} disabled={loading}>
             Cancel
           </button>
+          {onLogoutAll && (
+            <button type="button" className="la-btn la-btn-danger"
+                    onClick={onLogoutAll} disabled={loading}>
+              {loading ? "Signing in…" : "Logout From All Devices"}
+            </button>
+          )}
           <button type="button" className="la-btn la-btn-primary"
                   onClick={onContinue} disabled={loading}>
             {loading ? "Signing in…" : "Continue Login"}

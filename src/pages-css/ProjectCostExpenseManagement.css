@@ -2674,8 +2674,7 @@
   .exp-item-top-row { grid-template-columns: 1fr 1fr; }
   .exp-field-proj { grid-column: 1 / -1; }
 }
-.exp-field-sm {}
-.exp-field-proj {}
+
 
 .exp-item-del-btn {
   background: var(--c-fee2e2, #fee2e2); color: var(--ct-dc2626, #dc2626); border: none; border-radius: 6px;
