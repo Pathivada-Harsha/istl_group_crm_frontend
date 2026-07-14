@@ -5,6 +5,7 @@ import '../components_css/Navbar.css';
 import logo from "../images/logo.png";
 import ThemeToggle from './ThemeToggle';
 import { NotificationBell } from './Notifications/NotificationModule';
+import { CRMBotNavButton } from './CRMAssistantBot';
 
 function Navbar({ onMenuClick }) {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -101,6 +102,10 @@ function Navbar({ onMenuClick }) {
         {/* RIGHT SECTION */}
         <div className="navbar-right">
 
+
+          {/* CRM Assistant — opens the right-side drawer (SUPERADMIN/ADMIN only) */}
+          <CRMBotNavButton />
+
           {/* Theme toggle (light / dark) */}
           <ThemeToggle />
 
@@ -190,10 +195,10 @@ function Navbar({ onMenuClick }) {
               <div className="profile-avatar">
                 {user?.avatar_url === "db"
                   ? <img
-                      src={`${process.env.REACT_APP_API_URL}/users/avatar/${user.id}?t=${avatarTs}`}
-                      alt={user.name}
-                      className="profile-avatar-img"
-                    />
+                    src={`${process.env.REACT_APP_API_URL}/users/avatar/${user.id}?t=${avatarTs}`}
+                    alt={user.name}
+                    className="profile-avatar-img"
+                  />
                   : getUserInitials()
                 }
               </div>
@@ -229,7 +234,7 @@ function Navbar({ onMenuClick }) {
                       Users
                     </Link>
                   )}
-                   {/* <Link
+                {/* <Link
                       to="/users"
                       className="dropdown-item"
                       onClick={closeAllDropdowns}

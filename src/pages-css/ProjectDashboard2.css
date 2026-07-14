@@ -405,12 +405,32 @@
   gap: 14px;
   margin-bottom: 14px;
 }
+/* Grid children default to min-width:auto which STOPS them shrinking below
+   their content size — the donut/canvas then overflows the screen when the
+   viewport gets smaller. min-width:0 lets every chart card shrink with its
+   column, and the canvas is hard-capped to its card's width. */
+.dashboard-charts-grid > * {
+  min-width: 0;
+}
+.chart-card {
+  overflow: hidden;
+}
+.chart-card canvas {
+  max-width: 100% !important;
+}
 
 .chart-card {
   background: var(--c-white, white);
-  padding: 16px;
+  padding: 16px 16px 26px; /* extra bottom room for FULL multi-line project names */
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  min-height: 340px; /* taller card so amounts above bars + wrapped names both fit */
+}
+
+/* Bar charts: keep the canvas clear of the header so amount labels drawn
+   above the tallest bars are never clipped */
+.chart-card canvas {
+  margin-top: 4px;
 }
 
 .chart-card.full-width {
@@ -2012,4 +2032,23 @@
 [data-theme="dark"] .agg-projects-table td span[style*="0369a1"] {
   color: #7dd3fc !important;
   background: rgba(56, 189, 248, 0.16) !important;
+}
+/* ════════════════════════════════════════════════════════════════════════════
+   FIX: black focus border when clicking any chart
+   Chart.js canvases and Recharts wrappers receive keyboard focus (Recharts
+   sets tabindex for accessibility), and the browser then draws its default
+   black focus outline around the whole chart. Suppress it everywhere charts
+   render — cards, boxed previews, and expanded modals.
+   ════════════════════════════════════════════════════════════════════════════ */
+.chart-card canvas:focus,
+.chart-card canvas:focus-visible,
+canvas:focus,
+canvas:focus-visible,
+.recharts-wrapper:focus,
+.recharts-wrapper:focus-visible,
+.recharts-wrapper *:focus,
+.recharts-surface:focus,
+.recharts-surface:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
 }
