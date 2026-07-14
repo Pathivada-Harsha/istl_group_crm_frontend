@@ -39,6 +39,8 @@ import Addropdownitems from "./Pages/AddNewDropdownItems";
 import NewRolePermissions from './Pages/NewRolePermissions';
 import Projectdashboard from "./Pages/ProjectDashboard2.js";
 import OrderBook from "./Pages/OrderBook.js";
+import ProjectsList from "./Pages/ProjectsList.js";
+import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
@@ -128,7 +130,7 @@ function AppWrapper() {
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
       '/project-cost-expense', '/taskmanagement', '/projectaccess', '/inventory-management', '/notifications',
-      '/team-performance'
+      '/team-performance', '/projects'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -232,6 +234,14 @@ function AppShell({ hideShell }) {
 
           <Route path="/order-book" element={
             <ProtectedRoute><OrderBook /></ProtectedRoute>
+          } />
+
+          <Route path="/projects" element={
+            <ProtectedRoute><ProjectsList /></ProtectedRoute>
+          } />
+
+          <Route path="/projects/:projectUniqueId" element={
+            <ProtectedRoute><ProjectDetailPage /></ProtectedRoute>
           } />
 
           <Route path="/sales/invoices" element={

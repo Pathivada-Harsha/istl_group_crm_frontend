@@ -13,6 +13,7 @@ const SIDEBAR_KEY_PREFIX = 'sidebar_state_';
 const DEFAULT_STATE = {
   Main: true,
   Sales: false,
+  Projects: false,
   Procurement: false,
   'Office Use': false,
 };
@@ -123,6 +124,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
   const getGroupIcon = (groupTitle) => {
     const map = {
       Sales: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
+      Projects: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
       Procurement: 'M8 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0zM3 6h11v9H3V6zm11 3h4l3 3v3h-3',
       'Office Use': 'M3 21h18M5 21V5a2 2 0 012-2h6a2 2 0 012 2v16M9 9h1m-1 4h1m4-4h1m-1 4h1M19 21V9a2 2 0 00-2-2h-2v14',
     };
@@ -226,6 +228,18 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           path: '/sales/invoices',
           permission: 'INVOICES',
           icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z',
+        },
+      ],
+    },
+    {
+      title: 'Projects',
+      collapsible: true,
+      items: [
+        {
+          name: 'All Projects',
+          path: '/projects',
+          permission: 'PROJECTS',
+          icon: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
         },
       ],
     },

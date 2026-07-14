@@ -1034,8 +1034,9 @@ function OrderBook() {
   };
 
   const handleView = async (orderBook) => {
-    // Open the full in-page detail view. Items load lazily inside the detail
-    // page, but we prefetch here so the Overview tab is instant.
+    // Open the full in-page detail view (Overview tab only — the scope/finance/
+    // progress tabs now live in the Projects module). Items load lazily inside
+    // the detail page, but we prefetch here so the Overview tab is instant.
     setDetailOrderBook(orderBook);
     // Reflect the open order in the URL so a refresh stays on this detail view.
     setSearchParams(prev => {
