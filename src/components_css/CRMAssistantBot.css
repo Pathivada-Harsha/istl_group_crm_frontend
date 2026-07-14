@@ -751,3 +751,64 @@
 /* Online dot breathing */
 @keyframes cabBreath { 0%,100% { opacity: 1; } 50% { opacity: .45; } }
 .crm-bot-header-sub { animation: cabBreath 2.4s ease infinite; }
+/* ── Drawer mode (bot opened from the NAVBAR) ─────────────────────────────── */
+/* Fixed right-side drawer under the 64px navbar — replaces the floating FAB.
+   It slides in from the right edge; when closed it takes zero space, so it
+   never covers dashboard data. */
+.crm-bot-panel--drawer {
+  top: 64px;                 /* navbar height */
+  right: 0;
+  bottom: 0;
+  height: auto;
+  max-height: none;
+  width: 380px;
+  border-radius: 0;
+  border-top: none;
+  border-right: none;
+  transform: translateX(102%);
+}
+.crm-bot-panel--drawer.crm-bot-panel--open {
+  transform: translateX(0);
+}
+@media (max-width: 480px) {
+  .crm-bot-panel--drawer { width: 100%; }
+}
+
+/* ── Navbar trigger button — SAME style as the theme toggle button ────────── */
+/* Mirrors .theme-toggle-btn from Navbar.css: 34px circular slate-ring button
+   with hover scale; dark mode via the [data-theme] attribute. */
+.crm-bot-nav-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  background: #f1f5f9;
+  border: 1.5px solid #94a3b8;
+  transition: background 0.25s ease, border-color 0.25s ease,
+              box-shadow 0.25s ease, transform 0.2s ease;
+}
+[data-theme='dark'] .crm-bot-nav-btn {
+  background: var(--c-f1f5f9, #1e293b);
+  border-color: var(--c-94a3b8, #475569);
+}
+.crm-bot-nav-btn:hover  { transform: scale(1.12); }
+.crm-bot-nav-btn:active { transform: scale(0.93); }
+.crm-bot-nav-btn:focus-visible {
+  outline: 2px solid #3b82f6;
+  outline-offset: 3px;
+}
+.crm-bot-nav-icon {
+  color: #475569;
+  display: block;
+  transition: color 0.25s ease;
+}
+[data-theme='dark'] .crm-bot-nav-icon { color: #cbd5e1; }
+@media (prefers-reduced-motion: reduce) {
+  .crm-bot-nav-btn, .crm-bot-nav-icon { transition: none; }
+}

@@ -147,23 +147,13 @@ export async function collectClientContext() {
     const cached = sessionStorage.getItem(GEO_CACHE_KEY);
     if (cached) {
       Object.assign(ctx, JSON.parse(cached));
-    } else {
-      const state = await permissionState();
-      if (state === "granted") {
-        // Already permitted — no popup, so waiting a few seconds is safe.
-        // Desktop Wi-Fi positioning regularly needs 3–6s.
-        const geo = await resolveGeo(8000);
-        if (geo) Object.assign(ctx, geo);
-      } else if (state === "prompt") {
-        // The permission popup will open — do NOT block login waiting for
-        // the user's decision. Login proceeds without location and
-        // reportGeoWhenAvailable() (called after login) fills it in the
-        // moment the user clicks Allow.
-        const geo = await resolveGeo(2000); // catches instant cached fixes
-        if (geo) Object.assign(ctx, geo);
-      }
-      // state === "denied" → never ask, send nothing
     }
+    // NOT cached → do NOT wait for a fix here. Desktop Wi-Fi positioning
+    // regularly needs 3–8 seconds, and this function is awaited BEFORE the
+    // login request is sent — it was making every login take 5–8s.
+    // Login proceeds immediately without location;
+    // reportGeoWhenAvailable() (fire-and-forget, right after login) fills
+    // the session's location in the backend the moment a fix arrives.
   } catch { /* context is best-effort — never break login */ }
 
   return ctx;

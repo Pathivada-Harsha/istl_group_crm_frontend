@@ -10,6 +10,7 @@ import {
   FaPaperPlane, FaRedo, FaTimes,
   FaEdit, FaCopy, FaCheck, FaBan,
 } from 'react-icons/fa';
+import { TbMessageChatbot  } from 'react-icons/tb';
 import { useAuth } from '../hooks/useAuth';
 import '../components_css/CRMAssistantBot.css';
 
@@ -88,30 +89,8 @@ function BotIcon({ size = 26, color = '#fff' }) {
   );
 }
 
-// ─── FAB position persistence ────────────────────────────────────────────────
-const FAB_STORAGE_KEY = 'crmBotFab_v1';
-const FAB_SIZE = 52;
-const FAB_MARGIN = 16;
-
-function loadFabState() {
-  try {
-    const raw = localStorage.getItem(FAB_STORAGE_KEY);
-    if (raw) {
-      const s = JSON.parse(raw);
-      if ((s.side === 'left' || s.side === 'right') && typeof s.top === 'number') {
-        return { side: s.side, top: s.top, hidden: !!s.hidden };
-      }
-    }
-  } catch { /* ignore */ }
-  return { side: 'right', top: (typeof window !== 'undefined' ? window.innerHeight : 800) - FAB_SIZE - 28, hidden: false };
-}
-
-function saveFabState(s) {
-  try { localStorage.setItem(FAB_STORAGE_KEY, JSON.stringify(s)); } catch { /* ignore */ }
-}
-
-const clampFabTop = top =>
-  Math.min(Math.max(top, FAB_MARGIN), (window.innerHeight || 800) - FAB_SIZE - FAB_MARGIN);
+// ─── (The floating draggable FAB was removed — the bot is now opened from a
+//     button in the NAVBAR and renders as a fixed right-side drawer.) ─────────
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function CRMAssistantBot() {
@@ -126,99 +105,23 @@ export default function CRMAssistantBot() {
   const [editText,     setEditText]     = useState('');    // live text in the edit textarea
   const [copiedId,     setCopiedId]     = useState(null);  // index of recently copied message
   const [listening,    setListening]    = useState(false);
-  const [teaser,       setTeaser]       = useState(false);  // proactive greeting bubble
 
-  // ── FAB drag / dock / hide state ──────────────────────────────────────────
-  const [fab, setFab] = useState(loadFabState);           // { side, top, hidden }
-  const [dragging, setDragging] = useState(false);        // true only while actually moving
-  const [dragPos, setDragPos] = useState(null);           // { x, y } live position while dragging
-  const dragRef = useRef(null);                            // live drag data
-  const fabBtnRef = useRef(null);
-
-  // Keep the FAB inside the viewport when the window resizes.
+  // ── Opened from the NAVBAR bot button (see CRMBotNavButton below) ─────────
+  // The navbar button dispatches a window event so no prop-drilling through
+  // App.js is needed; the panel itself is a fixed right-side drawer.
   useEffect(() => {
-    const onResize = () => setFab(f => {
-      const next = { ...f, top: clampFabTop(f.top) };
-      saveFabState(next);
-      return next;
-    });
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
+    const onToggle = () => setOpen(o => !o);
+    const onOpen   = () => setOpen(true);
+    const onClose  = () => setOpen(false);
+    window.addEventListener('crm-bot-toggle', onToggle);
+    window.addEventListener('crm-bot-open',   onOpen);
+    window.addEventListener('crm-bot-close',  onClose);
+    return () => {
+      window.removeEventListener('crm-bot-toggle', onToggle);
+      window.removeEventListener('crm-bot-open',   onOpen);
+      window.removeEventListener('crm-bot-close',  onClose);
+    };
   }, []);
-
-  // Proactive greeting teaser — appears once per session until opened/dismissed
-  useEffect(() => {
-    if (sessionStorage.getItem('crmBotTeaserSeen')) return;
-    const t = setTimeout(() => setTeaser(true), 3000);
-    return () => clearTimeout(t);
-  }, []);
-  const dismissTeaser = () => { setTeaser(false); try { sessionStorage.setItem('crmBotTeaserSeen', '1'); } catch {} };
-
-  const onFabPointerDown = e => {
-    // Left button / touch only
-    if (e.button !== undefined && e.button !== 0) return;
-    const point = e.touches ? e.touches[0] : e;
-    const rect = fabBtnRef.current.getBoundingClientRect();
-    dragRef.current = {
-      startX: point.clientX, startY: point.clientY,
-      offsetX: point.clientX - rect.left, offsetY: point.clientY - rect.top,
-      x: rect.left, y: rect.top,
-      moved: false,
-    };
-
-    const onMove = ev => {
-      const p = ev.touches ? ev.touches[0] : ev;
-      const d = dragRef.current;
-      if (!d) return;
-      if (!d.moved && Math.hypot(p.clientX - d.startX, p.clientY - d.startY) < 6) return; // click tolerance
-      if (!d.moved) { d.moved = true; setDragging(true); }
-      if (ev.cancelable) ev.preventDefault();
-      d.x = Math.min(Math.max(p.clientX - d.offsetX, 0), window.innerWidth - FAB_SIZE);
-      d.y = clampFabTop(p.clientY - d.offsetY);
-      // Follow the pointer via state — React re-renders the wrapper at d.x/d.y
-      setDragPos({ x: d.x, y: d.y });
-    };
-
-    const onUp = () => {
-      const d = dragRef.current;
-      dragRef.current = null;
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onUp);
-      if (d && d.moved) {
-        // Snap to the nearest screen edge and persist
-        const side = (d.x + FAB_SIZE / 2) < window.innerWidth / 2 ? 'left' : 'right';
-        const top = clampFabTop(d.y);
-        setDragging(false);
-        setDragPos(null);
-        setFab(f => {
-          const next = { ...f, side, top };
-          saveFabState(next);
-          return next;
-        });
-      } else {
-        // No movement → treat as a normal click (toggle the panel)
-        setOpen(o => { if (!o) dismissTeaser(); return !o; });
-      }
-    };
-
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onUp);
-  };
-
-  const hideBot = e => {
-    e.stopPropagation();
-    e.preventDefault();
-    setOpen(false);
-    setFab(f => { const next = { ...f, hidden: true }; saveFabState(next); return next; });
-  };
-
-  const showBot = () => {
-    setFab(f => { const next = { ...f, hidden: false }; saveFabState(next); return next; });
-  };
 
   const conversationRef = useRef([]);
   const bottomRef       = useRef(null);
@@ -396,46 +299,10 @@ export default function CRMAssistantBot() {
   const suggestions = getSuggestions(user.role);
   const showSuggestions = messages.length === 1 && !loading;
 
-  // ── Position the panel anchored to wherever the FAB currently sits ────────
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-  const panelH = Math.min(560, vh - 120);            // matches .crm-bot-panel height/max-height
-  const maxBottom = Math.max(12, vh - panelH - 16);  // keep panel fully on screen
-  const panelBottom = Math.min(Math.max(12, vh - fab.top + 12), maxBottom);
-  const panelStyle = {
-    [fab.side]: 28,
-    left: fab.side === 'left' ? 28 : undefined,
-    right: fab.side === 'right' ? 28 : undefined,
-    bottom: panelBottom,
-  };
-
-  // ── Hidden state → only show a slim docked "restore" tab ──────────────────
-  if (fab.hidden) {
-    return (
-      <button
-        onClick={showBot}
-        title="Show CRM Assistant"
-        aria-label="Show CRM Assistant"
-        style={{
-          position: 'fixed', top: fab.top + 8, [fab.side]: 0, zIndex: 1200,
-          width: 26, height: 44, border: 'none', cursor: 'pointer',
-          background: 'linear-gradient(135deg, #0b63d6, #0952b8)', color: '#fff',
-          borderRadius: fab.side === 'right' ? '10px 0 0 10px' : '0 10px 10px 0',
-          boxShadow: '0 2px 12px rgba(11,99,214,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: 0, opacity: 0.85, transition: 'opacity 0.15s, width 0.15s',
-        }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.width = '32px'; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity = '0.85'; e.currentTarget.style.width = '26px'; }}
-      >
-        <BotIcon size={16} />
-      </button>
-    );
-  }
-
   return (
     <>
       {/* ── Panel ─────────────────────────────────────────────────────── */}
-      <div className={`crm-bot-panel ${open ? 'crm-bot-panel--open' : ''}`} style={panelStyle}>
+      <div className={`crm-bot-panel crm-bot-panel--drawer ${open ? 'crm-bot-panel--open' : ''}`}>
 
         {/* Header */}
         <div className="crm-bot-header">
@@ -593,60 +460,25 @@ export default function CRMAssistantBot() {
         </div>
       </div>
 
-      {/* ── FAB (draggable, snaps to edges, position remembered) ─────── */}
-      <div
-        style={
-          dragging && dragPos
-            ? { position: 'fixed', zIndex: 1200, top: dragPos.y, left: dragPos.x, right: 'auto' }
-            : {
-                position: 'fixed', zIndex: 1200,
-                top: fab.top,
-                left: fab.side === 'left' ? 28 : 'auto',
-                right: fab.side === 'right' ? 28 : 'auto',
-              }
-        }
-        ref={fabBtnRef}
-        className="crm-bot-fab-wrap"
-      >
-        {/* Proactive greeting teaser bubble */}
-        {teaser && !open && !dragging && (
-          <div className={`crm-bot-teaser crm-bot-teaser--${fab.side}`}>
-            <button className="crm-bot-teaser-x" onClick={e => { e.stopPropagation(); dismissTeaser(); }} aria-label="Dismiss">
-              <FaTimes size={9} />
-            </button>
-            <div className="crm-bot-teaser-title">Hi {user?.name?.split(' ')[0] || 'there'} 👋</div>
-            <div className="crm-bot-teaser-text">I'm your CRM copilot — ask me about leads, tasks, projects & more!</div>
-          </div>
-        )}
-        <button
-          className={`crm-bot-fab ${open ? 'crm-bot-fab--active' : ''} ${dragging ? 'crm-bot-fab--dragging' : ''}`}
-          onMouseDown={onFabPointerDown}
-          onTouchStart={onFabPointerDown}
-          title={dragging ? '' : 'CRM Assistant — drag to move'}
-          aria-label="Toggle CRM Assistant"
-          style={{
-            position: 'static',
-            cursor: dragging ? 'grabbing' : 'pointer',
-            transition: dragging ? 'none' : undefined,
-          }}
-        >
-          {open ? <FaTimes size={20} /> : <BotIcon size={28} />}
-        </button>
-
-        {/* Hide (✕) badge — appears on hover */}
-        {!open && !dragging && (
-          <button
-            className="crm-bot-hide-badge"
-            onMouseDown={e => e.stopPropagation()}
-            onTouchStart={e => e.stopPropagation()}
-            onClick={hideBot}
-            title="Hide assistant"
-            aria-label="Hide assistant"
-          >
-            <FaTimes size={9} />
-          </button>
-        )}
-      </div>
     </>
+  );
+}
+// ─── Navbar trigger button ────────────────────────────────────────────────────
+// Rendered inside the Navbar (next to the notification bell). Role-gated the
+// same way as the bot itself; toggles the drawer via the window event.
+export function CRMBotNavButton() {
+  const { user, isAuthenticated } = useAuth();
+  if (!isAuthenticated || !user) return null;
+  if (!ALLOWED_ROLES.includes(user.role?.toUpperCase())) return null;
+  return (
+    <button
+      type="button"
+      className="crm-bot-nav-btn"
+      title="CRM Assistant"
+      aria-label="Toggle CRM Assistant"
+      onClick={() => window.dispatchEvent(new CustomEvent('crm-bot-toggle'))}
+    >
+      <TbMessageChatbot  className="crm-bot-nav-icon" size={18} />
+    </button>
   );
 }
