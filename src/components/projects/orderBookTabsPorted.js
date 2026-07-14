@@ -1,3 +1,20 @@
+/* ============================================================================
+ *  orderBookTabsPorted.js  —  GENERATED / PORTED, do not edit by hand.
+ *
+ *  This is a faithful copy of components/OrderBook/OrderBookDetailPage.js with the
+ *  entity-scoped detail endpoints re-keyed from  /order-book/${id}/...  to
+ *  /projects/${id}/...  (the Projects backend MIRRORS the Order Book endpoints
+ *  exactly — same request/response bodies).  Only the four editable execution
+ *  tabs are exported and consumed by components/Projects/ProjectDetailPage.js:
+ *      TechnicalTab   -> Scope / SOW
+ *      CommercialTab  -> Financials (commercial)
+ *      BomTab         -> Financials (BOM / BOQ)
+ *      ProgressTab    -> Progress & Timeline
+ *  The rest of the module (OverviewTab, the default OrderBookDetailPage export)
+ *  is carried along unused so every module-scope helper the tabs depend on stays
+ *  intact.  The 'orderBook' prop these components receive is a project-shaped
+ *  shim built in ProjectDetailPage ({ id: projectUniqueId, ... }).
+ * ========================================================================== */
 // ============================================================================
 //  OrderBookDetailPage
 //  Full in-page detail view for a single order book — mirrors the LeadDetailPage
@@ -18,7 +35,6 @@
 //    (procurement/spend lists reuse the existing project-keyed endpoints)
 // ============================================================================
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import * as XLSXStyle from 'xlsx-js-style'; // style-capable SheetJS fork; used only for the colored export
 import { ArrowLeft, Plus, Trash2, Save, Wand2, Check, Download } from 'lucide-react';
@@ -128,15 +144,13 @@ const dateToGridFraction = (startStr, endStr, dateStr) => {
 
 const TABS = [
   { k: 'overview',   l: 'Overview' },
-  // slimmed down — moved to Projects module; keep for fallback
-  // { k: 'bom',        l: 'BOM / BOQ' },
-  // { k: 'technical',  l: 'Technical Scope' },
-  // { k: 'commercial', l: 'Financial / Commercial' },
-  // { k: 'progress',   l: 'Progress' },
+  { k: 'bom',        l: 'BOM / BOQ' },
+  { k: 'technical',  l: 'Technical Scope' },
+  { k: 'commercial', l: 'Financial / Commercial' },
+  { k: 'progress',   l: 'Progress' },
 ];
 
 const OrderBookDetailPage = ({ orderBook, user, onBack, onEdit, showSuccess, showError }) => {
-  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const switchTab = (k) => setActiveTab(k);
 
@@ -199,18 +213,6 @@ const OrderBookDetailPage = ({ orderBook, user, onBack, onEdit, showSuccess, sho
           <div><label>Customer</label><span>{orderBook.customerName || '-'}</span></div>
           <div><label>Order Date</label><span>{fmtDate(orderBook.orderDate)}</span></div>
           <div><label>Total Value</label><span>{fmtMoney(orderBook.totalAmount)}</span></div>
-          {orderBook.projectId && (
-            <div>
-              <label>Project</label>
-              <button
-                type="button"
-                onClick={() => navigate(`/projects/${orderBook.projectId}`)}
-                style={{ background: 'none', border: 'none', padding: 0, color: '#3b82f6', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
-              >
-                View Project →
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -270,7 +272,7 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
   useEffect(() => {
     (async () => {
       try {
-        const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
+        const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
         const data = await res.json();
         if (data.success && data.data && data.data.scope) {
           const s = data.data.scope;
@@ -291,7 +293,7 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
         siteLat: siteLat === '' || siteLat == null ? null : Number(siteLat),
         siteLng: siteLng === '' || siteLng == null ? null : Number(siteLng),
       };
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/site-location`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/site-location`, {
         method: 'PATCH', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -308,7 +310,7 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
     (async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+        const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
         const data = await res.json();
         if (data.success) setItems(data.data || []);
       } catch (e) { showError('Failed to load items'); }
@@ -329,7 +331,7 @@ const OverviewTab = ({ orderBook, authHeaders, onEdit, showError, showSuccess })
   const isImg = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'].includes(poExt);
 
   const fetchPoBlob = async (forceDownload) => {
-    const url = `${API_BASE_URL}/order-book/${orderBook.id}/download-po${forceDownload ? '?forceDownload=true' : ''}`;
+    const url = `${API_BASE_URL}/projects/${orderBook.id}/download-po${forceDownload ? '?forceDownload=true' : ''}`;
     const res = await fetch(url, { credentials: 'include', headers: authHeaders });
     if (!res.ok) throw new Error(`Server returned ${res.status}`);
     return res.blob();
@@ -507,7 +509,7 @@ const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 
 
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
 
-const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [scope, setScope] = useState({
     projectType: '', scopeOfWork: '', technicalNotes: '',
     systemCapacity: '', siteLocation: '', siteLat: '', siteLng: '',
@@ -549,7 +551,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
         const s = data.data.scope;
@@ -627,7 +629,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       if (!ok) return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/default-plan`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/default-plan`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
         const tmpl = data.data.phases || [];
@@ -666,7 +668,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       if (!ok) return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
         const items = (data.data || []).map((it) => {
@@ -777,7 +779,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
       return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       const lines = (data.success && Array.isArray(data.lines)) ? data.lines : (Array.isArray(data.data?.lines) ? data.data.lines : []);
       if (!lines.length) { showError('No BOM / BOQ items found. Add them in the BOM / BOQ tab first.'); return; }
@@ -874,7 +876,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           return pay;
         }),
       };
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -1249,7 +1251,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           }
         }
       });
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/progress`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/progress`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ cells }),
@@ -1722,7 +1724,7 @@ const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 // ── Item-keyed finance block (billing receivables OR cost payables) ──────────
 const blankFinance = (seq) => ({ id: null, seqNo: seq, itemName: '', amount: '', plannedDate: '', notes: '' });
 
-const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+export const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [billing, setBilling] = useState([]);
   const [cost, setCost] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -1743,10 +1745,10 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     setLoading(true);
     try {
       const [bRes, cRes, sRes, scRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/billing`, { credentials: 'include', headers: authHeaders }),
-        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/cost`, { credentials: 'include', headers: authHeaders }),
-        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
-        fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/projects/${orderBook.id}/billing`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/projects/${orderBook.id}/cost`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/projects/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
+        fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
       ]);
       const bData = await bRes.json();
       const cData = await cRes.json();
@@ -1820,7 +1822,7 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
     setSaving(true);
     try {
       const body = { lines: list.map((l, i) => ({ id: l.id, seqNo: i + 1, itemName: l.itemName.trim(), amount: l.amount === '' ? 0 : Number(l.amount), plannedDate: l.plannedDate || null, notes: l.notes })) };
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/${kind}`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/${kind}`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -1873,7 +1875,7 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           plannedBudget: si.plannedBudget === '' || si.plannedBudget == null ? null : Number(si.plannedBudget),
         })),
       }));
-      const scopeRes = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope/budgets`, {
+      const scopeRes = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/budgets`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ items }),
@@ -1883,7 +1885,7 @@ const CommercialTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 
       // 2) Extra budget-only lines → existing cost endpoint
       const extras = cost.filter(l => l.itemName && l.itemName.trim());
-      const costRes = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/cost`, {
+      const costRes = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/cost`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify({ lines: extras.map((l, i) => ({ id: l.id, seqNo: i + 1, itemName: l.itemName.trim(), amount: l.amount === '' ? 0 : Number(l.amount), plannedDate: l.plannedDate || null, notes: l.notes || '' })) }),
@@ -2193,7 +2195,7 @@ const bomRowToLine = (row, seq) => ({
   notes:    String(row['Notes'] ?? row['notes'] ?? row['Remarks'] ?? '').trim(),
 });
 
-const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
+export const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [lines, setLines] = useState([]);
   const { confirmModal, showConfirmation } = useConfirmationModal();
   const [loading, setLoading] = useState(true);
@@ -2203,7 +2205,7 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/bom`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
         setLines((data.data.lines || []).map(l => ({
@@ -2264,7 +2266,7 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   // Seed BOM lines from the order book's own line items (GET /{id}/items).
   const seedFromItems = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/items`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       const items = (data.success && Array.isArray(data.data?.items)) ? data.data.items
                   : (Array.isArray(data.items) ? data.items : (Array.isArray(data.data) ? data.data : []));
@@ -2310,7 +2312,7 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
           notes: l.notes,
         })),
       };
-      const res = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/bom`, {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/bom`, {
         method: 'PUT', credentials: 'include',
         headers: { ...authHeaders, 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -2395,12 +2397,9 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 //  • Billing:   planned-to-bill vs invoiced vs collected (live invoices)
 //  • Cost:      planned vs actual procurement + spend (live PO/expenses)
 // ─────────────────────────────────────────────────────────────────────────────
-const STATUS_CLASS = {
-  'Completed': 'completed', 'In Progress': 'in-progress',
-  'Delayed': 'delayed', 'On Hold': 'not-started', 'Not Started': 'not-started',
-};
+// (STATUS_CLASS map removed — unused after the port; status styling is inline below)
 
-const ProgressTab = ({ orderBook, authHeaders, showError }) => {
+export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
   const [phases, setPhases] = useState([]);
   const [summary, setSummary] = useState(null);
   const [planMeta, setPlanMeta] = useState({ start: '', end: '', unit: 'WEEK' });
@@ -2412,8 +2411,8 @@ const ProgressTab = ({ orderBook, authHeaders, showError }) => {
       setLoading(true);
       try {
         const [scRes, sRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/order-book/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
-          fetch(`${API_BASE_URL}/order-book/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
+          fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope`, { credentials: 'include', headers: authHeaders }),
+          fetch(`${API_BASE_URL}/projects/${orderBook.id}/commercial-summary-v2`, { credentials: 'include', headers: authHeaders }),
         ]);
         const scData = await scRes.json();
         const sData = await sRes.json();

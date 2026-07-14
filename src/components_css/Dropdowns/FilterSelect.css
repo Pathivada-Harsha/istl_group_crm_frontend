@@ -1,0 +1,36 @@
+/* FilterSelect.css
+ *
+ * Shared, always-loaded overrides for the portal dropdown list rendered by
+ * components/Dropdowns/FilterSelect.js. The base `.filter-dropdown-list` styles
+ * are duplicated across many page CSS files with a near-invisible 5px scrollbar,
+ * which made users think a scrollable list held only the first few items.
+ * These rules give the menu a clearly visible scrollbar in every context.
+ * `!important` is used deliberately to win over those duplicated definitions
+ * regardless of stylesheet load order.
+ */
+
+/* Firefox */
+.filter-dropdown-list {
+  scrollbar-width: thin !important;
+  scrollbar-color: #94a3b8 #eef2f6 !important;
+  overscroll-behavior: contain;
+}
+
+/* WebKit / Chromium / Edge / Safari */
+.filter-dropdown-list::-webkit-scrollbar {
+  width: 10px !important;
+  height: 10px !important;
+}
+.filter-dropdown-list::-webkit-scrollbar-track {
+  background: #eef2f6 !important;
+  border-radius: 0 10px 10px 0;
+}
+.filter-dropdown-list::-webkit-scrollbar-thumb {
+  background: #94a3b8 !important;
+  border-radius: 8px !important;
+  border: 2px solid #eef2f6 !important;
+  min-height: 32px;
+}
+.filter-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: #64748b !important;
+}
