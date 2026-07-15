@@ -13,7 +13,6 @@ import { FiDownload, FiFileText, FiGrid } from 'react-icons/fi';
 import * as XLSX from 'xlsx';
 import { saveAs } from 'file-saver';
 import { jsPDF } from 'jspdf';
-import '../pages-css/ProjectDashboard.css';
 import '../pages-css/ProjectDashboard2.css';
 import GroupProjectFilter from "../components/Dropdowns/GroupProjectFilter.js";
 import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
@@ -184,6 +183,26 @@ const attachWheelZoomGuard = (el) => {
 };
 
 const IDENTITY_FMT = (v) => v; // stable default — inline `(v) => v` would change identity every render and re-trigger the chart rebuild effects
+
+// Wrap a long name into multiple lines so the FULL project name is always
+// visible under its bar (Chart.js renders an array label as stacked lines).
+const wrapChartLabel = (label, maxChars = 14) => {
+  const text = String(label ?? '').trim();
+  if (text.length <= maxChars) return text;
+  const words = text.split(/\s+/);
+  const lines = [];
+  let line = '';
+  words.forEach(w => {
+    // A single word longer than the limit gets hard-broken so it can't overflow
+    while (w.length > maxChars) { if (line) { lines.push(line); line = ''; } lines.push(w.slice(0, maxChars)); w = w.slice(maxChars); }
+    if (!line) line = w;
+    else if ((line + ' ' + w).length <= maxChars) line += ' ' + w;
+    else { lines.push(line); line = w; }
+  });
+  if (line) lines.push(line);
+  // Show the COMPLETE name — no 3-line cap, no '…' truncation
+  return lines;
+};
 const ChartJSBar = ({
   data,          // [{ label, values: { Budget?, Received?, Spent?, 'Order Value'? }, color? }]
   labels,        // string[] — X axis labels
@@ -192,7 +211,7 @@ const ChartJSBar = ({
   yTickFormatter = IDENTITY_FMT,
   xLabelRotation = -30,
   modal = false,
-  showValueLabels = false,        // draw the value above each bar
+  showValueLabels = true,         // amounts are shown above each bar by default
   valueLabelFormatter = IDENTITY_FMT,
   onReset,       // optional external reset trigger ref
 }) => {
@@ -201,6 +220,7 @@ const ChartJSBar = ({
   const themeV = useThemeVersion();
   const [ready, setReady] = React.useState(!!window.Chart);
   const [logScaleActive, setLogScaleActive] = React.useState(false);
+  const [hiddenSets, setHiddenSets] = React.useState({}); // HTML-legend toggled-off series
 
   React.useEffect(() => {
     if (!window.Chart) {
@@ -252,39 +272,111 @@ const ChartJSBar = ({
       afterDatasetsDraw(chart) {
         if (!showValueLabels) return;
         const { ctx: c } = chart;
+        const metas = chart.data.datasets.map((_, i) => chart.getDatasetMeta(i));
+        const step = modal ? 15 : 13;
+        // Final label Y of every already-drawn label, per category index —
+        // collision checks compare against where labels ACTUALLY ended up
+        // (including earlier lifts), so equal amounts always stack cleanly.
+        const placed = {}; // { [idx]: [y, y, ...] }
         chart.data.datasets.forEach((ds, dsIndex) => {
-          const meta = chart.getDatasetMeta(dsIndex);
-          if (meta.hidden) return;
+          const meta = metas[dsIndex];
+          if (!chart.isDatasetVisible(dsIndex)) return;
           meta.data.forEach((bar, idx) => {
             const val = ds.data[idx];
             if (val == null) return;
+            const isZero = Number(val) === 0;
+            // Zero values have no height (and NO position on a log axis), so
+            // their label is pinned just above the x-axis baseline instead of
+            // floating at whatever y Chart.js assigns the empty bar.
+            let labelY = isZero ? chart.chartArea.bottom - 4 : bar.y - 5;
+            // Lift until this label is at least one line away from EVERY
+            // label already placed in this group — covers equal amounts,
+            // near-equal heights, and multiple zeros alike.
+            const others = placed[idx] || [];
+            let moved = true;
+            while (moved) {
+              moved = false;
+              for (const oy of others) {
+                if (Math.abs(oy - labelY) < step) { labelY = oy - step; moved = true; }
+              }
+            }
+            (placed[idx] = others).push(labelY);
             c.save();
-            c.font = `700 ${modal ? 11 : 9.5}px system-ui,sans-serif`;
-            c.fillStyle = P.tick;
+            c.font = `700 ${modal ? 11 : 9}px system-ui,sans-serif`;
             c.textAlign = 'center';
             c.textBaseline = 'bottom';
-            c.fillText(valueLabelFormatter(val), bar.x, bar.y - 5);
+            // Contrast pill: a rounded background chip behind the amount so
+            // the text stays readable even when it sits over a bar of the
+            // same colour (e.g. red amount over the red Spent bar).
+            const txt = valueLabelFormatter(val);
+            const tw = c.measureText(txt).width;
+            const fh = modal ? 11 : 9;
+            const px = 4, py = 2, r = 4;
+            const bx = bar.x - tw / 2 - px;
+            const by = labelY - fh - py;
+            const bw = tw + px * 2;
+            const bh = fh + py * 2;
+            c.beginPath();
+            c.moveTo(bx + r, by);
+            c.arcTo(bx + bw, by, bx + bw, by + bh, r);
+            c.arcTo(bx + bw, by + bh, bx, by + bh, r);
+            c.arcTo(bx, by + bh, bx, by, r);
+            c.arcTo(bx, by, bx + bw, by, r);
+            c.closePath();
+            c.fillStyle = P.plotBg;
+            c.globalAlpha = 0.88;
+            c.fill();
+            c.globalAlpha = 1;
+            // Theme-aware text shade of the bar's colour: on the LIGHT theme
+            // the pastels are too light to read, so darken them; on the DARK
+            // theme darks vanish, so brighten them instead.
+            const isDarkTheme = typeof document !== 'undefined'
+              && document.documentElement.getAttribute('data-theme') === 'dark';
+            const darken   = { '#60a5fa': '#2563eb', '#34d399': '#059669', '#f87171': '#dc2626', '#a78bfa': '#7c3aed', '#fbbf24': '#d97706' };
+            const brighten = { '#60a5fa': '#93c5fd', '#34d399': '#6ee7b7', '#f87171': '#fca5a5', '#a78bfa': '#c4b5fd', '#fbbf24': '#fcd34d' };
+            const base = ds.borderColor || P.tick;
+            const key = String(base).toLowerCase();
+            c.fillStyle = (isDarkTheme ? brighten[key] : darken[key]) || base;
+            c.fillText(txt, bar.x, labelY);
             c.restore();
           });
         });
       },
     };
 
+    // Full names, wrapped onto multiple lines under each bar
+    const wrappedLabels = labels.map(l => wrapChartLabel(l, modal ? 24 : 13));
+    // Clear gap between bars/groups so amount labels never collide
+    const isDarkTheme = typeof document !== 'undefined'
+      && document.documentElement.getAttribute('data-theme') === 'dark';
+    const spacedDatasets = datasets.map(ds => ({
+      maxBarThickness: modal ? 56 : 44,
+      // Wider bars with a clear gap between groups; labels are stacked above
+      // the whole group now, so bar width no longer risks label collisions.
+      categoryPercentage: 0.6,
+      barPercentage: 0.8,
+      ...ds,
+      // Dark theme: the pale 1.5px borders clash against dark cards and make
+      // the bars look outlined/odd — draw them flat (fill only) instead.
+      ...(isDarkTheme ? { borderWidth: 0 } : {}),
+    }));
+
     const ctx = canvasRef.current.getContext('2d');
     chartRef.current = new Chart(ctx, {
       type: 'bar',
-      data: { labels, datasets },
+      data: { labels: wrappedLabels, datasets: spacedDatasets },
       plugins: [whiteBgPlugin, valueLabelPlugin],
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 300 },
         backgroundColor: P.plotBg,
-        layout: { padding: { top: showValueLabels ? 22 : 6 } },
+        layout: { padding: { top: showValueLabels ? (modal ? 36 : 32) : 6 } },
         plugins: {
           legend: {
-            display: datasets.length > 1,
-            labels: { color: P.legend, font: { size: 11 }, boxWidth: 12, padding: 12 },
+            // Canvas legend disabled — legend chips are rendered as HTML in
+            // the top-right badge row, just BEFORE the "Log scale" badge
+            display: false,
           },
           tooltip: {
             enabled: !showValueLabels,
@@ -295,6 +387,10 @@ const ChartJSBar = ({
             bodyColor: P.tipBody,
             padding: 10,
             callbacks: {
+              title: (items) => {
+                const raw = items?.[0]?.chart?.data?.labels?.[items[0].dataIndex];
+                return Array.isArray(raw) ? raw.join(' ') : raw;
+              },
               label: (ctx) => ` ${ctx.dataset.label}: ${yTickFormatter(ctx.raw)}`,
             },
           },
@@ -329,8 +425,10 @@ const ChartJSBar = ({
             ticks: {
               font: { size: modal ? 11 : 10 },
               color: P.tick,
-              maxRotation: Math.abs(xLabelRotation),
-              minRotation: labels.length > 6 ? Math.abs(xLabelRotation) : 0,
+              // Names now wrap onto multiple lines, so they stay horizontal
+              // and are always shown completely — no rotation, no skipping.
+              maxRotation: 0,
+              minRotation: 0,
               autoSkip: false,
             },
             grid: { display: false },
@@ -338,6 +436,9 @@ const ChartJSBar = ({
           },
           y: {
             type: yScaleType,
+            // Extend the axis ~15% above the tallest bar so the topmost tick
+            // value is never SMALLER than what the bars visually show.
+            ...(yScaleType === 'linear' ? { grace: '15%', beginAtZero: true } : {}),
             ticks: {
               font: { size: modal ? 11 : 10 },
               color: P.tick,
@@ -376,17 +477,48 @@ const ChartJSBar = ({
           Loading chart…
         </div>
       )}
-      <canvas
-        ref={canvasRef}
-        style={{ display: ready ? 'block' : 'none', width:'100%', height:'100%' }}
-        onClick={e => e.stopPropagation()}
-        onMouseDown={e => e.stopPropagation()}
-      />
+      {/* Scroll container: with huge data every group keeps a readable
+          minimum width (bars + amount labels) and the chart scrolls
+          horizontally instead of crushing everything together. */}
+      <div style={{ overflowX: 'auto', overflowY: 'hidden', width: '100%', height: '100%' }}>
+        <div style={{ position: 'relative', height: '100%', minWidth: labels && labels.length > (modal ? 10 : 6) ? `${labels.length * (modal ? 130 : 110)}px` : '100%' }}>
+          <canvas
+            ref={canvasRef}
+            style={{ display: ready ? 'block' : 'none', width:'100%', height:'100%' }}
+            onClick={e => e.stopPropagation()}
+            onMouseDown={e => e.stopPropagation()}
+          />
+        </div>
+      </div>
       {ready && (
         <div
-          style={{ position:'absolute', top:6, right:8, display:'flex', gap:4, alignItems:'center' }}
+          style={{ position:'absolute', top:6, right:8, display:'flex', gap:6, alignItems:'center', flexWrap:'wrap', justifyContent:'flex-end' }}
           onClick={e => e.stopPropagation()}
         >
+          {datasets.length > 1 && datasets.map((ds, i) => (
+            <span
+              key={ds.label || i}
+              title="Click to show / hide this series"
+              onClick={e => {
+                e.stopPropagation();
+                const ch = chartRef.current;
+                if (!ch) return;
+                ch.setDatasetVisibility(i, !ch.isDatasetVisible(i));
+                ch.update();
+                setHiddenSets(hs => ({ ...hs, [i]: !ch.isDatasetVisible(i) }));
+              }}
+              style={{
+                display:'inline-flex', alignItems:'center', gap:4, cursor:'pointer',
+                fontSize:10, fontWeight:600, lineHeight:'16px', userSelect:'none',
+                color: getChartPalette().legend,
+                textDecoration: hiddenSets[i] ? 'line-through' : 'none',
+                opacity: hiddenSets[i] ? 0.5 : 1,
+              }}
+            >
+              <span style={{ width:11, height:11, borderRadius:2, background: ds.backgroundColor, border:`1px solid ${ds.borderColor}`, display:'inline-block' }} />
+              {ds.label}
+            </span>
+          ))}
           {logScaleActive && (
             <span
               title="Values differ greatly — logarithmic scale used so all bars are visible"
@@ -459,49 +591,81 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
         const cx = chartArea ? (chartArea.left + chartArea.right) / 2 : width / 2;
         const cy = chartArea ? (chartArea.top + chartArea.bottom) / 2 : h * 0.44;
 
+        // ── Pass 1: compute a label entry for every visible slice ──────────
+        const entries = [];
         meta.data.forEach((arc, i) => {
           if (!chart.getDataVisibility(i)) return; // skip hidden slices
           const val = values[i];
           const pct = visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
           if (parseFloat(pct) < 2) return; // skip slivers
 
-          // Mid-angle of the arc
           const midAngle = (arc.startAngle + arc.endAngle) / 2;
           const outerR   = arc.outerRadius;
-          const innerR   = arc.innerRadius;
-          const midR     = outerR + (modal ? 18 : 14); // point on outer edge
-          const elbowR   = outerR + (modal ? (showAmount ? 38 : 32) : (showAmount ? 30 : 24)); // elbow bend
-
+          const elbowR   = outerR + (modal ? (showAmount ? 38 : 32) : (showAmount ? 30 : 24));
           const cos = Math.cos(midAngle);
           const sin = Math.sin(midAngle);
+          entries.push({
+            i, val, pct, cos, sin,
+            x1: cx + (outerR + 4) * cos,
+            y1: cy + (outerR + 4) * sin,
+            y2: cy + elbowR * sin,
+            x2: cx + elbowR * cos,
+            side: cos >= 0 ? 'right' : 'left',
+          });
+        });
 
-          // Three points: slice edge → elbow → label anchor
-          const x1 = cx + (outerR + 4) * cos;
-          const y1 = cy + (outerR + 4) * sin;
-          const x2 = cx + elbowR * cos;
-          const y2 = cy + elbowR * sin;
-          const x3 = x2 + (cos >= 0 ? (modal ? 14 : 10) : -(modal ? 14 : 10));
-          const y3 = y2;
+        // ── Pass 2: per side, push overlapping labels apart vertically ─────
+        // Each label needs labelH px of vertical space (2 lines when
+        // showAmount). Sort by y and nudge downward until nothing overlaps,
+        // then clamp the whole column back inside the canvas.
+        const labelH = showAmount ? (modal ? 30 : 26) : (modal ? 16 : 14);
+        ['left', 'right'].forEach(side => {
+          const col = entries.filter(e => e.side === side).sort((a, b) => a.y2 - b.y2);
+          for (let k = 1; k < col.length; k++) {
+            if (col[k].y2 - col[k - 1].y2 < labelH) col[k].y2 = col[k - 1].y2 + labelH;
+          }
+          // Clamp bottom inside the canvas, then re-resolve upward overlaps
+          for (let k = col.length - 1; k >= 0; k--) {
+            const maxY = h - labelH / 2 - 2;
+            if (col[k].y2 > maxY) col[k].y2 = maxY;
+            if (k < col.length - 1 && col[k + 1].y2 - col[k].y2 < labelH) col[k].y2 = col[k + 1].y2 - labelH;
+          }
+          // Clamp top
+          col.forEach(e => { if (e.y2 < labelH / 2 + 2) e.y2 = labelH / 2 + 2; });
+        });
 
+        // ── Pass 3: draw ────────────────────────────────────────────────────
+        entries.forEach(e => {
+          const { i, val, pct, cos } = e;
+          const x3 = e.x2 + (cos >= 0 ? (modal ? 14 : 10) : -(modal ? 14 : 10));
+          const y3 = e.y2;
           const anchor = cos >= 0 ? 'left' : 'right';
 
+          // Clamp label x inside the canvas so amounts never run off-screen —
+          // measure the widest text line and pull the anchor point inward.
           c.save();
-          // Elbow line
+          c.font = `700 ${modal ? 12 : 10.5}px system-ui,sans-serif`;
+          const txtW = Math.max(
+            c.measureText(showAmount ? amountFormatter(val) : `${pct}%`).width,
+            showAmount ? c.measureText(`${pct}%`).width : 0
+          );
+          let labelX = x3 + (cos >= 0 ? 5 : -5);
+          if (anchor === 'left'  && labelX + txtW > width - 4) labelX = width - 4 - txtW;
+          if (anchor === 'right' && labelX - txtW < 4)         labelX = 4 + txtW;
+
+          // Elbow line follows the (possibly moved) label position
           c.beginPath();
-          c.moveTo(x1, y1);
-          c.lineTo(x2, y2);
+          c.moveTo(e.x1, e.y1);
+          c.lineTo(e.x2, y3);
           c.lineTo(x3, y3);
           c.strokeStyle = P.muted;
           c.lineWidth = 1.2;
           c.stroke();
-          // Dot at elbow
           c.beginPath();
           c.arc(x3, y3, 2.5, 0, Math.PI * 2);
           c.fillStyle = P.muted;
           c.fill();
-          // Label text — modern 2-line style: bold amount on top, muted % chip below
           c.textAlign = anchor;
-          const labelX = x3 + (cos >= 0 ? 5 : -5);
           if (showAmount) {
             c.textBaseline = 'alphabetic';
             c.font = `700 ${modal ? 12 : 10.5}px system-ui,sans-serif`;
@@ -567,7 +731,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
                   const val = chart.data.datasets[0].data[i];
                   const pct = !isHidden && visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
                   return {
-                    text: isHidden ? `${label}` : `${label} (${pct}%)`,
+                    text: isHidden ? `${label}` : (showAmount ? `${label} — ${amountFormatter(val)} (${pct}%)` : `${label} (${pct}%)`),
                     fillStyle: bgColors[i],
                     strokeStyle: bdColors[i],
                     fontColor: P.legend,
@@ -592,7 +756,7 @@ const ProjDonutChart = ({ data, height = 280, labelKey = 'name', valueKey = 'val
                 const visTotal = ctx.chart.data.datasets[0].data.reduce(
                   (s, v, i) => s + (ctx.chart.getDataVisibility(i) ? Number(v) : 0), 0);
                 const pct = visTotal > 0 ? ((val / visTotal) * 100).toFixed(1) : '0';
-                return ` ${ctx.label}: ${val} (${pct}%)`;
+                return ` ${ctx.label}: ${showAmount ? amountFormatter(val) : val} (${pct}%)`;
               },
             },
           },
@@ -725,7 +889,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
     const skewRatio = maxBudget / (minBudget || 1);
     const yScaleType = skewRatio > 15 ? 'logarithmic' : 'linear';
 
-    const labels   = data.map(d => d.name);
+    const labels   = data.map(d => wrapChartLabel(d.name, modal ? 24 : 12));
     const bdColors = data.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
     const bgColors = bdColors.map(c => c + 'dd');
 
@@ -743,13 +907,16 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
           borderWidth: 1.5,
           borderRadius: 0,
           borderSkipped: false,
+          maxBarThickness: modal ? 52 : 36,
+          categoryPercentage: 0.5,
+          barPercentage: 0.7,
         }],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
         animation: { duration: 400 },
-        layout: { padding: { top: 30 } },
+        layout: { padding: { top: 40 } },
         plugins: {
           legend: { display: false },
           tooltip: {
@@ -764,6 +931,7 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
             bodyColor: P.tipBody,
             padding: 10,
             callbacks: {
+              title: (items) => data[items?.[0]?.dataIndex]?.name ?? '',
               label: (tooltipCtx) => {
                 const item = data[tooltipCtx.dataIndex];
                 return [` Order Value: ${fmtCurr(tooltipCtx.raw)}`, ` Share: ${item?.pct ?? 0}%`];
@@ -790,16 +958,8 @@ const ContributionBarChart = ({ data, height = 300, modal = false }) => {
               maxRotation: 0,   // names shown horizontally, never diagonal
               minRotation: 0,
               autoSkip: false,
-              // The preview card is narrow, so the full (already-shortened)
-              // project name still overflows into its neighbours at 0°
-              // rotation. Shorten further just for the axis text here — the
-              // tooltip on hover still shows the fuller name, and the modal
-              // (much wider) keeps more of the original length.
-              callback(value) {
-                const label = this.getLabelForValue(value);
-                const limit = modal ? 22 : 10;
-                return label.length > limit ? label.slice(0, limit) + '…' : label;
-              },
+              // Names are pre-wrapped into multi-line arrays, so the complete
+              // project name always renders under its bar — no truncation.
             },
             grid: { display: false },
             border: { color: P.muted, width: 1.5 },
@@ -1352,6 +1512,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
   const [finViewMode, setFinViewMode]   = React.useState('cards'); // 'cards' | 'table' | 'graph'
   const [finBarShowLabels, setFinBarShowLabels] = React.useState(true); // toggle: amount labels on Financial Overview bars
   const [budgetBarShowLabels, setBudgetBarShowLabels] = React.useState(true); // toggle: amount labels on Top Projects (Budget vs Received) bars
+  const [rvsShowLabels, setRvsShowLabels] = React.useState(true); // toggle: amount labels on Received vs Spent bars (shown by default)
   const _themeVersion = useThemeVersion(); // re-render inline-styled modals on theme toggle
   const isDark = React.useMemo(
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark',
@@ -1723,8 +1884,10 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
         const map = {};
         projects.forEach(p => {
           const key = p.groupId || 'Unassigned';
-          if (!map[key]) map[key] = { name: key, budget: 0, count: 0 };
-          map[key].budget += Number(p.budget) || 0;
+          if (!map[key]) map[key] = { name: key, budget: 0, received: 0, spent: 0, count: 0 };
+          map[key].budget   += Number(p.budget) || 0;
+          map[key].received += Number(p.received) || 0;
+          map[key].spent    += Number(p.spent) || 0;
           map[key].count  += 1;
         });
         return Object.values(map)
@@ -1738,8 +1901,10 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
       const map = {};
       projects.forEach(p => {
         const key = p.subGroupName || p.subGroup || 'Other';
-        if (!map[key]) map[key] = { name: key, budget: 0, count: 0 };
-        map[key].budget += Number(p.budget) || 0;
+        if (!map[key]) map[key] = { name: key, budget: 0, received: 0, spent: 0, count: 0 };
+        map[key].budget   += Number(p.budget) || 0;
+        map[key].received += Number(p.received) || 0;
+        map[key].spent    += Number(p.spent) || 0;
         map[key].count  += 1;
       });
       return Object.values(map)
@@ -1750,8 +1915,10 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     // SUBGROUP scope — each project's contribution
     return projects
       .map(p => ({
-        name: p.projectName?.slice(0, 22) + (p.projectName?.length > 22 ? '…' : ''),
+        name: p.projectName || '',
         budget: Number(p.budget) || 0,
+        received: Number(p.received) || 0,
+        spent: Number(p.spent) || 0,
         pct: +((Number(p.budget) / total) * 100).toFixed(1),
         count: 1,
       }))
@@ -1772,7 +1939,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
   const topByBudget = React.useMemo(() => [...projects]
     .sort((a, b) => Number(b.budget || 0) - Number(a.budget || 0))
     .slice(0, 6)
-    .map(p => ({ name: p.projectName?.slice(0, 18) + (p.projectName?.length > 18 ? '…' : ''), budget: Number(p.budget || 0), received: Number(p.received || 0), spent: Number(p.spent || 0) })),
+    .map(p => ({ name: p.projectName || '', budget: Number(p.budget || 0), received: Number(p.received || 0), spent: Number(p.spent || 0) })),
   [projects]);
 
   // ── Stable chart props ─────────────────────────────────────────────────────
@@ -1785,13 +1952,22 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
     [statusDistribution] // eslint-disable-line react-hooks/exhaustive-deps
   );
   const topBudgetLabels = React.useMemo(() => topByBudget.map(d => d.name), [topByBudget]);
+  // Only 2 bars — Budget vs Received (Spent removed as requested)
   const topBudgetDatasets = React.useMemo(() => [
     { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
     { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-    { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
   ], [topByBudget]);
+  // NEW chart — Received vs Spent per group/sub-group/project (replaces the
+  // old "Order Value" contribution bar chart)
+  const rvsLabels = React.useMemo(() => contributionData.map(d => d.name), [contributionData]);
+  const rvsDatasets = React.useMemo(() => [
+    { label: 'Received', data: contributionData.map(d => d.received || 0), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+    { label: 'Spent',    data: contributionData.map(d => d.spent || 0),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
+  ], [contributionData]);
   const contributionPieData = React.useMemo(
-    () => contributionData.map(d => ({ name: d.name, value: d.pct, label: `${d.pct}%` })),
+    // Pass the ₹ amount as the value — the donut computes % itself and, with
+    // showAmount, renders "₹X Cr" + "NN%" on every slice label.
+    () => contributionData.map(d => ({ name: d.name, value: d.budget })),
     [contributionData]
   );
 
@@ -2325,30 +2501,11 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
         </div>
       </div>
 
-      {/* Charts Row */}
+      {/* Charts Row 1: Budget vs Received | Received vs Spent */}
       <div className="dashboard-charts-grid">
-        {/* Status Pie */}
-        {statusDistribution.length > 0 ? (
-          <div className="chart-card" style={{ height: 320 }}>
-            <div className="chart-header">
-              <h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4>
-            </div>
-            <ProjDonutChart
-              key="status-pie-stable"
-              data={statusPieData}
-              height={264}
-              labelKey="name"
-              valueKey="value"
-              colorKey="color"
-            />
-          </div>
-        ) : (
-          <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Status Distribution</h4></div><EmptyChart /></div>
-        )}
-
-        {/* Top Projects Budget Bar — click to expand */}
+        {/* Top Projects Budget Bar — expands ONLY via the expand button */}
         {topByBudget.length > 0 ? (
-          <div className="chart-card chart-card-clickable" style={{ height: 320 }} onClick={() => setChartModal({ type: 'budgetBar' })}>
+          <div className="chart-card" style={{ height: 320 }}>
             <div className="chart-header">
               <h4 className="chart-title"><BarChart3 size={16} />Top Projects — Budget vs Received</h4>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2358,7 +2515,12 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                   style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: budgetBarShowLabels ? '#eff6ff' : 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                   {budgetBarShowLabels ? <EyeOff size={11} /> : <Eye size={11} />} {budgetBarShowLabels ? 'Hide Amounts' : 'Show Amounts'}
                 </button>
-                <span className="chart-expand-hint">🔍 Click to expand</span>
+                <button
+                  onClick={e => { e.stopPropagation(); setChartModal({ type: 'budgetBar' }); }}
+                  title="Open this chart in a large view"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-white,#fff)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  🔍 Click to expand
+                </button>
               </div>
             </div>
             <ChartJSBar
@@ -2374,31 +2536,68 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
         ) : (
           <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Budget vs Received</h4></div><EmptyChart /></div>
         )}
+
+        {/* Received vs Spent grouped bars — card itself is NOT clickable,
+            expands ONLY via the button. */}
+        {contributionData.length > 0 ? (
+          <div className="chart-card" style={{ height: 320 }}>
+            <div className="chart-header">
+              <h4 className="chart-title">
+                <BarChart3 size={15} />
+                {data.scope === 'SUBGROUP' ? 'Projects — Received vs Spent (₹)' : data.scope === 'GROUP' ? 'Sub-groups — Received vs Spent (₹)' : 'Groups — Received vs Spent (₹)'}
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setRvsShowLabels(v => !v); }}
+                  title="Toggle the amount label shown on top of each bar"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: rvsShowLabels ? '#eff6ff' : 'var(--c-white,#fff)', color: '#3b82f6', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  {rvsShowLabels ? <EyeOff size={11} /> : <Eye size={11} />} {rvsShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setChartModal({ type: 'contributionBar' }); }}
+                  title="Open this chart in a large view"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-white,#fff)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                  🔍 Click to expand
+                </button>
+              </div>
+            </div>
+            <ChartJSBar
+              key="rvs-bar-stable"
+              labels={rvsLabels}
+              datasets={rvsDatasets}
+              height={264}
+              yTickFormatter={formatCurrency}
+              showValueLabels={rvsShowLabels}
+              valueLabelFormatter={formatCurrency}
+            />
+          </div>
+        ) : (
+          <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Received vs Spent</h4></div><EmptyChart /></div>
+        )}
       </div>
 
-      {/* ── Contribution Chart: Group (ALL) / Sub-group (GROUP) / Project (SUBGROUP) ── */}
+      {/* ── Charts Row 2: Project Status Distribution | Turnover Share ── */}
       {contributionData.length > 1 && (
         <div className="dashboard-section">
-          <h3 className="section-title">
-            <Percent size={20} />
-            {data.scope === 'SUBGROUP'
-              ? 'Project-wise Turnover Contribution'
-              : data.scope === 'GROUP'
-              ? 'Sub-group Turnover Contribution'
-              : 'Group-wise Turnover Contribution'}
-          </h3>
-          <div className="dashboard-charts-grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
-            {/* Horizontal Bar chart — budget amounts */}
-            <div className="chart-card chart-card-clickable" style={{ height: 360 }} onClick={() => setChartModal({ type: 'contributionBar' })}>
-              <div className="chart-header">
-                <h4 className="chart-title">
-                  <BarChart3 size={15} />
-                  {data.scope === 'SUBGROUP' ? 'Projects by Order Value (₹)' : data.scope === 'GROUP' ? 'Sub-groups by Order Value (₹)' : 'Groups by Order Value (₹)'}
-                </h4>
-                <span className="chart-expand-hint">🔍 Click to expand</span>
+          <div className="dashboard-charts-grid">
+            {/* Status Pie */}
+            {statusDistribution.length > 0 ? (
+              <div className="chart-card" style={{ height: 360 }}>
+                <div className="chart-header">
+                  <h4 className="chart-title"><PieChart size={16} />Project Status Distribution</h4>
+                </div>
+                <ProjDonutChart
+                  key="status-pie-stable"
+                  data={statusPieData}
+                  height={304}
+                  labelKey="name"
+                  valueKey="value"
+                  colorKey="color"
+                />
               </div>
-              <ContributionBarChart key="contrib-bar-stable" data={contributionData} height={304} />
-            </div>
+            ) : (
+              <div className="chart-card"><div className="chart-header"><h4 className="chart-title">Status Distribution</h4></div><EmptyChart /></div>
+            )}
 
             {/* Pie chart — % contribution */}
             <div className="chart-card" style={{ height: 360 }}>
@@ -2414,6 +2613,8 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 height={304}
                 labelKey="name"
                 valueKey="value"
+                showAmount
+                amountFormatter={formatCurrency}
               />
             </div>
           </div>
@@ -2659,7 +2860,7 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
               <h3 style={{ margin:0, fontSize:16, fontWeight:700, color: isDark ? '#e7ecf3' : '#1e293b', display:'flex', alignItems:'center', gap:8 }}>
                 {chartModal.type === 'statusPie' && <><PieChart size={18} /> Project Status Distribution</>}
                 {chartModal.type === 'budgetBar' && <><BarChart3 size={18} /> Top Projects — Budget vs Received</>}
-                {chartModal.type === 'contributionBar' && <><BarChart3 size={18} /> {data.scope === 'SUBGROUP' ? 'Projects' : data.scope === 'GROUP' ? 'Sub-groups' : 'Groups'} by Order Value</>}
+                {chartModal.type === 'contributionBar' && <><BarChart3 size={18} /> {data.scope === 'SUBGROUP' ? 'Projects' : data.scope === 'GROUP' ? 'Sub-groups' : 'Groups'} — Received vs Spent (₹)</>}
                 {chartModal.type === 'contributionPie' && <><PieChart size={18} /> {data.scope === 'SUBGROUP' ? 'Project' : data.scope === 'GROUP' ? 'Sub-group' : 'Group'} Turnover Share (%)</>}
                 {chartModal.type === 'finOverviewBar' && <><BarChart3 size={18} /> Financial Overview — All Figures (₹)</>}
               </h3>
@@ -2692,7 +2893,6 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                     datasets={[
                       { label: 'Budget',   data: topByBudget.map(d => d.budget),   backgroundColor: '#93c5fd', borderColor: '#60a5fa', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
                       { label: 'Received', data: topByBudget.map(d => d.received), backgroundColor: '#6ee7b7', borderColor: '#34d399', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
-                      { label: 'Spent',    data: topByBudget.map(d => d.spent),    backgroundColor: '#fca5a5', borderColor: '#f87171', borderWidth: 1.5, borderRadius: 0, borderSkipped: false },
                     ]}
                     height={400}
                     yTickFormatter={v => formatCurrency(v)}
@@ -2703,15 +2903,35 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
                 </>
               )}
               {chartModal.type === 'contributionBar' && (
-                <ContributionBarChart data={contributionData} height={Math.max(400, contributionData.length * 60 + 120)} modal={true} />
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+                    <button
+                      onClick={() => setRvsShowLabels(s => !s)}
+                      title="Toggle the amount label shown on top of each bar"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 14px', borderRadius: 7, border: isDark ? '1px solid #2b3445' : '1px solid #e2e8f0', background: rvsShowLabels ? (isDark ? 'rgba(59,130,246,0.18)' : '#eff6ff') : (isDark ? '#232b3b' : '#fff'), color: '#3b82f6', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                      {rvsShowLabels ? <EyeOff size={13} /> : <Eye size={13} />} {rvsShowLabels ? 'Hide Amounts' : 'Show Amounts'}
+                    </button>
+                  </div>
+                  <ChartJSBar
+                    labels={rvsLabels}
+                    datasets={rvsDatasets}
+                    height={Math.max(400, contributionData.length * 60 + 120)}
+                    yTickFormatter={formatCurrency}
+                    showValueLabels={rvsShowLabels}
+                    valueLabelFormatter={formatCurrency}
+                    modal={true}
+                  />
+                </>
               )}
               {chartModal.type === 'contributionPie' && (
                 <ProjDonutChart
-                  data={contributionData.map(d => ({ name: d.name, value: d.pct }))}
+                  data={contributionPieData}
                   height={460}
                   labelKey="name"
                   valueKey="value"
                   modal={true}
+                  showAmount
+                  amountFormatter={formatCurrency}
                 />
               )}
               {chartModal.type === 'finOverviewBar' && chartModal.barLabels && (
@@ -3389,7 +3609,8 @@ const ProjectDashboard = () => {
   // modals — which made Top Categories (and, via the same pattern, Monthly
   // Spending Trend's modal chart) visibly flash/rebuild for no real reason.
   const topCategoriesLabels = React.useMemo(
-    () => (dashboardData?.procurementData?.categoryDistribution || []).map(d => d.name),
+    () => (dashboardData?.procurementData?.categoryDistribution || [])
+      .map(d => d.name || d.category || d.label || 'Uncategorized'),
     [dashboardData?.procurementData?.categoryDistribution]
   );
   const topCategoriesDatasets = React.useMemo(() => {
@@ -3411,22 +3632,12 @@ const ProjectDashboard = () => {
   );
   const spendingTrendDatasets = React.useMemo(() => {
     const trend = dashboardData?.spendingTrend || [];
+    // Bars show the monthly SPENDING amount (₹) — the trend line and the
+    // Orders count series were removed as requested.
     return [
       {
         label: 'Spending',
         data: trend.map(d => d.spending),
-        type: 'line',
-        backgroundColor: 'rgba(96,165,250,0.15)',
-        borderColor: '#60a5fa',
-        borderWidth: 2,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 4,
-        pointBackgroundColor: '#60a5fa',
-      },
-      {
-        label: 'Orders',
-        data: trend.map(d => d.orders),
         backgroundColor: '#6ee7b7',
         borderColor: '#34d399',
         borderWidth: 1.5,
@@ -3630,8 +3841,8 @@ const ProjectDashboard = () => {
             </div>
             <div className="project-overview-details">
               {[
-                [<Calendar size={18} />, 'Start Date',            formatDate(dashboardData.startDate)],
-                [<Calendar size={18} />, 'End Date',              formatDate(dashboardData.endDate)],
+                [<Calendar size={18} />, 'Notice to Proceed',     formatDate(dashboardData.startDate)],
+                [<Calendar size={18} />, 'Scheduled Completion',  formatDate(dashboardData.endDate)],
                 [<User size={18} />,     'Project Manager',       dashboardData.manager || 'Not Assigned'],
                 [<IndianRupee size={18} />, 'Total Project Value', formatCurrency(dashboardData.budget)],
                 ...(projectCapacity ? [[<span style={{ fontSize: 16 }}>⚡</span>, 'Capacity', (() => {
@@ -4215,31 +4426,25 @@ const ProjectDashboard = () => {
                     </button>
                   </div>
                 </div>
-                {/* Static non-zoomable preview using Recharts — same convention as Financial
-                    Overview. minPointSize keeps the Orders bar visible even for small counts;
-                    the Spending line and Orders bar each get their own label. */}
+                {/* Static non-zoomable preview using Recharts — bars show the monthly
+                    SPENDING amount (₹) with the amount labelled on top of each bar.
+                    The line series and the right-hand count axis were removed. */}
                 <ResponsiveContainer width="100%" height={260}>
                   <ComposedChart data={dashboardData.spendingTrend} margin={{ top: projSpendingShowLabels ? 26 : 10, right: 10, left: 10, bottom: 10 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#64748b' }} />
                     <YAxis yAxisId="left" tickFormatter={v => formatCurrency(v)} tick={{ fontSize: 10, fill: '#64748b' }} width={80} />
-                    <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: '#64748b' }} width={40} allowDecimals={false} />
                     {!projSpendingShowLabels && (
                       <Tooltip
-                        formatter={(v, name) => [name === 'Spending' ? formatCurrency(v) : v, name]}
+                        formatter={(v, name) => [formatCurrency(v), name]}
                         contentStyle={{ fontSize: 12, borderRadius: 8 }}
                       />
                     )}
-                    <Bar yAxisId="right" dataKey="orders" name="Orders" fill="#6ee7b7" stroke="#34d399" strokeWidth={1.5} radius={[4,4,0,0]} minPointSize={2}>
+                    <Bar yAxisId="left" dataKey="spending" name="Spending" fill="#6ee7b7" stroke="#34d399" strokeWidth={1.5} radius={[4,4,0,0]} minPointSize={2}>
                       {projSpendingShowLabels && (
-                        <LabelList dataKey="orders" position="top" formatter={v => v} style={{ fontSize: 9, fontWeight: 700, fill: '#059669' }} />
+                        <LabelList dataKey="spending" position="top" formatter={v => formatCurrency(v)} style={{ fontSize: 10, fontWeight: 700, fill: '#059669' }} />
                       )}
                     </Bar>
-                    <Line yAxisId="left" type="monotone" dataKey="spending" name="Spending" stroke="#60a5fa" strokeWidth={2} dot={{ r: 3, fill: '#60a5fa' }}>
-                      {projSpendingShowLabels && (
-                        <LabelList dataKey="spending" position="top" formatter={v => formatCurrency(v)} style={{ fontSize: 10, fontWeight: 700, fill: 'var(--ct-1e293b,#1e293b)' }} />
-                      )}
-                    </Line>
                   </ComposedChart>
                 </ResponsiveContainer>
                 <p style={{ fontSize: 11, color: 'var(--ct-94a3b8,#94a3b8)', textAlign: 'center', marginTop: 4 }}>
@@ -4268,19 +4473,24 @@ const ProjectDashboard = () => {
               <div className="chart-card"><div className="chart-header"><h4 className="chart-title">PO Status Distribution</h4></div><EmptyChart message="No POs yet" /></div>
             )}
 
-            {/* Top Categories Bar — half width, Chart.js with zoom */}
+            {/* Top Categories Bar — expands ONLY via the expand button */}
             {dashboardData.procurementData?.categoryDistribution?.length > 0 ? (
-              <div className="chart-card chart-card-clickable"
-                onClick={() => setProjChartModal({ type: 'topCategories' })}>
+              <div className="chart-card">
                 <div className="chart-header">
                   <h4 className="chart-title"><BarChart3 size={16} />Top Categories</h4>
-                  <span className="chart-expand-hint">🔍 Click to expand</span>
+                  <button
+                    onClick={e => { e.stopPropagation(); setProjChartModal({ type: 'topCategories' }); }}
+                    title="Open this chart in a large view"
+                    style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 6, border: '1px solid var(--c-e2e8f0,#e2e8f0)', background: 'var(--c-white,#fff)', color: '#64748b', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
+                    🔍 Click to expand
+                  </button>
                 </div>
                 <ChartJSBar
                   labels={topCategoriesLabels}
                   datasets={topCategoriesDatasets}
                   height={250}
                   yTickFormatter={v => formatCurrency(v)}
+                  valueLabelFormatter={v => formatCurrency(v)}
                 />
               </div>
             ) : (
@@ -4433,6 +4643,7 @@ const ProjectDashboard = () => {
                   datasets={topCategoriesDatasets}
                   height={420}
                   yTickFormatter={v => formatCurrency(v)}
+                  valueLabelFormatter={v => formatCurrency(v)}
                   modal={true}
                 />
               )}

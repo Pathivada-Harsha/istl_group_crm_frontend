@@ -38,6 +38,10 @@ import { useNavigate } from 'react-router-dom';
 import SockJS from 'sockjs-client';
 import { Client as StompClient } from '@stomp/stompjs';
 import { useAuth } from '../../hooks/useAuth';
+import useToast from '../../hooks/useToast';
+import ToastContainer from '../Notification_Toast/ToastContainer.js';
+import useConfirmationModal from '../HandleConfirmationModal';
+import ConfirmationModal from '../ConfirmationModal';
 
 /* ============================================================================
  * 1. CONFIG & HELPERS
@@ -419,13 +423,23 @@ export function NotificationBell() {
 }
 
 // ── A single card (used on the page) ──────────────────────────────────
-function NotificationCard({ n, onOpen, onToggleRead, onDelete, confirmId, onRequestDelete, onCancelDelete }) {
+function NotificationCard({ n, onOpen, onToggleRead, onDelete, checked, onToggleSelect }) {
   const meta = MODULE_META[n.module] || { label: n.module, color: '#2563eb' };
-  const isPendingConfirm = confirmId === n.id;
 
   return (
-    <div className={`ntf-card ${n.isRead ? '' : 'ntf-card-unread'}`}>
+    <div className={`ntf-card ${n.isRead ? '' : 'ntf-card-unread'} ${checked ? 'ntf-card-selected' : ''}`}>
       <span className="ntf-card-accent" style={{ background: meta.color }} />
+      {/* Multi-select checkbox — shown only when the parent passes a handler */}
+      {onToggleSelect && (
+        <label className="ntf-select" onClick={e => e.stopPropagation()} title="Select for bulk delete">
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={() => onToggleSelect(n.id)}
+            aria-label={`Select notification: ${n.title}`}
+          />
+        </label>
+      )}
       <button className="ntf-card-main" onClick={() => onOpen(n)}>
         <div className="ntf-card-row">
           <span className="ntf-chip" style={{ borderColor: meta.color, color: meta.color }}>
@@ -442,17 +456,9 @@ function NotificationCard({ n, onOpen, onToggleRead, onDelete, confirmId, onRequ
             Mark read
           </button>
         )}
-        {isPendingConfirm ? (
-          <div className="ntf-delete-confirm">
-            <span className="ntf-delete-confirm-text">Delete?</span>
-            <button className="ntf-link ntf-danger" onClick={() => onDelete(n)}>Yes</button>
-            <button className="ntf-link" onClick={() => onCancelDelete()}>No</button>
-          </div>
-        ) : (
-          <button className="ntf-link ntf-danger" title="Delete" onClick={() => onRequestDelete(n.id)}>
-            Delete
-          </button>
-        )}
+        <button className="ntf-link ntf-danger" title="Delete" onClick={() => onDelete(n)}>
+          Delete
+        </button>
       </div>
     </div>
   );
@@ -502,11 +508,76 @@ export function NotificationsPage() {
   };
 
   const toggleRead = async (n) => { await markRead(n.id); load(); };
-  const [confirmId, setConfirmId] = useState(null);
-  const requestDelete = (id) => setConfirmId(id);
-  const cancelDelete  = ()  => setConfirmId(null);
-  const del = async (n) => { setConfirmId(null); await remove(n.id); load(); };
+  // App-standard toast feedback (same useToast + ToastContainer as other pages)
+  const { toasts, removeToast, showSuccess, showError } = useToast();
+  // App-standard centered confirmation modal (same as Follow-Ups / POs)
+  const { confirmModal, showConfirmation } = useConfirmationModal();
+  const del = async (n) => {
+    const ok = await showConfirmation({
+      title: 'Delete Notification',
+      message: 'Are you sure you want to delete this notification? This action cannot be undone.',
+      type: 'alert',
+      confirmText: 'Confirm',
+      cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    try {
+      await remove(n.id);
+      showSuccess('Notification deleted successfully.');
+    } catch (e) {
+      showError('Failed to delete the notification. Please try again.');
+    }
+    load();
+  };
   const handleMarkAll = async () => { await markAllRead(); load(); };
+
+  // ── Multi-select / bulk delete ─────────────────────────────────────────────
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  // Reset the selection whenever the visible list changes
+  useEffect(() => { setSelected(new Set()); }, [filter, debounced, page]);
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allOnPageSelected = items.length > 0 && items.every(n => selected.has(n.id));
+  const toggleSelectAll = () => setSelected(
+    allOnPageSelected ? new Set() : new Set(items.map(n => n.id))
+  );
+  const bulkDelete = async () => {
+    if (!selected.size) return;
+    const count = selected.size;
+    const ok = await showConfirmation({
+      title: `Delete ${count} Notification${count > 1 ? 's' : ''}`,
+      message: `Are you sure you want to delete ${count === 1 ? 'this notification' : `these ${count} notifications`}? This action cannot be undone.`,
+      type: 'alert',
+      confirmText: 'Confirm',
+      cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    setBulkDeleting(true);
+    try {
+      // Delete every selected notification; failures on individual ids
+      // shouldn't abort the rest of the batch.
+      const results = await Promise.allSettled([...selected].map(id => notificationApi.remove(id)));
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed === 0) {
+        showSuccess(`${count} notification${count > 1 ? 's' : ''} deleted successfully.`);
+      } else if (failed < count) {
+        showError(`${count - failed} deleted, ${failed} failed. Please try again for the rest.`);
+      } else {
+        showError('Failed to delete the selected notifications. Please try again.');
+      }
+    } finally {
+      setBulkDeleting(false);
+      setSelected(new Set());
+      refresh();   // updates the bell's unread badge
+      load();      // reloads this page's list
+    }
+  };
 
   return (
     <div className="ntf-page">
@@ -548,6 +619,26 @@ export function NotificationsPage() {
         </div>
       </div>
 
+      {/* ── Bulk selection bar ── */}
+      {!loading && items.length > 0 && (
+        <div className="ntf-bulkbar">
+          <label className="ntf-bulkbar-selectall">
+            <input
+              type="checkbox"
+              checked={allOnPageSelected}
+              onChange={toggleSelectAll}
+              aria-label="Select all notifications on this page"
+            />
+            <span>Select all on this page</span>
+          </label>
+          {selected.size > 0 && (
+            <button className="ntf-btn ntf-btn-danger" disabled={bulkDeleting} onClick={bulkDelete}>
+              {bulkDeleting ? 'Deleting…' : `Delete Selected (${selected.size})`}
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="ntf-list">
         {loading && <div className="ntf-empty">Loading…</div>}
         {!loading && items.length === 0 && (
@@ -560,9 +651,8 @@ export function NotificationsPage() {
             onOpen={openRecord}
             onToggleRead={toggleRead}
             onDelete={del}
-            confirmId={confirmId}
-            onRequestDelete={requestDelete}
-            onCancelDelete={cancelDelete}
+            checked={selected.has(n.id)}
+            onToggleSelect={toggleSelect}
           />
         ))}
       </div>
@@ -586,6 +676,15 @@ export function NotificationsPage() {
           </button>
         </div>
       )}
+
+      {/* App-standard toasts for delete feedback */}
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
+      {/* App-standard centered delete-confirmation modal */}
+      <ConfirmationModal
+        show={confirmModal.show} title={confirmModal.title} message={confirmModal.message}
+        type={confirmModal.type} confirmText={confirmModal.confirmText} cancelText={confirmModal.cancelText}
+        onConfirm={confirmModal.onConfirm} onCancel={confirmModal.onCancel}
+      />
     </div>
   );
 }
@@ -830,6 +929,15 @@ function NotificationStyles() {
 }
 .ntf-btn:disabled { opacity: .5; cursor: not-allowed; }
 .ntf-btn-primary { background: var(--c-2563eb, #2563eb); border-color: var(--c-2563eb, #2563eb); color: #fff; }
+.ntf-btn-danger { background: var(--c-ef4444, #ef4444); border-color: var(--c-ef4444, #ef4444); color: #fff; }
+.ntf-btn-danger:hover { background: var(--c-dc2626, #dc2626); }
+
+/* ── Multi-select / bulk delete ── */
+.ntf-bulkbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; margin-bottom: 10px; background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 10px; flex-wrap: wrap; }
+.ntf-bulkbar-selectall { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ct-475569, #475569); cursor: pointer; user-select: none; }
+.ntf-bulkbar-selectall input, .ntf-select input { width: 16px; height: 16px; accent-color: var(--c-2563eb, #2563eb); cursor: pointer; }
+.ntf-select { display: flex; align-items: center; padding: 0 0 0 12px; cursor: pointer; }
+.ntf-card-selected { outline: 2px solid var(--c-93c5fd, #93c5fd); outline-offset: -2px; background: var(--c-eff6ff, #eff6ff); }
 
 .ntf-pagination { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 20px; }
 .ntf-page-info { font-size: 13px; color: var(--ct-64748b, #64748b); }
