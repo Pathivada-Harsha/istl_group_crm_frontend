@@ -367,9 +367,11 @@ export default function GeneratePoModal({ open, po, vendor, authHeaders, onClose
   const card = { background: __sbg('#fff'), borderRadius: 8, border: `1px solid ${__sbg('#e2e8f0')}`, padding: 14, marginBottom: 12 };
   const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 };
 
+  // Overlay intentionally does NOT close on click — a mis-click outside must not
+  // discard a part-filled PO. Close only via the × button or Cancel.
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: __sbg('#f8fafc'), borderRadius: 12, width: 'min(880px,96vw)', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.55)', zIndex: 100000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: __sbg('#f8fafc'), borderRadius: 12, width: 'min(880px,96vw)', maxHeight: '92vh', overflow: 'auto', boxShadow: '0 20px 60px rgba(0,0,0,.3)' }}>
         <div style={{ position: 'sticky', top: 0, background: '#2563eb', color: '#fff', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
           <strong style={{ fontSize: 15 }}>{po.poDocPayload ? 'Re-generate' : 'Generate'} Purchase Order — {form.poNo || po.poNo}</strong>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', lineHeight: 1 }}>×</button>
