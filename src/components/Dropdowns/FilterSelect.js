@@ -175,7 +175,7 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
       typeaheadBuffer.current += e.key.toLowerCase();
 
       const match = options.find(o =>
-        o.label.toLowerCase().startsWith(typeaheadBuffer.current)
+        !o.disabled && o.label.toLowerCase().startsWith(typeaheadBuffer.current)
       );
       if (match) {
         onChange(match.value);
@@ -273,13 +273,18 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
 
       {filteredOptions.map(opt => {
         const isSelected = String(opt.value) === String(value);
+        // Options may opt in to being disabled via { disabled: true, disabledReason }.
+        // Purely additive — callers that don't set it are unaffected.
+        const isDisabled = !!opt.disabled;
         return (
           <li
             key={opt.value}
-            className={`filter-dropdown-item${isSelected ? ' filter-dropdown-item--selected' : ''}`}
-            onMouseDown={(e) => { e.preventDefault(); handleSelect(opt.value); }}
+            className={`filter-dropdown-item${isSelected ? ' filter-dropdown-item--selected' : ''}${isDisabled ? ' filter-dropdown-item--disabled' : ''}`}
+            onMouseDown={(e) => { e.preventDefault(); if (!isDisabled) handleSelect(opt.value); }}
             role="option"
             aria-selected={isSelected}
+            aria-disabled={isDisabled || undefined}
+            title={isDisabled ? (opt.disabledReason || undefined) : undefined}
           >
             {opt.label}
           </li>

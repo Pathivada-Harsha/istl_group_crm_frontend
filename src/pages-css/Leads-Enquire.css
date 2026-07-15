@@ -675,6 +675,17 @@
   font-weight: 600;
 }
 
+/* Earlier funnel stage the lead has already moved past — shown but not selectable. */
+.qs-status-btn--locked,
+.qs-status-btn--locked:hover {
+  opacity: 0.4;
+  cursor: not-allowed;
+  text-decoration: line-through;
+  border-color: var(--c-e2e8f0, #e2e8f0);
+  background: var(--c-f8fafc, #f8fafc);
+  color: var(--ct-374151, #374151);
+}
+
 .qs-conditional {
   border-radius: 10px;
   padding: 14px 16px;
@@ -2263,6 +2274,14 @@
   border-left: 4px solid var(--c-2563eb, #2563eb);
 }
 .ld-enquiry-text { font-size: 13px; color: var(--ct-374151, #374151); line-height: 1.6; margin: 0; }
+
+/* Closed-lead reason callout — full width, sits above the info grid on Overview.
+   Colours are applied inline (theme-aware helpers), so only layout lives here. */
+.ld-closed-banner {
+  border-radius: 7px;
+  padding: 14px;
+  margin-bottom: 14px;
+}
 
 /* ── Proposals tab ── */
 .ld-proposals-list { display: flex; flex-direction: column; gap: 10px; }

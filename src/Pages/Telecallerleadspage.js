@@ -6,6 +6,7 @@ import GroupCategoryFilter from "../components/Dropdowns/groupCategoryFilter.js"
 import useGroupProjectFilters from "../components/Dropdowns/useGroupProjectFilters.js";
 import useToast from "../hooks/useToast.js";
 import ToastContainer from "../components/Notification_Toast/ToastContainer.js";
+import { isStatusLocked, lockedStatusHint } from "../constants/leadStatus.js";
 
 const toINR = v => { const n = String(v).replace(/[^0-9]/g,''); if (!n) return ''; return parseInt(n,10).toLocaleString('en-IN'); };
 
@@ -535,7 +536,17 @@ export default function TelecallerLeadsPage() {
 
   // ── Drag & Drop ────────────────────────────────────────────────────────────
   const onDragStart = (lead, fromCol) => setDragging({ lead, fromCol });
-  const onDragOver  = (e, col) => { e.preventDefault(); setDragOver(col); };
+
+  // A column is not droppable when it is an earlier funnel stage the dragged lead
+  // has already moved past. Compares against the MAIN status (lead.leadStatus).
+  const isColLocked = (col) =>
+    !!dragging && isStatusLocked(dragging.lead?.leadStatus, col);
+
+  const onDragOver  = (e, col) => {
+    e.preventDefault();
+    if (isColLocked(col)) { setDragOver(null); return; }  // no drop highlight
+    setDragOver(col);
+  };
   const onDragLeave = () => setDragOver(null);
 
   const doBoardMove = async (lead, fromCol, toCol) => {
@@ -568,6 +579,13 @@ export default function TelecallerLeadsPage() {
 
     if (lead.leadStatus === "Closed Won") {
       showToast("Cannot move a Closed Won lead.", "info"); return;
+    }
+    // Block drops onto an earlier stage the lead has already moved past. Without
+    // this, NOT_RESPONDED / NEW fall straight through to doBoardMove, which PUTs
+    // a bare status with no reason.
+    if (isStatusLocked(lead.leadStatus, toCol)) {
+      showToast(lockedStatusHint(lead.leadStatus, STATUS_CONFIG[toCol]?.label || toCol), "info");
+      return;
     }
     if (toCol === "NOT_INTERESTED") {
       setSelected(lead); setNewStatus("NOT_INTERESTED");
@@ -1036,9 +1054,13 @@ export default function TelecallerLeadsPage() {
       {viewMode==="board" && (
         <>
           <div className="tc-board">
-          {BOARD_COLUMNS.map(col=>(
+          {BOARD_COLUMNS.map(col=>{
+            const colLocked = isColLocked(col.key);
+            return (
             <div key={col.key}
-              className={`tc-board-col ${dragOver===col.key?"tc-board-col--drag-over":""}`}
+              className={`tc-board-col ${dragOver===col.key?"tc-board-col--drag-over":""} ${colLocked?"tc-board-col--locked":""}`}
+              title={colLocked?lockedStatusHint(dragging?.lead?.leadStatus, col.label):undefined}
+              style={colLocked?{opacity:0.45}:undefined}
               onDragOver={e=>onDragOver(e,col.key)}
               onDragLeave={onDragLeave}
               onDrop={e=>onDrop(e,col.key)}>
@@ -1106,7 +1128,8 @@ export default function TelecallerLeadsPage() {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
         </>
       )}
@@ -1312,14 +1335,24 @@ export default function TelecallerLeadsPage() {
                   {value:"NOT_RESPONDED", emoji:"⏳",label:"Not Responded", desc:"No response. Resurfaces tomorrow."},
                   {value:"KEEP_IN_VIEW",  emoji:"👁",label:"Keep in View",  desc:"Client asked to be contacted back after some days."},
                   {value:"NOT_INTERESTED",emoji:"❌",label:"Not Interested",desc:"Not interested. Reason required."},
-                ].map(opt=>(
-                  <label key={opt.value} className={`tc-status-option ${newStatus===opt.value?"selected":""}`}
-                    style={newStatus===opt.value?{borderColor:STATUS_CONFIG[opt.value].color,background:STATUS_CONFIG[opt.value].bg}:{}}>
-                    <input type="radio" name="status" value={opt.value} checked={newStatus===opt.value} onChange={()=>setNewStatus(opt.value)}/>
+                ].map(opt=>{
+                  // Earlier funnel stages the lead has already moved past can't be
+                  // re-selected — compare against the MAIN status, not the TC one.
+                  const locked = isStatusLocked(selected?.leadStatus, opt.value);
+                  return (
+                  <label key={opt.value}
+                    className={`tc-status-option ${newStatus===opt.value?"selected":""} ${locked?"tc-status-option--locked":""}`}
+                    title={locked?lockedStatusHint(selected?.leadStatus, opt.label):undefined}
+                    style={locked
+                      ? {opacity:0.45,cursor:"not-allowed",textDecoration:"line-through"}
+                      : (newStatus===opt.value?{borderColor:STATUS_CONFIG[opt.value].color,background:STATUS_CONFIG[opt.value].bg}:{})}>
+                    <input type="radio" name="status" value={opt.value} disabled={locked}
+                      checked={newStatus===opt.value} onChange={()=>setNewStatus(opt.value)}/>
                     <span className="tc-status-emoji">{opt.emoji}</span>
                     <div><strong>{opt.label}</strong><p>{opt.desc}</p></div>
                   </label>
-                ))}
+                  );
+                })}
               </div>
 
               {newStatus==="NOT_INTERESTED"&&(

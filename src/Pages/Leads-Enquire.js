@@ -23,6 +23,9 @@ import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
 import LeadSiteVisitTab from './../components/Leads/LeadSiteVisitTab.js';
+import LeadTechnicalScopeTab from './../components/Leads/LeadTechnicalScopeTab';
+import LeadBudgetTab from './../components/Leads/LeadBudgetTab';
+import { isStatusDowngrade, isStatusLocked, lockedStatusHint, LEAD_STATUS_OPTIONS } from './../constants/leadStatus';
 import ConfirmationModal from '../components/ConfirmationModal.js';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
@@ -1212,10 +1215,19 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     finally { setLoadingHistory(false); }
   }, [lead.id]);
 
+  // Reasons for a closed lead are surfaced at the top of the Overview tab. The
+  // "Not Interested" reason lives on the lead itself (telecallerReason), but the
+  // "Closed Lost" reason is only ever written to lead history — so the Overview
+  // tab needs history loaded too when the lead is in a closed state.
+  const isClosedLost     = lead.status === 'Closed Lost';
+  const isNotInterested  = lead.status === 'Not Interested';
+  const isClosedLead     = isClosedLost || isNotInterested;
+
   useEffect(() => {
     if (activeTab === 'proposals') fetchProposals();
     if (activeTab === 'history') fetchHistory();
-  }, [activeTab]);
+    if (activeTab === 'overview' && isClosedLead) fetchHistory();
+  }, [activeTab, isClosedLead]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   const downloadPDF = async (id) => {
     try {
@@ -1455,6 +1467,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         {[
           { k: 'overview', l: 'Overview' },
           { k: 'sitevisit', l: 'Site Visit' },
+          ...(permissions?.EDIT ? [{ k: 'techscope', l: 'Technical Scope' }, { k: 'budget', l: 'Budget Estimation' }] : []),
           { k: 'proposals', l: isTenderLead(lead) ? 'Proposals' : 'Proposals' },
           ...(isTenderLead(lead) ? [{ k: 'documents', l: '📁 Documents' }] : []),
           { k: 'followups', l: 'Follow-ups' },
@@ -1470,6 +1483,31 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
       {activeTab === 'overview' && (
         <div className="ld-tab-content">
+          {/* Closed-lead callout — sits ABOVE Contact Information because once a
+              lead is Closed Lost / Not Interested the reason is the only thing
+              anyone needs; the rest of the detail is no longer actionable. */}
+          {isClosedLead && (() => {
+            const reason = isClosedLost
+              ? (history.find(h => h.actionType === 'CLOSED_LOST_REASON')?.newValue || '')
+              : (lead.telecallerReason
+                 || history.find(h => h.actionType === 'NOT_INTERESTED_REASON')?.newValue
+                 || '');
+            return (
+              <div className="ld-closed-banner"
+                   style={{ background: __sbg('#fef2f2'), border: `1.5px solid ${__sbg('#fecaca')}`, borderLeft: `4px solid ${__sbg('#dc2626')}` }}>
+                <h4 className="ld-card-title" style={{ color: __stc('#b91c1c'), margin: 0 }}>
+                  {isClosedLost ? '❌ Closed Lost — Reason' : '🚫 Not Interested — Reason'}
+                </h4>
+                <p className="ld-enquiry-text" style={{ marginTop: 6, marginBottom: 0, color: __stc('#374151') }}>
+                  {reason || (loadingHistory ? 'Loading reason…' : 'No reason was recorded for this lead.')}
+                </p>
+                <div style={{ marginTop: 8, fontSize: 12, fontWeight: 600, color: __stc('#b91c1c') }}>
+                  This lead is closed — no further follow-up is needed.
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="ld-info-grid">
             <div className="ld-info-card">
               <h4 className="ld-card-title">Contact Information</h4>
@@ -1685,15 +1723,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
               })()}
             </p>
           </div>
-          {lead.telecallerStatus === 'NOT_INTERESTED' && lead.telecallerReason && (
-            <div className="ld-enquiry-card" style={{background:__sbg('#fef2f2'),border:`1.5px solid ${__sbg('#fecaca')}`}}>
-              <h4 className="ld-card-title" style={{color:__stc('#b91c1c')}}>❌ Not Interested — Reason</h4>
-              <div>
-                <span style={{fontSize:11,fontWeight:700,color:__stc('#dc2626'),textTransform:'uppercase',letterSpacing:'0.5px'}}>Reason Given</span>
-                <p className="ld-enquiry-text" style={{marginTop:4,color:__stc('#374151')}}>{lead.telecallerReason}</p>
-              </div>
-            </div>
-          )}
+          {/* The "Not Interested — Reason" card that used to sit here now renders as a
+              full-width callout at the TOP of this tab (above Contact Information). */}
           {lead.telecallerStatus === 'KEEP_IN_VIEW' && (lead.telecallerReason || lead.kivReminderDate) && (
             <div className="ld-enquiry-card" style={{background:__sbg('#f5f3ff'),border:`1.5px solid ${__sbg('#e9d5ff')}`}}>
               <h4 className="ld-card-title" style={{color:__stc('#6d28d9')}}>👁 Keep in View Details</h4>
@@ -1971,6 +2002,30 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             onRefreshLead={() => {
               if (onLeadUpdated) onLeadUpdated();
             }}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </div>
+      )}
+      {activeTab === 'techscope' && (
+        <div className="ld-tab-content">
+          <LeadTechnicalScopeTab
+            lead={lead}
+            currentUser={currentUser}
+            permissions={permissions}
+            onRefreshLead={() => { if (onLeadUpdated) onLeadUpdated(); }}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </div>
+      )}
+      {activeTab === 'budget' && (
+        <div className="ld-tab-content">
+          <LeadBudgetTab
+            lead={lead}
+            currentUser={currentUser}
+            permissions={permissions}
+            onRefreshLead={() => { if (onLeadUpdated) onLeadUpdated(); }}
             showSuccess={showSuccess}
             showError={showError}
           />
@@ -2424,6 +2479,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const [quickClosedByName, setQuickClosedByName] = useState('');
   const [quickClosedLostReason, setQuickClosedLostReason] = useState('');
   const [quickNotInterestedReason, setQuickNotInterestedReason] = useState('');
+  const [quickDowngradeReason, setQuickDowngradeReason] = useState('');
   const [quickKivDate, setQuickKivDate] = useState('');
   const [quickKivTime, setQuickKivTime] = useState('09:00');
   const [deleteConfirmation, setDeleteConfirmation] = useState(null);
@@ -2434,6 +2490,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
     customerId: null, name: '', email: '', phone: '', source: 'Website',
     priority: 'Medium', status: 'New', assignedTo: null, enquiry: '',
     groupName: '', subGroupName: '', closedLostReason: '', notInterestedReason: '',
+    statusDowngradeReason: '',
     closedByUserId: null, closedByName: '',
     referralName: '', referralPhone: '',
     capacity: '', capacityUnit: 'kW',
@@ -2441,6 +2498,9 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
     // New TC interested fields
     tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
   });
+  // The lead's status when the edit form was opened — the baseline the downgrade
+  // guard compares against (formData.status changes as the user picks a new one).
+  const [originalStatus, setOriginalStatus] = useState('');
   const [billFile, setBillFile] = useState(null);
   const [billFileUploading, setBillFileUploading] = useState(false);
   const [kivDate, setKivDate] = useState('');
@@ -2699,6 +2759,8 @@ useEffect(() => {
       // force re-entry or blank out recorded values.
       closedLostReason: lead.closedLostReason || '',
       notInterestedReason: lead.notInterestedReason || (lead.status === 'Not Interested' ? (lead.telecallerReason || '') : ''),
+      // Always re-entered per downgrade — never pre-filled.
+      statusDowngradeReason: '',
       closedByName: lead.closedByName || '',
       closedByUserId: lead.closedByUserId ?? '',
       // NEW fields:
@@ -2717,6 +2779,8 @@ useEffect(() => {
       tcExistingContractLoad: lead.tcExistingContractLoad || '',
       tcRequiredContractLoad: lead.tcRequiredContractLoad || '',
     });
+    // Baseline for the downgrade guard — the status this lead had before editing.
+    setOriginalStatus(lead.status || '');
     // Seed the KIV callback date/time from the lead so a KIV lead can be edited
     // without being blocked, and record the baseline to avoid duplicate follow-ups.
     if (lead.status === 'Keep in View' && lead.kivReminderDate) {
@@ -2767,6 +2831,7 @@ useEffect(() => {
     setQuickClosedByName(lead.closedByName || '');
     setQuickClosedLostReason('');
     setQuickNotInterestedReason('');
+    setQuickDowngradeReason('');
     setQuickKivDate(''); setQuickKivTime('09:00');
     setShowQuickStatusModal(true);
   };
@@ -2777,6 +2842,12 @@ useEffect(() => {
     if (quickStatus === 'Closed Lost' && !quickClosedLostReason.trim()) { showError('Please enter a reason for closing lost'); return; }
     if (quickStatus === 'Not Interested' && !quickNotInterestedReason.trim()) { showError('Please enter a reason for marking this lead Not Interested'); return; }
     if (quickStatus === 'Keep in View' && (!quickKivDate || !quickKivTime)) { showError('Please set the callback date & time'); return; }
+    // Moving a lead BACKWARD in the funnel requires a reason (mirrors the backend guard).
+    const quickIsDowngrade = isStatusDowngrade(quickStatusLead.status, quickStatus);
+    if (quickIsDowngrade && !quickDowngradeReason.trim()) {
+      showError(`Please enter a reason for moving this lead back from "${quickStatusLead.status}" to "${quickStatus}"`);
+      return;
+    }
     setQuickStatusSaving(true);
     try {
       const payload = {
@@ -2785,6 +2856,7 @@ useEffect(() => {
         ...(quickStatus === 'Closed Lost' && { closedLostReason: quickClosedLostReason.trim() }),
         ...(quickStatus === 'Not Interested' && { notInterestedReason: quickNotInterestedReason.trim() }),
         ...(quickStatus === 'Keep in View' && { kivReminderDate: quickKivDate }),
+        ...(quickIsDowngrade && { statusDowngradeReason: quickDowngradeReason.trim() }),
       };
       const data = await fetchWithHeaders(`${API_BASE_URL}/leads/update/${quickStatusLead.id}`, { method: 'PUT', body: JSON.stringify(payload) });
       if (data.success) {
@@ -2820,6 +2892,12 @@ useEffect(() => {
     if (formData.status === 'Keep in View' && (!kivDate || !kivTime)) { showError('Please set the callback date & time for Keep in View'); return; }
     if (formData.status === 'Not Interested' && !(formData.notInterestedReason || '').trim()) { showError('Please enter a reason for marking this lead Not Interested'); return; }
     if (formData.status === 'Closed Won' && !formData.closedByUserId) { showError('Please select who closed this lead'); return; }
+    // Moving an existing lead BACKWARD in the funnel requires a reason (mirrors the backend guard).
+    if (formData.id && isStatusDowngrade(originalStatus, formData.status)
+        && !(formData.statusDowngradeReason || '').trim()) {
+      showError(`Please enter a reason for moving this lead back from "${originalStatus}" to "${formData.status}"`);
+      return;
+    }
     setLoading(true);
     try {
       const payload = { ...formData };
@@ -2936,7 +3014,8 @@ useEffect(() => {
       customerId: null, name: '', email: '', phone: '',
       source: 'Website', priority: 'Medium', status: 'New',
       assignedTo: null, enquiry: '', groupName: seedGroup, subGroupName: seedSubGroup,
-      closedLostReason: '', notInterestedReason: '', closedByUserId: null, closedByName: '',
+      closedLostReason: '', notInterestedReason: '', statusDowngradeReason: '',
+      closedByUserId: null, closedByName: '',
       // NEW:
       state: '', district: '', city: '', pincode: '', solarScheme: '', subsidyRequired: '',
       referralName: '', referralPhone: '',
@@ -2944,6 +3023,7 @@ useEffect(() => {
       leadOwner: user?.name || '',   // ← auto-fill with logged-in user
       tcMonthlyBill: '', tcExistingContractLoad: '', tcRequiredContractLoad: '',
     });
+    setOriginalStatus('');   // new lead — no downgrade baseline
     // Load subgroups for seeded group so the dropdown is ready
     if (seedGroup) fetchSubGroupsForForm(seedGroup);
     setPhoneError('');
@@ -3215,6 +3295,7 @@ useEffect(() => {
                   canAssign={canAssign} loading={loading} currentUser={user}
                   billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
                   kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
+                  originalStatus={originalStatus}
                   onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
                 />
               </div>
@@ -3453,6 +3534,7 @@ useEffect(() => {
                 canAssign={canAssign} loading={loading} currentUser={user}
                 billFile={billFile} setBillFile={setBillFile} billFileUploading={billFileUploading}
                 kivDate={kivDate} setKivDate={setKivDate} kivTime={kivTime} setKivTime={setKivTime}
+                originalStatus={originalStatus}
                 onCancel={() => setShowAddModal(false)} onSubmit={handleSubmit}
               />
             </div>
@@ -3480,9 +3562,17 @@ useEffect(() => {
 
             <div className="qs-status-label">New Status</div>
             <div className="qs-status-grid">
-              {['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>(
-                <button key={s} className={`qs-status-btn${quickStatus===s?' active':''}`} onClick={()=>setQuickStatus(s)}>{s}</button>
-              ))}
+              {LEAD_STATUS_OPTIONS.map(s=>{
+                // Earlier funnel stages are locked once the lead has moved past them.
+                // "Keep in View" (hold) and the terminal outcomes stay selectable.
+                const locked = isStatusLocked(quickStatusLead.status, s);
+                return (
+                  <button key={s} type="button" disabled={locked}
+                    className={`qs-status-btn${quickStatus===s?' active':''}${locked?' qs-status-btn--locked':''}`}
+                    title={locked ? lockedStatusHint(quickStatusLead.status, s) : undefined}
+                    onClick={()=>{ if(!locked) setQuickStatus(s); }}>{s}</button>
+                );
+              })}
             </div>
 
             {quickStatus==='Closed Won' && (
@@ -3507,6 +3597,15 @@ useEffect(() => {
                 <div className="qs-conditional-label">❌ Not Interested — Reason *</div>
                 <textarea rows={3} value={quickNotInterestedReason} onChange={e=>setQuickNotInterestedReason(e.target.value)}
                   placeholder="Why is this lead not interested?"
+                  style={{width:'100%',padding:'8px 10px',border:`1.5px solid ${__sbg('#fca5a5')}`,borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
+              </div>
+            )}
+
+            {quickStatusLead && isStatusDowngrade(quickStatusLead.status, quickStatus) && (
+              <div className="qs-conditional qs-conditional-lost">
+                <div className="qs-conditional-label">⬇️ Moving back from “{quickStatusLead.status}” to “{quickStatus}” — Reason *</div>
+                <textarea rows={3} value={quickDowngradeReason} onChange={e=>setQuickDowngradeReason(e.target.value)}
+                  placeholder="Why is this lead being moved back to an earlier stage?"
                   style={{width:'100%',padding:'8px 10px',border:`1.5px solid ${__sbg('#fca5a5')}`,borderRadius:7,fontSize:13,resize:'vertical',boxSizing:'border-box',fontFamily:"'Poppins',sans-serif"}}/>
               </div>
             )}
@@ -3913,7 +4012,7 @@ const TenderFormSection = ({ tenderMeta, setTenderMeta, tenderDesc, setTenderDes
 };
 
 // ─── Lead Add/Edit form body ──────────────────────────────────────────────────
-const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, allUsers, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime }) => {
+const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, groups, subGroups, users, allUsers, canAssign, loading, onCancel, onSubmit, currentUser, billFile, setBillFile, billFileUploading, kivDate, setKivDate, kivTime, setKivTime, originalStatus = '' }) => {
   // ── Detect if this is an edit of an existing tender lead ──────────────────
   /* TENDER TYPE TEMPORARILY DISABLED — uncomment when re-enabling tender leads
   const isEditingTender = !!(formData.id && formData.source === 'Tender');
@@ -4229,7 +4328,16 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
         </div>
         <div className="leads-enquiries-form-group">
           <label>Status *</label>
-          <FilterSelect value={formData.status} options={['New','Interested','Not Interested','Not Responded','Keep in View','Prospect','Proposal Sent','Closed Won','Closed Lost'].map(s=>({value:s,label:s}))} placeholder="Select Status" onChange={v=>{setFormData(p=>({...p,status:v,...(v==='Closed Won'&&!p.closedByUserId?{closedByUserId:currentUser?.id||null,closedByName:currentUser?.name||''}:{})}));}} />
+          {/* On an existing lead, earlier funnel stages are locked once it has moved
+              past them. "Keep in View" (hold) and terminal outcomes stay selectable. */}
+          <FilterSelect
+            value={formData.status}
+            options={LEAD_STATUS_OPTIONS.map(s=>{
+              const locked = !!formData.id && isStatusLocked(originalStatus, s);
+              return { value:s, label:s, disabled: locked, disabledReason: locked ? lockedStatusHint(originalStatus, s) : undefined };
+            })}
+            placeholder="Select Status"
+            onChange={v=>{setFormData(p=>({...p,status:v,...(v==='Closed Won'&&!p.closedByUserId?{closedByUserId:currentUser?.id||null,closedByName:currentUser?.name||''}:{})}));}} />
         </div>
         <div className="leads-enquiries-form-group">
           <label>Assign To</label>
@@ -4289,6 +4397,24 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           </label>
           <FilterSelect value={formData.closedByUserId?String(formData.closedByUserId):''} options={users.map(u=>({value:String(u.id),label:u.name}))} placeholder="Select who closed this lead" onChange={v=>{const u=users.find(u=>String(u.id)===v);setFormData(p=>({...p,closedByUserId:v?Number(v):null,closedByName:u?.name||''}));}} />
           <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>Select the person who closed this deal.</small>
+        </div>
+      )}
+
+      {formData.id && isStatusDowngrade(originalStatus, formData.status) && (
+        <div className="leads-enquiries-form-group" style={{ marginTop: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ background: __sbg('#fee2e2'), color: __stc('#991b1b'), borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 600 }}>REQUIRED</span>
+            Reason for moving back from “{originalStatus}” to “{formData.status}” *
+          </label>
+          <textarea
+            required
+            rows={3}
+            value={formData.statusDowngradeReason || ''}
+            onChange={e => setFormData(p => ({ ...p, statusDowngradeReason: e.target.value }))}
+            placeholder="Why is this lead being moved back to an earlier stage?"
+            style={{ borderColor: __sbg('#fca5a5') }}
+          />
+          <small style={{ color: __stc('#6b7280'), fontSize: 11 }}>This reason will be recorded in the lead history.</small>
         </div>
       )}
 
