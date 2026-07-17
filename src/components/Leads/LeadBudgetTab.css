@@ -33,6 +33,12 @@
 .lbe-margin-pct { font-size: 13px; font-weight: 700; }
 .lbe-pos { color: var(--ct-059669, #059669); }
 .lbe-neg { color: var(--ct-dc2626, #DC2626); }
+.lbe-metric-sub { font-size: 11px; color: var(--ct-9ca3af, #9CA3AF); }
+.lbe-metric-sub.lbe-pos { color: var(--ct-059669, #059669); font-weight: 600; }
+.lbe-metric-sub.lbe-neg { color: var(--ct-dc2626, #DC2626); font-weight: 600; }
+/* The markup card is the lever — give it a subtle accent border. */
+.lbe-metric--accent { border-color: var(--c-c7d2e5, #C7D2E5); box-shadow: 0 0 0 1px var(--c-c7d2e5, #C7D2E5) inset; }
+.lbe-pct-sign { font-size: 16px; font-weight: 700; color: var(--ct-6b7280, #6B7280); }
 
 .lbe-edit-btn {
   background: var(--c-f3f4f6, #F3F4F6); border: none; border-radius: 6px; cursor: pointer;
@@ -47,8 +53,16 @@
   background: var(--c-fff, #fff); border: 1px solid var(--c-e5e7eb, #E5E7EB); border-radius: 12px;
   padding: 16px; display: flex; flex-direction: column; gap: 14px;
 }
-.lbe-card-head { display: flex; align-items: center; gap: 8px; }
+.lbe-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .lbe-card-title { font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); margin: 0; }
+.lbe-card-sub { font-size: 11px; color: var(--ct-9ca3af, #9CA3AF); font-style: italic; }
+/* Card-level total, pinned right (BOM Costing header) */
+.lbe-card-total { margin-left: auto; font-size: 15px; font-weight: 700; color: var(--ct-111827, #111827); }
+.lbe-card-foot {
+  display: flex; justify-content: flex-end; padding-top: 8px;
+  border-top: 1px solid var(--c-f3f4f6, #F3F4F6);
+}
+.lbe-table-wrap { overflow-x: auto; }
 
 /* Inputs */
 .lbe-inp {
@@ -160,3 +174,38 @@
 .lbe-ac-cat { background: var(--c-f3f4f6, #F3F4F6); color: var(--ct-374151, #374151); border-radius: 4px; padding: 1px 6px; font-weight: 600; }
 .lbe-ac-dropdown::-webkit-scrollbar { width: 5px; }
 .lbe-ac-dropdown::-webkit-scrollbar-thumb { background: var(--c-cbd5e1, #cbd5e1); border-radius: 3px; }
+
+/* ── Extra allocations ────────────────────────────────────── */
+.lbe-c-num2 { width: 40px; text-align: center; color: var(--ct-9ca3af, #9CA3AF); font-weight: 600; }
+.lbe-c-basis { width: 120px; }
+select.lbe-inp { cursor: pointer; }
+
+/* "Other (type your own)" cell: free-text input + a way back to the list */
+.lbe-custom { display: flex; align-items: center; gap: 4px; }
+.lbe-custom-back {
+  flex: 0 0 auto; border: 1.5px solid var(--c-e5e7eb, #E5E7EB); background: var(--c-fff, #fff);
+  color: var(--ct-6b7280, #6B7280); border-radius: 6px; padding: 5px 8px; font-size: 12px;
+  cursor: pointer; line-height: 1; transition: all .15s;
+}
+.lbe-custom-back:hover { background: var(--c-f0f4fb, #F0F4FB); color: var(--ct-1b3a6b, #1B3A6B); }
+.lbe-custom-back:disabled { opacity: .55; cursor: default; }
+
+/* Buttons that carry a lucide icon */
+.lbe-add-cat, .lbe-btn-primary { display: inline-flex; align-items: center; gap: 5px; }
+.lbe-icon-del { display: inline-flex; align-items: center; justify-content: center; }
+
+/* ── Reconciliation footer: BOM + Extras = Total ──────────── */
+.lbe-recon {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  background: var(--c-f9fafb, #F9FAFB); border: 1px solid var(--c-e5e7eb, #E5E7EB);
+  border-radius: 10px; padding: 12px 16px; font-size: 13px; color: var(--ct-374151, #374151);
+}
+.lbe-recon b { color: var(--ct-111827, #111827); }
+.lbe-recon-op { color: var(--ct-9ca3af, #9CA3AF); font-weight: 700; }
+.lbe-recon-total { margin-left: auto; font-size: 14px; }
+.lbe-recon-total b { color: var(--ct-1b3a6b, #1B3A6B); }
+.lbe-recon-dirty {
+  background: var(--c-fef3c7, #FEF3C7); color: var(--ct-92400e, #92400E);
+  border: 1px solid var(--c-fde68a, #FDE68A); border-radius: 20px;
+  padding: 2px 10px; font-size: 11px; font-weight: 700; white-space: nowrap;
+}

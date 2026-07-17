@@ -26,6 +26,7 @@ import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } 
 import '../../pages-css/OrderBookDetail.css';
 import ConfirmationModal from '../ConfirmationModal.js';
 import useConfirmationModal from '../HandleConfirmationModal.js';
+import UnitSelectCell from '../Dropdowns/UnitSelectCell.js';
 import LocationPicker from '../LocationPicker.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
@@ -2366,7 +2367,7 @@ const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
                     <td><input className="obd-inp" value={l.category} onChange={e => upd(i, 'category', e.target.value)} placeholder="Specifications" /></td>
                     <td><input className="obd-inp" value={l.make} onChange={e => upd(i, 'make', e.target.value)} placeholder="Make / brand" /></td>
                     <td><input className="obd-inp obd-inp--sm" type="number" min="0" step="any" value={l.quantity} onChange={e => upd(i, 'quantity', e.target.value)} /></td>
-                    <td><input className="obd-inp obd-inp--sm" value={l.unit} onChange={e => upd(i, 'unit', e.target.value)} placeholder="nos / m / kg" /></td>
+                    <td><UnitSelectCell className="obd-inp obd-inp--sm" value={l.unit} onChange={v => upd(i, 'unit', v)} /></td>
                     <td><input className="obd-inp obd-inp--sm" type="number" min="0" step="any" value={l.unitRate} onChange={e => upd(i, 'unitRate', e.target.value)} /></td>
                     <td style={{ fontWeight: 600 }}>{fmtMoney(lineAmount(l))}</td>
                     <td><input className="obd-inp" value={l.notes} onChange={e => upd(i, 'notes', e.target.value)} /></td>

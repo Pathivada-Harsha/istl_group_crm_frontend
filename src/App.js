@@ -36,6 +36,7 @@ import Reports from "./Pages/ProjectReports.js";
 import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
+import LeadTemplatesAdmin from "./Pages/LeadTemplatesAdmin";
 import NewRolePermissions from './Pages/NewRolePermissions';
 import Projectdashboard from "./Pages/ProjectDashboard2.js";
 import OrderBook from "./Pages/OrderBook.js";
@@ -274,6 +275,10 @@ function AppShell({ hideShell }) {
 
           <Route path="/officeuse/roles-permissions" element={
             <ProtectedRoute><NewRolePermissions /></ProtectedRoute>
+          } />
+
+          <Route path="/officeuse/lead-admin" element={
+            <ProtectedRoute><LeadTemplatesAdmin /></ProtectedRoute>
           } />
 
           {/* ── NEW ──────────────────────────────────────────────────────── */}

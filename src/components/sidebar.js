@@ -290,6 +290,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a6.94 6.94 0 00-.1-1l2.02-1.57-2-3.46-2.38.96a7.02 7.02 0 00-1.73-1l-.36-2.54h-4l-.36 2.54a7.02 7.02 0 00-1.73 1l-2.38-.96-2 3.46 2.02 1.57a6.94 6.94 0 000 2l-2.02 1.57 2 3.46 2.38-.96a7.02 7.02 0 001.73 1l.36 2.54h4l.36-2.54a7.02 7.02 0 001.73-1l2.38.96 2-3.46-2.02-1.57c.07-.33.1-.66.1-1z',
         },
         {
+          name: 'Lead Scope / BOM Templates',
+          path: '/officeuse/lead-admin',
+          permission: 'OFFICE_USE',
+          icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+        },
+        {
           name: 'Login & Activity Monitor',
           path: '/officeuse/login-activity',
           permission: 'OFFICE_USE',

@@ -1,0 +1,98 @@
+// ─────────────────────────────────────────────────────────────────────────────
+//  Shared option lists for the lead Technical Scope / BOM / Budget tabs.
+//
+//  The projects module carries its own copy of ACTIVITY_SUGGESTIONS inside
+//  components/projects/orderBookTabsPorted.js, which is generated and must not
+//  be hand-edited — so that duplication stays for now. Anything new reads from
+//  here rather than adding a third copy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Built-in EPC activity/item names for the scope dropdown. Users can add their
+ * own via "Other (type your own)…"; those are persisted to the shared
+ * scope_activity_suggestion table and merged in at runtime.
+ */
+export const ACTIVITY_SUGGESTIONS = [
+  // Engineering & pre-construction
+  'Site Survey', 'Topographic Survey', 'Geotechnical Investigation', 'System Simulation',
+  'Civil Design', 'Structural Design', 'Electrical Design', 'SLD & Layout Design',
+  'Detailed Engineering', 'Statutory Approvals & Permits',
+  // Civil
+  'Site Mobilization', 'Earthworks, Grading & Drainage', 'Civil Works', 'Foundation & Piling',
+  'Boundary & Fencing', 'Site Roads & Access',
+  // Mechanical / structures
+  'MMS Supply', 'MMS Erection & Alignment', 'Module Mounting Structure',
+  'Module Earthing & Row Bonding', 'Mechanical Installation', 'Module Installation',
+  // Electrical
+  'Procurement', 'DC Cabling', 'AC Cabling', 'Earthing & Lightning Protection',
+  'Inverter Installation', 'Transformer Installation', 'Electrical & Cabling',
+  'Switchgear & LT/HT Panels', 'SCADA & Monitoring', 'Substation Works',
+  // Closeout
+  'Testing & Pre-Commissioning', 'Testing & Commissioning', 'Grid Synchronization',
+  'Inspection', 'Snag Rectification', 'Documentation & As-Builts', 'Handover',
+];
+
+/**
+ * The company's standard EPC lifecycle, used by "Suggest EPC scope". Matches
+ * DEFAULT_EPC_PHASES in OrderBookDetailService — minus the week numbers, since a
+ * lead's scope deliberately carries no dates.
+ */
+export const DEFAULT_EPC_SCOPE = [
+  'Site Survey', 'System Simulation', 'Civil Design', 'Electrical Design',
+  'Procurement', 'Installation', 'Commissioning', 'Handover',
+];
+
+/** Units offered on scope lines and BOM lines. */
+export const UNIT_SUGGESTIONS = [
+  'Nos', 'kW', 'kWp', 'MW', 'Lot', 'Set', 'm', 'sqm', 'kg', 'MT', 'Ltr', 'Job',
+];
+
+/** Fallback BOM categories, matching bom_items_master.category. */
+export const BOM_CATEGORIES = ['CCMS', 'ITMS', 'MCMS', 'EPC', 'COMMON'];
+
+/**
+ * Standard extra-allocation names for the Budget Estimation tab — costs that
+ * aren't a BOM material. Contingency and overheads are conventionally a
+ * percentage of the BOM base; freight and insurance are usually flat.
+ */
+export const EXTRA_ALLOCATION_TYPES = [
+  'Freight & Logistics', 'Contingency', 'Site Overheads', 'Installation Labour',
+  'Transportation', 'Insurance', 'Statutory & Approvals', 'Testing & Commissioning',
+  'Warranty / O&M Provision', 'Financing Cost',
+];
+
+/** Sentinel value for the "type your own" option in a name dropdown. */
+export const OTHER_OPTION = '__OTHER__';
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Suggestion / template constants (Lead Templates admin + the Suggest actions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * How a template BOM line's quantity scales with the lead's capacity. Mirrors the
+ * backend basis constants on LeadBomTemplateItemEntity.
+ */
+export const BASIS_OPTIONS = [
+  { value: 'FIXED', label: 'Fixed quantity', help: 'Same quantity regardless of capacity (e.g. 1 lightning arrestor).' },
+  { value: 'PER_KW', label: 'Per kW', help: 'Quantity = value × capacity in kW (e.g. 1.7 modules per kW).' },
+  { value: 'PER_STEP', label: 'Per step', help: 'One unit per N kW, rounded up (e.g. one 50 kW inverter per 50 kW).' },
+  { value: 'FROM_SITE_VISIT', label: 'From site visit', help: 'Quantity read from a site visit field (e.g. DC cable length).' },
+];
+
+/** Site-visit fields a FROM_SITE_VISIT line can pull its quantity from. */
+export const SITE_VISIT_FIELDS = [
+  { value: 'dc_cable_length', label: 'DC cable length' },
+  { value: 'ac_cable_length', label: 'AC cable length' },
+  { value: 'sanctioned_load', label: 'Sanctioned load' },
+  { value: 'shadow_free_area', label: 'Shadow-free area' },
+];
+
+/** Human labels for the suggestion warning codes the backend returns. */
+export const SUGGESTION_WARNING_LABELS = {
+  NEEDS_CAPACITY: 'This lead has no usable capacity — per-kW quantities were left blank.',
+  LARGE_SCALE_CHECK: 'Some quantities were scaled from a job of a very different size — review them.',
+  AMBIGUOUS_MATCH: 'Some items matched the template only loosely — check their quantities.',
+  BASIS_UNRESOLVED: 'Some items had no matching template rule — a sensible default was used; verify.',
+  NEEDS_SITE_VISIT: 'Some quantities come from the site visit and were left blank — fill them in.',
+  NO_TEMPLATE_NO_HISTORY: 'No template exists for this project type yet, and no similar past job was found.',
+};

@@ -24,6 +24,7 @@ import LeadsExcelPanel from "./../components/Leads/LeadsExcelPanel.js";
 import LeadFollowupsTab from './../components/Leads/LeadFollowupsTab';
 import LeadSiteVisitTab from './../components/Leads/LeadSiteVisitTab.js';
 import LeadTechnicalScopeTab from './../components/Leads/LeadTechnicalScopeTab';
+import LeadBomTab from './../components/Leads/LeadBomTab';
 import LeadBudgetTab from './../components/Leads/LeadBudgetTab';
 import { isStatusDowngrade, isStatusLocked, lockedStatusHint, LEAD_STATUS_OPTIONS } from './../constants/leadStatus';
 import ConfirmationModal from '../components/ConfirmationModal.js';
@@ -1467,7 +1468,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         {[
           { k: 'overview', l: 'Overview' },
           { k: 'sitevisit', l: 'Site Visit' },
-          ...(permissions?.EDIT ? [{ k: 'techscope', l: 'Technical Scope' }, { k: 'budget', l: 'Budget Estimation' }] : []),
+          // Scope → BOM → Budget Estimation, in the order they're worked through.
+          ...(permissions?.EDIT ? [{ k: 'techscope', l: 'Technical Scope' }, { k: 'bom', l: 'BOM' }, { k: 'budget', l: 'Budget Estimation' }] : []),
           { k: 'proposals', l: isTenderLead(lead) ? 'Proposals' : 'Proposals' },
           ...(isTenderLead(lead) ? [{ k: 'documents', l: '📁 Documents' }] : []),
           { k: 'followups', l: 'Follow-ups' },
@@ -2010,6 +2012,18 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       {activeTab === 'techscope' && (
         <div className="ld-tab-content">
           <LeadTechnicalScopeTab
+            lead={lead}
+            currentUser={currentUser}
+            permissions={permissions}
+            onRefreshLead={() => { if (onLeadUpdated) onLeadUpdated(); }}
+            showSuccess={showSuccess}
+            showError={showError}
+          />
+        </div>
+      )}
+      {activeTab === 'bom' && (
+        <div className="ld-tab-content">
+          <LeadBomTab
             lead={lead}
             currentUser={currentUser}
             permissions={permissions}
