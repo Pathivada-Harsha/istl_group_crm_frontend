@@ -3842,7 +3842,7 @@ const ProjectDashboard = () => {
             <div className="project-overview-details">
               {[
                 [<Calendar size={18} />, 'Notice to Proceed',     formatDate(dashboardData.startDate)],
-                [<Calendar size={18} />, 'Scheduled Completion',  formatDate(dashboardData.endDate)],
+                [<Calendar size={18} />, 'Scheduled Completion Date',  formatDate(dashboardData.endDate)],
                 [<User size={18} />,     'Project Manager',       dashboardData.manager || 'Not Assigned'],
                 [<IndianRupee size={18} />, 'Total Project Value', formatCurrency(dashboardData.budget)],
                 ...(projectCapacity ? [[<span style={{ fontSize: 16 }}>⚡</span>, 'Capacity', (() => {

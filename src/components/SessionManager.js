@@ -208,6 +208,7 @@ export default function SessionManager() {
       {showPopup && (
         <SessionTimeoutModal
           seconds={secondsLeft}
+          totalSeconds={WARNING_AT}
           onStay={handleStayActive}
           onLogout={handleLogout}
         />

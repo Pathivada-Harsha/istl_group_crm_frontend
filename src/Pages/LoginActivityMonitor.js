@@ -170,7 +170,13 @@ export default function LoginActivityMonitor() {
     setLoading(true);
     setError("");
     loginActivityApi.activeSessions()
-      .then(setSessions)
+      .then((list) => {
+        const arr = Array.isArray(list) ? [...list] : [];
+        // "You" (this browser's session) is always shown on top,
+        // like on the Profile page.
+        arr.sort((a, b) => (b.currentSession === true) - (a.currentSession === true));
+        setSessions(arr);
+      })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
@@ -725,12 +731,16 @@ export default function LoginActivityMonitor() {
                     <td>{s.city ? `📍 ${s.city}` : "—"}</td>
                     <td><span className="la-badge la-badge-success">Active</span></td>
                     <td>
-                      <button type="button" className="la-btn la-btn-danger la-btn-sm"
-                              disabled={s.currentSession}
-                              title={s.currentSession ? "Use Logout to end your own session" : "Terminate"}
-                              onClick={() => terminateSession(s.id)}>
-                        Terminate
-                      </button>
+                      {/* No Terminate button for THIS browser's own session —
+                          use the normal Logout instead. Other sessions get an
+                          instant WebSocket force-logout when terminated. */}
+                      {!s.currentSession && (
+                        <button type="button" className="la-btn la-btn-danger la-btn-sm"
+                                title="Terminate"
+                                onClick={() => terminateSession(s.id)}>
+                          Terminate
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
