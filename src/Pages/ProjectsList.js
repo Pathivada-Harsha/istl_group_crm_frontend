@@ -42,6 +42,16 @@ const statusLabel = (s) =>
 // Progress-fill colour by status: green COMPLETED, amber ON_HOLD, else accent blue.
 const progressColor = (s) => (s === 'COMPLETED' ? '#22c55e' : s === 'ON_HOLD' ? '#f59e0b' : '#3b82f6');
 
+// ── Grid card colour — driven by HOW FAR ALONG the project is, so a wall of
+//    cards reads at a glance. Status still drives the badge; this is progress.
+const progressTone = (pct) => {
+  if (pct >= 100) return '#22c55e';  // complete      — green
+  if (pct >= 67)  return '#3b82f6';  // nearly there  — blue
+  if (pct >= 34)  return '#f59e0b';  // under way     — amber
+  if (pct > 0)    return '#ef4444';  // just started  — red
+  return '#94a3b8';                  // not started   — grey
+};
+
 // Group pill flavour from the group name (EPC blue / IoT green / CBG amber).
 const groupPillClass = (groupName) => {
   const g = String(groupName || '').toUpperCase();
@@ -408,25 +418,35 @@ function ProjectsList() {
 // ─────────────────────────────────────────────────────────────────────────────
 //  PAGINATION
 // ─────────────────────────────────────────────────────────────────────────────
-const Pagination = ({ currentPage, totalPages, total, setCurrentPage }) => (
-  <div className="pl-pagination">
-    <span className="pl-page-info">
-      Showing {(currentPage - 1) * ROWS_PER_PAGE + 1}–{Math.min(currentPage * ROWS_PER_PAGE, total)} of {total}
-    </span>
-    <div className="pl-page-btns">
-      <button className="pl-page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))}>‹</button>
-      {Array.from({ length: totalPages }, (_, i) => i + 1)
-        .filter(p => Math.abs(p - currentPage) <= 2 || p === 1 || p === totalPages)
-        .map((p, idx, arr) => (
-          <React.Fragment key={p}>
-            {idx > 0 && p - arr[idx - 1] > 1 && <span className="pl-page-info">…</span>}
-            <button className={`pl-page-btn${p === currentPage ? ' active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
-          </React.Fragment>
-        ))}
-      <button className="pl-page-btn" disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}>›</button>
+// Mirrors the Leads page pagination (ServerPagination): « first · ‹ prev ·
+// page numbers · next › · last », plus a "Page X of Y" indicator.
+const Pagination = ({ currentPage, totalPages, total, setCurrentPage }) => {
+  const tp = totalPages || 1;
+  return (
+    <div className="pl-pagination">
+      <span className="pl-page-info">
+        {total === 0
+          ? 'No projects'
+          : `Showing ${(currentPage - 1) * ROWS_PER_PAGE + 1}–${Math.min(currentPage * ROWS_PER_PAGE, total)} of ${total}`}
+        {total > 0 && <>  ·  Page <strong>{currentPage}</strong> of <strong>{tp}</strong></>}
+      </span>
+      <div className="pl-page-btns">
+        <button className="pl-page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} title="First page">«</button>
+        <button className="pl-page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} title="Previous page">‹</button>
+        {Array.from({ length: tp }, (_, i) => i + 1)
+          .filter(p => Math.abs(p - currentPage) <= 2 || p === 1 || p === tp)
+          .map((p, idx, arr) => (
+            <React.Fragment key={p}>
+              {idx > 0 && p - arr[idx - 1] > 1 && <span className="pl-page-info">…</span>}
+              <button className={`pl-page-btn${p === currentPage ? ' active' : ''}`} onClick={() => setCurrentPage(p)}>{p}</button>
+            </React.Fragment>
+          ))}
+        <button className="pl-page-btn" disabled={currentPage === tp} onClick={() => setCurrentPage(p => Math.min(tp, p + 1))} title="Next page">›</button>
+        <button className="pl-page-btn" disabled={currentPage === tp} onClick={() => setCurrentPage(tp)} title="Last page">»</button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  GRID VIEW
@@ -434,9 +454,11 @@ const Pagination = ({ currentPage, totalPages, total, setCurrentPage }) => (
 const ProjectsGrid = ({ rows, onOpen }) => (
   <div className="pl-grid">
     {rows.map((p) => {
-      const pct = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
+      const pct  = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
+      const tone = progressTone(pct);
       return (
-        <div key={p.projectUniqueId} className="pl-card" onClick={() => onOpen(p)}>
+        <div key={p.projectUniqueId} className="pl-card" onClick={() => onOpen(p)}
+             style={{ borderLeft: `4px solid ${tone}`, boxShadow: `inset 0 0 0 100vmax ${tone}0a` }}>
           <div className="pl-card-head">
             <span className={groupPillClass(p.groupName)}>{p.groupName || '—'}</span>
             <span className="pl-status-badge" style={{ background: getStatusColor(p.status) + '22', color: getStatusColor(p.status) }}>
@@ -458,9 +480,9 @@ const ProjectsGrid = ({ rows, onOpen }) => (
 
           <div className="pl-progress-wrap">
             <div className="pl-progress">
-              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} />
+              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: tone }} />
             </div>
-            <span className="pl-progress-pct">{pct}%</span>
+            <span className="pl-progress-pct" style={{ color: tone, fontWeight: 700 }}>{pct}%</span>
           </div>
 
           <div className="pl-card-foot">

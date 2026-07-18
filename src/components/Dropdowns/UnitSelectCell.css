@@ -1,0 +1,21 @@
+/* UnitSelectCell — custom-unit fallback. The select itself is styled by whatever
+   `className` the host table passes (obd-inp, lbm-inp, …), so only the custom
+   input row needs rules here. */
+
+.unit-cell-custom { display: flex; align-items: center; gap: 4px; }
+.unit-cell-custom input { min-width: 0; flex: 1 1 auto; }
+
+.unit-cell-back {
+  flex: 0 0 auto;
+  border: 1.5px solid var(--c-e5e7eb, #E5E7EB);
+  background: var(--c-fff, #fff);
+  color: var(--ct-6b7280, #6B7280);
+  border-radius: 6px;
+  padding: 5px 7px;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all .15s;
+}
+.unit-cell-back:hover { background: var(--c-f0f4fb, #F0F4FB); color: var(--ct-1b3a6b, #1B3A6B); }
+.unit-cell-back:disabled { opacity: .55; cursor: default; }

@@ -58,9 +58,26 @@
 .lts-btn-primary {
   background: var(--c-1b3a6b, #1B3A6B); color: var(--ct-fff, #fff); border: none; border-radius: 8px;
   padding: 8px 18px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .lts-btn-primary:hover { background: var(--c-142d52, #142d52); }
 .lts-btn-primary:disabled { opacity: .55; cursor: default; }
+
+/* Header actions (Suggest EPC scope / Add row / Pull from site visit) */
+.lts-head-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lts-btn-ghost {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--c-fff, #fff); color: var(--ct-1b3a6b, #1B3A6B);
+  border: 1.5px solid var(--c-e5e7eb, #E5E7EB); border-radius: 8px; padding: 6px 12px;
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s; white-space: nowrap;
+}
+.lts-btn-ghost:hover { background: var(--c-f0f4fb, #F0F4FB); border-color: var(--c-1b3a6b, #1B3A6B); }
+.lts-btn-ghost:disabled { opacity: .55; cursor: default; }
+/* Accent for "Load template" — the primary action when a template exists. */
+.lts-btn-accent { background: var(--c-1b3a6b, #1B3A6B); color: #fff; border-color: var(--c-1b3a6b, #1B3A6B); }
+.lts-btn-accent:hover { background: var(--c-142d52, #142d52); border-color: var(--c-142d52, #142d52); }
+/* When the Scope Overview head has a ghost button, keep the badge hard right. */
+.lts-card-head .lts-btn-ghost + .lts-flow-badge { margin-left: auto; }
 
 /* Table */
 .lts-table-wrap { overflow-x: auto; }
@@ -86,11 +103,23 @@
 }
 .lts-inp:focus { border-color: var(--c-1b3a6b, #1B3A6B); }
 .lts-inp:disabled { background: var(--c-f9fafb, #F9FAFB); color: var(--ct-6b7280, #6B7280); }
+select.lts-inp { cursor: pointer; }
+
+/* "Other (type your own)" cell: free-text input + a way back to the list */
+.lts-custom { display: flex; align-items: center; gap: 4px; }
+.lts-custom-back {
+  flex: 0 0 auto; border: 1.5px solid var(--c-e5e7eb, #E5E7EB); background: var(--c-fff, #fff);
+  color: var(--ct-6b7280, #6B7280); border-radius: 6px; padding: 5px 8px; font-size: 12px;
+  cursor: pointer; line-height: 1; transition: all .15s;
+}
+.lts-custom-back:hover { background: var(--c-f0f4fb, #F0F4FB); color: var(--ct-1b3a6b, #1B3A6B); }
+.lts-custom-back:disabled { opacity: .55; cursor: default; }
 
 /* Row action icons */
 .lts-icon-save, .lts-icon-del {
   border: none; background: none; cursor: pointer; font-size: 15px; font-weight: 700;
   padding: 4px 6px; border-radius: 6px; transition: background .15s;
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .lts-icon-save { color: var(--ct-059669, #059669); }
 .lts-icon-save:hover { background: var(--c-f0fdf4, #F0FDF4); }
@@ -107,3 +136,16 @@
 .lts-add-line:hover { background: var(--c-f0f4fb, #F0F4FB); border-color: var(--c-1b3a6b, #1B3A6B); }
 
 .lts-hint { font-size: 11px; color: var(--ct-9ca3af, #9CA3AF); font-style: italic; margin: 0; }
+
+/* Suggestion source note + warnings */
+.lts-suggest-note {
+  font-size: 12px; font-weight: 600; color: var(--ct-065f46, #065F46);
+  background: var(--c-f0fdf4, #F0FDF4); border: 1px solid var(--c-bbf7d0, #BBF7D0);
+  border-radius: 8px; padding: 8px 12px;
+}
+.lts-suggest-warn {
+  display: flex; flex-direction: column; gap: 3px;
+  font-size: 12px; color: var(--ct-92400e, #92400E);
+  background: var(--c-fffbeb, #FFFBEB); border: 1px solid var(--c-fde68a, #FDE68A);
+  border-radius: 8px; padding: 8px 12px;
+}

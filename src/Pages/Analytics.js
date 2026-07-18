@@ -17,7 +17,16 @@ const RANGES = [
   { k: 'custom',         l: 'Custom range…' },
 ];
 
-const GRAN_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+const GRAN_LABEL = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', quarterly: 'Quarterly' };
+
+// Ranges whose monthly bars can be drilled into a single month's weeks.
+const DRILLABLE_RANGES = ['this_year', 'last_year', 'last_12_months'];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
+// Persisted filter — sessionStorage survives F5 but is cleared on unmount, so
+// navigating away and back resets to the default range.
+const FILTER_KEY = 'anl_filter';
+const readFilter = () => { try { return JSON.parse(sessionStorage.getItem(FILTER_KEY)) || {}; } catch { return {}; } };
 
 const SERIES = ['#5b8cff', '#27d3a2', '#ffb545', '#ff6b8a', '#a880ff', '#46c8ff', '#8de36a', '#ff8f5c'];
 const DOT = '\u00b7';
@@ -70,13 +79,28 @@ const useThemeVersion = () => {
 };
 
 const Analytics = () => {
-  const [range, setRange] = useState('last_12_months');
-  const [customFrom, setCustomFrom] = useState('');   // applied custom range (drives the fetch)
-  const [customTo, setCustomTo] = useState('');
+  // Seeded from sessionStorage so a refresh keeps the selected range. All three
+  // values are persisted together — a 'custom' range without its bounds is a
+  // broken half-state.
+  const [range, setRange] = useState(() => readFilter().range || 'last_12_months');
+  const [customFrom, setCustomFrom] = useState(() => readFilter().customFrom || '');   // applied custom range (drives the fetch)
+  const [customTo, setCustomTo] = useState(() => readFilter().customTo || '');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalChart, setModalChart] = useState(null); // { title, render }
+  // Drill-down is view state only — deliberately NOT persisted, and it never
+  // touches `range` (the dropdown must keep showing what the user picked).
+  const [drillMonth, setDrillMonth] = useState(null); // "2026-09"
+  const [drillData, setDrillData] = useState(null);   // kept apart so `data` (the year) survives
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  useEffect(() => {
+    sessionStorage.setItem(FILTER_KEY, JSON.stringify({ range, customFrom, customTo }));
+  }, [range, customFrom, customTo]);
+
+  // Clear on unmount → navigating away and back resets to the default range.
+  useEffect(() => () => sessionStorage.removeItem(FILTER_KEY), []);
 
   const user = useMemo(() => {
     try { return JSON.parse(localStorage.getItem('bd_portal_user') || '{}'); } catch { return {}; }
@@ -104,6 +128,42 @@ const Analytics = () => {
   }, [range, customFrom, customTo, user.id, user.role]);
 
   useEffect(() => { load(); }, [load]);
+
+  // ── Month drill-down ───────────────────────────────────────────────────────
+  // Reuses range=custom for a ~30-day span; the backend resolves that to weekly
+  // on its own, so there is no backend work here. The result is kept in
+  // `drillData` so `data` (the year view) stays intact and exiting is instant.
+  const drillIntoMonth = useCallback(async (bucketKey) => {
+    const [y, m] = String(bucketKey).split('-').map(Number);
+    if (!y || !m) return;
+    const last = new Date(y, m, 0).getDate();               // day 0 of next month = last of this
+    const from = `${bucketKey}-01`;
+    const to   = `${bucketKey}-${String(last).padStart(2, '0')}`;
+    setDrillMonth(bucketKey);
+    setDrillData(null);
+    // Uses its own loading flag, NOT the page-level one — drilling a chart must
+    // not blank out the KPIs and every other panel.
+    setDrillLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/analytics/leads?range=custom&from=${from}&to=${to}`, {
+        credentials: 'include',
+        headers: { 'User-Id': String(user.id || 1), 'User-Role': user.role || '' },
+      });
+      const json = await res.json();
+      if (json.success) setDrillData(json.data);
+      else setDrillMonth(null);
+    } catch {
+      setDrillMonth(null);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, [user.id, user.role]);
+
+  // Exit is instant — the year data was never discarded, so no refetch.
+  const exitDrill = useCallback(() => { setDrillMonth(null); setDrillData(null); }, []);
+
+  // Leaving the drill whenever the underlying filter changes keeps the two in sync.
+  useEffect(() => { setDrillMonth(null); setDrillData(null); }, [range, customFrom, customTo]);
 
   const openModal = (title, render, selfZoom) => setModalChart({ title, render, selfZoom });
 
@@ -159,8 +219,34 @@ const Analytics = () => {
           </section>
 
           <section className="anl-grid">
-            <Panel title="Leads Generated vs Won" subtitle={`${GRAN_LABEL[data.granularity] || ''} ${DOT} won by close date`} wide selfZoom
-                   onExpand={openModal} render={(m) => <BarChart series={data.series} modal={m} granularity={data.granularity} />} />
+            {(() => {
+              // Drilled view swaps only the series/granularity — `range` (and so the
+              // dropdown) is untouched; the breadcrumb is the only drill indicator.
+              const drilled    = !!drillMonth && !!drillData;
+              const src        = drilled ? drillData : data;
+              const canDrill   = !drillMonth && data.granularity === 'monthly' && DRILLABLE_RANGES.includes(range);
+              const drillYear  = drillMonth ? drillMonth.split('-')[0] : '';
+              const drillLabel = drillMonth ? MONTH_NAMES[Number(drillMonth.split('-')[1]) - 1] : '';
+              return (
+                <Panel title="Leads Generated vs Won"
+                       subtitle={`${GRAN_LABEL[src.granularity] || ''} ${DOT} won by close date`} wide selfZoom
+                       onExpand={openModal}
+                       render={(m) => (
+                         <>
+                           {drillMonth && (
+                             <div className="anl-crumb" onClick={e => e.stopPropagation()}>
+                               <button className="anl-crumb-link" onClick={exitDrill}>{drillYear}</button>
+                               <span className="anl-crumb-sep">{'›'}</span>
+                               <span className="anl-crumb-current">{drillLabel}</span>
+                               {drillLoading && <span className="anl-crumb-loading">loading…</span>}
+                             </div>
+                           )}
+                           <BarChart series={src.series} modal={m} granularity={src.granularity}
+                                     drillable={canDrill} onDrillMonth={drillIntoMonth} />
+                         </>
+                       )} />
+              );
+            })()}
 
             <Panel title="Status Distribution" subtitle="Where leads sit now"
                    onExpand={openModal} render={(m) => <PieChart data={data.byStatus} modal={m} />} />
@@ -267,13 +353,18 @@ const ChartModal = ({ title, onClose, children, selfZoom }) => {
 
 // Chart.js grouped bars with native x-axis zoom/pan — only the bars/axis zoom,
 // not the whole block (same behaviour as the Project Dashboard charts).
-const BarChart = ({ series, modal, granularity }) => {
+const BarChart = ({ series, modal, granularity, drillable, onDrillMonth }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
   const themeV = useThemeVersion();
   const [ready, setReady] = useState(!!window.Chart);
 
   useEffect(() => { if (!window.Chart) loadChartJS().then(() => setReady(true)); }, []);
+
+  // Hold the latest drill callback in a ref so a new closure identity doesn't
+  // force the whole chart to be torn down and rebuilt.
+  const drillRef = useRef(onDrillMonth);
+  useEffect(() => { drillRef.current = onDrillMonth; }, [onDrillMonth]);
 
   useEffect(() => {
     if (!ready || !canvasRef.current || !series || series.length === 0) return;
@@ -282,43 +373,114 @@ const BarChart = ({ series, modal, granularity }) => {
     if (window.ChartZoom) Chart.register(window.ChartZoom);
     const P = chartPalette();
     const labels = series.map(d => d.label);
-    const isDaily = granularity === 'daily';
+    const isDaily  = granularity === 'daily';
+    const isWeekly = granularity === 'weekly';
+    // Conversion rate per bucket — derived client-side from the existing series.
+    // Kept unrounded (the tooltip formats to 1dp); 0 generated → 0, never NaN/gap.
+    const rate = series.map(d => (d.generated > 0 ? (d.won / d.generated) * 100 : 0));
+    // Bars get a hover tint only where clicking actually drills.
+    const hoverTint = c => (drillable ? c : undefined);
     const ctx = canvasRef.current.getContext('2d');
     chartRef.current = new Chart(ctx, {
       type: 'bar',
       data: {
         labels,
+        // Chart.js draws sorted datasets in REVERSE, so the LOWER `order` lands on
+        // top: the line needs order 0 and the bars order 1, otherwise the bars
+        // (defined first) would paint over the conversion line.
         datasets: [
-          { label: 'Generated', data: series.map(d => d.generated), backgroundColor: SERIES[0], borderRadius: 4, maxBarThickness: modal ? 34 : 24 },
-          { label: 'Won',       data: series.map(d => d.won),       backgroundColor: SERIES[1], borderRadius: 4, maxBarThickness: modal ? 34 : 24 },
+          { label: 'Generated', data: series.map(d => d.generated), backgroundColor: SERIES[0], borderRadius: 4, maxBarThickness: modal ? 34 : 24, order: 1, hoverBackgroundColor: hoverTint('#2f6fe0') },
+          { label: 'Won',       data: series.map(d => d.won),       backgroundColor: SERIES[1], borderRadius: 4, maxBarThickness: modal ? 34 : 24, order: 1, hoverBackgroundColor: hoverTint('#1fae86') },
+          { type: 'line', label: 'Conversion %', data: rate, yAxisID: 'y1', order: 0,
+            borderColor: SERIES[2], backgroundColor: SERIES[2], borderWidth: 2,
+            pointRadius: modal ? 3 : 2, pointHoverRadius: 5, tension: 0.3, fill: false },
         ],
       },
       options: {
         responsive: true, maintainAspectRatio: false, animation: { duration: 300 },
+        // Drill-down uses Chart.js's own click handler. The canvas' React onClick
+        // only stops bubbling to the modal overlay and does NOT block this.
+        onClick: (evt, els) => {
+          if (!drillable || !els || !els.length) return;
+          const b = series[els[0].index];
+          if (b && b.bucket && drillRef.current) drillRef.current(b.bucket);
+        },
+        onHover: (evt, els) => {
+          const c = evt && evt.native && evt.native.target;
+          if (c) c.style.cursor = (drillable && els && els.length) ? 'pointer' : 'default';
+        },
         plugins: {
           legend: { labels: { color: P.legend, font: { size: 11 }, boxWidth: 12, padding: 12 } },
           tooltip: { backgroundColor: P.tipBg, borderColor: P.tipBorder, borderWidth: 1,
-                     titleColor: P.tipTitle, bodyColor: P.tipBody, padding: 10 },
+                     titleColor: P.tipTitle, bodyColor: P.tipBody, padding: 10,
+                     callbacks: {
+                       // Weekly ticks only show the month, so the tooltip must carry
+                       // the full week ("Week of 3 Jun 2026").
+                       title: (items) => {
+                         if (!items || !items.length) return '';
+                         if (!isWeekly) return items[0].label;
+                         const b = series[items[0].dataIndex];
+                         if (!b || !b.bucket) return items[0].label;
+                         const d = new Date(b.bucket);
+                         return isNaN(d.getTime())
+                           ? items[0].label
+                           : `Week of ${d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                       },
+                       // Rate is displayed to 1dp; the underlying value stays exact.
+                       label: (c) => (c.dataset.yAxisID === 'y1'
+                         ? `${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`
+                         : `${c.dataset.label}: ${c.parsed.y}`),
+                     } },
+          // Zoom/pan is for the expanded modal ONLY. Enabled in the grid it makes
+          // the plugin preventDefault() wheel events and the page stops scrolling.
           zoom: {
-            pan:  { enabled: true, mode: 'x', threshold: 5 },
-            zoom: { wheel: { enabled: true, speed: 0.08 }, pinch: { enabled: true }, mode: 'x', scaleMode: 'x' },
+            pan:  { enabled: !!modal, mode: 'x', threshold: 5 },
+            zoom: { wheel: { enabled: !!modal, speed: 0.08 }, pinch: { enabled: !!modal }, mode: 'x', scaleMode: 'x' },
             limits: { x: { minRange: 1 } },
           },
         },
         scales: {
           x: { ticks: { color: P.tick, font: { size: modal ? 11 : 10 },
                         autoSkip: isDaily, autoSkipPadding: 8,
-                        maxRotation: isDaily ? 60 : 45, minRotation: 0 },
+                        maxRotation: isWeekly ? 0 : (isDaily ? 60 : 45), minRotation: 0,
+                        // Weekly → two-tier tick. Chart.js renders an array label on
+                        // separate lines, so line 1 is the week (W1..W5) under every
+                        // bar and line 2 names the month at each month boundary —
+                        // the weeks then read as a group beneath their month.
+                        // Spread so the key is ABSENT (not undefined) otherwise — an
+                        // explicit undefined would override Chart.js's default formatter.
+                        ...(isWeekly ? {
+                          callback: (val, idx) => {
+                            const b = series[idx];
+                            if (!b) return '';
+                            const wk = b.weekOfMonth ? `W${b.weekOfMonth}` : '';
+                            // Also name the month on the very first bucket, which can be
+                            // a partial week carried in from the previous month.
+                            const showMonth = b.weekOfMonth === 1 || idx === 0;
+                            return [wk, showMonth ? (b.month || '') : ''];
+                          },
+                        } : {}) },
                grid: { display: false }, border: { color: P.tick } },
           y: { ticks: { color: P.tick, font: { size: modal ? 11 : 10 }, maxTicksLimit: 5, precision: 0 }, grid: { color: P.grid }, border: { color: P.tick } },
+          y1: { position: 'right', min: 0, max: 100,
+                ticks: { color: P.tick, font: { size: modal ? 11 : 10 }, maxTicksLimit: 5, callback: v => `${v}%` },
+                grid: { drawOnChartArea: false }, border: { color: P.tick } },
         },
       },
     });
+    // Only swallow wheel events where zoom is actually enabled — this listener was
+    // the second cause of the page not scrolling over the chart in the grid view.
     const canvas = canvasRef.current;
-    const stop = e => e.preventDefault();
-    canvas.addEventListener('wheel', stop, { passive: false });
-    return () => { canvas.removeEventListener('wheel', stop); if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; } };
-  }, [ready, series, modal, themeV, granularity]);
+    let stop = null;
+    if (modal) {
+      stop = e => e.preventDefault();
+      canvas.addEventListener('wheel', stop, { passive: false });
+    }
+    return () => {
+      if (stop) canvas.removeEventListener('wheel', stop);
+      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
+    };
+  }, [ready, series, modal, themeV, granularity, drillable]);
 
   const reset = () => { if (chartRef.current) chartRef.current.resetZoom(); };
 
@@ -328,7 +490,8 @@ const BarChart = ({ series, modal, granularity }) => {
       {!ready && <div className="anl-cjs-loading">Loading chart...</div>}
       <canvas ref={canvasRef} style={{ display: ready ? 'block' : 'none' }}
               onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()} />
-      {ready && (
+      {/* Hint + Reset belong only where zoom is enabled. */}
+      {ready && modal && (
         <div className="anl-cjs-tools" onClick={e => e.stopPropagation()}>
           <span className="anl-cjs-hint">Scroll to zoom {DOT} drag to pan</span>
           <button className="anl-expand" onClick={e => { e.stopPropagation(); reset(); }}>Reset</button>
