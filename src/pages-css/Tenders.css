@@ -1,0 +1,475 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Tenders.css — tender-ONLY widgets. The list shell, filters, table, badges,
+   tabbed-detail chrome and form fields are reused from Leads-Enquire.css
+   (leads-enquiries-* / ld-*). Everything here is specific to Tenders and follows
+   the same token convention as theme.css: colours are var(--c-xxxxxx, #hex)
+   for surfaces/borders and var(--ct-xxxxxx, #hex) for text, so light & dark
+   both work with no JS.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── Stat tiles (modeled on Projects' pl-stat-card) ─────────────────────── */
+.tnd-stats {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.tnd-stat-card {
+  background: var(--c-white, #fff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 10px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tnd-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  color: var(--ct-64748b, #64748b);
+}
+.tnd-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ct-0f172a, #0f172a);
+  line-height: 1.1;
+}
+.tnd-stat-accent { width: 34px; height: 3px; border-radius: 3px; }
+@media (max-width: 1100px) { .tnd-stats { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .tnd-stats { grid-template-columns: repeat(2, 1fr); } }
+
+/* ── List-cell chips (OVERDUE flag, linked-project indicator) ───────────── */
+.tnd-cell-stack { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
+.tnd-overdue-pill {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; letter-spacing: .3px;
+  color: var(--ct-991b1b, #991b1b);
+  background: var(--c-fee2e2, #fee2e2);
+  border: 1px solid var(--c-fecaca, #fecaca);
+  border-radius: 20px; padding: 1px 8px; white-space: nowrap;
+}
+.tnd-deadline-date { font-size: 12px; color: var(--ct-0f172a, #0f172a); }
+.tnd-link-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; border-radius: 20px; padding: 2px 9px; white-space: nowrap;
+  color: var(--ct-065f46, #065f46);
+  background: var(--c-d1fae5, #d1fae5);
+  border: 1px solid var(--c-a7f3d0, #a7f3d0);
+}
+.tnd-link-chip--none {
+  color: var(--ct-92400e, #92400e);
+  background: var(--c-fef3c7, #fef3c7);
+  border-color: var(--c-fde68a, #fde68a);
+}
+.tnd-muted { color: var(--ct-94a3b8, #94a3b8); font-size: 12px; }
+.tnd-money { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* ── Detail chrome (Back row → title row → tabs) ─────────────────────────── */
+.tnd-detail { background: var(--c-white, #fff); }
+
+/* Back link sits on its own row, above the title */
+.tnd-detail-backrow { padding: 10px 0 8px; }
+.tnd-back-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--c-f1f5f9, #f1f5f9); border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  color: var(--ct-475569, #475569); border-radius: 8px; padding: 7px 12px;
+  font-size: 13px; font-weight: 500; cursor: pointer; font-family: inherit;
+}
+.tnd-back-btn:hover { background: var(--c-e2e8f0, #e2e8f0); }
+
+/* Plain title row (full width) */
+.tnd-detail-titlerow {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 8px;
+}
+.tnd-detail-heading { display: flex; flex-direction: column; gap: 2px; min-width: 200px; }
+.tnd-detail-title { font-size: 18px; font-weight: 700; color: var(--ct-0f172a, #0f172a); margin: 0; }
+.tnd-detail-sub { font-size: 12px; color: var(--ct-64748b, #64748b); }
+.tnd-detail-actions { display: flex; align-items: center; gap: 8px; }
+.tnd-saved-flash { color: var(--ct-16a34a, #16a34a); font-size: 13px; font-weight: 600; }
+
+.tnd-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+  cursor: pointer; font-family: inherit; border: 1px solid transparent; transition: all .15s;
+}
+.tnd-btn:disabled { opacity: .55; cursor: not-allowed; }
+.tnd-btn-primary { background: var(--c-2563eb, #2563eb); color: #fff; }
+.tnd-btn-primary:hover:not(:disabled) { background: var(--c-1d4ed8, #1d4ed8); }
+.tnd-btn-secondary { background: var(--c-white, #fff); color: var(--ct-475569, #475569); border-color: var(--c-cbd5e1, #cbd5e1); }
+.tnd-btn-secondary:hover:not(:disabled) { background: var(--c-f8fafc, #f8fafc); }
+.tnd-btn-ghost { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569); border-color: var(--c-e2e8f0, #e2e8f0); }
+.tnd-btn-ghost:hover:not(:disabled) { background: var(--c-e2e8f0, #e2e8f0); }
+.tnd-btn-danger { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); border-color: var(--c-fecaca, #fecaca); }
+.tnd-btn-success { background: var(--c-16a34a, #16a34a); color: #fff; }
+.tnd-btn-success:hover:not(:disabled) { background: var(--c-15803d, #15803d); }
+.tnd-btn-sm { padding: 5px 10px; font-size: 12px; }
+
+/* ── Generic section card used inside tabs ──────────────────────────────── */
+.tnd-card {
+  background: var(--c-f9fafb, #f9fafb); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 8px; padding: 16px; margin-bottom: 14px;
+}
+.tnd-card-title {
+  font-size: 12px; font-weight: 700; color: var(--ct-374151, #374151);
+  text-transform: uppercase; letter-spacing: .04em; margin: 0 0 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.tnd-hint { font-size: 12px; color: var(--ct-64748b, #64748b); margin: 0 0 10px; }
+.tnd-empty {
+  text-align: center; color: var(--ct-94a3b8, #94a3b8); font-size: 13px;
+  padding: 22px; border: 1px dashed var(--c-e2e8f0, #e2e8f0); border-radius: 8px;
+}
+.tnd-row-actions { display: flex; align-items: center; gap: 6px; }
+.tnd-icon-x {
+  border: none; background: transparent; color: var(--ct-94a3b8, #94a3b8);
+  cursor: pointer; font-size: 16px; line-height: 1; padding: 2px 6px; border-radius: 6px;
+}
+.tnd-icon-x:hover { background: var(--c-fee2e2, #fee2e2); color: var(--ct-dc2626, #dc2626); }
+
+/* small inline input reused across editable tables */
+.tnd-inp {
+  width: 100%; box-sizing: border-box; padding: 6px 8px;
+  border: 1px solid var(--c-d1d5db, #d1d5db); border-radius: 6px; font-size: 12px;
+  font-family: inherit; background: var(--c-white, #fff); color: var(--ct-0f172a, #0f172a);
+}
+.tnd-inp:focus { outline: none; border-color: var(--c-2563eb, #2563eb); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+
+/* ── Editable data tables (Eligibility / Documents / Doc-requests / BOQ) ── */
+.tnd-table-wrap { overflow-x: auto; border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 8px; }
+.tnd-table { width: 100%; border-collapse: collapse; font-size: 12px; min-width: 720px; }
+.tnd-table thead th {
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569);
+  font-weight: 600; text-align: left; padding: 9px 10px; white-space: nowrap;
+  border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0); font-size: 11px; text-transform: uppercase; letter-spacing: .3px;
+}
+.tnd-table tbody td { padding: 7px 10px; border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9); vertical-align: middle; color: var(--ct-0f172a, #0f172a); }
+.tnd-table tbody tr:hover { background: var(--c-f8fafc, #f8fafc); }
+.tnd-table .tnd-num { text-align: right; font-variant-numeric: tabular-nums; }
+.tnd-table tfoot td { padding: 9px 10px; font-weight: 700; border-top: 2px solid var(--c-e2e8f0, #e2e8f0); background: var(--c-f8fafc, #f8fafc); }
+
+/* result badges shared by eligibility + doc status */
+.tnd-badge {
+  display: inline-flex; align-items: center; gap: 3px; font-size: 10px; font-weight: 700;
+  border-radius: 20px; padding: 2px 9px; white-space: nowrap; text-transform: uppercase; letter-spacing: .3px;
+}
+.tnd-badge-pass { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+.tnd-badge-fail { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
+.tnd-badge-pending { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
+.tnd-badge-override { background: var(--c-fef9c3, #fef9c3); color: var(--ct-854d0e, #854d0e); border: 1px solid var(--c-fde68a, #fde68a); }
+.tnd-badge-ready { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+.tnd-badge-na { background: var(--c-f3f4f6, #f3f4f6); color: var(--ct-6b7280, #6b7280); }
+
+/* ── Eligibility overall banner ─────────────────────────────────────────── */
+.tnd-elig-banner {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  border-radius: 10px; padding: 14px 18px; margin-bottom: 16px; border: 1px solid transparent;
+}
+.tnd-elig-banner .tnd-elig-verdict { font-size: 20px; font-weight: 800; letter-spacing: .5px; }
+.tnd-elig-banner .tnd-elig-note { font-size: 12px; }
+.tnd-elig-go { background: var(--c-ecfdf5, #ecfdf5); border-color: var(--c-a7f3d0, #a7f3d0); color: var(--ct-065f46, #065f46); }
+.tnd-elig-nogo { background: var(--c-fef2f2, #fef2f2); border-color: var(--c-fecaca, #fecaca); color: var(--ct-991b1b, #991b1b); }
+.tnd-elig-pending { background: var(--c-fffbeb, #fffbeb); border-color: var(--c-fde68a, #fde68a); color: var(--ct-92400e, #92400e); }
+.tnd-elig-section-title {
+  font-size: 13px; font-weight: 700; color: var(--ct-374151, #374151);
+  margin: 18px 0 8px; display: flex; align-items: center; gap: 8px;
+}
+.tnd-override-reason { font-size: 11px; color: var(--ct-854d0e, #854d0e); font-style: italic; }
+.tnd-link-txt { border: none; background: none; color: var(--c-2563eb, #2563eb); cursor: pointer; font-size: 11px; font-weight: 600; padding: 0; font-family: inherit; text-decoration: underline; }
+
+/* ── Rate Analysis & Bid (BOQ) ──────────────────────────────────────────── */
+.tnd-boq-controls {
+  display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  background: var(--c-f9fafb, #f9fafb); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 8px; padding: 12px 16px; margin-bottom: 14px;
+}
+.tnd-boq-control { display: flex; flex-direction: column; gap: 4px; }
+.tnd-boq-control label { font-size: 11px; font-weight: 600; color: var(--ct-475569, #475569); }
+.tnd-boq-control input { width: 90px; }
+.tnd-boq-controls .tnd-boq-spacer { flex: 1; }
+.tnd-boq-tools { display: flex; align-items: center; gap: 8px; }
+.tnd-scope-group { margin-bottom: 14px; }
+.tnd-scope-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; background: var(--c-eef2ff, #eef2ff); border: 1px solid var(--c-e0e7ff, #e0e7ff);
+  border-radius: 8px 8px 0 0; font-size: 12px; font-weight: 700; color: var(--ct-3730a3, #3730a3);
+}
+.tnd-scope-total { font-variant-numeric: tabular-nums; }
+.tnd-boq-grand {
+  display: flex; align-items: center; justify-content: flex-end; gap: 16px;
+  padding: 12px 16px; margin-top: 6px; border-radius: 8px;
+  background: var(--c-0f2748, #0f2748); color: #fff; font-weight: 700;
+}
+.tnd-boq-grand .tnd-boq-grand-val { font-size: 18px; font-variant-numeric: tabular-nums; }
+.tnd-boq-statrow { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0 4px; }
+.tnd-boq-stat {
+  background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 8px; padding: 8px 12px; font-size: 12px; color: var(--ct-475569, #475569);
+}
+.tnd-boq-stat strong { display: block; font-size: 15px; color: var(--ct-0f172a, #0f172a); font-variant-numeric: tabular-nums; }
+.tnd-add-row {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px dashed var(--c-93c5fd, #93c5fd);
+  background: var(--c-eff6ff, #eff6ff); color: var(--c-2563eb, #2563eb); border-radius: 8px;
+  padding: 7px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+.tnd-add-row:hover { background: var(--c-dbeafe, #dbeafe); }
+/* variance of our rate vs the tender's quoted rate */
+.tnd-var { font-weight: 700; font-variant-numeric: tabular-nums; }
+.tnd-var-over { color: var(--ct-dc2626, #dc2626); }   /* above the tender estimate */
+.tnd-var-under { color: var(--ct-16a34a, #16a34a); }  /* below — competitive */
+.tnd-var-even { color: var(--ct-64748b, #64748b); }
+.tnd-boq-stat strong.tnd-var-over { color: var(--ct-dc2626, #dc2626); }
+.tnd-boq-stat strong.tnd-var-under { color: var(--ct-16a34a, #16a34a); }
+
+/* ── Workflow tab ───────────────────────────────────────────────────────── */
+.tnd-wf-layout { display: grid; grid-template-columns: 1fr 300px; gap: 18px; align-items: start; }
+@media (max-width: 980px) { .tnd-wf-layout { grid-template-columns: 1fr; } }
+
+.tnd-gonogo-bar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 10px; padding: 14px 18px; margin-bottom: 16px;
+  background: var(--c-white, #fff);
+}
+.tnd-gonogo-bar.decided-go { border-left: 5px solid var(--c-16a34a, #16a34a); }
+.tnd-gonogo-bar.decided-nogo { border-left: 5px solid var(--c-dc2626, #dc2626); }
+.tnd-gonogo-bar.decided-none { border-left: 5px solid var(--c-cbd5e1, #cbd5e1); }
+.tnd-gonogo-main { flex: 1; min-width: 220px; }
+.tnd-gonogo-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--ct-64748b, #64748b); }
+.tnd-gonogo-value { font-size: 18px; font-weight: 800; margin-top: 2px; }
+.tnd-gonogo-value.go { color: var(--ct-16a34a, #16a34a); }
+.tnd-gonogo-value.nogo { color: var(--ct-dc2626, #dc2626); }
+.tnd-gonogo-value.none { color: var(--ct-94a3b8, #94a3b8); }
+.tnd-gonogo-reason { font-size: 12px; color: var(--ct-475569, #475569); margin-top: 2px; }
+
+.tnd-wf-stage {
+  border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 10px; margin-bottom: 14px; overflow: hidden;
+  background: var(--c-white, #fff);
+}
+.tnd-wf-stage.locked { opacity: .6; }
+.tnd-wf-stage.done { border-color: var(--c-a7f3d0, #a7f3d0); }
+.tnd-wf-stage-head {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+  background: var(--c-f8fafc, #f8fafc); border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0);
+}
+.tnd-wf-stage.done .tnd-wf-stage-head { background: var(--c-ecfdf5, #ecfdf5); }
+.tnd-wf-stage-num {
+  width: 24px; height: 24px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; background: var(--c-e2e8f0, #e2e8f0); color: var(--ct-475569, #475569); flex-shrink: 0;
+}
+.tnd-wf-stage.done .tnd-wf-stage-num { background: var(--c-16a34a, #16a34a); color: #fff; }
+.tnd-wf-stage-title { font-size: 14px; font-weight: 700; color: var(--ct-0f172a, #0f172a); }
+.tnd-wf-stage-status { margin-left: auto; }
+.tnd-wf-stage-body { padding: 14px 16px; }
+.tnd-wf-stage-desc { font-size: 12px; color: var(--ct-64748b, #64748b); margin: 0 0 12px; }
+.tnd-wf-locked-note { font-size: 12px; color: var(--ct-94a3b8, #94a3b8); font-style: italic; }
+.tnd-wf-metric-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.tnd-wf-metric { background: var(--c-f8fafc, #f8fafc); border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 8px; padding: 8px 14px; }
+.tnd-wf-metric-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: var(--ct-64748b, #64748b); }
+.tnd-wf-metric-val { font-size: 16px; font-weight: 700; color: var(--ct-0f172a, #0f172a); font-variant-numeric: tabular-nums; }
+
+/* audit sidebar */
+.tnd-audit {
+  position: sticky; top: 12px; border: 1px solid var(--c-e2e8f0, #e2e8f0); border-radius: 10px;
+  background: var(--c-f9fafb, #f9fafb); max-height: calc(100vh - 40px); overflow-y: auto;
+}
+.tnd-audit-head { padding: 12px 14px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .3px; color: var(--ct-475569, #475569); position: sticky; top: 0; background: var(--c-f9fafb, #f9fafb); }
+.tnd-audit-list { padding: 10px 14px; display: flex; flex-direction: column; gap: 12px; }
+.tnd-audit-item { position: relative; padding-left: 16px; font-size: 12px; }
+.tnd-audit-item::before { content: ''; position: absolute; left: 0; top: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--c-2563eb, #2563eb); }
+.tnd-audit-stage { font-weight: 700; color: var(--ct-0f172a, #0f172a); }
+.tnd-audit-action { color: var(--ct-475569, #475569); }
+.tnd-audit-meta { color: var(--ct-94a3b8, #94a3b8); font-size: 11px; margin-top: 2px; }
+.tnd-audit-empty { padding: 16px 14px; font-size: 12px; color: var(--ct-94a3b8, #94a3b8); font-style: italic; }
+
+/* ── Modal (Go/No-Go, override, approvals) ──────────────────────────────── */
+.tnd-modal-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 1000;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.tnd-modal {
+  background: var(--c-white, #fff); border-radius: 12px; width: 100%; max-width: 480px;
+  box-shadow: 0 20px 50px rgba(0,0,0,.25); overflow: hidden;
+}
+.tnd-modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0); }
+.tnd-modal-title { font-size: 15px; font-weight: 700; color: var(--ct-0f172a, #0f172a); }
+.tnd-modal-body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.tnd-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--c-e2e8f0, #e2e8f0); }
+.tnd-field { display: flex; flex-direction: column; gap: 5px; }
+.tnd-field label { font-size: 12px; font-weight: 600; color: var(--ct-374151, #374151); }
+.tnd-field input, .tnd-field textarea, .tnd-field select {
+  width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--c-d1d5db, #d1d5db); border-radius: 8px;
+  background: var(--c-white, #fff); color: var(--ct-0f172a, #0f172a);
+}
+.tnd-field input:focus, .tnd-field textarea:focus, .tnd-field select:focus { outline: none; border-color: var(--c-2563eb, #2563eb); box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+.tnd-choice-row { display: flex; gap: 10px; }
+.tnd-choice {
+  flex: 1; text-align: center; padding: 10px; border-radius: 8px; cursor: pointer; font-weight: 700; font-size: 13px;
+  border: 2px solid var(--c-e2e8f0, #e2e8f0); background: var(--c-white, #fff); color: var(--ct-475569, #475569); font-family: inherit;
+}
+.tnd-choice.sel-go { border-color: var(--c-16a34a, #16a34a); background: var(--c-ecfdf5, #ecfdf5); color: var(--ct-065f46, #065f46); }
+.tnd-choice.sel-nogo { border-color: var(--c-dc2626, #dc2626); background: var(--c-fef2f2, #fef2f2); color: var(--ct-991b1b, #991b1b); }
+
+/* ── Result — linked project affordance ─────────────────────────────────── */
+.tnd-won-block { border: 1px solid var(--c-a7f3d0, #a7f3d0); background: var(--c-ecfdf5, #ecfdf5); border-radius: 10px; padding: 16px; margin-top: 14px; }
+.tnd-won-title { font-size: 13px; font-weight: 700; color: var(--ct-065f46, #065f46); margin: 0 0 12px; }
+.tnd-project-strip {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 14px;
+  padding: 12px 14px; border: 1px dashed var(--c-a7f3d0, #a7f3d0); border-radius: 8px; background: var(--c-f0fdf4, #f0fdf4);
+}
+.tnd-project-strip-tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .4px; color: var(--ct-065f46, #065f46); background: var(--c-d1fae5, #d1fae5); border-radius: 6px; padding: 3px 8px; }
+.tnd-project-strip-note { font-size: 11px; color: var(--ct-64748b, #64748b); font-style: italic; width: 100%; }
+
+/* ── Source-PDF viewer modal (mirrors OrderBook's attached-PO viewer) ─────── */
+.tnd-file-viewer-overlay {
+  position: fixed; inset: 0; z-index: 1100;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(15, 23, 42, .55); padding: 16px;
+}
+.tnd-file-viewer-modal {
+  width: 1000px; max-width: 92vw; max-height: 92vh;
+  display: flex; flex-direction: column;
+  background: var(--c-white, #fff); border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 12px; overflow: hidden; box-shadow: 0 18px 48px rgba(15, 23, 42, .28);
+}
+.tnd-file-viewer-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 12px 16px; border-bottom: 1px solid var(--c-e2e8f0, #e2e8f0); background: var(--c-f8fafc, #f8fafc);
+}
+.tnd-file-viewer-title {
+  font-size: 13px; font-weight: 700; color: var(--ct-0f172a, #0f172a);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.tnd-file-viewer-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.tnd-file-viewer-actions a.tnd-btn { text-decoration: none; }
+.tnd-file-viewer-body {
+  flex: 1; min-height: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--c-1e1e2e, #1e1e2e);
+}
+.tnd-file-viewer-iframe { width: 100%; height: 75vh; border: none; }
+.tnd-file-viewer-loading { color: var(--ct-94a3b8, #94a3b8); font-size: 13px; padding: 40px; }
+.tnd-file-viewer-error { color: var(--ct-fca5a5, #fca5a5); font-size: 13px; padding: 40px; text-align: center; }
+
+/* ── Eligibility gate: locked downstream tabs + hint banner ──────────────── */
+.ld-tab.tnd-tab-locked {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.ld-tab.tnd-tab-locked:hover { background: transparent; }
+.tnd-gate-hint {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px;
+  margin: 10px 0 4px; padding: 9px 14px; border-radius: 8px; font-size: 12.5px;
+  color: var(--ct-92400e, #92400e);
+  background: var(--c-fef3c7, #fef3c7);
+  border: 1px solid var(--c-fde68a, #fde68a);
+}
+.tnd-linklike {
+  background: none; border: none; padding: 0; font: inherit; cursor: pointer;
+  color: var(--c-2563eb, #2563eb); text-decoration: underline;
+}
+.tnd-linklike:hover { color: var(--c-1d4ed8, #1d4ed8); }
+
+/* ── Grid view: compact tender cards ─────────────────────────────────────────
+   Scoped to .tnd-* so the Leads grid is untouched. Two fixes vs. the shared
+   card styles, both caused by tender text being far longer than lead text:
+   (1) cards were stretched to the row height (card height:100% + a single grid
+       row stretching to the container's fixed height) → size rows to content;
+   (2) a 100-char tender name with white-space:nowrap couldn't shrink (grid items
+       default to min-width:auto), blowing the column out so only 2 fit per row
+       → allow shrinking and clamp the title to 2 lines.                       */
+.leads-enquiries-grid-container.tnd-grid-container {
+  height: auto;                                   /* was calc(100vh - 263px) */
+  max-height: calc(100vh - 240px);                /* still scrolls when long  */
+}
+.leads-enquiries-grid.tnd-grid {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  align-content: start;                           /* don't stretch one row    */
+  grid-auto-rows: min-content;                    /* rows hug their content   */
+}
+.leads-enquiries-card.tnd-card {
+  height: auto;                                   /* was 100% → row-stretched */
+  min-width: 0;                                   /* allow the card to shrink */
+}
+.tnd-card .leads-enquiries-card-body,
+.tnd-card .leads-enquiries-card-info,
+.tnd-card .leads-enquiries-card-info-item { min-width: 0; }
+.tnd-card .leads-enquiries-card-body { flex: 0 1 auto; }
+.tnd-card .leads-enquiries-card-title {
+  white-space: normal;                            /* long names wrap…         */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;                          /* …then clamp at 2 lines   */
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+}
+.tnd-card .leads-enquiries-card-footer { margin-top: 6px; padding-top: 6px; }
+
+/* ── Table view: keep columns readable when the sidebar is open ──────────────
+   The shared table is table-layout:auto with only min-width:900px, and Leads
+   sizes its columns via [data-col] rules that don't exist for tenders. With 10
+   columns and the sidebar open the browser crushed the Tender column to ~110px
+   and word-break:break-word split it mid-word, blowing the row to ~400px tall.
+   Fix: give each tender column a floor, raise the table min-width so the
+   wrapper scrolls horizontally instead of crushing, and clamp the long name.  */
+.tnd-table-card .leads-enquiries-table { min-width: 1200px; }
+
+.tnd-table-card .leads-enquiries-table th[data-col="tender"],
+.tnd-table-card .leads-enquiries-table td[data-col="tender"] { min-width: 260px; width: 24%; }
+.tnd-table-card .leads-enquiries-table th[data-col="issuingAuthority"],
+.tnd-table-card .leads-enquiries-table td[data-col="issuingAuthority"] { min-width: 160px; width: 16%; }
+.tnd-table-card .leads-enquiries-table th[data-col="clientCompany"],
+.tnd-table-card .leads-enquiries-table td[data-col="clientCompany"] { min-width: 140px; width: 14%; }
+.tnd-table-card .leads-enquiries-table th[data-col="location"],
+.tnd-table-card .leads-enquiries-table td[data-col="location"] { min-width: 130px; }
+.tnd-table-card .leads-enquiries-table th[data-col="sector"],
+.tnd-table-card .leads-enquiries-table td[data-col="sector"] { min-width: 90px; }
+.tnd-table-card .leads-enquiries-table th[data-col="source"],
+.tnd-table-card .leads-enquiries-table td[data-col="source"] { min-width: 100px; }
+.tnd-table-card .leads-enquiries-table th[data-col="financialYear"],
+.tnd-table-card .leads-enquiries-table td[data-col="financialYear"] { min-width: 70px; }
+.tnd-table-card .leads-enquiries-table th[data-col="bidValue"],
+.tnd-table-card .leads-enquiries-table td[data-col="bidValue"] { min-width: 110px; }
+.tnd-table-card .leads-enquiries-table th[data-col="contractValue"],
+.tnd-table-card .leads-enquiries-table td[data-col="contractValue"] { min-width: 120px; }
+.tnd-table-card .leads-enquiries-table th[data-col="deadline"],
+.tnd-table-card .leads-enquiries-table td[data-col="deadline"] { min-width: 110px; }
+.tnd-table-card .leads-enquiries-table th[data-col="status"],
+.tnd-table-card .leads-enquiries-table td[data-col="status"] { min-width: 100px; }
+.tnd-table-card .leads-enquiries-table th[data-col="project"],
+.tnd-table-card .leads-enquiries-table td[data-col="project"] { min-width: 90px; }
+
+/* Short cells never wrap — only the two text-heavy columns may. */
+.tnd-table-card .leads-enquiries-table td[data-col="sector"],
+.tnd-table-card .leads-enquiries-table td[data-col="source"],
+.tnd-table-card .leads-enquiries-table td[data-col="financialYear"],
+.tnd-table-card .leads-enquiries-table td[data-col="bidValue"],
+.tnd-table-card .leads-enquiries-table td[data-col="contractValue"],
+.tnd-table-card .leads-enquiries-table td[data-col="deadline"],
+.tnd-table-card .leads-enquiries-table td[data-col="status"],
+.tnd-table-card .leads-enquiries-table td[data-col="project"] { white-space: nowrap; }
+
+/* Wrap on whole words (not mid-word) and clamp, so row height stays bounded. */
+.tnd-table-card .leads-enquiries-table td[data-col="tender"],
+.tnd-table-card .leads-enquiries-table td[data-col="issuingAuthority"],
+.tnd-table-card .leads-enquiries-table td[data-col="clientCompany"] {
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+.tnd-cell-title {
+  font-weight: 600;
+  color: var(--ct-0f172a, #0f172a);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.tnd-cell-sub {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

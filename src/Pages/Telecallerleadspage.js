@@ -30,9 +30,6 @@ const BOARD_COLUMNS = [
   { key: "NOT_INTERESTED", label: "Not Interested", color: "#dc2626", bg: "#fef2f2", icon: "❌" },
 ];
 
-// Coerce any value (number/null/string) to a trimmed string so `.trim()` never
-// throws on numeric fields (capacity, bill, price) that arrive from the backend.
-const trimVal = (v) => (v == null ? "" : String(v)).trim();
 
 const isResurfaced = (lead) => {
   if (lead.telecallerStatus !== "NOT_RESPONDED" || !lead.telecallerStatusUpdatedAt) return false;
@@ -64,13 +61,6 @@ function parseBackendDate(str) {
     return new Date(iso);
   }
   return new Date(str);
-}
-
-// Normalise any backend date string to the yyyy-MM-dd an <input type="date"> needs.
-function toDateInput(str) {
-  const d = parseBackendDate(str);
-  if (!d || isNaN(d)) return "";
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 
 // Local (not UTC) today as yyyy-MM-dd — for date-input `min`, so IST early-morning
@@ -370,23 +360,11 @@ export default function TelecallerLeadsPage() {
     } catch { setEditSubGroups([]); }
   };
 
-  // INTERESTED extra fields
-  const [intLocation, setIntLocation] = useState("");
-  const [intSiteDate, setIntSiteDate] = useState("");
-  const [intPropertyType, setIntPropertyType] = useState("");
-  const [intQuotedPrice, setIntQuotedPrice] = useState("");
-  const [intAddons, setIntAddons] = useState("");
-  const [intOtherComment, setIntOtherComment] = useState("");
-  const [intCapacity, setIntCapacity] = useState("");
-  const [intCapacityUnit, setIntCapacityUnit] = useState("kW");
-  const [intMonthlyBill, setIntMonthlyBill] = useState("");
-  const [intExistingContractLoad, setIntExistingContractLoad] = useState("");
-  const [intRequiredContractLoad, setIntRequiredContractLoad] = useState("");
+  // Electricity-bill upload (now used only by the Edit modal; the requirement /
+  // site-visit detail fields moved from the Interested popup into the Edit form).
   const [intBillFile, setIntBillFile] = useState(null);
   const [intBillUploading, setIntBillUploading] = useState(false);
   const [billPreview, setBillPreview] = useState(null);
-  const [intSolarScheme,    setIntSolarScheme]    = useState("");
-  const [intSubsidyRequired,setIntSubsidyRequired]= useState("");
 
   // ── Build common filter params for all API calls ───────────────────────────
   const buildFilterParams = () => {
@@ -599,19 +577,6 @@ export default function TelecallerLeadsPage() {
     if (toCol === "INTERESTED") {
       setSelected(lead); setNewStatus("INTERESTED");
       setReason(""); setDiscussion(lead.tcDiscussionNote||"");
-      setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
-      setIntSiteDate(toDateInput(lead.tcSiteVisitDate));
-      setIntPropertyType(lead.tcPropertyType||"");
-      setIntQuotedPrice(lead.tcQuotedPrice||"");
-      setIntAddons(lead.tcAddons||"");
-      setIntOtherComment(lead.tcOtherComments||"");
-      setIntCapacity(lead.capacity||""); setIntCapacityUnit(lead.capacityUnit||"kW");
-      setIntMonthlyBill(lead.tcMonthlyBill||"");
-      setIntExistingContractLoad(lead.tcExistingContractLoad||"");
-      setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
-      setIntBillFile(null);
-      setIntSolarScheme(lead.solarScheme||"");
-      setIntSubsidyRequired(lead.subsidyRequired||"");
       setDragFromCol(fromCol); setStatusModal(true); return;
     }
     doBoardMove(lead, fromCol, toCol);
@@ -692,19 +657,6 @@ export default function TelecallerLeadsPage() {
     }
     setSelected(lead); setNewStatus(""); setReason(""); setDiscussion("");
     setFollowupDate(""); setFollowupTime("09:00"); setFollowupNote("");
-    setIntLocation([lead.state||"", lead.district||"", lead.city||"", lead.pincode||""].join("||"));
-    setIntSiteDate(lead.tcSiteVisitDate ? lead.tcSiteVisitDate.split("T")[0] : "");
-    setIntPropertyType(lead.tcPropertyType||"");
-    setIntQuotedPrice(lead.tcQuotedPrice||"");
-    setIntAddons(lead.tcAddons||"");
-    setIntOtherComment(lead.tcOtherComments||"");
-    setIntCapacity(lead.capacity||""); setIntCapacityUnit(lead.capacityUnit||"kW");
-    setIntMonthlyBill(lead.tcMonthlyBill||"");
-    setIntExistingContractLoad(lead.tcExistingContractLoad||"");
-    setIntRequiredContractLoad(lead.tcRequiredContractLoad||"");
-    setIntBillFile(null);
-    setIntSolarScheme(lead.solarScheme||"");
-    setIntSubsidyRequired(lead.subsidyRequired||"");
     setDiscussion(lead.tcDiscussionNote||"");
     setStatusModal(true);
   };
@@ -713,7 +665,6 @@ export default function TelecallerLeadsPage() {
     if (!newStatus) return;
     if (newStatus==="NOT_INTERESTED" && !reason.trim()) { showToast("Reason required","error"); return; }
     if (newStatus==="INTERESTED" && !discussion.trim()) { showToast("Discussion required","error"); return; }
-    if (newStatus==="INTERESTED" && !intPropertyType)   { showToast("Property type required","error"); return; }
     if (newStatus==="KEEP_IN_VIEW" && !reason.trim())   { showToast("Conversation note required","error"); return; }
     setSaving(true);
     try {
@@ -735,59 +686,13 @@ export default function TelecallerLeadsPage() {
         setFollowupDate(""); setFollowupTime("09:00"); setFollowupModal(true);
         return;
       }
-      const locParts = intLocation.split("||");
-      const tcState    = locParts[0]||"";
-      const tcDistrict = locParts[1]||"";
-      const tcCity     = locParts[2]||"";
-      const tcPincode  = locParts[3]||"";
-      const tcLocStr   = [tcCity, tcDistrict, tcState].filter(Boolean).join(", ");
-
+      // Interested now captures only the discussion note here; all requirement /
+      // site-visit details + bill upload live in the Edit modal. The backend only
+      // overwrites tc* fields when sent, so those Edit-entered values are preserved.
       await api.put(`/telecaller/lead/${selected.id}/status`, {
         telecallerStatus: newStatus, reason: reason.trim(), discussionNote: discussion.trim(),
-        ...(newStatus==="INTERESTED" && {
-          tcLocation: tcLocStr||null,
-          tcState: tcState||null, tcDistrict: tcDistrict||null,
-          tcCity: tcCity||null, tcPincode: tcPincode||null,
-          tcSiteVisitDate: intSiteDate||null,
-          tcPropertyType: intPropertyType||null, tcQuotedPrice: trimVal(intQuotedPrice)||null,
-          tcAddons: trimVal(intAddons)||null, tcOtherComments: trimVal(intOtherComment)||null,
-          capacity: trimVal(intCapacity)||null, capacityUnit: intCapacityUnit||"kW",
-          tcMonthlyBill: trimVal(intMonthlyBill)||null,
-          tcExistingContractLoad: trimVal(intExistingContractLoad)||null,
-          tcRequiredContractLoad: trimVal(intRequiredContractLoad)||null,
-          solarScheme: intSolarScheme||null, subsidyRequired: intSubsidyRequired||null,
-        }),
       });
-      let billUploadFailed = false;
-      if (intBillFile) {
-        try {
-          setIntBillUploading(true);
-          const form = new FormData();
-          form.append("file", intBillFile);
-          const stored = JSON.parse(localStorage.getItem("bd_portal_user")||"{}");
-          const authUser = stored?.user || stored || {};
-          const uploadResp = await fetch(`${API_BASE_URL}/telecaller/lead/${selected.id}/upload-bill`, {
-            method: "POST",
-            headers: {
-              "User-Id":   String(authUser.id   || ""),
-              "User-Role": String(authUser.role  || "TELECALLER"),
-            },
-            body: form,
-          });
-          if (!uploadResp.ok) {
-            billUploadFailed = true;
-            const errData = await uploadResp.json().catch(()=>({}));
-            showToast("Bill upload failed: " + (errData.message||uploadResp.status), "error");
-          }
-        } catch(uploadErr) {
-          billUploadFailed = true;
-          showToast("Bill upload failed: " + uploadErr.message, "error");
-        } finally {
-          setIntBillUploading(false); setIntBillFile(null);
-        }
-      }
-      if (!billUploadFailed) showToast("Status updated!","success");
-      else showToast("Status updated, but the bill upload failed — please re-upload.","warning");
+      showToast("Status updated!","success");
       setStatusModal(false); setDragFromCol(null);
       if (modalOpen) {
         try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){}
@@ -813,7 +718,13 @@ export default function TelecallerLeadsPage() {
       referralName:lead.referralName||"", referralPhone:lead.referralPhone||"",
       capacity:lead.capacity||"", capacityUnit:lead.capacityUnit||"kW",
       groupName:lead.groupName||"", subGroupName:lead.subGroupName||"", solarScheme:lead.solarScheme||"",
+      // Requirement / site-visit details — moved here from the Interested popup
+      tcPropertyType:lead.tcPropertyType||"", tcMonthlyBill:lead.tcMonthlyBill||"",
+      tcExistingContractLoad:lead.tcExistingContractLoad||"", tcRequiredContractLoad:lead.tcRequiredContractLoad||"",
+      tcQuotedPrice:lead.tcQuotedPrice||"", tcSiteVisitDate:lead.tcSiteVisitDate?lead.tcSiteVisitDate.split("T")[0]:"",
+      tcAddons:lead.tcAddons||"", tcOtherComments:lead.tcOtherComments||"",
     });
+    setIntBillFile(null);   // electricity-bill upload now lives in the edit modal
     fetchEditGroups();
     if (lead.groupName) fetchEditSubGroups(lead.groupName);
     setEditModal(true);
@@ -825,8 +736,28 @@ export default function TelecallerLeadsPage() {
     try {
       const resp = await api.put(`/telecaller/lead/${selected.id}/details`, editForm);
       if (resp.success) {
-        showToast("Lead updated!","success"); setEditModal(false);
-        if (modalOpen) setSelected(resp.data);
+        // Optional electricity-bill upload (moved here from the Interested popup)
+        let billFailed = false;
+        if (intBillFile) {
+          try {
+            setIntBillUploading(true);
+            const form = new FormData();
+            form.append("file", intBillFile);
+            const stored = JSON.parse(localStorage.getItem("bd_portal_user")||"{}");
+            const authUser = stored?.user || stored || {};
+            const up = await fetch(`${API_BASE_URL}/telecaller/lead/${selected.id}/upload-bill`, {
+              method:"POST",
+              headers:{ "User-Id":String(authUser.id||""), "User-Role":String(authUser.role||"TELECALLER") },
+              body: form,
+            });
+            if (!up.ok) { billFailed = true; const ed = await up.json().catch(()=>({})); showToast("Bill upload failed: "+(ed.message||up.status),"error"); }
+          } catch(be){ billFailed = true; showToast("Bill upload failed: "+be.message,"error"); }
+          finally { setIntBillUploading(false); setIntBillFile(null); }
+        }
+        showToast(billFailed ? "Lead updated, but bill upload failed — please re-upload." : "Lead updated!", billFailed ? "warning" : "success");
+        setEditModal(false);
+        // Re-fetch so the detail view reflects the new details + bill immediately
+        if (modalOpen) { try { const f=await api.get(`/telecaller/lead/${selected.id}`); if(f.success) setSelected(f.data); } catch(_){} }
         if (viewMode==="board") resetBoard(); else fetchLeads(pageRef.current,filterRef.current,pageSizeRef.current);
       }
     } catch(e) { if(e.message!=="SESSION_EXPIRED") showToast(e.message||"Update failed","error"); }
@@ -1306,9 +1237,67 @@ export default function TelecallerLeadsPage() {
                   </div>
                 </div>
               )}
+              <div className="tc-edit-section-divider">🔆 Requirement &amp; Site Visit Details</div>
+              <div className="tc-edit-field tc-edit-field--full">
+                <label>Property Type</label>
+                <div className="tc-property-toggle">
+                  {["Residential","Commercial","Industrial"].map(pt=>(
+                    <button key={pt} type="button" className={`tc-prop-btn ${editForm.tcPropertyType===pt?"active":""}`}
+                      onClick={()=>setEditForm(f=>({...f,tcPropertyType:f.tcPropertyType===pt?"":pt}))}>
+                      {pt==="Residential"?"🏠":pt==="Commercial"?"🏢":"🏭"} {pt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="tc-edit-grid">
+                <div className="tc-edit-field"><label>Monthly Bill Amount (₹)</label>
+                  <input value={toINR(editForm.tcMonthlyBill)} onChange={e=>setEditForm(f=>({...f,tcMonthlyBill:e.target.value.replace(/[^0-9]/g,'')}))} placeholder="e.g. 2,500"/></div>
+                <div className="tc-edit-field"><label>Quoted Price (₹)</label>
+                  <input value={toINR(editForm.tcQuotedPrice)} onChange={e=>setEditForm(f=>({...f,tcQuotedPrice:e.target.value.replace(/[^0-9]/g,'')}))} placeholder="e.g. 1,20,000"/></div>
+                <div className="tc-edit-field"><label>Existing Contracted Load</label>
+                  <input value={editForm.tcExistingContractLoad} onChange={e=>setEditForm(f=>({...f,tcExistingContractLoad:e.target.value}))} placeholder="e.g. 5 kW"/></div>
+                <div className="tc-edit-field"><label>Required Contracted Load</label>
+                  <input value={editForm.tcRequiredContractLoad} onChange={e=>setEditForm(f=>({...f,tcRequiredContractLoad:e.target.value}))} placeholder="e.g. 10 kW"/></div>
+                <div className="tc-edit-field"><label>Site Visit Date</label>
+                  <input type="date" value={editForm.tcSiteVisitDate} onChange={e=>setEditForm(f=>({...f,tcSiteVisitDate:e.target.value}))} min={todayLocalStr()}/></div>
+                <div className="tc-edit-field"><label>Add-ons</label>
+                  <input value={editForm.tcAddons} onChange={e=>setEditForm(f=>({...f,tcAddons:e.target.value}))} placeholder="e.g. Battery backup"/></div>
+              </div>
+              <div className="tc-edit-field tc-edit-field--full"><label>Other Comments</label>
+                <textarea rows={2} value={editForm.tcOtherComments} onChange={e=>setEditForm(f=>({...f,tcOtherComments:e.target.value}))} placeholder="Additional notes for BD team…"/></div>
+              <div className="tc-edit-field tc-edit-field--full">
+                <label>Electricity Bill <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}> (optional, max 10 MB)</span></label>
+                {selected.tcHasBillFile && selected.tcBillFileName && !intBillFile && (
+                  <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between", gap:8,padding:"8px 12px",marginBottom:8, background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:8 }}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#059669",minWidth:0}}>
+                      <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>📄 {selected.tcBillFileName}</span>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button type="button" className="tc-bill-btn tc-bill-btn--newtab" style={{padding:"3px 10px",fontSize:12}} onClick={()=>setBillPreview({ url:`${API_BASE_URL}/telecaller/lead/${selected.id}/bill`, name:selected.tcBillFileName, type:selected.tcBillFileType||"application/octet-stream" })}>👁 View</button>
+                      <label style={{ padding:"3px 10px",fontSize:12,cursor:"pointer", background:"#eff6ff",color:"#2563eb", border:"1.5px solid #bfdbfe",borderRadius:7, display:"inline-flex",alignItems:"center",gap:4 }}>
+                        🔄 Replace
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                      </label>
+                    </div>
+                  </div>
+                )}
+                {(!selected.tcHasBillFile || intBillFile) && (
+                  <label className="tc-bill-upload" style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer", border:"1.5px dashed "+(intBillFile?"#059669":"#d1d5db"), borderRadius:8,padding:"10px 14px", background:intBillFile?"#f0fdf4":"#fafafa", fontSize:13,color:intBillFile?"#059669":"#6b7280" }}>
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    <span>{intBillFile ? intBillFile.name : "Choose PDF, JPG, or PNG…"}</span>
+                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
+                  </label>
+                )}
+                {intBillFile && (
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                    <span style={{fontSize:11,color:"#059669"}}>✓ {intBillFile.name} — will be uploaded on save</span>
+                    <button type="button" style={{fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}} onClick={()=>setIntBillFile(null)}>✕ Cancel</button>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="tc-modal-footer tc-modal-footer--fixed">
-              <button className="tc-btn-primary" disabled={editSaving} onClick={submitEdit}>{editSaving?"Saving…":"Save Changes"}</button>
+              <button className="tc-btn-primary" disabled={editSaving||intBillUploading} onClick={submitEdit}>{editSaving||intBillUploading?"Saving…":"Save Changes"}</button>
               <button className="tc-btn-status" style={{background:"#7c3aed",color:"#fff",border:"none"}}
                 onClick={()=>{setEditModal(false);openStatusModal(selected);}}>Update Status</button>
               <button className="tc-btn-secondary" onClick={()=>setEditModal(false)}>Cancel</button>
@@ -1392,146 +1381,7 @@ export default function TelecallerLeadsPage() {
                 <div className="tc-interested-fields">
                   <div className="tc-reason-field tc-field--full"><label>Discussion Summary <span className="tc-req">*</span></label>
                     <textarea rows={3} value={discussion} onChange={e=>setDiscussion(e.target.value)} placeholder="Summarise the discussion with the customer…"/></div>
-
-                  <div className="tc-reason-field tc-field--full">
-                    <label>Location / Address</label>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"10px 14px",marginTop:6}}>
-                      <div>
-                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>State</label>
-                        <select className="tc-styled-input"
-                          value={intLocation.split("||")[0]||""}
-                          onChange={e=>{ const parts=intLocation.split("||"); parts[0]=e.target.value; setIntLocation(parts.join("||")); }}>
-                          <option value="">Select State</option>
-                          {["Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat","Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh","Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab","Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh","Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh","Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir","Ladakh","Lakshadweep","Puducherry"].map(s=><option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>District</label>
-                        <input className="tc-styled-input" value={intLocation.split("||")[1]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[1]=e.target.value; setIntLocation(parts.join("||")); }} placeholder="e.g. Hyderabad"/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>City / Village</label>
-                        <input className="tc-styled-input" value={intLocation.split("||")[2]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[2]=e.target.value; setIntLocation(parts.join("||")); }} placeholder="e.g. Uppal"/>
-                      </div>
-                      <div>
-                        <label style={{fontSize:11,color:"#6b7280",fontWeight:600,display:"block",marginBottom:3}}>Pincode</label>
-                        <input className="tc-styled-input" value={intLocation.split("||")[3]||""} onChange={e=>{ const parts=intLocation.split("||"); while(parts.length<4) parts.push(""); parts[3]=e.target.value.replace(/\D/g,"").slice(0,6); setIntLocation(parts.join("||")); }} placeholder="6-digit PIN" maxLength={6}/>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px 16px"}}>
-                    <div className="tc-reason-field">
-                      <label>Site Visit Date</label>
-                      <input type="date" value={intSiteDate} onChange={e=>setIntSiteDate(e.target.value)} min={todayLocalStr()}/>
-                    </div>
-                    <div className="tc-reason-field">
-                      <label>Quoted Price (₹)</label>
-                      <input className="tc-styled-input" value={toINR(intQuotedPrice)} onChange={e=>setIntQuotedPrice(e.target.value.replace(/[^0-9]/g,''))} placeholder="e.g. 1,20,000"/>
-                    </div>
-                    <div className="tc-reason-field">
-                      <label>Monthly Bill Amount (₹)</label>
-                      <input className="tc-styled-input" value={toINR(intMonthlyBill)} onChange={e=>setIntMonthlyBill(e.target.value.replace(/[^0-9]/g,''))} placeholder="e.g. 2,500"/>
-                    </div>
-                    <div className="tc-reason-field">
-                      <label>Existing Contracted Load</label>
-                      <input className="tc-styled-input" value={intExistingContractLoad} onChange={e=>setIntExistingContractLoad(e.target.value)} placeholder="e.g. 5 kW"/>
-                    </div>
-                    <div className="tc-reason-field">
-                      <label>Required Contracted Load</label>
-                      <input className="tc-styled-input" value={intRequiredContractLoad} onChange={e=>setIntRequiredContractLoad(e.target.value)} placeholder="e.g. 10 kW"/>
-                    </div>
-                    <div className="tc-reason-field">
-                      <label>Capacity</label>
-                      <div style={{display:"flex",gap:6}}>
-                        <input type="number" className="tc-styled-input" value={intCapacity} onChange={e=>setIntCapacity(e.target.value)} style={{flex:1}} placeholder="0"/>
-                        <select className="tc-styled-input" value={intCapacityUnit} onChange={e=>setIntCapacityUnit(e.target.value)} style={{width:80}}>
-                          {["kWp","kVA","Units","kW","MW","HP"].map(u=><option key={u}>{u}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="tc-reason-field tc-field--full">
-                    <label>Property Type <span className="tc-req">*</span></label>
-                    <div className="tc-property-toggle">
-                      {["Residential","Commercial","Industrial"].map(pt=>(
-                        <button key={pt} type="button" className={`tc-prop-btn ${intPropertyType===pt?"active":""}`} onClick={()=>setIntPropertyType(pt)}>
-                          {pt==="Residential"?"🏠":pt==="Commercial"?"🏢":"🏭"} {pt}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {(selected.subGroupName === "Solar_Rooftop" || selected.subGroupName === "Solar_ground_mounted" || intSolarScheme) && (
-                    <div className="tc-reason-field tc-field--full">
-                      <label>Solar Scheme</label>
-                      <FilterSelect value={intSolarScheme} options={selected.subGroupName==="Solar_ground_mounted"?[{value:'PM_Kusum',label:'PM Kusum'},{value:'No_Scheme',label:'No Scheme'}]:[{value:'PM_Surya_Ghar',label:'PM Surya Ghar'},{value:'PM_Kusum',label:'PM Kusum'},{value:'State_Subsidy',label:'State Subsidy'},{value:'Net_Metering_Only',label:'Net Metering Only'},{value:'No_Scheme',label:'No Scheme'},{value:'Others',label:'Others'}]} placeholder="— Select Scheme —" onChange={v=>{setIntSolarScheme(v);setIntSubsidyRequired('');}} />
-                    </div>
-                  )}
-                  {intSolarScheme === "PM_Surya_Ghar" && (
-                    <div className="tc-reason-field tc-field--full">
-                      <label>Subsidy Required?</label>
-                      <div style={{display:"flex",gap:8}}>
-                        {["Yes","No"].map(opt => (
-                          <button key={opt} type="button"
-                            onClick={() => setIntSubsidyRequired(r => r === opt ? "" : opt)}
-                            style={{
-                              flex:1, padding:"8px 0", borderRadius:8, fontWeight:600,
-                              fontSize:13, cursor:"pointer",
-                              border: intSubsidyRequired === opt ? "none" : "1.5px solid #e2e8f0",
-                              background: intSubsidyRequired === opt ? (opt==="Yes" ? "#059669" : "#dc2626") : "#fff",
-                              color: intSubsidyRequired === opt ? "#fff" : "#374151",
-                            }}>
-                            {opt === "Yes" ? "✅ Yes, wants subsidy" : "❌ No subsidy needed"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="tc-reason-field tc-field--full">
-                    <label>Add-ons</label>
-                    <input className="tc-styled-input" value={intAddons} onChange={e=>setIntAddons(e.target.value)} placeholder="e.g. Battery backup, Net metering"/>
-                  </div>
-                  <div className="tc-reason-field tc-field--full">
-                    <label>Other Comments</label>
-                    <textarea rows={2} value={intOtherComment} onChange={e=>setIntOtherComment(e.target.value)} placeholder="Additional notes for BD team…"/>
-                  </div>
-
-                  <div className="tc-reason-field tc-field--full">
-                    <label>Electricity Bill <span style={{color:"#9ca3af",fontWeight:400,fontSize:11}}> (optional, max 10 MB)</span></label>
-                    {selected.tcHasBillFile && selected.tcBillFileName && !intBillFile && (
-                      <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between", gap:8,padding:"8px 12px",marginBottom:8, background:"#f0fdf4",border:"1.5px solid #bbf7d0",borderRadius:8 }}>
-                        <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,color:"#059669",minWidth:0}}>
-                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="16" height="16"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-                          <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selected.tcBillFileName}</span>
-                        </div>
-                        <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          <button type="button" className="tc-bill-btn tc-bill-btn--newtab" style={{padding:"3px 10px",fontSize:12}} onClick={()=>setBillPreview({ url:`${API_BASE_URL}/telecaller/lead/${selected.id}/bill`, name:selected.tcBillFileName, type:selected.tcBillFileType||"application/octet-stream" })}>👁 View</button>
-                          <label style={{ padding:"3px 10px",fontSize:12,cursor:"pointer", background:"#eff6ff",color:"#2563eb", border:"1.5px solid #bfdbfe",borderRadius:7, display:"inline-flex",alignItems:"center",gap:4 }}>
-                            🔄 Replace
-                            <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
-                          </label>
-                        </div>
-                      </div>
-                    )}
-                    {(!selected.tcHasBillFile || intBillFile) && (
-                      <label className="tc-bill-upload" style={{ display:"flex",alignItems:"center",gap:8,cursor:"pointer", border:"1.5px dashed "+(intBillFile?"#059669":"#d1d5db"), borderRadius:8,padding:"10px 14px", background:intBillFile?"#f0fdf4":"#fafafa", fontSize:13,color:intBillFile?"#059669":"#6b7280" }}>
-                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="18" height="18"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                        <span>{intBillFile ? intBillFile.name : "Choose PDF, JPG, or PNG…"}</span>
-                        <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/*" style={{display:"none"}} onChange={e=>setIntBillFile(e.target.files[0]||null)}/>
-                      </label>
-                    )}
-                    {intBillFile && (
-                      <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
-                        <span style={{fontSize:11,color:"#059669"}}>✓ {intBillFile.name} — will replace existing</span>
-                        <button type="button" style={{fontSize:11,color:"#dc2626",background:"none",border:"none",cursor:"pointer"}} onClick={()=>setIntBillFile(null)}>✕ Cancel</button>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="tc-handoff-note">ℹ️ Lead will be assigned to BD Executive via round-robin.</div>
+                  <div className="tc-handoff-note">ℹ️ Lead will be assigned to BD Executive via round-robin. Add site-visit &amp; requirement details (loads, bill, quoted price, property type…) anytime via <strong>Edit Details</strong>.</div>
                 </div>
               )}
             </div>

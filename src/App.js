@@ -38,11 +38,13 @@ import SolarProfile from "./Pages/Solarproposaleditor";
 import Users from "./Pages/UsersPage";
 import Addropdownitems from "./Pages/AddNewDropdownItems";
 import LeadTemplatesAdmin from "./Pages/LeadTemplatesAdmin";
+import BomItemsMaster from "./Pages/BomItemsMaster";
 import NewRolePermissions from './Pages/NewRolePermissions';
 import Projectdashboard from "./Pages/ProjectDashboard2.js";
 import OrderBook from "./Pages/OrderBook.js";
 import ProjectsList from "./Pages/ProjectsList.js";
 import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
+import Tenders from "./Pages/Tenders.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
@@ -132,7 +134,7 @@ function AppWrapper() {
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
       '/project-cost-expense', '/taskmanagement', '/projectaccess', '/inventory-management', '/notifications',
-      '/team-performance', '/projects'
+      '/team-performance', '/projects', '/tenders'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -249,6 +251,10 @@ function AppShell({ hideShell }) {
             <ProtectedRoute><ProjectDetailPage /></ProtectedRoute>
           } />
 
+          <Route path="/tenders" element={
+            <ProtectedRoute><Tenders /></ProtectedRoute>
+          } />
+
           <Route path="/sales/invoices" element={
             <ProtectedRoute><Invoices /></ProtectedRoute>
           } />
@@ -283,6 +289,10 @@ function AppShell({ hideShell }) {
 
           <Route path="/officeuse/lead-admin" element={
             <ProtectedRoute><LeadTemplatesAdmin /></ProtectedRoute>
+          } />
+
+          <Route path="/officeuse/item-master" element={
+            <ProtectedRoute><BomItemsMaster /></ProtectedRoute>
           } />
 
           {/* ── NEW ──────────────────────────────────────────────────────── */}

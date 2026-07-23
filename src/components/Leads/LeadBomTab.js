@@ -41,12 +41,17 @@ const fmtINR = n => Number(Math.round((Number(n) || 0) * 100) / 100)
 
 const lineAmount = l => (Number(l.quantity) || 0) * (Number(l.unitRate) || 0);
 
+// Display label for a variant option: "make model" (either part may be blank).
+const variantLabel = v => [v?.make, v?.model].filter(Boolean).join(" ").trim();
+
 const GENERAL = "__general__"; // section key for lines with no scope link
 
 const blankLine = (scopeItemId = "") => ({
   _key: `n${Math.random().toString(36).slice(2)}`, // stable local key for new rows
   id: null, scopeItemId, category: "", itemName: "", make: "",
   specification: "", unit: "kW", quantity: "", unitRate: "", notes: "",
+  // Pick-a-make: catalog link, chosen make, and the allowed makes (constrained dropdown).
+  bomItemId: null, variantId: null, variants: [],
   _flags: [], _review: false,
 });
 
@@ -85,6 +90,9 @@ export default function LeadBomTab({ lead, currentUser, permissions, onRefreshLe
           quantity: l.quantity ?? "",
           unitRate: l.unitRate ?? "",
           notes: l.notes || "",
+          bomItemId: l.bomItemId ?? null,
+          variantId: l.variantId ?? null,
+          variants: Array.isArray(l.variants) ? l.variants : [],
         })));
       }
       if (scopeRes?.success) setScopeItems(scopeRes.data?.items || []);
@@ -102,6 +110,15 @@ export default function LeadBomTab({ lead, currentUser, permissions, onRefreshLe
     setLines(prev => prev.map(l => (l._key === key ? { ...l, [field]: val } : l)));
   const removeLine = (key) => setLines(prev => prev.filter(l => l._key !== key));
   const addLineTo = (scopeItemId) => setLines(prev => [...prev, blankLine(scopeItemId)]);
+
+  // Choosing a make from the constrained dropdown snapshots make + spec onto the line.
+  const pickVariant = (key, variantId) => setLines(prev => prev.map(l => {
+    if (l._key !== key) return l;
+    const v = (l.variants || []).find(x => String(x.variantId) === String(variantId));
+    if (!v) return { ...l, variantId: null };
+    const label = variantLabel(v);
+    return { ...l, variantId: v.variantId, make: label || l.make, specification: v.description || l.specification };
+  }));
 
   // Resolve a scope activity NAME → its scope item id (for suggestion grouping).
   const scopeIdByActivity = (name) => {
@@ -188,6 +205,9 @@ export default function LeadBomTab({ lead, currentUser, permissions, onRefreshLe
     unit: b.unit || "",
     quantity: b.quantity ?? "",
     unitRate: b.unitRate ?? "",
+    bomItemId: b.bomItemId ?? null,
+    variantId: b.variantId ?? b.defaultVariantId ?? null,
+    variants: Array.isArray(b.variants) ? b.variants : [],
     _flags: Array.isArray(b.flags) ? b.flags : [],
     _review: !!b.review,
   });
@@ -291,6 +311,8 @@ export default function LeadBomTab({ lead, currentUser, permissions, onRefreshLe
           quantity: l.quantity === "" || l.quantity == null ? 0 : Number(l.quantity),
           unitRate: l.unitRate === "" || l.unitRate == null ? 0 : Number(l.unitRate),
           notes: (l.notes || "").trim() || null,
+          bomItemId: l.bomItemId ?? null,
+          variantId: l.variantId ?? null,
         })),
       });
       if (res?.success) {
@@ -457,8 +479,19 @@ export default function LeadBomTab({ lead, currentUser, permissions, onRefreshLe
                               onChange={e => updLine(l._key, "specification", e.target.value)} placeholder="Specifications" />
                           </td>
                           <td className="lbm-c-make">
-                            <input className="lbm-inp" value={l.make} disabled={!canEdit}
-                              onChange={e => updLine(l._key, "make", e.target.value)} placeholder="Make / brand" />
+                            {(l.variants && l.variants.length > 0) ? (
+                              <select className="lbm-inp" value={l.variantId ?? ""} disabled={!canEdit}
+                                title="Choose an approved make for this item"
+                                onChange={e => pickVariant(l._key, e.target.value)}>
+                                {l.variantId == null && <option value="">— make —</option>}
+                                {l.variants.map(v => (
+                                  <option key={v.variantId} value={v.variantId}>{variantLabel(v) || "(make)"}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input className="lbm-inp" value={l.make} disabled={!canEdit}
+                                onChange={e => updLine(l._key, "make", e.target.value)} placeholder="Make / brand" />
+                            )}
                           </td>
                           <td className="lbm-c-qty">
                             <input className="lbm-inp" type="number" min="0" step="any" value={l.quantity}

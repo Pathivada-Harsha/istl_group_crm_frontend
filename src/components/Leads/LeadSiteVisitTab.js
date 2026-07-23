@@ -21,8 +21,22 @@ import "./LeadSiteVisitTab.css";
 
 // Property/project types for the solar rooftop flow
 const PROPERTY_TYPES = ["Residential", "Commercial", "Industrial", "Institutional", "Agricultural", "Government"];
-// Unit options for the app-standard dropdown (+ a Custom escape hatch)
-const UNIT_OPTIONS = [...COMMON_UNITS.map(u => ({ value: u, label: u })), { value: "Custom", label: "✏️ Custom" }];
+// Curated pick-lists for the site-visit selects (replace free-text inputs)
+const PHASE_OPTIONS         = ["Single Phase", "Three Phase"];
+const ROOF_TYPES            = ["RCC", "Metal Sheet", "Tiled", "Asbestos Sheet", "Concrete", "Shed", "Ground Mount"];
+const ACCESSIBILITY_OPTIONS = ["Easy", "Moderate", "Difficult"];
+const INVERTER_LOCATIONS    = ["Indoor", "Outdoor", "Wall Mounted", "Near Meter Room", "Rooftop", "Basement"];
+const EARTHING_LOCATIONS    = ["Near Inverter", "Rooftop", "Ground Level", "Near Meter Room"];
+const STRUCTURE_TYPES       = ["Standard (GI)", "Elevated", "Ground Mount", "Ballasted", "Tin Shed", "RCC Anchored"];
+const MODULE_ORIENTATIONS   = ["Portrait", "Landscape"];
+
+// Curated unit subsets, so each measurement offers only sensible units.
+const POWER_UNITS  = ["kW", "kWp", "kWh", "MW", "MWp", "kVA", "MVA"];
+const AREA_UNITS   = ["Sqft", "Sq.ft", "Sqm", "Sq.m", "Acres", "Hectares"];
+const LENGTH_UNITS = ["Meter", "Feet", "Km", "Inch", "cm", "mm"];
+
+// Build FilterSelect options (+ a Custom escape hatch) from a plain unit array.
+const toUnitOptions = (units) => [...units.map(u => ({ value: u, label: u })), { value: "Custom", label: "✏️ Custom" }];
 
 // Split a stored "5 kW" style string into { num, unit }. Robust to "10kW", "5", "".
 const parseValueUnit = (s) => {
@@ -32,9 +46,12 @@ const parseValueUnit = (s) => {
 };
 const joinValueUnit = (num, unit) => [num, unit].filter(x => x !== "" && x != null).join(" ").trim();
 
-// App-standard unit dropdown (FilterSelect + COMMON_UNITS) with a Custom text fallback.
-function UnitSelect({ value, onChange }) {
-  const [customMode, setCustomMode] = useState(!!value && !COMMON_UNITS.includes(value));
+// App-standard unit dropdown (FilterSelect) with a Custom text fallback.
+// `units` restricts the list to the units that make sense for the field; the
+// search box only appears for long lists so short curated lists stay compact.
+function UnitSelect({ value, onChange, units = COMMON_UNITS }) {
+  const [customMode, setCustomMode] = useState(!!value && !units.includes(value));
+  const options = React.useMemo(() => toUnitOptions(units), [units]);
   if (customMode) {
     return (
       <div className="lsv-unit-custom">
@@ -49,27 +66,29 @@ function UnitSelect({ value, onChange }) {
       <FilterSelect
         value={value}
         onChange={v => { if (v === "Custom") { setCustomMode(true); onChange(""); } else onChange(v); }}
-        options={UNIT_OPTIONS}
+        options={options}
         placeholder="Unit"
-        searchable
+        searchable={units.length > 10}
         searchPlaceholder="Search units…"
       />
     </div>
   );
 }
 
-// A number/value input + unit dropdown that reads & writes a single combined string.
-function ValueUnit({ label, value, onChange, placeholder }) {
+// A number/value input + unit dropdown that reads & writes a single combined
+// string. `units` scopes the unit list; `defaultUnit` pre-selects a unit when
+// the stored value has none (so a fresh field already shows e.g. "kW").
+function ValueUnit({ label, value, onChange, placeholder, units, defaultUnit }) {
   const init = parseValueUnit(value);
   const [num, setNum] = useState(init.num);
-  const [unit, setUnit] = useState(init.unit);
+  const [unit, setUnit] = useState(init.unit || defaultUnit || "");
   const push = (n, u) => onChange(joinValueUnit(n, u));
   return (
     <label className="lsv-field">
       <span>{label}</span>
       <div className="lsv-capacity">
         <input value={num} onChange={e => { setNum(e.target.value); push(e.target.value, unit); }} placeholder={placeholder || ""} />
-        <UnitSelect value={unit} onChange={u => { setUnit(u); push(num, u); }} />
+        <UnitSelect value={unit} units={units} onChange={u => { setUnit(u); push(num, u); }} />
       </div>
     </label>
   );
@@ -99,6 +118,21 @@ const LsvField = ({ label, value, onChange, placeholder, type = "text" }) => (
   <label className="lsv-field">
     <span>{label}</span>
     <input type={type} value={value} onChange={onChange} placeholder={placeholder || ""} />
+  </label>
+);
+
+// Labelled FilterSelect built from a plain string array (or {value,label} list).
+// Module-scoped for the same stable-identity reason as LsvField.
+const LsvSelect = ({ label, value, onChange, options, placeholder = "Select" }) => (
+  <label className="lsv-field">
+    <span>{label}</span>
+    <FilterSelect
+      value={value}
+      onChange={onChange}
+      options={options.map(o => (typeof o === "string" ? { value: o, label: o } : o))}
+      placeholder={placeholder}
+      searchable={options.length > 10}
+    />
   </label>
 );
 
@@ -188,6 +222,11 @@ export function SiteVisitForm({ lead, leadId, leadInfo, followupId, visit, curre
     <LsvField label={label} value={form[k]} onChange={set(k)} placeholder={placeholder} type={type} />
   );
 
+  const S = (label, k, options, placeholder) => (
+    <LsvSelect label={label} value={form[k]} onChange={v => setForm(p => ({ ...p, [k]: v }))}
+      options={options} placeholder={placeholder} />
+  );
+
   return (
     <form className="lsv-form" onSubmit={submit}>
       {/* 1. Customer Details */}
@@ -223,19 +262,19 @@ export function SiteVisitForm({ lead, leadId, leadInfo, followupId, visit, curre
             <span>Proposed Capacity</span>
             <div className="lsv-capacity">
               <input value={form.capacity} onChange={set("capacity")} placeholder="e.g. 10" />
-              <UnitSelect value={form.capacityUnit} onChange={u => setForm(p => ({ ...p, capacityUnit: u }))} />
+              <UnitSelect value={form.capacityUnit} units={POWER_UNITS} onChange={u => setForm(p => ({ ...p, capacityUnit: u }))} />
             </div>
           </label>
           <ValueUnit label="Existing Connected Load" value={form.existingContractLoad}
-            onChange={v => setForm(p => ({ ...p, existingContractLoad: v }))} placeholder="e.g. 5" />
+            onChange={v => setForm(p => ({ ...p, existingContractLoad: v }))} placeholder="e.g. 5" units={POWER_UNITS} defaultUnit="kW" />
           <ValueUnit label="Required Contract Load" value={form.requiredContractLoad}
-            onChange={v => setForm(p => ({ ...p, requiredContractLoad: v }))} placeholder="e.g. 10" />
+            onChange={v => setForm(p => ({ ...p, requiredContractLoad: v }))} placeholder="e.g. 10" units={POWER_UNITS} defaultUnit="kW" />
           <ValueUnit label="Sanctioned Load" value={form.sanctionedLoad}
-            onChange={v => setForm(p => ({ ...p, sanctionedLoad: v }))} placeholder="e.g. 8" />
+            onChange={v => setForm(p => ({ ...p, sanctionedLoad: v }))} placeholder="e.g. 8" units={POWER_UNITS} defaultUnit="kW" />
           {F("Electricity Tariff", "electricityTariff", "e.g. LT-II / ₹8.5 per unit")}
           {F("Consumer Number", "consumerNumber")}
           {F("DISCOM", "discom", "e.g. TSSPDCL")}
-          {F("Phase", "phase", "Single / Three Phase")}
+          {S("Phase", "phase", PHASE_OPTIONS, "Select phase")}
         </div>
       </section>
 
@@ -270,13 +309,13 @@ export function SiteVisitForm({ lead, leadId, leadInfo, followupId, visit, curre
       <section className="lsv-section">
         <h5 className="lsv-section-title">5. Roof Details</h5>
         <div className="lsv-grid">
-          {F("Roof Type", "roofType", "RCC / Metal Sheet / Tiled")}
+          {S("Roof Type", "roofType", ROOF_TYPES, "Select roof type")}
           <ValueUnit label="Shadow Free Area" value={form.shadowFreeArea}
-            onChange={v => setForm(p => ({ ...p, shadowFreeArea: v }))} placeholder="e.g. 50" />
+            onChange={v => setForm(p => ({ ...p, shadowFreeArea: v }))} placeholder="e.g. 500" units={AREA_UNITS} defaultUnit="Sqft" />
           {F("Roof Condition", "roofCondition")}
           {F("Roof Direction", "roofDirection", "e.g. South")}
           {F("Roof Tilt", "roofTilt", "e.g. 10°")}
-          {F("Accessibility", "accessibility", "Easy / Moderate / Difficult")}
+          {S("Accessibility", "accessibility", ACCESSIBILITY_OPTIONS, "Select accessibility")}
         </div>
       </section>
 
@@ -303,12 +342,14 @@ export function SiteVisitForm({ lead, leadId, leadInfo, followupId, visit, curre
       <section className="lsv-section">
         <h5 className="lsv-section-title">7. Installation Details</h5>
         <div className="lsv-grid">
-          {F("Inverter Location", "inverterLocation")}
-          {F("AC Cable Length", "acCableLength")}
-          {F("DC Cable Length", "dcCableLength")}
-          {F("Earthing Location", "earthingLocation")}
-          {F("Structure Type", "structureType")}
-          {F("Module Orientation", "moduleOrientation", "Portrait / Landscape")}
+          {S("Inverter Location", "inverterLocation", INVERTER_LOCATIONS, "Select location")}
+          <ValueUnit label="AC Cable Length" value={form.acCableLength}
+            onChange={v => setForm(p => ({ ...p, acCableLength: v }))} placeholder="e.g. 10" units={LENGTH_UNITS} defaultUnit="Meter" />
+          <ValueUnit label="DC Cable Length" value={form.dcCableLength}
+            onChange={v => setForm(p => ({ ...p, dcCableLength: v }))} placeholder="e.g. 20" units={LENGTH_UNITS} defaultUnit="Meter" />
+          {S("Earthing Location", "earthingLocation", EARTHING_LOCATIONS, "Select location")}
+          {S("Structure Type", "structureType", STRUCTURE_TYPES, "Select structure")}
+          {S("Module Orientation", "moduleOrientation", MODULE_ORIENTATIONS, "Select orientation")}
         </div>
       </section>
 

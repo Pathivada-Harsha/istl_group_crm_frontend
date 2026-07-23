@@ -28,20 +28,24 @@ const SAMPLE_STYLE = {
 /**
  * Download a styled .xlsx template.
  * @param columns  [{ header, width }]  — header text + column width (chars)
- * @param sample   array of example cell values (one row), aligned to columns
+ * @param sample   array of example cell values (one row), aligned to columns.
+ *                 Pass null/omit to emit a header-only template (so nothing gets
+ *                 imported back as a real row).
  * @param sheetName / fileName
  */
 export function downloadStyledTemplate(columns, sample, sheetName, fileName) {
   const headers = columns.map(c => c.header);
-  const ws = XLSXStyle.utils.aoa_to_sheet([headers, sample]);
+  const ws = XLSXStyle.utils.aoa_to_sheet(sample ? [headers, sample] : [headers]);
   ws["!cols"] = columns.map(c => ({ wch: c.width }));
-  ws["!rows"] = [{ hpt: 24 }, { hpt: 20 }];
+  ws["!rows"] = sample ? [{ hpt: 24 }, { hpt: 20 }] : [{ hpt: 24 }];
 
   headers.forEach((_, c) => {
     const head = XLSXStyle.utils.encode_cell({ r: 0, c });
     if (ws[head]) ws[head].s = HEADER_STYLE;
-    const samp = XLSXStyle.utils.encode_cell({ r: 1, c });
-    if (ws[samp]) ws[samp].s = SAMPLE_STYLE;
+    if (sample) {
+      const samp = XLSXStyle.utils.encode_cell({ r: 1, c });
+      if (ws[samp]) ws[samp].s = SAMPLE_STYLE;
+    }
   });
 
   const wb = XLSXStyle.utils.book_new();

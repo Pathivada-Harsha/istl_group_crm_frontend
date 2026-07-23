@@ -2266,6 +2266,21 @@
 .ld-field-label { color: var(--ct-6b7280, #6b7280); font-weight: 500; flex-shrink: 0; }
 .ld-field-val   { color: var(--ct-111827, #111827); font-weight: 500; text-align: right; word-break: break-word; }
 
+/* BD executive change / remove control (Team Assignment card) */
+.ld-bd-actions { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--c-e5e7eb, #e5e7eb); display: flex; flex-direction: column; gap: 6px; }
+.ld-bd-actions > .ld-field-label { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+.ld-bd-actions-row { display: flex; align-items: center; gap: 8px; }
+.ld-bd-select { flex: 1 1 auto; min-width: 0; }
+.ld-bd-remove-btn {
+  flex: 0 0 auto; padding: 7px 12px; font-size: 12px; font-weight: 600;
+  color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: 7px; cursor: pointer; white-space: nowrap;
+}
+.ld-bd-remove-btn:hover:not(:disabled) { background: #fee2e2; }
+.ld-bd-remove-btn:disabled { opacity: .6; cursor: not-allowed; }
+[data-theme="dark"] .ld-bd-actions { border-top-color: #2b3445; }
+[data-theme="dark"] .ld-bd-remove-btn { color: #f08a8a; background: #2a1719; border-color: #3a1f22; }
+
 .ld-enquiry-card {
   background: var(--c-f0f9ff, #f0f9ff);
   border: 1px solid var(--c-bae6fd, #bae6fd);
