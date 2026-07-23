@@ -1,8 +1,14 @@
 // src/components/LoginActivity/SessionLimitDialog.js
 // LOGIN ACTIVITY MODULE — Feature 2 warning dialog shown on the login page
 // when the backend returns 409 SESSION_LIMIT_REACHED.
+//
+// The user can either:
+//   • pick ANY ONE of the currently active devices (not only the oldest) and
+//     "Continue Login" — that specific device is evicted and force-logged-out
+//     instantly via WebSocket; or
+//   • "Logout From All Devices" — every existing session is evicted.
 
-import React from "react";
+import React, { useState } from "react";
 import "../../pages-css/LoginActivityMonitor.css";
 
 const DEVICE_ICON = { MOBILE: "📱", TABLET: "📱", LAPTOP: "💻", DESKTOP: "🖥️" };
@@ -19,6 +25,9 @@ function formatWhen(iso) {
 }
 
 export default function SessionLimitDialog({ sessions = [], loading, onCancel, onContinue, onLogoutAll }) {
+  // Pre-select the oldest session (first item — backend orders by loginAt ASC)
+  const [selectedId, setSelectedId] = useState(sessions[0]?.id ?? null);
+
   return (
     <div className="la-modal-overlay" role="dialog" aria-modal="true">
       <div className="la-modal la-session-limit">
@@ -28,14 +37,27 @@ export default function SessionLimitDialog({ sessions = [], loading, onCancel, o
           maximum allowed. Choose how you want to proceed:
         </p>
         <ul className="la-modal-text la-limit-options">
-          <li><strong>Continue Login</strong> — your <strong>oldest</strong> session (marked below) will be logged out automatically and you will be signed in here.</li>
+          <li><strong>Continue Login</strong> — select the device below that you want to log out. It will be signed out <strong>immediately</strong> and you will be signed in here.</li>
           <li><strong>Logout From All Devices</strong> — both existing sessions will be signed out and only this device will stay logged in.</li>
         </ul>
 
         {sessions.length > 0 && (
           <div className="la-session-limit-list">
             {sessions.map((s, i) => (
-              <div key={s.id || i} className="la-session-limit-item">
+              <label
+                key={s.id || i}
+                className={`la-session-limit-item la-session-limit-selectable ${selectedId === s.id ? "la-session-limit-selected" : ""}`}
+                style={{ cursor: "pointer" }}
+              >
+                <input
+                  type="radio"
+                  name="terminate-session"
+                  value={s.id}
+                  checked={selectedId === s.id}
+                  onChange={() => setSelectedId(s.id)}
+                  disabled={loading}
+                  style={{ marginRight: 10 }}
+                />
                 <span className="la-session-limit-icon">
                   {DEVICE_ICON[s.deviceType] || "💻"}
                 </span>
@@ -44,8 +66,11 @@ export default function SessionLimitDialog({ sessions = [], loading, onCancel, o
                     {s.browser || "Browser"}
                     {s.operatingSystem ? ` · ${s.operatingSystem}` : ""}
                     {i === 0 && (
+                      <span className="la-badge la-badge-info">Oldest</span>
+                    )}
+                    {selectedId === s.id && (
                       <span className="la-badge la-badge-warning">
-                        Oldest — will be logged out
+                        Will be logged out
                       </span>
                     )}
                   </div>
@@ -53,7 +78,7 @@ export default function SessionLimitDialog({ sessions = [], loading, onCancel, o
                     {s.city ? `${s.city} · ` : ""}Signed in {formatWhen(s.loginAt)}
                   </div>
                 </div>
-              </div>
+              </label>
             ))}
           </div>
         )}
@@ -72,7 +97,8 @@ export default function SessionLimitDialog({ sessions = [], loading, onCancel, o
             </button>
           )}
           <button type="button" className="la-btn la-btn-primary"
-                  onClick={onContinue} disabled={loading}>
+                  onClick={() => onContinue(selectedId)}
+                  disabled={loading || selectedId == null}>
             {loading ? "Signing in…" : "Continue Login"}
           </button>
         </div>

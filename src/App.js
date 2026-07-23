@@ -14,6 +14,7 @@ import { useAuth } from './hooks/useAuth.js';
 import Navbar from './components/Navbar';
 import Sidebar from './components/sidebar';
 import SessionManager from './components/SessionManager';
+import SessionGuardSocket from './components/SessionGuardSocket';
 
 // Pages
 import Login from './Pages/Login';
@@ -173,6 +174,9 @@ function AppShell({ hideShell }) {
     <div className={`app ${collapsed ? "sidebar-collapsed" : "sidebar-expanded"}`}>
 
       {!hideShell && <SessionManager />}
+
+      {/* LOGIN ACTIVITY: real-time force-logout when this session is terminated */}
+      {!hideShell && <SessionGuardSocket />}
 
       {!hideShell && <CRMAssistantBot />}
       

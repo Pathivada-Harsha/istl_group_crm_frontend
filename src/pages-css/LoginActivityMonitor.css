@@ -438,3 +438,18 @@
 .la-limit-options li { font-size: 12.5px; line-height: 1.5; }
 .la-session-limit .la-modal-actions { flex-wrap: wrap; gap: 8px; }
 .la-btn-danger:hover { background: var(--c-fecaca, #fecaca); }
+/* ── Session-limit dialog: selectable device rows (individual logout) ──── */
+.la-session-limit-selectable {
+  display: flex;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.la-session-limit-selectable:hover {
+  background: rgba(59, 130, 246, 0.06);
+}
+.la-session-limit-selected {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.10);
+}

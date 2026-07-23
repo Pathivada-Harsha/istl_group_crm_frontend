@@ -57,11 +57,45 @@ body.session-modal-open {
   color: var(--ct-374151, #374151);
 }
 
-.session-timer {
-  font-size: 48px;
-  font-weight: bold;
+/* ── Circular countdown ring ─────────────────────────────────── */
+.session-ring-wrap {
+  position: relative;
+  margin: 14px auto 8px;
+}
+
+.session-ring-track {
+  stroke: var(--c-e5e7eb, #e5e7eb);
+}
+
+.session-ring-progress {
+  transition: stroke-dashoffset 1s linear, stroke 1s linear;
+}
+
+.session-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.session-ring-secs {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--ct-111827, #111827);
+  transition: color 0.4s ease;
+}
+
+.session-ring-urgent {
   color: var(--ct-dc2626, #dc2626);
-  margin: 14px 0;
+}
+
+.session-ring-unit {
+  font-size: 11px;
+  color: var(--ct-6b7280, #6b7280);
+  margin-top: 2px;
 }
 
 .session-subtext {

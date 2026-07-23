@@ -260,7 +260,7 @@ export default function Login() {
     // ── LOGIN submit ──────────────────────────────────────────────────────────
     // LOGIN ACTIVITY MODULE: sends device/location context with the
     // credentials and handles 409 SESSION_LIMIT_REACHED (two-device limit).
-    async function doLogin(mode) {
+    async function doLogin(mode, terminateSessionId) {
       // mode: undefined/false → normal attempt; 'force' → evict oldest; 'all' → logout everywhere
       try {
         // Device, browser, screen, timezone and (if already permitted)
@@ -276,6 +276,7 @@ export default function Login() {
             password: password.trim(),
             ...clientContext,
             ...(mode === 'force' ? { forceLogin: "true" } : {}),
+            ...(mode === 'force' && terminateSessionId != null ? { terminateSessionId: String(terminateSessionId) } : {}),
             ...(mode === 'all' ? { logoutAllDevices: "true" } : {}),
           }),
         });
@@ -334,11 +335,11 @@ export default function Login() {
     }
 
     // "Continue Login" in the session-limit dialog — retries with the flag;
-    // the backend then evicts the oldest session automatically.
-    async function handleForceLogin() {
+    // the backend evicts the device the user SELECTED in the dialog (instant WebSocket force-logout on that browser).
+    async function handleForceLogin(selectedSessionId) {
       setForceSubmitting(true);
       try {
-        await doLogin('force');
+        await doLogin('force', selectedSessionId);
       } finally {
         setForceSubmitting(false);
       }
