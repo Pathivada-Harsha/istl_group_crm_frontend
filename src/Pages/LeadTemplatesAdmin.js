@@ -10,13 +10,13 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Save, Trash2, RefreshCw, Download, Upload } from "lucide-react";
 import api from "../services/leadsapi.js";
 import { downloadStyledTemplate, readSheetRows, cell } from "../components/Leads/bomExcel.js";
-import { useAuth } from "../hooks/useAuth.js";
 import useToast from "../hooks/useToast";
 import ToastContainer from "../components/Notification_Toast/ToastContainer.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
 import useConfirmationModal from "../components/HandleConfirmationModal.js";
 import UnitSelectCell from "../components/Dropdowns/UnitSelectCell.js";
-import ItemNameAutocomplete from "../components/OrderBook/ItemNameAutocomplete.js";
+import BomItemAutocomplete from "../components/Leads/BomItemAutocomplete.js";
+import TemplateLineVariantsModal from "../components/Leads/TemplateLineVariantsModal.js";
 import { BASIS_OPTIONS, SITE_VISIT_FIELDS } from "../constants/scopeActivities.js";
 import "../pages-css/LeadTemplatesAdmin.css";
 
@@ -29,8 +29,6 @@ const TPL_COLUMNS = [
   { header: "Basis", width: 16 }, { header: "Qty (per basis)", width: 15 }, { header: "Step (per-step only)", width: 18 },
   { header: "Units", width: 10 }, { header: "Unit Price", width: 13 }, { header: "Notes", width: 24 },
 ];
-const TPL_SAMPLE = ["Solar Module 550Wp", "Mono PERC Bifacial", "Adani", "Per kW", 1.8, "", "Nos", 10000, ""];
-
 // Normalise a free-text basis cell to a valid code (default PER_KW).
 const normBasis = (v) => {
   const s = String(v || "").trim().toLowerCase();
@@ -59,12 +57,13 @@ const blankBom = (scopeActivity = "") => ({
   _key: `n${Math.random().toString(36).slice(2)}`, // stable local key for grouping
   id: null, scopeActivity, category: "", itemName: "", make: "", specification: "",
   unit: "kW", basis: "PER_KW", basisValue: "", stepValue: "", siteVisitField: "", defaultUnitRate: "", notes: "",
+  // Pick-a-make: catalog link + curated allowed makes + default (null when free-text).
+  bomItemId: null, allowedVariantIds: [], defaultVariantId: null,
 });
 
 export default function LeadTemplatesAdmin() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { confirmModal, showConfirmation } = useConfirmationModal();
-  const { user } = useAuth();
 
   const [templates, setTemplates] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
@@ -76,6 +75,7 @@ export default function LeadTemplatesAdmin() {
   const [loading, setLoading] = useState(true);
   const [savingScope, setSavingScope] = useState(false);
   const [savingBom, setSavingBom] = useState(false);
+  const [variantLineKey, setVariantLineKey] = useState(null); // _key of the line whose Makes modal is open
 
   // New-template form
   const [newType, setNewType] = useState("");
@@ -118,6 +118,7 @@ export default function LeadTemplatesAdmin() {
         make: b.make || "", specification: b.specification || "", unit: b.unit || "",
         basis: b.basis || "PER_KW", basisValue: b.basisValue ?? "", stepValue: b.stepValue ?? "",
         siteVisitField: b.siteVisitField || "", defaultUnitRate: b.defaultUnitRate ?? "", notes: b.notes || "",
+        bomItemId: b.bomItemId ?? null, allowedVariantIds: b.allowedVariantIds || [], defaultVariantId: b.defaultVariantId ?? null,
       })));
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showError("Failed to open template");
@@ -196,7 +197,7 @@ export default function LeadTemplatesAdmin() {
   const bomFileRef = useRef(null);
   const importTargetRef = useRef("");    // the scope activity name to import under
   const downloadBomTemplate = () =>
-    downloadStyledTemplate(TPL_COLUMNS, TPL_SAMPLE, "BOM Template", "lead_bom_template_lines.xlsx");
+    downloadStyledTemplate(TPL_COLUMNS, null, "BOM Template", "lead_bom_template_lines.xlsx");
   const startImport = (activity) => { importTargetRef.current = activity || ""; bomFileRef.current?.click(); };
   const onBomFilePicked = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -239,6 +240,9 @@ export default function LeadTemplatesAdmin() {
           siteVisitField: r.siteVisitField || null,
           defaultUnitRate: r.defaultUnitRate === "" ? null : Number(r.defaultUnitRate),
           notes: r.notes || null,
+          bomItemId: r.bomItemId ?? null,
+          allowedVariantIds: r.allowedVariantIds || [],
+          defaultVariantId: r.defaultVariantId ?? null,
         })),
       });
       await openTemplate(detail.id);
@@ -285,6 +289,20 @@ export default function LeadTemplatesAdmin() {
     <div className="lta-page">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
       <ConfirmationModal {...confirmModal} />
+
+      {variantLineKey && (() => {
+        const vLine = bomLines.find(r => r._key === variantLineKey);
+        if (!vLine) return null;
+        return (
+          <TemplateLineVariantsModal
+            line={vLine}
+            onClose={() => setVariantLineKey(null)}
+            onApply={patch => setBomLines(prev => prev.map(row => row._key === variantLineKey ? { ...row, ...patch } : row))}
+            showError={showError}
+            showSuccess={showSuccess}
+          />
+        );
+      })()}
 
       <div className="lta-head">
         <h1 className="lta-title">Lead Scope / BOM Templates</h1>
@@ -436,24 +454,39 @@ export default function LeadTemplatesAdmin() {
                                   <tr key={r._key}>
                                     <td className="lta-c-no">{i + 1}</td>
                                     <td className="lta-c-item">
-                                      <ItemNameAutocomplete
-                                        className="lta-inp"
+                                      <BomItemAutocomplete
                                         value={r.itemName}
-                                        user={user}
                                         placeholder="Component name"
                                         onChange={v => updBom(r._key, "itemName", v)}
                                         onSelect={item => setBomLines(prev => prev.map(row => (row._key === r._key ? {
                                           ...row,
                                           itemName: item.itemName || row.itemName,
-                                          unit: item.unit || row.unit,
-                                          defaultUnitRate: (row.defaultUnitRate === "" || row.defaultUnitRate == null) && item.unitPrice != null
-                                            ? item.unitPrice : row.defaultUnitRate,
+                                          bomItemId: item.id ?? null,
+                                          // New catalog item → re-curate makes from scratch.
+                                          allowedVariantIds: [], defaultVariantId: null,
+                                          make: item.makeBrand || row.make,
+                                          unit: row.unit || item.defaultUnit || "",
                                           specification: row.specification || item.specification || "",
                                         } : row)))}
                                       />
                                     </td>
                                     <td><input className="lta-inp" value={r.specification} onChange={e => updBom(r._key, "specification", e.target.value)} placeholder="Specifications" /></td>
-                                    <td><input className="lta-inp" value={r.make} onChange={e => updBom(r._key, "make", e.target.value)} placeholder="Make / brand" /></td>
+                                    <td>
+                                      {r.bomItemId ? (
+                                        <div className="lta-make-cell" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                          <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: r.make ? "inherit" : "#9CA3AF" }}>
+                                            {r.make || "— set make —"}
+                                          </span>
+                                          <button type="button" className="lta-btn-ghost" style={{ whiteSpace: "nowrap", padding: "2px 8px" }}
+                                            onClick={() => setVariantLineKey(r._key)}
+                                            title="Manage the allowed makes for this line">
+                                            Makes{(r.allowedVariantIds?.length || 0) > 0 ? ` (${r.allowedVariantIds.length})` : ""}
+                                          </button>
+                                        </div>
+                                      ) : (
+                                        <input className="lta-inp" value={r.make} onChange={e => updBom(r._key, "make", e.target.value)} placeholder="Make / brand" />
+                                      )}
+                                    </td>
                                     <td className="lta-c-qty">{basisInput(r)}</td>
                                     <td className="lta-c-unit"><UnitSelectCell className="lta-inp" value={r.unit} onChange={v => updBom(r._key, "unit", v)} /></td>
                                     <td><input className="lta-inp" type="number" min="0" step="any" value={r.defaultUnitRate} onChange={e => updBom(r._key, "defaultUnitRate", e.target.value)} placeholder="0" /></td>

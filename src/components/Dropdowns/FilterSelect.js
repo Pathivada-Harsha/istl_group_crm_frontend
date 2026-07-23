@@ -64,9 +64,24 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
     // scrollbar signals there is more when the full list doesn't fit.
     const listHeight = Math.min(desired, avail);
 
+    // ── Horizontal placement (responsive) ─────────────────────────────────
+    // Searchable lists want to be wider than a narrow trigger; others match the
+    // trigger. In every case clamp the width and left offset to the viewport so
+    // the menu is never pushed off the left/right edge — a searchable list on a
+    // left-aligned trigger used to expand off-screen and clip its labels.
+    const viewportW = window.innerWidth;
+    const width      = Math.min(
+      isSearchable ? Math.max(rect.width, 420) : rect.width,
+      viewportW - MARGIN * 2
+    );
+    // Searchable: align the list's right edge with the trigger and grow left;
+    // otherwise align left edges. Then clamp so it stays fully on-screen.
+    let left = isSearchable ? rect.right - width : rect.left;
+    left = Math.max(MARGIN, Math.min(left, viewportW - width - MARGIN));
+
     setListPos({
-      left:   rect.left,
-      width:  rect.width,
+      left,
+      width,
       openUp,
       maxHeight: listHeight,
       top:    openUp ? rect.top - listHeight - 4 : rect.bottom + 4,
@@ -205,18 +220,8 @@ const FilterSelect = ({ value, onChange, options = [], placeholder = 'Select', d
       style={{
         position:  'fixed',
         top:       listPos.top,
-        // Searchable (project): anchor right edge to trigger's right edge, expand leftward
-        ...(isSearchable
-          ? {
-              right: window.innerWidth - listPos.left - listPos.width,
-              left:  'auto',
-              width: Math.max(listPos.width, 420),
-            }
-          : {
-              left:  listPos.left,
-              width: listPos.width,
-            }
-        ),
+        left:      listPos.left,
+        width:     listPos.width,
         zIndex:    99999,
         maxHeight: listPos.maxHeight ? `${listPos.maxHeight}px` : undefined,
         overflowY: 'auto',

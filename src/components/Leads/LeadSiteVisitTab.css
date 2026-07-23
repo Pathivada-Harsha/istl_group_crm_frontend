@@ -51,15 +51,37 @@
   font-size: 13px; background: var(--bg-input, #fff); color: var(--text-primary, #1e293b); width: 100%;
 }
 .lsv-field input:focus, .lsv-field select:focus, .lsv-field textarea:focus { outline: none; border-color: #2563eb; }
-.lsv-capacity { display: flex; gap: 6px; align-items: stretch; }
-.lsv-capacity > input { flex: 1; min-width: 0; }
-.lsv-capacity select { flex: 0 0 80px; }
-/* Unit dropdown (app-standard FilterSelect) sized to sit beside the value input */
-.lsv-unit-select { flex: 0 0 118px; }
-.lsv-unit-custom { flex: 0 0 118px; display: flex; gap: 4px; }
-.lsv-unit-custom input { flex: 1; min-width: 0; }
+/* Number + unit rendered as ONE combined input: a single outer border with the
+   value on the left and the unit selector seamlessly attached on the right. */
+.lsv-capacity {
+  display: flex; align-items: stretch;
+  border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;
+  background: var(--bg-input, #fff);
+}
+.lsv-capacity:focus-within { border-color: #2563eb; }
+.lsv-capacity > input {
+  flex: 1 1 auto; min-width: 0;
+  border: none; background: transparent; border-radius: 8px 0 0 8px;
+  padding: 8px 11px; font-size: 13px; color: var(--text-primary, #1e293b);
+}
+.lsv-capacity > input:focus { outline: none; }
+/* Unit selector sits flush against the value input, divided by a hairline. */
+.lsv-unit-select, .lsv-unit-custom { flex: 0 0 116px; border-left: 1px solid var(--border-color, #e2e8f0); }
+.lsv-unit-custom { display: flex; align-items: center; gap: 2px; padding-right: 4px; }
+.lsv-unit-custom input {
+  flex: 1; min-width: 0; border: none; background: transparent;
+  padding: 8px; font-size: 13px; color: var(--text-primary, #1e293b);
+}
+.lsv-unit-custom input:focus { outline: none; }
+/* The FilterSelect trigger becomes borderless/transparent inside the group. */
+.lsv-capacity .filter-trigger {
+  width: 100% !important; height: 100% !important; min-width: 0 !important;
+  border: none !important; border-radius: 0 8px 8px 0 !important;
+  background: transparent !important; box-shadow: none !important;
+  padding: 0 26px 0 10px !important;
+}
 .lsv-unit-back {
-  flex: 0 0 26px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 8px;
+  flex: 0 0 26px; border: 1px solid var(--border-color, #cbd5e1); border-radius: 6px;
   background: var(--bg-secondary, #f1f5f9); color: var(--text-secondary, #475569); cursor: pointer; font-size: 13px;
 }
 [data-theme="dark"] .lsv-unit-back { background: #232b3b; border-color: #2b3445; color: #c2cbd8; }
@@ -135,6 +157,12 @@
 [data-theme="dark"] .lsv-field input,
 [data-theme="dark"] .lsv-field select,
 [data-theme="dark"] .lsv-field textarea { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+/* Combined value+unit input in dark mode: one outer border, seamless inner parts. */
+[data-theme="dark"] .lsv-capacity { background: #0f172a; border-color: #334155; }
+[data-theme="dark"] .lsv-capacity > input,
+[data-theme="dark"] .lsv-unit-custom input { background: transparent; border: none; }
+[data-theme="dark"] .lsv-unit-select,
+[data-theme="dark"] .lsv-unit-custom { border-left-color: #2b3445; }
 [data-theme="dark"] .lsv-btn-sec { background: #232b3b; border-color: #2b3445; color: #c2cbd8; }
 [data-theme="dark"] .lsv-count-pill { background: #232b3b; color: #c2cbd8; }
 [data-theme="dark"] .lsv-visited-chip { background: #15243d; color: #5b9bf0; border-color: #244b7a; }

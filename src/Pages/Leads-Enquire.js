@@ -1175,6 +1175,42 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
   const headers = { 'Content-Type': 'application/json', 'User-Id': String(currentUser.id), 'User-Role': currentUser.role };
 
+  // ── BD reassignment: change or remove the BD executive on this lead ────────
+  const canAssignBd = !!(permissions.ASSIGN || permissions.EDIT);
+  const [bdExecs, setBdExecs] = useState([]);
+  const [bdBusy, setBdBusy] = useState(false);
+
+  useEffect(() => {
+    if (!canAssignBd) return;
+    fetch(`${API_BASE_URL}/filters/bd-executives`, { credentials: 'include', headers })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setBdExecs(d); })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canAssignBd]);
+
+  // bdIdOrNull: a user id to (re)assign, or null to remove the current BD.
+  const handleBdChange = async (bdIdOrNull) => {
+    setBdBusy(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/leads/${lead.id}/bd`, {
+        method: 'PUT', credentials: 'include', headers,
+        body: JSON.stringify({ bdAssignedTo: bdIdOrNull }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d.success) {
+        showSuccess(bdIdOrNull == null ? 'BD executive removed' : 'BD executive updated');
+        if (onLeadUpdated) onLeadUpdated();
+      } else {
+        showError(d.message || 'Failed to update BD executive');
+      }
+    } catch {
+      showError('Failed to update BD executive');
+    } finally {
+      setBdBusy(false);
+    }
+  };
+
   const fetchProposals = useCallback(async () => {
     setLoadingProposals(true);
     try {
@@ -1645,12 +1681,15 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             })()}
 
 
-            {lead.bdAssignedToName && (
+            {(lead.telecallerName || lead.assignedToName || lead.bdAssignedToName || canAssignBd) && (
               <div className="ld-info-card">
                 <h4 className="ld-card-title">Team Assignment</h4>
                 <div className="ld-field-list">
                   {[
-                    ['Telecaller', lead.telecallerName || lead.assignedToName],
+                    // Telecaller shows ONLY a real telecaller. A non-telecaller in
+                    // the assigned slot is a "Lead Handler", never a Telecaller.
+                    ['Telecaller', lead.telecallerName],
+                    ['Lead Handler', lead.telecallerName ? null : lead.assignedToName],
                     ['BD Executive', lead.bdAssignedToName],
                     ['BD Assigned At', lead.bdAssignedAt],
                   ].filter(([, v]) => v).map(([l, v]) => (
@@ -1660,6 +1699,34 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                     </div>
                   ))}
                 </div>
+
+                {/* Change / remove the BD executive — any lead, any time. */}
+                {canAssignBd && (
+                  <div className="ld-bd-actions">
+                    <span className="ld-field-label">
+                      {lead.bdAssignedToName ? 'Change BD Executive' : 'Assign BD Executive'}
+                    </span>
+                    <div className="ld-bd-actions-row">
+                      <div className="ld-bd-select">
+                        <FilterSelect
+                          value={lead.bdAssignedToId ? String(lead.bdAssignedToId) : ''}
+                          options={bdExecs.map(u => ({ value: String(u.id), label: u.name }))}
+                          placeholder={bdBusy ? 'Updating…' : 'Select BD executive'}
+                          disabled={bdBusy}
+                          onChange={v => {
+                            if (v && String(v) !== String(lead.bdAssignedToId || '')) handleBdChange(Number(v));
+                          }}
+                        />
+                      </div>
+                      {lead.bdAssignedToId && (
+                        <button type="button" className="ld-bd-remove-btn" disabled={bdBusy}
+                          onClick={() => handleBdChange(null)}>
+                          Remove BD
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2428,7 +2495,7 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   const currentUser = { id: user.id || 1, role: user.role || 'USER', name: user.name || 'Current User' };
 
   const permissions = {
-    VIEW: canView, CREATE: canCreate, EDIT: canEdit, DELETE: canDelete,
+    VIEW: canView, CREATE: canCreate, EDIT: canEdit, DELETE: canDelete, ASSIGN: canAssign,
     APPROVE: leadsPermissions.includes('APPROVE'), DOWNLOAD: leadsPermissions.includes('DOWNLOAD'),
     // Proposal-specific permissions — mapped from PROPOSALS page permissions
     PROPOSAL_VIEW:     proposalsPermissions.includes('VIEW'),

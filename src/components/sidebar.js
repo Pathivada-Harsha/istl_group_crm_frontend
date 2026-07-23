@@ -212,6 +212,14 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z',
         },
         {
+          name: 'Tenders',
+          path: '/tenders',
+          permission: 'TENDERS',
+          // Balance scale — bid evaluation/comparison. Distinct from the
+          // document-style icons used by Reports / OrderBook / Invoices.
+          icon: 'M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3',
+        },
+        {
           name: 'Clients Data',
           path: '/sales/clients',
           permission: 'SALES_CLIENTS',
@@ -229,6 +237,7 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           permission: 'INVOICES',
           icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z',
         },
+        
       ],
     },
     {
@@ -294,6 +303,12 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           path: '/officeuse/lead-admin',
           permission: 'OFFICE_USE',
           icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4',
+        },
+        {
+          name: 'Master Items (BOM Catalog)',
+          path: '/officeuse/item-master',
+          permission: 'OFFICE_USE',
+          icon: 'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-14L4 7m8 4v10M4 7v10l8 4',
         },
         {
           name: 'Login & Activity Monitor',
