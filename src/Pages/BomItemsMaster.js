@@ -1,18 +1,19 @@
 // ─────────────────────────────────────────────────────────────────────────────
 //  BomItemsMaster — master-data admin for the BOM catalog (bom_items_master).
-//  Restyled to the Leads-Enquire design system (self-contained: no coupling to
-//  that page's CSS). Catalog table has sortable + draggable columns and paging;
-//  the item modal's variant-attribute builder supports drag-to-reorder fields.
+//  This is the FIRST step: define catalog items, their variant-attribute schema,
+//  and each item's makes. Attaching a BOM to a lead happens later on the Lead
+//  Scope / BOM Templates page — this page deliberately does not browse or adopt
+//  from past project BOMs.
 //
-//  Two modes:
-//   • Catalog  — the flat item list (search + category), create/edit/deactivate
-//                items and manage each item's makes.
-//   • Subgroup — pick Group → Subgroup (DB taxonomy) to see the items already
-//                used in that subgroup's TEMPLATE BOM (e.g. Rooftop). "Adopt"
-//                brings a free-text BOM line into the catalog and links it.
+//  Styled to the Leads-Enquire design system (self-contained bim-* classes).
+//  The catalog table has sortable + draggable columns and paging; the item modal's
+//  variant-attribute builder supports drag-to-reorder fields.
+//
+//  Excel: Template / Export / Import move a whole catalog (items + attribute
+//  schema + makes) between servers instead of re-typing it. See BomCatalogExcel.js.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Plus, Pencil, Trash2, Search, Save, X, Layers, Download, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Save, X, Layers, GripVertical, Download, Upload } from "lucide-react";
 import api from "../services/leadsapi.js";
 import filterApi from "../services/filterApi.js";
 import useToast from "../hooks/useToast";
@@ -20,6 +21,8 @@ import ToastContainer from "../components/Notification_Toast/ToastContainer.js";
 import ConfirmationModal from "../components/ConfirmationModal.js";
 import useConfirmationModal from "../components/HandleConfirmationModal.js";
 import ItemMakesModal from "../components/ItemMakesModal.js";
+import { downloadStyledWorkbook, readWorkbookSheets } from "../components/Leads/bomExcel.js";
+import { buildSheets, buildTemplateSheets, parseWorkbook, parseSchemaStr, valuesFromRow } from "../components/BomCatalogExcel.js";
 import "../pages-css/BomItemsMaster.css";
 
 const emptyForm = () => ({
@@ -84,18 +87,12 @@ export default function BomItemsMaster() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
   const { confirmModal, showConfirmation } = useConfirmationModal();
 
-  // Catalog (flat) mode
   const [items, setItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("");
-  // Taxonomy (subgroup) mode
+  // Category is chosen via Group → Subgroup inside the add/edit form.
   const [groups, setGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
-  const [group, setGroup] = useState("");
-  const [subGroup, setSubGroup] = useState("");
-  const [subItems, setSubItems] = useState([]);
-  // Category is chosen via Group → Subgroup in the add/edit form.
   const [sgByGroup, setSgByGroup] = useState({}); // groupValue -> [{value,label}]
   const [sgIndex, setSgIndex] = useState({});     // subGroupValue -> groupValue
   const [formGroup, setFormGroup] = useState("");
@@ -105,7 +102,11 @@ export default function BomItemsMaster() {
   const [saving, setSaving] = useState(false);
   const [attrErrors, setAttrErrors] = useState({});
   const [makesItem, setMakesItem] = useState(null);
-  const [adopting, setAdopting] = useState(null);
+
+  // Excel
+  const fileRef = useRef(null);
+  const [exporting, setExporting] = useState(false);
+  const [imp, setImp] = useState(null); // { stage:"preview"|"running"|"done", … }
 
   // Table sort / paging / column order
   const [sortCol, setSortCol] = useState("");
@@ -118,8 +119,6 @@ export default function BomItemsMaster() {
   // Builder field drag
   const dragAttr = useRef(null);
   const [dragOverAttr, setDragOverAttr] = useState(null);
-
-  const inSubgroupMode = !!subGroup;
 
   const loadCatalog = useCallback(async () => {
     setLoading(true);
@@ -134,20 +133,7 @@ export default function BomItemsMaster() {
     } finally { setLoading(false); }
   }, [search, category, showError]);
 
-  const loadSubItems = useCallback(async () => {
-    if (!subGroup) return;
-    setLoading(true);
-    try {
-      const res = await api.get("/bom-items-master/by-subgroup", { params: { subGroup } });
-      setSubItems(res?.success ? (res.data || []) : []);
-    } catch (e) {
-      if (e.message !== "SESSION_EXPIRED") showError("Failed to load subgroup BOM items");
-    } finally { setLoading(false); }
-  }, [subGroup, showError]);
-
-  const reload = useCallback(() => (subGroup ? loadSubItems() : loadCatalog()), [subGroup, loadSubItems, loadCatalog]);
-
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { loadCatalog(); }, [loadCatalog]);
 
   useEffect(() => {
     (async () => {
@@ -179,15 +165,6 @@ export default function BomItemsMaster() {
   const onFormGroupChange = (val) => {
     setFormGroup(val);
     setForm((f) => ({ ...f, category: "" }));
-  };
-
-  const onGroupChange = async (val) => {
-    setGroup(val); setSubGroup(""); setSubGroups([]);
-    if (!val) return;
-    try {
-      const sg = await filterApi.getSubGroups(val);
-      setSubGroups(Array.isArray(sg) ? sg : []);
-    } catch { showError("Failed to load subgroups"); }
   };
 
   const openCreate = () => { setFormGroup(""); setAttrErrors({}); setForm(emptyForm()); };
@@ -223,7 +200,6 @@ export default function BomItemsMaster() {
   const onAttrKey = (i, key) => updateAttr(i, { key, keyLocked: true });
   const onAttrType = (i, type) => updateAttr(i, { type, optionsText: "", unit: "" });
 
-  // Drag-to-reorder attribute fields (native HTML5 DnD; grip is the handle).
   const onAttrDragStart = (e, i) => { dragAttr.current = i; e.dataTransfer.effectAllowed = "move"; };
   const onAttrDragOver = (e, i) => { e.preventDefault(); if (dragOverAttr !== i) setDragOverAttr(i); };
   const onAttrDrop = (e, i) => {
@@ -282,7 +258,7 @@ export default function BomItemsMaster() {
       if (res?.success) {
         showSuccess(form.id ? "Item updated" : "Item created");
         setForm(null);
-        await reload();
+        await loadCatalog();
       } else {
         showError(res?.message || "Failed to save item");
       }
@@ -300,22 +276,120 @@ export default function BomItemsMaster() {
     if (!ok) return;
     try {
       const res = await api.delete(`/bom-items-master/${it.id}`);
-      if (res?.success) { showSuccess("Item deactivated"); await reload(); }
+      if (res?.success) { showSuccess("Item deactivated"); await loadCatalog(); }
       else showError(res?.message || "Failed to deactivate");
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showError("Failed to deactivate");
     }
   };
 
-  const adopt = async (row) => {
-    setAdopting(row.templateItemId);
+  // ── Excel: template / export / import ───────────────────────────────────────
+  const downloadTemplate = () => downloadStyledWorkbook(buildTemplateSheets(), "bom_catalog_template.xlsx");
+
+  const exportCatalog = async () => {
+    setExporting(true);
     try {
-      const res = await api.post(`/bom-items-master/adopt`, null, { params: { templateItemId: row.templateItemId } });
-      if (res?.success) { showSuccess(`“${row.itemName}” is now in the catalog`); await loadSubItems(); }
-      else showError(res?.message || "Failed to adopt item");
+      const res = await api.get("/bom-items-master/admin");
+      const list = res?.success ? (res.data || []) : [];
+      const makesByItemId = {};
+      for (const it of list) {
+        try {
+          const vr = await api.get(`/bom-items-master/${it.id}/variants`);
+          makesByItemId[it.id] = Array.isArray(vr?.data) ? vr.data : [];
+        } catch { makesByItemId[it.id] = []; }
+      }
+      const stamp = new Date().toISOString().slice(0, 10);
+      downloadStyledWorkbook(buildSheets(list, makesByItemId), `bom_catalog_${stamp}.xlsx`);
+      showSuccess(`Exported ${list.length} item(s)`);
     } catch (e) {
-      if (e.message !== "SESSION_EXPIRED") showError("Failed to adopt item");
-    } finally { setAdopting(null); }
+      if (e.message !== "SESSION_EXPIRED") showError("Failed to export catalog");
+    } finally { setExporting(false); }
+  };
+
+  const onFilePicked = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = ""; // let the same file be picked again
+    if (!file) return;
+    try {
+      const sheets = await readWorkbookSheets(file);
+      const { items: parsed, errors } = parseWorkbook(sheets);
+      if (!parsed.length) { setImp({ stage: "preview", parsed: [], errors, counts: null }); return; }
+      const res = await api.get("/bom-items-master/admin");
+      const existing = res?.success ? (res.data || []) : [];
+      const existingByName = new Map(existing.map((it) => [String(it.itemName || "").trim().toLowerCase(), it]));
+      let toCreate = 0, toUpdate = 0, makes = 0;
+      parsed.forEach((p) => {
+        if (existingByName.has(p.name.toLowerCase())) toUpdate++; else toCreate++;
+        makes += p.makes.length;
+      });
+      setImp({ stage: "preview", parsed, errors, existingByName, counts: { toCreate, toUpdate, makes } });
+    } catch {
+      showError("Could not read the file. Use the Template format (.xlsx, .xls or .csv).");
+    }
+  };
+
+  const runImport = async () => {
+    const { parsed, existingByName } = imp;
+    const total = parsed.reduce((n, p) => n + 1 + p.makes.length, 0);
+    let done = 0;
+    const bump = () => { done += 1; setImp((s) => (s ? { ...s, progress: { done, total } } : s)); };
+    setImp((s) => ({ ...s, stage: "running", progress: { done: 0, total } }));
+
+    const failures = [];
+    let created = 0, updated = 0, makesAdded = 0, makesUpdated = 0;
+
+    for (const entry of parsed) {
+      const ex = existingByName.get(entry.name.toLowerCase());
+      // Never wipe an existing schema: applyItem always overwrites variant_attributes,
+      // so when the sheet defines none, re-send what the server already has.
+      const schemaJson = entry.schema ? JSON.stringify(entry.schema) : (ex ? (ex.variantAttributes || null) : null);
+      const body = {
+        category: entry.category || ex?.category || "COMMON",
+        itemName: entry.name,
+        specification: entry.specification || null,
+        description: entry.description || null,
+        defaultUnit: entry.defaultUnit || null,
+        defaultTaxPercent: entry.defaultTaxPercent,
+        hsnCode: entry.hsnCode || null,
+        isActive: entry.isActive,
+        variantAttributes: schemaJson,
+      };
+      let itemId = ex?.id ?? null;
+      try {
+        if (ex) { await api.put(`/bom-items-master/${ex.id}`, body); updated++; }
+        else { const r = await api.post(`/bom-items-master`, body); itemId = r?.data?.id ?? null; created++; }
+      } catch (err) {
+        failures.push(`Items row ${entry.rowNo} (${entry.name}): ${err.message}`);
+        bump(); continue;
+      }
+      bump();
+      if (!itemId) { failures.push(`${entry.name}: server returned no id — makes skipped.`); continue; }
+
+      const effSchema = entry.schema || parseSchemaStr(schemaJson);
+      let existingVars = [];
+      try {
+        const vr = await api.get(`/bom-items-master/${itemId}/variants`);
+        existingVars = Array.isArray(vr?.data) ? vr.data : [];
+      } catch { /* treat as none */ }
+      const vkey = (mk, md) => `${String(mk || "").trim().toLowerCase()}|${String(md || "").trim().toLowerCase()}`;
+      const vByKey = new Map(existingVars.map((v) => [vkey(v.make, v.model), v]));
+
+      for (const m of entry.makes) {
+        const vbody = { make: m.make, model: m.model, description: m.description || "", isActive: m.isActive };
+        if (effSchema.length) vbody.attributeValues = JSON.stringify(valuesFromRow(m.raw, effSchema));
+        const hit = vByKey.get(vkey(m.make, m.model));
+        try {
+          if (hit) { await api.put(`/bom-item-variants/${hit.id}`, vbody); makesUpdated++; }
+          else { await api.post(`/bom-items-master/${itemId}/variants`, vbody); makesAdded++; }
+        } catch (err) {
+          failures.push(`Makes row ${m.rowNo} (${entry.name} · ${[m.make, m.model].filter(Boolean).join(" ")}): ${err.message}`);
+        }
+        bump();
+      }
+    }
+
+    setImp((s) => ({ ...s, stage: "done", result: { created, updated, makesAdded, makesUpdated, failures } }));
+    await loadCatalog();
   };
 
   // ── Sort / paginate (client-side) ───────────────────────────────────────────
@@ -344,7 +418,6 @@ export default function BomItemsMaster() {
   const pageItems = sortedItems.slice((pageClamped - 1) * pageSize, pageClamped * pageSize);
   const orderedCols = colOrder.map((k) => CATALOG_COLS.find((c) => c.key === k)).filter(Boolean);
 
-  // Column drag (reorder)
   const onColDragStart = (e, key) => { dragCol.current = key; e.dataTransfer.effectAllowed = "move"; };
   const onColDragOver = (e, key) => { e.preventDefault(); if (dragOverCol !== key) setDragOverCol(key); };
   const onColDrop = (e, key) => {
@@ -374,93 +447,39 @@ export default function BomItemsMaster() {
       </div>
 
       <div className="bim-actionbar">
-        <select className="bim-inp" value={group} onChange={(e) => onGroupChange(e.target.value)}>
-          <option value="">— Group —</option>
-          {groups.map((g) => <option key={g.value} value={g.value}>{g.label || g.value}</option>)}
-        </select>
-        <select className="bim-inp" value={subGroup} onChange={(e) => setSubGroup(e.target.value)} disabled={!group}>
-          <option value="">{group ? "— Subgroup —" : "pick a group"}</option>
-          {subGroups.map((sg) => <option key={sg.value} value={sg.value}>{sg.label || sg.value}</option>)}
-        </select>
-
-        {!inSubgroupMode && (
-          <>
-            <div className="bim-search">
-              <Search size={14} />
-              <input className="bim-inp" placeholder="Search name / spec / make"
-                value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
-            </div>
-            <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
-              <option value="">All categories</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <div className="bim-spacer" />
-            <button className="bim-btn bim-btn-primary" onClick={openCreate}><Plus size={15} /> Add item</button>
-          </>
-        )}
-      </div>
-
-      {inSubgroupMode && (
-        <div className="bim-muted" style={{ marginBottom: 10, fontSize: 12.5 }}>
-          Items in the <b>{subGroups.find((s) => s.value === subGroup)?.label || subGroup}</b> template BOM.
-          “Adopt” brings a line into the catalog so you can edit its spec + makes.
+        <div className="bim-search">
+          <Search size={14} />
+          <input className="bim-inp" placeholder="Search name / spec / make"
+            value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
-      )}
+        <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
+          <option value="">All categories</option>
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="bim-spacer" />
+        <button className="bim-btn bim-btn-secondary" onClick={downloadTemplate} title="Blank Excel workbook with an example">
+          <Download size={14} /> Template
+        </button>
+        <button className="bim-btn bim-btn-secondary" onClick={exportCatalog} disabled={exporting} title="Download the whole catalog as Excel">
+          {exporting ? "Exporting…" : <><Download size={14} /> Export</>}
+        </button>
+        <button className="bim-btn bim-btn-secondary" onClick={() => fileRef.current?.click()} title="Import items + makes from Excel">
+          <Upload size={14} /> Import
+        </button>
+        <button className="bim-btn bim-btn-primary" onClick={openCreate}><Plus size={15} /> Add item</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={onFilePicked} />
+      </div>
 
       {loading ? (
         <div className="bim-muted" style={{ padding: 16 }}>Loading…</div>
-      ) : inSubgroupMode ? (
-        /* ── Subgroup BOM view ── */
-        <div className="bim-table-wrap">
-          <div className="bim-table-scroll">
-            <table className="bim-table">
-              <thead>
-                <tr><th>Scope activity</th><th>Item</th><th>Make</th><th>Specification</th><th>In catalog</th><th /></tr>
-              </thead>
-              <tbody>
-                {subItems.length === 0 && (
-                  <tr><td colSpan={6} className="bim-muted" style={{ padding: 16 }}>
-                    No template BOM for this subgroup yet. Build one in Lead Scope / BOM Templates.
-                  </td></tr>
-                )}
-                {subItems.map((r) => (
-                  <tr key={r.templateItemId}>
-                    <td className="bim-muted">{r.scopeActivity || "General"}</td>
-                    <td style={{ fontWeight: 600 }}>{r.itemName}</td>
-                    <td>{r.make || <span className="bim-muted">—</span>}</td>
-                    <td className="bim-muted" style={{ maxWidth: 260, whiteSpace: "pre-wrap" }}>{r.specification || "—"}</td>
-                    <td>{r.bomItemId ? <span className="bim-badge bim-badge-on">In catalog</span> : <span className="bim-badge bim-badge-off">Not linked</span>}</td>
-                    <td>
-                      <div className="bim-actions">
-                        {r.bomItemId ? (
-                          <>
-                            <button className="bim-btn bim-btn-secondary bim-btn-sm" onClick={() => setMakesItem({ id: r.bomItemId, itemName: r.catalogItem?.itemName || r.itemName })}><Layers size={13} /> Makes</button>
-                            {r.catalogItem && (
-                              <button className="bim-btn bim-btn-secondary bim-btn-sm" onClick={() => openEdit(r.catalogItem)}><Pencil size={13} /> Spec</button>
-                            )}
-                          </>
-                        ) : (
-                          <button className="bim-btn bim-btn-primary bim-btn-sm" disabled={adopting === r.templateItemId} onClick={() => adopt(r)}>
-                            {adopting === r.templateItemId ? "Adopting…" : <><Download size={13} /> Adopt</>}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
       ) : (
-        /* ── Flat catalog view (sortable + draggable columns, paged) ── */
         <div className="bim-table-wrap">
           <div className="bim-table-scroll">
             <table className="bim-table">
               <thead>
                 <tr>
                   {orderedCols.map((col) => (
-                    <th key={col.key} className={`bim-th ${dragOverCol === col.key ? "bim-col-drag-over" : ""} ${dragCol.current === col.key ? "bim-col-dragging" : ""}`}
+                    <th key={col.key} className={`bim-th ${dragOverCol === col.key ? "bim-col-drag-over" : ""}`}
                       draggable onDragStart={(e) => onColDragStart(e, col.key)} onDragOver={(e) => onColDragOver(e, col.key)}
                       onDrop={(e) => onColDrop(e, col.key)} onDragEnd={onColDragEnd}
                       onClick={() => onSort(col.key)} title="Click to sort · drag to reorder">
@@ -476,7 +495,7 @@ export default function BomItemsMaster() {
               </thead>
               <tbody>
                 {pageItems.length === 0 && (
-                  <tr><td colSpan={orderedCols.length + 1} className="bim-muted" style={{ padding: 16 }}>No items. Click “Add item”.</td></tr>
+                  <tr><td colSpan={orderedCols.length + 1} className="bim-muted" style={{ padding: 16 }}>No items. Click “Add item”, or Import from Excel.</td></tr>
                 )}
                 {pageItems.map((it) => (
                   <tr key={it.id} style={{ opacity: it.isActive === false ? 0.55 : 1 }}>
@@ -511,6 +530,90 @@ export default function BomItemsMaster() {
               ))}
               <button className="bim-pager-btn" disabled={pageClamped === totalPages} onClick={() => setPage(pageClamped + 1)}>›</button>
               <button className="bim-pager-btn" disabled={pageClamped === totalPages} onClick={() => setPage(totalPages)}>»</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Import preview / progress / result ── */}
+      {imp && (
+        <div className="bim-overlay" onMouseDown={() => imp.stage !== "running" && setImp(null)}>
+          <div className="bim-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="bim-modal-head">
+              <div className="bim-modal-title">
+                {imp.stage === "done" ? "Import finished" : imp.stage === "running" ? "Importing…" : "Import preview"}
+              </div>
+              {imp.stage !== "running" && <button className="bim-iconbtn" onClick={() => setImp(null)}><X size={18} /></button>}
+            </div>
+
+            <div className="bim-modal-body">
+              {imp.stage === "preview" && (
+                <>
+                  {imp.counts ? (
+                    <div style={{ fontSize: 13, marginBottom: 10 }}>
+                      <b>{imp.counts.toCreate}</b> item(s) to create · <b>{imp.counts.toUpdate}</b> to update · <b>{imp.counts.makes}</b> make row(s).
+                    </div>
+                  ) : (
+                    <div className="bim-muted" style={{ fontSize: 13, marginBottom: 10 }}>Nothing importable was found in this file.</div>
+                  )}
+                  {imp.errors.length > 0 && (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ct-dc2626,#dc2626)", marginBottom: 4 }}>
+                        {imp.errors.length} problem row(s) — these will be skipped:
+                      </div>
+                      <div className="bim-muted" style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, lineHeight: 1.6 }}>
+                        {imp.errors.map((er, i) => <div key={i}>{er}</div>)}
+                      </div>
+                    </>
+                  )}
+                  {imp.counts && (
+                    <div className="bim-muted" style={{ fontSize: 11, marginTop: 10 }}>
+                      Items are matched by name and updated; makes are matched on Make + Model — so re-running the same file is safe and won't duplicate anything.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {imp.stage === "running" && (
+                <>
+                  <div style={{ fontSize: 13, marginBottom: 8 }}>{imp.progress.done} / {imp.progress.total} saved…</div>
+                  <div style={{ height: 8, background: "var(--c-e5e7eb,#e5e7eb)", borderRadius: 999 }}>
+                    <div style={{ height: 8, borderRadius: 999, background: "var(--c-2563eb,#2563eb)", width: `${imp.progress.total ? (imp.progress.done / imp.progress.total) * 100 : 0}%` }} />
+                  </div>
+                </>
+              )}
+
+              {imp.stage === "done" && (
+                <div style={{ fontSize: 13 }}>
+                  <div><b>{imp.result.created}</b> item(s) created · <b>{imp.result.updated}</b> updated</div>
+                  <div style={{ marginTop: 2 }}><b>{imp.result.makesAdded}</b> make(s) added · <b>{imp.result.makesUpdated}</b> updated</div>
+                  {imp.result.failures.length > 0 && (
+                    <>
+                      <div style={{ fontWeight: 600, color: "var(--ct-dc2626,#dc2626)", margin: "10px 0 4px" }}>
+                        {imp.result.failures.length} failed:
+                      </div>
+                      <div className="bim-muted" style={{ maxHeight: 200, overflowY: "auto", fontSize: 12, lineHeight: 1.6 }}>
+                        {imp.result.failures.map((f, i) => <div key={i}>{f}</div>)}
+                      </div>
+                      <div className="bim-muted" style={{ fontSize: 11, marginTop: 8 }}>
+                        Fix those rows and re-import the same file — everything is upserted, so nothing duplicates.
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="bim-modal-foot">
+              {imp.stage === "preview" && (
+                <>
+                  <button className="bim-btn bim-btn-secondary" onClick={() => setImp(null)}>Cancel</button>
+                  <button className="bim-btn bim-btn-primary" disabled={!imp.counts} onClick={runImport}>
+                    <Upload size={14} /> Import
+                  </button>
+                </>
+              )}
+              {imp.stage === "done" && <button className="bim-btn bim-btn-primary" onClick={() => setImp(null)}>Close</button>}
             </div>
           </div>
         </div>
@@ -657,7 +760,7 @@ export default function BomItemsMaster() {
       )}
 
       {makesItem && (
-        <ItemMakesModal item={makesItem} onClose={() => { setMakesItem(null); if (subGroup) loadSubItems(); }}
+        <ItemMakesModal item={makesItem} onClose={() => setMakesItem(null)}
           showError={showError} showSuccess={showSuccess} />
       )}
     </div>

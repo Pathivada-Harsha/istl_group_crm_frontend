@@ -53,6 +53,43 @@ export function downloadStyledTemplate(columns, sample, sheetName, fileName) {
   XLSXStyle.writeFile(wb, fileName);
 }
 
+/**
+ * Download a styled multi-sheet .xlsx workbook.
+ * @param sheets  [{ name, columns:[{header,width}], rows:[[...]], sampleRows?:number }]
+ *                `sampleRows` styles the first N data rows as italic examples.
+ * @param fileName
+ */
+export function downloadStyledWorkbook(sheets, fileName) {
+  const wb = XLSXStyle.utils.book_new();
+  sheets.forEach(({ name, columns, rows = [], sampleRows = 0 }) => {
+    const headers = columns.map((c) => c.header);
+    const ws = XLSXStyle.utils.aoa_to_sheet([headers, ...rows]);
+    ws["!cols"] = columns.map((c) => ({ wch: c.width }));
+    ws["!rows"] = [{ hpt: 24 }];
+    headers.forEach((_, c) => {
+      const head = XLSXStyle.utils.encode_cell({ r: 0, c });
+      if (ws[head]) ws[head].s = HEADER_STYLE;
+      for (let i = 0; i < sampleRows; i++) {
+        const samp = XLSXStyle.utils.encode_cell({ r: 1 + i, c });
+        if (ws[samp]) ws[samp].s = SAMPLE_STYLE;
+      }
+    });
+    XLSXStyle.utils.book_append_sheet(wb, ws, name);
+  });
+  XLSXStyle.writeFile(wb, fileName);
+}
+
+/** Read EVERY sheet of an uploaded file → { sheetName: rowObjects[] } (blanks → ""). */
+export async function readWorkbookSheets(file) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const out = {};
+  wb.SheetNames.forEach((n) => {
+    out[n] = XLSX.utils.sheet_to_json(wb.Sheets[n], { defval: "" });
+  });
+  return out;
+}
+
 /** Read the first sheet of an uploaded file into plain row objects (blanks → ""). */
 export async function readSheetRows(file) {
   const buf = await file.arrayBuffer();

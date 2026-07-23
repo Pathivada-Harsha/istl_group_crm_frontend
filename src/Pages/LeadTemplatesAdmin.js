@@ -44,19 +44,30 @@ const fmtINR = n => "₹" + Number(Math.round((Number(n) || 0) * 100) / 100)
 // A template line has no fixed quantity, so "Amount" is only meaningful for the
 // two capacity-independent-per-unit bases: FIXED (qty × price) and PER_KW (the
 // per-kW cost). PER_STEP / FROM_SITE_VISIT depend on the lead → shown as "—".
+// NOTE the suffix comes from the BASIS, not the Units column: "per kW" means per
+// kW of plant capacity, which is independent of the item's own unit (Nos/Set/m).
 const templateAmount = (r) => {
   const price = Number(r.defaultUnitRate) || 0;
   const val = Number(r.basisValue) || 0;
-  if (r.basis === "FIXED") return { text: fmtINR(val * price), suffix: "" };
-  if (r.basis === "PER_KW") return { text: fmtINR(val * price), suffix: "/kW" };
-  return { text: "—", suffix: "" };
+  if (r.basis === "FIXED") {
+    return { text: fmtINR(val * price), suffix: "", title: "Fixed amount for this line (qty × unit price)." };
+  }
+  if (r.basis === "PER_KW") {
+    return {
+      text: fmtINR(val * price), suffix: "per kW",
+      title: "Cost per kW of plant capacity — this comes from the “Per kW” basis, not from the item's Units.",
+    };
+  }
+  return { text: "—", suffix: "", title: "Depends on the lead (step / site-visit basis), so it can't be shown on the template." };
 };
 
 const blankScope = () => ({ id: null, activity: "", category: "", specification: "", unit: "kW", notes: "" });
 const blankBom = (scopeActivity = "") => ({
   _key: `n${Math.random().toString(36).slice(2)}`, // stable local key for grouping
   id: null, scopeActivity, category: "", itemName: "", make: "", specification: "",
-  unit: "kW", basis: "PER_KW", basisValue: "", stepValue: "", siteVisitField: "", defaultUnitRate: "", notes: "",
+  // Units starts empty so picking a catalog item can fill in its real unit
+  // (Nos / Set / m). Defaulting to "kW" used to mask every item's own unit.
+  unit: "", basis: "PER_KW", basisValue: "", stepValue: "", siteVisitField: "", defaultUnitRate: "", notes: "",
   // Pick-a-make: catalog link + curated allowed makes + default (null when free-text).
   bomItemId: null, allowedVariantIds: [], defaultVariantId: null,
 });
@@ -215,7 +226,7 @@ export default function LeadTemplatesAdmin() {
         basis: normBasis(cell(r, "Basis")),
         basisValue: cell(r, "Qty (per basis)", "Qty", "Value"),
         stepValue: cell(r, "Step (per-step only)", "Step"),
-        unit: String(cell(r, "Units", "Unit")).trim() || "kW",
+        unit: String(cell(r, "Units", "Unit")).trim(),
         defaultUnitRate: cell(r, "Unit Price", "Rate"),
         notes: String(cell(r, "Notes")).trim(),
       })).filter(l => l.itemName);
@@ -465,7 +476,9 @@ export default function LeadTemplatesAdmin() {
                                           // New catalog item → re-curate makes from scratch.
                                           allowedVariantIds: [], defaultVariantId: null,
                                           make: item.makeBrand || row.make,
-                                          unit: row.unit || item.defaultUnit || "",
+                                          // Catalog wins: the master item's unit is authoritative
+                                          // (was `row.unit || …`, which the "kW" default always won).
+                                          unit: item.defaultUnit || row.unit || "",
                                           specification: row.specification || item.specification || "",
                                         } : row)))}
                                       />
@@ -490,7 +503,7 @@ export default function LeadTemplatesAdmin() {
                                     <td className="lta-c-qty">{basisInput(r)}</td>
                                     <td className="lta-c-unit"><UnitSelectCell className="lta-inp" value={r.unit} onChange={v => updBom(r._key, "unit", v)} /></td>
                                     <td><input className="lta-inp" type="number" min="0" step="any" value={r.defaultUnitRate} onChange={e => updBom(r._key, "defaultUnitRate", e.target.value)} placeholder="0" /></td>
-                                    <td className="lta-c-amt lta-amt">{amt.text}<span className="lta-amt-suffix">{amt.suffix}</span></td>
+                                    <td className="lta-c-amt lta-amt" title={amt.title}>{amt.text}<span className="lta-amt-suffix">{amt.suffix}</span></td>
                                     <td className="lta-c-basis">
                                       <select className="lta-inp" value={r.basis} onChange={e => updBom(r._key, "basis", e.target.value)}
                                         title={(BASIS_OPTIONS.find(b => b.value === r.basis) || {}).help}>

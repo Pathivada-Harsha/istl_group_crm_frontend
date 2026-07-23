@@ -124,7 +124,7 @@ select.lta-inp { cursor: pointer; }
 .lta-c-unit { min-width: 120px; }
 .lta-c-item { min-width: 190px; }
 .lta-c-qty { width: 100px; }
-.lta-c-amt { width: 130px; white-space: nowrap; }
+.lta-c-amt { width: 155px; white-space: nowrap; }
 .lta-c-basis { width: 120px; }
 .lta-c-move { width: 140px; }
 .lta-c-act { width: 46px; text-align: right; }
