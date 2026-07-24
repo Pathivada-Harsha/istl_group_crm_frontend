@@ -37,6 +37,7 @@ const ALL_COLUMNS = [
   { key: 'deadline',         label: 'Deadline',          sortable: true,  required: false },
   { key: 'status',           label: 'Status',            sortable: true,  required: true  },
   { key: 'project',          label: 'Project',           sortable: false, required: false },
+  { key: 'actions',          label: 'Actions',           sortable: false, required: true  },
 ];
 const DEFAULT_ORDER = ALL_COLUMNS.map((c) => c.key);
 // Keep the default table close to what it showed before — the rest are one
@@ -174,6 +175,7 @@ export default function Tenders() {
   const canView = perms.includes('VIEW');
   const canCreate = perms.includes('CREATE');
   const canEdit = perms.includes('EDIT');
+  const canDelete = perms.includes('DELETE');
 
   const [tenders, setTenders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -189,6 +191,11 @@ export default function Tenders() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [fyFilter, setFyFilter] = useState('All');
+
+  // delete confirmation + one-line result banner
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState(null);   // { kind: 'success' | 'error', text }
 
   // ── list UI state (table/grid, columns, sort, paging) ─────────────────
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('tenders_view_mode') || 'table');
@@ -229,6 +236,47 @@ export default function Tenders() {
     const saved = hydrateTender(await tenderApi.update(id, working));
     setTenders((prev) => prev.map((t) => (t.id === id ? saved : t)));
     return saved;
+  };
+
+  // ── delete: validate → confirm → call ─────────────────────────────────
+  //
+  // Why a tender may not be deletable. Once it is Won or linked to a project
+  // it is a live commercial record other screens point at, so removing it would
+  // strand that link. Those tenders are cancelled via the Result tab instead.
+  const deleteBlockedReason = (t) => {
+    if (!t?.id) return 'This tender has not been saved yet.';
+    if (t.projectId) return `It is linked to project ${t.projectId}. Unlink the project first.`;
+    if (t.status === 'Won') return 'It is marked Won — a won tender is a contract record. Set the result back first if this was a mistake.';
+    return null;
+  };
+
+  const askDelete = (t) => {
+    // Re-check the permission at the point of use: hiding a button is a UI
+    // nicety, not a control.
+    if (!canDelete) { setNotice({ kind: 'error', text: 'You do not have permission to delete tenders.' }); return; }
+    const blocked = deleteBlockedReason(t);
+    if (blocked) { setNotice({ kind: 'error', text: `Can't delete this tender. ${blocked}` }); return; }
+    setDeleteTarget(t);
+  };
+
+  const confirmDelete = async () => {
+    const t = deleteTarget;
+    if (!t) return;
+    // The list can move under a modal that is left open; re-validate on submit.
+    const blocked = !canDelete ? 'You do not have permission to delete tenders.' : deleteBlockedReason(t);
+    if (blocked) { setDeleteTarget(null); setNotice({ kind: 'error', text: blocked }); return; }
+
+    setDeleting(true);
+    try {
+      await tenderApi.remove(t.id);
+      setTenders((prev) => prev.filter((x) => x.id !== t.id));
+      setNotice({ kind: 'success', text: `Deleted "${t.tenderName || t.tenderNumber || 'tender'}".` });
+      setDeleteTarget(null);
+    } catch (e) {
+      setNotice({ kind: 'error', text: e.message || 'Delete failed.' });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // ── stat tiles ────────────────────────────────────────────────────────
@@ -313,6 +361,46 @@ export default function Tenders() {
 
   const switchView = (mode) => { setViewMode(mode); localStorage.setItem('tenders_view_mode', mode); };
 
+  // ── row actions (shared by the table cell and the grid card footer) ───
+  // stopPropagation everywhere: both the row and the card are click-to-open,
+  // so a button press must not also navigate into the tender.
+  const actionButtons = (t, btnClass, wrap = true) => {
+    const blocked = deleteBlockedReason(t);
+    const stop = (fn) => (e) => { e.stopPropagation(); fn(); };
+    // The grid card footer is already a flex row that stops propagation; only
+    // the table cell needs its own container.
+    const Wrap = wrap
+      ? ({ children }) => (
+          <div className="leads-enquiries-action-buttons-cell" onClick={(e) => e.stopPropagation()}>{children}</div>
+        )
+      : React.Fragment;
+    return (
+      <Wrap>
+        <button className={`${btnClass} leads-enquiries-action-view`} onClick={stop(() => openTender(t))} title="View tender">
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+        </button>
+        {canEdit && (
+          <button className={`${btnClass} leads-enquiries-action-edit`} onClick={stop(() => openTender(t))} title="Edit tender">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+          </button>
+        )}
+        {canDelete && (
+          // Shown disabled rather than hidden when blocked, so the tooltip can
+          // explain why this particular tender can't be removed.
+          <button
+            className={`${btnClass} leads-enquiries-action-delete`}
+            onClick={stop(() => askDelete(t))}
+            disabled={!!blocked}
+            title={blocked ? `Can't delete — ${blocked}` : 'Delete tender'}
+            style={blocked ? { opacity: 0.45, cursor: 'not-allowed' } : undefined}
+          >
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+          </button>
+        )}
+      </Wrap>
+    );
+  };
+
   // ── cell renderer ─────────────────────────────────────────────────────
   const renderCell = (t, key) => {
     switch (key) {
@@ -334,6 +422,7 @@ export default function Tenders() {
       case 'project': return t.projectId
         ? <span className="tnd-link-chip" title="Linked project">🔗 {t.projectId}</span>
         : <span className="tnd-muted">—</span>;
+      case 'actions': return actionButtons(t, 'leads-enquiries-action-btn');
       default: return t[key] || '—';
     }
   };
@@ -407,6 +496,16 @@ export default function Tenders() {
       <div className="leads-enquiries-header">
         <div className="leads-enquiries-title-with-icon"><h1>Tenders</h1></div>
       </div>
+
+      {/* Result of the last delete (or why it was refused) */}
+      {notice && (
+        <div className={`tnd-elig-banner ${notice.kind === 'success' ? 'tnd-elig-go' : 'tnd-elig-nogo'}`}
+             style={{ marginBottom: 12 }}>
+          <span className="tnd-elig-note">{notice.text}</span>
+          <button className="tnd-icon-x" style={{ marginLeft: 'auto' }}
+                  onClick={() => setNotice(null)} title="Dismiss">×</button>
+        </div>
+      )}
 
       {error && <div className="alert alert-danger">{error}</div>}
 
@@ -581,15 +680,42 @@ export default function Tenders() {
                     </div>
                   )}
                   <div className="leads-enquiries-card-actions">
-                    <button className="leads-enquiries-card-action-btn leads-enquiries-action-view" onClick={() => openTender(t)} title="Open tender">
-                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                    </button>
+                    {actionButtons(t, 'leads-enquiries-card-action-btn', false)}
                   </div>
                 </div>
               </div>
             ))}
           </div>
           {pager}
+        </div>
+      )}
+
+      {/* Delete confirmation — the tender is named so there is no doubt which
+          row is about to go, and the child records are spelled out. */}
+      {deleteTarget && (
+        <div className="tnd-modal-overlay" onClick={() => !deleting && setDeleteTarget(null)}>
+          <div className="tnd-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="tnd-modal-head">
+              <span className="tnd-modal-title">Delete tender?</span>
+              <button className="tnd-icon-x" onClick={() => setDeleteTarget(null)} disabled={deleting}>×</button>
+            </div>
+            <div className="tnd-modal-body">
+              <div>
+                <div style={{ fontWeight: 700 }}>{deleteTarget.tenderName || 'Untitled tender'}</div>
+                <div className="tnd-muted">{deleteTarget.tenderNumber || '—'}</div>
+              </div>
+              <div className="tnd-hint">
+                This removes the tender along with its BOQ, eligibility criteria, documents and
+                approval history. It cannot be undone from here.
+              </div>
+            </div>
+            <div className="tnd-modal-foot">
+              <button className="tnd-btn tnd-btn-secondary" onClick={() => setDeleteTarget(null)} disabled={deleting}>Cancel</button>
+              <button className="tnd-btn tnd-btn-danger" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? 'Deleting…' : 'Delete tender'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

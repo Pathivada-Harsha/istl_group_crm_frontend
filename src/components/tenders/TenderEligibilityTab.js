@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  Eligibility tab — Technical + Financial criteria, each auto pass/fail/pending
+//  Eligibility tab — Technical / Financial / Legal criteria, each auto pass/fail/pending
 //  via evaluateCriterion. A failed criterion can be overridden with a reason
 //  (OVERRIDDEN badge + Undo). Overall roll-up: GO / NO-GO / PENDING.
 //
@@ -11,7 +11,11 @@ import {
   blankCriterion, evaluateCriterion, computeEligibility, OPERATORS, suggestOperator, currentUserLabel,
 } from '../../services/tenderData';
 
-const CATEGORIES = ['Technical', 'Financial'];
+// Sections always offered, even when empty, so there is somewhere to add a
+// criterion of each kind. "Legal" is one the PDF importer produces (licences,
+// statutory registrations, not-blacklisted).
+const BASE_CATEGORIES = ['Technical', 'Financial', 'Legal'];
+const OTHER = '__other__';
 
 export default function TenderEligibilityTab({ tender, setTender }) {
   const [overrideKey, setOverrideKey] = useState(null);
@@ -19,6 +23,21 @@ export default function TenderEligibilityTab({ tender, setTender }) {
 
   const criteria = tender.eligibilityCriteria || [];
   const decision = computeEligibility(criteria);
+
+  // computeEligibility counts EVERY criterion, so each one must be reachable in
+  // the UI — a row in a section we don't render would sit pending forever and
+  // silently lock Documents/Rate Analysis/Workflow with no way to clear it.
+  // Render the base sections plus any other category present, and sweep rows
+  // with a blank/unknown category into a final "Other" bucket.
+  const categoryOf = (c) => (c.category || '').trim();
+  const extraCategories = [...new Set(criteria.map(categoryOf))]
+    .filter((c) => c && !BASE_CATEGORIES.includes(c));
+  const hasUncategorised = criteria.some((c) => !categoryOf(c));
+  const sections = [
+    ...BASE_CATEGORIES,
+    ...extraCategories,
+    ...(hasUncategorised ? [OTHER] : []),
+  ];
 
   const upd = (key, changes) => setTender((prev) => ({
     ...prev,
@@ -60,10 +79,20 @@ export default function TenderEligibilityTab({ tender, setTender }) {
   };
   const undoOverride = (key) => upd(key, { override: false, overrideReason: '', overrideBy: '', overrideAt: '' });
 
+  // Say how many are outstanding: "some criteria are not yet evaluated" gives no
+  // clue what to go and fix when the rows are further down the page.
+  const countBy = (r) => criteria.filter((c) => !c.override && evaluateCriterion(c) === r).length;
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
   const banner = {
     GO: { cls: 'tnd-elig-go', verdict: 'GO', note: 'All criteria are satisfied (passed or overridden).' },
-    NO_GO: { cls: 'tnd-elig-nogo', verdict: 'NO-GO', note: 'At least one criterion fails and is not overridden.' },
-    PENDING: { cls: 'tnd-elig-pending', verdict: 'PENDING', note: 'Some criteria are not yet evaluated.' },
+    NO_GO: {
+      cls: 'tnd-elig-nogo', verdict: 'NO-GO',
+      note: `${plural(countBy('fail'), 'criterion fails', 'criteria fail')} and are not overridden.`,
+    },
+    PENDING: {
+      cls: 'tnd-elig-pending', verdict: 'PENDING',
+      note: `${plural(countBy('pending'), 'criterion', 'criteria')} still need a value — check every section below.`,
+    },
   }[decision];
 
   const resultBadge = (c) => {
@@ -73,15 +102,21 @@ export default function TenderEligibilityTab({ tender, setTender }) {
   };
 
   const renderSection = (category) => {
-    const rows = criteria.filter((c) => c.category === category);
+    const isOther = category === OTHER;
+    const label = isOther ? 'Other' : category;
+    const rows = isOther
+      ? criteria.filter((c) => !categoryOf(c))
+      : criteria.filter((c) => categoryOf(c) === category);
     return (
       <div key={category}>
         <div className="tnd-elig-section-title">
-          <span>{category} Criteria</span>
-          <button className="tnd-btn tnd-btn-ghost tnd-btn-sm" onClick={() => add(category)}>＋ Add criterion</button>
+          <span>{label} Criteria</span>
+          {!isOther && (
+            <button className="tnd-btn tnd-btn-ghost tnd-btn-sm" onClick={() => add(category)}>＋ Add criterion</button>
+          )}
         </div>
         {rows.length === 0 ? (
-          <div className="tnd-empty">No {category.toLowerCase()} criteria yet.</div>
+          <div className="tnd-empty">No {label.toLowerCase()} criteria yet.</div>
         ) : (
           <div className="tnd-table-wrap">
             <table className="tnd-table">
@@ -166,7 +201,7 @@ export default function TenderEligibilityTab({ tender, setTender }) {
         from the operator. A failed criterion may be individually overridden with a documented reason.
       </p>
 
-      {CATEGORIES.map(renderSection)}
+      {sections.map(renderSection)}
 
       {/* Override reason modal */}
       {overrideKey && (

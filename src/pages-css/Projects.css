@@ -6,7 +6,9 @@
 /* ── Summary stat cards ───────────────────────────────────────────────── */
 .pl-stats {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  /* auto-fit so the financial cards (Received / Spent) wrap gracefully
+     instead of forcing a lopsided 4 + 2 layout on narrow screens. */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -32,7 +34,19 @@
   color: var(--ct-0f172a, #0f172a);
   line-height: 1.1;
 }
+.pl-stat-sub {
+  font-size: 11px;
+  color: var(--ct-64748b, #64748b);
+  line-height: 1.2;
+}
 .pl-stat-accent { width: 34px; height: 3px; border-radius: 3px; }
+
+/* Money figures in table cells — tabular digits so columns line up */
+.pl-money {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* ── Filter bar ───────────────────────────────────────────────────────── */
 .pl-filterbar {
@@ -197,6 +211,32 @@
 .pl-card-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
 .pl-card-row label { color: var(--ct-64748b, #64748b); font-size: 11px; }
 .pl-card-value { font-weight: 600; color: var(--ct-0f172a, #0f172a); }
+/* Received / Spent / Balance strip on a grid card */
+.pl-card-money {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 8px;
+  background: var(--c-f8fafc, #f8fafc);
+}
+.pl-money-cell { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.pl-money-cell label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  color: var(--ct-64748b, #64748b);
+}
+.pl-money-cell span {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .pl-card-foot { display: flex; align-items: flex-end; justify-content: space-between; margin-top: auto; gap: 8px; }
 .pl-card-id {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
