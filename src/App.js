@@ -45,6 +45,8 @@ import OrderBook from "./Pages/OrderBook.js";
 import ProjectsList from "./Pages/ProjectsList.js";
 import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import Tenders from "./Pages/Tenders.js";
+import BorrowerRegistry from "./Pages/BorrowerRegistry.js";
+import BorrowerDetail from "./components/borrowers/BorrowerDetail.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
@@ -134,7 +136,7 @@ function AppWrapper() {
       '/analytics', '/profile', '/reports', '/solarprofile', '/follow-ups',
       '/users', '/officeuse', '/project-over-view', '/order-book',
       '/project-cost-expense', '/taskmanagement', '/projectaccess', '/inventory-management', '/notifications',
-      '/team-performance', '/projects', '/tenders'
+      '/team-performance', '/projects', '/tenders','/lender'
     ];
     const isKnown = knownPaths.some(p => location.pathname.startsWith(p));
     if (!isKnown) return <NotFound />;
@@ -253,6 +255,18 @@ function AppShell({ hideShell }) {
 
           <Route path="/tenders" element={
             <ProtectedRoute><Tenders /></ProtectedRoute>
+          } />
+
+          {/* ── LENDER MODULE ─────────────────────────────────────────────
+              The list route must come first: React Router matches in order,
+              and "/lender/borrowers/:id" would otherwise never be reached
+              from a link that also matches the index path. */}
+          <Route path="/lender/borrowers" element={
+            <ProtectedRoute><BorrowerRegistry /></ProtectedRoute>
+          } />
+
+          <Route path="/lender/borrowers/:id" element={
+            <ProtectedRoute><BorrowerDetail /></ProtectedRoute>
           } />
 
           <Route path="/sales/invoices" element={
