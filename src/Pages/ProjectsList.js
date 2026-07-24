@@ -65,6 +65,36 @@ const fmtMoney = (n) => {
   const v = Number(n || 0);
   return '₹' + v.toLocaleString('en-IN', { maximumFractionDigits: 0 });
 };
+// Compact money for dense cells/cards — ₹1.2 Cr / ₹4.5 L / ₹32,000.
+const fmtMoneyShort = (n) => {
+  const v = Number(n || 0);
+  const a = Math.abs(v);
+  const sign = v < 0 ? '-' : '';
+  if (a >= 1e7) return `${sign}₹${(a / 1e7).toFixed(2)} Cr`;
+  if (a >= 1e5) return `${sign}₹${(a / 1e5).toFixed(2)} L`;
+  return sign + '₹' + a.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+};
+
+// ── Financial helpers ───────────────────────────────────────────────────────
+// Semantics match the project dashboard: received = paid_invoice_value (cash in
+// from the customer), spent = paid_bill_value (cash out to vendors), billed =
+// total_invoice_value, payable = total_bill_value. Balance = received − spent.
+const moneyIn      = (p) => Number(p.paidInvoiceValue  || 0);
+const moneyOut     = (p) => Number(p.paidBillValue     || 0);
+const billedAmt    = (p) => Number(p.totalInvoiceValue || 0);
+const payableAmt   = (p) => Number(p.totalBillValue    || 0);
+const balanceAmt   = (p) => (p.balance !== undefined && p.balance !== null)
+  ? Number(p.balance) : moneyIn(p) - moneyOut(p);
+// % of budget collected from the customer — capped at 100 for the meter.
+const collectedPct = (p) => {
+  const b = Number(p.budget || 0);
+  if (b <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((moneyIn(p) / b) * 100)));
+};
+
+const MONEY_IN_COLOR  = '#16a34a';   // received — green
+const MONEY_OUT_COLOR = '#dc2626';   // spent    — red
+const balanceColor = (v) => (v < 0 ? MONEY_OUT_COLOR : v > 0 ? MONEY_IN_COLOR : '#64748b');
 const fmtDate = (d) => {
   if (!d) return '—';
   const dt = new Date(d);
@@ -84,6 +114,11 @@ const COLUMN_DEFS = [
   { key: 'subGroup', label: 'Sub Group' },
   { key: 'status',   label: 'Status' },
   { key: 'budget',   label: 'Budget' },
+  { key: 'billed',   label: 'Billed' },
+  { key: 'received', label: 'Received' },
+  { key: 'payable',  label: 'Payable' },
+  { key: 'spent',    label: 'Spent' },
+  { key: 'balance',  label: 'Balance' },
   { key: 'progress', label: 'Progress' },
   { key: 'timeline', label: 'Timeline' },
 ];
@@ -110,9 +145,12 @@ function ProjectsList() {
   // ── Table mechanics (mirror OrderBook): sort + column order + visibility ────
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [columnOrder, setColumnOrder] = useState(COLUMN_DEFS.map(c => c.key));
+  // Financial columns: Received / Spent / Balance are on by default (the
+  // money-in-vs-money-out story); Billed / Payable are opt-in via the picker.
   const [visibleColumns, setVisibleColumns] = useState({
     sno: true, projId: true, name: true, customer: false, group: true,
-    subGroup: false, status: true, budget: true, progress: true, timeline: true,
+    subGroup: false, status: true, budget: true, billed: false, received: true,
+    payable: false, spent: true, balance: true, progress: true, timeline: true,
   });
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const dragCol = useRef(null);
@@ -181,8 +219,16 @@ function ProjectsList() {
     const total = projects.length;
     const inProgress = projects.filter(p => p.status === 'IN_PROGRESS').length;
     const completed = projects.filter(p => p.status === 'COMPLETED').length;
-    const totalBudget = projects.reduce((s, p) => s + Number(p.budget || 0), 0);
-    return { total, inProgress, completed, totalBudget };
+    const totalBudget   = projects.reduce((s, p) => s + Number(p.budget || 0), 0);
+    const totalBilled   = projects.reduce((s, p) => s + billedAmt(p), 0);
+    const totalReceived = projects.reduce((s, p) => s + moneyIn(p), 0);
+    const totalSpent    = projects.reduce((s, p) => s + moneyOut(p), 0);
+    return {
+      total, inProgress, completed, totalBudget,
+      totalBilled, totalReceived, totalSpent,
+      totalBalance: totalReceived - totalSpent,
+      pendingReceipts: Math.max(0, totalBilled - totalReceived),
+    };
   }, [projects]);
 
   // ── Sort → paginate ─────────────────────────────────────────────────────────
@@ -197,6 +243,11 @@ function ProjectsList() {
       subGroup: o.subGroupName || '',
       status:   o.status || '',
       budget:   parseFloat(o.budget) || 0,
+      billed:   billedAmt(o),
+      received: moneyIn(o),
+      payable:  payableAmt(o),
+      spent:    moneyOut(o),
+      balance:  balanceAmt(o),
       progress: Number(o.progressPercentage) || 0,
       timeline: o.startDate || '',
     }[key] ?? '');
@@ -230,6 +281,40 @@ function ProjectsList() {
       <td key="status"><span className="pl-status-badge" style={{ background: getStatusColor(p.status) + '22', color: getStatusColor(p.status) }}>{statusLabel(p.status)}</span></td>
     ) },
     budget:   { label: 'Budget', sortKey: 'budget', render: (p) => <td key="budget">{fmtMoney(p.budget)}</td> },
+
+    // ── Financials ───────────────────────────────────────────────────────────
+    billed:   { label: 'Billed', sortKey: 'billed', render: (p) => (
+      <td key="billed" title={fmtMoney(billedAmt(p))}>{fmtMoneyShort(billedAmt(p))}</td>
+    ) },
+    received: { label: 'Received', sortKey: 'received', render: (p) => {
+      const pct = collectedPct(p);
+      return (
+        <td key="received" title={`${fmtMoney(moneyIn(p))} received of ${fmtMoney(p.budget)} budget`}>
+          <div className="pl-money" style={{ color: MONEY_IN_COLOR }}>{fmtMoneyShort(moneyIn(p))}</div>
+          {Number(p.budget || 0) > 0 && <div className="pl-muted-sm">{pct}% of budget</div>}
+        </td>
+      );
+    } },
+    payable:  { label: 'Payable', sortKey: 'payable', render: (p) => (
+      <td key="payable" title={fmtMoney(payableAmt(p))}>{fmtMoneyShort(payableAmt(p))}</td>
+    ) },
+    spent:    { label: 'Spent', sortKey: 'spent', render: (p) => {
+      const pending = Math.max(0, payableAmt(p) - moneyOut(p));
+      return (
+        <td key="spent" title={`${fmtMoney(moneyOut(p))} paid of ${fmtMoney(payableAmt(p))} billed by vendors`}>
+          <div className="pl-money" style={{ color: MONEY_OUT_COLOR }}>{fmtMoneyShort(moneyOut(p))}</div>
+          {pending > 0 && <div className="pl-muted-sm">{fmtMoneyShort(pending)} due</div>}
+        </td>
+      );
+    } },
+    balance:  { label: 'Balance', sortKey: 'balance', render: (p) => {
+      const bal = balanceAmt(p);
+      return (
+        <td key="balance" title={`Received ${fmtMoney(moneyIn(p))} − Spent ${fmtMoney(moneyOut(p))}`}>
+          <span className="pl-money" style={{ color: balanceColor(bal) }}>{fmtMoneyShort(bal)}</span>
+        </td>
+      );
+    } },
     progress: { label: 'Progress', sortKey: 'progress', render: (p) => {
       const pct = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
       return (
@@ -290,8 +375,24 @@ function ProjectsList() {
         </div>
         <div className="pl-stat-card">
           <span className="pl-stat-label">Total Budget</span>
-          <span className="pl-stat-value">{fmtMoney(stats.totalBudget)}</span>
+          <span className="pl-stat-value" title={fmtMoney(stats.totalBudget)}>{fmtMoneyShort(stats.totalBudget)}</span>
           <span className="pl-stat-accent" style={{ background: '#8b5cf6' }} />
+        </div>
+        <div className="pl-stat-card">
+          <span className="pl-stat-label">Received</span>
+          <span className="pl-stat-value" style={{ color: MONEY_IN_COLOR }} title={fmtMoney(stats.totalReceived)}>
+            {fmtMoneyShort(stats.totalReceived)}
+          </span>
+          <span className="pl-stat-sub">{fmtMoneyShort(stats.pendingReceipts)} yet to collect</span>
+          <span className="pl-stat-accent" style={{ background: MONEY_IN_COLOR }} />
+        </div>
+        <div className="pl-stat-card">
+          <span className="pl-stat-label">Spent</span>
+          <span className="pl-stat-value" style={{ color: MONEY_OUT_COLOR }} title={fmtMoney(stats.totalSpent)}>
+            {fmtMoneyShort(stats.totalSpent)}
+          </span>
+          <span className="pl-stat-sub">Balance {fmtMoneyShort(stats.totalBalance)}</span>
+          <span className="pl-stat-accent" style={{ background: MONEY_OUT_COLOR }} />
         </div>
       </div>
 
@@ -476,6 +577,22 @@ const ProjectsGrid = ({ rows, onOpen }) => (
           <div className="pl-card-row">
             <label>Budget</label>
             <span className="pl-card-value">{fmtMoney(p.budget)}</span>
+          </div>
+
+          {/* Money in / money out at a glance */}
+          <div className="pl-card-money">
+            <div className="pl-money-cell" title={`Received from customer: ${fmtMoney(moneyIn(p))}`}>
+              <label>Received</label>
+              <span style={{ color: MONEY_IN_COLOR }}>{fmtMoneyShort(moneyIn(p))}</span>
+            </div>
+            <div className="pl-money-cell" title={`Paid to vendors: ${fmtMoney(moneyOut(p))}`}>
+              <label>Spent</label>
+              <span style={{ color: MONEY_OUT_COLOR }}>{fmtMoneyShort(moneyOut(p))}</span>
+            </div>
+            <div className="pl-money-cell" title={`Received ${fmtMoney(moneyIn(p))} − Spent ${fmtMoney(moneyOut(p))}`}>
+              <label>Balance</label>
+              <span style={{ color: balanceColor(balanceAmt(p)) }}>{fmtMoneyShort(balanceAmt(p))}</span>
+            </div>
           </div>
 
           <div className="pl-progress-wrap">

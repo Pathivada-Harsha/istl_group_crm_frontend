@@ -96,6 +96,10 @@ export default function BomItemsMaster() {
   const [sgByGroup, setSgByGroup] = useState({}); // groupValue -> [{value,label}]
   const [sgIndex, setSgIndex] = useState({});     // subGroupValue -> groupValue
   const [formGroup, setFormGroup] = useState("");
+  // Toolbar taxonomy FILTER (narrows the catalog only — it never pulls template/
+  // past-project BOM lines). The Subgroup select writes into `category`, which is
+  // already the server-side filter param, so the two stay in sync automatically.
+  const [filterGroup, setFilterGroup] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(null);
@@ -166,6 +170,9 @@ export default function BomItemsMaster() {
     setFormGroup(val);
     setForm((f) => ({ ...f, category: "" }));
   };
+
+  // Toolbar filter: switching group clears the chosen subgroup (= category).
+  const onFilterGroupChange = (val) => { setFilterGroup(val); setCategory(""); setPage(1); };
 
   const openCreate = () => { setFormGroup(""); setAttrErrors({}); setForm(emptyForm()); };
   const openEdit = (it) => {
@@ -398,9 +405,17 @@ export default function BomItemsMaster() {
     else { setSortCol(key); setSortDir("asc"); }
     setPage(1);
   };
+  // A group with no subgroup picked → narrow to every subgroup of that group.
+  // (The server's `category` param only matches one exact value.)
+  const visibleItems = useMemo(() => {
+    if (!filterGroup || category) return items;
+    const subs = new Set((sgByGroup[filterGroup] || []).map((s) => s.value));
+    return items.filter((it) => subs.has(it.category));
+  }, [items, filterGroup, category, sgByGroup]);
+
   const sortedItems = useMemo(() => {
     const col = CATALOG_COLS.find((c) => c.key === sortCol);
-    const arr = [...items];
+    const arr = [...visibleItems];
     if (col) {
       arr.sort((a, b) => {
         const av = col.get(a), bv = col.get(b);
@@ -411,7 +426,7 @@ export default function BomItemsMaster() {
       });
     }
     return arr;
-  }, [items, sortCol, sortDir]);
+  }, [visibleItems, sortCol, sortDir]);
   const totalItems = sortedItems.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const pageClamped = Math.min(page, totalPages);
@@ -452,7 +467,16 @@ export default function BomItemsMaster() {
           <input className="bim-inp" placeholder="Search name / spec / make"
             value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         </div>
-        <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}>
+        <select className="bim-inp" value={filterGroup} onChange={(e) => onFilterGroupChange(e.target.value)} title="Filter the catalog by group">
+          <option value="">— Group —</option>
+          {groups.map((g) => <option key={g.value} value={g.value}>{g.label || g.value}</option>)}
+        </select>
+        <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }}
+          disabled={!filterGroup} title="Filter the catalog by subgroup">
+          <option value="">{filterGroup ? "— All subgroups —" : "pick a group"}</option>
+          {(sgByGroup[filterGroup] || []).map((sg) => <option key={sg.value} value={sg.value}>{sg.label || sg.value}</option>)}
+        </select>
+        <select className="bim-inp" value={category} onChange={(e) => { setCategory(e.target.value); setPage(1); }} title="Or filter by any category value">
           <option value="">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
