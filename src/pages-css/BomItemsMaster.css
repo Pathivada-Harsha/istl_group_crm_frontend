@@ -66,6 +66,12 @@
 /* ── Table card ── */
 .bim-table-wrap { background: var(--c-ffffff, #fff); overflow: hidden; border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .bim-table-scroll { overflow-x: auto; }
+
+/* Catalog table fills the remaining viewport; the table BODY scrolls (sticky header
+   stays put) and the pager is pinned — so the page itself doesn't scroll. */
+.bim-table-wrap.bim-fill { display: flex; flex-direction: column; height: calc(100vh - 230px); min-height: 300px; }
+.bim-fill .bim-table-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.bim-fill .bim-pager { flex: 0 0 auto; }
 .bim-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bim-table th, .bim-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9); vertical-align: middle; }
 .bim-table thead th { background: var(--c-f9fafb, #f9fafb); color: var(--ct-374151, #374151); font-weight: 600; white-space: nowrap; position: sticky; top: 0; z-index: 2; user-select: none; }

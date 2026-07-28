@@ -14,6 +14,14 @@
  *  is carried along unused so every module-scope helper the tabs depend on stays
  *  intact.  The 'orderBook' prop these components receive is a project-shaped
  *  shim built in ProjectDetailPage ({ id: projectUniqueId, ... }).
+ *
+ *  SANCTIONED DIVERGENCES from OrderBookDetailPage.js (do not re-port over them):
+ *    • TechnicalTab's parent Weight % cell is an editable input here; the order
+ *      book renders it read-only.
+ *    • loadDefaultPlan() carries the template's weightPct onto each suggested
+ *      row, so a project generated from a template inherits the template's
+ *      weights instead of the equal split. Nothing else about the tab's weight
+ *      behaviour (auto-distribution, pinning, snapping, validation) changed.
  * ========================================================================== */
 // ============================================================================
 //  OrderBookDetailPage
@@ -509,6 +517,22 @@ const blankPhase = (seq) => ({
 const blankSubItem = () => ({ name: '', status: 'Not Started', progressPercent: 0, weightPct: '', weightManual: false, description: '', startDate: '', endDate: '', startWeek: '', endWeek: '', customName: false });
 
 const PHASE_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Delayed', 'On Hold'];
+// Manual statuses that OVERRIDE the progress-driven auto status (they stick until
+// the user changes them). The rest (Not Started / In Progress / Completed) are
+// auto-derived from a phase's actual progress in DETAILED tracking.
+const MANUAL_PHASE_STATUSES = ['Delayed', 'On Hold'];
+
+// Parse a free-text capacity ("100 kW", "2.5 MWp", "80") → kW number, or null.
+// Mirrors backend CapacityUtil.parseValueUnit: MW/MWp × 1000; kW/kWp/bare = kW.
+const parseCapacityKw = (s) => {
+  if (s == null) return null;
+  const m = String(s).trim().match(/^([\d.,\s]*)\s*(.*)$/);
+  if (!m) return null;
+  const num = parseFloat((m[1] || '').replace(/[,\s]/g, ''));
+  if (!Number.isFinite(num)) return null;
+  const unit = (m[2] || '').trim().toLowerCase();
+  return unit.startsWith('mw') ? num * 1000 : num;
+};
 
 export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
   const [scope, setScope] = useState({
@@ -591,6 +615,7 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
             startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
             customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
             status: p.status || 'Not Started', progressPercent: p.progressPercent != null ? Number(p.progressPercent) : 0,
+            plannedProgressPct: p.plannedProgressPct != null ? Number(p.plannedProgressPct) : '',
             weightPct: p.weightPct != null ? Number(p.weightPct) : '',
             subItems,
             expanded: false,
@@ -620,38 +645,53 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // "Suggest plan" — pulls the standardised scope template for this project's
+  // sub-group (GET /scope/suggest?target=scope), exactly like the Leads page.
+  // Only the row SOURCE changed vs the old default-plan: the bucket-distribution
+  // across the plan duration below is unchanged, as are all downstream columns.
   const loadDefaultPlan = async () => {
     if (phases.length) {
       const ok = await showConfirmation({
         title: 'Replace schedule', type: 'alert',
-        message: 'This replaces the current rows with the suggested EPC plan. Continue?',
+        message: 'This replaces the current rows with the suggested plan for this sub-group. Continue?',
         confirmText: 'Yes, Replace', cancelText: 'Cancel',
       });
       if (!ok) return;
     }
     try {
-      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/default-plan`, { credentials: 'include', headers: authHeaders });
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/suggest?target=scope`, { credentials: 'include', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
-        const tmpl = data.data.phases || [];
+        // Template scope lines → parent rows: activity→phaseName, specification→phaseDescription.
+        const tmpl = data.data.scopeItems || [];
+        if (!tmpl.length) {
+          const w = (data.data.warnings || [])[0];
+          showError(w?.message || 'No standard template for this project’s sub-group yet. Add rows manually, or create a template.');
+          return;
+        }
         // Distribute the template phases across the ACTUAL plan duration so a
         // short plan doesn't get phases at months 1–12. If dates aren't set,
-        // keep the template's own numbers.
+        // keep no bucket (blank), same as before.
         const u = scope.planUnit || 'WEEK';
         const dur = bucketCount(scope.plannedStartDate, scope.plannedEndDate, u);
         let mapped;
+        // The template defines each activity's share of project progress, so the
+        // suggested rows carry it through instead of falling back to the equal
+        // split at save time. The backend guarantees every line has one.
+        // Weights stay fully editable here afterwards.
         if (dur > 0 && tmpl.length > 0) {
           mapped = tmpl.map((p, i) => {
             // Phase i spans its proportional slice of [1..dur].
             const start = Math.floor((i / tmpl.length) * dur) + 1;
             const end = Math.max(start, Math.floor(((i + 1) / tmpl.length) * dur));
-            return { id: null, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: '', startWeek: start, endWeek: end, customName: !PHASE_SUGGESTIONS.includes(p.phaseName) };
+            return { id: null, seqNo: i + 1, phaseName: p.activity, phaseDescription: p.specification || '', startWeek: start, endWeek: end, weightPct: p.weightPct != null ? Number(p.weightPct) : '', customName: !PHASE_SUGGESTIONS.includes(p.activity) };
           });
         } else {
           mapped = tmpl.map((p, i) => ({
-            id: null, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: '',
-            startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
-            customName: !PHASE_SUGGESTIONS.includes(p.phaseName),
+            id: null, seqNo: i + 1, phaseName: p.activity, phaseDescription: p.specification || '',
+            startWeek: '', endWeek: '',
+            weightPct: p.weightPct != null ? Number(p.weightPct) : '',
+            customName: !PHASE_SUGGESTIONS.includes(p.activity),
           }));
         }
         setPhases(mapped);
@@ -843,15 +883,22 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         }
       }
     }
+    // Item weights drive physical progress, so they must total 100% before the
+    // scope is stored. Blank rows already absorb whatever the typed rows leave,
+    // so this only fires when the typed weights themselves are wrong — 110%
+    // across the rows, or 90% with nothing blank left to make up the difference.
+    if (phases.length > 0 && Math.abs(parentWeightSum - 100) > WEIGHT_TOLERANCE) {
+      showError(`Item weights total ${fmtW(parentWeightSum)}% — they must add up to 100% before saving.`);
+      return;
+    }
     setSaving(true);
     try {
       const { siteLat: _sLat, siteLng: _sLng, ...scopeRest } = scope;
-      const projectSlice = phases.length > 0 ? 100 / phases.length : 0;
       const body = {
         ...scopeRest,
         totalPlannedWeeks: hasDates ? planDuration : null,
         planUnit: scope.planUnit || 'WEEK',
-        trackingMode: 'DETAILED',
+        trackingMode: isSimple ? 'SIMPLE' : 'DETAILED',
         plannedStartDate: scope.plannedStartDate || null,
         plannedEndDate: scope.plannedEndDate || null,
         // Site location is owned by the Overview tab (PATCH /site-location). We
@@ -863,17 +910,34 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
           id: p.id, seqNo: i + 1, phaseName: p.phaseName, phaseDescription: p.phaseDescription,
           startWeek: p.startWeek === '' ? null : Number(p.startWeek),
           endWeek: p.endWeek === '' ? null : Number(p.endWeek),
-          status: p.status || 'Not Started',
-          progressPercent: 0, // set below from weeks data
-          // Every parent owns an equal project slice (100 / parentCount).
-          weightPct: Number(projectSlice.toFixed(4)),
+          // Persist the AUTO status (progress drives it; Delayed/On Hold stick).
+          status: derivedStatus(p),
+          progressPercent: 0, // set below (weekly roll-up in DETAILED, typed value in SIMPLE)
+          plannedProgressPct: isSimple
+            ? (p.plannedProgressPct === '' || p.plannedProgressPct == null ? null : Number(p.plannedProgressPct))
+            : null,
+          // Parent weight is editable & stored: the typed weight, else this row's
+          // share of what the typed rows left over — the same number the grid
+          // showed, so what is saved is what the user validated.
+          weightPct: (p.weightPct === '' || p.weightPct == null)
+            ? Number(autoSlice.toFixed(4))
+            : Number(p.weightPct),
           // Sub-item weightPct is RELATIVE to the parent (sums to 100 within it).
           subItems: (p.subItems || []).filter(si => si.name && si.name.trim()).map(si => ({
-            ...si, progressPercent: Math.round(leafActual(leafForSub(p, si))),
+            ...si,
+            progressPercent: isSimple
+              ? (Number(si.progressPercent) || 0)
+              : Math.round(leafActual(leafForSub(p, si))),
+            plannedProgressPct: isSimple
+              ? (si.plannedProgressPct === '' || si.plannedProgressPct == null ? null : Number(si.plannedProgressPct))
+              : (si.plannedProgressPct ?? null),
           })),
         })).map((pay, i) => {
-          // Phase actual progress derived from weeks (weighted roll-up for parents).
-          pay.progressPercent = Math.round(phaseActualProgress(phases[i]));
+          // Actual (phaseActualProgress is mode-aware): SIMPLE = typed value / sub-item
+          // roll-up; DETAILED = weekly roll-up. Keep decimals in SIMPLE, round in DETAILED.
+          pay.progressPercent = isSimple
+            ? phaseActualProgress(phases[i])
+            : Math.round(phaseActualProgress(phases[i]));
           return pay;
         }),
       };
@@ -883,7 +947,14 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.success) { showSuccess('Technical scope saved'); load(); }
+      if (data.success) {
+        // Also persist the week-wise planned/actual cells so "Save Schedule"/"Save
+        // Scope" saves EVERYTHING in one click. Phase ids are preserved by the
+        // backend upsert, so the cells (keyed by phase id) stay linked.
+        try { await persistProgress(); } catch { /* non-fatal — phases already saved */ }
+        showSuccess('Technical scope saved');
+        load();
+      }
       else showError(data.message || 'Save failed');
     } catch { showError('Save failed'); }
     finally { setSaving(false); }
@@ -1106,16 +1177,32 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
   const parentCount = phases.length;
   // The fixed project slice each parent owns (equal split of 100%).
   const parentSlice = () => (parentCount > 0 ? 100 / parentCount : 0);
+  // A row the user typed a weight into HOLDS that weight; the blank rows share
+  // whatever is left of 100 between them. Giving every blank row an equal slice
+  // of the WHOLE (the old fallback) pushed the total over 100 the moment one row
+  // was typed — five rows with one set to 30 came to 110%.
+  const typedWeightSum = phases.reduce((s, p) => s + Math.max(0, num(p.weightPct)), 0);
+  const autoWeightCount = phases.filter(p => !(num(p.weightPct) > 0)).length;
+  const autoSlice = autoWeightCount > 0 ? Math.max(0, 100 - typedWeightSum) / autoWeightCount : 0;
+  // A parent's effective weight: its own typed weight when set, else its share of
+  // what the typed rows left over. This is what physical progress (backend) rolls
+  // up, so it is also what the total and the approve gate must measure.
+  const parentWeightOf = (p) => { const w = num(p.weightPct); return w > 0 ? w : autoSlice; };
+  const parentWeightSum = phases.reduce((s, p) => s + parentWeightOf(p), 0);
+  const parentWeightsOff = parentCount > 0 && Math.abs(parentWeightSum - 100) > 0.5;
   const hasSubs = (p) => !!(p.subItems && p.subItems.filter(si => si.name != null).length > 0);
   // Sum of a parent's RELATIVE sub-item weights (should be ≤100).
   const subWeightSum = (p) => (p.subItems || []).reduce((s, si) => s + num(si.weightPct), 0);
   // A single sub-item's ABSOLUTE project weight.
   const absSubWeight = (si) => parentSlice() * (num(si.weightPct) / 100);
-  // A parent's effective ABSOLUTE project weight — always its equal slice.
-  const effectiveWeight = (p) => parentSlice();
-  // The whole project must total 100% by construction; kept as a live sum so the
-  // banner and the approve gate still reflect reality if a slice is ever 0.
-  const grandTotalWeight = phases.reduce((s) => s + parentSlice(), 0);
+  // A parent's effective ABSOLUTE project weight — the weight it will be SAVED
+  // with, so the banner, the approve gate and the weighted progress shown here
+  // all agree with what the backend rolls up.
+  const effectiveWeight = (p) => parentWeightOf(p);
+  // Live total of the real weights. This used to sum parentSlice() instead, which
+  // is 100 by construction — so the banner read "100% ✓ ready to approve" and the
+  // approve gate passed even when the typed weights totalled 110%.
+  const grandTotalWeight = parentWeightSum;
   // ±0.01% tolerance so raw Excel-derived fractions still validate (exact 100.000000
   // is unreachable with hand-typed weights and float dust).
   const WEIGHT_TOLERANCE = 0.01;
@@ -1159,8 +1246,14 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
   const totalPlannedCap = phases.reduce((s, p) => s + phasePlannedCap(p), 0);
   const totalActualCap = phases.reduce((s, p) => s + phaseActualCap(p), 0);
 
-  // ── Per-period progress tracking (always on; every project uses the weeks modal) ──
-  const isDetailed = true;
+  // ── Planning granularity ──────────────────────────────────────────────────
+  // Solar_Rooftop under 100 kW → SIMPLE: Planned/Actual % are typed directly in
+  // the grid (no weekly Weeks modal). Capacity comes from the free-text System
+  // Capacity field; blank/unparseable on a rooftop → Simple (rooftop is small).
+  // Everything else → DETAILED (the weekly Weeks modal).
+  const isRooftop = /rooftop/i.test(orderBook.subGroupName || '');
+  const isSimple = isRooftop && (() => { const kw = parseCapacityKw(scope.systemCapacity); return kw == null || kw < 100; })();
+  const isDetailed = !isSimple;
   // Flatten scope into leaf entries: {phaseId, subKey|null, label, start, end, weight}
   const leaves = [];
   phases.forEach(p => {
@@ -1218,19 +1311,38 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
   //  - childless phase → its own leaf sum
   //  - parent with sub-items → WEIGHTED roll-up by sub-item weight (EPC standard).
   //    Falls back to a plain average only if no sub-item has a weight set.
+  // Actual/planned readers for a leaf: SIMPLE = typed value; DETAILED = weekly periods.
+  const leafActualVal = (p, si) => isSimple
+    ? (Number((si || p).progressPercent) || 0)
+    : leafActual(si ? leafForSub(p, si) : leafForPhase(p));
+  const leafPlannedVal = (p, si) => isSimple
+    ? (Number((si || p).plannedProgressPct) || 0)
+    : leafPlanned(si ? leafForSub(p, si) : leafForPhase(p));
   const phaseActualProgress = (p) => {
     const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
-    if (subs.length === 0) return leafActual(leafForPhase(p));
+    if (subs.length === 0) return leafActualVal(p, null);
     const wsum = subs.reduce((s, si) => s + num(si.weightPct), 0);
-    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafActual(leafForSub(p, si)), 0) / wsum;
-    return subs.reduce((s, si) => s + leafActual(leafForSub(p, si)), 0) / subs.length;
+    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafActualVal(p, si), 0) / wsum;
+    return subs.reduce((s, si) => s + leafActualVal(p, si), 0) / subs.length;
   };
   const phasePlannedProgress = (p) => {
     const subs = (p.subItems || []).filter(si => si.name && si.name.trim());
-    if (subs.length === 0) return leafPlanned(leafForPhase(p));
+    if (subs.length === 0) return leafPlannedVal(p, null);
     const wsum = subs.reduce((s, si) => s + num(si.weightPct), 0);
-    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafPlanned(leafForSub(p, si)), 0) / wsum;
-    return subs.reduce((s, si) => s + leafPlanned(leafForSub(p, si)), 0) / subs.length;
+    if (wsum > 0) return subs.reduce((s, si) => s + num(si.weightPct) * leafPlannedVal(p, si), 0) / wsum;
+    return subs.reduce((s, si) => s + leafPlannedVal(p, si), 0) / subs.length;
+  };
+  // Auto status from a phase's actual progress (progress drives status). A manual
+  // Delayed / On Hold always wins. In SIMPLE mode (no weekly data) status stays a
+  // manual field, so it is returned as-is.
+  const derivedStatus = (p) => {
+    if (MANUAL_PHASE_STATUSES.includes(p.status)) return p.status;
+    // Actual drives status (phaseActualProgress is mode-aware: typed in SIMPLE,
+    // weekly roll-up in DETAILED; parents roll up from their sub-items either way).
+    const a = phaseActualProgress(p);
+    if (a >= 99.995) return 'Completed';
+    if (a > 0) return 'In Progress';
+    return 'Not Started';
   };
   // Project weighted progress from DETAILED actuals = Σ(leaf weight% × leaf actual%) / Σweight.
   const detailedWeightedActual = (() => {
@@ -1239,27 +1351,40 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
     return leaves.reduce((s, lf) => s + lf.weight * leafActual(lf), 0) / wsum;
   })();
 
+  // Collect the non-empty week cells for every leaf, keyed by phase id (+ sub-item).
+  // Only leaves with a real phase id are sent — an unsaved phase (id == null) can't
+  // own periods, and the Weeks button is disabled for it.
+  const collectProgressCells = () => {
+    const cells = [];
+    leaves.forEach(lf => {
+      if (lf.phaseId == null) return;
+      for (let b = 1; b <= nBuckets; b++) {
+        const c = getCell(lf.phaseId, lf.subKey, b);
+        if (num(c.plannedPct) !== 0 || num(c.actualPct) !== 0) {
+          cells.push({ phaseId: lf.phaseId, subItemKey: lf.subKey, periodNo: b,
+            plannedPct: num(c.plannedPct), actualPct: num(c.actualPct) });
+        }
+      }
+    });
+    return cells;
+  };
+
+  // Persist the week cells. Returns true on success. No toast — callers decide.
+  const persistProgress = async () => {
+    const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/progress`, {
+      method: 'PUT', credentials: 'include',
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cells: collectProgressCells() }),
+    });
+    const data = await res.json();
+    return !!data.success;
+  };
+
   const saveProgress = async () => {
     setSavingProgress(true);
     try {
-      const cells = [];
-      leaves.forEach(lf => {
-        for (let b = 1; b <= nBuckets; b++) {
-          const c = getCell(lf.phaseId, lf.subKey, b);
-          if (num(c.plannedPct) !== 0 || num(c.actualPct) !== 0) {
-            cells.push({ phaseId: lf.phaseId, subItemKey: lf.subKey, periodNo: b,
-              plannedPct: num(c.plannedPct), actualPct: num(c.actualPct) });
-          }
-        }
-      });
-      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/progress`, {
-        method: 'PUT', credentials: 'include',
-        headers: { ...authHeaders, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cells }),
-      });
-      const data = await res.json();
-      if (data.success) { showSuccess('Progress saved'); }
-      else showError(data.message || 'Save failed');
+      if (await persistProgress()) showSuccess('Progress saved');
+      else showError('Save failed');
     } catch { showError('Save failed'); }
     finally { setSavingProgress(false); }
   };
@@ -1315,7 +1440,7 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         <div className="obd-card-head">
           <h4 className="obd-card-title">Work Breakdown &amp; Schedule</h4>
           <div className="obd-card-head-actions">
-            <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest EPC plan</button>
+            <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest plan</button>
             <button className="obd-btn obd-btn--ghost" onClick={loadFromLineItems}><Plus size={14} /> Load line items</button>
             <button className="obd-btn obd-btn--ghost" onClick={addPhase}><Plus size={14} /> Add row</button>
           </div>
@@ -1330,9 +1455,14 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         ) : null}
 
         {phases.length === 0 ? (
-          <div className="obd-empty">No rows yet. Use "Suggest EPC plan", "Load line items", or "Add row" to begin.</div>
+          <div className="obd-empty">No rows yet. Use "Suggest plan", "Load line items", or "Add row" to begin.</div>
         ) : (
           <>
+            {parentWeightsOff && (
+              <div className="obd-banner obd-banner--warn">
+                Phase weights total {parentWeightSum.toFixed(1)}% — they must add up to 100% before the scope can be saved. Blank rows share whatever the typed rows leave over, so clearing a weight hands it back to the automatic split.
+              </div>
+            )}
             <div className="obd-table-wrap">
               <table className="obd-table obd-phase-table">
                 <thead>
@@ -1394,11 +1524,11 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
                           <td><input className="obd-inp" value={p.phaseDescription} onChange={e => updatePhase(i, 'phaseDescription', e.target.value)} placeholder="Optional" /></td>
                           <td>
                             <div className="obd-progress-cell">
-                              <input className="obd-inp obd-inp--xs obd-cell-locked" type="number" min="0" max="100" step="any"
-                                value={fmtW(parentSlice())}
-                                title={`Auto: 100% ÷ ${parentCount} parent item(s) = equal project slice`}
-                                readOnly
-                                placeholder="0" />
+                              <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                value={p.weightPct ?? ''}
+                                title="Weight % of this phase in the whole project. Blank = equal split. All phases should total 100%."
+                                placeholder={fmtW(autoSlice)}
+                                onChange={e => updatePhase(i, 'weightPct', e.target.value)} />
                               <span className="obd-progress-cell-pct">%</span>
                             </div>
                           </td>
@@ -1419,29 +1549,63 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
                             </select>
                           </td>
                           <td>
-                            <select className="obd-inp obd-inp--sm" value={p.status || 'Not Started'}
+                            <select className="obd-inp obd-inp--sm" value={derivedStatus(p)}
+                              title="Auto from progress — pick Delayed / On Hold to override"
                               onChange={e => {
                                 const st = e.target.value;
-                                const extra = st === 'Completed' ? { progressPercent: 100 } : st === 'Not Started' ? { progressPercent: 0 } : {};
-                                updatePhase(i, 'status', st, extra);
+                                if (isDetailed) {
+                                  // Progress drives status; only Delayed / On Hold are manual
+                                  // overrides. Choosing a progress status hands control back.
+                                  updatePhase(i, 'status', MANUAL_PHASE_STATUSES.includes(st) ? st : null);
+                                } else {
+                                  const extra = st === 'Completed' ? { progressPercent: 100 } : st === 'Not Started' ? { progressPercent: 0 } : {};
+                                  updatePhase(i, 'status', st, extra);
+                                }
                               }}>
                               {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                             </select>
                           </td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}
-                            className={phasePlannedProgress(p) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
-                            title="Planned % — derived from the weeks modal">
-                            {fmtW(phasePlannedProgress(p))}%
-                          </td>
-                          <td style={{ textAlign: 'center', fontWeight: 600 }}
-                            className={phaseActualProgress(p) > phasePlannedProgress(p) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
-                            title="Actual % — derived from the weeks modal (amber if ahead of plan)">
-                            {fmtW(phaseActualProgress(p))}%
-                          </td>
+                          {/* SIMPLE mode (rooftop < 100 kW): type Planned/Actual % directly.
+                              DETAILED mode (and phases with sub-items): read-only weekly roll-up. */}
+                          {isSimple && !hasSubItems ? (
+                            <td style={{ textAlign: 'center' }}>
+                              <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                value={p.plannedProgressPct ?? ''} placeholder="0"
+                                title="Planned % for this phase"
+                                onChange={e => updatePhase(i, 'plannedProgressPct', e.target.value)} />
+                            </td>
+                          ) : (
+                            <td style={{ textAlign: 'center', fontWeight: 600 }}
+                              className={phasePlannedProgress(p) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
+                              title="Planned % — derived from the weeks modal">
+                              {fmtW(phasePlannedProgress(p))}%
+                            </td>
+                          )}
+                          {isSimple && !hasSubItems ? (
+                            <td style={{ textAlign: 'center' }}>
+                              <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                value={p.progressPercent ?? ''} placeholder="0"
+                                title="Actual % for this phase"
+                                onChange={e => updatePhase(i, 'progressPercent', e.target.value)} />
+                            </td>
+                          ) : (
+                            <td style={{ textAlign: 'center', fontWeight: 600 }}
+                              className={phaseActualProgress(p) > phasePlannedProgress(p) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
+                              title="Actual % — derived from the weeks modal (amber if ahead of plan)">
+                              {fmtW(phaseActualProgress(p))}%
+                            </td>
+                          )}
                           <td style={{ whiteSpace: 'nowrap' }}>
                             {isDetailed && !hasSubItems && (
+                              // Week-wise progress is stored per phase id — a phase must be
+                              // saved first (id != null), else the periods can't be persisted
+                              // (and unsaved rows would collide on a null id). Save the schedule,
+                              // then set weekly progress.
                               <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
-                                title="Set week-wise planned & actual progress"
+                                disabled={p.id == null}
+                                title={p.id == null
+                                  ? 'Save the schedule first, then set week-wise progress'
+                                  : 'Set week-wise planned & actual progress'}
                                 onClick={() => setWeekModalLeaf(leafForPhase(p))}>Weeks</button>
                             )}
                             <button className="obd-icon-btn" title="Add sub-item"
@@ -1547,16 +1711,33 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
                                 {PHASE_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
                               </select>
                             </td>
-                            <td style={{ textAlign: 'center' }}
-                              className={leafPlanned(leafForSub(p, si)) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
-                              title="Planned % — from this item's weeks">
-                              {fmtW(leafPlanned(leafForSub(p, si)))}%
-                            </td>
-                            <td style={{ textAlign: 'center' }}
-                              className={leafActual(leafForSub(p, si)) > leafPlanned(leafForSub(p, si)) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
-                              title="Actual % — from this item's weeks">
-                              {fmtW(leafActual(leafForSub(p, si)))}%
-                            </td>
+                            {isSimple ? (
+                              <>
+                                <td style={{ textAlign: 'center' }}>
+                                  <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                    value={si.plannedProgressPct ?? ''} placeholder="0" title="Planned % for this sub-item"
+                                    onChange={e => { const u = [...p.subItems]; u[si_i] = { ...si, plannedProgressPct: e.target.value }; updatePhase(i, 'subItems', u); }} />
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <input className="obd-inp obd-inp--xs" type="number" min="0" max="100" step="any"
+                                    value={si.progressPercent ?? ''} placeholder="0" title="Actual % for this sub-item"
+                                    onChange={e => { const u = [...p.subItems]; u[si_i] = { ...si, progressPercent: e.target.value }; updatePhase(i, 'subItems', u); }} />
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                <td style={{ textAlign: 'center' }}
+                                  className={leafPlanned(leafForSub(p, si)) > 100.01 ? 'obd-weight-banner--warn' : 'obd-cell-muted'}
+                                  title="Planned % — from this item's weeks">
+                                  {fmtW(leafPlanned(leafForSub(p, si)))}%
+                                </td>
+                                <td style={{ textAlign: 'center' }}
+                                  className={leafActual(leafForSub(p, si)) > leafPlanned(leafForSub(p, si)) + 0.01 ? 'obd-weight-banner--warn' : 'obd-cap-cell--actual'}
+                                  title="Actual % — from this item's weeks">
+                                  {fmtW(leafActual(leafForSub(p, si)))}%
+                                </td>
+                              </>
+                            )}
                             <td style={{ whiteSpace: 'nowrap' }}>
                               {isDetailed && si.name && si.name.trim() && (
                                 <button className="obd-btn obd-btn--ghost obd-btn--sm" style={{ marginRight: 4 }}
@@ -2400,7 +2581,7 @@ export const BomTab = ({ orderBook, authHeaders, showSuccess, showError }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 // (STATUS_CLASS map removed — unused after the port; status styling is inline below)
 
-export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
+export const ProgressTab = ({ orderBook, authHeaders, showError, scheduleTitle, showFinancials = true }) => {
   const [phases, setPhases] = useState([]);
   const [summary, setSummary] = useState(null);
   const [planMeta, setPlanMeta] = useState({ start: '', end: '', unit: 'WEEK' });
@@ -2421,14 +2602,22 @@ export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
         if (scData.success) {
           setPhases((scData.data.phases || []).map(p => {
             const subItems = Array.isArray(p.subItems) ? p.subItems : [];
-            // Use sub-item average as effective progress when sub-items exist;
-            // fall back to the stored value for phases without sub-items.
-            const effectiveProgress = subItems.length > 0
-              ? Math.round(subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / subItems.length)
-              : (p.progressPercent != null ? Number(p.progressPercent) : 0);
+            // Effective progress = WEIGHTED mean of sub-items (by weightPct), matching
+            // the backend physical-progress roll-up. Falls back to a plain mean only
+            // when no sub-item has a weight, and to the stored value when childless.
+            let effectiveProgress;
+            if (subItems.length > 0) {
+              const wsum = subItems.reduce((s, si) => s + (Number(si.weightPct) || 0), 0);
+              effectiveProgress = wsum > 0
+                ? Math.round(subItems.reduce((s, si) => s + (Number(si.weightPct) || 0) * (Number(si.progressPercent) || 0), 0) / wsum)
+                : Math.round(subItems.reduce((s, si) => s + (Number(si.progressPercent) || 0), 0) / subItems.length);
+            } else {
+              effectiveProgress = p.progressPercent != null ? Number(p.progressPercent) : 0;
+            }
             return {
               phaseName: p.phaseName, status: p.status || 'Not Started',
               progressPercent: effectiveProgress,
+              weightPct: p.weightPct,
               startWeek: p.startWeek ?? '', endWeek: p.endWeek ?? '',
               subItems,
             };
@@ -2448,9 +2637,18 @@ export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
 
   const pct = (a, b) => b > 0 ? Math.min(100, (a / b) * 100) : 0;
 
-  // Schedule: average of per-phase progress (real captured data)
-  const schedAvg = phases.length ? phases.reduce((s, p) => s + (Number(p.progressPercent) || 0), 0) / phases.length : 0;
-  const doneCount = phases.filter(p => p.status === 'Completed').length;
+  // Schedule: WEIGHTED average of per-phase progress by parent weight (matches the
+  // backend physical-progress roll-up); plain mean only when no phase has a weight.
+  const phaseWeightSum = phases.reduce((s, p) => s + (Number(p.weightPct) || 0), 0);
+  const schedAvg = phases.length
+    ? (phaseWeightSum > 0
+        ? phases.reduce((s, p) => s + (Number(p.weightPct) || 0) * (Number(p.progressPercent) || 0), 0) / phaseWeightSum
+        : phases.reduce((s, p) => s + (Number(p.progressPercent) || 0), 0) / phases.length)
+    : 0;
+  // A phase counts as "done" when its actual progress reaches 100% OR it's marked
+  // Completed — so setting actuals to 100% updates the count even if the status
+  // field wasn't manually flipped (progress drives completion).
+  const doneCount = phases.filter(p => (Number(p.progressPercent) || 0) >= 100 || p.status === 'Completed').length;
   // Gantt grid: buckets across the plan dates ONLY (not stretched by a phase's
   // stored bucket). Bars clamp to this range — matches the Technical tab.
   const pUnit = planMeta.unit || 'WEEK';
@@ -2533,7 +2731,7 @@ export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
 
       {/* ── 1. Schedule progress — two-bar Gantt (planned vs actual) ── */}
       <div className="obd-card">
-        <h4 className="obd-card-title">Schedule Progress (Planned vs Actual)</h4>
+        <h4 className="obd-card-title">{scheduleTitle || 'Schedule Progress (Planned vs Actual)'}</h4>
         {phases.length === 0 ? (
           <div className="obd-empty">No schedule phases yet. Add them in the Technical Scope tab.</div>
         ) : !hasGrid ? (
@@ -2600,6 +2798,9 @@ export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
         )}
       </div>
 
+      {/* Financial timelines (Billing + Cost) — hidden when showFinancials=false
+          (e.g. on the Project Dashboard, which shows only the tech-scope Gantt). */}
+      {showFinancials && (<>
       {/* ── 2. Billing progress (receivables) — itemized ── */}
       <div className="obd-card">
         <h4 className="obd-card-title">Billing Progress (Receivables)</h4>
@@ -2716,6 +2917,7 @@ export const ProgressTab = ({ orderBook, authHeaders, showError }) => {
           </>
         )}
       </div>
+      </>)}
 
     </div>
   );

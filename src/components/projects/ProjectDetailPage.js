@@ -19,7 +19,8 @@ import ToastContainer from '../Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../preLoader.js';
 import LocationPicker from '../LocationPicker.js';
 import projectsApi from '../../services/projectsApi.js';
-import { TechnicalTab, CommercialTab, BomTab, ProgressTab } from './orderBookTabsPorted.js';
+import { TechnicalTab, CommercialTab, ProgressTab } from './orderBookTabsPorted.js';
+import ProjectBomTab from './ProjectBomTab.js';
 import '../../pages-css/OrderBookDetail.css';
 import '../../pages-css/Projects.css';
 
@@ -46,10 +47,12 @@ const fmtDate = (d) => {
   return `${String(dt.getDate()).padStart(2, '0')}-${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`;
 };
 
+// Scope before BOM: technical scope is decided first, then BOM is allocated under
+// each scope line (mirrors the Leads-Enquire flow). Financials/Progress unchanged.
 const TABS = [
   { k: 'overview',   l: 'Overview' },
-  { k: 'bom',        l: 'BOM / BOQ' },
   { k: 'scope',      l: 'Scope / SOW' },
+  { k: 'bom',        l: 'BOM / BOQ' },
   { k: 'financials', l: 'Financials' },
   { k: 'progress',   l: 'Progress & Timeline' },
 ];
@@ -157,7 +160,13 @@ const ProjectDetailPage = () => {
     );
   }
 
-  const pct = Math.min(100, Math.max(0, Number(project.progressPercentage || 0)));
+  // Progress = TECHNICAL (physical), matching the Project Dashboard. Falls back to the
+  // stored progress_percentage (override / financial) only when there's no scope yet.
+  const techPct = project.physicalProgressPct != null
+    ? Number(project.physicalProgressPct)
+    : Number(project.progressPercentage || 0);
+  const pct = Math.min(100, Math.max(0, techPct));
+  const finPct = Math.min(100, Math.max(0, Number(project.financialProgressPct || 0)));
 
   return (
     <div className="obd-page">
@@ -204,11 +213,17 @@ const ProjectDetailPage = () => {
           <div className="pd-metric"><label>Timeline</label><span>{fmtDate(project.startDate)} → {fmtDate(project.endDate)}</span></div>
           <div className="pd-metric pd-metric--progress">
             <label>Progress</label>
-            <div className="pl-progress-wrap">
-              <div className="pl-progress">
-                <div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(project.status) }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
+                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(project.status) }} /></div>
+                <span className="pl-progress-pct">{pct}%</span>
               </div>
-              <span className="pl-progress-pct">{pct}%</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>
+                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${finPct}%`, background: '#8b5cf6' }} /></div>
+                <span className="pl-progress-pct">{finPct}%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -237,8 +252,8 @@ const ProjectDetailPage = () => {
             showError={showError}
           />
         )}
-        {activeTab === 'bom'        && <ProjectBomTab        orderBook={obShim} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
         {activeTab === 'scope'      && <ProjectScopeTab      orderBook={obShim} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
+        {activeTab === 'bom'        && <ProjectBomTab        projectUniqueId={project.projectUniqueId || projectUniqueId} project={obShim} currentUser={user} showSuccess={showSuccess} showError={showError} />}
         {activeTab === 'financials' && <ProjectFinancialsTab orderBook={obShim} authHeaders={authHeaders} showSuccess={showSuccess} showError={showError} />}
         {activeTab === 'progress'   && <ProjectProgressTab   orderBook={obShim} authHeaders={authHeaders} showError={showError} />}
       </div>
@@ -254,7 +269,8 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
   const p = project || {};
   const groupName = p.groupName || p.subGroup?.group?.groupName || p.group_id || p.groupId || '';
   const customer  = p.customerName || p.customerCode || p.customerId || p.customer_id || '';
-  const pct = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
+  const pct = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+  const finPct = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
   const capacity = p.capacityValue != null && p.capacityValue !== ''
     ? `${p.capacityValue}${p.capacityUnit ? ' ' + p.capacityUnit : ''}` : '';
 
@@ -432,11 +448,17 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
           <div><label>Assigned To</label><span>{p.assignedTo || '-'}</span></div>
           <div>
             <label>Progress</label>
-            <div className="pl-progress-wrap" style={{ marginTop: 2 }}>
-              <div className="pl-progress" style={{ maxWidth: 140 }}>
-                <div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
+                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} /></div>
+                <span className="pl-progress-pct">{pct}%</span>
               </div>
-              <span className="pl-progress-pct">{pct}%</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>
+                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${finPct}%`, background: '#8b5cf6' }} /></div>
+                <span className="pl-progress-pct">{finPct}%</span>
+              </div>
             </div>
           </div>
         </div>
@@ -542,8 +564,9 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
 };
 
 // ── Distinct project-named wrappers around the ported editable tabs ──────────
+// (BOM now uses the dedicated ProjectBomTab component imported above, which groups
+//  materials under each scope line — no longer the ported flat BomTab.)
 const ProjectScopeTab      = (props) => <TechnicalTab {...props} />;
-const ProjectBomTab        = (props) => <BomTab {...props} />;
 const ProjectFinancialsTab = (props) => <CommercialTab {...props} />;
 const ProjectProgressTab   = (props) => <ProgressTab {...props} />;
 

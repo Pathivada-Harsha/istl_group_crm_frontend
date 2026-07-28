@@ -497,7 +497,7 @@ export default function BomItemsMaster() {
       {loading ? (
         <div className="bim-muted" style={{ padding: 16 }}>Loading…</div>
       ) : (
-        <div className="bim-table-wrap">
+        <div className="bim-table-wrap bim-fill">
           <div className="bim-table-scroll">
             <table className="bim-table">
               <thead>

@@ -20,6 +20,12 @@ import { useAuth } from "../hooks/useAuth.js";
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
+// Reuse the project detail's Progress & Timeline tab (planned-vs-actual phase Gantt
+// + billing/cost financial timelines) so the dashboard shows the same charts under
+// each project. Its CSS lives in OrderBookDetail.css.
+import { ProgressTab } from '../components/projects/orderBookTabsPorted.js';
+import projectsApi from '../services/projectsApi.js';
+import '../pages-css/OrderBookDetail.css';
 import {
   BarChart, Bar, PieChart as RechartsPieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area,
@@ -3259,6 +3265,21 @@ const calculateProgress = (dashboardData) => {
 
   return Math.min(100, weighted).toFixed(1);
 };
+
+// Headline progress = TECHNICAL (physical). Falls back to the financial
+// calculateProgress only when there's no scope (physicalProgress == null).
+const techProgress = (d) => {
+  if (!d) return 0;
+  if (d.physicalProgress != null) return Number(Number(d.physicalProgress).toFixed(1));
+  return Number(calculateProgress(d));
+};
+// Financial progress (40/30/20/10) — shown separately, never blended into the headline.
+const financialProgress = (d) => {
+  const f = d?.progressBreakdown?.financialProgress;
+  return f != null ? Number(Number(f).toFixed(1)) : 0;
+};
+const fmtPct1 = (v) => `${Number(v || 0).toFixed(1)}%`;
+
 const getStatusColor = (s) => ({
   NOT_STARTED: '#64748b', PLANNING: '#f59e0b', IN_PROGRESS: '#3b82f6',
   COMPLETED: '#22c55e', ON_HOLD: '#8b5cf6', CANCELLED: '#ef4444',
@@ -3588,6 +3609,8 @@ const ProjectDashboard = () => {
   const [showSpentModal, setShowSpentModal] = useState(false); // Amount Spent breakdown modal
   const [showCashModal,  setShowCashModal]  = useState(false); // Cash Deficit/In-Hand breakdown modal
   const [showProfitModal, setShowProfitModal] = useState(false); // Profit breakdown modal
+  const [showProgressModal, setShowProgressModal] = useState(false); // Technical vs Financial progress breakdown
+  const [progressPhases, setProgressPhases] = useState(null); // tech-scope phases for the breakdown modal
   const [projChartModal, setProjChartModal] = useState(null); // single-project chart expand modal
   const [projFinViewMode, setProjFinViewMode] = useState('cards'); // 'cards' | 'table' | 'graph' — Project Financial Overview
   const [projFinBarShowLabels, setProjFinBarShowLabels] = useState(true); // toggle: amount labels on Project Financial Overview bars
@@ -3825,17 +3848,30 @@ const ProjectDashboard = () => {
                   )}
                 </div>
               </div>
-              <div className="project-progress-section">
+              <div className="project-progress-section" style={{ cursor: 'pointer' }}
+                title="Click for the technical vs financial breakdown"
+                onClick={async () => {
+                  setShowProgressModal(true);
+                  try {
+                    const id = dashboardData.projectId || dashboardData.uniqueId;
+                    const res = await projectsApi.getScope(id);
+                    setProgressPhases(res?.success ? (res.data?.phases || []) : []);
+                  } catch { setProgressPhases([]); }
+                }}>
                 <div className="progress-circle">
                   <svg viewBox="0 0 120 120">
                     <circle cx="60" cy="60" r="54" fill="none" stroke="#e2e8f0" strokeWidth="12" />
                     <circle cx="60" cy="60" r="54" fill="none"
                       stroke={getStatusColor(dashboardData.status)} strokeWidth="12"
-                      strokeDasharray={`${calculateProgress(dashboardData) * 3.39} 339`}
+                      strokeDasharray={`${techProgress(dashboardData) * 3.39} 339`}
                       strokeLinecap="round" transform="rotate(-90 60 60)" />
-                    <text x="60" y="55" textAnchor="middle" className="progress-value">{calculateProgress(dashboardData)}%</text>
-                    <text x="60" y="70" textAnchor="middle" className="progress-label">Complete</text>
+                    <text x="60" y="54" textAnchor="middle" className="progress-value">{techProgress(dashboardData)}%</text>
+                    <text x="60" y="70" textAnchor="middle" className="progress-label">Technical</text>
                   </svg>
+                </div>
+                <div style={{ textAlign: 'center', marginTop: 6, fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>
+                  Financial: <strong style={{ color: '#0f172a' }}>{financialProgress(dashboardData)}%</strong>
+                  <span style={{ marginLeft: 6, color: '#3b82f6' }}>🔍 details</span>
                 </div>
               </div>
             </div>
@@ -4517,6 +4553,34 @@ const ProjectDashboard = () => {
             </div>
           )}
 
+          {/* Technical Scope + Financial Progress & Timeline (Gantt) — reuses the
+              ProgressTab from the project detail page so this dashboard shows the
+              same planned-vs-actual phase Gantt (physical progress) AND the
+              billing/cost financial timelines under each project. Physical progress
+              is computed live from the scope phases (weighted), independent of the
+              stored figure, so it is always current. */}
+          {(dashboardData.projectId || dashboardData.uniqueId) && (
+            <div className="dashboard-section">
+              <h3 className="section-title"><BarChart3 size={20} />Progress &amp; Timeline</h3>
+              {/* Key off the RESOLVED project id the dashboard already loaded
+                  (project_unique_id), not the raw filter value — so the scope /
+                  commercial fetches resolve the same project shown above. */}
+              <ProgressTab
+                orderBook={{ id: dashboardData.projectId || dashboardData.uniqueId }}
+                /* Use projectsApi headers (send User-Id / User-Role, which /scope and
+                   /commercial-summary-v2 require via @RequestHeader) — the dashboard's
+                   own getAuthHeaders only sends the X-User-* variants, so those calls
+                   would 400 and the charts would come back empty. */
+                authHeaders={projectsApi.getAuthHeaders()}
+                showError={showError}
+                /* Dashboard shows only the tech-scope Gantt (renamed); the financial
+                   Billing/Cost timelines are hidden here. */
+                scheduleTitle="Tech Scope Progress (Planned vs Actual)"
+                showFinancials={false}
+              />
+            </div>
+          )}
+
           {/* Project Timeline + Recent Activities — combined side-by-side section.
               Timeline on the left, Activities on the right; each shows its 3 most
               recent entries with a "View All" button opening the full list in a modal. */}
@@ -4684,6 +4748,98 @@ const ProjectDashboard = () => {
 
 
       {/* ─── Amount Spent Breakdown Modal ──────────────────────────────────── */}
+      {/* ── Progress breakdown: Technical vs Financial ── */}
+      {showProgressModal && dashboardData && (
+        <div className="spent-modal-overlay" onClick={() => setShowProgressModal(false)}>
+          <div className="spent-modal" onClick={e => e.stopPropagation()}>
+            <div className="spent-modal-header">
+              <div className="spent-modal-title-row">
+                <BarChart3 size={22} className="spent-modal-icon" />
+                <h2 className="spent-modal-title">Progress — Breakdown</h2>
+              </div>
+              <button className="spent-modal-close" onClick={() => setShowProgressModal(false)}><X size={20} /></button>
+            </div>
+            <div className="spent-modal-body">
+
+              {/* Technical */}
+              <div className="spent-block">
+                <div className="spent-block-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Technical progress — site execution</span>
+                  <strong>{techProgress(dashboardData)}%</strong>
+                </div>
+                {progressPhases == null ? (
+                  <div className="spent-row"><span className="spent-row-label">Loading phases…</span></div>
+                ) : progressPhases.length === 0 ? (
+                  <div className="spent-row"><span className="spent-row-label">No technical scope defined yet (add phases in the project's Scope / SOW tab).</span></div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead><tr style={{ textAlign: 'left', color: '#64748b' }}>
+                      <th style={{ padding: '4px 6px' }}>Phase</th>
+                      <th style={{ padding: '4px 6px', textAlign: 'right' }}>Weight %</th>
+                      <th style={{ padding: '4px 6px', textAlign: 'right' }}>Actual %</th>
+                    </tr></thead>
+                    <tbody>
+                      {progressPhases.map((ph, i) => (
+                        <tr key={i} style={{ borderTop: '1px solid #e2e8f0' }}>
+                          <td style={{ padding: '4px 6px' }}>{ph.phaseName || '—'}</td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right' }}>{fmtPct1(ph.weightPct)}</td>
+                          <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{fmtPct1(ph.progressPercent)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+                <p className="obd-spec" style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                  Technical % = Σ(phase actual × phase weight) ÷ Σ(weights).
+                </p>
+              </div>
+
+              {/* Financial */}
+              {dashboardData.progressBreakdown && (() => {
+                const b = dashboardData.progressBreakdown;
+                const rows = [
+                  { label: 'Collection',     weight: 40, pct: b.collectionPct, basis: `${formatCurrency(b.received)} received ÷ ${formatCurrency(b.budget)} budget` },
+                  { label: 'PO Delivery',    weight: 30, pct: b.deliveryPct,   basis: `${formatCurrency(b.deliveredPoValue)} delivered ÷ ${formatCurrency(b.committedPoValue)} committed` },
+                  { label: 'Invoicing',      weight: 20, pct: b.invoicingPct,  basis: `${formatCurrency(b.invoiced)} invoiced ÷ ${formatCurrency(b.budget)} budget` },
+                  { label: 'PO Commitment',  weight: 10, pct: b.commitmentPct, basis: `${formatCurrency(b.committedPoValue)} committed ÷ ${formatCurrency(b.budget)} budget` },
+                ];
+                return (
+                  <div className="spent-block" style={{ marginTop: 18 }}>
+                    <div className="spent-block-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Financial progress — cash &amp; procurement</span>
+                      <strong>{financialProgress(dashboardData)}%</strong>
+                    </div>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                      <thead><tr style={{ textAlign: 'left', color: '#64748b' }}>
+                        <th style={{ padding: '4px 6px' }}>Component</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>Weight</th>
+                        <th style={{ padding: '4px 6px', textAlign: 'right' }}>Score</th>
+                        <th style={{ padding: '4px 6px' }}>Basis</th>
+                      </tr></thead>
+                      <tbody>
+                        {rows.map((r, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid #e2e8f0' }}>
+                            <td style={{ padding: '4px 6px' }}>{r.label}</td>
+                            <td style={{ padding: '4px 6px', textAlign: 'right' }}>{r.weight}%</td>
+                            <td style={{ padding: '4px 6px', textAlign: 'right', fontWeight: 600 }}>{fmtPct1(r.pct)}</td>
+                            <td style={{ padding: '4px 6px', fontSize: 11, color: '#64748b' }}>{r.basis}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <p className="obd-spec" style={{ marginTop: 8, fontSize: 11, color: '#94a3b8' }}>
+                      Financial % = 0.40·Collection + 0.30·PO Delivery + 0.20·Invoicing + 0.10·PO Commitment.
+                      This is separate from Technical progress and is not part of the headline % complete.
+                    </p>
+                  </div>
+                );
+              })()}
+
+            </div>
+          </div>
+        </div>
+      )}
+
       {showSpentModal && dashboardData?.financialData && (
         <div className="spent-modal-overlay">
           <div className="spent-modal" onClick={e => e.stopPropagation()}>

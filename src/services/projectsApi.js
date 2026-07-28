@@ -67,6 +67,9 @@ const projectsApi = {
   getScope:        (id) => req(`/projects/${enc(id)}/scope`),
   saveScope:       (id, body) => req(`/projects/${enc(id)}/scope`, { method: 'PUT', body }),
   getDefaultPlan:  (id) => req(`/projects/${enc(id)}/scope/default-plan`),
+  // Template-driven scope + BOM suggestion (mirrors /leads/{id}/scope/suggest).
+  suggestScope:    (id, target = 'both') => req(`/projects/${enc(id)}/scope/suggest?target=${enc(target)}`),
+  templateInfo:    (id) => req(`/projects/${enc(id)}/scope/template-info`),
 
   // ── FINANCIALS (Commercial + BOM tabs) ───────────────────────────────────────
   getBudget:            (id) => req(`/projects/${enc(id)}/budget`),

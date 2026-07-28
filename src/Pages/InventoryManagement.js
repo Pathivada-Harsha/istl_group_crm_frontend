@@ -1042,7 +1042,11 @@ function AddItemModal({ open, onClose, onSave, onBulkSave,
 function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWarehouseId,
                             defaultGroupName, defaultSubGroupName }) {
   const blankLine    = () => ({ inventoryItemId: '', qty: '', unitCost: '' });
-  const blankPoLine  = () => ({ poId: '', poNo: '', poItemId: '', inventoryItemId: '', itemCode: '', itemName: '', unit: '', orderedQty: 0, receivedQty: 0, qty: '', unitCost: '' });
+  // An INWARD line can come from two sources — a PO line item still awaiting
+  // delivery, or an item previously issued from the warehouse to this project
+  // that is now coming back from site. `optKey` is the dropdown value and
+  // encodes which: "po:<poItemId>" or "iss:<inventoryItemId>".
+  const blankPoLine  = () => ({ optKey: '', source: '', poId: '', poNo: '', poItemId: '', inventoryItemId: '', itemCode: '', itemName: '', unit: '', orderedQty: 0, receivedQty: 0, qty: '', unitCost: '' });
   const blank = () => ({
     type: 'INWARD', itemId: '', qty: '', ref: '', note: '',
     warehouseId: '', groupName: '', subGroupName: '', projectId: '',
@@ -1142,6 +1146,63 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
       .finally(() => setLoadingPoItems2(false));
   }, [isInward, form.projectId]); // eslint-disable-line
 
+  // ── INWARD: items already issued from warehouse → this project ────────────
+  // These are the site-return candidates: stock that left the warehouse on an
+  // OUTWARD and can now be received back. Scoped to the selected warehouse,
+  // because an inward always lands back on the item's own warehouse record.
+  const [issuedItems,    setIssuedItems]    = useState([]);
+  const [loadingIssued,  setLoadingIssued]  = useState(false);
+
+  React.useEffect(() => {
+    if (!isInward || !form.projectId) { setIssuedItems([]); return; }
+    setLoadingIssued(true);
+    const qs = form.warehouseId ? `?warehouseId=${encodeURIComponent(form.warehouseId)}` : '';
+    fetch(`${API}/inventory/transactions/project/${encodeURIComponent(form.projectId)}/issued-items${qs}`, {
+      headers: getAuthHeaders(), credentials: 'include'
+    })
+      .then(r => r.json())
+      .then(d => setIssuedItems(Array.isArray(d) ? d : []))
+      .catch(() => setIssuedItems([]))
+      .finally(() => setLoadingIssued(false));
+  }, [isInward, form.projectId, form.warehouseId]); // eslint-disable-line
+
+  // ── Combined INWARD picker options — PO items first, then site returns ────
+  const inwardOptions = React.useMemo(() => {
+    const withCode = (code, name) => {
+      const c = code != null && String(code).trim() && String(code).trim() !== 'null'
+        ? `${String(code).trim()} — ` : '';
+      return `${c}${name || 'Item'}`;
+    };
+    const poOpts = allPoItems.map(pi => ({
+      value: `po:${pi.id}`,
+      label: `📄 ${pi.poNo || 'PO'} · ${withCode(pi.itemCode, pi.itemName)}`,
+    }));
+    const issuedOpts = issuedItems.map(si => {
+      const pending = Number(si.pendingQty) || 0;
+      const tail = pending > 0
+        ? ` · ${fmt(pending)}${si.unit ? ` ${si.unit}` : ''} at site`
+        : ' · fully returned';
+      return {
+        value: `iss:${si.inventoryItemId}`,
+        label: `↩ Issued · ${withCode(si.itemCode, si.itemName)}${tail}`,
+      };
+    });
+    return [...poOpts, ...issuedOpts];
+  }, [allPoItems, issuedItems]);
+
+  // Changing the warehouse reloads the issued list — clear any already-picked
+  // site-return line that the new warehouse no longer offers, so the row can
+  // never keep an inventoryItemId the dropdown no longer shows.
+  React.useEffect(() => {
+    setForm(f => {
+      const lines = f.poLines || [];
+      const valid = new Set(issuedItems.map(s => `iss:${s.inventoryItemId}`));
+      const stale = (l) => l.source === 'ISSUE' && !valid.has(l.optKey);
+      if (!lines.some(stale)) return f;
+      return { ...f, poLines: lines.map(l => stale(l) ? blankPoLine() : l) };
+    });
+  }, [issuedItems]); // eslint-disable-line
+
   if (!open) return null;
 
   // ── Line-item helpers (OUTWARD) ──────────────────────────────────────────
@@ -1164,28 +1225,53 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
   const addPoLine  = () => setForm(f => ({ ...f, poLines: [...f.poLines, blankPoLine()] }));
   const delPoLine  = (idx) => setForm(f => ({ ...f, poLines: f.poLines.length > 1 ? f.poLines.filter((_, i) => i !== idx) : f.poLines }));
 
-  const pickFlatPoItem = (idx, poItemId) => {
-    const pi = allPoItems.find(p => String(p.id) === String(poItemId));
+  // Handles both option sources. `optKey` is "po:<id>" or "iss:<inventoryItemId>".
+  const pickInwardItem = (idx, optKey) => {
+    const applyLine = (patch) =>
+      setForm(f => ({ ...f, poLines: f.poLines.map((l, i) => i === idx ? { ...blankPoLine(), ...patch } : l) }));
+
+    if (!optKey) { applyLine({}); return; }
+
+    // ── Site return: an item previously issued out to this project ──────────
+    if (String(optKey).startsWith('iss:')) {
+      const si = issuedItems.find(s => `iss:${s.inventoryItemId}` === String(optKey));
+      if (!si) return;
+      applyLine({
+        optKey:          String(optKey),
+        source:          'ISSUE',
+        inventoryItemId: String(si.inventoryItemId),
+        itemCode:        si.itemCode || '',
+        itemName:        si.itemName || '',
+        unit:            si.unit || '',
+        orderedQty:      Number(si.issuedQty   || 0),   // shown under "Ordered" — qty issued to site
+        receivedQty:     Number(si.returnedQty || 0),   // shown under "Rcvd"    — qty already back
+        unitCost:        si.unitCost != null ? String(si.unitCost) : '',
+        qty:             String(Number(si.pendingQty) > 0 ? si.pendingQty : ''),
+      });
+      return;
+    }
+
+    // ── PO line item awaiting delivery ──────────────────────────────────────
+    const poItemId = String(optKey).replace(/^po:/, '');
+    const pi = allPoItems.find(p => String(p.id) === poItemId);
     if (!pi) return;
     const invItem = items.find(i => i.itemCode === pi.itemCode ||
       (pi.inventoryItemId && String(i.id) === String(pi.inventoryItemId)));
-    setForm(f => ({
-      ...f,
-      poLines: f.poLines.map((l, i) => i === idx ? {
-        ...l,
-        poItemId:        String(poItemId),
-        poId:            String(pi.poId || ''),
-        poNo:            pi.poNo || '',
-        inventoryItemId: invItem ? String(invItem.id) : null,
-        itemCode:        pi.itemCode || '',
-        itemName:        pi.itemName || '',
-        unit:            pi.unit || '',
-        orderedQty:      Number(pi.orderedQty || 0),
-        receivedQty:     Number(pi.receivedQty || 0),
-        unitCost:        String(pi.unitPrice || invItem?.unitCost || ''),
-        qty:             String(pi.pendingQty && Number(pi.pendingQty) > 0 ? pi.pendingQty : ''),
-      } : l)
-    }));
+    applyLine({
+      optKey:          String(optKey),
+      source:          'PO',
+      poItemId:        poItemId,
+      poId:            String(pi.poId || ''),
+      poNo:            pi.poNo || '',
+      inventoryItemId: invItem ? String(invItem.id) : null,
+      itemCode:        pi.itemCode || '',
+      itemName:        pi.itemName || '',
+      unit:            pi.unit || '',
+      orderedQty:      Number(pi.orderedQty || 0),
+      receivedQty:     Number(pi.receivedQty || 0),
+      unitCost:        String(pi.unitPrice || invItem?.unitCost || ''),
+      qty:             String(pi.pendingQty && Number(pi.pendingQty) > 0 ? pi.pendingQty : ''),
+    });
   };
 
   const inwardTotal = (form.poLines || []).reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.unitCost) || 0), 0);
@@ -1206,7 +1292,7 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
   const canSave = isOutward
     ? (form.warehouseId && form.projectId && (form.lines || []).some(l => l.inventoryItemId && l.qty))
     : isInward
-      ? (form.warehouseId && (form.poLines || []).some(l => l.poItemId && l.qty))
+      ? (form.warehouseId && (form.poLines || []).some(l => (l.poItemId || l.inventoryItemId) && l.qty))
         || (form.itemId && form.qty)   // fallback: plain inward without PO
       : (form.itemId && form.qty);
 
@@ -1385,21 +1471,21 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                 </div>
                 {form.projectId ? (
                   <>
-                    {loadingPoItems2 && (
-                      <div style={{ padding:'12px 16px', color:__stc('#6366f1'), fontSize:13 }}>⏳ Loading PO items…</div>
+                    {(loadingPoItems2 || loadingIssued) && (
+                      <div style={{ padding:'12px 16px', color:__stc('#6366f1'), fontSize:13 }}>⏳ Loading project items…</div>
                     )}
-                    {!loadingPoItems2 && allPoItems.length === 0 && (
+                    {!loadingPoItems2 && !loadingIssued && inwardOptions.length === 0 && (
                       <div style={{ padding:'16px', textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>
-                        No PO items found for this project
+                        No PO items or warehouse issuances found for this project
                       </div>
                     )}
-                    {!loadingPoItems2 && allPoItems.length > 0 && (
+                    {!loadingPoItems2 && !loadingIssued && inwardOptions.length > 0 && (
                       <>
                         <div className="inv-lineitems-table">
                           <div className="inv-lineitems-row inv-lineitems-row--head">
-                            <div>PO Item (PO No — Item)</div>
-                            <div style={{ textAlign:'right' }}>Ordered</div>
-                            <div style={{ textAlign:'right' }}>Rcvd</div>
+                            <div>Item (PO Line or Issued to Site)</div>
+                            <div style={{ textAlign:'right' }} title="PO lines: quantity ordered · Issued lines: quantity sent to site">Ordered</div>
+                            <div style={{ textAlign:'right' }} title="PO lines: quantity already received · Issued lines: quantity already returned">Rcvd</div>
                             <div style={{ textAlign:'right' }}>Qty In <span className="inv-req">*</span></div>
                             <div>Unit</div>
                             <div style={{ textAlign:'right' }}>Unit Cost</div>
@@ -1412,16 +1498,15 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                               <div key={idx} className="inv-lineitems-row">
                                 <FilterSelect
                                   searchable
-                                  value={l.poItemId || ''}
-                                  onChange={v => pickFlatPoItem(idx, v)}
-                                  options={allPoItems.map(pi => ({
-                                    value: String(pi.id),
-                                    label: `${pi.poNo || 'PO'} · ${pi.itemCode} — ${pi.itemName}`,
-                                  }))}
+                                  value={l.optKey || ''}
+                                  onChange={v => pickInwardItem(idx, v)}
+                                  options={inwardOptions}
                                   placeholder="Search item…"
                                 />
-                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}>{l.orderedQty || '—'}</div>
-                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}>{l.receivedQty || '—'}</div>
+                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}
+                                  title={l.source === 'ISSUE' ? 'Issued to site' : undefined}>{l.orderedQty || '—'}</div>
+                                <div className="inv-lineitems-subtotal" style={{ fontSize:11, color:__stc('#64748b') }}
+                                  title={l.source === 'ISSUE' ? 'Already returned' : undefined}>{l.receivedQty || '—'}</div>
                                 <input className="inv-input inv-input--sm" type="number" min="0.01" step="0.01"
                                   style={{ textAlign:'right' }} placeholder="0"
                                   value={l.qty} onChange={e => setPoLine(idx, 'qty', e.target.value)} />
@@ -1444,12 +1529,13 @@ function TransactionModal({ open, onClose, onSave, items, warehouses, defaultWar
                   </>
                 ) : (
                   <div style={{ padding:'16px', textAlign:'center', color:__stc('#94a3b8'), fontSize:13 }}>
-                    Select a project above to load procurement items
+                    Select a project above to load procurement and issued items
                   </div>
                 )}
               </div>
               <div style={{ background:__sbg('#f0fdf4'), border:`1px solid ${__sbg('#bbf7d0')}`, borderRadius:8, padding:'10px 14px', marginTop:8, fontSize:12, color:__stc('#166534') }}>
-                💡 Items will be received into the selected warehouse. If an item is not yet in inventory, it will be created automatically.
+                💡 The picker lists 📄 PO line items awaiting delivery and ↩ items issued from this warehouse to the project — pick the latter to take unused site stock back.
+                Items are received into the selected warehouse; anything not yet in inventory is created automatically.
               </div>
             </>
           )}
@@ -4130,9 +4216,11 @@ const canEdit   = invPerms.includes('EDIT');
         const billMsg = result.autoBillNo ? ` · Bill ${result.autoBillNo} created` : '';
         toast.add(`${result.itemCount || lines.length} item${lines.length > 1 ? 's' : ''} issued${billMsg}`);
 
-      } else if (form.type === 'INWARD' && (form.poLines || []).some(l => l.poItemId && l.qty)) {
-        // ── Multi-item INWARD from site (PO-linked) ───────────────────────
-        const poLines = (form.poLines || []).filter(l => l.poItemId && l.qty);
+      } else if (form.type === 'INWARD' && (form.poLines || []).some(l => (l.poItemId || l.inventoryItemId) && l.qty)) {
+        // ── Multi-item INWARD from site ───────────────────────────────────
+        // A line is either PO-linked (has poItemId) or a return of stock that
+        // was issued from the warehouse to this project (has inventoryItemId).
+        const poLines = (form.poLines || []).filter(l => (l.poItemId || l.inventoryItemId) && l.qty);
         if (!form.warehouseId) { toast.add('Warehouse is required'); return; }
 
         const buildBody = (lines) => ({
@@ -4156,17 +4244,22 @@ const canEdit   = invPerms.includes('EDIT');
           return await res.json();
         };
 
-        // Build initial lines (no conflict decisions yet)
-        let mappedLines = poLines.map(l => ({
-          poId:            Number(l.poId),
-          poItemId:        Number(l.poItemId),
+        // Build initial lines (no conflict decisions yet).
+        // poId / poItemId stay null for site-return lines so the backend does
+        // not try to bump a PO's receivedQty for stock that never came from one.
+        const mapLine = (l, extra = {}) => ({
+          poId:            l.poId     ? Number(l.poId)     : null,
+          poItemId:        l.poItemId ? Number(l.poItemId) : null,
           inventoryItemId: l.inventoryItemId ? Number(l.inventoryItemId) : null,
           itemCode:        l.itemCode || '',
           itemName:        l.itemName || '',
           unit:            l.unit || '',
           qty:             Number(l.qty),
           unitCost:        Number(l.unitCost) || 0,
-        }));
+          ...extra,
+        });
+
+        let mappedLines = poLines.map(l => mapLine(l));
 
         // First call — backend detects conflicts
         let result = await submitInward(mappedLines);
@@ -4192,19 +4285,10 @@ const canEdit   = invPerms.includes('EDIT');
           // Rebuild lines with conflict decisions
           mappedLines = poLines.map((l, idx) => {
             const conflict = result.conflicts.find(c => c.lineIndex === idx);
-            const decision = decisions[idx];
-            return {
-              poId:            Number(l.poId),
-              poItemId:        Number(l.poItemId),
-              inventoryItemId: l.inventoryItemId ? Number(l.inventoryItemId) : null,
-              itemCode:        l.itemCode || '',
-              itemName:        l.itemName || '',
-              unit:            l.unit || '',
-              qty:             Number(l.qty),
-              unitCost:        Number(l.unitCost) || 0,
-              conflictAction:  decision || null,
-              existingItemId:  conflict ? conflict.existingItemId : null,
-            };
+            return mapLine(l, {
+              conflictAction: decisions[idx] || null,
+              existingItemId: conflict ? conflict.existingItemId : null,
+            });
           });
 
           // Second call — with conflict resolutions

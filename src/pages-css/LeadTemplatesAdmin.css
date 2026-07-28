@@ -161,3 +161,33 @@ select.lta-inp { cursor: pointer; }
   font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s;
 }
 .lta-add-material:hover { background: var(--c-f0f4fb, #F0F4FB); border-color: var(--c-1b3a6b, #1B3A6B); }
+
+/* ── Scope weights ────────────────────────────────────────────────────────────
+   Each scope line carries the share of project progress it represents. Unpinned
+   lines auto-balance so the group always totals 100%; a line the user typed into
+   is pinned and holds its value. The running total below the table is what makes
+   that mechanism visible — without it a rejected save has no explanation. */
+.lta-tab-actions .lta-act-right { margin-left: auto; }
+.lta-tab-actions .lta-act-right ~ .lta-btn-ghost { margin-left: 0; }
+
+.lta-c-weight { width: 96px; text-align: right; }
+.lta-inp--w {
+  text-align: right; font-variant-numeric: tabular-nums; font-feature-settings: "tnum";
+  padding-right: 6px;
+}
+/* A pinned weight reads as deliberate: the user set it, and it holds. */
+.lta-inp--w.lta-w-pinned {
+  border-color: var(--c-1b3a6b, #1B3A6B); font-weight: 700;
+  background: var(--c-f0f4fb, #F0F4FB);
+}
+
+.lta-weight-total {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+}
+.lta-weight-total--ok  { background: var(--c-ecfdf5, #ECFDF5); color: #047857; border: 1px solid #A7F3D0; }
+.lta-weight-total--err { background: var(--c-fef2f2, #FEF2F2); color: #B91C1C; border: 1px solid #FECACA; }
+.lta-weight-total .lta-hint { font-weight: 500; color: inherit; opacity: .8; }
+[data-theme="dark"] .lta-weight-total--ok  { background: #102A22; color: #4ADE80; border-color: #1D4D3C; }
+[data-theme="dark"] .lta-weight-total--err { background: #2A1212; color: #F87171; border-color: #4D1D1D; }
+[data-theme="dark"] .lta-inp--w.lta-w-pinned { background: #16233a; border-color: #3b6bb5; }
