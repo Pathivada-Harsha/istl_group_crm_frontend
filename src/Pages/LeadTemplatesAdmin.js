@@ -18,6 +18,9 @@ import UnitSelectCell from "../components/Dropdowns/UnitSelectCell.js";
 import BomItemAutocomplete from "../components/Leads/BomItemAutocomplete.js";
 import TemplateLineVariantsModal from "../components/Leads/TemplateLineVariantsModal.js";
 import { BASIS_OPTIONS, SITE_VISIT_FIELDS } from "../constants/scopeActivities.js";
+import {
+  distributeWeights, resetWeights, setWeightAt, validateWeights, weightSum, fmtWeight,
+} from "../utils/scopeWeights.js";
 import "../pages-css/LeadTemplatesAdmin.css";
 
 const GENERAL = "__general__"; // section key for BOM lines with no scope activity
@@ -61,7 +64,12 @@ const templateAmount = (r) => {
   return { text: "—", suffix: "", title: "Depends on the lead (step / site-visit basis), so it can't be shown on the template." };
 };
 
-const blankScope = () => ({ id: null, activity: "", category: "", specification: "", unit: "kW", notes: "" });
+// weightPct is this line's share of the template's 100%; weightManual marks it
+// as pinned (the user typed it) so auto-distribution leaves it alone.
+const blankScope = () => ({
+  id: null, activity: "", category: "", specification: "", unit: "kW", notes: "",
+  weightPct: "", weightManual: false,
+});
 const blankBom = (scopeActivity = "") => ({
   _key: `n${Math.random().toString(36).slice(2)}`, // stable local key for grouping
   id: null, scopeActivity, category: "", itemName: "", make: "", specification: "",
@@ -119,10 +127,15 @@ export default function LeadTemplatesAdmin() {
     try {
       const t = await api.get(`/admin/lead-templates/${id}`);
       setDetail({ id: t.id, projectType: t.projectType, name: t.name || "", description: t.description || "", isActive: t.isActive });
-      setScopeLines((t.scopeItems || []).map(s => ({
+      // Auto-balance on open: unpinned lines share whatever the pinned ones leave,
+      // so the total reads 100% straight away. A template saved before weights
+      // existed has none pinned and simply comes up as an even split.
+      setScopeLines(distributeWeights((t.scopeItems || []).map(s => ({
         id: s.id, activity: s.activity || "", category: s.category || "",
         specification: s.specification || "", unit: s.unit || "", notes: s.notes || "",
-      })));
+        weightPct: s.weightPct != null ? Number(s.weightPct) : "",
+        weightManual: s.weightManual === true,
+      }))));
       setBomLines((t.bomItems || []).map(b => ({
         ...blankBom(b.scopeActivity || ""),
         id: b.id, category: b.category || "", itemName: b.itemName || "",
@@ -147,7 +160,7 @@ export default function LeadTemplatesAdmin() {
       await loadTemplates();
       showSuccess("Template created");
       openTemplate(t.id);
-    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError("Failed to create template"); }
+    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError(e.message || "Failed to create template"); }
   };
 
   const saveHeader = async () => {
@@ -159,7 +172,7 @@ export default function LeadTemplatesAdmin() {
       });
       await loadTemplates();
       showSuccess("Template saved");
-    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError("Failed to save template"); }
+    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError(e.message || "Failed to save template"); }
   };
 
   const deleteTemplate = async (t) => {
@@ -182,20 +195,41 @@ export default function LeadTemplatesAdmin() {
 
   // ── Scope lines ──
   const updScope = (i, k, v) => setScopeLines(p => p.map((r, idx) => idx === i ? { ...r, [k]: v } : r));
+  // Adding or removing a line re-balances the unpinned ones, so the total never
+  // drifts off 100% behind the user's back.
+  const addScopeLine = () => setScopeLines(p => distributeWeights([...p, blankScope()]));
+  const rmScopeLine = (i) => setScopeLines(p => distributeWeights(p.filter((_, idx) => idx !== i)));
+  // Typing pins the line; the rest absorb the difference live.
+  const setScopeWeight = (i, raw) => setScopeLines(p => setWeightAt(p, i, raw));
+  // The escape hatch: with every line pinned nothing is left to auto-balance, so
+  // a wrong total would otherwise be unrecoverable from the screen.
+  const resetScopeWeights = () => setScopeLines(p => resetWeights(p));
+
+  const scopeWeightTotal = weightSum(scopeLines);
+  const scopeWeightsOk = scopeLines.length === 0
+    || validateWeights(scopeLines, r => r.activity).ok;
+
   const saveScope = async () => {
     for (const r of scopeLines) if (!r.activity.trim()) { showError("Every scope line needs an activity"); return; }
+    // Blocks a zero line or a genuinely wrong total, and absorbs the sub-0.01
+    // drift that retyping the displayed values causes. Re-checked server-side.
+    const check = validateWeights(scopeLines, r => r.activity.trim());
+    if (!check.ok) { showError(check.error); return; }
     setSavingScope(true);
     try {
       await api.put(`/admin/lead-templates/${detail.id}/scope-items`, {
-        items: scopeLines.map((r, i) => ({
+        items: check.rows.map((r, i) => ({
           id: r.id ?? null, seqNo: i + 1, activity: r.activity.trim(),
           category: r.category || null, specification: r.specification || null,
           unit: r.unit || null, notes: r.notes || null,
+          // Full precision, not the two-decimal display value.
+          weightPct: r.weightPct === "" || r.weightPct == null ? null : Number(r.weightPct),
+          weightManual: r.weightManual === true,
         })),
       });
       await openTemplate(detail.id);
       showSuccess("Scope lines saved");
-    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError("Failed to save scope lines"); }
+    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError(e.message || "Failed to save scope lines"); }
     finally { setSavingScope(false); }
   };
 
@@ -275,6 +309,17 @@ export default function LeadTemplatesAdmin() {
           {SITE_VISIT_FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
         </select>
       );
+    }
+    // Driver bases take no factor — the number comes from the attached make
+    // (module Wp / inverter kW). Attach makes via the Makes button on this line.
+    if (r.basis === "PER_WATT_PEAK" || r.basis === "PER_INVERTER_KW") {
+      return <input className="lta-inp" value="from make" disabled readOnly
+        title="Quantity is derived from the selected make (module wattage / inverter kW). Attach makes on this line." />;
+    }
+    if (r.basis === "PER_MODULE" || r.basis === "PER_INVERTER") {
+      return <input className="lta-inp" type="number" min="0" step="any" value={r.basisValue}
+        placeholder={r.basis === "PER_MODULE" ? "per module" : "per inverter"}
+        onChange={e => updBom(r._key, "basisValue", e.target.value)} />;
     }
     // FIXED or PER_KW → a numeric value
     return <input className="lta-inp" type="number" min="0" step="any" value={r.basisValue}
@@ -390,14 +435,18 @@ export default function LeadTemplatesAdmin() {
               {detailTab === "scope" && (
                 <div className="lta-tab-body">
                   <div className="lta-tab-actions">
-                    <span className="lta-hint">The standard activities suggested for this project type.</span>
-                    <button className="lta-btn-ghost" onClick={() => setScopeLines(p => [...p, blankScope()])}><Plus size={13} /> Add line</button>
+                    <span className="lta-hint">The standard activities suggested for this project type, and the share of project progress each one carries.</span>
+                    <button className="lta-btn-ghost lta-act-right" onClick={resetScopeWeights}
+                      title="Unpin every weight and split them evenly again">
+                      <RefreshCw size={13} /> Reset weights
+                    </button>
+                    <button className="lta-btn-ghost" onClick={addScopeLine}><Plus size={13} /> Add line</button>
                   </div>
                   <div className="lta-table-wrap">
                     <table className="lta-table">
-                      <thead><tr><th className="lta-c-no">#</th><th>Activity</th><th>Category</th><th>Specification</th><th className="lta-c-unit">Unit</th><th>Notes</th><th className="lta-c-act" /></tr></thead>
+                      <thead><tr><th className="lta-c-no">#</th><th>Activity</th><th>Category</th><th>Specification</th><th className="lta-c-unit">Unit</th><th className="lta-c-weight">Weight %</th><th>Notes</th><th className="lta-c-act" /></tr></thead>
                       <tbody>
-                        {scopeLines.length === 0 && <tr><td colSpan={7} className="lta-empty">No scope lines. "Add line" to define the standard scope.</td></tr>}
+                        {scopeLines.length === 0 && <tr><td colSpan={8} className="lta-empty">No scope lines. "Add line" to define the standard scope.</td></tr>}
                         {scopeLines.map((r, i) => (
                           <tr key={r.id ?? `n${i}`}>
                             <td className="lta-c-no">{i + 1}</td>
@@ -405,13 +454,32 @@ export default function LeadTemplatesAdmin() {
                             <td><input className="lta-inp" value={r.category} onChange={e => updScope(i, "category", e.target.value)} placeholder="Optional" /></td>
                             <td><input className="lta-inp" value={r.specification} onChange={e => updScope(i, "specification", e.target.value)} placeholder="Optional" /></td>
                             <td className="lta-c-unit"><UnitSelectCell className="lta-inp" value={r.unit} onChange={v => updScope(i, "unit", v)} /></td>
+                            <td className="lta-c-weight">
+                              <input
+                                className={`lta-inp lta-inp--w${r.weightManual ? " lta-w-pinned" : ""}`}
+                                type="number" min="0" max="100" step="0.01" value={r.weightPct}
+                                onChange={e => setScopeWeight(i, e.target.value)}
+                                title={r.weightManual
+                                  ? "Set by you — this weight holds while the others rebalance around it."
+                                  : "Calculated automatically. Type a value to hold it."} />
+                            </td>
                             <td><input className="lta-inp" value={r.notes} onChange={e => updScope(i, "notes", e.target.value)} /></td>
-                            <td className="lta-c-act"><button className="lta-icon-del" onClick={() => setScopeLines(p => p.filter((_, idx) => idx !== i))}><Trash2 size={14} /></button></td>
+                            <td className="lta-c-act"><button className="lta-icon-del" onClick={() => rmScopeLine(i)}><Trash2 size={14} /></button></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                  {scopeLines.length > 0 && (
+                    <div className={`lta-weight-total${scopeWeightsOk ? " lta-weight-total--ok" : " lta-weight-total--err"}`}>
+                      <span>Total weight: <b>{fmtWeight(scopeWeightTotal)}%</b></span>
+                      <span className="lta-hint">
+                        {scopeWeightsOk
+                          ? "Adds up — the generated project inherits these weights."
+                          : "Must add up to 100% before this template can be saved."}
+                      </span>
+                    </div>
+                  )}
                   <div className="lta-card-foot"><button className="lta-btn-primary" onClick={saveScope} disabled={savingScope}><Save size={13} /> {savingScope ? "Saving…" : "Save scope lines"}</button></div>
                 </div>
               )}

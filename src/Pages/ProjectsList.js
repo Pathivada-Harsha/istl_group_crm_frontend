@@ -42,17 +42,8 @@ const statusLabel = (s) =>
 // Progress-fill colour by status: green COMPLETED, amber ON_HOLD, else accent blue.
 const progressColor = (s) => (s === 'COMPLETED' ? '#22c55e' : s === 'ON_HOLD' ? '#f59e0b' : '#3b82f6');
 
-// ── Grid card colour — driven by HOW FAR ALONG the project is, so a wall of
-//    cards reads at a glance. Status still drives the badge; this is progress.
-const progressTone = (pct) => {
-  if (pct >= 100) return '#22c55e';  // complete      — green
-  if (pct >= 67)  return '#3b82f6';  // nearly there  — blue
-  if (pct >= 34)  return '#f59e0b';  // under way     — amber
-  if (pct > 0)    return '#ef4444';  // just started  — red
-  return '#94a3b8';                  // not started   — grey
-};
-
 // Group pill flavour from the group name (EPC blue / IoT green / CBG amber).
+// Still used by the table's Group column (the grid card no longer shows a pill).
 const groupPillClass = (groupName) => {
   const g = String(groupName || '').toUpperCase();
   if (g.includes('EPC')) return 'pl-group-pill pl-group-pill--epc';
@@ -102,7 +93,38 @@ const fmtDate = (d) => {
   return `${String(dt.getDate()).padStart(2, '0')}-${String(dt.getMonth() + 1).padStart(2, '0')}-${dt.getFullYear()}`;
 };
 
-const ROWS_PER_PAGE = 10;
+// A project is overdue when its end date has passed and it is neither
+// finished nor cancelled. Cancelled projects are not "late", they are closed.
+const isOverdue = (p) => {
+  if (!p.endDate) return false;
+  if (p.status === 'COMPLETED' || p.status === 'CANCELLED') return false;
+  const end = new Date(p.endDate);
+  if (isNaN(end)) return false;
+  return end.getTime() < Date.now();
+};
+
+const daysOverdue = (p) => {
+  const end = new Date(p.endDate);
+  return Math.max(0, Math.floor((Date.now() - end.getTime()) / 86400000));
+};
+
+// Rows-per-page options (mirrors the Leads / Enquiries page selector).
+const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
+
+const FIN_COLOR = '#8b5cf6'; // financial progress = purple (distinct from technical/status)
+
+// Two stacked mini-bars — Technical (status colour) + Financial (purple) — shown together.
+const DualProgress = ({ tech, fin, techColor }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 120 }}>
+    {[['Tech', tech, techColor], ['Fin', fin, FIN_COLOR]].map(([label, val, color]) => (
+      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 10, color: '#94a3b8', width: 24, flexShrink: 0 }}>{label}</span>
+        <div className="pl-progress" style={{ flex: 1 }}><div className="pl-progress-fill" style={{ width: `${val}%`, background: color }} /></div>
+        <span className="pl-progress-pct" style={{ minWidth: 34, textAlign: 'right' }}>{val}%</span>
+      </div>
+    ))}
+  </div>
+);
 
 // Column catalogue (order + labels) for the picker and default ordering.
 const COLUMN_DEFS = [
@@ -140,6 +162,8 @@ function ProjectsList() {
 
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('projects_view_mode') || 'table');
   const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const changeRowsPerPage = (n) => { setRowsPerPage(n); setCurrentPage(1); };
   const setView = (mode) => { setViewMode(mode); localStorage.setItem('projects_view_mode', mode); };
 
   // ── Table mechanics (mirror OrderBook): sort + column order + visibility ────
@@ -248,7 +272,7 @@ function ProjectsList() {
       payable:  payableAmt(o),
       spent:    moneyOut(o),
       balance:  balanceAmt(o),
-      progress: Number(o.progressPercentage) || 0,
+      progress: Number(o.physicalProgressPct != null ? o.physicalProgressPct : o.progressPercentage) || 0,
       timeline: o.startDate || '',
     }[key] ?? '');
     return [...projects].sort((a, b) => {
@@ -259,17 +283,17 @@ function ProjectsList() {
     });
   }, [projects, sortConfig]);
 
-  const totalPages = Math.max(1, Math.ceil(sortedProjects.length / ROWS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(sortedProjects.length / rowsPerPage));
   const pageItems = useMemo(
-    () => sortedProjects.slice((currentPage - 1) * ROWS_PER_PAGE, currentPage * ROWS_PER_PAGE),
-    [sortedProjects, currentPage]
+    () => sortedProjects.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage),
+    [sortedProjects, currentPage, rowsPerPage]
   );
 
   const openProject = (p) => navigate(`/projects/${encodeURIComponent(p.projectUniqueId)}`);
 
   // ── Column render map + sort keys ───────────────────────────────────────────
   const columnMeta = {
-    sno:    { label: 'S.No', sortKey: null, render: (p, idx) => <td key="sno" style={{ textAlign: 'center', color: '#6b7280', fontWeight: 600 }}>{(currentPage - 1) * ROWS_PER_PAGE + idx + 1}</td> },
+    sno:    { label: 'S.No', sortKey: null, render: (p, idx) => <td key="sno" style={{ textAlign: 'center', color: '#6b7280', fontWeight: 600 }}>{(currentPage - 1) * rowsPerPage + idx + 1}</td> },
     projId: { label: 'Project ID', sortKey: 'projId', render: (p) => (
       <td key="projId"><div className="pl-id-main">{p.projectUniqueId}</div><div className="pl-muted-sm">{p.customerName || '—'}</div></td>
     ) },
@@ -316,13 +340,9 @@ function ProjectsList() {
       );
     } },
     progress: { label: 'Progress', sortKey: 'progress', render: (p) => {
-      const pct = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
-      return (
-        <td key="progress"><div className="pl-progress-wrap">
-          <div className="pl-progress"><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} /></div>
-          <span className="pl-progress-pct">{pct}%</span>
-        </div></td>
-      );
+      const tech = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const fin  = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
+      return <td key="progress"><DualProgress tech={tech} fin={fin} techColor={progressColor(p.status)} /></td>;
     } },
     timeline: { label: 'Timeline', sortKey: 'timeline', render: (p) => <td key="timeline" className="pl-muted-sm">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</td> },
   };
@@ -467,7 +487,7 @@ function ProjectsList() {
       ) : viewMode === 'grid' ? (
         <>
           <ProjectsGrid rows={pageItems} onOpen={openProject} />
-          <Pagination currentPage={currentPage} totalPages={totalPages} total={sortedProjects.length} setCurrentPage={setCurrentPage} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} total={sortedProjects.length} setCurrentPage={setCurrentPage} rowsPerPage={rowsPerPage} onRowsPerPageChange={changeRowsPerPage} />
         </>
       ) : (
         <>
@@ -509,7 +529,7 @@ function ProjectsList() {
               </table>
             </div>
           </div>
-          <Pagination currentPage={currentPage} totalPages={totalPages} total={sortedProjects.length} setCurrentPage={setCurrentPage} />
+          <Pagination currentPage={currentPage} totalPages={totalPages} total={sortedProjects.length} setCurrentPage={setCurrentPage} rowsPerPage={rowsPerPage} onRowsPerPageChange={changeRowsPerPage} />
         </>
       )}
     </div>
@@ -521,16 +541,28 @@ function ProjectsList() {
 // ─────────────────────────────────────────────────────────────────────────────
 // Mirrors the Leads page pagination (ServerPagination): « first · ‹ prev ·
 // page numbers · next › · last », plus a "Page X of Y" indicator.
-const Pagination = ({ currentPage, totalPages, total, setCurrentPage }) => {
+const Pagination = ({ currentPage, totalPages, total, setCurrentPage, rowsPerPage, onRowsPerPageChange }) => {
   const tp = totalPages || 1;
   return (
     <div className="pl-pagination">
-      <span className="pl-page-info">
-        {total === 0
-          ? 'No projects'
-          : `Showing ${(currentPage - 1) * ROWS_PER_PAGE + 1}–${Math.min(currentPage * ROWS_PER_PAGE, total)} of ${total}`}
-        {total > 0 && <>  ·  Page <strong>{currentPage}</strong> of <strong>{tp}</strong></>}
-      </span>
+      {/* Left: rows-per-page selector + record/page info (mirrors Leads/Enquiries) */}
+      <div className="pl-pagination-left">
+        <span className="pl-rows-label">Rows per page:</span>
+        <FilterSelect
+          value={String(rowsPerPage)}
+          onChange={v => onRowsPerPageChange(Number(v))}
+          options={ROWS_PER_PAGE_OPTIONS.map(n => ({ value: String(n), label: `${n} rows` }))}
+          placeholder="Rows"
+        />
+        <span className="pl-page-info">
+          {total === 0
+            ? 'No projects'
+            : `${(currentPage - 1) * rowsPerPage + 1}–${Math.min(currentPage * rowsPerPage, total)} of ${total} projects`}
+        </span>
+        {total > 0 && (
+          <span className="pl-page-info">Page <strong>{currentPage}</strong> of <strong>{tp}</strong></span>
+        )}
+      </div>
       <div className="pl-page-btns">
         <button className="pl-page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(1)} title="First page">«</button>
         <button className="pl-page-btn" disabled={currentPage === 1} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} title="Previous page">‹</button>
@@ -555,56 +587,82 @@ const Pagination = ({ currentPage, totalPages, total, setCurrentPage }) => {
 const ProjectsGrid = ({ rows, onOpen }) => (
   <div className="pl-grid">
     {rows.map((p) => {
-      const pct  = Math.min(100, Math.max(0, Number(p.progressPercentage || 0)));
-      const tone = progressTone(pct);
+      const pct      = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const finPct   = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
+      const statusHx = getStatusColor(p.status);
+      const bal      = balanceAmt(p);
+      const late     = isOverdue(p);
+
       return (
-        <div key={p.projectUniqueId} className="pl-card" onClick={() => onOpen(p)}
-             style={{ borderLeft: `4px solid ${tone}`, boxShadow: `inset 0 0 0 100vmax ${tone}0a` }}>
+        <div
+          key={p.projectUniqueId}
+          className="pl-card"
+          role="button"
+          tabIndex={0}
+          onClick={() => onOpen(p)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(p); } }}
+        >
+          {/* Row 1 — identifier and status */}
           <div className="pl-card-head">
-            <span className={groupPillClass(p.groupName)}>{p.groupName || '—'}</span>
-            <span className="pl-status-badge" style={{ background: getStatusColor(p.status) + '22', color: getStatusColor(p.status) }}>
+            <span className="pl-card-id">{p.projectUniqueId}</span>
+            <span className="pl-card-status">
+              <span className="pl-status-dot" style={{ background: statusHx }} />
               {statusLabel(p.status)}
             </span>
           </div>
 
+          {/* Row 2 — the headline */}
           <div>
             <div className="pl-card-name">{p.projectName || '—'}</div>
-            <div className="pl-card-customer">{p.customerName || '—'}</div>
+            <div className="pl-card-customer">
+              {p.customerName || '—'}
+              {p.groupName ? <span className="pl-card-sep">·</span> : null}
+              {p.groupName || ''}
+            </div>
           </div>
 
-          <div className="pl-card-divider" />
-
-          <div className="pl-card-row">
-            <label>Budget</label>
-            <span className="pl-card-value">{fmtMoney(p.budget)}</span>
+          {/* Row 3 — progress: Technical + Financial */}
+          <div className="pl-card-progress">
+            <div className="pl-card-progress-head">
+              <span>Technical</span>
+              <span className="pl-card-progress-pct">{pct}%</span>
+            </div>
+            <div className="pl-progress">
+              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: statusHx }} />
+            </div>
+            <div className="pl-card-progress-head" style={{ marginTop: 6 }}>
+              <span style={{ color: '#64748b' }}>Financial</span>
+              <span className="pl-card-progress-pct" style={{ color: FIN_COLOR }}>{finPct}%</span>
+            </div>
+            <div className="pl-progress">
+              <div className="pl-progress-fill" style={{ width: `${finPct}%`, background: FIN_COLOR }} />
+            </div>
           </div>
 
-          {/* Money in / money out at a glance */}
+          {/* Row 4 — three numbers, hairline-separated, no nested box */}
           <div className="pl-card-money">
+            <div className="pl-money-cell" title={`Budget: ${fmtMoney(p.budget)}`}>
+              <label>Budget</label>
+              <span>{fmtMoneyShort(p.budget)}</span>
+            </div>
             <div className="pl-money-cell" title={`Received from customer: ${fmtMoney(moneyIn(p))}`}>
               <label>Received</label>
-              <span style={{ color: MONEY_IN_COLOR }}>{fmtMoneyShort(moneyIn(p))}</span>
-            </div>
-            <div className="pl-money-cell" title={`Paid to vendors: ${fmtMoney(moneyOut(p))}`}>
-              <label>Spent</label>
-              <span style={{ color: MONEY_OUT_COLOR }}>{fmtMoneyShort(moneyOut(p))}</span>
+              <span>{fmtMoneyShort(moneyIn(p))}</span>
             </div>
             <div className="pl-money-cell" title={`Received ${fmtMoney(moneyIn(p))} − Spent ${fmtMoney(moneyOut(p))}`}>
               <label>Balance</label>
-              <span style={{ color: balanceColor(balanceAmt(p)) }}>{fmtMoneyShort(balanceAmt(p))}</span>
+              <span style={{ color: balanceColor(bal) }}>{fmtMoneyShort(bal)}</span>
             </div>
           </div>
 
-          <div className="pl-progress-wrap">
-            <div className="pl-progress">
-              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: tone }} />
-            </div>
-            <span className="pl-progress-pct" style={{ color: tone, fontWeight: 700 }}>{pct}%</span>
-          </div>
-
+          {/* Row 5 — schedule signal */}
           <div className="pl-card-foot">
-            <span className="pl-muted-sm">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</span>
-            <span className="pl-card-id">{p.projectUniqueId}</span>
+            {late ? (
+              <span className="pl-card-late">⚠ {daysOverdue(p)} days overdue</span>
+            ) : (
+              <span className="pl-muted-sm">{fmtDate(p.startDate)} → {fmtDate(p.endDate)}</span>
+            )}
+            <span className="pl-muted-sm">{p.subGroupName || ''}</span>
           </div>
         </div>
       );

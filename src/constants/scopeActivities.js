@@ -77,6 +77,10 @@ export const BASIS_OPTIONS = [
   { value: 'PER_KW', label: 'Per kW', help: 'Quantity = value × capacity in kW (e.g. 1.7 modules per kW).' },
   { value: 'PER_STEP', label: 'Per step', help: 'One unit per N kW, rounded up (e.g. one 50 kW inverter per 50 kW).' },
   { value: 'FROM_SITE_VISIT', label: 'From site visit', help: 'Quantity read from a site visit field (e.g. DC cable length).' },
+  { value: 'PER_WATT_PEAK', label: 'Module count (from Wp)', help: 'Module count = ceil(kW×1000 ÷ selected make wattage). Attach module makes that carry a Wp wattage.' },
+  { value: 'PER_INVERTER_KW', label: 'Inverter count (from kW)', help: 'Inverter count = ceil(kW ÷ selected make kW). Attach inverter makes that carry a kW capacity.' },
+  { value: 'PER_MODULE', label: 'Per module count', help: 'Quantity = ceil(value × module count), e.g. 2 connectors per module. Use PER_KW for weight/area items.' },
+  { value: 'PER_INVERTER', label: 'Per inverter count', help: 'Quantity = ceil(value × inverter count), e.g. 1 ACDB per inverter.' },
 ];
 
 /** Site-visit fields a FROM_SITE_VISIT line can pull its quantity from. */
@@ -95,4 +99,9 @@ export const SUGGESTION_WARNING_LABELS = {
   BASIS_UNRESOLVED: 'Some items had no matching template rule — a sensible default was used; verify.',
   NEEDS_SITE_VISIT: 'Some quantities come from the site visit and were left blank — fill them in.',
   NO_TEMPLATE_NO_HISTORY: 'No template exists for this project type yet, and no similar past job was found.',
+  NEEDS_MODULE_WATT: 'Pick a module make with a wattage (Wp) so the module count can be computed.',
+  NEEDS_INVERTER_KW: 'Pick an inverter make with a kW rating so the inverter count can be computed.',
+  NEEDS_MODULE_DRIVER: 'A per-module item could not size — there is no module (watt-peak) line to scale from.',
+  NEEDS_INVERTER_DRIVER: 'A per-inverter item could not size — there is no inverter line to scale from.',
+  MULTIPLE_DRIVERS: 'More than one module/inverter driver line was found — counts were summed; verify.',
 };
