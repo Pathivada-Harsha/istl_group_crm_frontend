@@ -8,14 +8,34 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft, FileText, Pencil, Plus, Download, MapPin, Mail, Phone,
-  Building2, Users, Link2, Eye, Paperclip, RefreshCw,
+  Building2, Users, Link2, Eye, Paperclip, RefreshCw, Upload, Trash2, AlertTriangle,
 } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
 import BorrowerFormModal from './BorrowerFormModal';
 import SanctionFormModal from './SanctionFormModal';
 import DocumentViewerModal from './DocumentViewerModal';
 import SanctionCompareModal from './SanctionCompareModal';
+import { SANCTION_FIELDS } from './sanctionFields';
 import '../../pages-css/BorrowerRegistry.css';
+
+const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
+
+/** The derived panel, as data — so it can be filtered like the card beside it. */
+const DERIVED_ROWS = [
+  { key: 'derivedEquityContribution', label: 'Equity contribution' },
+  { key: 'derivedRatioCheck', label: 'Ratio check', tone: (v) => (v === 'Reconciles' ? 'ok' : 'warn') },
+  { key: 'derivedRoiCheck', label: 'ROI check', tone: (v) => (v === 'Reconciles' ? 'ok' : 'warn') },
+  { key: 'derivedMoratoriumEnd', label: 'Moratorium ends' },
+  // Modelled from tenor and moratorium, deliberately distinct from the
+  // contractual dates in the card alongside. Where the two disagree, that gap
+  // is worth seeing rather than reconciling away.
+  { key: 'derivedRepaymentStart', label: 'Repayment starts (modelled)' },
+  { key: 'derivedRepaymentEnd', label: 'Repayment ends (modelled)' },
+  { key: 'derivedTotalTenorMonths', label: 'Total tenor' },
+  { key: 'derivedFirstYearInterest', label: 'First-year interest' },
+  { key: 'derivedSanctionValidTill', label: 'Sanction valid till' },
+  { key: 'derivedCodStatus', label: 'COD status', tone: (v) => (/Overdue/i.test(v || '') ? 'warn' : '') },
+];
 
 const BorrowerDetail = () => {
   const { id } = useParams();
@@ -32,6 +52,14 @@ const BorrowerDetail = () => {
   const [compare, setCompare] = useState(null);             // { sanction, parsed, file }
   const attachRef = useRef(null);
   const attachTargetRef = useRef(null);
+  const importRef = useRef(null);
+  const [importing, setImporting] = useState(false);
+  const [deleteSanction, setDeleteSanction] = useState(null); // row awaiting confirmation
+  const [deleting, setDeleting] = useState(false);
+  // A letter states maybe a dozen of the thirty-odd registry columns. Showing
+  // the rest as dashes turned a short page into three screens of nothing, so
+  // they are left out until asked for.
+  const [showAll, setShowAll] = useState(false);
 
   const backToRegistry = useCallback(() => navigate('/lender/borrowers'), [navigate]);
 
@@ -55,15 +83,61 @@ const BorrowerDetail = () => {
   // so it stays consistent across the module.
   useEffect(() => {
     const onKey = (e) => {
-      if (e.key === 'Escape' && !editIdentity && !sanctionModal && !viewerFor && !compare) {
+      if (e.key === 'Escape' && !editIdentity && !sanctionModal && !viewerFor
+          && !compare && !deleteSanction) {
         backToRegistry();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [backToRegistry, editIdentity, sanctionModal, viewerFor, compare]);
+  }, [backToRegistry, editIdentity, sanctionModal, viewerFor, compare, deleteSanction]);
 
   const openDocument = (sanction) => setViewerFor(sanction);
+
+  /**
+   * Add a further sanction by importing its letter. Same parse as the registry
+   * import, but the borrower is already known, so the review screen saves
+   * against this record rather than matching on the name.
+   */
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setImporting(true);
+    setError('');
+    try {
+      const parsed = await borrowerApi.parseSanction(file);
+      setSanctionModal({ mode: 'import', initial: parsed, file });
+    } catch (err) {
+      setError(err.message || 'Could not read the document');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  /**
+   * Soft-deletes one sanction, leaving the borrower and any other letters
+   * intact. Frees the reference number for a corrected re-import.
+   */
+  const handleDeleteSanction = async () => {
+    if (!deleteSanction) return;
+    setDeleting(true);
+    setError('');
+    try {
+      await borrowerApi.removeSanction(deleteSanction.id);
+      // If the deleted row was the one on display, fall back to whatever
+      // remains rather than leaving the cards showing a removed record.
+      if (activeId === deleteSanction.id) setActiveId(null);
+      setDeleteSanction(null);
+      await load();
+    } catch (err) {
+      setError(err.message || 'Could not delete this sanction');
+      setDeleteSanction(null);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   /** Open the file picker for a specific sanction. */
   const startAttach = (sanction) => {
@@ -141,6 +215,46 @@ const BorrowerDetail = () => {
 
   const sanctions = borrower.sanctions || [];
   const active = sanctions.find((s) => s.id === activeId) || sanctions[0] || null;
+  // Keys the server worked out rather than read off the letter.
+  const computed = new Set(active?.computedFields || []);
+  const hiddenCount = active
+    ? SANCTION_FIELDS.filter((f) => isBlank(active[f.key])).length
+    : 0;
+
+  // Same rule as the sanction cards — an unfilled identity field is left out
+  // rather than repeated as "Not entered" fifteen times. The pending chip and
+  // the button below already say what's outstanding.
+  //
+  // The name is exempt: it is always set, and a card headed "Borrower identity"
+  // that doesn't show the borrower's name reads as broken — the more so once
+  // the blank rows around it are hidden and the card falls back to an empty
+  // state while the name sits in the title right above it.
+  const identityKyc = [
+    { label: 'CIN', value: borrower.cin, mono: true },
+    { label: 'PAN', value: borrower.pan, mono: true },
+    { label: 'Promoter', value: borrower.promoterName, icon: <Building2 size={14} aria-hidden="true" /> },
+    { label: 'Sponsor', value: borrower.sponsorName, icon: <Building2 size={14} aria-hidden="true" /> },
+    { label: 'Guarantor', value: borrower.guarantorName, icon: <Users size={14} aria-hidden="true" /> },
+    { label: 'Group name', value: borrower.groupName },
+    { label: 'Cat', value: borrower.borrowerCategory },
+    { label: 'Sub Cat', value: borrower.borrowerSubCategory },
+    { label: 'State', value: borrower.state, icon: <MapPin size={14} aria-hidden="true" /> },
+    { label: 'Registered office', value: borrower.registeredAddress, icon: <MapPin size={14} aria-hidden="true" /> },
+    { label: 'Contact person', value: borrower.contactPerson, icon: <Users size={14} aria-hidden="true" /> },
+    { label: 'Email', value: borrower.contactEmail, icon: <Mail size={14} aria-hidden="true" /> },
+    { label: 'Phone', value: borrower.contactPhone, icon: <Phone size={14} aria-hidden="true" /> },
+    {
+      label: 'Linked project',
+      value: borrower.projectId ? `#${borrower.projectId}` : null,
+      empty: 'Not linked',
+      icon: <Link2 size={14} aria-hidden="true" />,
+    },
+  ].filter((r) => showAll || !isBlank(r.value));
+
+  const identityRows = [
+    { label: 'Borrower name', value: borrower.borrowerName, strong: true },
+    ...identityKyc,
+  ];
   const filled = borrower.identityFilled ?? 0;
   const total = borrower.identityTotal ?? 7;
   const pending = total - filled;
@@ -151,13 +265,13 @@ const BorrowerDetail = () => {
           page rather than as an action on the record. */}
       <button type="button" className="br-back" onClick={backToRegistry}>
         <ArrowLeft size={16} aria-hidden="true" />
-        Back to registry
+        Back to Registry
       </button>
 
       <div className="br-head">
         <div className="br-head-text">
           <button type="button" className="br-crumb" onClick={backToRegistry}>
-            Lender · Borrower registry
+            Lender · Borrower Registry
           </button>
           <h1 className="br-title">{borrower.borrowerName}</h1>
           <p className="br-sub">
@@ -167,16 +281,6 @@ const BorrowerDetail = () => {
           </p>
         </div>
         <div className="br-head-actions">
-          {active?.hasDocument && (
-            <button
-              type="button"
-              className="br-btn"
-              onClick={() => openDocument(active)}
-            >
-              <Eye size={15} aria-hidden="true" />
-              View letter
-            </button>
-          )}
           <button type="button" className="br-btn" onClick={() => setEditIdentity(true)}>
             <Pencil size={15} aria-hidden="true" />
             Edit
@@ -184,114 +288,201 @@ const BorrowerDetail = () => {
         </div>
       </div>
 
-      {/* Provenance legend, keyed to the dot on each card header — so it is
-          obvious which numbers the system worked out and which a person must
-          still supply. */}
+      {/* Provenance legend. Each entry names the card it keys to, so the dot
+          on a card header is unambiguous — labelling these by source alone
+          ("Read from the letter") left the reader to guess which card was
+          which. */}
       <div className="br-legend">
         <span className="br-legend-item">
           <span className="br-dot br-dot-read" aria-hidden="true" />
-          Read from the letter
+          <strong className="br-legend-name">Sanction details</strong>
+          <span className="br-legend-src">read from the letter</span>
         </span>
         <span className="br-legend-item">
           <span className="br-dot br-dot-calc" aria-hidden="true" />
-          Calculated automatically
+          <strong className="br-legend-name">Derived values</strong>
+          <span className="br-legend-src">calculated automatically</span>
         </span>
         <span className="br-legend-item">
           <span className="br-dot br-dot-user" aria-hidden="true" />
-          Entered by the user
+          <strong className="br-legend-name">Borrower identity</strong>
+          <span className="br-legend-src">entered by the user</span>
         </span>
       </div>
 
-      {/* The stored letter sits directly under the legend rather than at the
-          foot of the page: it is the source every value above was read from,
-          so View and Download should be reachable without scrolling past the
-          whole record. */}
-      {active && (
-        <div className="br-docstrip">
-          <FileText size={20} className="br-docstrip-icon" aria-hidden="true" />
-          <div className="br-docstrip-text">
-            <strong>
-              {active.hasDocument ? 'Sanction letter stored' : 'No letter attached'}
-            </strong>
-            <span>
+      {error && <div className="br-banner br-banner-danger">{error}</div>}
+
+      {/* One section, not two: the stored letter and the list of sanctions
+          describe the same thing, so the document sits at the top of this
+          card rather than floating above it as a card of its own. */}
+      <section className="br-card">
+        <header className="br-card-head">
+          <h2 className="br-card-title">Sanctions</h2>
+          <div className="br-docstrip-actions">
+            <button
+              type="button"
+              className="br-btn br-btn-sm"
+              onClick={() => setSanctionModal({ mode: 'create', initial: null })}
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add manually
+            </button>
+            <button
+              type="button"
+              className="br-btn br-btn-sm br-btn-primary"
+              onClick={() => importRef.current?.click()}
+              disabled={importing}
+            >
+              <Upload size={14} aria-hidden="true" />
+              {importing ? 'Reading…' : 'Import sanction letter'}
+            </button>
+          </div>
+        </header>
+
+        <input
+          ref={importRef}
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleImportFile}
+          hidden
+        />
+
+        {/* The document belongs to whichever sanction is selected above. */}
+        {active && (
+          <div className="br-docstrip br-docstrip-inset">
+            <FileText size={20} className="br-docstrip-icon" aria-hidden="true" />
+            <div className="br-docstrip-text">
+              <strong>
+                {active.hasDocument ? 'Sanction letter' : 'No letter attached'}
+              </strong>
+              <span>
+                {active.hasDocument ? (
+                  <>
+                    {active.sanctionDocName}
+                    {active.sanctionDocSize
+                      ? ` · ${Math.round(active.sanctionDocSize / 1024)} KB`
+                      : ''}
+                  </>
+                ) : (
+                  'Attach the letter and its values will be checked against this record.'
+                )}
+              </span>
+            </div>
+            <div className="br-docstrip-actions">
               {active.hasDocument ? (
                 <>
-                  {active.sanctionDocName}
-                  {active.sanctionDocSize
-                    ? ` · ${Math.round(active.sanctionDocSize / 1024)} KB`
-                    : ''}
+                  <button
+                    type="button"
+                    className="br-btn br-btn-sm"
+                    onClick={() => openDocument(active)}
+                  >
+                    <Eye size={14} aria-hidden="true" />
+                    View
+                  </button>
+                  <a className="br-btn br-btn-sm" href={borrowerApi.docDownloadUrl(active.id)}>
+                    <Download size={14} aria-hidden="true" />
+                    Download
+                  </a>
+                  <button
+                    type="button"
+                    className="br-btn br-btn-sm"
+                    onClick={() => startAttach(active)}
+                    disabled={attaching}
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Replace
+                  </button>
                 </>
               ) : (
-                'Attach the letter and its values will be checked against this record.'
-              )}
-            </span>
-          </div>
-          <div className="br-docstrip-actions">
-            {active.hasDocument ? (
-              <>
                 <button
                   type="button"
-                  className="br-btn br-btn-sm"
-                  onClick={() => openDocument(active)}
-                >
-                  <Eye size={14} aria-hidden="true" />
-                  View
-                </button>
-                <a className="br-btn br-btn-sm" href={borrowerApi.docDownloadUrl(active.id)}>
-                  <Download size={14} aria-hidden="true" />
-                  Download
-                </a>
-                <button
-                  type="button"
-                  className="br-btn br-btn-sm"
+                  className="br-btn br-btn-sm br-btn-primary"
                   onClick={() => startAttach(active)}
                   disabled={attaching}
                 >
-                  <RefreshCw size={14} aria-hidden="true" />
-                  Replace
+                  <Paperclip size={14} aria-hidden="true" />
+                  {attaching ? 'Reading…' : 'Attach letter'}
                 </button>
-              </>
-            ) : (
+              )}
+            </div>
+          </div>
+        )}
+
+        <input
+          ref={attachRef}
+          type="file"
+          accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          onChange={handleAttachFile}
+          hidden
+        />
+
+        {sanctions.length === 0 ? (
+          <div className="br-empty">
+            <p>No sanction letter yet.</p>
+            <div className="br-docstrip-actions">
               <button
                 type="button"
-                className="br-btn br-btn-sm br-btn-primary"
-                onClick={() => startAttach(active)}
-                disabled={attaching}
+                className="br-btn"
+                onClick={() => setSanctionModal({ mode: 'create', initial: null })}
               >
-                <Paperclip size={14} aria-hidden="true" />
-                {attaching ? 'Reading…' : 'Attach letter'}
+                <Plus size={15} aria-hidden="true" />
+                Add manually
               </button>
-            )}
+              <button
+                type="button"
+                className="br-btn br-btn-primary"
+                onClick={() => importRef.current?.click()}
+                disabled={importing}
+              >
+                <Upload size={15} aria-hidden="true" />
+                {importing ? 'Reading…' : 'Import sanction letter'}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
-
-      <input
-        ref={attachRef}
-        type="file"
-        accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        onChange={handleAttachFile}
-        hidden
-      />
-
-      {error && <div className="br-banner br-banner-danger">{error}</div>}
-
-      {sanctions.length > 1 && (
-        <div className="br-tabstrip" role="tablist">
-          {sanctions.map((s) => (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={s.id === active?.id}
-              className={`br-tab ${s.id === active?.id ? 'br-tab-on' : ''}`}
-              onClick={() => setActiveId(s.id)}
-            >
-              {s.refNo}
-            </button>
-          ))}
-        </div>
-      )}
+        ) : (
+          <table className="br-table">
+            <tbody>
+              {sanctions.map((s) => (
+                <tr
+                  key={s.id}
+                  className={s.id === active?.id ? 'br-row-active' : ''}
+                  onClick={() => setActiveId(s.id)}
+                >
+                  <td className="br-mono">{s.refNo}</td>
+                  <td className="br-muted">{s.sanctionDate || '—'}</td>
+                  <td>{s.sanctionedAmount || '—'}</td>
+                  <td><span className="br-chip">{statusLabel(s.status)}</span></td>
+                  <td
+                    className="br-right"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="br-row-actions">
+                      <button
+                        type="button"
+                        className="br-icon-btn"
+                        title={`Edit ${s.refNo}`}
+                        aria-label={`Edit ${s.refNo}`}
+                        onClick={() => setSanctionModal({ mode: 'edit', initial: s })}
+                      >
+                        <Pencil size={15} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="br-icon-btn br-icon-danger"
+                        title={`Delete ${s.refNo}`}
+                        aria-label={`Delete ${s.refNo}`}
+                        onClick={() => setDeleteSanction(s)}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <div className="br-grid-2">
         <section className="br-card">
@@ -299,59 +490,66 @@ const BorrowerDetail = () => {
             <span className="br-dot br-dot-read" aria-hidden="true" />
             <h2 className="br-card-title">Sanction details</h2>
             {active?.source && <span className="br-chip">{sourceLabel(active.source)}</span>}
-          </header>
-          {active ? (
-            <dl className="br-dl">
-              <Row label="Lender" value={active.lenderName} />
-              <Row label="Project" value={active.projectName} />
-              <Row label="Category" value={active.category} />
-              <Row label="Location" value={active.location} />
-              <Row label="Project cost" value={active.projectCost} />
-              <Row label="Sanctioned" value={active.sanctionedAmount} strong />
-              <Row label="Debt : equity" value={active.debtEquityRatio} />
-              <Row label="Interest" value={active.interestRateText} />
-              <Row label="Tenor" value={active.tenorText} />
-              <Row label="Scheduled COD" value={active.scheduledCod} />
-            </dl>
-          ) : (
-            <div className="br-empty">
-              <p>No sanction letter yet.</p>
+            {active && hiddenCount > 0 && (
               <button
                 type="button"
-                className="br-btn"
-                onClick={() => setSanctionModal({ mode: 'create', initial: null })}
+                className="br-link"
+                onClick={() => setShowAll((v) => !v)}
               >
-                <Plus size={15} aria-hidden="true" />
-                Add sanction
+                {showAll ? 'Hide empty fields' : `Show all ${SANCTION_FIELDS.length} fields`}
               </button>
-            </div>
+            )}
+          </header>
+          {active ? (
+            // One flat list, in the order the registry sheet prints the fields.
+            // A letter states maybe a dozen of the thirty-odd columns, so the
+            // rest are left out rather than shown as a wall of dashes — the
+            // link in the header brings them back when you want to see what a
+            // record is missing.
+            <dl className="br-dl br-scroll-body">
+              {SANCTION_FIELDS
+                .filter((f) => showAll || !isBlank(active[f.key]))
+                .map((f) => (
+                  <Row
+                    key={f.key}
+                    label={f.label}
+                    value={active[f.key]}
+                    strong={f.key === 'sanctionedAmount'}
+                    mono={f.mono}
+                    calc={computed.has(f.key)}
+                  />
+                ))}
+            </dl>
+          ) : (
+            <p className="br-muted">These fill in once a sanction is recorded.</p>
           )}
         </section>
 
         <section className="br-card">
           <header className="br-card-head">
             <span className="br-dot br-dot-calc" aria-hidden="true" />
-            <h2 className="br-card-title">Derived from the letter</h2>
+            <h2 className="br-card-title">Derived values</h2>
           </header>
           {active ? (
-            <dl className="br-dl">
-              <Row label="Equity contribution" value={active.derivedEquityContribution} />
-              <Row
-                label="Ratio check"
-                value={active.derivedRatioCheck}
-                tone={active.derivedRatioCheck === 'Reconciles' ? 'ok' : 'warn'}
-              />
-              <Row label="Moratorium ends" value={active.derivedMoratoriumEnd} />
-              <Row label="Repayment starts" value={active.derivedRepaymentStart} />
-              <Row label="Repayment ends" value={active.derivedRepaymentEnd} />
-              <Row label="Total tenor" value={active.derivedTotalTenorMonths} />
-              <Row label="First-year interest" value={active.derivedFirstYearInterest} />
-              <Row label="Sanction valid till" value={active.derivedSanctionValidTill} />
-              <Row
-                label="COD status"
-                value={active.derivedCodStatus}
-                tone={/Overdue/i.test(active.derivedCodStatus || '') ? 'warn' : ''}
-              />
+            // Same rule as the card alongside: a derived value with nothing to
+            // work from is left out rather than printed as a dash.
+            <dl className="br-dl br-scroll-body">
+              {DERIVED_ROWS
+                .filter((d) => showAll || !isBlank(active[d.key]))
+                .map((d) => (
+                  <Row
+                    key={d.key}
+                    label={d.label}
+                    value={active[d.key]}
+                    tone={d.tone ? d.tone(active[d.key]) : ''}
+                  />
+                ))}
+              {!showAll && DERIVED_ROWS.every((d) => isBlank(active[d.key])) && (
+                <p className="br-muted br-dl-note">
+                  Nothing to work these out from yet. They fill in as the
+                  amounts, rate and dates are recorded.
+                </p>
+              )}
             </dl>
           ) : (
             <p className="br-muted">These fill in once a sanction is recorded.</p>
@@ -367,30 +565,26 @@ const BorrowerDetail = () => {
             {pending ? `${pending} of ${total} pending` : 'Complete'}
           </span>
         </header>
+        {/* Split down the middle so the two columns stay even as fields fill in. */}
         <div className="br-grid-2 br-grid-tight">
           <dl className="br-dl">
-            <Row label="CIN" value={borrower.cin} empty="Not entered" mono />
-            <Row label="PAN" value={borrower.pan} empty="Not entered" mono />
-            <Row label="Sponsor" value={borrower.sponsorName} empty="Not entered"
-                 icon={<Building2 size={14} aria-hidden="true" />} />
-            <Row label="Registered office" value={borrower.registeredAddress} empty="Not entered"
-                 icon={<MapPin size={14} aria-hidden="true" />} />
+            {identityRows.slice(0, Math.ceil(identityRows.length / 2)).map((r) => (
+              <Row key={r.label} label={r.label} value={r.value} empty={r.empty || 'Not entered'}
+                   mono={r.mono} icon={r.icon} strong={r.strong} />
+            ))}
           </dl>
           <dl className="br-dl">
-            <Row label="Contact person" value={borrower.contactPerson} empty="Not entered"
-                 icon={<Users size={14} aria-hidden="true" />} />
-            <Row label="Email" value={borrower.contactEmail} empty="Not entered"
-                 icon={<Mail size={14} aria-hidden="true" />} />
-            <Row label="Phone" value={borrower.contactPhone} empty="Not entered"
-                 icon={<Phone size={14} aria-hidden="true" />} />
-            <Row
-              label="Linked project"
-              value={borrower.projectId ? `#${borrower.projectId}` : null}
-              empty="Not linked"
-              icon={<Link2 size={14} aria-hidden="true" />}
-            />
+            {identityRows.slice(Math.ceil(identityRows.length / 2)).map((r) => (
+              <Row key={r.label} label={r.label} value={r.value} empty={r.empty || 'Not entered'}
+                   mono={r.mono} icon={r.icon} strong={r.strong} />
+            ))}
           </dl>
         </div>
+        {identityKyc.length === 0 && (
+          <p className="br-muted br-dl-note">
+            The rest comes from the KYC pack — a sanction letter doesn't carry it.
+          </p>
+        )}
         <div className="br-card-foot">
           <button type="button" className="br-btn br-btn-sm" onClick={() => setEditIdentity(true)}>
             <Plus size={14} aria-hidden="true" />
@@ -399,44 +593,58 @@ const BorrowerDetail = () => {
         </div>
       </section>
 
-      <section className="br-card">
-        <header className="br-card-head">
-          <h2 className="br-card-title">Sanctions</h2>
-          <button
-            type="button"
-            className="br-btn br-btn-sm"
-            onClick={() => setSanctionModal({ mode: 'create', initial: null })}
+      {deleteSanction && (
+        <div className="br-modal-backdrop" onMouseDown={() => setDeleteSanction(null)}>
+          <div
+            className="br-modal br-modal-confirm"
+            onMouseDown={(e) => e.stopPropagation()}
+            role="alertdialog"
+            aria-modal="true"
+            aria-label="Confirm delete sanction"
           >
-            <Plus size={14} aria-hidden="true" />
-            Add sanction
-          </button>
-        </header>
-        {sanctions.length === 0 ? (
-          <p className="br-muted">None recorded.</p>
-        ) : (
-          <table className="br-table">
-            <tbody>
-              {sanctions.map((s) => (
-                <tr key={s.id}>
-                  <td className="br-mono">{s.refNo}</td>
-                  <td className="br-muted">{s.sanctionDate || '—'}</td>
-                  <td>{s.sanctionedAmount || '—'}</td>
-                  <td><span className="br-chip">{statusLabel(s.status)}</span></td>
-                  <td className="br-right">
-                    <button
-                      type="button"
-                      className="br-link"
-                      onClick={() => setSanctionModal({ mode: 'edit', initial: s })}
-                    >
-                      Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+            <div className="br-modal-head">
+              <div className="br-viewer-title">
+                <AlertTriangle size={18} className="br-tone-warn" aria-hidden="true" />
+                <div className="br-viewer-title-text">
+                  <h3 className="br-modal-title">Delete this sanction?</h3>
+                  <p className="br-modal-sub br-mono">{deleteSanction.refNo}</p>
+                </div>
+              </div>
+            </div>
+            <div className="br-modal-body br-modal-body-single">
+              <p className="br-confirm-text">
+                {deleteSanction.hasDocument
+                  ? <>The stored letter <strong>{deleteSanction.sanctionDocName}</strong> will
+                      be removed with it.</>
+                  : 'No letter is attached to this sanction.'}
+              </p>
+              <p className="br-muted br-confirm-note">
+                {borrower.borrowerName} stays on the registry. The record is archived rather
+                than erased, so this reference number becomes free to import again.
+              </p>
+            </div>
+            <div className="br-modal-foot">
+              <button
+                type="button"
+                className="br-btn"
+                onClick={() => setDeleteSanction(null)}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="br-btn br-btn-danger"
+                onClick={handleDeleteSanction}
+                disabled={deleting}
+              >
+                <Trash2 size={15} aria-hidden="true" />
+                {deleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {compare && (
         <SanctionCompareModal
@@ -468,7 +676,10 @@ const BorrowerDetail = () => {
         <SanctionFormModal
           mode={sanctionModal.mode}
           initial={sanctionModal.initial}
+          file={sanctionModal.file || null}
           borrowerId={borrower.id}
+          borrowerName={borrower.borrowerName}
+          allowAttach={sanctionModal.mode === 'create'}
           onClose={() => setSanctionModal(null)}
           onSaved={() => { setSanctionModal(null); load(); }}
         />
@@ -477,7 +688,10 @@ const BorrowerDetail = () => {
   );
 };
 
-const Row = ({ label, value, strong = false, tone = '', empty = '—', mono = false, icon = null }) => (
+const Row = ({
+  label, value, strong = false, tone = '', empty = '—',
+  mono = false, icon = null, calc = false,
+}) => (
   <div className="br-dl-row">
     <dt className="br-dl-label">
       {icon && <span className="br-dl-icon">{icon}</span>}
@@ -490,6 +704,10 @@ const Row = ({ label, value, strong = false, tone = '', empty = '—', mono = fa
       value ? (tone ? `br-tone-${tone}` : '') : 'br-muted',
     ].filter(Boolean).join(' ')}>
       {value || empty}
+      {/* The letter didn't print this one; it follows from the values that
+          were printed. Same distinction the legend at the top of the page
+          draws between read, calculated and entered. */}
+      {calc && value && <span className="br-chip br-chip-calc">calc</span>}
     </dd>
   </div>
 );

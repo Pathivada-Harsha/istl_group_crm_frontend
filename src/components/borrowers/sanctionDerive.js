@@ -6,8 +6,9 @@
 // immediately, not after a save round-trip.
 //
 // The backend remains authoritative: what the detail page shows is what Java
-// computed. If a rule changes in SanctionDerivedCalculator.java, change it here
-// too.
+// computed. If a rule changes in SanctionDerivedCalculator.java — in either
+// apply() or fillGaps() — change it here too. This file and that one are the
+// highest drift risk in the module.
 
 const CRORE = 10000000;
 const LAKH = 100000;
@@ -97,13 +98,50 @@ export const parseRatePct = (raw) => {
 };
 
 /**
+ * A percentage that may arrive with or without its sign: "75", "75%", "9.75 %".
+ * Not parseRatePct — that one requires the "%" and returns null for a bare
+ * number, which is exactly what a value copied off the registry sheet is.
+ */
+export const parsePct = (raw) => {
+  if (raw === null || raw === undefined || raw === '') return null;
+  const n = parseFloat(String(raw).replace(/[^0-9.-]/g, ''));
+  return Number.isNaN(n) ? null : n;
+};
+
+/** "1.12x", "1.12 times", "1.12" → 1.12 */
+export const parseMultiple = parsePct;
+
+/** Trim trailing zeros so 9.750 renders as "9.75%". */
+const pct = (n) => (n === null || n === undefined || Number.isNaN(n)
+  ? null
+  : `${parseFloat(n.toFixed(3))}%`);
+
+/**
+ * Money quoted in crore. A bare number scales; an explicit unit wins; and a
+ * bare figure of a lakh or more is left alone, because nothing in this book
+ * costs a hundred thousand crore and a number that large was plainly already
+ * pasted in rupees. Mirrors SanctionValueParser.parseMoneyCrore.
+ */
+export const parseMoneyCrore = (raw) => {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).replace(/ /g, ' ').trim().toLowerCase();
+  if (!s) return null;
+  if (/crore|lakh|lac|\bcrs?\b|\blk?\b/.test(s)) return parseMoney(raw);
+  const m = s.match(/(-?\d[\d,]*(?:\.\d+)?)/);
+  if (!m) return null;
+  const n = parseFloat(m[1].replace(/,/g, ''));
+  if (Number.isNaN(n)) return null;
+  return Math.abs(n) >= LAKH ? n : n * CRORE;
+};
+
+/**
  * Everything the detail page shows under "derived", computed from the form's
  * current values. Fields that can't be computed come back as null so the panel
  * can render a dash rather than a wrong number.
  */
 export const deriveSanction = (form) => {
-  const cost = parseMoney(form.projectCost);
-  const loan = parseMoney(form.sanctionedAmount);
+  const cost = parseMoneyCrore(form.projectCost);
+  const loan = parseMoneyCrore(form.sanctionedAmount);
   const signed = parseDate(form.sanctionDate);
   const cod = parseDate(form.scheduledCod);
   const tenor = parseTenorMonths(form.tenorText);
@@ -122,6 +160,16 @@ export const deriveSanction = (form) => {
     sanctionValidTill: null,
     codStatus: null,
     codOverdue: false,
+    // Registry-sheet gap-fills. Printed wins; these only appear where the
+    // letter was silent, and `computed` names the ones that were worked out.
+    debtAmount: null,
+    equityAmount: null,
+    debtPct: null,
+    equityPct: null,
+    roi: null,
+    roiCheck: null,
+    roiOk: null,
+    computed: new Set(),
   };
 
   if (cost !== null && loan !== null) {
@@ -155,6 +203,58 @@ export const deriveSanction = (form) => {
 
   if (loan !== null && rate !== null) {
     out.firstYearInterest = `${formatCrore((loan * rate) / 100)} approx.`;
+  }
+
+  // ── registry-sheet gap-fills, mirroring SanctionDerivedCalculator.fillGaps ──
+  let debt = parseMoneyCrore(form.debtAmount);
+  if (debt === null && loan !== null) {
+    debt = loan;                              // one lender, one facility
+    out.debtAmount = formatCrore(debt);
+    out.computed.add('debtAmount');
+  }
+
+  let equity = parseMoneyCrore(form.equityAmount);
+  if (equity === null && cost !== null && debt !== null) {
+    equity = cost - debt;
+    out.equityAmount = formatCrore(equity);
+    out.computed.add('equityAmount');
+  }
+
+  let debtPctValue = parsePct(form.debtPct);
+  if (debtPctValue === null && cost !== null && debt !== null && cost !== 0) {
+    debtPctValue = Math.round((debt / cost) * 1000) / 10;
+    out.debtPct = pct(debtPctValue);
+    out.computed.add('debtPct');
+  }
+
+  if (parsePct(form.equityPct) === null) {
+    let equityPctValue = null;
+    if (equity !== null && cost !== null && cost !== 0) {
+      equityPctValue = Math.round((equity / cost) * 1000) / 10;
+    } else if (debtPctValue !== null) {
+      equityPctValue = 100 - debtPctValue;
+    }
+    if (equityPctValue !== null) {
+      out.equityPct = pct(equityPctValue);
+      out.computed.add('equityPct');
+    }
+  }
+
+  const base = parsePct(form.baseRatePct);
+  const spread = parsePct(form.spreadPct);
+  const printedRoi = parsePct(form.roiPct);
+  if (base !== null && spread !== null) {
+    const built = base + spread;
+    if (printedRoi === null) {
+      out.roi = pct(built);
+      out.computed.add('roiPct');
+    } else if (Math.abs(printedRoi - built) > 0.001) {
+      out.roiOk = false;
+      out.roiCheck = `Does not reconcile — base + spread = ${pct(built)}`;
+    } else {
+      out.roiOk = true;
+      out.roiCheck = 'Reconciles';
+    }
   }
 
   if (cod) {

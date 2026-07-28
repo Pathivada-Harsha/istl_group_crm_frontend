@@ -92,8 +92,17 @@ const borrowerApi = {
 
   // Find-or-create by name. Called once the user confirms which company a
   // reviewed letter belongs to, so the sanction has a borrower to hang off.
-  resolve: async (borrowerName) =>
-    (await req('/borrower/resolve', { method: 'POST', body: { borrowerName } })).data,
+  //
+  // Takes either a bare name or a whole identity object — the letter also
+  // carries promoter, guarantor, group, Cat / Sub Cat and the SL ref., which
+  // have no home on the sanction row. The server fills only blank fields with
+  // them, so importing never overwrites something a user typed.
+  resolve: async (borrowerOrName) => {
+    const body = typeof borrowerOrName === 'string'
+      ? { borrowerName: borrowerOrName }
+      : borrowerOrName;
+    return (await req('/borrower/resolve', { method: 'POST', body })).data;
+  },
 
   // Stateless parse → partial field map. Writes nothing; safe to call before
   // any borrower exists.

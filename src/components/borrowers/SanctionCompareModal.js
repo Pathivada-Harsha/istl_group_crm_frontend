@@ -11,24 +11,13 @@
 
 import React, { useMemo, useState } from 'react';
 import { X, Check, AlertTriangle, FileText } from 'lucide-react';
+import { SANCTION_FIELDS as FIELDS } from './sanctionFields';
 import '../../pages-css/BorrowerRegistry.css';
 
-// Compared in the order they appear on the letter, so the reviewer can read
-// down the page and down the dialog together.
-const FIELDS = [
-  { key: 'refNo', label: 'Reference number' },
-  { key: 'sanctionDate', label: 'Sanction date', kind: 'date' },
-  { key: 'lenderName', label: 'Lender' },
-  { key: 'projectName', label: 'Project' },
-  { key: 'category', label: 'Category' },
-  { key: 'location', label: 'Location' },
-  { key: 'projectCost', label: 'Total project cost', kind: 'money' },
-  { key: 'sanctionedAmount', label: 'Sanctioned amount', kind: 'money' },
-  { key: 'debtEquityRatio', label: 'Debt : equity', kind: 'ratio' },
-  { key: 'interestRateText', label: 'Rate of interest' },
-  { key: 'tenorText', label: 'Tenor' },
-  { key: 'scheduledCod', label: 'Scheduled COD', kind: 'date' },
-];
+// The same array the form is built from, compared in the order the letter
+// prints them so the reviewer can read down the page and down the dialog
+// together. Sharing it is the point: a local copy would silently compare only
+// the fields it remembered and still report "the letter matches".
 
 /**
  * Compare two values for *meaning*, not for characters.
@@ -69,6 +58,13 @@ const normalise = (raw, kind) => {
   }
 
   if (kind === 'ratio') return s.replace(/[^0-9:]/g, '').replace(/\/+/g, ':');
+
+  // "75%" vs "75", "1.12x" vs "1.12" — the same figure with and without its
+  // unit. Comparing those as text would flag every percentage on the sheet.
+  if (kind === 'pct' || kind === 'multiple') {
+    const n = parseFloat(s.replace(/[^0-9.]/g, ''));
+    return Number.isNaN(n) ? s : String(n);
+  }
 
   // Collapse whitespace and drop trailing punctuation so wording differences
   // in spacing don't register as a change.

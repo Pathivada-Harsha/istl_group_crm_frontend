@@ -63,7 +63,10 @@
   padding: 11px 16px; margin-bottom: 16px;
   font-size: 12px; color: var(--ct-6b7280, #6b7280);
 }
-.br-legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.br-legend-item { display: inline-flex; align-items: baseline; gap: 7px; }
+/* The card name carries the weight; the source sits behind it as a gloss. */
+.br-legend-name { font-weight: 600; color: var(--ct-374151, #374151); }
+.br-legend-src { color: var(--ct-6b7280, #6b7280); }
 
 /* ── buttons ────────────────────────────────────────────────────────────── */
 
@@ -201,10 +204,13 @@ a.br-btn { text-decoration: none; }
 .br-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .br-table td, .br-table th { padding: 10px 8px; text-align: left; }
 .br-table tbody tr + tr { border-top: 1px solid var(--c-f1f5f9, #f1f5f9); }
+/* Sanction rows select which letter the cards above describe. */
+.br-card .br-table tbody tr { cursor: pointer; }
+.br-card .br-table tbody tr:hover { background: var(--c-f8fafc, #f8fafc); }
 .br-right { text-align: right; }
 .br-pad { padding: 22px 16px; }
 
-.br-table-wrap { width: 100%; overflow-x: auto; }
+.br-table-wrap { width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
 .br-table-list { min-width: 720px; }
 .br-table-list thead tr {
   background: var(--c-f8fafc, #f8fafc);
@@ -233,6 +239,102 @@ a.br-btn { text-decoration: none; }
   font-size: 12px;
 }
 
+/* ── the registry matrix ────────────────────────────────────────────────────
+   The lender's sheet in full: ~32 columns under ten grouped bands. Scoped to
+   its own class rather than extending .br-table-list, because .br-table is
+   shared with the detail page's sanction list and this table needs a different
+   border model.
+
+   `border-collapse: separate` is required, not stylistic — with `collapse` a
+   position:sticky cell loses its borders in Chrome and Safari. */
+
+.br-table-matrix { border-collapse: separate; border-spacing: 0; width: 100%; }
+/* Nine columns fit a normal screen and share the width between them; the widths
+   themselves are set in JS, since an inline width would beat anything here. The
+   full sheet keeps its fixed widths and scrolls instead. */
+.br-table-compact { table-layout: auto; }
+/* Nothing to scroll past when the columns already fit. */
+.br-table-compact td, .br-table-compact th { white-space: normal; }
+.br-table-compact .br-mono, .br-table-compact .br-num { white-space: nowrap; }
+
+/* The row counter: present, but never competing with the data beside it. */
+.br-serial {
+  color: var(--ct-9ca3af, #9ca3af);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+}
+thead .br-serial { color: var(--ct-6b7280, #6b7280); }
+.br-table-matrix th,
+.br-table-matrix td {
+  padding: 11px 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+}
+.br-table-matrix tbody tr + tr { border-top: none; }
+
+/* Band row. */
+.br-table-matrix .br-th-group {
+  text-align: center;
+  font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ct-475569, #475569);
+  background: var(--c-f1f5f9, #f1f5f9);
+  border-left: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+.br-table-matrix thead tr:first-child th:first-child { border-left: none; }
+
+/* Leaf row. */
+.br-table-matrix thead tr:nth-child(2) th {
+  font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ct-6b7280, #6b7280);
+  background: var(--c-f8fafc, #f8fafc);
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+/* Pinned cells paint above the row, so they carry their own background and
+   their own hover rule — inheriting the row's would leave them transparent and
+   the scrolled content would read straight through them. */
+.br-table-matrix .br-sticky-col {
+  position: sticky; z-index: 2;
+  background: var(--c-white, #ffffff);
+}
+.br-table-matrix thead .br-sticky-col { z-index: 4; }
+.br-table-matrix .br-row-click:hover .br-sticky-col { background: var(--c-f8fafc, #f8fafc); }
+
+.br-table-matrix .br-sticky-right {
+  position: sticky; right: 0; z-index: 3;
+  background: var(--c-white, #ffffff);
+}
+
+/* The edge markers on the pinned columns exist to show that content is sliding
+   underneath them — so they appear only while that is actually happening. A
+   table whose columns all fit shows none, which is why they were just two
+   unexplained vertical rules in the default view. */
+.br-scroll-left .br-sticky-edge { box-shadow: 1px 0 0 var(--c-e5e7eb, #e5e7eb); }
+.br-scroll-right .br-sticky-right { box-shadow: -1px 0 0 var(--c-e5e7eb, #e5e7eb); }
+.br-table-matrix thead .br-sticky-right { z-index: 5; }
+.br-table-matrix .br-row-click:hover .br-sticky-right { background: var(--c-f8fafc, #f8fafc); }
+
+/* Tabular figures so a column of amounts lines up on the decimal point. */
+.br-num { text-align: right; font-variant-numeric: tabular-nums; }
+.br-table-matrix td.br-cell-strong { font-weight: 600; color: var(--ct-111827, #111827); }
+
+/* The header follows you down a long list — the column you are reading is not
+   much use once its label has scrolled away. */
+.br-table-matrix thead th { position: sticky; top: 0; }
+.br-table-matrix thead tr:nth-child(2) th { top: 34px; }
+.br-table-compact thead th { top: 0; }
+
+/* Marks the toggle that is currently in force, so "Full sheet" reads as a
+   state rather than an action you may or may not have taken. */
+.br-btn-active {
+  background: var(--c-eff6ff, #eff6ff);
+  border-color: var(--c-bfdbfe, #bfdbfe);
+  color: var(--ct-2563eb, #2563eb);
+}
+
 /* ── chips, tones, banners ──────────────────────────────────────────────── */
 
 .br-chip {
@@ -242,6 +344,11 @@ a.br-btn { text-decoration: none; }
 }
 .br-chip-ok { background: var(--c-dcfce7, #dcfce7); color: var(--ct-15803d, #15803d); }
 .br-chip-warn { background: var(--c-fef3c7, #fef3c7); color: var(--ct-b45309, #b45309); }
+/* Marks a value the letter didn't print — worked out from ones it did. */
+.br-chip-calc {
+  margin-left: 8px; font-size: 10px; vertical-align: middle;
+  background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb);
+}
 
 .br-tone-ok { color: var(--ct-15803d, #15803d); }
 .br-tone-warn { color: var(--ct-b45309, #b45309); }
@@ -259,6 +366,9 @@ a.br-btn { text-decoration: none; }
 
 .br-empty { text-align: center; padding: 18px 8px; }
 .br-empty p { margin: 0 0 8px; }
+/* The action row inside an empty state is centred, unlike the right-aligned
+   one it shares a class with in the card headers. */
+.br-empty .br-docstrip-actions { justify-content: center; flex-wrap: wrap; }
 
 .br-tabstrip { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .br-tab {
@@ -290,6 +400,16 @@ a.br-btn { text-decoration: none; }
   overflow-wrap: anywhere;
 }
 .br-docstrip-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* Nested inside the Sanctions card rather than standing alone: drop the card
+   shadow it no longer needs and tint it so it reads as part of the section. */
+.br-docstrip-inset {
+  background: var(--c-f8fafc, #f8fafc);
+  box-shadow: none;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  padding: 12px 16px;
+  margin-bottom: 14px;
+}
 
 /* ── modal shell ────────────────────────────────────────────────────────── */
 
@@ -337,9 +457,10 @@ a.br-btn { text-decoration: none; }
 }
 .br-modal-body-single { grid-template-columns: minmax(0, 1fr); }
 
+/* Holds the sanction form's banded fieldsets, one under the other. Each
+   fieldset lays its own fields out two-up via .br-form-grid. */
 .br-form-col {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-  gap: 12px; align-content: start;
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; align-content: start;
 }
 .br-form-grid {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px;
@@ -349,6 +470,84 @@ a.br-btn { text-decoration: none; }
 .br-field-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 12px; font-weight: 500; color: var(--ct-374151, #374151);
+}
+/* The unit a column is quoted in, e.g. "in ₹ Cr". Without it there is no way
+   to tell from the form whether 205 means rupees or crore. */
+.br-field-suffix {
+  margin-left: auto; font-size: 11px; font-weight: 400;
+  color: var(--ct-9ca3af, #9ca3af);
+}
+.br-input-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+/* ── grouped form sections ──────────────────────────────────────────────────
+   Both forms carry enough fields now that an unbroken run of them is hard to
+   scan. The bands are the ones the lender's registry sheet already uses, so
+   the form and the sheet read the same way round. */
+
+.br-fieldset {
+  border: none; margin: 0; padding: 14px 0 4px; min-width: 0;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
+}
+.br-fieldset:first-of-type { border-top: none; padding-top: 0; }
+/* Deliberately NOT `.br-legend` — that class belongs to the provenance legend
+   at the top of the detail page, and reusing it here silently restyled that
+   legend into cramped uppercase from halfway down this file. */
+.br-fieldset-legend {
+  padding: 0 0 10px; font-size: 11px; font-weight: 600;
+  letter-spacing: .04em; text-transform: uppercase;
+  color: var(--ct-6b7280, #6b7280);
+}
+
+/* A quiet inline control in a card header — "Show all 32 fields". A text link,
+   not a button: it changes how much you're shown, it doesn't perform an action. */
+.br-link {
+  margin-left: auto; padding: 0; border: none; background: none;
+  font: inherit; font-size: 11.5px; color: var(--ct-2563eb, #2563eb);
+  cursor: pointer;
+}
+.br-link:hover { text-decoration: underline; }
+.br-link:focus-visible {
+  outline: 2px solid var(--c-2563eb, #2563eb); outline-offset: 2px; border-radius: 3px;
+}
+
+/* Stands in for a list that has nothing in it yet. */
+.br-dl-note { margin: 2px 0 0; font-size: 12px; line-height: 1.5; }
+
+/* ── capped card bodies ─────────────────────────────────────────────────────
+   Sanction details and Derived values run to thirty-odd and ten rows once a
+   record fills in, and "Show all fields" reveals every one of them. Left
+   uncapped, either card pushes everything below it off the screen. The cap is
+   the height they already sit at; past that the list scrolls inside the card
+   and the page keeps its shape.
+
+   The scrollbar is deliberately always visible rather than overlay-on-hover —
+   a capped list that looks complete but isn't is worse than a visible bar. */
+.br-scroll-body {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  /* Room for the bar so the right-hand values don't sit under it. */
+  padding-right: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-cbd5e1, #cbd5e1) transparent;
+}
+.br-scroll-body::-webkit-scrollbar { width: 9px; }
+.br-scroll-body::-webkit-scrollbar-track {
+  background: var(--c-f8fafc, #f8fafc); border-radius: 5px;
+}
+.br-scroll-body::-webkit-scrollbar-thumb {
+  background: var(--c-cbd5e1, #cbd5e1); border-radius: 5px;
+  border: 2px solid var(--c-white, #ffffff);
+}
+.br-scroll-body::-webkit-scrollbar-thumb:hover { background: var(--c-94a3b8, #94a3b8); }
+
+/* On a phone the card is already the whole width and there is nothing beside
+   it to protect, so a nested scroll area only makes the list harder to read. */
+@media (max-width: 768px) {
+  .br-scroll-body { max-height: none; overflow-y: visible; padding-right: 0; }
 }
 
 .br-side-col {
@@ -432,6 +631,35 @@ a.br-btn { text-decoration: none; }
 .br-viewer-doc .docx-th {
   background: var(--c-f8fafc, #f8fafc); font-weight: 600;
 }
+
+.br-row-active { background: var(--c-eff6ff, #eff6ff); }
+.br-row-active td:first-child { box-shadow: inset 2px 0 0 var(--c-2563eb, #2563eb); }
+
+/* ── row actions ────────────────────────────────────────────────────────── */
+
+.br-row-actions {
+  display: inline-flex; gap: 2px; justify-content: flex-end;
+}
+/* Kept subtle until the row is hovered — twenty rows of bright icons compete
+   with the data they sit beside. */
+.br-row-actions .br-icon-btn { opacity: .55; transition: opacity .12s ease; }
+.br-row-click:hover .br-icon-btn,
+.br-row-actions .br-icon-btn:focus-visible { opacity: 1; }
+
+.br-icon-danger:hover {
+  background: var(--c-fee2e2, #fee2e2); color: var(--ct-b91c1c, #b91c1c);
+}
+
+.br-btn-danger {
+  border-color: var(--c-dc2626, #dc2626); color: var(--ct-dc2626, #dc2626);
+}
+.br-btn-danger:hover:not(:disabled) {
+  background: var(--c-fee2e2, #fee2e2); border-color: var(--c-dc2626, #dc2626);
+}
+
+.br-modal-confirm { max-width: 440px; }
+.br-confirm-text { margin: 0 0 10px; font-size: 13px; line-height: 1.6; }
+.br-confirm-note { margin: 0; font-size: 12px; line-height: 1.55; }
 
 /* ── compare with the attached letter ───────────────────────────────────── */
 

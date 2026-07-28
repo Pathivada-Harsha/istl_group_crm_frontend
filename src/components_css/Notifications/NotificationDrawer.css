@@ -1,0 +1,258 @@
+/* src/components_css/Notifications/NotificationDrawer.css
+ *
+ * Colours use the app's existing token convention — var(--c-<hex>, <fallback>)
+ * for surfaces and var(--ct-<hex>, <fallback>) for text — so theme.css drives
+ * dark mode here exactly as it does everywhere else. No [data-theme] rules are
+ * needed in this file.
+ */
+
+/* ── shell ──────────────────────────────────────────────────────────────── */
+
+.ntfd-root { position: fixed; inset: 0; z-index: 1200; }
+
+.ntfd-overlay {
+  position: absolute; inset: 0;
+  background: rgba(15, 23, 42, .45);
+  animation: ntfd-fade 180ms ease-out;
+}
+
+.ntfd-panel {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  width: 520px; max-width: 100vw;
+  display: flex; flex-direction: column;
+  background: var(--c-white, #ffffff);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, .16);
+  animation: ntfd-slide-in 260ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@keyframes ntfd-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ntfd-slide-in {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+
+.ntfd-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 16px 18px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+  flex-shrink: 0;
+}
+.ntfd-head-title { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.ntfd-heading {
+  margin: 0; font-size: 16px; font-weight: 600;
+  color: var(--ct-111827, #111827);
+}
+.ntfd-count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  background: var(--c-dc2626, #dc2626); color: var(--ct-white, #ffffff);
+}
+.ntfd-head-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+
+.ntfd-conn { display: inline-flex; padding: 4px; }
+.ntfd-conn-on { color: var(--ct-15803d, #15803d); }
+.ntfd-conn-off { color: var(--ct-9ca3af, #9ca3af); }
+
+.ntfd-toolbar {
+  display: flex; justify-content: flex-end;
+  padding: 8px 18px;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  flex-shrink: 0;
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+.ntfd-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0;
+  background: transparent; border: 0; border-radius: 6px; cursor: pointer;
+  color: var(--ct-6b7280, #6b7280);
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+.ntfd-icon-btn:hover:not(:disabled) {
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-111827, #111827);
+}
+.ntfd-icon-btn:active:not(:disabled) { transform: scale(.92); }
+.ntfd-icon-btn:disabled { opacity: .5; cursor: not-allowed; }
+.ntfd-icon-btn:focus-visible {
+  outline: 2px solid var(--c-2563eb, #2563eb); outline-offset: 1px;
+}
+.ntfd-icon-danger:hover {
+  background: var(--c-fee2e2, #fee2e2); color: var(--ct-b91c1c, #b91c1c);
+}
+
+.ntfd-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 0; padding: 4px 2px; cursor: pointer;
+  font-size: 12px; font-family: inherit; color: var(--ct-2563eb, #2563eb);
+}
+.ntfd-link:hover { text-decoration: underline; }
+
+.ntfd-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  padding: 9px 15px; font-size: 13px; font-family: inherit; cursor: pointer;
+  background: var(--c-white, #ffffff); color: var(--ct-374151, #374151);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 6px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.ntfd-btn:hover {
+  background: var(--c-f8fafc, #f8fafc); border-color: var(--c-cbd5e1, #cbd5e1);
+}
+.ntfd-btn-block { width: 100%; }
+
+.ntfd-spin { animation: ntfd-rotate 900ms linear infinite; }
+@keyframes ntfd-rotate { to { transform: rotate(360deg); } }
+
+/* ── list ───────────────────────────────────────────────────────────────── */
+
+.ntfd-body { flex: 1; min-height: 0; overflow-y: auto; scroll-behavior: smooth; }
+.ntfd-list { list-style: none; margin: 0; padding: 0; }
+
+.ntfd-item {
+  position: relative; display: flex; align-items: stretch;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  /* Each row fades in as the list renders, staggered by nothing fancier than
+     the animation itself — enough to feel alive without a library. */
+  animation: ntfd-rise 220ms ease-out both;
+}
+@keyframes ntfd-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+.ntfd-item:hover { background: var(--c-f8fafc, #f8fafc); }
+
+/* Unread: tinted, with the module colour as a left accent. */
+.ntfd-item-unread { background: var(--c-eff6ff, #eff6ff); }
+.ntfd-item-unread:hover { background: var(--c-dbeafe, #dbeafe); }
+.ntfd-item-unread::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--ntfd-accent, #2563eb);
+}
+
+.ntfd-item-main {
+  flex: 1; min-width: 0; display: flex; gap: 11px; align-items: flex-start;
+  padding: 13px 16px; text-align: left; cursor: pointer;
+  background: none; border: 0; font-family: inherit;
+}
+.ntfd-item-main:focus-visible {
+  outline: 2px solid var(--c-2563eb, #2563eb); outline-offset: -2px;
+}
+
+/* Module icon standing in for an avatar — notifications carry no user. */
+.ntfd-avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: color-mix(in srgb, var(--ntfd-accent, #2563eb) 14%, transparent);
+  color: var(--ntfd-accent, #2563eb);
+}
+.ntfd-initials { font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+
+.ntfd-item-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1; }
+.ntfd-item-top { display: flex; align-items: center; gap: 8px; }
+
+.ntfd-chip {
+  font-size: 10px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px;
+  background: color-mix(in srgb, var(--ntfd-accent, #2563eb) 12%, transparent);
+  color: var(--ntfd-accent, #2563eb);
+}
+.ntfd-time { font-size: 11px; color: var(--ct-9ca3af, #9ca3af); margin-left: auto; }
+
+.ntfd-title {
+  font-size: 13px; color: var(--ct-111827, #111827);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ntfd-item-unread .ntfd-title { font-weight: 600; }
+
+.ntfd-msg {
+  font-size: 12px; line-height: 1.5; color: var(--ct-6b7280, #6b7280);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ntfd-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 6px;
+  background: var(--ntfd-accent, #2563eb);
+}
+
+/* Row actions appear on hover, and on keyboard focus so they stay reachable
+   without a mouse. */
+.ntfd-item-actions {
+  display: flex; align-items: center; gap: 2px; padding-right: 10px;
+  opacity: 0; transition: opacity 140ms ease;
+}
+.ntfd-item:hover .ntfd-item-actions,
+.ntfd-item:focus-within .ntfd-item-actions { opacity: 1; }
+
+/* ── states ─────────────────────────────────────────────────────────────── */
+
+.ntfd-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; padding: 56px 24px; text-align: center;
+  animation: ntfd-fade 220ms ease-out;
+}
+.ntfd-state-icon { color: var(--ct-cbd5e1, #cbd5e1); margin-bottom: 4px; }
+.ntfd-state-danger { color: var(--ct-dc2626, #dc2626); }
+.ntfd-state-title {
+  margin: 0; font-size: 14px; font-weight: 600; color: var(--ct-374151, #374151);
+}
+.ntfd-state-text {
+  margin: 0 0 10px; font-size: 12.5px; line-height: 1.55;
+  color: var(--ct-9ca3af, #9ca3af);
+}
+
+/* ── skeleton ───────────────────────────────────────────────────────────── */
+
+.ntfd-skel { padding: 13px 16px; gap: 11px; pointer-events: none; }
+.ntfd-skel-avatar {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+}
+.ntfd-skel-body { display: flex; flex-direction: column; gap: 7px; flex: 1; }
+.ntfd-skel-line { height: 9px; border-radius: 4px; display: block; }
+.ntfd-skel-sm { width: 32%; }
+.ntfd-skel-md { width: 58%; }
+.ntfd-skel-lg { width: 82%; }
+
+.ntfd-skel-avatar, .ntfd-skel-line {
+  background: linear-gradient(
+    90deg,
+    var(--c-f1f5f9, #f1f5f9) 25%,
+    var(--c-e5e7eb, #e5e7eb) 37%,
+    var(--c-f1f5f9, #f1f5f9) 63%
+  );
+  background-size: 400% 100%;
+  animation: ntfd-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes ntfd-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+
+/* ── footer ─────────────────────────────────────────────────────────────── */
+
+.ntfd-foot {
+  padding: 12px 16px; flex-shrink: 0;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 1024px) { .ntfd-panel { width: 440px; } }
+
+@media (max-width: 640px) {
+  /* dvh, not vh — mobile browser chrome makes vh overshoot. */
+  .ntfd-panel { width: 100%; height: 100dvh; }
+  .ntfd-head { padding: 14px 16px; }
+  /* Touch has no hover, so the row actions must always be visible. */
+  .ntfd-item-actions { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ntfd-panel, .ntfd-overlay, .ntfd-item, .ntfd-state { animation: none; }
+  .ntfd-spin, .ntfd-skel-avatar, .ntfd-skel-line { animation: none; }
+  .ntfd-icon-btn, .ntfd-btn, .ntfd-item-actions { transition: none; }
+}

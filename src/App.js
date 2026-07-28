@@ -56,7 +56,7 @@ import './theme.css';
 import { setupFetchInterceptor } from './utils/setupFetchInterceptor';
 import ProjectAccessManager from './Pages/ProjectAccessPage.js';
 import InventoryManagement from './Pages/InventoryManagement.js';
-import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationModule';
+import { NotificationProvider, NotificationsPage } from './components/Notifications/NotificationPage';
 import CRMAssistantBot from './components/CRMAssistantBot';
 import TeamLeadPerformance from "./Pages/TeamLeadPerformance.js";
 // ── LOGIN ACTIVITY MODULE ──────────────────────────────────────────────

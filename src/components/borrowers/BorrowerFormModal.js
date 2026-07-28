@@ -6,24 +6,11 @@
 import React, { useEffect, useState } from 'react';
 import { X, Check } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
+import { BORROWER_FIELDS as FIELDS, borrowerFieldGroups } from './borrowerFields';
 import '../../pages-css/BorrowerRegistry.css';
 
-const FIELDS = [
-  { key: 'borrowerName', label: 'Borrower name', required: true, placeholder: 'Company name in full' },
-  { key: 'cin', label: 'CIN', placeholder: 'U40106RJ2021PTC074829' },
-  { key: 'pan', label: 'PAN', placeholder: 'AAKCR8842J' },
-  { key: 'sponsorName', label: 'Sponsor / parent', placeholder: 'Promoter group behind the SPV' },
-  { key: 'registeredAddress', label: 'Registered address', textarea: true, placeholder: 'Registered office as per MCA' },
-  { key: 'city', label: 'City', placeholder: 'Jodhpur' },
-  { key: 'state', label: 'State', placeholder: 'Rajasthan' },
-  { key: 'pincode', label: 'Pincode', placeholder: '342011' },
-  { key: 'contactPerson', label: 'Contact person', placeholder: 'Name' },
-  { key: 'contactEmail', label: 'Email', placeholder: 'name@company.com' },
-  { key: 'contactPhone', label: 'Phone', placeholder: '0291 244 8817' },
-  { key: 'notes', label: 'Notes', textarea: true, placeholder: 'Anything worth recording' },
-];
-
 const EMPTY = FIELDS.reduce((a, f) => ({ ...a, [f.key]: '' }), {});
+const GROUPS = borrowerFieldGroups();
 
 const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
   const [form, setForm] = useState({ ...EMPTY });
@@ -85,36 +72,41 @@ const BorrowerFormModal = ({ borrower = null, onClose, onSaved }) => {
         </div>
 
         <div className="br-modal-body br-modal-body-single">
-          <div className="br-form-grid">
-            {FIELDS.map((f) => (
-              <label
-                key={f.key}
-                className={`br-field ${f.textarea ? 'br-field-wide' : ''}`}
-              >
-                <span className="br-field-label">
-                  {f.label}
-                  {f.required && <span className="br-req" aria-hidden="true"> *</span>}
-                </span>
-                {f.textarea ? (
-                  <textarea
-                    className="br-input br-textarea"
-                    rows={2}
-                    value={form[f.key]}
-                    onChange={set(f.key)}
-                    placeholder={f.placeholder}
-                  />
-                ) : (
-                  <input
-                    type="text"
-                    className="br-input"
-                    value={form[f.key]}
-                    onChange={set(f.key)}
-                    placeholder={f.placeholder}
-                  />
-                )}
-              </label>
-            ))}
-          </div>
+          {GROUPS.map(({ group, fields }) => (
+            <fieldset key={group} className="br-fieldset">
+              <legend className="br-fieldset-legend">{group}</legend>
+              <div className="br-form-grid">
+                {fields.map((f) => (
+                  <label
+                    key={f.key}
+                    className={`br-field ${f.textarea ? 'br-field-wide' : ''}`}
+                  >
+                    <span className="br-field-label">
+                      {f.label}
+                      {f.required && <span className="br-req" aria-hidden="true"> *</span>}
+                    </span>
+                    {f.textarea ? (
+                      <textarea
+                        className="br-input br-textarea"
+                        rows={2}
+                        value={form[f.key]}
+                        onChange={set(f.key)}
+                        placeholder={f.placeholder}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        className={`br-input ${f.mono ? 'br-input-mono' : ''}`.trim()}
+                        value={form[f.key]}
+                        onChange={set(f.key)}
+                        placeholder={f.placeholder}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ))}
         </div>
 
         {error && <div className="br-banner br-banner-danger">{error}</div>}

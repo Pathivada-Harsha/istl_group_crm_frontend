@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import '../components_css/Navbar.css';
 import logo from "../images/logo.png";
 import ThemeToggle from './ThemeToggle';
-import { NotificationBell } from './Notifications/NotificationModule';
+import { NotificationBell } from './Notifications/NotificationPage';
 import { CRMBotNavButton } from './CRMAssistantBot';
 
 function Navbar({ onMenuClick }) {

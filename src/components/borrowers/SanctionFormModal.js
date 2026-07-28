@@ -15,25 +15,12 @@ import { X, Check, AlertTriangle, FileText, Paperclip } from 'lucide-react';
 import borrowerApi from '../../services/borrowerApi';
 import { deriveSanction } from './sanctionDerive';
 import SanctionCompareModal from './SanctionCompareModal';
+import { SANCTION_FIELDS as FIELDS, sanctionFieldGroups } from './sanctionFields';
+import { BORROWER_IMPORT_KEYS } from './borrowerFields';
 import '../../pages-css/BorrowerRegistry.css';
 
-const FIELDS = [
-  { key: 'refNo', label: 'Reference number', required: true, placeholder: 'VIFL/PF/2025/1007' },
-  { key: 'sanctionDate', label: 'Sanction date', placeholder: '14 March 2025' },
-  { key: 'lenderName', label: 'Lender', placeholder: 'Vindhya Infra Finance Ltd.' },
-  { key: 'borrowerName', label: 'Borrower', required: true, placeholder: 'Company name in full' },
-  { key: 'projectName', label: 'Project', placeholder: '50 MWac ground-mounted solar' },
-  { key: 'category', label: 'Category', placeholder: 'Utility-Scale Solar' },
-  { key: 'location', label: 'Location', placeholder: 'Jodhpur, Rajasthan' },
-  { key: 'projectCost', label: 'Total project cost', placeholder: 'Rs. 205.00 Crore' },
-  { key: 'sanctionedAmount', label: 'Sanctioned amount', required: true, placeholder: 'Rs. 153.75 Crore' },
-  { key: 'debtEquityRatio', label: 'Debt : equity', placeholder: '75:25' },
-  { key: 'interestRateText', label: 'Rate of interest', placeholder: '10.35% p.a. (floating)' },
-  { key: 'tenorText', label: 'Tenor', placeholder: '16 years including moratorium of 6 months' },
-  { key: 'scheduledCod', label: 'Scheduled COD', placeholder: '14 February 2026' },
-];
-
 const EMPTY = FIELDS.reduce((a, f) => ({ ...a, [f.key]: '' }), {});
+const GROUPS = sanctionFieldGroups();
 
 const SanctionFormModal = ({
   mode = 'create',
@@ -147,27 +134,26 @@ const SanctionFormModal = ({
     try {
       // Resolve the borrower first — find by name or create — so the sanction
       // always has a parent, whether or not the company was already on file.
+      // The borrower-level values the letter carried (promoter, guarantor,
+      // group, Cat / Sub Cat, SL ref.) ride along; the server fills only blank
+      // fields with them, so an import never overwrites something typed.
       let bId = borrowerId;
       if (!bId) {
-        const b = await borrowerApi.resolve(form.borrowerName.trim());
+        const identity = { borrowerName: form.borrowerName.trim() };
+        BORROWER_IMPORT_KEYS.forEach((k) => {
+          const v = initial?.[k];
+          if (v != null && String(v).trim()) identity[k] = String(v);
+        });
+        const b = await borrowerApi.resolve(identity);
         bId = b.id;
       }
 
+      // Built from FIELDS rather than a hand-written literal, so a field added
+      // to the array is posted without a second edit here.
       const payload = {
         id: initial?.id || null,
         borrowerId: bId,
-        refNo: form.refNo,
-        sanctionDate: form.sanctionDate,
-        lenderName: form.lenderName,
-        projectName: form.projectName,
-        category: form.category,
-        location: form.location,
-        projectCost: form.projectCost,
-        sanctionedAmount: form.sanctionedAmount,
-        debtEquityRatio: form.debtEquityRatio,
-        interestRateText: form.interestRateText,
-        tenorText: form.tenorText,
-        scheduledCod: form.scheduledCod,
+        ...FIELDS.reduce((p, f) => ({ ...p, [f.key]: form[f.key] }), {}),
         status: mode === 'import' ? 'IMPORTED' : (initial?.status || 'DRAFT'),
         source: mode === 'import' ? 'IMPORTED' : (initial?.source || 'MANUAL'),
         extractionEngine: engine || initial?.extractionEngine || null,
@@ -206,8 +192,10 @@ const SanctionFormModal = ({
 
   return (
     <div className="br-modal-backdrop" onMouseDown={onClose}>
+      {/* Wide in every mode now: thirty-odd fields in a single narrow column
+          is unusable, whether they arrived from a letter or by hand. */}
       <div
-        className={`br-modal ${mode === 'import' ? 'br-modal-wide' : ''}`}
+        className="br-modal br-modal-wide"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -266,23 +254,38 @@ const SanctionFormModal = ({
 
         <div className="br-modal-body">
           <div className="br-form-col">
-            {FIELDS.map((f) => (
-              <label key={f.key} className="br-field">
-                <span className="br-field-label">
-                  {f.label}
-                  {f.required && <span className="br-req" aria-hidden="true"> *</span>}
-                  {lowConfidence.has(f.key) && (
-                    <span className="br-chip br-chip-warn">check</span>
-                  )}
-                </span>
-                <input
-                  type="text"
-                  value={form[f.key]}
-                  onChange={set(f.key)}
-                  placeholder={f.placeholder}
-                  className={lowConfidence.has(f.key) ? 'br-input br-input-warn' : 'br-input'}
-                />
-              </label>
+            {GROUPS.map(({ group, fields }) => (
+              <fieldset key={group} className="br-fieldset">
+                <legend className="br-fieldset-legend">{group}</legend>
+                <div className="br-form-grid">
+                  {fields.map((f) => (
+                    <label key={f.key} className="br-field">
+                      <span className="br-field-label">
+                        {f.label}
+                        {f.required && <span className="br-req" aria-hidden="true"> *</span>}
+                        {/* The unit the column is quoted in. Without it a user
+                            typing 205 into "Project Cost" has no way to know
+                            whether that means rupees or crore. */}
+                        {f.suffix && <span className="br-field-suffix">{f.suffix}</span>}
+                        {lowConfidence.has(f.key) && (
+                          <span className="br-chip br-chip-warn">check</span>
+                        )}
+                      </span>
+                      <input
+                        type="text"
+                        value={form[f.key]}
+                        onChange={set(f.key)}
+                        placeholder={f.placeholder}
+                        className={[
+                          'br-input',
+                          lowConfidence.has(f.key) ? 'br-input-warn' : '',
+                          f.mono ? 'br-input-mono' : '',
+                        ].filter(Boolean).join(' ')}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
             ))}
           </div>
 
@@ -294,6 +297,18 @@ const SanctionFormModal = ({
                 label="Ratio check"
                 value={derived.ratioCheck}
                 tone={derived.ratioOk === false ? 'warn' : derived.ratioOk ? 'ok' : ''}
+              />
+              {/* Only shown where the form left the column blank — a printed
+                  value always wins over the one worked out here. */}
+              <Row label="Debt" value={derived.debtAmount} />
+              <Row label="Equity" value={derived.equityAmount} />
+              <Row label="Debt %" value={derived.debtPct} />
+              <Row label="Equity %" value={derived.equityPct} />
+              <Row label="ROI (base + spread)" value={derived.roi} />
+              <Row
+                label="ROI check"
+                value={derived.roiCheck}
+                tone={derived.roiOk === false ? 'warn' : derived.roiOk ? 'ok' : ''}
               />
               <Row label="Moratorium ends" value={derived.moratoriumEnd} />
               <Row label="Repayment starts" value={derived.repaymentStart} />
