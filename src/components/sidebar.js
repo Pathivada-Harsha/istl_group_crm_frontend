@@ -126,6 +126,8 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
       Sales: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6',
       Projects: 'M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z',
       Procurement: 'M8 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0zM3 6h11v9H3V6zm11 3h4l3 3v3h-3',
+      // Bank / institution — lending, distinct from the folder and cart icons.
+      Lender: 'M3 21h18M4 10h16M5 10V21m14-11v11M9 10v11m6-11v11M12 3l9 5H3l9-5z',
       'Office Use': 'M3 21h18M5 21V5a2 2 0 012-2h6a2 2 0 012 2v16M9 9h1m-1 4h1m4-4h1m-1 4h1M19 21V9a2 2 0 00-2-2h-2v14',
     };
     // Generic folder icon as a safe fallback for any future collapsible group.
@@ -238,6 +240,20 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
           icon: 'M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z',
         },
         
+      ],
+    },
+    {
+      title: 'Lender',
+      collapsible: true,
+      items: [
+        {
+          name: 'Borrower Registry',
+          path: '/lender/borrowers',
+          permission: 'LENDER_BORROWERS',
+          // Document with a rupee mark — a sanction letter, distinct from the
+          // plain document icons used by Reports / OrderBook / Invoices.
+          icon: 'M9 12h6M9 9h6m-6 6h3m-6 6h12a1 1 0 001-1V7l-4-4H6a1 1 0 00-1 1v16a1 1 0 001 1z',
+        },
       ],
     },
     {

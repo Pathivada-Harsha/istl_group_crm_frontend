@@ -37,11 +37,16 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 import SockJS from 'sockjs-client';
 import { Client as StompClient } from '@stomp/stompjs';
-import { useAuth } from '../../hooks/useAuth';
-import useToast from '../../hooks/useToast';
+import { useAuth } from '../../hooks/useAuth.js';
+import NotificationDrawer from './NotificationDrawer.js';
+import {
+  Search, CheckCheck, Trash2, Inbox, CircleDot, MailOpen, BellOff,
+} from 'lucide-react';
+import '../../components_css/Notifications/NotificationsPage.css';
+import useToast from '../../hooks/useToast.js';
 import ToastContainer from '../Notification_Toast/ToastContainer.js';
-import useConfirmationModal from '../HandleConfirmationModal';
-import ConfirmationModal from '../ConfirmationModal';
+import useConfirmationModal from '../HandleConfirmationModal.js';
+import ConfirmationModal from '../ConfirmationModal.js';
 
 /* ============================================================================
  * 1. CONFIG & HELPERS
@@ -116,7 +121,7 @@ async function apiRequest(method, path, { body, params } = {}) {
 }
 
 // "2 minutes ago" style relative time
-function timeAgo(iso) {
+export function timeAgo(iso) {
   if (!iso) return '';
   const then = new Date(iso).getTime();
   const diff = Math.max(0, Date.now() - then);
@@ -131,7 +136,7 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString();
 }
 
-const MODULE_META = {
+export const MODULE_META = {
   LEAD:     { label: 'Lead',      color: '#2563eb', token: '--c-2563eb' },
   TASK:     { label: 'Task',      color: '#7c3aed', token: '--c-6366f1' },
   FOLLOWUP: { label: 'Follow-up', color: '#059669', token: '--c-059669' },
@@ -317,149 +322,29 @@ export function NotificationBadge({ count }) {
 
 // ── Navbar bell + dropdown of latest 10 ───────────────────────────────
 export function NotificationBell() {
-  const { latest, unreadCount, markRead, markAllRead } = useNotifications();
-  const [hoveredId, setHoveredId] = useState(null);
+  const { unreadCount } = useNotifications();
   const [open, setOpen] = useState(false);
-  const ref = useRef(null);
-  const navigate = useNavigate();
 
-  useEffect(() => {
-    function onClickOutside(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
-
-  // Clicking any dropdown item just goes to the full notifications page.
-  // It is NOT marked read here — that happens when the user clicks it there.
-  const goToNotifications = () => {
-    setOpen(false);
-    navigate('/notifications');
-  };
+  // No click-outside listener here any more: the drawer owns its own overlay,
+  // ESC handling and focus trap, so a document-level listener would fight it.
+  const close = useCallback(() => setOpen(false), []);
 
   return (
-    <div className="ntf-bell-wrap" ref={ref}>
+    <div className="ntf-bell-wrap">
       <button
         className="ntf-icon-button"
-        aria-label="Notifications"
-        onClick={() => setOpen((o) => !o)}
+        aria-label={
+          unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'
+        }
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
       >
         <BellIcon />
         <NotificationBadge count={unreadCount} />
       </button>
 
-      {open && (
-        <div className="ntf-dropdown">
-          <div className="ntf-dropdown-head">
-            <span>Notifications</span>
-            <div className="ntf-dropdown-head-right">
-              {unreadCount > 0 && <span className="ntf-dropdown-count">{unreadCount} unread</span>}
-              {unreadCount > 0 && (
-                <button
-                  className="ntf-mark-all-btn"
-                  onClick={(e) => { e.stopPropagation(); markAllRead(); }}
-                  title="Mark all as read"
-                >
-                  Mark all as read
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="ntf-dropdown-list">
-            {latest.length === 0 && (
-              <div className="ntf-empty">You're all caught up 🎉</div>
-            )}
-            {latest.map((n) => (
-              <div
-                key={n.id}
-                className={`ntf-drop-item ${n.isRead ? '' : 'ntf-unread'}`}
-                onMouseEnter={() => setHoveredId(n.id)}
-                onMouseLeave={() => setHoveredId(null)}
-              >
-                <button
-                  className="ntf-drop-item-main"
-                  onClick={goToNotifications}
-                >
-                  <span
-                    className="ntf-dot"
-                    style={{ background: MODULE_META[n.module]?.color || '#2563eb' }}
-                  />
-                  <span className="ntf-drop-body">
-                    <span className="ntf-drop-title">{n.title}</span>
-                    <span className="ntf-drop-msg">{n.message}</span>
-                    <span className="ntf-drop-time">{timeAgo(n.createdAt)}</span>
-                  </span>
-                </button>
-                {!n.isRead && hoveredId === n.id && (
-                  <button
-                    className="ntf-drop-mark-read"
-                    title="Mark as read"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      markRead(n.id);
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-
-          <button
-            className="ntf-viewall"
-            onClick={goToNotifications}
-          >
-            View All Notifications
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── A single card (used on the page) ──────────────────────────────────
-function NotificationCard({ n, onOpen, onToggleRead, onDelete, checked, onToggleSelect }) {
-  const meta = MODULE_META[n.module] || { label: n.module, color: '#2563eb' };
-
-  return (
-    <div className={`ntf-card ${n.isRead ? '' : 'ntf-card-unread'} ${checked ? 'ntf-card-selected' : ''}`}>
-      <span className="ntf-card-accent" style={{ background: meta.color }} />
-      {/* Multi-select checkbox — shown only when the parent passes a handler */}
-      {onToggleSelect && (
-        <label className="ntf-select" onClick={e => e.stopPropagation()} title="Select for bulk delete">
-          <input
-            type="checkbox"
-            checked={!!checked}
-            onChange={() => onToggleSelect(n.id)}
-            aria-label={`Select notification: ${n.title}`}
-          />
-        </label>
-      )}
-      <button className="ntf-card-main" onClick={() => onOpen(n)}>
-        <div className="ntf-card-row">
-          <span className="ntf-chip" style={{ borderColor: meta.color, color: meta.color }}>
-            {meta.label}
-          </span>
-          <span className="ntf-card-time">{timeAgo(n.createdAt)}</span>
-        </div>
-        <div className="ntf-card-title">{n.title}</div>
-        <div className="ntf-card-msg">{n.message}</div>
-      </button>
-      <div className="ntf-card-actions">
-        {!n.isRead && (
-          <button className="ntf-link" title="Mark as read" onClick={() => onToggleRead(n)}>
-            Mark read
-          </button>
-        )}
-        <button className="ntf-link ntf-danger" title="Delete" onClick={() => onDelete(n)}>
-          Delete
-        </button>
-      </div>
+      <NotificationDrawer open={open} onClose={close} />
     </div>
   );
 }
@@ -471,6 +356,7 @@ export function NotificationsPage() {
 
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState('all');     // all | unread | read
+  const [moduleFilter, setModuleFilter] = useState('');  // '' = every module
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [page, setPage] = useState(1);
@@ -531,22 +417,63 @@ export function NotificationsPage() {
   };
   const handleMarkAll = async () => { await markAllRead(); load(); };
 
-  // ── Multi-select / bulk delete ─────────────────────────────────────────────
+  // ── Multi-select / bulk actions ────────────────────────────────────────────
   const [selected, setSelected] = useState(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkReading, setBulkReading] = useState(false);
 
   // Reset the selection whenever the visible list changes
-  useEffect(() => { setSelected(new Set()); }, [filter, debounced, page]);
+  useEffect(() => { setSelected(new Set()); }, [filter, moduleFilter, debounced, page]);
 
   const toggleSelect = (id) => setSelected(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allOnPageSelected = items.length > 0 && items.every(n => selected.has(n.id));
-  const toggleSelectAll = () => setSelected(
-    allOnPageSelected ? new Set() : new Set(items.map(n => n.id))
+
+  // Client-side module narrowing. The API takes no module parameter, so this
+  // filters the page already fetched — the rail counts are labelled "on this
+  // page" for the same reason. Add a `module` param server-side and this
+  // becomes a one-line change.
+  const visible = useMemo(
+    () => (moduleFilter ? items.filter(n => n.module === moduleFilter) : items),
+    [items, moduleFilter],
   );
+
+  const moduleCounts = useMemo(() => {
+    const counts = {};
+    items.forEach(n => { counts[n.module] = (counts[n.module] || 0) + 1; });
+    return counts;
+  }, [items]);
+
+  // Grouped by calendar day, newest first, so chronology is read rather than
+  // inferred from a column of timestamps.
+  const groups = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+
+    const out = [];
+    visible.forEach((n) => {
+      const d = n.createdAt ? new Date(n.createdAt) : null;
+      let label = 'Earlier';
+      if (d && !Number.isNaN(d.getTime())) {
+        const day = new Date(d); day.setHours(0, 0, 0, 0);
+        if (day.getTime() === today.getTime()) label = 'Today';
+        else if (day.getTime() === yesterday.getTime()) label = 'Yesterday';
+        else label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
+      }
+      const bucket = out.find(g => g.label === label);
+      if (bucket) bucket.items.push(n);
+      else out.push({ label, items: [n] });
+    });
+    return out;
+  }, [visible]);
+
+  const allOnPageSelected = visible.length > 0 && visible.every(n => selected.has(n.id));
+  const toggleSelectAll = () => setSelected(
+    allOnPageSelected ? new Set() : new Set(visible.map(n => n.id))
+  );
+
   const bulkDelete = async () => {
     if (!selected.size) return;
     const count = selected.size;
@@ -579,103 +506,272 @@ export function NotificationsPage() {
     }
   };
 
+  // Bulk mark-as-read reuses the existing per-item markRead, so no new API.
+  const bulkMarkRead = async () => {
+    const ids = [...selected].filter(id => {
+      const n = items.find(x => x.id === id);
+      return n && !n.isRead;
+    });
+    if (!ids.length) { setSelected(new Set()); return; }
+    setBulkReading(true);
+    try {
+      const results = await Promise.allSettled(ids.map(id => markRead(id)));
+      const failed = results.filter(r => r.status === 'rejected').length;
+      if (failed === 0) showSuccess(`${ids.length} marked as read.`);
+      else showError(`${ids.length - failed} marked as read, ${failed} failed.`);
+    } finally {
+      setBulkReading(false);
+      setSelected(new Set());
+      load();
+    }
+  };
+
+  const busy = bulkDeleting || bulkReading;
+  const rangeFrom = totalElements === 0 ? 0 : (page - 1) * size + 1;
+  const rangeTo = Math.min(page * size, totalElements);
+
   return (
-    <div className="ntf-page">
-      <div className="ntf-page-head">
+    <div className="ntfp-page">
+      <div className="ntfp-head">
         <div>
-          <h1 className="ntf-page-title">Notifications</h1>
-          <p className="ntf-page-sub">
-            {totalElements} total{unreadCount ? ` · ${unreadCount} unread` : ''}
+          <h1 className="ntfp-title">Notifications</h1>
+          <p className="ntfp-sub">
+            {totalElements} total{unreadCount > 0 ? ` · ${unreadCount} unread` : ''}
           </p>
         </div>
-        <button
-          className="ntf-btn ntf-btn-primary"
-          disabled={!unreadCount}
-          onClick={handleMarkAll}
-        >
-          Mark all as read
-        </button>
+        <div className="ntfp-head-actions">
+          <div className="ntfp-search">
+            <Search size={15} className="ntfp-search-icon" aria-hidden="true" />
+            <input
+              type="text"
+              className="ntfp-input"
+              placeholder="Search notifications"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <button
+            type="button"
+            className="ntfp-btn"
+            onClick={handleMarkAll}
+            disabled={unreadCount === 0}
+          >
+            <CheckCheck size={15} aria-hidden="true" />
+            Mark all read
+          </button>
+        </div>
       </div>
 
-      <div className="ntf-toolbar">
-        <div className="ntf-search">
-          <input
-            type="text"
-            placeholder="Search notifications…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <div className="ntf-tabs">
-          {['all', 'unread', 'read'].map((f) => (
+      <div className="ntfp-layout">
+        <nav className="ntfp-rail" aria-label="Filter notifications">
+          <p className="ntfp-rail-label">Status</p>
+          {[
+            { key: 'all', label: 'All', Icon: Inbox },
+            { key: 'unread', label: 'Unread', Icon: CircleDot },
+            { key: 'read', label: 'Read', Icon: MailOpen },
+          ].map(({ key, label, Icon }) => (
             <button
-              key={f}
-              className={`ntf-tab ${filter === f ? 'ntf-tab-active' : ''}`}
-              onClick={() => { setFilter(f); setPage(1); }}
+              key={key}
+              type="button"
+              className={`ntfp-rail-item ${filter === key ? 'ntfp-rail-on' : ''}`}
+              aria-current={filter === key}
+              onClick={() => { setFilter(key); setPage(1); }}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              <Icon size={16} aria-hidden="true" />
+              {label}
+              {/* Only the unread figure is globally accurate — it comes from the
+                  provider. A count beside All or Read would reflect the current
+                  filter, not the whole set. */}
+              {key === 'unread' && unreadCount > 0 && (
+                <span className="ntfp-rail-pill">{unreadCount}</span>
+              )}
             </button>
           ))}
-        </div>
-      </div>
 
-      {/* ── Bulk selection bar ── */}
-      {!loading && items.length > 0 && (
-        <div className="ntf-bulkbar">
-          <label className="ntf-bulkbar-selectall">
-            <input
-              type="checkbox"
-              checked={allOnPageSelected}
-              onChange={toggleSelectAll}
-              aria-label="Select all notifications on this page"
-            />
-            <span>Select all on this page</span>
-          </label>
-          {selected.size > 0 && (
-            <button className="ntf-btn ntf-btn-danger" disabled={bulkDeleting} onClick={bulkDelete}>
-              {bulkDeleting ? 'Deleting…' : `Delete Selected (${selected.size})`}
+          <div className="ntfp-rail-sep" />
+
+          <p className="ntfp-rail-label">Module · this page</p>
+          <button
+            type="button"
+            className={`ntfp-rail-item ${moduleFilter === '' ? 'ntfp-rail-on' : ''}`}
+            onClick={() => setModuleFilter('')}
+          >
+            <span className="ntfp-swatch" style={{ background: 'var(--c-94a3b8, #94a3b8)' }} />
+            All modules
+            <span className="ntfp-rail-count">{items.length}</span>
+          </button>
+          {Object.entries(MODULE_META).map(([key, meta]) => (
+            <button
+              key={key}
+              type="button"
+              className={`ntfp-rail-item ${moduleFilter === key ? 'ntfp-rail-on' : ''}`}
+              onClick={() => setModuleFilter(moduleFilter === key ? '' : key)}
+            >
+              <span className="ntfp-swatch" style={{ background: meta.color }} />
+              {meta.label}
+              <span className="ntfp-rail-count">{moduleCounts[key] || 0}</span>
             </button>
+          ))}
+        </nav>
+
+        <div className="ntfp-feed">
+          <div className="ntfp-feed-scroll">
+          {visible.length > 0 && (
+            <label className="ntfp-selectall">
+              <input
+                type="checkbox"
+                checked={allOnPageSelected}
+                onChange={toggleSelectAll}
+                aria-label="Select all on this page"
+              />
+              Select all on this page
+            </label>
+          )}
+
+          {selected.size > 0 && (
+            <div className="ntfp-bulkbar" role="region" aria-label="Bulk actions">
+              <span className="ntfp-bulk-count">{selected.size} selected</span>
+              <span className="ntfp-bulk-of">of {visible.length} on this page</span>
+              <span className="ntfp-bulk-actions">
+                <button
+                  type="button"
+                  className="ntfp-btn ntfp-btn-sm"
+                  onClick={bulkMarkRead}
+                  disabled={busy}
+                >
+                  <CheckCheck size={14} aria-hidden="true" />
+                  {bulkReading ? 'Marking…' : 'Mark as read'}
+                </button>
+                <button
+                  type="button"
+                  className="ntfp-btn ntfp-btn-sm ntfp-btn-danger"
+                  onClick={bulkDelete}
+                  disabled={busy}
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  {bulkDeleting ? 'Deleting…' : `Delete ${selected.size}`}
+                </button>
+                <button
+                  type="button"
+                  className="ntfp-btn ntfp-btn-sm"
+                  onClick={() => setSelected(new Set())}
+                  disabled={busy}
+                >
+                  Cancel
+                </button>
+              </span>
+            </div>
+          )}
+
+          {loading && (
+            <>
+              {[0, 1, 2, 3].map(i => (
+                <div className="ntfp-skel" key={i} aria-hidden="true">
+                  <div className="ntfp-skel-body">
+                    <span className="ntfp-skel-line ntfp-skel-sm" />
+                    <span className="ntfp-skel-line ntfp-skel-lg" />
+                    <span className="ntfp-skel-line ntfp-skel-md" />
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+
+          {!loading && visible.length === 0 && (
+            <div className="ntfp-state">
+              <BellOff size={28} className="ntfp-state-icon" aria-hidden="true" />
+              <p className="ntfp-state-title">No notifications found</p>
+              <p className="ntfp-state-text">
+                {search || moduleFilter || filter !== 'all'
+                  ? 'Try clearing the search or filters.'
+                  : 'You are all caught up.'}
+              </p>
+            </div>
+          )}
+
+          {!loading && groups.map((group) => (
+            <div key={group.label}>
+              <p className="ntfp-daylabel">{group.label}</p>
+              <div className="ntfp-timeline">
+                {group.items.map((n) => {
+                  const meta = MODULE_META[n.module] || { label: n.module, color: '#64748b' };
+                  const isSel = selected.has(n.id);
+                  return (
+                    <div
+                      key={n.id}
+                      className="ntfp-node"
+                      style={{ '--ntfp-accent': meta.color }}
+                    >
+                      <div
+                        className={`ntfp-card ${n.isRead ? 'ntfp-card-read' : 'ntfp-card-unread'} ${isSel ? 'ntfp-card-selected' : ''}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="ntfp-check"
+                          checked={isSel}
+                          onChange={() => toggleSelect(n.id)}
+                          aria-label={`Select: ${n.title}`}
+                        />
+                        <div className="ntfp-card-body">
+                          <div className="ntfp-card-top">
+                            <span className="ntfp-card-title">{n.title}</span>
+                            <span className="ntfp-card-time">{timeAgo(n.createdAt)}</span>
+                          </div>
+                          <p className="ntfp-card-msg">{n.message}</p>
+                          <div className="ntfp-card-foot">
+                            <span className="ntfp-chip">{meta.label}</span>
+                            <span className="ntfp-card-links">
+                              <button type="button" className="ntfp-link" onClick={() => openRecord(n)}>
+                                Open
+                              </button>
+                              {!n.isRead && (
+                                <button type="button" className="ntfp-link ntfp-link-muted" onClick={() => toggleRead(n)}>
+                                  Mark read
+                                </button>
+                              )}
+                              <button type="button" className="ntfp-link ntfp-link-danger" onClick={() => del(n)}>
+                                Delete
+                              </button>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+
+          </div>
+
+          {/* Pager sits outside the scroller, so it stays put as the feed moves. */}
+          {!loading && totalElements > 0 && (
+            <div className="ntfp-pager">
+              <span>Showing {rangeFrom}–{rangeTo} of {totalElements}</span>
+              <span className="ntfp-pager-nav">
+                <button
+                  type="button"
+                  className="ntfp-btn ntfp-btn-sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  Previous
+                </button>
+                <span>Page {page} of {totalPages}</span>
+                <button
+                  type="button"
+                  className="ntfp-btn ntfp-btn-sm"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                >
+                  Next
+                </button>
+              </span>
+            </div>
           )}
         </div>
-      )}
-
-      <div className="ntf-list">
-        {loading && <div className="ntf-empty">Loading…</div>}
-        {!loading && items.length === 0 && (
-          <div className="ntf-empty">No notifications found.</div>
-        )}
-        {!loading && items.map((n) => (
-          <NotificationCard
-            key={n.id}
-            n={n}
-            onOpen={openRecord}
-            onToggleRead={toggleRead}
-            onDelete={del}
-            checked={selected.has(n.id)}
-            onToggleSelect={toggleSelect}
-          />
-        ))}
       </div>
-
-      {totalPages > 1 && (
-        <div className="ntf-pagination">
-          <button
-            className="ntf-btn"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-          >
-            Previous
-          </button>
-          <span className="ntf-page-info">Page {page} of {totalPages}</span>
-          <button
-            className="ntf-btn"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-          >
-            Next
-          </button>
-        </div>
-      )}
 
       {/* App-standard toasts for delete feedback */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />

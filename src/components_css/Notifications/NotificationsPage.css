@@ -1,0 +1,330 @@
+/* src/components_css/Notifications/NotificationsPage.css
+ *
+ * Colours use the app's token convention — var(--c-<hex>, <fallback>) for
+ * surfaces and var(--ct-<hex>, <fallback>) for text — so theme.css drives dark
+ * mode here as it does elsewhere. No [data-theme] rules needed in this file.
+ *
+ * Prefix: ntfp- (page), kept clear of the ntf- block inside NotificationModule
+ * and the ntfd- drawer sheet.
+ */
+
+.ntfp-page {
+  padding: 24px 28px 24px;
+  font-size: 13px;
+  color: var(--ct-111827, #111827);
+}
+
+/* ── header ─────────────────────────────────────────────────────────────── */
+
+.ntfp-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.ntfp-title { margin: 0; font-size: 24px; font-weight: 600; }
+.ntfp-sub { margin: 4px 0 0; font-size: 13px; color: var(--ct-6b7280, #6b7280); }
+.ntfp-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+.ntfp-search { position: relative; }
+.ntfp-search-icon {
+  position: absolute; left: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--ct-9ca3af, #9ca3af); pointer-events: none;
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+.ntfp-input {
+  box-sizing: border-box; width: 220px;
+  background: var(--c-white, #ffffff); color: var(--ct-111827, #111827);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 6px;
+  padding: 9px 12px 9px 34px; font-size: 13px; font-family: inherit;
+}
+.ntfp-input::placeholder { color: var(--ct-9ca3af, #9ca3af); }
+.ntfp-input:focus {
+  outline: none; border-color: var(--c-2563eb, #2563eb);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .1);
+}
+
+.ntfp-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  background: var(--c-white, #ffffff); color: var(--ct-374151, #374151);
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 6px;
+  padding: 8px 14px; font-size: 13px; font-family: inherit; cursor: pointer;
+  white-space: nowrap; transition: background .15s ease, border-color .15s ease;
+}
+.ntfp-btn:hover:not(:disabled) {
+  background: var(--c-f8fafc, #f8fafc); border-color: var(--c-cbd5e1, #cbd5e1);
+}
+.ntfp-btn:disabled { opacity: .55; cursor: not-allowed; }
+.ntfp-btn-sm { padding: 6px 11px; font-size: 12px; }
+.ntfp-btn-on {
+  border-color: var(--c-2563eb, #2563eb); color: var(--ct-2563eb, #2563eb);
+  background: var(--c-eff6ff, #eff6ff);
+}
+.ntfp-btn-danger {
+  border-color: var(--c-dc2626, #dc2626); color: var(--ct-dc2626, #dc2626);
+}
+.ntfp-btn-danger:hover:not(:disabled) { background: var(--c-fee2e2, #fee2e2); }
+
+/* ── layout ─────────────────────────────────────────────────────────────── */
+
+/* The rail is genuinely fixed rather than sticky: the grid is given the
+   remaining viewport height and the feed column scrolls inside it. Sticky
+   depends on the nearest scrolling ancestor, so any wrapper with overflow set
+   would quietly break it — this cannot. */
+.ntfp-layout {
+  display: grid; grid-template-columns: 288px minmax(0, 1fr);
+  gap: 20px; align-items: stretch;
+  height: calc(100vh - 190px);
+  min-height: 420px;
+}
+
+/* ── filter rail ────────────────────────────────────────────────────────── */
+
+.ntfp-rail {
+  background: var(--c-white, #ffffff); border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+  padding: 10px;
+  /* Fills the grid row and scrolls within itself, so a long module list can
+     never push it past the viewport. No sticky needed. */
+  height: 100%; overflow-y: auto; box-sizing: border-box;
+}
+
+/* The moving half. It is a column: the body scrolls, the pager underneath
+   does not. min-height: 0 is required — a grid item defaults to
+   min-height: auto, which refuses to shrink below its content and would make
+   the page scroll instead of this column. */
+.ntfp-feed {
+  min-height: 0; display: flex; flex-direction: column;
+}
+.ntfp-feed-scroll {
+  flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px;
+  scroll-behavior: smooth;
+}
+.ntfp-rail-label {
+  margin: 6px 9px; font-size: 10px; font-weight: 600;
+  letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ct-9ca3af, #9ca3af);
+}
+.ntfp-rail-sep { height: 1px; background: var(--c-f1f5f9, #f1f5f9); margin: 9px 8px; }
+
+.ntfp-rail-item {
+  display: flex; align-items: center; gap: 9px; width: 100%;
+  padding: 8px 9px; border: 0; border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--ct-475569, #475569);
+  font-size: 13px; font-family: inherit; text-align: left;
+  transition: background .14s ease, color .14s ease;
+}
+.ntfp-rail-item:hover { background: var(--c-f8fafc, #f8fafc); }
+.ntfp-rail-item:focus-visible {
+  outline: 2px solid var(--c-2563eb, #2563eb); outline-offset: -2px;
+}
+.ntfp-rail-on {
+  background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb);
+  font-weight: 500;
+}
+.ntfp-rail-count { margin-left: auto; font-size: 11px; color: var(--ct-9ca3af, #9ca3af); }
+.ntfp-rail-on .ntfp-rail-count { color: var(--ct-2563eb, #2563eb); }
+.ntfp-rail-pill {
+  margin-left: auto; font-size: 11px; font-weight: 600;
+  background: var(--c-dc2626, #dc2626); color: var(--ct-white, #ffffff);
+  border-radius: 9px; padding: 1px 7px;
+}
+.ntfp-swatch { width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── selection bar ──────────────────────────────────────────────────────── */
+
+.ntfp-selectall {
+  display: flex; align-items: center; gap: 10px;
+  margin: 2px 0 12px; font-size: 12px; color: var(--ct-6b7280, #6b7280);
+}
+.ntfp-selectall input { cursor: pointer; }
+
+/* Sits directly under "Select all on this page" rather than docking to the
+   viewport, so the count and the checkbox that produced it stay together. */
+.ntfp-bulkbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--c-eff6ff, #eff6ff); border: 1px solid var(--c-bfdbfe, #bfdbfe);
+  border-radius: 8px; padding: 10px 14px; margin: 0 0 14px;
+  animation: ntfp-drop 180ms ease-out;
+}
+@keyframes ntfp-drop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+.ntfp-bulk-count { font-size: 13px; font-weight: 600; color: var(--ct-1d4ed8, #1d4ed8); }
+.ntfp-bulk-of { font-size: 12px; color: var(--ct-6b7280, #6b7280); }
+.ntfp-bulk-actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── timeline ───────────────────────────────────────────────────────────── */
+
+.ntfp-daylabel {
+  font-size: 11px; font-weight: 600; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--ct-9ca3af, #9ca3af);
+  margin: 18px 0 10px;
+}
+.ntfp-daylabel:first-child { margin-top: 2px; }
+
+.ntfp-timeline { position: relative; padding-left: 26px; }
+.ntfp-timeline::before {
+  content: ''; position: absolute; left: 7px; top: 6px; bottom: 6px;
+  width: 1px; background: var(--c-e5e7eb, #e5e7eb);
+}
+
+.ntfp-node { position: relative; margin: 0 0 10px; }
+.ntfp-node::before {
+  content: ''; position: absolute; left: -23px; top: 15px;
+  width: 11px; height: 11px; border-radius: 50%;
+  background: var(--ntfp-accent, #94a3b8);
+  box-shadow: 0 0 0 2px var(--c-white, #ffffff);
+}
+
+.ntfp-card {
+  display: flex; gap: 11px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 10px;
+  padding: 12px 14px;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+  animation: ntfp-rise 220ms ease-out both;
+}
+@keyframes ntfp-rise {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.ntfp-card:hover { border-color: var(--c-cbd5e1, #cbd5e1); }
+
+/* Unread carries the tint and the module-coloured border. */
+.ntfp-card-unread {
+  background: var(--c-eff6ff, #eff6ff);
+  border-color: var(--c-bfdbfe, #bfdbfe);
+}
+.ntfp-card-selected {
+  border-color: var(--c-2563eb, #2563eb);
+  box-shadow: 0 0 0 1px var(--c-2563eb, #2563eb);
+}
+
+.ntfp-check { margin-top: 3px; cursor: pointer; flex-shrink: 0; }
+.ntfp-card-body { flex: 1; min-width: 0; }
+
+.ntfp-card-top {
+  display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px;
+}
+.ntfp-card-title {
+  font-size: 13px; color: var(--ct-111827, #111827);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ntfp-card-unread .ntfp-card-title { font-weight: 600; }
+.ntfp-card-read .ntfp-card-title { color: var(--ct-6b7280, #6b7280); }
+.ntfp-card-time {
+  margin-left: auto; font-size: 11px; white-space: nowrap;
+  color: var(--ct-9ca3af, #9ca3af);
+}
+.ntfp-card-msg {
+  margin: 0 0 9px; font-size: 12px; line-height: 1.55;
+  color: var(--ct-6b7280, #6b7280);
+}
+.ntfp-card-read .ntfp-card-msg { color: var(--ct-9ca3af, #9ca3af); }
+
+.ntfp-card-foot { display: flex; align-items: center; gap: 8px; }
+.ntfp-chip {
+  font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  text-transform: uppercase; padding: 2px 7px; border-radius: 4px;
+  background: color-mix(in srgb, var(--ntfp-accent, #64748b) 13%, transparent);
+  color: var(--ntfp-accent, #64748b);
+}
+.ntfp-card-read .ntfp-chip {
+  background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-9ca3af, #9ca3af);
+}
+
+.ntfp-card-links { margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+.ntfp-link {
+  background: none; border: 0; padding: 2px; cursor: pointer;
+  font-size: 12px; font-family: inherit; color: var(--ct-2563eb, #2563eb);
+}
+.ntfp-link:hover { text-decoration: underline; }
+.ntfp-link-muted { color: var(--ct-6b7280, #6b7280); }
+.ntfp-link-danger { color: var(--ct-dc2626, #dc2626); }
+
+/* ── states ─────────────────────────────────────────────────────────────── */
+
+.ntfp-state {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding: 64px 24px; text-align: center;
+}
+.ntfp-state-icon { color: var(--ct-cbd5e1, #cbd5e1); margin-bottom: 4px; }
+.ntfp-state-title {
+  margin: 0; font-size: 14px; font-weight: 600; color: var(--ct-374151, #374151);
+}
+.ntfp-state-text { margin: 0; font-size: 12.5px; color: var(--ct-9ca3af, #9ca3af); }
+
+.ntfp-skel { display: flex; gap: 11px; padding: 12px 14px; margin: 0 0 10px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 10px; }
+.ntfp-skel-body { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+.ntfp-skel-line { height: 9px; border-radius: 4px; }
+.ntfp-skel-sm { width: 30%; }
+.ntfp-skel-md { width: 55%; }
+.ntfp-skel-lg { width: 80%; }
+.ntfp-skel-line {
+  background: linear-gradient(90deg,
+    var(--c-f1f5f9, #f1f5f9) 25%,
+    var(--c-e5e7eb, #e5e7eb) 37%,
+    var(--c-f1f5f9, #f1f5f9) 63%);
+  background-size: 400% 100%;
+  animation: ntfp-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes ntfp-shimmer {
+  from { background-position: 100% 50%; }
+  to   { background-position: 0 50%; }
+}
+
+/* ── pagination ─────────────────────────────────────────────────────────── */
+
+/* Anchored below the scrolling body rather than at the end of the list, so the
+   range and page controls stay visible however far the feed is scrolled. */
+.ntfp-pager {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; flex-shrink: 0;
+  margin-top: 12px; padding-top: 12px;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+  background: var(--c-f8fafc, #f8fafc);
+  font-size: 13px; color: var(--ct-6b7280, #6b7280);
+}
+.ntfp-pager-nav { display: flex; align-items: center; gap: 6px; }
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 900px) {
+  .ntfp-layout {
+    grid-template-columns: minmax(0, 1fr);
+    /* Below this the two-pane split is gone, so the page scrolls normally
+       again rather than trapping the feed in its own scroller. */
+    height: auto; min-height: 0;
+  }
+  .ntfp-feed { display: block; }
+  .ntfp-feed-scroll { overflow-y: visible; padding-right: 0; }
+  .ntfp-pager { background: transparent; }
+  /* The rail becomes a horizontal scroller above the feed. */
+  .ntfp-rail {
+    position: static; align-self: auto;
+    height: auto; max-height: none; overflow-y: visible;
+    display: flex; gap: 6px; overflow-x: auto;
+    padding: 8px 10px;
+  }
+  .ntfp-rail-label, .ntfp-rail-sep { display: none; }
+  .ntfp-rail-item { width: auto; white-space: nowrap; }
+}
+
+@media (max-width: 640px) {
+  .ntfp-page { padding: 16px 14px 40px; }
+  .ntfp-title { font-size: 20px; }
+  .ntfp-head-actions { width: 100%; }
+  .ntfp-search, .ntfp-input { width: 100%; }
+  .ntfp-timeline { padding-left: 18px; }
+  .ntfp-node::before { left: -16px; }
+  .ntfp-card-links { width: 100%; margin-left: 0; }
+  .ntfp-bulk-actions { width: 100%; margin-left: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ntfp-card, .ntfp-bulkbar { animation: none; }
+  .ntfp-skel-line { animation: none; }
+  .ntfp-btn, .ntfp-rail-item, .ntfp-card { transition: none; }
+}
