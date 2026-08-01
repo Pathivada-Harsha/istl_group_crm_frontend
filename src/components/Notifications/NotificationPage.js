@@ -35,6 +35,7 @@ import React, {
   useMemo,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { redirectToLogin } from '../../utils/setupFetchInterceptor';
 import SockJS from 'sockjs-client';
 import { Client as StompClient } from '@stomp/stompjs';
 import { useAuth } from '../../hooks/useAuth.js';
@@ -107,11 +108,10 @@ async function apiRequest(method, path, { body, params } = {}) {
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 401) {
-    // session expired — mirror the app's behaviour
-    if (!window.location.pathname.includes('/login')) {
-      localStorage.removeItem(USER_KEY);
-      window.location.href = '/login';
-    }
+    // Same guarded redirect the global fetch interceptor uses, so this
+    // doesn't push its own separate trip to /login on top of one already
+    // in progress.
+    redirectToLogin();
     throw new Error('SESSION_EXPIRED');
   }
   const text = await res.text();

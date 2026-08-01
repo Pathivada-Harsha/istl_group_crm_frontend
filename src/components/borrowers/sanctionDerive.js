@@ -242,13 +242,22 @@ export const deriveSanction = (form) => {
 
   const base = parsePct(form.baseRatePct);
   const spread = parsePct(form.spreadPct);
-  const printedRoi = parsePct(form.roiPct);
+  // A number printed as part of "Rate of Interest" is what the letter
+  // actually says, so it wins over the base + spread build-up below.
+  let roi = parsePct(form.roiPct);
+  if (roi === null) {
+    roi = parseRatePct(form.interestRateText);
+    if (roi !== null) {
+      out.roi = pct(roi);
+      out.computed.add('roiPct');
+    }
+  }
   if (base !== null && spread !== null) {
     const built = base + spread;
-    if (printedRoi === null) {
+    if (roi === null) {
       out.roi = pct(built);
       out.computed.add('roiPct');
-    } else if (Math.abs(printedRoi - built) > 0.001) {
+    } else if (Math.abs(roi - built) > 0.001) {
       out.roiOk = false;
       out.roiCheck = `Does not reconcile — base + spread = ${pct(built)}`;
     } else {
