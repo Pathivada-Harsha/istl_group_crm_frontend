@@ -59,8 +59,16 @@ export const SANCTION_FIELDS = [
     kind: 'pct', placeholder: '7.25', align: 'right', width: 100 },
   { key: 'spreadPct', group: 'Rate of Interest', label: 'Spread',
     kind: 'pct', placeholder: '2.50', align: 'right', width: 90 },
+  // Not a separate box to type into — Rate of interest already states it, and
+  // fillGaps (backend) / deriveSanction (client) pull the number out of that
+  // text on every read. Kept out of the sanction form and the borrower detail
+  // page for the same reason — Rate of interest already carries the number in
+  // full there — and shown only as its own column in the registry table's Key
+  // columns view, where a bare percentage is worth having without opening a
+  // record just to read it off the sentence.
   { key: 'roiPct', group: 'Rate of Interest', label: 'ROI',
-    kind: 'pct', placeholder: '9.75', align: 'right', width: 90 },
+    kind: 'pct', placeholder: '9.75', align: 'right', width: 90,
+    formHidden: true, detailHidden: true },
   { key: 'interestRateText', group: 'Rate of Interest', label: 'Rate of interest',
     kind: 'text', placeholder: '10.35% p.a. (floating)', width: 200, listHidden: true },
 
@@ -94,7 +102,7 @@ export const SANCTION_FIELDS = [
   { key: 'isra', group: 'Financial Covenants', label: 'ISRA',
     kind: 'text', placeholder: 'As printed in the letter', width: 170 },
   { key: 'cashSweep', group: 'Financial Covenants', label: 'Cash Sweep',
-    kind: 'text', placeholder: '100% above 1.30x DSCR', width: 170 },
+    kind: 'text', placeholder: '100% above 1.30x DSCR', width: 300 },
 
   // ── Time Lines ──
   { key: 'sanctionDate', group: 'Time Lines', label: 'Sanction Date',
@@ -102,7 +110,7 @@ export const SANCTION_FIELDS = [
   { key: 'disbursementDate', group: 'Time Lines', label: 'Disb. Date',
     kind: 'date', placeholder: '30 April 2025', width: 130 },
   { key: 'tenorText', group: 'Time Lines', label: 'Tenor',
-    kind: 'text', placeholder: '16 years including moratorium of 6 months', width: 200 },
+    kind: 'text', placeholder: '16 years including moratorium of 6 months', width: 300 },
   { key: 'repaymentStartDate', group: 'Time Lines', label: 'Repayment Start Date',
     kind: 'date', placeholder: '30 September 2026', width: 170 },
   { key: 'repaymentEndDate', group: 'Time Lines', label: 'Repayment End date',

@@ -6,6 +6,8 @@
  * AuthContext uses. No hooks needed since this is a plain JS module.
  */
 
+import { redirectToLogin } from "../utils/setupFetchInterceptor";
+
 const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080";
 const USER_KEY = "bd_portal_user"; // must match AuthContext.js
 
@@ -32,11 +34,11 @@ const getDefaultHeaders = () => {
 };
 
 // ── Session expired → clear storage and redirect ──────────────────────────────
+// Funnels through the same guarded redirect the global fetch interceptor
+// uses, so a request made through here doesn't push its own separate trip
+// to /login on top of one the interceptor (or another caller) already made.
 const handleSessionExpired = () => {
-  if (!window.location.pathname.includes("/login")) {
-    localStorage.removeItem(USER_KEY);
-    window.location.href = "/login";
-  }
+  redirectToLogin();
 };
 
 // ── Core request ──────────────────────────────────────────────────────────────
