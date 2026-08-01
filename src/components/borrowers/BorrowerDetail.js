@@ -17,6 +17,16 @@ import DocumentViewerModal from './DocumentViewerModal';
 import SanctionCompareModal from './SanctionCompareModal';
 import { SANCTION_FIELDS } from './sanctionFields';
 import '../../pages-css/BorrowerRegistry.css';
+import '../../pages-css/BorrowerRegistryPremium.css';
+
+// Free-text covenant fields read as sentences, not numbers — left-aligning
+// just these keeps every other field's right-aligned number/date look intact.
+const LEFT_ALIGN_KEYS = new Set(['cashSweep', 'dsra', 'isra']);
+
+// ROI (detailHidden) is left out of this card — Rate of interest already
+// states it in full, and the bare percentage is only worth a place of its
+// own in the registry table's Key columns view.
+const DETAIL_FIELDS = SANCTION_FIELDS.filter((f) => !f.detailHidden);
 
 const isBlank = (v) => v === null || v === undefined || String(v).trim() === '';
 
@@ -215,10 +225,8 @@ const BorrowerDetail = () => {
 
   const sanctions = borrower.sanctions || [];
   const active = sanctions.find((s) => s.id === activeId) || sanctions[0] || null;
-  // Keys the server worked out rather than read off the letter.
-  const computed = new Set(active?.computedFields || []);
   const hiddenCount = active
-    ? SANCTION_FIELDS.filter((f) => isBlank(active[f.key])).length
+    ? DETAIL_FIELDS.filter((f) => isBlank(active[f.key])).length
     : 0;
 
   // Same rule as the sanction cards — an unfilled identity field is left out
@@ -279,12 +287,6 @@ const BorrowerDetail = () => {
               ? `${active.refNo}${active.sanctionDate ? ` · ${active.sanctionDate}` : ''}`
               : 'No sanction letter on file'}
           </p>
-        </div>
-        <div className="br-head-actions">
-          <button type="button" className="br-btn" onClick={() => setEditIdentity(true)}>
-            <Pencil size={15} aria-hidden="true" />
-            Edit
-          </button>
         </div>
       </div>
 
@@ -496,7 +498,7 @@ const BorrowerDetail = () => {
                 className="br-link"
                 onClick={() => setShowAll((v) => !v)}
               >
-                {showAll ? 'Hide empty fields' : `Show all ${SANCTION_FIELDS.length} fields`}
+                {showAll ? 'Hide empty fields' : `Show all ${DETAIL_FIELDS.length} fields`}
               </button>
             )}
           </header>
@@ -506,17 +508,28 @@ const BorrowerDetail = () => {
             // rest are left out rather than shown as a wall of dashes — the
             // link in the header brings them back when you want to see what a
             // record is missing.
+            //
+            // `borrowerName` here is the letter's own field, separate from
+            // the borrower record's name below — but a letter that didn't
+            // capture one shouldn't just look blank when the record's name is
+            // right there, so it falls back to that.
             <dl className="br-dl br-scroll-body">
-              {SANCTION_FIELDS
-                .filter((f) => showAll || !isBlank(active[f.key]))
+              {DETAIL_FIELDS
+                .map((f) => ({
+                  ...f,
+                  value: f.key === 'borrowerName'
+                    ? (active[f.key] || borrower.borrowerName)
+                    : active[f.key],
+                }))
+                .filter((f) => showAll || !isBlank(f.value))
                 .map((f) => (
                   <Row
                     key={f.key}
                     label={f.label}
-                    value={active[f.key]}
+                    value={f.value}
                     strong={f.key === 'sanctionedAmount'}
                     mono={f.mono}
-                    calc={computed.has(f.key)}
+                    align={LEFT_ALIGN_KEYS.has(f.key) ? 'left' : ''}
                   />
                 ))}
             </dl>
@@ -690,7 +703,7 @@ const BorrowerDetail = () => {
 
 const Row = ({
   label, value, strong = false, tone = '', empty = '—',
-  mono = false, icon = null, calc = false,
+  mono = false, icon = null, align = '',
 }) => (
   <div className="br-dl-row">
     <dt className="br-dl-label">
@@ -702,12 +715,9 @@ const Row = ({
       strong ? 'br-strong' : '',
       mono && value ? 'br-mono' : '',
       value ? (tone ? `br-tone-${tone}` : '') : 'br-muted',
+      align === 'left' ? 'brx-dl-value-left' : '',
     ].filter(Boolean).join(' ')}>
       {value || empty}
-      {/* The letter didn't print this one; it follows from the values that
-          were printed. Same distinction the legend at the top of the page
-          draws between read, calculated and entered. */}
-      {calc && value && <span className="br-chip br-chip-calc">calc</span>}
     </dd>
   </div>
 );

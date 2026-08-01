@@ -12,14 +12,19 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Plus, Upload, Search, FileText, Pencil, Trash2, AlertTriangle, Columns3,
+  Plus, Upload, Search, FileText, Trash2, AlertTriangle, Columns3,
+  Users, Wallet, Percent, MapPin, Package, ShieldCheck, FileCheck,
+  CalendarClock, TrendingUp, IndianRupee, AlertCircle, Clock,
 } from 'lucide-react';
 import borrowerApi from '../services/borrowerApi';
 import BorrowerFormModal from '../components/borrowers/BorrowerFormModal';
 import SanctionFormModal from '../components/borrowers/SanctionFormModal';
 import { parseMoney, formatCrore } from '../components/borrowers/sanctionDerive';
 import { SANCTION_FIELDS, latestSanction } from '../components/borrowers/sanctionFields';
+import useToast from '../hooks/useToast';
+import ToastContainer from '../components/Notification_Toast/ToastContainer';
 import '../pages-css/BorrowerRegistry.css';
+import '../pages-css/BorrowerRegistryPremium.css';
 
 const SF = SANCTION_FIELDS.reduce((a, f) => ({ ...a, [f.key]: f }), {});
 
@@ -49,24 +54,11 @@ const borrowerCol = (key, label, extra = {}) => ({
 // a third of the sheet, so showing all thirty-two at once is a screen of
 // dashes; the rest arrive with the "Full sheet" toggle.
 const COLUMN_GROUPS = [
-  { id: 'number', label: 'Number', columns: [
-    // A row counter, not stored data — "SL" is the serial number, and it's
-    // generated here rather than kept on the record, so it always runs 1..n
-    // over whatever the current search and filter left behind.
-    {
-      key: 'slNo',
-      label: 'SL No',
-      width: 62,
-      align: 'right',
-      sticky: true,
-      compact: true,
-      serial: true,
-      get: (row, sanction, index) => index + 1,
-    },
-  ] },
   { id: 'borrower', label: 'Borrower Details', columns: [
-    borrowerCol('borrowerName', 'Borrower Name', { width: 240, sticky: true, strong: true, compact: true }),
-    sanctionCol('refNo', { label: 'Ref. No', width: 160, mono: true, compact: true }),
+    sanctionCol('refNo', {
+      label: 'Ref. No', width: 160, mono: true, compact: true, sticky: true, link: true,
+    }),
+    borrowerCol('borrowerName', 'Borrower Name', { width: 240, compact: true }),
     borrowerCol('promoterName', 'Promoter Name', { width: 170 }),
     borrowerCol('sponsorName', 'Sponsor Name', { width: 170 }),
     borrowerCol('guarantorName', 'Guarantor Name', { width: 170 }),
@@ -82,6 +74,9 @@ const COLUMN_GROUPS = [
   { id: 'roi', label: 'Rate of Interest', columns: [
     sanctionCol('baseRatePct'),
     sanctionCol('spreadPct'),
+    // In both views, not just Key columns — plenty of letters give the ROI
+    // outright without ever breaking it into base rate + spread, so on the
+    // full sheet it's often the only one of the three with anything in it.
     sanctionCol('roiPct', { compact: true }),
   ] },
   { id: 'project', label: 'Project Details', columns: [
@@ -97,21 +92,27 @@ const COLUMN_GROUPS = [
     sanctionCol('instrument'),
   ] },
   { id: 'security', label: 'Security', columns: [
-    sanctionCol('coObligators'),
+    // Free text long enough to run past one line — same fixed-height,
+    // hover-to-scroll cell as Cash Sweep, at this column's own width.
+    sanctionCol('coObligators', { clamp: true }),
     sanctionCol('pledgeOfSharesPct'),
   ] },
   { id: 'covenants', label: 'Financial Covenants', columns: [
     sanctionCol('minDscr'),
-    sanctionCol('dsra'),
-    sanctionCol('isra'),
+    sanctionCol('dsra', { clamp: true }),
+    sanctionCol('isra', { clamp: true }),
     // A cash sweep is a covenant mechanic, not a date, so it sits here rather
-    // than under Time Lines.
-    sanctionCol('cashSweep'),
+    // than under Time Lines. `clamp` marks it for the fixed-height, hover-to-
+    // scroll cell treatment — the clause text is a full sentence, too long
+    // for one line but not worth widening the column or the row for.
+    sanctionCol('cashSweep', { clamp: true }),
   ] },
   { id: 'timelines', label: 'Time Lines', columns: [
     sanctionCol('sanctionDate', { compact: true }),
     sanctionCol('disbursementDate'),
-    sanctionCol('tenorText', { compact: true }),
+    // Also compact — shown in Key columns too, so it gets the same clamped
+    // cell there as well, not just on the full sheet.
+    sanctionCol('tenorText', { compact: true, clamp: true }),
     sanctionCol('repaymentStartDate'),
     sanctionCol('repaymentEndDate'),
     sanctionCol('scheduledCod', { label: 'Scheduled COD', compact: true }),
@@ -122,8 +123,25 @@ const COLUMN_GROUPS = [
   ] },
 ];
 
-const FLAT_COLUMNS = COLUMN_GROUPS.flatMap((g) => g.columns);
+// groupId is presentational only — it lets the header/cell rendering draw a
+// divider at each band boundary; it doesn't change what a column reads or how
+// it's grouped for COLUMN_GROUPS' own purposes.
+const FLAT_COLUMNS = COLUMN_GROUPS.flatMap((g) => g.columns.map((c) => ({ ...c, groupId: g.id })));
 const COMPACT_COLUMNS = FLAT_COLUMNS.filter((c) => c.compact);
+
+// Presentational only — icon + pastel tone for each band's header cell.
+// Keyed by the same ids as COLUMN_GROUPS; doesn't touch its grouping logic.
+const GROUP_META = {
+  borrower: { icon: Users, tone: 'blue' },
+  mof: { icon: Wallet, tone: 'green' },
+  roi: { icon: Percent, tone: 'lavender' },
+  project: { icon: MapPin, tone: 'orange' },
+  product: { icon: Package, tone: 'teal' },
+  security: { icon: ShieldCheck, tone: 'sky' },
+  covenants: { icon: FileCheck, tone: 'pink' },
+  timelines: { icon: CalendarClock, tone: 'yellow' },
+  assumptions: { icon: TrendingUp, tone: 'purple' },
+};
 
 // Left offsets for the pinned columns, accumulated from the widths so that
 // changing a width in the config keeps header and body aligned on its own.
@@ -141,12 +159,18 @@ const LEFTS = { full: stickyLeft(FLAT_COLUMNS), compact: stickyLeft(COMPACT_COLU
 
 const cellProps = (c, columns, lefts, fill) => {
   const lastSticky = [...columns].reverse().find((x) => x.sticky)?.key;
+  const idx = columns.indexOf(c);
+  const prev = idx > 0 ? columns[idx - 1] : null;
+  // Only meaningful on the full sheet, where the band row above explains what
+  // the divider marks — in Key columns view there's no band row, so the same
+  // line would just be an unexplained rule between columns.
+  const groupStart = !fill && !!prev && prev.groupId !== c.groupId;
   const className = [
-    c.align === 'right' ? 'br-num' : '',
-    c.mono ? 'br-mono' : '',
-    c.serial ? 'br-serial' : '',
-    c.sticky ? 'br-sticky-col' : '',
-    c.key === lastSticky ? 'br-sticky-edge' : '',
+    c.align === 'right' ? 'brx-num' : '',
+    c.mono ? 'brx-mono' : '',
+    c.sticky ? 'brx-sticky-col' : '',
+    c.key === lastSticky ? 'brx-sticky-edge' : '',
+    groupStart ? 'brx-group-start' : '',
   ].filter(Boolean).join(' ');
   // Nine columns fit a normal screen, so only a minimum is set and the table
   // shares the leftover width between them. Pinning an exact width there would
@@ -164,13 +188,14 @@ const cellProps = (c, columns, lefts, fill) => {
  */
 const renderCell = (v) => (
   v === null || v === undefined || v === ''
-    ? <span className="br-muted">—</span>
+    ? <span className="brx-dash">—</span>
     : v
 );
 
 const BorrowerRegistry = () => {
   const navigate = useNavigate();
   const fileRef = useRef(null);
+  const { toasts, removeToast, showSuccess, showWarning, showError } = useToast();
 
   const [rows, setRows] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -181,7 +206,6 @@ const BorrowerRegistry = () => {
   const [parsing, setParsing] = useState(false);
 
   const [addBorrower, setAddBorrower] = useState(false);
-  const [editBorrower, setEditBorrower] = useState(null);   // row being edited
   const [deleteTarget, setDeleteTarget] = useState(null);   // row awaiting confirmation
   const [deleting, setDeleting] = useState(false);
   const [newBorrower, setNewBorrower] = useState(null); // awaiting its first sanction
@@ -271,8 +295,11 @@ const BorrowerRegistry = () => {
     try {
       const parsed = await borrowerApi.parseSanction(file);
       setReview({ initial: parsed, file });
+      showSuccess('Sanction letter read. Review the details before saving.', 'Ready to review');
     } catch (err) {
-      setError(err.message || 'Could not read the document');
+      const msg = err.message || 'Could not read the document';
+      setError(msg);
+      showWarning(msg, 'Could not read letter');
     } finally {
       setParsing(false);
     }
@@ -286,33 +313,38 @@ const BorrowerRegistry = () => {
     if (!deleteTarget) return;
     setDeleting(true);
     setError('');
+    const name = deleteTarget.borrowerName;
     try {
       await borrowerApi.remove(deleteTarget.id);
       setDeleteTarget(null);
       await load();
+      showSuccess(`${name} and its sanction letters were permanently deleted.`, 'Deleted');
     } catch (err) {
-      setError(err.message || 'Could not delete this borrower');
+      const msg = err.message || 'Could not delete this borrower';
+      setError(msg);
       setDeleteTarget(null);
+      showError(msg, 'Delete failed');
     } finally {
       setDeleting(false);
     }
   };
 
   return (
-    <div className="br-page">
-      <div className="br-head">
-        <div className="br-head-text">
-          <p className="br-crumb-static">Lender</p>
-          <h1 className="br-title">Borrower Registry</h1>
+    <div className="br-page brx-registry">
+      <div className="brx-head">
+        <div className="brx-head-text">
+          <p className="brx-eyebrow">Lender</p>
+          <h1 className="brx-title">Borrower Registry</h1>
+          <p className="brx-subtitle">Manage and compare borrower information</p>
         </div>
-        <div className="br-head-actions">
-          <button type="button" className="br-btn" onClick={() => setAddBorrower(true)}>
+        <div className="brx-head-actions">
+          <button type="button" className="brx-btn" onClick={() => setAddBorrower(true)}>
             <Plus size={15} aria-hidden="true" />
             Add manually
           </button>
           <button
             type="button"
-            className="br-btn br-btn-primary"
+            className="brx-btn brx-btn-primary"
             onClick={() => fileRef.current?.click()}
             disabled={parsing}
           >
@@ -331,19 +363,19 @@ const BorrowerRegistry = () => {
 
       {error && <div className="br-banner br-banner-danger">{error}</div>}
 
-      <div className="br-filters">
-        <div className="br-search">
-          <Search size={15} className="br-search-icon" aria-hidden="true" />
+      <div className="brx-filters">
+        <div className="brx-search">
+          <Search size={15} className="brx-search-icon" aria-hidden="true" />
           <input
             type="text"
-            className="br-input br-input-icon"
+            className="brx-input brx-input-icon"
             placeholder="Search by borrower, SL ref., ref no., group, or CIN"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <select
-          className="br-input br-select"
+          className="brx-input brx-select"
           value={category}
           onChange={(e) => setCategory(e.target.value)}
           title="Filter by the project category on a borrower's sanction letters"
@@ -357,7 +389,7 @@ const BorrowerRegistry = () => {
             dashes. */}
         <button
           type="button"
-          className={`br-btn ${fullSheet ? 'br-btn-active' : ''}`}
+          className={`brx-btn ${fullSheet ? 'brx-btn-active' : ''}`}
           onClick={() => setFullSheet((v) => !v)}
           title={fullSheet
             ? 'Show only the columns that usually carry a value'
@@ -368,44 +400,62 @@ const BorrowerRegistry = () => {
         </button>
       </div>
 
-      <div className="br-stats">
-        <Stat label="Borrowers" value={stats.count} />
-        <Stat label="Sanctioned" value={stats.sanctioned} />
-        <Stat label="Details pending" value={stats.pending} />
-        <Stat label="COD overdue" value={stats.overdue} />
+      <div className="brx-stats">
+        <Stat icon={Users} tone="blue" label="Borrowers" value={stats.count} />
+        <Stat icon={IndianRupee} tone="green" label="Sanctioned" value={stats.sanctioned} />
+        <Stat icon={AlertCircle} tone="amber" label="Details pending" value={stats.pending} />
+        <Stat icon={Clock} tone="rose" label="COD overdue" value={stats.overdue} />
       </div>
 
-      <div className="br-card br-card-flush">
+      <div className="brx-table-card">
         <div
           className={[
-            'br-table-wrap',
-            edges.left ? 'br-scroll-left' : '',
-            edges.right ? 'br-scroll-right' : '',
+            'brx-table-wrap',
+            edges.left ? 'brx-scroll-left' : '',
+            edges.right ? 'brx-scroll-right' : '',
           ].filter(Boolean).join(' ')}
           ref={scrollRef}
           onScroll={syncEdges}
         >
-        <table className={`br-table br-table-matrix ${fullSheet ? '' : 'br-table-compact'}`}>
+        <table className={`brx-table ${fullSheet ? '' : 'brx-table-compact'}`}>
+          {/* Pins every column to its configured width regardless of content
+              length — without it, a long value (e.g. Cash Sweep's free text)
+              can widen its column past the width set in COLUMN_GROUPS. Only
+              needed on the full sheet: the compact view intentionally shares
+              leftover width between its nine columns instead. */}
+          {fullSheet && (
+            <colgroup>
+              {columns.map((c) => <col key={c.key} style={{ width: c.width }} />)}
+              <col style={{ width: 96 }} />
+            </colgroup>
+          )}
           <thead>
             {/* The band row only earns its place on the full sheet. With nine
                 columns drawn from six different bands it was label noise. */}
             {fullSheet && (
               <tr>
-                {COLUMN_GROUPS.map((g) => (
-                  <th
-                    key={g.id}
-                    className="br-th-group"
-                    colSpan={g.columns.length}
-                    scope="colgroup"
-                  >
-                    {g.label}
-                  </th>
-                ))}
+                {COLUMN_GROUPS.map((g) => {
+                  const meta = GROUP_META[g.id] || {};
+                  const Icon = meta.icon;
+                  return (
+                    <th
+                      key={g.id}
+                      className={`brx-th-group brx-band-${meta.tone || 'slate'}`}
+                      colSpan={g.columns.length}
+                      scope="colgroup"
+                    >
+                      <span className="brx-band-label">
+                        {Icon && <Icon size={13} className="brx-band-icon" aria-hidden="true" />}
+                        {g.label}
+                      </span>
+                    </th>
+                  );
+                })}
                 {/* An empty cell above Actions rather than a rowSpan on the
                     label. A rowSpan'd sticky cell sits between the two header
                     rows in Chrome — it painted over the band beside it and the
                     word "Actions" floated in the gap. */}
-                <th className="br-sticky-right" aria-hidden="true" />
+                <th className="brx-sticky-right" aria-hidden="true" />
               </tr>
             )}
             <tr>
@@ -419,22 +469,22 @@ const BorrowerRegistry = () => {
               })}
               {/* Pinned right: on the full sheet, Edit and Delete would
                   otherwise need a horizontal scroll on every row. */}
-              <th className="br-sticky-right br-right" scope="col">Actions</th>
+              <th className="brx-sticky-right brx-right" scope="col">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={totalCols} className="br-muted br-pad">Loading…</td></tr>
+              <tr><td colSpan={totalCols} className="brx-muted brx-pad">Loading…</td></tr>
             )}
 
             {!loading && visible.length === 0 && (
               <tr>
-                <td colSpan={totalCols} className="br-pad">
-                  <div className="br-empty">
+                <td colSpan={totalCols} className="brx-pad">
+                  <div className="brx-empty">
                     {search || category ? (
                       <>
                         <p><strong>No borrowers match</strong></p>
-                        <p className="br-muted">
+                        <p className="brx-muted">
                           {search && `Nothing found for "${search}"`}
                           {search && category && ' in '}
                           {category && `category "${category}"`}
@@ -443,7 +493,7 @@ const BorrowerRegistry = () => {
                         </p>
                         <button
                           type="button"
-                          className="br-btn"
+                          className="brx-btn"
                           onClick={() => { setSearch(''); setCategory(''); }}
                         >
                           Clear filters
@@ -452,12 +502,12 @@ const BorrowerRegistry = () => {
                     ) : (
                       <>
                         <p><strong>No borrowers yet</strong></p>
-                        <p className="br-muted">
+                        <p className="brx-muted">
                           Import a sanction letter to create the first record, or add one manually.
                         </p>
                         <button
                           type="button"
-                          className="br-btn"
+                          className="brx-btn"
                           onClick={() => fileRef.current?.click()}
                         >
                           <FileText size={15} aria-hidden="true" />
@@ -470,53 +520,58 @@ const BorrowerRegistry = () => {
               </tr>
             )}
 
-            {!loading && visible.map((r, i) => {
+            {!loading && visible.map((r) => {
               const s = latestSanction(r);
               return (
-                <tr
-                  key={r.id}
-                  className="br-row-click"
-                  onClick={() => navigate(`/lender/borrowers/${r.id}`)}
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') navigate(`/lender/borrowers/${r.id}`);
-                  }}
-                >
+                <tr key={r.id} className="brx-row">
                   {columns.map((c) => {
                     const { className, style } = cellProps(c, columns, lefts, !fullSheet);
-                    const v = c.get(r, s, i);
+                    const v = c.get(r, s);
+                    if (c.link) {
+                      return (
+                        <td key={c.key} className={className} style={style}>
+                          <button
+                            type="button"
+                            className="brx-ref-link"
+                            onClick={() => navigate(`/lender/borrowers/${r.id}`)}
+                          >
+                            {renderCell(v)}
+                          </button>
+                        </td>
+                      );
+                    }
+                    // Full sheet only — in Key columns view this would force
+                    // every row up to the clamp's 3-line height even when a
+                    // column like Tenor is the only long value in the row, so
+                    // compact view keeps the plain single-line truncation
+                    // every other compact column already uses.
+                    if (c.clamp && fullSheet) {
+                      return (
+                        <td key={c.key} className={className} style={style}>
+                          <div
+                            className="brx-clamp"
+                            // Only resets the box's own scroll offset — no
+                            // state, no re-render, doesn't touch anything the
+                            // table's own scroll tracking depends on.
+                            onMouseLeave={(e) => { e.currentTarget.scrollTop = 0; }}
+                          >
+                            {renderCell(v)}
+                          </div>
+                        </td>
+                      );
+                    }
                     return (
-                      <td
-                        key={c.key}
-                        className={`${className} ${c.strong ? 'br-cell-strong' : ''}`.trim()}
-                        style={style}
-                        title={c.strong || c.serial ? undefined : String(v ?? '')}
-                      >
-                        {c.serial ? v : renderCell(v)}
+                      <td key={c.key} className={className} style={style} title={String(v ?? '')}>
+                        {renderCell(v)}
                       </td>
                     );
                   })}
 
-                  {/* stopPropagation on the cell, not each button: the row is
-                      clickable, and without it Edit would also navigate. */}
-                  <td
-                    className="br-sticky-right br-right"
-                    onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
-                  >
-                    <div className="br-row-actions">
+                  <td className="brx-sticky-right brx-right">
+                    <div className="brx-row-actions">
                       <button
                         type="button"
-                        className="br-icon-btn"
-                        title={`Edit ${r.borrowerName}`}
-                        aria-label={`Edit ${r.borrowerName}`}
-                        onClick={() => setEditBorrower(r)}
-                      >
-                        <Pencil size={15} aria-hidden="true" />
-                      </button>
-                      <button
-                        type="button"
-                        className="br-icon-btn br-icon-danger"
+                        className="brx-icon-btn brx-icon-danger"
                         title={`Delete ${r.borrowerName}`}
                         aria-label={`Delete ${r.borrowerName}`}
                         onClick={() => setDeleteTarget(r)}
@@ -532,14 +587,6 @@ const BorrowerRegistry = () => {
         </table>
         </div>
       </div>
-
-      {editBorrower && (
-        <BorrowerFormModal
-          borrower={editBorrower}
-          onClose={() => setEditBorrower(null)}
-          onSaved={() => { setEditBorrower(null); load(); }}
-        />
-      )}
 
       {deleteTarget && (
         <div className="br-modal-backdrop" onMouseDown={() => setDeleteTarget(null)}>
@@ -637,6 +684,7 @@ const BorrowerRegistry = () => {
           onClose={() => setReview(null)}
           onSaved={(saved) => {
             setReview(null);
+            showSuccess('Sanction letter saved to the registry.', 'Saved');
             // Land on the record just created — that is where the derived
             // panel shows what the import worked out.
             if (saved?.id) navigate(`/lender/borrowers/${saved.id}`);
@@ -644,14 +692,19 @@ const BorrowerRegistry = () => {
           }}
         />
       )}
+
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </div>
   );
 };
 
-const Stat = ({ label, value }) => (
-  <div className="br-stat">
-    <span className="br-stat-label">{label}</span>
-    <span className="br-stat-value">{value}</span>
+const Stat = ({ icon: Icon, tone, label, value }) => (
+  <div className={`brx-stat brx-stat-${tone}`}>
+    <span className="brx-stat-icon"><Icon size={19} aria-hidden="true" /></span>
+    <span className="brx-stat-body">
+      <span className="brx-stat-value">{value}</span>
+      <span className="brx-stat-label">{label}</span>
+    </span>
   </div>
 );
 

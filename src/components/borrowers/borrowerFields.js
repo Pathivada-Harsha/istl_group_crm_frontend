@@ -8,6 +8,17 @@
 // page. Only `borrowerName` is required; everything else fills in as the KYC
 // pack and the registry sheet arrive.
 
+// PAN is always stored upper-case regardless of how it was typed — the
+// income-tax department never issues a lower-case one, and a mixed-case
+// value on file just makes later exact-match lookups miss.
+const toPan = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+// Digits only — a pincode or phone number with a stray space or dash typed
+// into it silently breaks any lookup keyed on the raw string.
+const toDigits = (max) => (v) => v.replace(/\D/g, '').slice(0, max);
+// Stored lower-case so "Name@Company.com" and "name@company.com" are the
+// same row rather than two, and login/notification matching doesn't miss.
+const toEmailCase = (v) => v.toLowerCase();
+
 export const BORROWER_FIELDS = [
   // ── Identity ──
   // The sheet's "SL Ref. No" is the sanction's own reference number under
@@ -15,7 +26,8 @@ export const BORROWER_FIELDS = [
   { key: 'borrowerName', group: 'Identity', label: 'Borrower name', required: true,
     placeholder: 'Company name in full' },
   { key: 'cin', group: 'Identity', label: 'CIN', mono: true, placeholder: 'U40106RJ2021PTC074829' },
-  { key: 'pan', group: 'Identity', label: 'PAN', mono: true, placeholder: 'AAKCR8842J' },
+  { key: 'pan', group: 'Identity', label: 'PAN', mono: true, placeholder: 'AAKCR8842J',
+    normalize: toPan, maxLength: 10 },
 
   // ── Group & parties ──
   { key: 'promoterName', group: 'Group & parties', label: 'Promoter name',
@@ -32,16 +44,23 @@ export const BORROWER_FIELDS = [
     placeholder: 'Borrower sub-category' },
 
   // ── Registered office ──
+  // Pincode comes first: City, State and District are looked up from it
+  // (see BorrowerFormModal), so asking for it first is the order they
+  // actually get filled in.
   { key: 'registeredAddress', group: 'Registered office', label: 'Registered address',
     textarea: true, placeholder: 'Registered office as per MCA' },
+  { key: 'pincode', group: 'Registered office', label: 'Pincode', placeholder: '342011',
+    normalize: toDigits(6), maxLength: 6, inputMode: 'numeric' },
   { key: 'city', group: 'Registered office', label: 'City', placeholder: 'Jodhpur' },
   { key: 'state', group: 'Registered office', label: 'State', placeholder: 'Rajasthan' },
-  { key: 'pincode', group: 'Registered office', label: 'Pincode', placeholder: '342011' },
+  { key: 'district', group: 'Registered office', label: 'District', placeholder: 'Jodhpur' },
 
   // ── Contact ──
   { key: 'contactPerson', group: 'Contact', label: 'Contact person', placeholder: 'Name' },
-  { key: 'contactEmail', group: 'Contact', label: 'Email', placeholder: 'name@company.com' },
-  { key: 'contactPhone', group: 'Contact', label: 'Phone', placeholder: '0291 244 8817' },
+  { key: 'contactEmail', group: 'Contact', label: 'Email', placeholder: 'name@company.com',
+    normalize: toEmailCase, type: 'email' },
+  { key: 'contactPhone', group: 'Contact', label: 'Phone', placeholder: '9876543210',
+    normalize: toDigits(10), maxLength: 10, inputMode: 'numeric' },
 
   // ── Notes ──
   { key: 'notes', group: 'Notes', label: 'Notes', textarea: true,
