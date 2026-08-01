@@ -61,7 +61,9 @@ const AttrCell = ({ field, value, onChange }) => {
   return <input className="bim-inp" value={value} onChange={(e) => onChange(e.target.value)} />;
 };
 
-export default function ItemMakesModal({ item, onClose, showError, showSuccess }) {
+// `embedded` renders just the body — no overlay, head or footer — so the item
+// modal's Makes tab can host the exact same UI. Save behaviour is identical.
+export default function ItemMakesModal({ item, onClose, showError, showSuccess, embedded = false }) {
   const itemId = item?.id;
   const [variants, setVariants] = useState([]);
   const [schema, setSchema] = useState([]);
@@ -215,15 +217,8 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess }
 
   if (!item) return null;
 
-  return (
-    <div className="bim-overlay" onMouseDown={onClose}>
-      <div className="bim-modal bim-modal-lg" onMouseDown={(e) => e.stopPropagation()}>
-        <div className="bim-modal-head">
-          <div className="bim-modal-title">Makes for “{item.itemName}”</div>
-          <button className="bim-iconbtn" onClick={onClose} title="Close"><X size={18} /></button>
-        </div>
-
-        <div className="bim-modal-body">
+  const body = (
+    <div className="bim-modal-body">
           <div className="bim-muted" style={{ fontSize: 12, marginBottom: 10 }}>
             The makes available for this item. Curate which ones a template line allows (and the default) in the template’s BOM tab.
           </div>
@@ -341,7 +336,20 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess }
               </button>
             </div>
           </div>
+    </div>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <div className="bim-overlay" onMouseDown={onClose}>
+      <div className="bim-modal bim-modal-lg" onMouseDown={(e) => e.stopPropagation()}>
+        <div className="bim-modal-head">
+          <div className="bim-modal-title">Makes for “{item.itemName}”</div>
+          <button className="bim-iconbtn" onClick={onClose} title="Close"><X size={18} /></button>
         </div>
+
+        {body}
 
         <div className="bim-modal-foot">
           <button className="bim-btn bim-btn-secondary" onClick={onClose}>Close</button>

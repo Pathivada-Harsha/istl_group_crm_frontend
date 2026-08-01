@@ -45,6 +45,7 @@ import OrderBook from "./Pages/OrderBook.js";
 import ProjectsList from "./Pages/ProjectsList.js";
 import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import Tenders from "./Pages/Tenders.js";
+import OrdersInLine from "./Pages/OrdersInLine.js"; // PROVISIONAL — temporary register, see file header
 import BorrowerRegistry from "./Pages/BorrowerRegistry.js";
 import BorrowerDetail from "./components/borrowers/BorrowerDetail.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
@@ -236,6 +237,11 @@ function AppShell({ hideShell }) {
               </ProtectedRoute>
             }
           />
+
+          {/* PROVISIONAL — temporary Orders in Line register, see the page file header */}
+          <Route path="/sales/orders-in-line" element={
+            <ProtectedRoute><OrdersInLine /></ProtectedRoute>
+          } />
 
           <Route path="/sales/clients" element={
             <ProtectedRoute><Customer_dashboard /></ProtectedRoute>

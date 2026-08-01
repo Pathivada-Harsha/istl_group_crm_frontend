@@ -6,18 +6,29 @@
    ───────────────────────────────────────────────────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
+/* The page is the flex context the table sizes against: header, action bar and
+   filter chips take their natural height and the table card absorbs the rest.
+   64px is the app shell's fixed navbar (App.css → .main-content padding-top).
+   A definite `height` (not min-height) is what keeps the row list scrolling
+   inside the card instead of growing the whole page; `overflow: auto` is only
+   the escape hatch for viewports too short to fit the chrome at all. */
 .bim-page {
   padding: 18px 22px;
   font-family: 'Poppins', sans-serif;
   color: var(--ct-374151, #374151);
   background: var(--c-f9fafb, #f9fafb);
-  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 64px);
+  overflow: auto;
 }
-.bim-page * { box-sizing: border-box; }
+.bim-page, .bim-page * { box-sizing: border-box; }
 
 /* ── Header + action bar ── */
 .bim-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.bim-titlerow { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
 .bim-title { font-size: 20px; font-weight: 600; color: var(--ct-111827, #111827); }
+.bim-count { font-size: 12px; font-weight: 500; color: var(--ct-6b7280, #6b7280); background: var(--c-f3f4f6, #f3f4f6); border-radius: 9999px; padding: 2px 10px; white-space: nowrap; }
 .bim-sub { font-size: 12.5px; color: var(--ct-6b7280, #6b7280); margin-top: 2px; }
 
 .bim-actionbar {
@@ -28,6 +39,41 @@
 }
 .bim-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .bim-spacer { flex: 1; }
+
+/* ── Action-bar dropdowns (Import/Export, Columns) ── */
+.bim-menu { position: relative; display: inline-flex; }
+.bim-menu-pop {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 190px;
+  background: var(--c-ffffff, #fff); border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px; box-shadow: 0 12px 28px rgba(15,23,42,0.14); padding: 6px;
+}
+.bim-menu-pop-wide { min-width: 262px; }
+.bim-menu-head { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ct-9ca3af, #9ca3af); padding: 5px 8px 6px; }
+.bim-menu-item {
+  display: flex; align-items: flex-start; gap: 9px; width: 100%; text-align: left;
+  background: none; border: none; cursor: pointer; padding: 8px; border-radius: 8px;
+  font-family: inherit; font-size: 13px; color: var(--ct-374151, #374151);
+}
+.bim-menu-item:hover:not(:disabled) { background: var(--c-f3f4f6, #f3f4f6); }
+.bim-menu-item:disabled { opacity: .55; cursor: default; }
+.bim-menu-item > svg { flex: none; margin-top: 2px; color: var(--ct-6b7280, #6b7280); }
+.bim-menu-item b { display: block; font-weight: 600; }
+.bim-menu-item small { display: block; font-size: 11px; color: var(--ct-6b7280, #6b7280); margin-top: 1px; }
+.bim-menu-check { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.bim-menu-check:hover { background: var(--c-f3f4f6, #f3f4f6); }
+.bim-menu-check-off { opacity: .6; cursor: default; }
+
+/* ── Active-filter chips ── */
+.bim-chips { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -4px 0 12px; }
+.bim-chips-label { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ct-9ca3af, #9ca3af); }
+.bim-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 5px 3px 10px;
+  border-radius: 9999px; font-size: 12px; background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-1d4ed8, #1d4ed8); border: 1px solid var(--c-dbeafe, #dbeafe);
+}
+.bim-chip-k { color: var(--ct-6b7280, #6b7280); font-weight: 600; }
+.bim-chip-x { background: none; border: none; cursor: pointer; padding: 2px; border-radius: 9999px; display: inline-flex; color: inherit; opacity: .6; }
+.bim-chip-x:hover { opacity: 1; background: rgba(37,99,235,0.14); }
 
 /* ── Inputs / selects ── */
 .bim-inp {
@@ -67,10 +113,12 @@
 .bim-table-wrap { background: var(--c-ffffff, #fff); overflow: hidden; border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
 .bim-table-scroll { overflow-x: auto; }
 
-/* Catalog table fills the remaining viewport; the table BODY scrolls (sticky header
-   stays put) and the pager is pinned — so the page itself doesn't scroll. */
-.bim-table-wrap.bim-fill { display: flex; flex-direction: column; height: calc(100vh - 230px); min-height: 300px; }
-.bim-fill .bim-table-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* Catalog card takes whatever height .bim-page has left over; the row list
+   scrolls (sticky header stays put) and the pager is pinned — so the page itself
+   doesn't scroll. flex-basis 0 + min-height 0 is what lets it shrink below its
+   own content; with `auto` the rows would push the page taller instead. */
+.bim-table-wrap.bim-fill { display: flex; flex-direction: column; flex: 1 1 0; min-height: 240px; }
+.bim-fill .bim-table-scroll, .bim-fill .bim-cards-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
 .bim-fill .bim-pager { flex: 0 0 auto; }
 .bim-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .bim-table th, .bim-table td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9); vertical-align: middle; }
@@ -95,6 +143,44 @@
 .bim-muted { color: var(--ct-6b7280, #6b7280); }
 .bim-actions { display: flex; gap: 4px; white-space: nowrap; align-items: center; }
 
+/* ── View toggle (Table / Grid) — own row between the filters and the view ── */
+.bim-viewbar { display: flex; align-items: center; justify-content: flex-end; flex: 0 0 auto; margin-bottom: 10px; }
+.bim-viewtoggle { display: inline-flex; border: 1.5px solid var(--c-d1d5db, #d1d5db); border-radius: 8px; overflow: hidden; background: var(--c-ffffff, #fff); }
+.bim-viewbtn {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border: none;
+  background: transparent; font-family: inherit; font-size: 12.5px; font-weight: 500;
+  color: var(--ct-6b7280, #6b7280); cursor: pointer; white-space: nowrap;
+}
+.bim-viewbtn + .bim-viewbtn { border-left: 1.5px solid var(--c-e5e7eb, #e5e7eb); }
+.bim-viewbtn:hover { background: var(--c-f9fafb, #f9fafb); color: var(--ct-374151, #374151); }
+.bim-viewbtn-active, .bim-viewbtn-active:hover { background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb); }
+.bim-sortpick { display: inline-flex; align-items: center; gap: 6px; }
+.bim-sortpick .bim-btn { padding: 7px 9px; }
+
+/* ── Grid (card) view ── */
+.bim-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(272px, 1fr)); gap: 12px; padding: 14px; }
+.bim-card {
+  display: flex; flex-direction: column; gap: 7px; padding: 13px 14px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb); border-radius: 10px;
+  background: var(--c-ffffff, #fff); transition: border-color .12s, box-shadow .12s;
+}
+.bim-card:hover { border-color: var(--c-2563eb, #2563eb); box-shadow: 0 4px 14px rgba(15,23,42,0.08); }
+.bim-card-off { opacity: 0.6; }
+.bim-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.bim-card-name { font-size: 13.5px; font-weight: 600; color: var(--ct-111827, #111827); line-height: 1.35; }
+.bim-card-cat { font-size: 10.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ct-6b7280, #6b7280); }
+.bim-card-spec { font-size: 12px; line-height: 1.5; color: var(--ct-6b7280, #6b7280); white-space: pre-wrap; }
+.bim-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.bim-card-meta span { display: inline-flex; align-items: baseline; gap: 4px; font-size: 11.5px; color: var(--ct-374151, #374151); background: var(--c-f9fafb, #f9fafb); border: 1px solid var(--c-f1f5f9, #f1f5f9); border-radius: 6px; padding: 2px 7px; }
+.bim-card-meta b { font-weight: 600; font-size: 10px; letter-spacing: .04em; text-transform: uppercase; color: var(--ct-9ca3af, #9ca3af); }
+.bim-card-foot { display: flex; justify-content: flex-end; margin-top: auto; padding-top: 4px; border-top: 1px solid var(--c-f1f5f9, #f1f5f9); }
+
+/* ── Empty states ── */
+.bim-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 5px; padding: 30px 16px; }
+.bim-empty-title { font-size: 13.5px; font-weight: 600; color: var(--ct-374151, #374151); }
+.bim-empty-sub { font-size: 12.5px; color: var(--ct-6b7280, #6b7280); max-width: 460px; }
+.bim-empty .bim-btn { margin-top: 6px; }
+
 /* ── Pagination ── */
 .bim-pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 12px; border-top: 1px solid var(--c-e5e7eb, #e5e7eb); background: var(--c-fafafa, #fafafa); }
 .bim-pager-info { font-size: 12.5px; color: var(--ct-6b7280, #6b7280); }
@@ -107,18 +193,52 @@
 
 /* ── Modal ── */
 .bim-overlay { position: fixed; inset: 0; background: rgba(15,39,72,0.45); display: flex; align-items: center; justify-content: center; z-index: 100000; padding: 16px; }
-.bim-modal { background: var(--c-ffffff, #fff); color: var(--ct-374151, #374151); font-family: 'Poppins', sans-serif; border-radius: 12px; width: min(640px, 96vw); max-height: 92vh; overflow: auto; box-shadow: 0 24px 64px rgba(15,23,42,0.22); }
+.bim-modal { background: var(--c-ffffff, #fff); color: var(--ct-374151, #374151); font-family: 'Poppins', sans-serif; border-radius: 12px; width: min(860px, 96vw); max-height: 92vh; overflow: auto; box-shadow: 0 24px 64px rgba(15,23,42,0.22); }
 .bim-modal-lg { width: min(900px, 96vw); }
 .bim-modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb); position: sticky; top: 0; background: var(--c-ffffff, #fff); z-index: 3; border-radius: 12px 12px 0 0; }
 .bim-modal-title { font-size: 16px; font-weight: 600; color: var(--ct-111827, #111827); }
 .bim-modal-body { padding: 16px 18px; }
 .bim-modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--c-e5e7eb, #e5e7eb); position: sticky; bottom: 0; background: var(--c-ffffff, #fff); border-radius: 0 0 12px 12px; }
 
+/* Icon + title + one-line subtitle */
+.bim-modal-headline { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
+.bim-modal-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--c-eff6ff, #eff6ff); color: var(--ct-2563eb, #2563eb); }
+.bim-modal-subtitle { font-size: 11.5px; line-height: 1.5; color: var(--ct-6b7280, #6b7280); margin-top: 2px; }
+
+/* Tabbed modal: head, tab strip and footer stay put; only the panel scrolls. */
+.bim-modal-tabbed { display: flex; flex-direction: column; overflow: hidden; }
+.bim-modal-tabbed > .bim-modal-head, .bim-modal-tabbed > .bim-modal-foot { position: static; flex: 0 0 auto; }
+.bim-modal-tabbed .bim-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+.bim-tabs { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; padding: 0 18px; border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb); }
+.bim-tab { background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px; padding: 10px 12px; font-family: inherit; font-size: 13px; font-weight: 500; color: var(--ct-6b7280, #6b7280); cursor: pointer; }
+.bim-tab:hover:not(:disabled) { color: var(--ct-111827, #111827); }
+.bim-tab-active { color: var(--ct-2563eb, #2563eb); border-bottom-color: var(--c-2563eb, #2563eb); font-weight: 600; }
+.bim-tab:disabled { color: var(--ct-9ca3af, #9ca3af); cursor: not-allowed; }
+.bim-tabs-hint { font-size: 11px; color: var(--ct-9ca3af, #9ca3af); margin-left: 2px; }
+
+/* Footer: Active toggle on the left, Cancel / Save on the right */
+.bim-modal-foot-split { justify-content: space-between; align-items: center; }
+.bim-foot-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ct-374151, #374151); cursor: pointer; }
+.bim-foot-actions { display: flex; gap: 8px; }
+
 /* ── Form fields ── */
 .bim-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
 .bim-field > label { font-size: 12px; font-weight: 600; color: var(--ct-374151, #374151); }
 .bim-field .bim-inp { width: 100%; }
 .bim-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+/* Section header — uppercase label with a hairline to the right edge */
+.bim-section { display: flex; align-items: center; gap: 10px; margin: 20px 0 12px; font-size: 10.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--ct-6b7280, #6b7280); }
+.bim-section:first-child { margin-top: 2px; }
+.bim-section::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--c-e5e7eb, #e5e7eb); }
+
+/* Two-column field grid; long fields span both columns */
+.bim-formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.bim-formgrid > .bim-field { margin-bottom: 0; }
+.bim-span2 { grid-column: 1 / -1; }
+.bim-hint { font-size: 11px; line-height: 1.5; color: var(--ct-6b7280, #6b7280); margin-top: 4px; }
+.bim-hint + .bim-hint { margin-top: 3px; }
 
 /* ── Variant-attribute schema builder ── */
 .bim-attrs { display: flex; flex-direction: column; gap: 8px; }
@@ -145,3 +265,4 @@
 .bim-cellwrap .bim-unit { font-size: 11px; color: var(--ct-6b7280, #6b7280); }
 
 @media (max-width: 640px) { .bim-grid2 { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .bim-formgrid { grid-template-columns: 1fr; } }

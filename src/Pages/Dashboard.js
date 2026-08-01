@@ -5,6 +5,9 @@ import React, { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import "../pages-css/Dashboard.css";
+// Solar Capacity tile is currently hidden — see components/dashboard/ProjectCapacityKpi.js
+// to re-enable (one import here, one <ProjectCapacityKpi /> in the KPI grid below).
+import OrdersInLineDashboardBlock from "../components/dashboard/OrdersInLineDashboardBlock"; // PROVISIONAL add-on — self-contained, fails silently, delete this line and its JSX usage to remove
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8080";
 const USER_KEY = "bd_portal_user";
@@ -112,8 +115,16 @@ const Empty   = ({ icon = "📭", msg = "No data available" }) => (
   <div className="rd-empty"><div className="rd-empty-icon">{icon}</div>{msg}</div>
 );
 
-const KpiCard = ({ label, value, sub, accent = "#3b82f6", iconBg = "#eff6ff", icon }) => (
-  <div className="rd-kpi-card" style={{ "--kpi-accent": accent, "--kpi-icon-bg": iconBg }}>
+/* `onClick` is optional — cards without it behave exactly as before. */
+const KpiCard = ({ label, value, sub, accent = "#3b82f6", iconBg = "#eff6ff", icon, onClick }) => (
+  <div
+    className="rd-kpi-card"
+    style={{ "--kpi-accent": accent, "--kpi-icon-bg": iconBg, cursor: onClick ? "pointer" : undefined }}
+    onClick={onClick}
+    role={onClick ? "button" : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+  >
     <div className="rd-kpi-icon">{icon}</div>
     <div className="rd-kpi-label">{label}</div>
     <div className="rd-kpi-value">{value ?? "—"}</div>
@@ -388,6 +399,7 @@ const TaskList = ({ tasks = [] }) => {
 const SuperAdminDashboard = () => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/dashboard/admin")
@@ -398,21 +410,23 @@ const SuperAdminDashboard = () => {
   if (!d && !err) return <Spinner />;
   if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
-  const kpis = [
-    { label: "Total Leads",      value: fmtNum(d.totalLeads),      sub: `+${fmtNum(d.leadsThisMonth)} this month`, accent: "#3b82f6", iconBg: "#eff6ff", icon: "🎯" },
-    { label: "Leads This Month", value: fmtNum(d.leadsThisMonth),  sub: "Current month",       accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "📅" },
-    { label: "Closed Won",       value: fmtNum(d.closedWon),       sub: "Converted leads",     accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
-    { label: "Proposals",        value: fmtNum(d.totalProposals),  sub: `${fmtNum(d.proposalSent)} sent`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📋" },
-    { label: "Order Book",       value: fmtMoney(d.orderBookValue),sub: `${fmtNum(d.totalOrders)} orders`, accent: "#06b6d4", iconBg: "#ecfeff", icon: "💰" },
-    { label: "Follow-ups",       value: fmtNum(d.pendingFollowups),sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "🔔" },
-    { label: "Contacted",        value: fmtNum(d.contacted),       sub: "Leads reached",       accent: "#6366f1", iconBg: "#eef2ff", icon: "💬" },
-    { label: "In Discussion",    value: fmtNum(d.inDiscussion),    sub: "Active conversations",accent: "#ec4899", iconBg: "#fdf2f8", icon: "🤝" },
-  ];
-
   return (
     <div>
-      <div className="rd-kpi-grid rd-kpi-grid-8">
-        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+      {/* Headline tiles, in the order the business reads them: booked work first,
+          then the capacity behind it, then what is still only prospective.
+          auto-fit so the row stays full-width whichever add-on tiles render. */}
+      <div className="rd-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
+        <KpiCard
+          label="Order Book" value={fmtMoney(d.orderBookValue)} sub={`${fmtNum(d.totalOrders)} orders`}
+          accent="#06b6d4" iconBg="#ecfeff" icon="💰"
+          onClick={() => navigate("/order-book")}
+        />
+        <OrdersInLineDashboardBlock />
+        <KpiCard
+          label="Total Leads" value={fmtNum(d.totalLeads)} sub={`+${fmtNum(d.leadsThisMonth)} this month`}
+          accent="#3b82f6" iconBg="#eff6ff" icon="🎯"
+          onClick={() => navigate("/sales/leads")}
+        />
       </div>
 
       {/* Row 1: Chart + Pipeline side by side */}

@@ -21,6 +21,7 @@ import LocationPicker from '../LocationPicker.js';
 import projectsApi from '../../services/projectsApi.js';
 import { TechnicalTab, CommercialTab, ProgressTab } from './orderBookTabsPorted.js';
 import ProjectBomTab from './ProjectBomTab.js';
+import { techProgressPct, NO_TECH_PROGRESS } from '../../utils/projectProgress.js';
 import '../../pages-css/OrderBookDetail.css';
 import '../../pages-css/Projects.css';
 
@@ -160,12 +161,9 @@ const ProjectDetailPage = () => {
     );
   }
 
-  // Progress = TECHNICAL (physical), matching the Project Dashboard. Falls back to the
-  // stored progress_percentage (override / financial) only when there's no scope yet.
-  const techPct = project.physicalProgressPct != null
-    ? Number(project.physicalProgressPct)
-    : Number(project.progressPercentage || 0);
-  const pct = Math.min(100, Math.max(0, techPct));
+  // Progress = TECHNICAL (physical), matching the Project Dashboard. null when the
+  // project has no scope — shown as "—", never substituted with the financial score.
+  const pct = techProgressPct(project);
   const finPct = Math.min(100, Math.max(0, Number(project.financialProgressPct || 0)));
 
   return (
@@ -214,10 +212,11 @@ const ProjectDetailPage = () => {
           <div className="pd-metric pd-metric--progress">
             <label>Progress</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                title={pct == null ? 'No technical scope defined for this project' : undefined}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
-                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(project.status) }} /></div>
-                <span className="pl-progress-pct">{pct}%</span>
+                <div className="pl-progress" style={{ flex: 1, minWidth: 90 }}><div className="pl-progress-fill" style={{ width: `${pct ?? 0}%`, background: progressColor(project.status) }} /></div>
+                <span className="pl-progress-pct">{pct == null ? NO_TECH_PROGRESS : `${pct}%`}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>
@@ -269,7 +268,7 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
   const p = project || {};
   const groupName = p.groupName || p.subGroup?.group?.groupName || p.group_id || p.groupId || '';
   const customer  = p.customerName || p.customerCode || p.customerId || p.customer_id || '';
-  const pct = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+  const pct = techProgressPct(p);   // null = no scope defined
   const finPct = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
   const capacity = p.capacityValue != null && p.capacityValue !== ''
     ? `${p.capacityValue}${p.capacityUnit ? ' ' + p.capacityUnit : ''}` : '';
@@ -449,10 +448,11 @@ const ProjectOverviewTab = ({ project, projectUniqueId, linkedOrderBookId, linke
           <div>
             <label>Progress</label>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 2 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                title={pct == null ? 'No technical scope defined for this project' : undefined}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Tech</span>
-                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${pct}%`, background: progressColor(p.status) }} /></div>
-                <span className="pl-progress-pct">{pct}%</span>
+                <div className="pl-progress" style={{ flex: 1, maxWidth: 120 }}><div className="pl-progress-fill" style={{ width: `${pct ?? 0}%`, background: progressColor(p.status) }} /></div>
+                <span className="pl-progress-pct">{pct == null ? NO_TECH_PROGRESS : `${pct}%`}</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ fontSize: 10, color: '#94a3b8', width: 24 }}>Fin</span>

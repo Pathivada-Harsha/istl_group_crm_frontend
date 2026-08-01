@@ -18,6 +18,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import useToast from '../hooks/useToast';
 import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from '../components/preLoader.js';
+import { techProgressPct, NO_TECH_PROGRESS } from '../utils/projectProgress.js';
 import '../pages-css/OrderBook.css';
 import '../pages-css/Projects.css';
 
@@ -113,14 +114,18 @@ const ROWS_PER_PAGE_OPTIONS = [10, 20, 50, 100];
 
 const FIN_COLOR = '#8b5cf6'; // financial progress = purple (distinct from technical/status)
 
-// Two stacked mini-bars — Technical (status colour) + Financial (purple) — shown together.
+// Two stacked mini-bars — Technical (status colour) + Financial (purple) — shown
+// together. `tech` is null for a project with no scope: empty bar, "—", no number.
 const DualProgress = ({ tech, fin, techColor }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 120 }}>
     {[['Tech', tech, techColor], ['Fin', fin, FIN_COLOR]].map(([label, val, color]) => (
-      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+      <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        title={val == null ? 'No technical scope defined for this project' : undefined}>
         <span style={{ fontSize: 10, color: '#94a3b8', width: 24, flexShrink: 0 }}>{label}</span>
-        <div className="pl-progress" style={{ flex: 1 }}><div className="pl-progress-fill" style={{ width: `${val}%`, background: color }} /></div>
-        <span className="pl-progress-pct" style={{ minWidth: 34, textAlign: 'right' }}>{val}%</span>
+        <div className="pl-progress" style={{ flex: 1 }}><div className="pl-progress-fill" style={{ width: `${val ?? 0}%`, background: color }} /></div>
+        <span className="pl-progress-pct" style={{ minWidth: 34, textAlign: 'right' }}>
+          {val == null ? NO_TECH_PROGRESS : `${val}%`}
+        </span>
       </div>
     ))}
   </div>
@@ -272,7 +277,7 @@ function ProjectsList() {
       payable:  payableAmt(o),
       spent:    moneyOut(o),
       balance:  balanceAmt(o),
-      progress: Number(o.physicalProgressPct != null ? o.physicalProgressPct : o.progressPercentage) || 0,
+      progress: techProgressPct(o) ?? -1,   // untracked sorts below a genuine 0%
       timeline: o.startDate || '',
     }[key] ?? '');
     return [...projects].sort((a, b) => {
@@ -340,7 +345,7 @@ function ProjectsList() {
       );
     } },
     progress: { label: 'Progress', sortKey: 'progress', render: (p) => {
-      const tech = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const tech = techProgressPct(p);   // null = no scope defined
       const fin  = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
       return <td key="progress"><DualProgress tech={tech} fin={fin} techColor={progressColor(p.status)} /></td>;
     } },
@@ -587,7 +592,7 @@ const Pagination = ({ currentPage, totalPages, total, setCurrentPage, rowsPerPag
 const ProjectsGrid = ({ rows, onOpen }) => (
   <div className="pl-grid">
     {rows.map((p) => {
-      const pct      = Math.min(100, Math.max(0, p.physicalProgressPct != null ? Number(p.physicalProgressPct) : Number(p.progressPercentage || 0)));
+      const pct      = techProgressPct(p);   // null = no scope defined
       const finPct   = Math.min(100, Math.max(0, Number(p.financialProgressPct || 0)));
       const statusHx = getStatusColor(p.status);
       const bal      = balanceAmt(p);
@@ -623,12 +628,13 @@ const ProjectsGrid = ({ rows, onOpen }) => (
 
           {/* Row 3 — progress: Technical + Financial */}
           <div className="pl-card-progress">
-            <div className="pl-card-progress-head">
+            <div className="pl-card-progress-head"
+              title={pct == null ? 'No technical scope defined for this project' : undefined}>
               <span>Technical</span>
-              <span className="pl-card-progress-pct">{pct}%</span>
+              <span className="pl-card-progress-pct">{pct == null ? NO_TECH_PROGRESS : `${pct}%`}</span>
             </div>
             <div className="pl-progress">
-              <div className="pl-progress-fill" style={{ width: `${pct}%`, background: statusHx }} />
+              <div className="pl-progress-fill" style={{ width: `${pct ?? 0}%`, background: statusHx }} />
             </div>
             <div className="pl-card-progress-head" style={{ marginTop: 6 }}>
               <span style={{ color: '#64748b' }}>Financial</span>
