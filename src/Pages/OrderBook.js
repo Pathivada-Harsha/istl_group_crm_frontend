@@ -10,7 +10,6 @@ import ToastContainer from '../components/Notification_Toast/ToastContainer.js';
 import CrmPreloader from "../components/preLoader.js";
 import { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
-import OrderBookDetailPage from '../components/OrderBook/OrderBookDetailPage.js';
 import { Eye, Edit2, Trash2, Upload, CloudUpload } from 'lucide-react';
 import { FaFileDownload, FaCloudUploadAlt, FaColumns, FaFileAlt, FaFilePdf, FaFileImage, FaTimes, FaDownload, FaFileExcel } from 'react-icons/fa';
 import * as XLSX from 'xlsx';
@@ -322,7 +321,6 @@ function OrderBook() {
   // Modals
   const [showViewModal, setShowViewModal] = useState(false);
   // Full in-page detail view (Overview / Technical Scope / Commercial tabs)
-  const [detailOrderBook, setDetailOrderBook] = useState(null);
   // URL param ?view=<id> keeps the detail view open across a browser refresh.
   const [searchParams, setSearchParams] = useSearchParams();
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -352,7 +350,6 @@ function OrderBook() {
     expectedDeliveryDate: '',
     poNumber: '',
     poDate: '',
-    advanceAmount: '',
     status: 'Draft',
     remarks: '',
     items: []
@@ -885,10 +882,14 @@ function OrderBook() {
     }
   };
 
-  const fetchProposalsByCustomer = async (customerId) => {
+  // Only approved, CRM-generated proposals come back — the backend owns that rule.
+  // An empty list is normal: the dropdown shows its placeholder and creation carries on.
+  // keepProposalId pins an already-linked proposal so editing can't silently drop it.
+  const fetchProposalsByCustomer = async (customerId, keepProposalId) => {
     if (!customerId) { setProposals([]); return; }
     try {
-      const response = await fetch(`${API_BASE_URL}/proposals/by-customer/${customerId}`, {
+      const qs = keepProposalId ? `?includeId=${encodeURIComponent(keepProposalId)}` : '';
+      const response = await fetch(`${API_BASE_URL}/proposals/by-customer/${customerId}${qs}`, {
         credentials: "include",
         headers: { 'User-Id': user.id, 'User-Role': user.role }
       });
@@ -958,7 +959,7 @@ function OrderBook() {
       await fetchCustomersByGroup(orderBook.groupName, orderBook.subGroupName);
     }
     if (orderBook.customerId) {
-      await fetchProposalsByCustomer(orderBook.customerId);
+      await fetchProposalsByCustomer(orderBook.customerId, orderBook.proposalId);
     }
 
     // Restore existing attachment info (file lives in DB; no file path needed)
@@ -989,7 +990,6 @@ function OrderBook() {
             expectedDeliveryDate: orderBook.expectedDeliveryDate || '',
             poNumber: orderBook.poNumber || '',
             poDate: orderBook.poDate || '',
-            advanceAmount: orderBook.advanceAmount || '',
             status: orderBook.status || 'Draft',
             remarks: orderBook.remarks || '',
             items: (data.data || []).map(item => ({
@@ -1011,52 +1011,19 @@ function OrderBook() {
     }
   };
 
-  // On load / refresh: if the URL has ?view=<id>, reopen that order's detail
-  // once the list has loaded. Runs whenever the list or the param changes.
+  // The order book detail view is gone — everything it showed beyond the Overview
+  // (Technical Scope, BOM, Financials, Progress) now lives in the Projects module,
+  // so the list is the whole page. A stale ?view=<id> link is stripped rather than
+  // honoured, so an old bookmark lands on the list instead of a blank screen.
   useEffect(() => {
-    const viewId = searchParams.get('view');
-    if (!viewId) return;
-    if (detailOrderBook && String(detailOrderBook.id) === String(viewId)) return;
-    if (!orderBooks || orderBooks.length === 0) return; // wait for list to load
-    const match = orderBooks.find(o => String(o.id) === String(viewId));
-    if (match) handleView(match);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderBooks, searchParams]);
-
-  // Close the detail view and remove ?view from the URL.
-  const closeDetail = () => {
-    setDetailOrderBook(null);
+    if (!searchParams.get('view')) return;
     setSearchParams(prev => {
       const next = new URLSearchParams(prev);
       next.delete('view');
       return next;
     }, { replace: true });
-  };
-
-  const handleView = async (orderBook) => {
-    // Open the full in-page detail view (Overview tab only — the scope/finance/
-    // progress tabs now live in the Projects module). Items load lazily inside
-    // the detail page, but we prefetch here so the Overview tab is instant.
-    setDetailOrderBook(orderBook);
-    // Reflect the open order in the URL so a refresh stays on this detail view.
-    setSearchParams(prev => {
-      const next = new URLSearchParams(prev);
-      next.set('view', String(orderBook.id));
-      return next;
-    }, { replace: true });
-    try {
-      const response = await fetch(`${API_BASE_URL}/order-book/${orderBook.id}/items`, {
-        credentials: "include",
-        headers: { 'User-Id': user.id, 'User-Role': user.role }
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) setDetailOrderBook({ ...orderBook, items: data.data || [] });
-      }
-    } catch (err) {
-      // non-fatal: detail page will retry the items fetch itself
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const handleDeleteClick = (id) => {
     setDeleteOrderId(id);
@@ -1104,9 +1071,11 @@ function OrderBook() {
       discountPercent: item.discountPercent || 0
     }));
 
+    // No advanceAmount is sent. The backend defaults it to zero on create and
+    // leaves it untouched on update when the field is absent, so an edit can
+    // never wipe the figure a historical order already carries.
     const submitData = {
       ...formData,
-      advanceAmount: formData.advanceAmount || 0,
       items: preparedItems
     };
 
@@ -1158,6 +1127,9 @@ function OrderBook() {
         }
 
         showSuccess(isEditMode ? 'Order book updated successfully' : 'Order book created successfully');
+        // Non-blocking notices from the save that already committed — currently a
+        // divergence between this order book's total and the linked proposal's value.
+        (data.data?.warnings || []).forEach(w => showWarning(w));
         setShowCreateModal(false);
         resetForm();
         refreshOrderBooks();
@@ -1230,7 +1202,6 @@ function OrderBook() {
       expectedDeliveryDate: '',
       poNumber: '',
       poDate: '',
-      advanceAmount: '',
       status: 'Draft',
       remarks: '',
       items: []
@@ -1480,7 +1451,6 @@ function OrderBook() {
       render: (o) => (
         <td key="actions">
           <div className="orderbook-actions-inline" onClick={e => e.stopPropagation()}>
-            <button className="orderbook-icon-btn ob-view"   onClick={() => canView   && handleView(o)}          title={canView   ? "View"      : "No permission to view"}   disabled={!canView}  ><Eye size={14} /></button>
             <button className="orderbook-icon-btn ob-edit"   onClick={() => canEdit   && handleEdit(o)}          title={canEdit   ? "Edit"      : "No permission to edit"}   disabled={!canEdit}  ><Edit2 size={14} /></button>
             <button className="orderbook-icon-btn ob-upload" onClick={() => canUpload && handlePOUploadClick(o)} title={canUpload ? "Upload PO" : "No permission to upload"} disabled={!canUpload}><FaCloudUploadAlt /></button>
             <button className="orderbook-icon-btn ob-delete" onClick={() => canDelete && handleDeleteClick(o.id)} title={canDelete ? "Delete"    : "No permission to delete"} disabled={!canDelete}><Trash2 size={14} /></button>
@@ -1500,16 +1470,6 @@ function OrderBook() {
   return (
     <>
     <ToastContainer toasts={toasts} removeToast={removeToast} />
-    {detailOrderBook ? (
-      <OrderBookDetailPage
-        orderBook={detailOrderBook}
-        user={user}
-        onBack={() => closeDetail()}
-        onEdit={(ob) => { closeDetail(); handleEdit(ob); }}
-        showSuccess={showSuccess}
-        showError={showError}
-      />
-    ) : (
     <div className="orderbook-page">
       {loading && <CrmPreloader text="Loading..." />}
 
@@ -1677,7 +1637,7 @@ function OrderBook() {
                 </tr>
               ) : (
                 sortedOrderBooks.map((order, idx) => (
-                  <tr key={order.id} onClick={() => handleView(order)} style={{ cursor: 'pointer' }}>
+                  <tr key={order.id}>
                     {columnOrder
                       .filter(key => visibleColumns[key])
                       .map(key => columnMeta[key].render(order, idx))}
@@ -2051,16 +2011,13 @@ function OrderBook() {
                     />
                   </div>
 
-                  <div className="orderbook-form-group">
-                    <label>Advance Amount (₹)</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={formData.advanceAmount}
-                      onChange={(e) => setFormData({ ...formData, advanceAmount: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
+                  {/* Advance Amount was removed from this modal (create AND edit).
+                      It stored a figure that drove no receipt, no ledger entry and no
+                      project financials — money does not get captured here. Advances,
+                      if ever tracked, come from customer receipts as an ADVANCE receipt.
+                      The order_book.advance_amount column and every read-only view of it
+                      are deliberately left alone so historical orders keep their value;
+                      orders created from now on simply have none. */}
 
                   {/* ── Attachment field ── */}
                   <div className="orderbook-form-group orderbook-form-full">
@@ -2482,7 +2439,6 @@ function OrderBook() {
         </div>
       )}
     </div>
-    )}
     </>
   );
 }

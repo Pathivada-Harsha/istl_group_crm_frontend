@@ -13,14 +13,18 @@
 //  the exact same form inside a modal.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from "react";
+import { MapPin } from 'lucide-react';
+import './LeadCardHead.css';
 import api from "../../services/leadsapi.js";
 import FilterSelect from "../Dropdowns/FilterSelect.js";
 import LocationPicker from "../LocationPicker.js";
 import { COMMON_UNITS } from "../Dropdowns/Unittypedropdown.js";
 import "./LeadSiteVisitTab.css";
 
-// Property/project types for the solar rooftop flow
-const PROPERTY_TYPES = ["Residential", "Commercial", "Industrial", "Institutional", "Agricultural", "Government"];
+// Property/project types for the solar rooftop flow.
+// Exported because GenerateProposalModal offers the same list — a lead typed
+// here as Industrial must be selectable in the proposal review step too.
+export const PROPERTY_TYPES = ["Residential", "Commercial", "Industrial", "Institutional", "Agricultural", "Government"];
 // Curated pick-lists for the site-visit selects (replace free-text inputs)
 const PHASE_OPTIONS         = ["Single Phase", "Three Phase"];
 const ROOF_TYPES            = ["RCC", "Metal Sheet", "Tiled", "Asbestos Sheet", "Concrete", "Shed", "Ground Mount"];
@@ -491,7 +495,7 @@ export default function LeadSiteVisitTab({ lead, currentUser, permissions, onRef
       {/* Header */}
       <div className="lsv-head">
         <div className="lsv-head-left">
-          <h4 className="lsv-heading">Site Visit Report</h4>
+          <span className="lead-card-ico"><MapPin size={17} strokeWidth={2} /></span><h4 className="lsv-heading">Site Visit Report</h4>
           {report && (
             <span className="lsv-recorded">
               Last updated by {report.visitedByName || "—"}

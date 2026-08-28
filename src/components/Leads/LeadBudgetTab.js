@@ -15,7 +15,8 @@
 //  • All amounts are en-IN formatted and rounded.
 // ─────────────────────────────────────────────────────────────────────────────
 import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Save, Trash2 } from "lucide-react";
+import './LeadCardHead.css';
+import { Plus, Save, Trash2, Wallet, PlusCircle } from "lucide-react";
 import api from "../../services/leadsapi.js";
 import { EXTRA_ALLOCATION_TYPES, OTHER_OPTION } from "../../constants/scopeActivities.js";
 import "./LeadBudgetTab.css";
@@ -266,7 +267,7 @@ export default function LeadBudgetTab({ lead, currentUser, permissions, onRefres
       {/* ── Section B: budget allocation, grouped by scope activity ───────────── */}
       <div className="lbe-card">
         <div className="lbe-card-head">
-          <h4 className="lbe-card-title">Budget Allocation (by Scope)</h4>
+          <span className="lead-card-ico"><Wallet size={17} strokeWidth={2} /></span><h4 className="lbe-card-title">Budget Allocation (by Scope)</h4>
           <span className="lbe-card-sub">Materials per scope activity — rates are edited in the BOM tab</span>
           <div className="lbe-card-total">₹{fmtINR(summary.bomTotal)}</div>
         </div>
@@ -328,7 +329,7 @@ export default function LeadBudgetTab({ lead, currentUser, permissions, onRefres
       {/* ── Section C: extra allocations ──────────────────────────────────────── */}
       <div className="lbe-card">
         <div className="lbe-card-head">
-          <h4 className="lbe-card-title">Extra Allocations</h4>
+          <span className="lead-card-ico"><PlusCircle size={17} strokeWidth={2} /></span><h4 className="lbe-card-title">Extra Allocations</h4>
           <span className="lbe-card-sub">Costs not tied to a BOM material</span>
           {canEdit && (
             <button className="lbe-add-cat" onClick={addExtra}><Plus size={13} /> Add allocation</button>

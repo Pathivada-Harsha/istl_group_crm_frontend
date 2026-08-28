@@ -63,6 +63,11 @@ const projectsApi = {
   // ── DETAIL / HEADER ─────────────────────────────────────────────────────────
   getProject: (id) => req(`/projects/${enc(id)}`),
 
+  // Two-stage on the server: an active project is deactivated (and so leaves the
+  // list, which only shows active ones); deleting an already-inactive one removes
+  // it permanently. Returns 204, which req() maps to { success: true }.
+  deleteProject: (id) => req(`/projects/${enc(id)}`, { method: 'DELETE' }),
+
   // ── SCOPE / SOW (Technical tab) ──────────────────────────────────────────────
   getScope:        (id) => req(`/projects/${enc(id)}/scope`),
   saveScope:       (id, body) => req(`/projects/${enc(id)}/scope`, { method: 'PUT', body }),
@@ -80,6 +85,10 @@ const projectsApi = {
   saveCost:             (id, body) => req(`/projects/${enc(id)}/cost`, { method: 'PUT', body }),
   getBom:               (id) => req(`/projects/${enc(id)}/bom`),
   saveBom:              (id, body) => req(`/projects/${enc(id)}/bom`, { method: 'PUT', body }),
+  // Planned vs Procured for the BOM tab. "Procured" is purchase-order value only —
+  // never expenses — and is computed from the same attribution the BOM enforcement
+  // guard uses, so the two can never report different figures for one BOM line.
+  getBomPlannedVsActual: (id) => req(`/projects/${enc(id)}/bom/planned-vs-actual`),
   getItems:             (id) => req(`/projects/${enc(id)}/items`),
   getCommercialSummary: (id) => req(`/projects/${enc(id)}/commercial-summary`),
   getCommercialSummaryV2: (id) => req(`/projects/${enc(id)}/commercial-summary-v2`),

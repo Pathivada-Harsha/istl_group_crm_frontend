@@ -78,7 +78,85 @@ const blankBom = (scopeActivity = "") => ({
   unit: "", basis: "PER_KW", basisValue: "", stepValue: "", siteVisitField: "", defaultUnitRate: "", notes: "",
   // Pick-a-make: catalog link + curated allowed makes + default (null when free-text).
   bomItemId: null, allowedVariantIds: [], defaultVariantId: null,
+  // Why this saved line can't produce a quantity, as judged server-side against
+  // the catalogue. Null until the server says otherwise.
+  configIssue: null,
+  // A make-driven basis the catalogue could already drive for this line. Advice,
+  // not a fault — see rowAdvice below.
+  basisAdvice: null,
 });
+
+// ── Basis completeness (mirrors LeadAdminService.incompleteBasisReason) ──────
+// A basis is a promise that a quantity can be derived. Saving one without the
+// number it needs breaks that promise on every lead seeded from this template,
+// with nothing on the lead pointing back here — so it is caught before the save.
+const isSet = (v) => { const n = Number(v); return v !== "" && v != null && Number.isFinite(n) && n > 0; };
+
+const BASIS_NEEDS_VALUE = new Set(["FIXED", "PER_KW", "PER_MODULE", "PER_INVERTER"]);
+const DRIVER_BASES = { PER_WATT_PEAK: "wattage", PER_INVERTER_KW: "kW rating" };
+
+/** What stops this line producing a quantity, phrased as an instruction; null when sound. */
+const lineProblem = (r) => {
+  const basis = r.basis || "PER_KW";
+  const label = (BASIS_OPTIONS.find((b) => b.value === basis) || {}).label || basis;
+  if (BASIS_NEEDS_VALUE.has(basis)) {
+    if (isSet(r.basisValue)) return null;
+    // Mirrors the server: offer the make-driven alternative in the same breath, so
+    // "type any number to make this go away" isn't the only obvious escape.
+    const adv = rowAdvice(r);
+    return `“${label}” needs a quantity value above zero in the Qty column.`
+      + (adv ? ` Or use “${adv.basisLabel}”, which needs no value.` : "");
+  }
+  if (basis === "PER_STEP") {
+    return isSet(r.stepValue) ? null : "“Per step” needs the kW per unit above zero in the Qty column.";
+  }
+  if (basis === "FROM_SITE_VISIT") {
+    return r.siteVisitField ? null : "“From site visit” needs a site-visit field picked in the Qty column.";
+  }
+  if (DRIVER_BASES[basis]) {
+    // Whether the item's makes actually carry the number is a catalogue question
+    // the server answers; all this can check is that an item is attached at all.
+    return r.bomItemId
+      ? null
+      : `“${label}” reads the ${DRIVER_BASES[basis]} off the selected make, so pick a catalogue item in the Component column.`;
+  }
+  return null;
+};
+
+/**
+ * The problem to show on a row — and, just as importantly, WHEN.
+ *
+ * A line the user is still filling in is not a broken template line. Judging it
+ * live meant adding a row, or clearing a value to retype it, immediately lit up a
+ * complaint about work in progress. So a live problem is held back until a save is
+ * actually attempted; what shows before that is only the server's verdict on lines
+ * already STORED in the template, which is what the screen is meant to surface.
+ *
+ * A stored verdict is dropped as soon as the client can see the line is incomplete
+ * for a different reason, or once the user edits the fields it was about (updBom
+ * clears configIssue) — so it never lingers as a stale accusation.
+ */
+const rowIssue = (r, saveAttempted) => {
+  const p = lineProblem(r);
+  if (p) return saveAttempted ? { severity: "BLOCKING", message: p } : null;
+  return r.configIssue || null;
+};
+
+/**
+ * A better basis the catalogue can already drive, or null.
+ *
+ * Advice is about the ITEM, not the basis, so it survives a basis edit — but it
+ * retires itself once taken, and is dropped the moment the row points at a
+ * different catalogue item than the one the server judged.
+ */
+const rowAdvice = (r) => {
+  const a = r.basisAdvice;
+  if (!a || !a.basis) return null;
+  if (r.basis === a.basis) return null;      // already using it
+  if (DRIVER_BASES[r.basis]) return null;    // already make-driven
+  if (r.bomItemId !== a.itemId) return null; // item changed since the server judged
+  return a;
+};
 
 export default function LeadTemplatesAdmin() {
   const { toasts, removeToast, showSuccess, showError } = useToast();
@@ -94,6 +172,9 @@ export default function LeadTemplatesAdmin() {
   const [loading, setLoading] = useState(true);
   const [savingScope, setSavingScope] = useState(false);
   const [savingBom, setSavingBom] = useState(false);
+  // Set when a save is refused. Until then, half-finished rows are left alone —
+  // see rowIssue. Cleared whenever the template is (re)loaded.
+  const [saveAttempted, setSaveAttempted] = useState(false);
   const [variantLineKey, setVariantLineKey] = useState(null); // _key of the line whose Makes modal is open
 
   // New-template form
@@ -124,6 +205,7 @@ export default function LeadTemplatesAdmin() {
 
   const openTemplate = async (id) => {
     setSelectedId(id);
+    setSaveAttempted(false); // a fresh load is a fresh start, not a rejected save
     try {
       const t = await api.get(`/admin/lead-templates/${id}`);
       setDetail({ id: t.id, projectType: t.projectType, name: t.name || "", description: t.description || "", isActive: t.isActive });
@@ -143,6 +225,7 @@ export default function LeadTemplatesAdmin() {
         basis: b.basis || "PER_KW", basisValue: b.basisValue ?? "", stepValue: b.stepValue ?? "",
         siteVisitField: b.siteVisitField || "", defaultUnitRate: b.defaultUnitRate ?? "", notes: b.notes || "",
         bomItemId: b.bomItemId ?? null, allowedVariantIds: b.allowedVariantIds || [], defaultVariantId: b.defaultVariantId ?? null,
+        configIssue: b.configIssue ?? null, basisAdvice: b.basisAdvice ?? null,
       })));
     } catch (e) {
       if (e.message !== "SESSION_EXPIRED") showError("Failed to open template");
@@ -234,7 +317,36 @@ export default function LeadTemplatesAdmin() {
   };
 
   // ── BOM lines (key-based, grouped by scope activity) ──
-  const updBom = (key, k, v) => setBomLines(p => p.map(r => (r._key === key ? { ...r, [k]: v } : r)));
+  // Editing any input the basis depends on retires the server's verdict on this
+  // line — it was about the old values, and lineProblem re-judges the new ones.
+  const BASIS_FIELDS = new Set(["basis", "basisValue", "stepValue", "siteVisitField", "bomItemId", "allowedVariantIds"]);
+  // Advice is about the ITEM, so only an item/make change retires it — editing the
+  // basis must not, or the hint would vanish the moment someone starts reacting to it.
+  const ADVICE_FIELDS = new Set(["bomItemId", "allowedVariantIds"]);
+  const updBom = (key, k, v) => setBomLines(p => p.map(r => (
+    r._key === key ? {
+      ...r, [k]: v,
+      ...(BASIS_FIELDS.has(k) ? { configIssue: null } : {}),
+      ...(ADVICE_FIELDS.has(k) ? { basisAdvice: null } : {}),
+    } : r)));
+
+  /**
+   * Take the advice: switch the basis and drop the factor it no longer needs.
+   * Local state only — "Save BOM lines" still has to be pressed, so nothing is
+   * changed behind the admin's back.
+   */
+  // Not named use* — that prefix makes React's lint rules read it as a hook.
+  const applyAdvisedBasis = (key, adv) => {
+    setBomLines(p => p.map(r => (r._key === key ? {
+      ...r, basis: adv.basis,
+      basisValue: "", stepValue: "", siteVisitField: "",
+      configIssue: null, // the server's verdict was about the old basis
+    } : r)));
+    // Worth a toast: the Basis select is several columns right of the button, so
+    // the visible effect happens away from where the click landed.
+    showSuccess(`Basis set to “${adv.basisLabel}” — the Qty factor is no longer needed. `
+      + `Press “Save BOM lines” to apply it.`);
+  };
   const rmBom = (key) => setBomLines(p => p.filter(r => r._key !== key));
   const addBomTo = (activity) => setBomLines(p => [...p, blankBom(activity)]);
 
@@ -273,6 +385,20 @@ export default function LeadTemplatesAdmin() {
   };
   const saveBom = async () => {
     for (const r of bomLines) if (!r.itemName.trim()) { showError("Every BOM line needs an item name"); return; }
+    // Blocked at the source rather than warned about afterwards: an incomplete
+    // basis here is silently inherited by every lead built from this template.
+    const broken = bomLines
+      .map((r, i) => ({ r, i, problem: lineProblem(r) }))
+      .filter((x) => x.problem);
+    if (broken.length) {
+      setSaveAttempted(true); // now the rows may speak up — the user asked to commit
+      const first = broken[0];
+      showError(
+        `Line ${first.i + 1} “${first.r.itemName.trim() || "(unnamed)"}”: ${first.problem}`
+        + (broken.length > 1 ? ` (and ${broken.length - 1} more line${broken.length > 2 ? "s" : ""} — see the red rows.)` : "")
+      );
+      return;
+    }
     setSavingBom(true);
     try {
       await api.put(`/admin/lead-templates/${detail.id}/bom-items`, {
@@ -292,7 +418,11 @@ export default function LeadTemplatesAdmin() {
       });
       await openTemplate(detail.id);
       showSuccess("BOM lines saved");
-    } catch (e) { if (e.message !== "SESSION_EXPIRED") showError("Failed to save BOM lines"); }
+    } catch (e) {
+      // The server's per-line message (it also checks whether the linked item's
+      // makes carry the attribute, which needs the catalogue) is the useful one.
+      if (e.message !== "SESSION_EXPIRED") showError(e.message || "Failed to save BOM lines");
+    }
     finally { setSavingBom(false); }
   };
 
@@ -341,6 +471,13 @@ export default function LeadTemplatesAdmin() {
     return act.toLowerCase() === section.activity.toLowerCase();
   });
 
+  // Every line that can't (or might not) produce a quantity, in one place — so a
+  // template broken three rows down doesn't have to be found by opening each row.
+  const issueList = bomLines
+    .map((r, i) => ({ r, no: i + 1, issue: rowIssue(r, saveAttempted) }))
+    .filter((x) => x.issue);
+  const blockingCount = issueList.filter((x) => x.issue.severity === "BLOCKING").length;
+
   return (
     <div className="lta-page">
       <ToastContainer toasts={toasts} removeToast={removeToast} />
@@ -353,7 +490,10 @@ export default function LeadTemplatesAdmin() {
           <TemplateLineVariantsModal
             line={vLine}
             onClose={() => setVariantLineKey(null)}
-            onApply={patch => setBomLines(prev => prev.map(row => row._key === variantLineKey ? { ...row, ...patch } : row))}
+            onApply={patch => setBomLines(prev => prev.map(row =>
+              // Re-curating the makes changes what the basis can read, so the
+              // server's last verdict and advice on this line are retired with it.
+              row._key === variantLineKey ? { ...row, ...patch, configIssue: null, basisAdvice: null } : row))}
             showError={showError}
             showSuccess={showSuccess}
           />
@@ -500,6 +640,36 @@ export default function LeadTemplatesAdmin() {
                     </div>
                   )}
 
+                  {issueList.length > 0 && (
+                    <div className={`lta-issues${blockingCount ? " lta-issues--block" : ""}`}>
+                      <div className="lta-issues-head">
+                        {blockingCount > 0 ? (
+                          <b>{blockingCount} line{blockingCount === 1 ? "" : "s"} cannot produce a quantity</b>
+                        ) : (
+                          <b>{issueList.length} line{issueList.length === 1 ? "" : "s"} need attention</b>
+                        )}
+                        <span className="lta-hint">
+                          Every lead built from this template inherits these lines, and shows a blank quantity for them.
+                        </span>
+                      </div>
+                      <ul className="lta-issues-list">
+                        {issueList.map(({ r, no, issue }) => {
+                          const adv = rowAdvice(r);
+                          return (
+                            <li key={r._key} className={issue.severity === "BLOCKING" ? "lta-issue-block" : "lta-issue-warn"}>
+                              <b>Line {no} — {r.itemName.trim() || "(unnamed)"}</b>
+                              <span>{r.scopeActivity ? ` (${r.scopeActivity})` : " (General)"}: </span>
+                              {issue.message}
+                              {/* Where a broken line has a ready remedy, put it here too —
+                                  this list is what gets read after a rejected save. */}
+                              {adv && <span className="lta-issue-fix"> → {adv.message}</span>}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+
                   {bomSections.map(section => {
                     const secLines = bomLinesFor(section);
                     if (section.key === GENERAL && secLines.length === 0) return null; // hide empty General
@@ -529,9 +699,16 @@ export default function LeadTemplatesAdmin() {
                               <tbody>
                                 {secLines.map((r, i) => {
                                   const amt = templateAmount(r);
+                                  const issue = rowIssue(r, saveAttempted);
+                                  const adv = rowAdvice(r);
+                                  const rowCls = !issue ? undefined
+                                    : issue.severity === "BLOCKING" ? "lta-row-block" : "lta-row-warn";
                                   return (
-                                  <tr key={r._key}>
-                                    <td className="lta-c-no">{i + 1}</td>
+                                  <tr key={r._key} className={rowCls}>
+                                    <td className="lta-c-no">
+                                      {i + 1}
+                                      {issue && <span className="lta-issue-dot" title={issue.message}>●</span>}
+                                    </td>
                                     <td className="lta-c-item">
                                       <BomItemAutocomplete
                                         value={r.itemName}
@@ -541,8 +718,10 @@ export default function LeadTemplatesAdmin() {
                                           ...row,
                                           itemName: item.itemName || row.itemName,
                                           bomItemId: item.id ?? null,
-                                          // New catalog item → re-curate makes from scratch.
+                                          // New catalog item → re-curate makes from scratch, and the
+                                          // server's verdict and advice about the old item no longer apply.
                                           allowedVariantIds: [], defaultVariantId: null,
+                                          configIssue: null, basisAdvice: null,
                                           make: item.makeBrand || row.make,
                                           // Catalog wins: the master item's unit is authoritative
                                           // (was `row.unit || …`, which the "kW" default always won).
@@ -568,7 +747,21 @@ export default function LeadTemplatesAdmin() {
                                         <input className="lta-inp" value={r.make} onChange={e => updBom(r._key, "make", e.target.value)} placeholder="Make / brand" />
                                       )}
                                     </td>
-                                    <td className="lta-c-qty">{basisInput(r)}</td>
+                                    <td className="lta-c-qty">
+                                      {basisInput(r)}
+                                      {/* No inline complaint here. It fired the moment a box was
+                                          empty, so clearing a value to retype it lit up a red
+                                          sentence under every row — 22 of them while editing. The
+                                          row dot, the summary panel above and the blocked save all
+                                          still name these lines; the cell keeps only the REMEDY,
+                                          which is the one thing worth acting on in place. */}
+                                      {adv && (
+                                        <button type="button" className="lta-cell-advice" title={adv.message}
+                                          onClick={() => applyAdvisedBasis(r._key, adv)}>
+                                          ⇢ Use “{adv.basisLabel}”
+                                        </button>
+                                      )}
+                                    </td>
                                     <td className="lta-c-unit"><UnitSelectCell className="lta-inp" value={r.unit} onChange={v => updBom(r._key, "unit", v)} /></td>
                                     <td><input className="lta-inp" type="number" min="0" step="any" value={r.defaultUnitRate} onChange={e => updBom(r._key, "defaultUnitRate", e.target.value)} placeholder="0" /></td>
                                     <td className="lta-c-amt lta-amt" title={amt.title}>{amt.text}<span className="lta-amt-suffix">{amt.suffix}</span></td>

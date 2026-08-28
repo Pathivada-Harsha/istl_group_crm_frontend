@@ -772,34 +772,18 @@ const ProjectCostExpenseManagement = () => {
 
   // ── Modal dropdown handlers — ADVANCE ────────────────────────────────────────
   // ── Fetch users for Paid By ───────────────────────────────────────────────────
-  // The backend /filters/leads-users reads User-Role from the request header.
-  // SUPERADMIN/ADMIN → returns all users.
-  // ACCOUNTS_* roles → normally scoped, so we override User-Role header to SUPERADMIN
-  //                    so the backend returns all users for the Paid By dropdown.
+  // This used to send 'User-Role': 'SUPERADMIN' for ACCOUNTS_*/ADMIN callers so the
+  // backend would widen /filters/leads-users to every user. The server ignores that
+  // header now and scopes the list by the caller's real, session-derived role, so the
+  // override could only ever claim a privilege we might not have. Plain call.
   useEffect(() => {
     if (!user?.id) return;
 
-    const isAccountsRole = user?.role && user.role.toUpperCase().startsWith('ACCOUNTS_');
-    const isPrivileged   = isAccountsRole
-      || user?.role === 'ADMIN'
-      || user?.role === 'SUPERADMIN';
-
     const fetchPaidByUsers = async () => {
       try {
-        // For privileged / accounts roles: call leads-users with SUPERADMIN role header
-        // so backend returns the full user list (not scoped to team/createdBy).
-        const headers = {
-          'Content-Type': 'application/json',
-          'User-Id':     String(user.id),
-          'X-User-Id':   String(user.id),
-          'User-Role':   isPrivileged ? 'SUPERADMIN' : (user.role || ''),
-          'X-User-Role': isPrivileged ? 'SUPERADMIN' : (user.role || ''),
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        };
-
         const res = await fetch(`${API_BASE_URL}/filters/leads-users`, {
           credentials: 'include',
-          headers,
+          headers: { 'Content-Type': 'application/json' },
         });
 
         if (res.ok) {

@@ -664,3 +664,838 @@ div.rd-card-sub {
 [data-theme="dark"] .rd-badge-purple { background: var(--c-2a1b3d, #2a1b3d); color: var(--ct-c9a8f5, #c9a8f5); }
 [data-theme="dark"] .rd-badge-indigo { background: var(--c-1e1f45, #1e1f45); color: var(--ct-a8aef5, #a8aef5); }
 [data-theme="dark"] .rd-badge-orange { color: var(--ct-f0a35a, #f0a35a); }
+
+/* =============================================================
+   SUPER ADMIN DASHBOARD  —  rd-ad-* namespace
+   -------------------------------------------------------------
+   Own namespace on purpose: the plain rd-* classes above are shared
+   by the Manager / BD / Telecaller / Generic dashboards, and nothing
+   here may reach them.
+
+   Colours go through the --c-* (surface) / --ct-* (foreground) token
+   pattern used across this file, so dark mode is handled by
+   theme.css rather than by duplicating every rule.
+   ============================================================= */
+
+.rd-ad { width: 100%; }
+
+/* ── Tone palette ──
+   One accent + soft tint per tone, consumed by the KPI chips, the funnel
+   and the snapshot tiles. Set once here, never repeated inline in JSX. */
+.rd-ad-tone-blue   { --ad-accent: var(--ct-2563eb, #2563eb); --ad-soft: var(--c-e8effd, #e8effd); }
+.rd-ad-tone-indigo { --ad-accent: var(--ct-6741d9, #6741d9); --ad-soft: var(--c-eeeafc, #eeeafc); }
+.rd-ad-tone-green  { --ad-accent: var(--ct-159b5c, #159b5c); --ad-soft: var(--c-e3f7ec, #e3f7ec); }
+.rd-ad-tone-orange { --ad-accent: var(--ct-f06a12, #f06a12); --ad-soft: var(--c-fdeee1, #fdeee1); }
+.rd-ad-tone-amber  { --ad-accent: var(--ct-e8930c, #e8930c); --ad-soft: var(--c-fdf3e0, #fdf3e0); }
+.rd-ad-tone-cyan   { --ad-accent: var(--ct-1e77c9, #1e77c9); --ad-soft: var(--c-e4f1fb, #e4f1fb); }
+
+/* ── KPI row ── */
+/* Admin KPI row. Six tiles since Total Billed Value joined the row; the
+   breakpoints below step it down to 3 / 2 / 1. Used ONLY by the admin view —
+   every other dashboard is on .rd-ad-kpis-auto. */
+.rd-ad-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+  width: 100%;
+}
+.rd-ad-kpi {
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-eef2f6, #eef2f6);
+  border-radius: 12px;
+  padding: 16px 16px 14px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.rd-ad-kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.09);
+}
+.rd-ad-kpi:focus-visible { outline: 2px solid var(--c-2563eb, #2563eb); outline-offset: 2px; }
+.rd-ad-kpi-top { display: flex; align-items: flex-start; gap: 13px; }
+.rd-ad-kpi-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--ad-soft, var(--c-e8effd, #e8effd));
+  color: var(--ad-accent, var(--ct-2563eb, #2563eb));
+}
+.rd-ad-kpi-body { min-width: 0; flex: 1; }
+.rd-ad-kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--ct-94a3b8, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rd-ad-kpi-value {
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--ct-0f172a, #0f172a);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Growth delta ── */
+.rd-ad-kpi-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 9px;
+}
+.rd-ad-kpi-foot:empty { display: none; }
+.rd-ad-kpi-extra {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ad-accent, var(--ct-2563eb, #2563eb));
+  background: var(--ad-soft, var(--c-e8effd, #e8effd));
+  border-radius: 6px;
+  padding: 3px 7px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rd-ad-delta-wrap { min-width: 0; }
+.rd-ad-delta {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+.rd-ad-delta.up   { color: var(--ct-159b5c, #159b5c); }
+.rd-ad-delta.down { color: var(--ct-dc2626, #dc2626); }
+.rd-ad-delta-note {
+  font-size: 11px;
+  color: var(--ct-94a3b8, #94a3b8);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+
+/* ── Main grid ──
+   Attention Required is the tall right-hand column: it spans the chart row
+   AND the team row, which is what makes the left side read as two rows of
+   two while the right side stays one continuous panel. */
+.rd-ad-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.82fr);
+  gap: 14px;
+  margin-bottom: 14px;
+  width: 100%;
+  align-items: stretch;
+}
+.rd-ad-tall { grid-column: 3; grid-row: 1 / span 2; position: relative; min-height: 0; }
+.rd-ad-tall > .rd-ad-card { position: absolute; inset: 0; }
+
+.rd-ad-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+  width: 100%;
+}
+
+/* ── Section card ── */
+.rd-ad-card {
+  display: flex;
+  flex-direction: column;
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-eef2f6, #eef2f6);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  overflow: hidden;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.rd-ad-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 18px 13px;
+  flex-shrink: 0;
+}
+.rd-ad-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ct-0f172a, #0f172a);
+  margin: 0;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd-ad-card-body { padding: 0 18px 16px; flex: 1; min-height: 0; }
+.rd-ad-card-body.rd-ad-flush { padding: 0; }
+.rd-ad-card-body.rd-ad-fill  { display: flex; flex-direction: column; }
+
+/* Header controls */
+.rd-ad-select {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ct-475569, #475569);
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 8px;
+  padding: 6px 9px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rd-ad-chip {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ct-475569, #475569);
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 8px;
+  padding: 6px 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.rd-ad-link {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ct-2563eb, #2563eb);
+  background: var(--c-eff6ff, #eff6ff);
+  border: 1px solid var(--c-dbeafe, #dbeafe);
+  border-radius: 8px;
+  padding: 6px 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rd-ad-link:hover { background: var(--c-dbeafe, #dbeafe); }
+
+/* ── Revenue chart ── */
+.rd-ad-axis-cap {
+  font-size: 10.5px;
+  color: var(--ct-94a3b8, #94a3b8);
+  margin-bottom: 4px;
+}
+.rd-ad-legend { display: flex; justify-content: center; gap: 24px; margin-top: 8px; }
+.rd-ad-leg {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: var(--ct-64748b, #64748b);
+}
+.rd-ad-leg-line { width: 22px; height: 0; border-top-width: 2.5px; border-radius: 2px; }
+.rd-ad-leg-line.solid { border-top-style: solid;  border-top-color: var(--c-2563eb, #2563eb); }
+.rd-ad-leg-line.dash  { border-top-style: dashed; border-top-color: var(--c-7c3aed, #7c3aed); }
+
+/* Chart tooltip */
+.rd-ad-tip {
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-e2e8f0, #e2e8f0);
+  border-radius: 9px;
+  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.12);
+  padding: 9px 11px;
+  min-width: 168px;
+}
+.rd-ad-tip-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ct-475569, #475569);
+  margin-bottom: 7px;
+}
+.rd-ad-tip-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; margin-top: 4px; }
+.rd-ad-tip-dash { width: 16px; height: 0; border-top: 2.5px solid; border-radius: 2px; flex-shrink: 0; }
+.rd-ad-tip-name { color: var(--ct-64748b, #64748b); }
+.rd-ad-tip-val  { margin-left: auto; color: var(--ct-0f172a, #0f172a); font-weight: 700; }
+
+/* ── Lead funnel ──
+   Two halves: the tapered silhouette on the left, the exact figures on the
+   right. clip-path draws each band as a trapezoid running from its own boundary
+   width down to the next one; the widths come from a fixed taper in AdFunnel,
+   not from the data, so the outline is always a funnel. Bands are separated by a
+   real gap rather than butting together — that is what makes the stack read as
+   one tapering vessel instead of a column of coloured blocks. */
+.rd-ad-funnel {
+  --fn-gap: 4px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 18px;
+  /* Both columns stretch to the row, and both distribute their children with
+     flex:1 over the same gap — which is what makes legend row i sit level with
+     band i instead of the legend bunching in the middle of the card. */
+  align-items: stretch;
+  align-content: center;
+  height: 100%;
+}
+.rd-ad-funnel-shape {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fn-gap);
+  justify-content: center;
+  min-height: 0;
+}
+.rd-ad-fn-seg {
+  /* Sized by the card, not fixed: a 320px manager card and a 440px admin card
+     both get a funnel that fills them without overflowing. */
+  flex: 1 1 0;
+  min-height: 38px;
+  max-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ct-ffffff, #ffffff);
+  background: var(--ad-accent, var(--c-2563eb, #2563eb));
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* The label sits over a saturated fill at every width, including the neck, so it
+   carries its own contrast rather than relying on the band behind it. */
+.rd-ad-fn-num {
+  letter-spacing: 0.2px;
+  text-shadow: 0 1px 2px rgba(15, 23, 42, 0.32);
+}
+.rd-ad-funnel-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--fn-gap, 4px);
+  min-height: 0;
+}
+/* Same flex:1 and same min/max as .rd-ad-fn-seg — see the alignment note above. */
+.rd-ad-fn-row {
+  flex: 1 1 0;
+  min-height: 38px;
+  max-height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+.rd-ad-fn-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  border: 3px solid var(--ad-accent, var(--c-2563eb, #2563eb));
+  background: var(--c-ffffff, #ffffff);
+}
+.rd-ad-fn-name {
+  color: var(--ct-64748b, #64748b);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd-ad-fn-val { font-weight: 700; color: var(--ct-0f172a, #0f172a); white-space: nowrap; }
+.rd-ad-fn-pct { color: var(--ct-94a3b8, #94a3b8); white-space: nowrap; }
+/* A stage that came back larger than the stage above it. The silhouette stays a
+   clean funnel; the number is the thing that is wrong, so the number is what
+   gets marked. */
+.rd-ad-fn-pct.warn { color: var(--ct-f06a12, #f06a12); font-weight: 600; cursor: help; }
+
+/* ── Business snapshot ── */
+.rd-ad-snap { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 12px; height: 100%; }
+.rd-ad-snap-tile {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-eef2f6, #eef2f6);
+  border-radius: 10px;
+  padding: 11px 9px;
+  min-width: 0;
+}
+.rd-ad-snap-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--ad-soft, var(--c-e8effd, #e8effd));
+  color: var(--ad-accent, var(--ct-2563eb, #2563eb));
+}
+.rd-ad-snap-text { min-width: 0; }
+.rd-ad-snap-value { font-size: 19px; font-weight: 700; color: var(--ct-0f172a, #0f172a); line-height: 1.1; }
+.rd-ad-snap-label {
+  font-size: 9.5px;
+  line-height: 1.2;
+  color: var(--ct-94a3b8, #94a3b8);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Tables ── */
+.rd-ad-table-wrap { overflow-x: auto; width: 100%; }
+.rd-ad-table-wrap.rd-ad-scroll { max-height: 214px; overflow-y: auto; }
+.rd-ad-table-wrap.rd-ad-scroll::-webkit-scrollbar { width: 4px; }
+.rd-ad-table-wrap.rd-ad-scroll::-webkit-scrollbar-track { background: transparent; }
+.rd-ad-table-wrap.rd-ad-scroll::-webkit-scrollbar-thumb { background: var(--c-cbd5e1, #cbd5e1); border-radius: 4px; }
+.rd-ad-table thead th { position: sticky; top: 0; z-index: 1; background: var(--c-fafbfc, #fafbfc); }
+.rd-ad-table { font-size: 12.5px; min-width: 520px; }
+/* Team Performance sits in a narrow column; .rd-table hard-codes min-width:580px,
+   which would force a scrollbar and hide the Revenue / Win Rate columns. */
+.rd-ad-table.compact { font-size: 11.5px; min-width: 0; table-layout: fixed; width: 100%; }
+.rd-ad-table.compact th:nth-child(1) { width: 30%; }
+.rd-ad-table.compact th:nth-child(2) { width: 20%; }
+.rd-ad-table.compact th:nth-child(3) { width: 11%; }
+.rd-ad-table.compact th:nth-child(4) { width: 10%; }
+.rd-ad-table.compact th:nth-child(5) { width: 15%; }
+.rd-ad-table.compact th:nth-child(6) { width: 14%; }
+.rd-ad-table.compact td { overflow: hidden; padding-top: 9px; padding-bottom: 9px; }
+.rd-ad-table.compact th, .rd-ad-table.compact td { padding-left: 9px; padding-right: 9px; }
+.rd-ad-table.compact th:first-child, .rd-ad-table.compact td:first-child { padding-left: 16px; }
+.rd-ad-table.compact th:last-child,  .rd-ad-table.compact td:last-child  { padding-right: 16px; }
+.rd-ad-table.compact .rd-avatar { width: 24px; height: 24px; font-size: 9px; }
+.rd-ad-table.compact .rd-team-member-cell { gap: 7px; min-width: 0; }
+/* Six columns have to fit ~410px without a scrollbar: the two text columns
+   give way, the numbers never do. */
+.rd-ad-table.compact th { font-size: 10.5px; letter-spacing: 0; }
+.rd-ad-table.compact .name-cell { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rd-ad-table.compact .rd-ad-role {
+  font-size: 8px;
+  padding: 3px 5px;
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.rd-ad-table.compact th.num, .rd-ad-table.compact td.num { padding-left: 3px; padding-right: 3px; }
+.rd-ad-table.compact th.num:last-child, .rd-ad-table.compact td.num:last-child { padding-right: 14px; }
+.rd-ad-table thead tr { background: var(--c-fafbfc, #fafbfc); }
+.rd-ad-table th {
+  padding: 10px 18px;
+  background: var(--c-fafbfc, #fafbfc);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ct-64748b, #64748b);
+  text-transform: none;
+  letter-spacing: 0;
+  border-top: 1px solid var(--c-f1f5f9, #f1f5f9);
+}
+.rd-ad-table td { padding: 11px 18px; border-bottom: 1px solid var(--c-f6f8fa, #f6f8fa); }
+.rd-ad-table th.num, .rd-ad-table td.num { text-align: right; }
+.rd-ad-code { font-weight: 700; color: var(--ct-2563eb, #2563eb); }
+.rd-ad-muted { color: var(--ct-64748b, #64748b); }
+.rd-ad-rev   { color: var(--ct-0f172a, #0f172a); font-weight: 600; }
+.rd-ad-won   { color: var(--ct-159b5c, #159b5c); font-weight: 700; }
+.rd-ad-rate  { font-weight: 700; color: var(--ct-64748b, #64748b); }
+.rd-ad-rate.good { color: var(--ct-159b5c, #159b5c); }
+.rd-ad-role  { font-size: 9px; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 7px; }
+
+/* ── Attention required ── */
+.rd-ad-att { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.rd-ad-att-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
+  flex-shrink: 0;
+}
+.rd-ad-att-count { text-align: center; }
+.rd-ad-att-count + .rd-ad-att-count { border-left: 1px solid var(--c-f1f5f9, #f1f5f9); }
+.rd-ad-att-num { font-size: 21px; font-weight: 700; line-height: 1.1; }
+.rd-ad-att-cap { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); margin-top: 4px; }
+.rd-ad-att-count.overdue  .rd-ad-att-num { color: var(--ct-dc2626, #dc2626); }
+.rd-ad-att-count.today    .rd-ad-att-num { color: var(--ct-e8930c, #e8930c); }
+.rd-ad-att-count.upcoming .rd-ad-att-num { color: var(--ct-2563eb, #2563eb); }
+
+/* Scrolls inside the tall column so a long backlog can't stretch the grid. */
+.rd-ad-att-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.rd-ad-att-list::-webkit-scrollbar { width: 4px; }
+.rd-ad-att-list::-webkit-scrollbar-track { background: transparent; }
+.rd-ad-att-list::-webkit-scrollbar-thumb { background: var(--c-cbd5e1, #cbd5e1); border-radius: 4px; }
+.rd-ad-att-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border-left: 3px solid var(--c-cbd5e1, #cbd5e1);
+  background: var(--c-fafbfc, #fafbfc);
+  flex-shrink: 0;
+}
+/* Tinted, not saturated — a panel of solid red reads as broken, not urgent. */
+.rd-ad-att-item.overdue  { border-left-color: var(--c-dc2626, #dc2626); background: var(--c-fef5f5, #fef5f5); }
+.rd-ad-att-item.today    { border-left-color: var(--c-e8930c, #e8930c); background: var(--c-fffbf3, #fffbf3); }
+.rd-ad-att-item.upcoming { border-left-color: var(--c-2563eb, #2563eb); background: var(--c-f7faff, #f7faff); }
+.rd-ad-att-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: currentColor; }
+.rd-ad-att-item.overdue  .rd-ad-att-dot { color: var(--ct-dc2626, #dc2626); }
+.rd-ad-att-item.today    .rd-ad-att-dot { color: var(--ct-e8930c, #e8930c); }
+.rd-ad-att-item.upcoming .rd-ad-att-dot { color: var(--ct-2563eb, #2563eb); }
+.rd-ad-att-main { flex: 1; min-width: 0; }
+.rd-ad-att-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ct-0f172a, #0f172a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd-ad-att-meta {
+  font-size: 10.5px;
+  color: var(--ct-94a3b8, #94a3b8);
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rd-ad-att-when {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ct-dc2626, #dc2626);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.rd-ad-att-item.today    .rd-ad-att-when { color: var(--ct-e8930c, #e8930c); }
+.rd-ad-att-item.upcoming .rd-ad-att-when { color: var(--ct-2563eb, #2563eb); }
+.rd-ad-att-all {
+  font: inherit;
+  margin-bottom: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ct-2563eb, #2563eb);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rd-ad-att-all:hover { text-decoration: underline; }
+
+/* ── Responsive ──
+   Matches the breakpoint ladder already used above. Below 1200 the tall
+   Attention column stops spanning and simply flows as its own full card. */
+@media (min-width: 1500px) {
+  .rd-ad-snap-tile   { padding: 14px 13px; gap: 11px; }
+  .rd-ad-snap-icon   { width: 32px; height: 32px; }
+  .rd-ad-snap-value  { font-size: 21px; }
+  .rd-ad-snap-label  { font-size: 11px; }
+  .rd-ad-table.compact { font-size: 12.5px; }
+  .rd-ad-table.compact th { font-size: 11.5px; }
+  .rd-ad-table.compact .rd-avatar { width: 27px; height: 27px; font-size: 10px; }
+  .rd-ad-kpi-value   { font-size: 25px; }
+  /* Bands are flex-sized now; only the type scale changes at this breakpoint. */
+  .rd-ad-fn-seg      { font-size: 14px; }
+  .rd-ad-fn-row      { font-size: 12.5px; }
+}
+@media (max-width: 1080px) {
+  .rd-ad-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 950px) {
+  .rd-ad-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .rd-ad-tall { grid-column: auto; grid-row: auto; position: static; }
+  .rd-ad-tall > .rd-ad-card { position: static; }
+  .rd-ad-att-list { max-height: 320px; }
+}
+@media (max-width: 820px) {
+  .rd-ad-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+@media (max-width: 720px) {
+  .rd-ad-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .rd-ad-funnel { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .rd-ad-kpis, .rd-ad-grid, .rd-ad-row { gap: 12px; margin-bottom: 12px; }
+  .rd-ad-kpi-value { font-size: 20px; }
+  .rd-ad-snap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rd-ad-card-body { padding: 0 14px 14px; }
+  .rd-ad-table th, .rd-ad-table td { padding-left: 14px; padding-right: 14px; }
+}
+@media (max-width: 480px) {
+  .rd-ad-kpis { grid-template-columns: minmax(0, 1fr); }
+  .rd-ad-snap { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Dark mode ──
+   Only the one-off light tints the token layer can't resolve; everything
+   else above is already token-driven. */
+[data-theme="dark"] .rd-ad-att-item          { background: var(--c-1b2230, #1b2230); }
+[data-theme="dark"] .rd-ad-att-item.overdue  { background: var(--c-2b1d20, #2b1d20); }
+[data-theme="dark"] .rd-ad-att-item.today    { background: var(--c-2b2517, #2b2517); }
+[data-theme="dark"] .rd-ad-att-item.upcoming { background: var(--c-15243d, #15243d); }
+[data-theme="dark"] .rd-ad-snap-tile         { background: var(--c-1b2230, #1b2230); }
+[data-theme="dark"] .rd-ad-tip {
+  background: var(--c-1b2230, #1b2230);
+  border-color: var(--c-2f3947, #2f3947);
+}
+[data-theme="dark"] .rd-ad-fn-dot { background: var(--c-1b2230, #1b2230); }
+
+/* =============================================================
+   ROLE DASHBOARDS ON THE ADMIN DESIGN  —  additive rd-ad-* only
+   -------------------------------------------------------------
+   Manager / BD / Telecaller / Generic reuse the Ad* components, but
+   their rows are shaped differently from the admin grid: 8-9 KPIs
+   instead of 5, and plain 2-up / 3-up card rows instead of one tall
+   spanning column. Everything below is NEW — nothing here overrides
+   a rule the Super Admin dashboard depends on.
+   ============================================================= */
+
+/* ── KPI descriptor line ──
+   Non-admin KPIs carry a caption ("45% conv.", "3 accepted") where the
+   admin KPIs carry a month-over-month delta. Admin never passes `sub`,
+   so this rule simply never matches there. */
+.rd-ad-kpi-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ct-64748b, #64748b);
+  line-height: 1.3;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Flexible KPI row ──
+   .rd-ad-kpis is locked to admin's 5 columns. These rows carry 4, 7, 8 or 9
+   cards, so the column count is chosen to divide them without stranding a
+   single card alone on the last line: four columns suits 4 / 7 / 8, and the
+   .c5 variant suits the telecaller's nine (5 + 4). auto-fit was tried first
+   and is what produces the 7 + 1 orphan at desktop widths. */
+.rd-ad-kpis-auto {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+  width: 100%;
+}
+.rd-ad-kpis-auto.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+
+/* ── Equal-height card rows ──
+   The admin grid gets its heights from a row span; these rows state the
+   height outright (as the old fixed-height <Card> did) so side-by-side
+   cards always line up and their lists scroll internally rather than
+   stretching the row. */
+.rd-ad-eqrow {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 14px;
+  width: 100%;
+  align-items: stretch;
+}
+.rd-ad-eqrow.cols-1 { grid-template-columns: minmax(0, 1fr); }
+.rd-ad-eqrow.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.rd-ad-eqrow.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rd-ad-eqrow.h-sm { grid-auto-rows: 320px; }
+.rd-ad-eqrow.h-md { grid-auto-rows: 380px; }
+.rd-ad-eqrow.h-lg { grid-auto-rows: 440px; }
+
+/* Pane that eats the card's leftover height and scrolls its own overflow. */
+.rd-ad-pane {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+.rd-ad-pane::-webkit-scrollbar { width: 4px; height: 4px; }
+.rd-ad-pane::-webkit-scrollbar-track { background: transparent; }
+.rd-ad-pane::-webkit-scrollbar-thumb { background: var(--c-cbd5e1, #cbd5e1); border-radius: 4px; }
+
+/* AdTeamTable caps itself at 214px for the admin grid; inside a stated-height
+   row it should use the whole card instead. Scoped so admin never sees it. */
+.rd-ad-eqrow .rd-ad-table-wrap.rd-ad-scroll {
+  max-height: none;
+  flex: 1;
+  min-height: 0;
+}
+
+/* A chart body that should fill the card rather than sit at its natural 110px. */
+.rd-ad-chartfill .rd-mini-chart { height: 100%; padding-bottom: 2px; }
+
+@media (max-width: 1280px) {
+  .rd-ad-kpis-auto.c5 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (max-width: 1100px) {
+  .rd-ad-kpis-auto,
+  .rd-ad-kpis-auto.c5 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rd-ad-eqrow.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 820px) {
+  .rd-ad-kpis-auto,
+  .rd-ad-kpis-auto.c5 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .rd-ad-eqrow.cols-2,
+  .rd-ad-eqrow.cols-3 { grid-template-columns: minmax(0, 1fr); }
+  .rd-ad-eqrow.h-sm,
+  .rd-ad-eqrow.h-md,
+  .rd-ad-eqrow.h-lg { grid-auto-rows: 380px; }
+}
+@media (max-width: 640px) {
+  .rd-ad-eqrow { gap: 12px; margin-bottom: 12px; }
+}
+@media (max-width: 420px) {
+  .rd-ad-kpis-auto,
+  .rd-ad-kpis-auto.c5 { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── Telecaller interest-rate bar ──
+   Same three parts as before (label + track, big percent, legend); only the
+   shell and type are moved onto the rd-ad-* card tokens. */
+.rd-ad-ir {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--c-ffffff, #ffffff);
+  border: 1px solid var(--c-eef2f6, #eef2f6);
+  border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  box-sizing: border-box;
+}
+.rd-ad-ir-left { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 9px; }
+.rd-ad-ir-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ct-0f172a, #0f172a);
+  letter-spacing: -0.01em;
+}
+.rd-ad-ir-title svg { color: var(--ct-159b5c, #159b5c); }
+.rd-ad-ir-track {
+  height: 8px;
+  width: 100%;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--c-f1f5f9, #f1f5f9);
+}
+.rd-ad-ir-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--ct-159b5c, #159b5c);
+  transition: width 0.5s ease;
+}
+.rd-ad-ir-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  min-width: 62px;
+}
+.rd-ad-ir-pct {
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ct-159b5c, #159b5c);
+}
+.rd-ad-ir-cap { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); }
+.rd-ad-ir-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--ct-64748b, #64748b);
+}
+.rd-ad-ir-legend b { font-weight: 700; }
+.rd-ad-ir-legend .yes  { color: var(--ct-159b5c, #159b5c); }
+.rd-ad-ir-legend .no   { color: var(--ct-dc2626, #dc2626); }
+.rd-ad-ir-legend .none { color: var(--ct-e8930c, #e8930c); }
+
+@media (max-width: 640px) {
+  .rd-ad-ir { gap: 12px; padding: 12px 14px; }
+  .rd-ad-ir-legend { flex-direction: row; flex-wrap: wrap; gap: 10px; font-size: 10px; }
+}
+
+/* ── Generic dashboard: funnel + performance stat tiles ──
+   AdFunnel is height:100% so it fills an admin card on its own. Here it shares
+   the card with the two tiles below it: the pane becomes a flex column, the
+   funnel takes whatever the tiles do not, and its bands stay inside their own
+   min/max so it neither overflows a short card nor leaves a gap in a tall one.
+   The tiles keep their natural height (flex-shrink: 0) so a squeezed card eats
+   into the funnel, never into the numbers. */
+.rd-ad-perf { display: flex; flex-direction: column; overflow: hidden; }
+.rd-ad-perf .rd-ad-funnel { flex: 1 1 auto; min-height: 0; height: auto; }
+.rd-ad-stats { display: flex; gap: 14px; margin-top: 16px; flex-shrink: 0; }
+.rd-ad-stat {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+  padding: 12px 10px;
+  border-radius: 10px;
+  background: var(--c-f8fafc, #f8fafc);
+  border: 1px solid var(--c-eef2f6, #eef2f6);
+}
+.rd-ad-stat-val {
+  font-size: 25px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--ct-0f172a, #0f172a);
+}
+.rd-ad-stat.good .rd-ad-stat-val { color: var(--ct-159b5c, #159b5c); }
+.rd-ad-stat.info .rd-ad-stat-val { color: var(--ct-2563eb, #2563eb); }
+.rd-ad-stat-cap { font-size: 11px; color: var(--ct-64748b, #64748b); margin-top: 5px; }
+
+/* ── Generic dashboard: getting-started empty state ── */
+.rd-ad-welcome { text-align: center; padding: 18px 0 6px; color: var(--ct-64748b, #64748b); }
+.rd-ad-welcome-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--c-e8effd, #e8effd);
+  color: var(--ct-2563eb, #2563eb);
+}
+.rd-ad-welcome-title { font-weight: 700; font-size: 14px; color: var(--ct-0f172a, #0f172a); margin-bottom: 4px; }
+.rd-ad-welcome-sub { font-size: 13px; }
+
+/* ── Dark mode (only the tints the token layer can't resolve) ── */
+[data-theme="dark"] .rd-ad-stat { background: var(--c-1b2230, #1b2230); }
+
+/* .compact is table-layout:fixed with column widths cut for AdTeamTable's six
+   columns. The leads / proposals / lead-queue tables have five of their own, so
+   `auto` keeps .compact's tighter type and padding but lets the browser size
+   the columns. */
+.rd-ad-table.compact.auto { table-layout: auto; }
+.rd-ad-table.compact.auto th { width: auto; }

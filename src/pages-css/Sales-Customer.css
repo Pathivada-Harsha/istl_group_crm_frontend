@@ -305,7 +305,7 @@
 .cust-card-action-btn.cust-action-followup:hover { background: rgba(251,146,60,0.1); color: var(--ct-ea580c, #ea580c); }
 
 /* ── Lead/Customer Detail Page ───────────────────────────────── */
-.ld-detail-page {
+.custd-detail-page {
   animation: ldFadeIn 0.2s ease-out;
 }
 @keyframes ldFadeIn {
@@ -313,7 +313,7 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-.ld-detail-topbar {
+.custd-detail-topbar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -321,7 +321,7 @@
   flex-wrap: wrap;
 }
 
-.ld-back-btn {
+.custd-back-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -335,9 +335,9 @@
   font-weight: 500;
   transition: all 0.15s;
 }
-.ld-back-btn:hover { background: var(--c-f8fafc, #f8fafc); border-color: var(--c-3b82f6, #3b82f6); color: var(--ct-3b82f6, #3b82f6); }
+.custd-back-btn:hover { background: var(--c-f8fafc, #f8fafc); border-color: var(--c-3b82f6, #3b82f6); color: var(--ct-3b82f6, #3b82f6); }
 
-.ld-detail-breadcrumb {
+.custd-detail-breadcrumb {
   display: flex;
   align-items: center;
   font-size: 12px;
@@ -345,7 +345,7 @@
 }
 
 /* Hero Card */
-.ld-hero {
+.custd-hero {
   background: var(--c-white, white);
   border-radius: 10px;
   padding: 16px;
@@ -357,7 +357,7 @@
   flex-wrap: wrap;
 }
 
-.ld-hero-left {
+.custd-hero-left {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -365,7 +365,7 @@
   min-width: 200px;
 }
 
-.ld-hero-avatar {
+.custd-hero-avatar {
   width: 44px;
   height: 44px;
   border-radius: 10px;
@@ -379,14 +379,14 @@
   flex-shrink: 0;
 }
 
-.ld-hero-name {
+.custd-hero-name {
   font-size: 18px;
   font-weight: 700;
   color: var(--ct-0f172a, #0f172a);
   margin: 0 0 2px;
 }
 
-.ld-hero-code {
+.custd-hero-code {
   font-size: 11px;
   color: var(--ct-94a3b8, #94a3b8);
   font-weight: 600;
@@ -394,69 +394,142 @@
   font-family: monospace;
 }
 
-.ld-hero-badges {
+.custd-hero-badges {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-.ld-hero-actions {
+.custd-hero-actions {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
 }
 
-/* Tabs */
-.ld-tabs {
+/* ── Tabs — one row of chevrons that nest into each other ──────────────────
+   The selected tab reads as an arrow pointing into the next. Same pattern and
+   the same geometry as the project detail view (.pd-pipe-step in Projects.css)
+   and the lead detail view (.ld-pipe), so the three detail pages feel like one
+   product. Kept under the custd-* namespace rather than importing the projects
+   stylesheet — see the note at the top of this file about why these two
+   namespaces stay apart.
+
+   Appearance depends only on which tab is selected: no done/pending/upcoming
+   states, and no change to the tab logic itself.
+
+   CAVEAT: the nested-arrow bar is sized for a small, fixed set of tabs. Four
+   is comfortable. If this page ever grows past ~6, revisit the treatment
+   rather than letting the arrows wrap or squeeze to ellipses. */
+.custd-tabs {
+  --custd-notch: 13px;
   display: flex;
-  gap: 2px;
-  border-bottom: 2px solid var(--c-f1f5f9, #f1f5f9);
+  align-items: stretch;
+  gap: 0;
+  border-bottom: none;
   margin-bottom: 14px;
 }
 
-.ld-tab {
-  padding: 8px 16px;
-  background: transparent;
+.custd-tab {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: calc(var(--custd-notch) * -1 + 2px);   /* 2px seam */
+  padding: 9px 8px 9px calc(var(--custd-notch) + 8px);
   border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--ct-64748b, #64748b);
+  background: var(--c-f1f5f9, #f1f5f9);
+  color: var(--ct-475569, #475569);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background .18s, color .18s;
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--custd-notch)) 0,
+    100% 50%,
+    calc(100% - var(--custd-notch)) 100%,
+    0 100%,
+    var(--custd-notch) 50%
+  );
 }
-.ld-tab:hover { color: var(--ct-0f172a, #0f172a); }
-.ld-tab.active { color: var(--ct-3b82f6, #3b82f6); border-bottom-color: var(--c-3b82f6, #3b82f6); font-weight: 600; }
+/* Flat left edge on the first segment, flat right edge on the last. */
+.custd-tab:first-child {
+  margin-left: 0;
+  padding-left: 14px;
+  border-radius: 7px 0 0 7px;
+  clip-path: polygon(0 0, calc(100% - var(--custd-notch)) 0, 100% 50%, calc(100% - var(--custd-notch)) 100%, 0 100%);
+}
+.custd-tab:last-child {
+  padding-right: 14px;
+  border-radius: 0 7px 7px 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, var(--custd-notch) 50%);
+}
+.custd-tab:first-child:last-child { clip-path: none; border-radius: 7px; }
+
+/* The icon keeps its size; only the label gives way when the strip is narrow. */
+.custd-tab-ico   { flex: 0 0 auto; }
+.custd-tab-label { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Selected — the ONLY tab that differs. The lighter blue the leads and
+   projects detail views standardised on, not the old navy. */
+.custd-tab.active {
+  flex-grow: 1.15;
+  background: var(--c-2563eb, #2563eb);
+  color: #fff;
+  font-weight: 700;
+}
+.custd-tab:not(.active):hover {
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+/* clip-path clips outlines, so the focus ring has to be drawn inside the box. */
+.custd-tab:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--c-1d4ed8, #1d4ed8); }
+
+[data-theme="dark"] .custd-tab {
+  background: var(--c-f1f5f9, #232b3b);
+  color: var(--ct-475569, #aab4c2);
+}
+[data-theme="dark"] .custd-tab.active { background: var(--c-2563eb, #2f6fe0); color: #fff; }
+[data-theme="dark"] .custd-tab:not(.active):hover {
+  background: var(--c-eff6ff, #15243d);
+  color: var(--ct-60a5fa, #7fb6fb);
+}
 
 
 /* Info Grid */
-.ld-info-grid {
+.custd-info-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 14px;
   margin-bottom: 14px;
 }
 
-.ld-info-card {
+.custd-info-card {
   background: var(--c-white, white);
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
 }
 
-.ld-card-title {
-  font-size: 13px;
+/* Section headings: 15px/700, matching .pd-page .obd-card-title on the
+   project detail view. The old 13px read noticeably lighter than the Leads
+   and Projects detail pages sitting next to it. */
+.custd-card-title {
+  font-size: 15px;
   font-weight: 700;
-  color: var(--ct-0f172a, #0f172a);
+  color: var(--ct-111827, #111827);
   margin: 0 0 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--c-f1f5f9, #f1f5f9);
 }
 
-.ld-field-list { display: flex; flex-direction: column; gap: 8px; }
-.ld-field-row  { display: flex; align-items: flex-start; gap: 8px; }
-.ld-field-label {
+.custd-field-list { display: flex; flex-direction: column; gap: 8px; }
+.custd-field-row  { display: flex; align-items: flex-start; gap: 8px; }
+.custd-field-label {
   font-size: 11px;
   font-weight: 600;
   color: var(--ct-94a3b8, #94a3b8);
@@ -465,59 +538,59 @@
   white-space: nowrap;
   min-width: 100px;
 }
-.ld-field-val { font-size: 12px; color: var(--ct-0f172a, #0f172a); }
+.custd-field-val { font-size: 12px; color: var(--ct-0f172a, #0f172a); }
 
 /* Enquiry card */
-.ld-enquiry-card {
+.custd-enquiry-card {
   background: var(--c-white, white);
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   margin-bottom: 14px;
 }
-.ld-enquiry-text { font-size: 13px; color: var(--ct-475569, #475569); line-height: 1.6; }
+.custd-enquiry-text { font-size: 13px; color: var(--ct-475569, #475569); line-height: 1.6; }
 
 /* Overview Proposals/OrderBooks Summary */
-.ld-overview-proposals {
+.custd-overview-proposals {
   background: var(--c-white, white);
   border-radius: 10px;
   padding: 14px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   margin-top: 14px;
 }
-.ld-overview-proposals-empty {
+.custd-overview-proposals-empty {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-.ld-ovp-icon { font-size: 28px; flex-shrink: 0; }
-.ld-ovp-text { display: flex; flex-direction: column; flex: 1; }
-.ld-ovp-label { font-size: 13px; font-weight: 600; color: var(--ct-0f172a, #0f172a); }
-.ld-ovp-sub   { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); }
+.custd-ovp-icon { font-size: 28px; flex-shrink: 0; }
+.custd-ovp-text { display: flex; flex-direction: column; flex: 1; }
+.custd-ovp-label { font-size: 13px; font-weight: 600; color: var(--ct-0f172a, #0f172a); }
+.custd-ovp-sub   { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); }
 
-.ld-ovp-header {
+.custd-ovp-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 10px;
 }
 
-.ld-ovp-stats {
+.custd-ovp-stats {
   display: flex;
   gap: 20px;
   margin-bottom: 10px;
   flex-wrap: wrap;
 }
-.ld-ovp-stat {
+.custd-ovp-stat {
   display: flex;
   flex-direction: column;
   gap: 2px;
 }
-.ld-ovp-stat-val { font-size: 18px; font-weight: 700; color: var(--ct-0f172a, #0f172a); }
-.ld-ovp-stat-money .ld-ovp-stat-val { color: var(--ct-059669, #059669); }
-.ld-ovp-stat-label { font-size: 10px; color: var(--ct-94a3b8, #94a3b8); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
+.custd-ovp-stat-val { font-size: 18px; font-weight: 700; color: var(--ct-0f172a, #0f172a); }
+.custd-ovp-stat-money .custd-ovp-stat-val { color: var(--ct-059669, #059669); }
+.custd-ovp-stat-label { font-size: 10px; color: var(--ct-94a3b8, #94a3b8); font-weight: 500; text-transform: uppercase; letter-spacing: 0.3px; }
 
-.ld-ovp-latest {
+.custd-ovp-latest {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -527,11 +600,11 @@
   font-size: 12px;
   flex-wrap: wrap;
 }
-.ld-ovp-latest-label { font-weight: 600; color: var(--ct-64748b, #64748b); font-size: 11px; }
-.ld-ovp-latest-title { color: var(--ct-0f172a, #0f172a); font-weight: 500; }
+.custd-ovp-latest-label { font-weight: 600; color: var(--ct-64748b, #64748b); font-size: 11px; }
+.custd-ovp-latest-title { color: var(--ct-0f172a, #0f172a); font-weight: 500; }
 
 /* Section header (title + action button) */
-.ld-section-hdr {
+.custd-section-hdr {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -540,13 +613,13 @@
 }
 
 /* Proposals / Orders list */
-.ld-proposals-list {
+.custd-proposals-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-.ld-proposal-card {
+.custd-proposal-card {
   background: var(--c-white, white);
   border-radius: 8px;
   padding: 12px 14px;
@@ -557,23 +630,23 @@
   gap: 14px;
   transition: all 0.15s;
 }
-.ld-proposal-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+.custd-proposal-card:hover { box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
 
-.ld-proposal-card-left { flex: 1; min-width: 0; }
-.ld-proposal-no   { font-size: 11px; font-weight: 700; color: var(--ct-3b82f6, #3b82f6); font-family: monospace; margin-bottom: 3px; }
-.ld-proposal-title { font-size: 13px; font-weight: 600; color: var(--ct-0f172a, #0f172a); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ld-proposal-meta  { display: flex; gap: 6px; font-size: 11px; color: var(--ct-94a3b8, #94a3b8); flex-wrap: wrap; align-items: center; }
+.custd-proposal-card-left { flex: 1; min-width: 0; }
+.custd-proposal-no   { font-size: 11px; font-weight: 700; color: var(--ct-3b82f6, #3b82f6); font-family: monospace; margin-bottom: 3px; }
+.custd-proposal-title { font-size: 13px; font-weight: 600; color: var(--ct-0f172a, #0f172a); margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.custd-proposal-meta  { display: flex; gap: 6px; font-size: 11px; color: var(--ct-94a3b8, #94a3b8); flex-wrap: wrap; align-items: center; }
 
-.ld-proposal-card-right {
+.custd-proposal-card-right {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
 }
 
-.ld-proposal-actions { display: flex; gap: 4px; }
+.custd-proposal-actions { display: flex; gap: 4px; }
 
-.ld-pact-btn {
+.custd-pact-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -587,11 +660,11 @@
   font-weight: 500;
   transition: all 0.15s;
 }
-.ld-pact-btn:hover { background: var(--c-eff6ff, #eff6ff); border-color: var(--c-93c5fd, #93c5fd); color: var(--ct-2563eb, #2563eb); }
-.ld-pact-edit:hover { background: var(--c-f0fdf4, #f0fdf4); border-color: var(--c-86efac, #86efac); color: var(--ct-16a34a, #16a34a); }
+.custd-pact-btn:hover { background: var(--c-eff6ff, #eff6ff); border-color: var(--c-93c5fd, #93c5fd); color: var(--ct-2563eb, #2563eb); }
+.custd-pact-edit:hover { background: var(--c-f0fdf4, #f0fdf4); border-color: var(--c-86efac, #86efac); color: var(--ct-16a34a, #16a34a); }
 
 /* Proposal status badges */
-.ld-proposal-status {
+.custd-proposal-status {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 999px;
@@ -600,11 +673,11 @@
   text-transform: uppercase;
   letter-spacing: 0.2px;
 }
-.ld-ps-draft    { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569); }
-.ld-ps-sent     { background: var(--c-dbeafe, #dbeafe); color: var(--ct-1e40af, #1e40af); }
-.ld-ps-approved { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
-.ld-ps-rejected { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
-.ld-ps-hold     { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
+.custd-ps-draft    { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569); }
+.custd-ps-sent     { background: var(--c-dbeafe, #dbeafe); color: var(--ct-1e40af, #1e40af); }
+.custd-ps-approved { background: var(--c-d1fae5, #d1fae5); color: var(--ct-065f46, #065f46); }
+.custd-ps-rejected { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
+.custd-ps-hold     { background: var(--c-fef3c7, #fef3c7); color: var(--ct-92400e, #92400e); }
 
 /* OrderBook status badges */
 .ob-s-draft       { background: var(--c-f1f5f9, #f1f5f9); color: var(--ct-475569, #475569); }
@@ -616,9 +689,9 @@
 .ob-s-cancelled   { background: var(--c-fee2e2, #fee2e2); color: var(--ct-991b1b, #991b1b); }
 
 /* History */
-.ld-history-list { display: flex; flex-direction: column; gap: 10px; }
+.custd-history-list { display: flex; flex-direction: column; gap: 10px; }
 
-.ld-history-item {
+.custd-history-item {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -628,7 +701,7 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 }
 
-.ld-history-icon {
+.custd-history-icon {
   width: 32px;
   height: 32px;
   border-radius: 8px;
@@ -640,27 +713,27 @@
   flex-shrink: 0;
 }
 
-.ld-history-body { flex: 1; }
+.custd-history-body { flex: 1; }
 
-.ld-history-hdr {
+.custd-history-hdr {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 3px;
   flex-wrap: wrap;
 }
-.ld-history-type { font-size: 12px; font-weight: 600; color: var(--ct-0f172a, #0f172a); }
-.ld-history-date { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); }
-.ld-history-by   { font-size: 11px; color: var(--ct-64748b, #64748b); }
-.ld-history-desc { font-size: 12px; color: var(--ct-475569, #475569); line-height: 1.4; }
+.custd-history-type { font-size: 12px; font-weight: 600; color: var(--ct-0f172a, #0f172a); }
+.custd-history-date { font-size: 11px; color: var(--ct-94a3b8, #94a3b8); }
+.custd-history-by   { font-size: 11px; color: var(--ct-64748b, #64748b); }
+.custd-history-desc { font-size: 12px; color: var(--ct-475569, #475569); line-height: 1.4; }
 
-.ld-history-change { font-size: 11px; margin-top: 4px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
-.ld-chg-field { font-weight: 600; color: var(--ct-64748b, #64748b); }
-.ld-chg-old   { color: var(--ct-dc2626, #dc2626); text-decoration: line-through; }
-.ld-chg-new   { color: var(--ct-16a34a, #16a34a); font-weight: 600; }
+.custd-history-change { font-size: 11px; margin-top: 4px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.custd-chg-field { font-weight: 600; color: var(--ct-64748b, #64748b); }
+.custd-chg-old   { color: var(--ct-dc2626, #dc2626); text-decoration: line-through; }
+.custd-chg-new   { color: var(--ct-16a34a, #16a34a); font-weight: 600; }
 
 /* Buttons */
-.ld-btn {
+.custd-btn {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -672,15 +745,15 @@
   border: none;
   transition: all 0.15s;
 }
-.ld-btn-pri { background: linear-gradient(135deg,var(--c-3b82f6, #3b82f6),var(--c-2563eb, #2563eb)); color: var(--ct-white, white); }
-.ld-btn-pri:hover:not(:disabled) { box-shadow: 0 3px 8px rgba(59,130,246,0.35); transform: translateY(-1px); }
-.ld-btn-sec { background: var(--c-white, white); color: var(--ct-64748b, #64748b); border: 1px solid var(--c-e2e8f0, #e2e8f0); }
-.ld-btn-sec:hover { background: var(--c-f8fafc, #f8fafc); border-color: var(--c-cbd5e1, #cbd5e1); }
-.ld-btn-sm  { padding: 4px 10px; font-size: 11px; }
-.ld-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
+.custd-btn-pri { background: linear-gradient(135deg,var(--c-3b82f6, #3b82f6),var(--c-2563eb, #2563eb)); color: var(--ct-white, white); }
+.custd-btn-pri:hover:not(:disabled) { box-shadow: 0 3px 8px rgba(59,130,246,0.35); transform: translateY(-1px); }
+.custd-btn-sec { background: var(--c-white, white); color: var(--ct-64748b, #64748b); border: 1px solid var(--c-e2e8f0, #e2e8f0); }
+.custd-btn-sec:hover { background: var(--c-f8fafc, #f8fafc); border-color: var(--c-cbd5e1, #cbd5e1); }
+.custd-btn-sm  { padding: 4px 10px; font-size: 11px; }
+.custd-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none !important; }
 
 /* Form footer */
-.ld-pform-footer {
+.custd-pform-footer {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
@@ -690,16 +763,16 @@
 }
 
 /* Empty state */
-.ld-empty-state {
+.custd-empty-state {
   text-align: center;
   padding: 32px 20px;
   color: var(--ct-94a3b8, #94a3b8);
 }
-.ld-empty-icon { font-size: 36px; margin-bottom: 8px; }
-.ld-empty-state p { margin: 0 0 12px; font-size: 13px; }
+.custd-empty-icon { font-size: 36px; margin-bottom: 8px; }
+.custd-empty-state p { margin: 0 0 12px; font-size: 13px; }
 
 /* Loading row */
-.ld-loading-row { display: flex; align-items: center; gap: 8px; padding: 20px; color: var(--ct-64748b, #64748b); font-size: 13px; justify-content: center; }
+.custd-loading-row { display: flex; align-items: center; gap: 8px; padding: 20px; color: var(--ct-64748b, #64748b); font-size: 13px; justify-content: center; }
 
 
 
@@ -728,28 +801,31 @@
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 1024px) {
-  .ld-info-grid { grid-template-columns: 1fr; }
+  .custd-info-grid { grid-template-columns: 1fr; }
   .cust-grid { grid-template-columns: repeat(auto-fill, minmax(260px,1fr)); }
 }
 
 @media (max-width: 768px) {
-  .ld-hero { flex-direction: column; align-items: flex-start; }
-  .ld-hero-actions { width: 100%; }
-  .ld-hero-actions .cust-btn { flex: 1; justify-content: center; }
-  .ld-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-  .ld-tab  { white-space: nowrap; }
+  .custd-hero { flex-direction: column; align-items: flex-start; }
+  .custd-hero-actions { width: 100%; }
+  .custd-hero-actions .cust-btn { flex: 1; justify-content: center; }
+  /* Narrow viewports: scroll the chevron strip rather than squeezing every
+     label down to an ellipsis. Mirrors the .pd-pipe rule in Projects.css. */
+  .custd-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+  .custd-tab  { flex: 0 0 auto; min-width: 132px; white-space: nowrap; }
+  .custd-tab.active { flex-grow: 0; }
   .cust-grid { grid-template-columns: 1fr; }
-  .ld-proposal-card { flex-direction: column; align-items: flex-start; }
-  .ld-proposal-card-right { width: 100%; justify-content: space-between; }
+  .custd-proposal-card { flex-direction: column; align-items: flex-start; }
+  .custd-proposal-card-right { width: 100%; justify-content: space-between; }
   .cust-view-toggle-container { flex-direction: column; align-items: flex-start; gap: 6px; }
-  .ld-ovp-stats { gap: 12px; }
-  .ld-detail-topbar { gap: 6px; }
+  .custd-ovp-stats { gap: 12px; }
+  .custd-detail-topbar { gap: 6px; }
 }
 
 @media (max-width: 480px) {
-  .ld-hero-name { font-size: 16px; }
-  .ld-proposal-actions { flex-wrap: wrap; }
-  .ld-pact-btn { flex: 1; justify-content: center; }
+  .custd-hero-name { font-size: 16px; }
+  .custd-proposal-actions { flex-wrap: wrap; }
+  .custd-pact-btn { flex: 1; justify-content: center; }
   .col-visibility-dropdown { left: auto; right: 0; }
 }
 
@@ -1311,7 +1387,7 @@
    ══════════════════════════════════════════════════════════ */
 
 /* The detail page takes full viewport height, no page scroll */
-.ld-detail-page {
+.custd-detail-page {
   display: flex;
   flex-direction: column;
   /* Use min-height + overflow on the tab content rather than a fixed viewport height,
@@ -1320,15 +1396,15 @@
 }
 
 /* Hero + tabs stay fixed at top */
-.ld-detail-topbar,
-.ld-detail-hero,
-.ld-tabs {
+.custd-detail-topbar,
+.custd-detail-hero,
+.custd-tabs {
   flex-shrink: 0;
 }
 
 /* Tab content areas scroll independently.
    Proper horizontal padding so content never touches container edges. */
-.ld-tab-content {
+.custd-tab-content {
   overflow-y: auto;
   padding: 20px 24px;
   max-height: calc(100vh - 260px);
@@ -1337,14 +1413,14 @@
 }
 
 /* ── FilterSelect inside detail tabs — full width ── */
-.ld-tab-content .filter-trigger {
+.custd-tab-content .filter-trigger {
   width: 100%;
   height: 36px;
   font-size: 13px;
   border-color: var(--c-d1d5db, #d1d5db);
 }
-.ld-tab-content .filter-trigger--open { border-color: var(--c-3b82f6, #3b82f6); box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
-.ld-tab-content .filter-dropdown-list { width: 100%; min-width: unset; font-size: 13px; }
+.custd-tab-content .filter-trigger--open { border-color: var(--c-3b82f6, #3b82f6); box-shadow: 0 0 0 2px rgba(59,130,246,0.1); }
+.custd-tab-content .filter-dropdown-list { width: 100%; min-width: unset; font-size: 13px; }
 
 /* ── FilterSelect in cust-filters bar ── */
 .cust-filters .filter-trigger {
@@ -1380,59 +1456,59 @@
    ══════════════════════════════════════════════════════════════ */
 
 /* Info cards — give enough internal padding */
-.ld-info-card {
-  padding: 18px 20px !important;
+.custd-info-card {
+  padding: 18px 20px;
 }
 
-.ld-card-title {
-  margin-bottom: 14px !important;
-  padding-bottom: 10px !important;
+.custd-card-title {
+  margin-bottom: 14px;
+  padding-bottom: 10px;
 }
 
 /* Field rows — more room between label and value */
-.ld-field-label {
-  min-width: 120px !important;
+.custd-field-label {
+  min-width: 120px;
 }
 
-.ld-field-row {
+.custd-field-row {
   padding: 3px 0;
 }
 
 /* KPI / stats cards — ensure they don't clip */
-.ld-overview-proposals {
-  padding: 18px 20px !important;
+.custd-overview-proposals {
+  padding: 18px 20px;
 }
 
 /* Proposal & order book cards — internal padding */
-.ld-proposal-card {
-  padding: 14px 18px !important;
+.custd-proposal-card {
+  padding: 14px 18px;
 }
 
 /* Section headers — breathing space */
-.ld-section-hdr {
-  margin-bottom: 16px !important;
+.custd-section-hdr {
+  margin-bottom: 16px;
   padding: 0 2px;
 }
 
 /* Overview full-width info grid */
-.ld-info-grid {
-  gap: 16px !important;
+.custd-info-grid {
+  gap: 16px;
 }
 
 /* OrderBook rows in list view — internal padding */
-.ld-ob-row {
-  padding: 14px 18px !important;
+.custd-ob-row {
+  padding: 14px 18px;
 }
 
 /* Follow-up cards */
-.ld-fu-card {
-  padding: 14px 18px !important;
+.custd-fu-card {
+  padding: 14px 18px;
 }
 
 /* Tables inside tab content — ensure header/cells have proper spacing */
-.ld-tab-content table th,
-.ld-tab-content table td {
-  padding: 10px 14px !important;
+.custd-tab-content table th,
+.custd-tab-content table td {
+  padding: 10px 14px;
 }
 
 /* ob-form-wrapper — inner form breathing room */
@@ -1446,29 +1522,29 @@
 }
 
 /* History items */
-.ld-history-item {
-  padding: 12px 16px !important;
+.custd-history-item {
+  padding: 12px 16px;
 }
 
 /* Responsive — reduce side padding on smaller screens */
 @media (max-width: 768px) {
-  .ld-tab-content {
-    padding: 14px 16px !important;
+  .custd-tab-content {
+    padding: 14px 16px;
   }
-  .ld-info-card {
-    padding: 14px 16px !important;
+  .custd-info-card {
+    padding: 14px 16px;
   }
-  .ld-field-label {
-    min-width: 90px !important;
+  .custd-field-label {
+    min-width: 90px;
   }
 }
 
 @media (max-width: 480px) {
-  .ld-tab-content {
-    padding: 12px !important;
+  .custd-tab-content {
+    padding: 12px;
   }
-  .ld-info-grid {
-    grid-template-columns: 1fr !important;
+  .custd-info-grid {
+    grid-template-columns: 1fr;
   }
 }
 /* ── FilterSelect inside Order Book items table ──────────────────────────── */

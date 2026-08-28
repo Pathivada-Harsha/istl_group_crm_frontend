@@ -19,6 +19,8 @@ import filterApi from '../services/filterApi';
 import * as XLSX from 'xlsx';
 import ItemNameAutocomplete from '../components/OrderBook/ItemNameAutocomplete.js';
 import UnitTypeDropdown, { COMMON_UNITS } from '../components/Dropdowns/Unittypedropdown.js';
+import BomItemPicker from '../components/procurement/BomItemPicker.js';
+import BomViolationDialog from '../components/procurement/BomViolationDialog.js';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL;
 
@@ -56,6 +58,16 @@ const SortIcon = ({ columnId, sortConfig }) => {
 // ── Validation sets for import ───────────────────────────────────────────────
 const VALID_GST = new Set([0, 5, 12, 18, 28]);
 const GST_OPTIONS = [0, 5, 12, 18, 28];
+
+/**
+ * Item sources. The project BOM leads because it is what actually needs buying;
+ * the order book describes what was sold to the customer.
+ */
+const QR_ITEM_SOURCES = [
+  { key: 'bom',       icon: '🧾', label: 'From Project BOM', hint: 'What the project still needs to buy' },
+  { key: 'orderbook', icon: '📦', label: 'From Order Book',  hint: 'What was sold to the customer' },
+  { key: 'manual',    icon: '✏️', label: 'Add manually',     hint: 'Type the lines, or import from Excel' },
+];
 const CATEGORIES = [
   'Manufacturer',
   'Supplier',
@@ -308,6 +320,14 @@ const QuotationsReceived = () => {
   const [customVendorCategory, setCustomVendorCategory] = useState('');
   const [customVendorType,     setCustomVendorType]     = useState('');
   const [orderBookItems, setOrderBookItems] = useState([]);
+
+  // ── Project BOM sourcing ──────────────────────────────────────────────────
+  // Items no longer auto-load when a project is picked; the user chooses a source.
+  const [itemSource, setItemSource]       = useState(null);   // 'bom' | 'orderbook' | 'manual'
+  const [showBomPicker, setShowBomPicker] = useState(false);
+  // Warnings returned by the backend after saving. A quotation only records what a
+  // vendor sent, so off-BOM lines and over-quantities are reported, never blocked.
+  const [bomWarnings, setBomWarnings]     = useState(null);
   const [loadingOrderItems, setLoadingOrderItems] = useState(false);
   const [showNewVendorForm, setShowNewVendorForm] = useState(false);
   const [focusedField, setFocusedField] = useState(null); // tracks 'qty-N' or 'rate-N'
@@ -824,11 +844,76 @@ const QuotationsReceived = () => {
     if (modalGroupName && sg) { fetchModalProjects(modalGroupName, sg); fetchVendors(modalGroupName, sg); }
   };
 
+  /** How many rows currently carry a project BOM link. */
+  const bomLoadedCount = (quotationFormData?.items || []).filter(i => i.bomLineId).length;
+
   const handleModalProjectChange = (val) => {
     const pid = val || '';
     setModalProjectId(pid);
     if (quotationFormData) setQuotationFormData({ ...quotationFormData, projectId: pid });
-    if (pid && !isEditMode) fetchOrderBookItems(pid);
+    // Items deliberately DO NOT auto-load here any more. The user picks a source
+    // first — otherwise BOM items and order book items accumulate in the same table
+    // and duplicate each other.
+    setItemSource(null);
+    setOrderBookItems([]);
+  };
+
+  /**
+   * Choose where the quotation's items come from. Switching source once rows exist
+   * asks first, then clears, so the two sources can never mix in one table.
+   */
+  const handleSelectItemSource = (key) => {
+    if (key === itemSource) {
+      if (key === 'bom') setShowBomPicker(true);
+      return;
+    }
+    const applySource = () => {
+      setQuotationFormData(prev => (prev ? { ...prev, items: [] } : prev));
+      setOrderBookItems([]);
+      setItemSource(key);
+      if (key === 'bom') setShowBomPicker(true);
+      if (key === 'orderbook' && modalProjectId) fetchOrderBookItems(modalProjectId);
+    };
+
+    if ((quotationFormData?.items || []).length > 0) {
+      setConfirmModal({
+        show: true,
+        title: 'Change item source?',
+        message: 'The items already added will be cleared so the two sources cannot duplicate each other.',
+        type: 'confirm',
+        onConfirm: () => { setConfirmModal({ show: false }); applySource(); },
+      });
+      return;
+    }
+    applySource();
+  };
+
+  /** Add picked BOM lines. Additive — the picker reopens to add more. */
+  const handleAddBomItems = (rows) => {
+    setQuotationFormData(prev => {
+      if (!prev) return prev;
+      const existing = new Set((prev.items || []).map(i => String(i.bomLineId)));
+      const fresh = rows
+        .filter(r => !existing.has(String(r.bomLineId)))
+        .map(r => ({
+          bomLineId: r.bomLineId,
+          bomItemId: r.bomItemId,
+          variantId: r.variantId,
+          itemName: r.itemName,
+          description: r.specification || '',
+          unit: r.unit || '',
+          quantity: r.quantity,
+          make: r.make || '',
+          // The vendor's price is what this document records — the BOM rate is a
+          // budget figure and must not be presented as a quote.
+          unitPrice: '',
+          taxPercent: 18,
+          included: true,
+          bomQty: r.bomQty,
+          remainingQty: r.remaining,
+        }));
+      return { ...prev, items: [...(prev.items || []), ...fresh] };
+    });
   };
 
   // ── Vendor handlers ──────────────────────────────────────────────────────
@@ -1127,7 +1212,10 @@ const QuotationsReceived = () => {
         category: quotationFormData.category, deliveryTime: quotationFormData.deliveryTime?.trim() || null,
         paymentTerms: quotationFormData.paymentTerms?.trim() || null, warranty: quotationFormData.warranty?.trim() || null,
         notes: quotationFormData.notes?.trim() || null, status: quotationFormData.status, type: 'Procurement',
-        items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', unit: item.unit?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent, make: item.make?.trim() || '' })),
+        // bomLineId / bomItemId / variantId must be forwarded — a PO later raised from
+        // this quotation is matched against the BOM at creation, and the stored link
+        // saves it falling back to name matching.
+        items: included.map(item => ({ id: item.id || null, itemName: item.itemName.trim(), description: item.description?.trim() || '', unit: item.unit?.trim() || '', quantity: item.quantity, unitPrice: parseFloat(item.unitPrice), taxPercent: item.taxPercent, make: item.make?.trim() || '', bomLineId: item.bomLineId || null, bomItemId: item.bomItemId || null, variantId: item.variantId || null })),
       };
       fd.append('quotation', new Blob([JSON.stringify(qd)], { type: 'application/json' }));
       if (selectedFile) fd.append('file', selectedFile);
@@ -1136,9 +1224,16 @@ const QuotationsReceived = () => {
       const { 'Content-Type': _ct, ...multipartHeaders } = getAuthHeaders();
       const res = await fetch(url, { credentials: 'include', method, headers: multipartHeaders, body: fd });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
+      const body = await res.json().catch(() => ({}));
       showSuccess(isEditMode ? 'Quotation updated!' : 'Quotation uploaded!');
       setShowUploadQuotationModal(false); setSelectedFile(null); setFilePreview(null);
       setSelectedVendorDetails(null); setVendors([]); setOrderBookItems([]); setShowNewVendorForm(false); setIsEditMode(false);
+      setItemSource(null);
+      // The quotation SAVED — these are warnings, not a rejection. A PO for the same
+      // lines will be blocked until the BOM covers them, so surface them now.
+      if (Array.isArray(body.bomWarnings) && body.bomWarnings.length > 0) {
+        setBomWarnings({ violations: body.bomWarnings, projectId: modalProjectId });
+      }
       fetchQuotations(); fetchStats();
     } catch (err) { showError(err.message || 'Failed to save quotation'); }
     finally { setLoading(false); }
@@ -1272,6 +1367,23 @@ const QuotationsReceived = () => {
         type={confirmModal.type}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ show: false })}
+      />
+
+      <BomItemPicker
+        open={showBomPicker}
+        projectUniqueId={modalProjectId}
+        alreadyLoadedIds={(quotationFormData?.items || []).map(i => i.bomLineId).filter(Boolean)}
+        onAdd={handleAddBomItems}
+        onClose={() => setShowBomPicker(false)}
+        showError={showError}
+      />
+
+      <BomViolationDialog
+        open={!!bomWarnings}
+        violations={bomWarnings?.violations || []}
+        blocking={false}
+        projectUniqueId={bomWarnings?.projectId}
+        onClose={() => setBomWarnings(null)}
       />
 
       {/* Header */}
@@ -1677,7 +1789,43 @@ const QuotationsReceived = () => {
                   </div>
                 </div>
                 {loadingOrderItems && <div style={{ marginTop: 10, color: '#3b82f6', fontSize: 13 }}>🔄 Loading order book items…</div>}
-                {!isEditMode && orderBookItems.length > 0 && <div style={{ marginTop: 10, color: '#059669', fontSize: 13 }}>✅ Loaded {orderBookItems.length} items from order book</div>}
+                {!isEditMode && itemSource === 'orderbook' && orderBookItems.length > 0 && <div style={{ marginTop: 10, color: '#059669', fontSize: 13 }}>✅ Loaded {orderBookItems.length} items from order book</div>}
+
+                {/* ── Item source ──────────────────────────────────────────
+                    Nothing loads until a source is picked. Mixing the project BOM
+                    with the order book in one table is what produced duplicates. */}
+                {modalProjectId && !isEditMode && (
+                  <div style={{ marginTop: 16 }}>
+                    <label style={{ display: 'block', marginBottom: 8, fontSize: 13, fontWeight: 600 }}>
+                      Where should the items come from?
+                    </label>
+                    <div className="qr-source-grid">
+                      {QR_ITEM_SOURCES.map(src => (
+                        <button
+                          type="button"
+                          key={src.key}
+                          className={`qr-source-card${itemSource === src.key ? ' qr-source-card--active' : ''}`}
+                          onClick={() => handleSelectItemSource(src.key)}
+                        >
+                          <span className="qr-source-card__title">{src.icon} {src.label}</span>
+                          <span className="qr-source-card__hint">{src.hint}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {itemSource === 'bom' && (
+                      <div className="qr-source-panel">
+                        <span>
+                          {bomLoadedCount > 0
+                            ? `✓ ${bomLoadedCount} line${bomLoadedCount === 1 ? '' : 's'} loaded from the project BOM`
+                            : 'Pick the BOM lines this vendor quoted for.'}
+                        </span>
+                        <button type="button" className="qr-source-pick" onClick={() => setShowBomPicker(true)}>
+                          {bomLoadedCount > 0 ? 'Add more lines' : 'Choose BOM items'}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Vendor */}
@@ -2018,6 +2166,22 @@ const QuotationsReceived = () => {
                                     <input type="text" placeholder="Item name / description" value={item.itemName} className="table-input" disabled />
                                   )}
                                   <input type="text" placeholder="Specification (optional)" value={item.description} onChange={(e) => handleUpdateQuotationItem(idx, 'description', e.target.value)} className="table-input" disabled={!inc} style={{ marginTop: 3, fontSize: 11, color: '#64748b' }} />
+                                  {/* §4.3 — flagged, never blocking. A quotation records what
+                                      the vendor sent; the PO is where this becomes a hard stop. */}
+                                  {item.bomLineId && parseFloat(item.quantity || 0) > parseFloat(item.remainingQty ?? Infinity) && (
+                                    <div className="qr-bom-warn">
+                                      ⚠ {item.quantity} requested, BOM allows {item.remainingQty} more
+                                      (over by {(parseFloat(item.quantity || 0) - parseFloat(item.remainingQty || 0)).toFixed(2).replace(/\.00$/, '')})
+                                    </div>
+                                  )}
+                                  {!item.bomLineId && modalProjectId && item.itemName?.trim() && (
+                                    <div className="qr-bom-warn qr-bom-warn--muted">
+                                      Not on the project BOM.{' '}
+                                      <a href={`/projects/${encodeURIComponent(modalProjectId)}?tab=bom`} target="_blank" rel="noreferrer">
+                                        Open BOM
+                                      </a>
+                                    </div>
+                                  )}
                                 </td>
                                 <td>
                                   <div className="qr-unit-select-wrap">

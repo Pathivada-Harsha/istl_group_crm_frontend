@@ -63,7 +63,11 @@
   display: flex; align-items: center; gap: 10px; padding: 9px 14px;
   background: var(--c-f9fafb, #F9FAFB); border-bottom: 1px solid var(--c-f3f4f6, #F3F4F6);
 }
-.lbm-section-title { font-size: 13px; font-weight: 700; color: var(--ct-111827, #111827); flex: 1; }
+/* HEADING SCALE — LEVEL 2: section subheading inside a card. */
+.lbm-section-title {
+  font-size: 12px; font-weight: 700; color: var(--ct-2563eb, #2563eb);
+  text-transform: uppercase; letter-spacing: .05em; flex: 1;
+}
 .lbm-section-suggest {
   display: inline-flex; align-items: center; gap: 4px;
   background: var(--c-fff, #fff); color: var(--ct-1b3a6b, #1B3A6B);
@@ -81,8 +85,65 @@
 }
 .lbm-add-material:hover { background: var(--c-f0f4fb, #F0F4FB); border-color: var(--c-1b3a6b, #1B3A6B); }
 
+/* ── Standing notices: a missing input, stated once with the fix attached ── */
+.lbm-notice {
+  display: flex; gap: 10px; align-items: flex-start;
+  border-radius: 8px; padding: 10px 12px; font-size: 12px;
+}
+.lbm-notice-icon { flex: 0 0 auto; margin-top: 1px; }
+.lbm-notice-body { display: flex; flex-direction: column; gap: 4px; }
+.lbm-notice-body b { font-size: 12.5px; }
+.lbm-notice-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.lbm-notice-inp { max-width: 140px; }
+/* Blocking — nothing capacity-driven can be calculated at all. */
+.lbm-notice--block {
+  color: var(--ct-991b1b, #991B1B); background: var(--c-fef2f2, #FEF2F2);
+  border: 1px solid var(--c-fecaca, #FECACA);
+}
+/* Advisory — it works, but it was built from rules that have since moved on. */
+.lbm-notice--warn {
+  color: var(--ct-92400e, #92400E); background: var(--c-fffbeb, #FFFBEB);
+  border: 1px solid var(--c-fde68a, #FDE68A);
+}
+/* A maybe, not a fault — reads as information, so it must not borrow warning colour. */
+.lbm-notice--muted {
+  color: var(--ct-42506b, #42506B); background: var(--c-f8fafc, #F8FAFC);
+  border: 1px solid var(--c-e5e7eb, #E5E7EB);
+}
+.lbm-notice--muted .lbm-notice-icon { color: var(--ct-64748b, #64748B); }
+.lbm-notice a.lbm-btn-ghost { text-decoration: none; }
+
+/* "The cure is on the template" — inline, next to the symptom. */
+.lbm-warn-link {
+  display: inline-flex; align-items: center; gap: 3px; margin-left: 4px;
+  color: inherit; font-weight: 700; text-decoration: underline; white-space: nowrap;
+}
+
+/* ── Capacity field: saved-on-lead vs unsaved what-if ── */
+.lbm-cap-cell { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lbm-cap-tag {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  border-radius: 999px; padding: 2px 8px; white-space: nowrap; cursor: help;
+}
+.lbm-cap-tag--saved { color: var(--ct-065f46, #065F46); background: var(--c-d1fae5, #D1FAE5); }
+.lbm-cap-tag--unsaved { color: var(--ct-92400e, #92400E); background: var(--c-fef3c7, #FEF3C7); }
+
+/* ── Qty caption: computed / waiting on an input / typed by hand ── */
+.lbm-qty-note {
+  display: block; margin-top: 2px; font-size: 10px; line-height: 1.25;
+  background: none; border: none; padding: 0; text-align: left;
+}
+.lbm-qty-note--auto { color: var(--ct-2563eb, #2563EB); cursor: help; }
+.lbm-qty-note--manual { color: var(--ct-b45309, #B45309); cursor: pointer; }
+button.lbm-qty-note--manual:hover { text-decoration: underline; }
+.lbm-qty-note--blocked { color: var(--ct-b91c1c, #B91C1C); font-weight: 600; cursor: help; }
+/* A line that could not be sized is blank on purpose — the dashed box says the
+   emptiness is a stated outcome, not a value still on its way. */
+.lbm-inp--blocked { border-style: dashed; border-color: var(--c-fca5a5, #FCA5A5); background: var(--c-fffafa, #FFFAFA); }
+
 /* Rows flagged for review after a suggestion */
 .lbm-row-review { background: var(--c-fffdf5, #FFFDF5); }
+.lbm-row-blocked { background: var(--c-fffafa, #FFF7F7); }
 .lbm-review-dot { color: var(--ct-d97706, #D97706); margin-left: 4px; font-size: 10px; cursor: help; }
 .lbm-c-move { width: 130px; }
 
@@ -102,8 +163,8 @@
 .lbm-table-wrap { overflow-x: auto; }
 .lbm-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1000px; }
 .lbm-table thead th {
-  text-align: left; font-size: 11px; font-weight: 700; color: var(--ct-6b7280, #6B7280);
-  text-transform: uppercase; letter-spacing: .03em; padding: 8px; white-space: nowrap;
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151);
+  text-transform: uppercase; letter-spacing: .04em; padding: 8px; white-space: nowrap;
   border-bottom: 1.5px solid var(--c-e5e7eb, #E5E7EB);
 }
 .lbm-table tbody td { padding: 6px 8px; border-bottom: 1px solid var(--c-f3f4f6, #F3F4F6); vertical-align: middle; }
@@ -114,9 +175,11 @@
 .lbm-c-item { min-width: 180px; }
 .lbm-c-spec { min-width: 160px; }
 .lbm-c-make { min-width: 150px; }
-.lbm-c-qty { width: 110px; }
+/* Wide enough for the caption under the box to read on two lines rather than
+   breaking a word per line ("selected make has no Wattage (Wp)"). */
+.lbm-c-qty { width: 132px; }
 .lbm-c-unit { width: 140px; }
-.lbm-c-rate { width: 120px; }
+.lbm-c-rate { width: 150px; }   /* wider: carries the last-procured-cost caption */
 .lbm-c-amt { width: 110px; text-align: left; white-space: nowrap; }
 .lbm-c-notes { min-width: 150px; }
 .lbm-c-act { width: 50px; text-align: right; }
@@ -143,3 +206,63 @@ select.lbm-inp { cursor: pointer; }
 .lbm-icon-del:hover { background: var(--c-fef2f2, #FEF2F2); }
 
 .lbm-hint { font-size: 11px; color: var(--ct-9ca3af, #9CA3AF); font-style: italic; margin: 0; }
+
+/* ── Last procured cost ─────────────────────────────────────────────────────
+   A suggestion under the rate input, in the same caption idiom the Qty column
+   uses. Never a value in its own right: the number is a button, and nothing is
+   written until it is clicked. */
+.lbm-rate-note {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px;
+  margin-top: 2px; font-size: 10px; line-height: 1.3;
+}
+.lbm-rate-note--ok    { color: var(--ct-047857, #047857); }
+.lbm-rate-note--stale { color: var(--ct-b45309, #B45309); }
+/* A price for a make the estimator did NOT pick is never dressed as agreement. */
+.lbm-rate-note--other { color: var(--ct-374151, #374151); }
+
+.lbm-rate-make { font-weight: 600; cursor: help; max-width: 100%; overflow-wrap: anywhere; }
+
+.lbm-rate-apply {
+  background: none; border: none; padding: 0; font: inherit; color: inherit;
+  font-weight: 700; cursor: pointer; text-decoration: underline dotted;
+}
+.lbm-rate-apply:hover:not(:disabled) { text-decoration: underline solid; }
+/* A rate quoted per a different unit is not comparable, so it cannot be taken —
+   it stays visible (it is still information) but is plainly not on offer. */
+.lbm-rate-apply:disabled { cursor: not-allowed; opacity: .55; text-decoration: line-through; }
+.lbm-rate-apply--ro { cursor: default; text-decoration: none; }
+
+.lbm-rate-tag {
+  font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .03em;
+  padding: 0 3px; border-radius: 3px;
+  color: var(--ct-6b7280, #6B7280); background: var(--c-f3f4f6, #F3F4F6);
+}
+.lbm-rate-tag--stale { color: var(--ct-92400e, #92400E); background: var(--c-fef3c7, #FEF3C7); }
+.lbm-rate-tag--clash { color: var(--ct-991b1b, #991B1B); background: var(--c-fef2f2, #FEF2F2); cursor: help; }
+
+.lbm-rate-more {
+  background: none; border: none; padding: 0 2px; font: inherit; color: inherit;
+  cursor: pointer; opacity: .7;
+}
+.lbm-rate-more:hover { opacity: 1; }
+
+/* The detail panel is a real table row, not a popover: .lbm-table-wrap scrolls
+   horizontally and would clip anything floating out of a cell. */
+.lbm-hint-row > td { padding: 0 8px 10px; background: var(--c-f9fafb, #F9FAFB); }
+.lbm-hint-panel {
+  border: 1px solid var(--c-e5e7eb, #E5E7EB); border-radius: 8px;
+  background: var(--c-fff, #fff); padding: 8px 10px;
+}
+.lbm-hint-head {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--ct-6b7280, #6B7280); margin-bottom: 6px;
+}
+.lbm-hint-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.lbm-hint-table th {
+  text-align: left; font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--ct-9ca3af, #9CA3AF); padding: 2px 6px;
+  border-bottom: 1px solid var(--c-f3f4f6, #F3F4F6);
+}
+.lbm-hint-table td { padding: 3px 6px; color: var(--ct-374151, #374151); }
+.lbm-hint-num { text-align: right; font-variant-numeric: tabular-nums; }
+.lbm-hint-foot { margin-top: 6px; font-size: 10px; color: var(--ct-9ca3af, #9CA3AF); }

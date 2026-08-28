@@ -9,6 +9,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { GrDocumentUpdate } from 'react-icons/gr';
+import { User, Calendar, MapPin, Sun, Users, Phone, FileText,
+         LayoutDashboard, ClipboardList, Package, Wallet, FolderOpen, Repeat, History as HistoryIcon,
+         Eye, Download as DownloadIcon, Sparkles, Trash2 } from 'lucide-react';
+import '../components/Leads/LeadCardHead.css';
+import ProposalDocViewer from '../components/Leads/ProposalDocViewer.js';
 import '../pages-css/Leads-Enquire.css';
 import GroupCategoryFilter from '../components/Dropdowns/groupCategoryFilter.js';
 import FilterSelect from '../components/Dropdowns/FilterSelect.js';
@@ -26,8 +31,23 @@ import LeadSiteVisitTab from './../components/Leads/LeadSiteVisitTab.js';
 import LeadTechnicalScopeTab from './../components/Leads/LeadTechnicalScopeTab';
 import LeadBomTab from './../components/Leads/LeadBomTab';
 import LeadBudgetTab from './../components/Leads/LeadBudgetTab';
+import GenerateProposalModal from './../components/Leads/GenerateProposalModal.js';
 import { isStatusDowngrade, isStatusLocked, lockedStatusHint, LEAD_STATUS_OPTIONS } from './../constants/leadStatus';
 import ConfirmationModal from '../components/ConfirmationModal.js';
+
+/**
+ * Solar leads generate their client proposal from their own tabs (Technical
+ * Scope / BOM / Budget / Site Visit) into the approved Word template. Other
+ * groups keep the generic proposal form.
+ *
+ * Solar is an EPC *sub-group*, not a group — the live taxonomy is
+ * EPC → Solar_Rooftop | Solar_ground_mounted | Solar_carports | Solar Wind |
+ * Pm_kusum | Substations, IoT → CCMS | ITMS | MCMS, plus CBG. Must stay in step
+ * with SolarProposalDocService.isSolar on the backend.
+ */
+const isSolarLead = (lead) =>
+  String(lead?.subGroupName || '').trim().toLowerCase().startsWith('solar') ||
+  String(lead?.groupName || '').trim().toLowerCase() === 'solar';
 
 /* ── Inline-style theme mappers (added for dark mode) ── */
 const __isDarkTheme = () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark';
@@ -486,7 +506,11 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     if (!formData.title) { alert('Please fill in Title'); return; }
     setSaving(true);
     try {
-      const body = JSON.stringify({ ...formData, ...tmpl, systemPricing: JSON.stringify(tmpl.systemPricing), bomItems: JSON.stringify(tmpl.bomItems) });
+      // Solar carries no typed template — writing the defaults back would clobber
+      // fields the generated document doesn't use anyway.
+      const body = JSON.stringify(isSolarLead(lead)
+        ? formData
+        : { ...formData, ...tmpl, systemPricing: JSON.stringify(tmpl.systemPricing), bomItems: JSON.stringify(tmpl.bomItems) });
       const url = existingProposal ? `${apiBase}/proposals/update/${existingProposal.id}` : `${apiBase}/proposals/create`;
       const method = existingProposal ? 'PUT' : 'POST';
       const res = await fetch(url, { method, headers, credentials: 'include', body });
@@ -553,20 +577,34 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
     );
   }
 
-  const TABS = [
-    { k: 'basic', l: 'Basic' }, { k: 'company', l: 'Company' }, { k: 'aboutUs', l: 'About Us' },
-    { k: 'system', l: 'System' }, { k: 'pricing', l: 'Pricing' }, { k: 'payment', l: 'Payment' },
-    { k: 'dlp', l: 'DLP' }, { k: 'bom', l: 'BOM' },
-  ];
+  // Solar proposals no longer carry a typed template or a catalog-picked BOM:
+  // the client document is generated from the lead's own tabs. What is left to
+  // edit here is the tracked record itself.
+  const solarLead = isSolarLead(lead);
+  const TABS = solarLead
+    ? [{ k: 'basic', l: 'Basic' }]
+    : [
+        { k: 'basic', l: 'Basic' }, { k: 'company', l: 'Company' }, { k: 'aboutUs', l: 'About Us' },
+        { k: 'system', l: 'System' }, { k: 'pricing', l: 'Pricing' }, { k: 'payment', l: 'Payment' },
+        { k: 'dlp', l: 'DLP' }, { k: 'bom', l: 'BOM' },
+      ];
+  const tab = solarLead ? 'basic' : activeTab;
 
   return (
     <div className="ld-proposal-form">
+      {solarLead && (
+        <div style={{ background: __sbg('#eef2ff'), border: `1.5px solid ${__sbg('#cbd5e1')}`, borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, color: __stc('#334155') }}>
+          <strong>Solar proposal.</strong> The client document is generated from this lead's
+          Technical Scope, BOM, Budget and Site Visit tabs into the approved template —
+          use <strong>Generate Proposal</strong>. Only the tracked record is edited here.
+        </div>
+      )}
       <div className="ld-ptabs">
-        {TABS.map(t => <button key={t.k} className={`ld-ptab${activeTab === t.k ? ' active' : ''}`} onClick={() => setActiveTab(t.k)}>{t.l}</button>)}
+        {TABS.map(t => <button key={t.k} className={`ld-ptab${tab === t.k ? ' active' : ''}`} onClick={() => setActiveTab(t.k)}>{t.l}</button>)}
       </div>
 
       <div className="ld-ptab-body">
-        {activeTab === 'basic' && (
+        {tab === 'basic' && (
           <div className="ld-form-grid">
             <div className="ld-fgroup ld-full">
               <label>Title *</label>
@@ -592,33 +630,33 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
           </div>
         )}
 
-        {activeTab === 'company' && (
+        {tab === 'company' && (
           <div className="ld-fgroup"><label>Company Name</label>
             <input value={tmpl.companyName} onChange={e => setTmpl({ ...tmpl, companyName: e.target.value })} />
           </div>
         )}
-        {activeTab === 'aboutUs' && (
+        {tab === 'aboutUs' && (
           <div className="ld-fgroup"><label>About Us</label>
             <textarea rows={12} value={tmpl.aboutUs} onChange={e => setTmpl({ ...tmpl, aboutUs: e.target.value })} />
           </div>
         )}
-        {activeTab === 'system' && (
+        {tab === 'system' && (
           <div className="ld-fgroup"><label>About System</label>
             <textarea rows={12} value={tmpl.aboutSystem} onChange={e => setTmpl({ ...tmpl, aboutSystem: e.target.value })} />
           </div>
         )}
-        {activeTab === 'payment' && (
+        {tab === 'payment' && (
           <div className="ld-fgroup"><label>Payment Terms</label>
             <textarea rows={12} value={tmpl.paymentTerms} onChange={e => setTmpl({ ...tmpl, paymentTerms: e.target.value })} />
           </div>
         )}
-        {activeTab === 'dlp' && (
+        {tab === 'dlp' && (
           <div className="ld-fgroup"><label>Defect Liability Period</label>
             <textarea rows={12} value={tmpl.defectLiabilityPeriod} onChange={e => setTmpl({ ...tmpl, defectLiabilityPeriod: e.target.value })} />
           </div>
         )}
 
-        {activeTab === 'pricing' && (
+        {tab === 'pricing' && (
           <div>
             <div className="ld-section-hdr"><span>System Pricing</span><button className="ld-btn ld-btn-sm ld-btn-sec" onClick={addPricing}>+ Add Row</button></div>
             <table className="ld-inner-table">
@@ -643,7 +681,7 @@ const ProposalForm = ({ lead, currentUser, onSaved, onCancel, existingProposal, 
           </div>
         )}
 
-        {activeTab === 'bom' && (
+        {tab === 'bom' && (
           <div>
             <div className="ld-section-hdr"><span>Bill of Materials</span><button className="ld-btn ld-btn-sm ld-btn-sec" onClick={addBOM}>+ Add Row</button></div>
             <div style={{ overflowX: 'auto' }}>
@@ -1141,6 +1179,16 @@ const TenderDocumentsTab = ({ lead, currentUser, permissions, showSuccess, showE
   );
 };
 
+// Overview card header: a tinted icon badge next to the title. Icon is a
+// lucide component; sizing/colour live in .ld-card-ico so the badge stays
+// consistent across every card.
+const CardHead = ({ icon: Icon, children }) => (
+  <div className="ld-card-head">
+    <span className="lead-card-ico"><Icon size={17} strokeWidth={2} /></span>
+    <h4 className="ld-card-title">{children}</h4>
+  </div>
+);
+
 // ─── Lead Detail Page (full-page view inside leads container) ─────────────────
 const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions, onEdit, showSuccess, showError }) => {
   useThemeVersion();
@@ -1155,6 +1203,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const [timelineModal, setTimelineModal] = useState(false);
   const [pdfModal, setPdfModal] = useState({ open: false, url: null, name: null });
   const [deleteProposalConfirm, setDeleteProposalConfirm] = useState(null); // { id, proposalNo }
+  // One generated version, not the whole proposal: { id, proposalNo, version, isLatest }
+  const [deleteVersionConfirm, setDeleteVersionConfirm] = useState(null);
   const [billPreview, setBillPreview] = useState(null); // { url, name, type }
   const [uploadingId, setUploadingId] = useState(null);
   const [showOfflinePanel, setShowOfflinePanel] = useState(false);
@@ -1163,6 +1213,18 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
   const [offlineTotalValue, setOfflineTotalValue] = useState('');
   const [offlineStatus, setOfflineStatus] = useState('Draft');
   const [offlineUploading, setOfflineUploading] = useState(false);
+  // Solar proposal generation: { open, proposalId } — proposalId null = new record.
+  const [generateProposal, setGenerateProposal] = useState(null);
+  // proposalId -> [{ version, fileName, generatedAt, generatedByName }]
+  const [proposalDocs, setProposalDocs] = useState({});
+  // Generated-proposal preview: { open, loading, blob, unavailable, error, title,
+  // version, proposalId, fileName }. `blob` holds the PDF rendition; the .docx is
+  // only ever fetched on demand by Download.
+  const [docViewer, setDocViewer] = useState({ open: false });
+  // Monotonic request id — guards against an older, slower response overwriting a
+  // newer one when the user clicks through versions quickly.
+  const docReqRef = useRef(0);
+  const isSolar = isSolarLead(lead);
 
   // ── Lead access: user has direct access if they are the assignee, creator,
   //    BD executive on this lead, or have admin/manager level permissions
@@ -1276,6 +1338,131 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
     } catch { showError('Failed to download PDF'); }
   };
 
+  // ── Generated Solar proposal documents (versioned Word files) ─────────────
+
+  const fetchProposalDocs = useCallback(async (ids) => {
+    const wanted = (ids || []).filter(Boolean);
+    if (!wanted.length) return;
+    try {
+      const results = await Promise.all(wanted.map(async id => {
+        const res = await fetch(`${API_BASE_URL}/proposals/${id}/documents`, { credentials: 'include', headers });
+        const data = await res.json().catch(() => ({}));
+        return [id, data.success ? (data.data || []) : []];
+      }));
+      setProposalDocs(prev => ({ ...prev, ...Object.fromEntries(results) }));
+    } catch { /* the cards just fall back to "no document yet" */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Which proposals have a generated Word document (and how many versions).
+  useEffect(() => {
+    if (!isSolar || !proposals.length) return;
+    fetchProposalDocs(proposals.map(p => p.id));
+  }, [isSolar, proposals, fetchProposalDocs]);
+
+  /** The .docx — always the deliverable, and always what Download hands over. */
+  const fetchProposalDocxBlob = async (proposalId, version) => {
+    const qs = version ? `?version=${version}` : '';
+    const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/documents/download${qs}`,
+      { credentials: 'include', headers });
+    if (!res.ok) throw new Error();
+    return res.blob();
+  };
+
+  const saveBlob = (blob, fileName) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    // Deferred: Firefox/Safari can drop a large download if the URL is revoked
+    // the instant the click is dispatched.
+    setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+  };
+
+  const downloadProposalDoc = async (proposalId, version, fileName) => {
+    try {
+      const blob = await fetchProposalDocxBlob(proposalId, version);
+      saveBlob(blob, fileName || `proposal-${proposalId}-v${version || 'latest'}.docx`);
+    } catch { showError('Failed to download the proposal document'); }
+  };
+
+  /**
+   * Fetch the PDF rendition for preview.
+   * 409 = this version exists but can never have a PDF (no stored payload) — the
+   * viewer shows its "no preview" state rather than an error.
+   */
+  const fetchProposalPdfBlob = async (proposalId, version) => {
+    const qs = version ? `?version=${version}` : '';
+    const res = await fetch(`${API_BASE_URL}/proposals/${proposalId}/documents/pdf${qs}`,
+      { credentials: 'include', headers });
+    if (res.status === 409) return null;
+    if (!res.ok) throw new Error(String(res.status));
+    const blob = await res.blob();
+    if (!blob.size) return null;
+    // A blob URL typed application/octet-stream DOWNLOADS instead of rendering,
+    // which looks exactly like the feature being broken.
+    return blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' });
+  };
+
+  /**
+   * Save the PDF rendition. Same endpoint the preview uses — the file is named
+   * from the .docx with its extension swapped, so a proposal's two renditions
+   * land side by side in the downloads folder.
+   *
+   * A null blob means 409: this version predates the PDF feature AND has no
+   * stored payload to re-render from, so it can never have one. Say that rather
+   * than writing a 0-byte file.
+   */
+  const downloadProposalPdf = async (proposalId, version, fileName) => {
+    try {
+      const blob = await fetchProposalPdfBlob(proposalId, version);
+      if (!blob) {
+        showError('This version has no PDF — download the Word file, or re-generate to get one.');
+        return;
+      }
+      const base = (fileName || `proposal-${proposalId}-v${version || 'latest'}.docx`);
+      saveBlob(blob, base.replace(/\.docx$/i, '') + '.pdf');
+    } catch { showError('Failed to download the proposal PDF'); }
+  };
+
+  // The modal fetches through JS rather than pointing an iframe at the endpoint:
+  // it requires the User-Id/User-Role headers, and <iframe src> cannot send them.
+  const viewProposalDoc = async (proposalId, version, fileName, title) => {
+    const seq = ++docReqRef.current;
+    setDocViewer({
+      open: true, loading: true, blob: null, unavailable: false, error: null,
+      title: title || fileName || 'Proposal document',
+      version, proposalId, fileName,
+    });
+    try {
+      const blob = await fetchProposalPdfBlob(proposalId, version);
+      // Two guards, not one: res.blob() is a second await, so a large body can
+      // still be streaming when a newer click has already fully landed. Without
+      // the second check, clicking v3 then v1 can show v3 under the v1 header.
+      if (seq !== docReqRef.current) return;
+      setDocViewer(v => (v.open
+        ? { ...v, loading: false, blob, unavailable: !blob }
+        : v));
+    } catch {
+      if (seq !== docReqRef.current) return;
+      setDocViewer(v => (v.open
+        ? { ...v, loading: false, error: 'Could not load this preview.' }
+        : v));
+    }
+  };
+
+  // After a generate: show the new version straight away (the PDF is rendered in
+  // the same transaction, so it is already there), and refresh the list behind it.
+  const handleProposalGenerated = async (result) => {
+    viewProposalDoc(result.proposalId, result.version, result.fileName,
+                    result.fileName || `${lead.name} — proposal`);
+    await fetchProposals();
+    await fetchProposalDocs([result.proposalId]);
+    if (result.version === 1) markProposalSent();
+    else if (onLeadUpdated) onLeadUpdated();
+  };
+
   const handleUploadOffline = async (proposalId, file) => {
     if (!file) return;
     if (!file.name.toLowerCase().endsWith('.pdf')) { showError('Only PDF files are allowed'); return; }
@@ -1342,6 +1529,28 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
       if (data.success) { showSuccess('Proposal deleted.'); fetchProposals(); if (onLeadUpdated) onLeadUpdated(); }
       else showError(data.error || 'Delete failed');
     } catch { showError('Delete failed'); }
+  };
+
+  /**
+   * Delete one generated version. Removing the latest rolls the proposal back to
+   * the version below it — the earlier files were sent to the client and are the
+   * proposal's history, so they stay. The backend refuses the last one standing;
+   * that is what deleting the proposal is for.
+   */
+  const confirmDeleteVersion = async () => {
+    if (!deleteVersionConfirm) return;
+    const { id, version } = deleteVersionConfirm;
+    setDeleteVersionConfirm(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/proposals/${id}/documents/${version}`, {
+        method: 'DELETE', credentials: 'include', headers,
+      });
+      const data = await res.json();
+      if (!data.success) { showError(data.message || 'Failed to delete this version'); return; }
+      showSuccess(data.message || `v${version} deleted.`);
+      fetchProposalDocs([id]);
+      fetchProposals();
+    } catch { showError('Failed to delete this version'); }
   };
 
   // Create a minimal proposal record then upload the offline PDF to it
@@ -1491,33 +1700,85 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                 <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                 Add Follow-up
               </button>
-              <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => { setActiveTab('proposals'); setShowProposalForm(true); setEditingProposal(null); }}>
-                <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                New Proposal
-              </button>
+              {isSolar ? (
+                /* Solar: the client proposal is generated from this lead's tabs
+                   into the approved Word template — there is no second path. */
+                <button className="leads-enquiries-btn leads-enquiries-btn-primary"
+                  onClick={() => { setActiveTab('proposals'); setShowProposalForm(false); setGenerateProposal({ proposalId: null }); }}>
+                  <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  Generate Proposal
+                </button>
+              ) : (
+                <button className="leads-enquiries-btn leads-enquiries-btn-secondary" onClick={() => { setActiveTab('proposals'); setShowProposalForm(true); setEditingProposal(null); }}>
+                  <svg className="leads-enquiries-btn-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  New Proposal
+                </button>
+              )}
             </>
           )}
         </div>
       </div>
 
-      <div className="ld-tabs">
-        {[
-          { k: 'overview', l: 'Overview' },
-          { k: 'sitevisit', l: 'Site Visit' },
-          // Scope → BOM → Budget Estimation, in the order they're worked through.
-          ...(permissions?.EDIT ? [{ k: 'techscope', l: 'Technical Scope' }, { k: 'bom', l: 'BOM' }, { k: 'budget', l: 'Budget Estimation' }] : []),
-          { k: 'proposals', l: isTenderLead(lead) ? 'Proposals' : 'Proposals' },
-          ...(isTenderLead(lead) ? [{ k: 'documents', l: '📁 Documents' }] : []),
-          { k: 'followups', l: 'Follow-ups' },
-          { k: 'history', l: 'History' },
-        ].map(t => (
-          <button key={t.k}
-            className={`ld-tab${activeTab === t.k ? ' active' : ''}`}
-            onClick={() => { setActiveTab(t.k); setShowProposalForm(false); localStorage.setItem('leads_detail_tab', t.k); }}>
-            {t.l}
-          </button>
-        ))}
-      </div>
+      {generateProposal && (
+        <GenerateProposalModal
+          open
+          lead={lead}
+          currentUser={currentUser}
+          proposalId={generateProposal.proposalId}
+          onClose={() => setGenerateProposal(null)}
+          onGenerated={handleProposalGenerated}
+          showSuccess={showSuccess}
+          showError={showError}
+        />
+      )}
+
+      {/* ── Tab navigation ───────────────────────────────────────────────────
+          One row, every tab, in the original order. Each tab is drawn as a
+          chevron that nests into the next so the selected one reads as an arrow.
+
+          A tab's appearance depends ONLY on whether it is selected. Per-tab
+          completion state (has a site visit / a BOM / a budget) is deliberately
+          not modelled — GET /leads/{id} does not report it and this component
+          holds no state for it. Adding it later is a class on the button below,
+          not a restructure.                                                     */}
+      {(() => {
+        const go = k => { setActiveTab(k); setShowProposalForm(false); localStorage.setItem('leads_detail_tab', k); };
+
+        const tabs = [
+          { k: 'overview',  l: 'Overview',        i: LayoutDashboard },
+          { k: 'sitevisit', l: 'Site visit',      i: MapPin },
+          // Scope → BOM → Budget, in the order they're worked through.
+          ...(permissions?.EDIT ? [
+            { k: 'techscope', l: 'Technical scope', i: ClipboardList },
+            { k: 'bom',       l: 'BOM',             i: Package },
+            { k: 'budget',    l: 'Budget',          i: Wallet },
+          ] : []),
+          { k: 'proposals', l: 'Proposals',       i: FileText },
+          ...(isTenderLead(lead) ? [{ k: 'documents', l: 'Documents', i: FolderOpen }] : []),
+          { k: 'followups', l: 'Follow-ups',      i: Repeat },
+          { k: 'history',   l: 'History',         i: HistoryIcon },
+        ];
+
+        return (
+          <div className="ld-tabnav">
+            <div className="ld-pipe">
+              {tabs.map(t => {
+                const Ico = t.i;
+                return (
+                  <button key={t.k} type="button"
+                    className={`ld-pipe-step${activeTab === t.k ? ' active' : ''}`}
+                    aria-current={activeTab === t.k ? 'true' : undefined}
+                    title={t.l}
+                    onClick={() => go(t.k)}>
+                    <Ico className="ld-pipe-ico" size={14} strokeWidth={2} aria-hidden="true" />
+                    <span className="ld-pipe-label">{t.l}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
 
       {activeTab === 'overview' && (
         <div className="ld-tab-content">
@@ -1548,7 +1809,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
           <div className="ld-info-grid">
             <div className="ld-info-card">
-              <h4 className="ld-card-title">Contact Information</h4>
+              <CardHead icon={User}>Contact Information</CardHead>
               <div className="ld-field-list">
                 {[
                   ['Email', lead.email || '-'],
@@ -1570,7 +1831,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
               </div>
             </div>
             <div className="ld-info-card">
-              <h4 className="ld-card-title">Assignment & Dates</h4>
+              <CardHead icon={Calendar}>Assignment &amp; Dates</CardHead>
               <div className="ld-field-list">
                 {[
                   ['Lead Owner', lead.leadOwner || '-'],
@@ -1590,7 +1851,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             {/* Address card — show only if address data exists */}
             {(lead.state || lead.district || lead.city) && (
               <div className="ld-info-card">
-                <h4 className="ld-card-title">Address</h4>
+                <CardHead icon={MapPin}>Address</CardHead>
                 <div className="ld-field-list">
                   {[
                     ['State', lead.state],
@@ -1610,7 +1871,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             {/* Solar scheme — only for Solar_Rooftop */}
             {lead.solarScheme && (
               <div className="ld-info-card">
-                <h4 className="ld-card-title">Solar Scheme</h4>
+                <CardHead icon={Sun}>Solar Scheme</CardHead>
                 <div className="ld-field-list">
                   <div className="ld-field-row">
                     <span className="ld-field-label">Scheme</span>
@@ -1683,7 +1944,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
 
             {(lead.telecallerName || lead.assignedToName || lead.bdAssignedToName || canAssignBd) && (
               <div className="ld-info-card">
-                <h4 className="ld-card-title">Team Assignment</h4>
+                <CardHead icon={Users}>Team Assignment</CardHead>
                 <div className="ld-field-list">
                   {[
                     // Telecaller shows ONLY a real telecaller. A non-telecaller in
@@ -1733,7 +1994,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             {/* Telecaller interaction details — shown when TC has marked Interested */}
             {(lead.tcDiscussionNote || lead.tcLocation || lead.tcSiteVisitDate || lead.tcPropertyType || lead.tcQuotedPrice || lead.tcAddons || lead.tcOtherComments || lead.tcMonthlyBill || lead.tcHasBillFile) && (
               <div className="ld-info-card">
-                <h4 className="ld-card-title">Telecaller Interaction Details</h4>
+                <CardHead icon={Phone}>Telecaller Interaction Details</CardHead>
                 <div className="ld-field-list">
                   {lead.tcDiscussionNote && (
                     <div className="ld-field-row ld-field-row--block" key="disc">
@@ -1780,7 +2041,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
             )}
           </div>
           <div className="ld-enquiry-card">
-            <h4 className="ld-card-title">{isTenderLead(lead) ? 'Tender Description / Notes' : 'Enquiry Description'}</h4>
+            <CardHead icon={FileText}>{isTenderLead(lead) ? 'Tender Description / Notes' : 'Enquiry Description'}</CardHead>
             <p className="ld-enquiry-text">
               {(() => {
                 const td = decodeTenderMeta(lead.enquiry);
@@ -1866,7 +2127,7 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
           ) : (
             <div>
               <div className="ld-section-hdr">
-                <h4 className="ld-card-title" style={{ margin: 0 }}>{proposals.length} Proposal{proposals.length !== 1 ? 's' : ''}</h4>
+                <div style={{display:'flex',alignItems:'center',gap:11}}><span className="lead-card-ico"><FileText size={17} strokeWidth={2} /></span><h4 className="ld-card-title" style={{ margin: 0 }}>{proposals.length} Proposal{proposals.length !== 1 ? 's' : ''}</h4></div>
                 <div style={{display:'flex',gap:8,alignItems:'center'}}>
                   {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                     <label className="ld-pact-btn ld-pact-upload" title="Upload an offline proposal PDF given by client" style={{cursor:'pointer',padding:'7px 14px',fontSize:13}} onClick={() => { setShowOfflinePanel(v => !v); setShowProposalForm(false); }}>
@@ -1875,9 +2136,15 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                     </label>
                   )}
                   {permissions.PROPOSAL_CREATE && (
-                    <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
-                      + New Proposal
-                    </button>
+                    isSolar ? (
+                      <button className="ld-btn ld-btn-pri" onClick={() => { setShowOfflinePanel(false); setGenerateProposal({ proposalId: null }); }}>
+                        Generate Proposal
+                      </button>
+                    ) : (
+                      <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setEditingProposal(null); setShowOfflinePanel(false); }}>
+                        + New Proposal
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -1954,7 +2221,10 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                   <div className="ld-empty-icon">📝</div>
                   <p>No proposals yet for this lead.</p>
                   <div style={{display:'flex',gap:10,justifyContent:'center',flexWrap:'wrap'}}>
-                    {permissions.PROPOSAL_CREATE && <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>}
+                    {permissions.PROPOSAL_CREATE && (isSolar
+                      ? <button className="ld-btn ld-btn-pri" onClick={() => { setShowOfflinePanel(false); setGenerateProposal({ proposalId: null }); }}>Generate Proposal</button>
+                      : <button className="ld-btn ld-btn-pri" onClick={() => { setShowProposalForm(true); setShowOfflinePanel(false); }}>+ Create Proposal</button>
+                    )}
                     {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                     <button className="ld-pact-btn ld-pact-upload" style={{padding:'8px 16px',fontSize:13,cursor:'pointer'}} onClick={() => setShowOfflinePanel(v => !v)}>
                       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="14" height="14"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
@@ -1970,6 +2240,20 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                       <div className="ld-proposal-card-left">
                         <div className="ld-proposal-no-row" style={{display:'flex',alignItems:'center',gap:6}}>
                           <div className="ld-proposal-no">{p.proposalNo}</div>
+                          {/* Where this proposal's document came from. Both can be
+                              true: a generated proposal can also have a signed copy
+                              uploaded against it later. */}
+                          {(proposalDocs[p.id] || []).length > 0 && (() => {
+                            const docs = proposalDocs[p.id];
+                            const latest = docs[0];
+                            return (
+                              <span className="ld-generated-badge"
+                                title={`Generated from this lead's tabs — ${docs.length} version${docs.length > 1 ? 's' : ''}, latest v${latest.version} on ${fmtDT(latest.generatedAt)}${latest.generatedByName ? ' by ' + latest.generatedByName : ''}`}>
+                                <Sparkles size={11} strokeWidth={2.2} />
+                                System generated
+                              </span>
+                            );
+                          })()}
                           {p.offlinePdfName && (
                             <span className="ld-offline-badge" title={`Offline PDF: ${p.offlinePdfName}`}>
                               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="11" height="11"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
@@ -1986,6 +2270,38 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                           <span>{fmtDT(p.updatedAt)}</span>
                           {p.preparedByName && <><span>·</span><span>by {p.preparedByName}</span></>}
                         </div>
+                        {/* Every generated version stays available — re-generating
+                            appends, it never overwrites an already-sent file.
+                            Clicking a version previews it; the chip's ⬇ saves it
+                            and its 🗑 removes that version alone. */}
+                        {isSolar && (proposalDocs[p.id] || []).length > 1 && (
+                          <div style={{display:'flex',flexWrap:'wrap',gap:6,marginTop:6,alignItems:'center'}}>
+                            <span style={{fontSize:11,color:__stc('#6b7280')}}>Earlier versions:</span>
+                            {proposalDocs[p.id].slice(1).map(d => (
+                              <span key={d.version} className="ld-docver"
+                                title={`${d.fileName} — ${fmtDT(d.generatedAt)}${d.generatedByName ? ' by ' + d.generatedByName : ''}`}>
+                                <button type="button" className="ld-docver-view"
+                                  onClick={() => viewProposalDoc(p.id, d.version, d.fileName, p.title)}
+                                  title={`Preview v${d.version}`}>
+                                  <Eye size={11} strokeWidth={2.2} />
+                                  v{d.version}
+                                </button>
+                                <button type="button" className="ld-docver-dl"
+                                  onClick={() => downloadProposalDoc(p.id, d.version, d.fileName)}
+                                  title={`Download v${d.version}`} aria-label={`Download version ${d.version}`}>
+                                  <DownloadIcon size={11} strokeWidth={2.2} />
+                                </button>
+                                {permissions.PROPOSAL_DELETE && (
+                                  <button type="button" className="ld-docver-del"
+                                    onClick={() => setDeleteVersionConfirm({ id: p.id, proposalNo: p.proposalNo, version: d.version, isLatest: false })}
+                                    title={`Delete v${d.version}`} aria-label={`Delete version ${d.version}`}>
+                                    <Trash2 size={11} strokeWidth={2.2} />
+                                  </button>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div className="ld-proposal-card-right">
                         <span className={`ld-proposal-status ${getPropStatusClass(p.status)}`}>{p.status}</span>
@@ -2013,12 +2329,64 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
                               )}
                             </>
                           ) : (
-                            /* ── No offline PDF — show generated PDF download + upload option ── */
+                            /* ── No offline PDF — Solar downloads its generated Word
+                                 document; other groups keep the generic PDF. ── */
                             <>
-                              <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
-                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                PDF
-                              </button>
+                              {isSolar ? (
+                                (proposalDocs[p.id] || []).length > 0 ? (
+                                  <>
+                                    <button className="ld-pact-btn ld-pact-offline-view"
+                                      onClick={() => viewProposalDoc(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName, p.title)}
+                                      title={`Preview the latest generated proposal (v${proposalDocs[p.id][0].version})`}>
+                                      <Eye size={15} strokeWidth={2} />
+                                      View v{proposalDocs[p.id][0].version}
+                                    </button>
+                                    <button className="ld-pact-btn" onClick={() => downloadProposalDoc(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName)}
+                                      title={`Download the editable Word file (v${proposalDocs[p.id][0].version}) — this is what gets sent to the client`}>
+                                      <DownloadIcon size={15} strokeWidth={2} />
+                                      Word
+                                    </button>
+                                    {/* The PDF is the same version rendered for sending/printing.
+                                        Hidden when the row can never have one (a version generated
+                                        before the feature, with no payload to re-render from). */}
+                                    {proposalDocs[p.id][0].previewable !== false && (
+                                      <button className="ld-pact-btn ld-pact-pdf"
+                                        onClick={() => downloadProposalPdf(p.id, proposalDocs[p.id][0].version, proposalDocs[p.id][0].fileName)}
+                                        title={`Download v${proposalDocs[p.id][0].version} as PDF`}>
+                                        <DownloadIcon size={15} strokeWidth={2} />
+                                        PDF
+                                      </button>
+                                    )}
+                                  </>
+                                ) : (
+                                  <span className="ld-pact-btn" style={{opacity:.65,cursor:'default'}} title="No document generated for this proposal yet">
+                                    No document yet
+                                  </span>
+                                )
+                              ) : (
+                                <button className="ld-pact-btn" onClick={() => downloadPDF(p.id)} title="Download generated PDF">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                  PDF
+                                </button>
+                              )}
+                              {isSolar && permissions.PROPOSAL_CREATE && (
+                                <button className="ld-pact-btn ld-pact-edit" onClick={() => setGenerateProposal({ proposalId: p.id })}
+                                  title="Re-generate from the lead's current tabs as a new version">
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                                  Re-generate
+                                </button>
+                              )}
+                              {/* Undo a bad re-generate without losing the versions already
+                                  sent — the card falls back to the one below it. Only offered
+                                  while there is something to fall back to. */}
+                              {isSolar && permissions.PROPOSAL_DELETE && (proposalDocs[p.id] || []).length > 1 && (
+                                <button className="ld-pact-btn ld-pact-delete"
+                                  onClick={() => setDeleteVersionConfirm({ id: p.id, proposalNo: p.proposalNo, version: proposalDocs[p.id][0].version, isLatest: true })}
+                                  title={`Delete only v${proposalDocs[p.id][0].version} — v${proposalDocs[p.id][1].version} becomes the latest again`}>
+                                  <Trash2 size={15} strokeWidth={2} />
+                                  Delete v{proposalDocs[p.id][0].version}
+                                </button>
+                              )}
                               {permissions.PROPOSAL_OFFLINE_UPLOAD && (
                               <label className="ld-pact-btn ld-pact-upload" title="Upload offline proposal PDF given by client" style={{cursor:'pointer'}}>
                                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" width="15" height="15"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
@@ -2113,8 +2481,8 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         </div>
       )}
       {activeTab === 'history' && (
-        <div className="ld-tab-content">
-          <h4 className="ld-card-title">Activity History</h4>
+        <div className="ld-tab-content ld-tab-content--history">
+          <div className="ld-card-head"><span className="lead-card-ico"><HistoryIcon size={17} strokeWidth={2} /></span><h4 className="ld-card-title">Activity History</h4></div>
           {loadingHistory ? (
             <div className="ld-loading-row"><div className="p-loading-spinner"></div> Loading history…</div>
           ) : history.length === 0 ? (
@@ -2225,6 +2593,38 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         </div>
       )}
 
+      {/* ── Generated proposal preview (PDF rendition of the .docx) ───── */}
+      <ProposalDocViewer
+        open={!!docViewer.open}
+        title={docViewer.title}
+        version={docViewer.version}
+        loading={!!docViewer.loading}
+        blob={docViewer.blob}
+        unavailable={!!docViewer.unavailable}
+        error={docViewer.error}
+        // Bump the request id so a response still in flight cannot repopulate a
+        // modal the user has closed (or reopened on another version).
+        onClose={() => { docReqRef.current++; setDocViewer({ open: false }); }}
+        // Re-fetches the real .docx. It must NOT save docViewer.blob — that holds
+        // the PDF rendition, and writing those bytes to a .docx would hand the
+        // client a file Word cannot open.
+        onDownloadWord={() => downloadProposalDoc(
+          docViewer.proposalId, docViewer.version, docViewer.fileName)}
+        // The PDF on screen IS the file to save, so this writes docViewer.blob
+        // directly — no second fetch, and no chance of handing over a different
+        // render than the one just reviewed.
+        onDownloadPdf={() => {
+          if (!docViewer.blob) return;
+          const base = docViewer.fileName
+            || `proposal-${docViewer.proposalId}-v${docViewer.version || 'latest'}.docx`;
+          saveBlob(docViewer.blob, base.replace(/\.docx$/i, '') + '.pdf');
+        }}
+        onRegenerate={permissions.PROPOSAL_CREATE ? () => {
+          setDocViewer({ open: false });
+          setGenerateProposal({ proposalId: docViewer.proposalId });
+        } : null}
+      />
+
       {/* ── PDF Viewer Modal ─────────────────────────────────────────── */}
       {pdfModal.open && (
         <div className="ld-pdf-modal-overlay" onClick={() => { setPdfModal({ open: false, url: null, name: null }); if(pdfModal.url) window.URL.revokeObjectURL(pdfModal.url); }}>
@@ -2261,18 +2661,47 @@ const LeadDetailPage = ({ lead, currentUser, onBack, onLeadUpdated, permissions,
         </div>
       )}
 
-      {deleteProposalConfirm && (
-        <ConfirmationModal
-          show={true}
-          type="alert"
-          title="Delete Proposal"
-          message={`Are you sure you want to delete proposal ${deleteProposalConfirm.proposalNo}?\nThis action cannot be undone.`}
-          confirmText="Delete"
-          cancelText="Cancel"
-          onConfirm={confirmDeleteProposal}
-          onCancel={() => setDeleteProposalConfirm(null)}
-        />
-      )}
+      {deleteProposalConfirm && (() => {
+        // Say how much goes with it — this button removes the whole record,
+        // every generated version included. Deleting one version is the ✕ on
+        // its chip (or "Delete v…" in the card's actions).
+        const versions = (proposalDocs[deleteProposalConfirm.id] || []).length;
+        return (
+          <ConfirmationModal
+            show={true}
+            type="alert"
+            title="Delete Proposal"
+            message={`Are you sure you want to delete proposal ${deleteProposalConfirm.proposalNo}?`
+              + (versions > 1 ? `\nAll ${versions} generated versions go with it.` : '')
+              + `\nThis action cannot be undone.`}
+            confirmText="Delete"
+            cancelText="Cancel"
+            onConfirm={confirmDeleteProposal}
+            onCancel={() => setDeleteProposalConfirm(null)}
+          />
+        );
+      })()}
+
+      {deleteVersionConfirm && (() => {
+        const docs = proposalDocs[deleteVersionConfirm.id] || [];
+        const below = docs.find(d => d.version < deleteVersionConfirm.version);
+        return (
+          <ConfirmationModal
+            show={true}
+            type="alert"
+            title={`Delete version ${deleteVersionConfirm.version}`}
+            message={`Delete v${deleteVersionConfirm.version} of ${deleteVersionConfirm.proposalNo}?`
+              + (deleteVersionConfirm.isLatest && below
+                  ? `\nv${below.version} becomes the latest again.`
+                  : `\nThe other versions are not affected.`)
+              + `\nThis action cannot be undone.`}
+            confirmText={`Delete v${deleteVersionConfirm.version}`}
+            cancelText="Cancel"
+            onConfirm={confirmDeleteVersion}
+            onCancel={() => setDeleteVersionConfirm(null)}
+          />
+        );
+      })()}
 
       {/* ── Bill File Preview Modal ── */}
       {billPreview && (
@@ -2667,9 +3096,22 @@ const filterStateRef      = useRef({ rowsPerPage: 10, groupName: '', subGroupNam
   // ← NO }, [...]) at the end — this is NOT a useCallback
 };
 
+  // `users` backs every picker on this page that attributes a lead to somebody:
+  // "Assign To" (create + edit) and "Closed By" (quick status + edit).
+  //
+  // It comes from /filters/assignable-users, which scopes by the REPORTING GRAPH:
+  // a top-level role (hierarchy level 1–2) gets everyone, anybody else gets their
+  // own reporting subtree — themselves plus every transitive report. The old
+  // /filters/leads-users rule (role allow-lists narrowed by the free-text team
+  // field) is gone from this page: a manager whose reports span five roles could
+  // not be expressed by any role list without also exposing unrelated users.
+  //
+  // The endpoint takes no User-Role header on purpose — it resolves the role from
+  // the database, and the same rule gates the write endpoints, so a hand-crafted
+  // assign/close request cannot reach outside the subtree either.
   const fetchUsers = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/filters/leads-users`, { credentials: 'include', headers: buildHeaders() });
+      const res = await fetch(`${API_BASE_URL}/filters/assignable-users`, { credentials: 'include', headers: buildHeaders() });
       const data = await res.json(); if (Array.isArray(data)) setUsers(data);
     } catch (e) { console.error('fetchUsers failed:', e); setUsers([]); }
   };
@@ -4462,8 +4904,12 @@ const LeadFormBody = ({ formData, setFormData, phoneError, handlePhoneChange, gr
           Lead Owner
           <span style={{ background: __sbg('#EFF6FF'), color: __stc('#2563eb'), borderRadius: 4, padding: '1px 7px', fontSize: 10, fontWeight: 600 }}>OPTIONAL</span>
         </label>
+        {/* Lead Owner is a NAME, not an assignment — it takes free text via the
+            "Other" fallback and grants nobody anything. It therefore keeps the full
+            user list (like the tender and referral pickers already did) rather than
+            the subtree-scoped `users` that backs Assign To / Closed By. */}
         <LeadOwnerDropdown
-          users={users}
+          users={allUsers || []}
           value={formData.leadOwner || ''}
           onChange={val => setFormData(p => ({ ...p, leadOwner: val }))}
         />

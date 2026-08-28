@@ -1021,6 +1021,25 @@ useEffect(() => {
     finally { setTeamsLoading(false); }
   }, []);
 
+  // Options for the user form's Team dropdown.
+  //
+  // The field used to be free text, so the same team got typed several different
+  // ways. It is now picked from the real teams (Users → Teams tab). A stored value
+  // that predates the dropdown is appended as its own option and flagged, so
+  // editing such a user shows their current team and never silently wipes it —
+  // the admin can keep it or move them onto a listed team.
+  //
+  // Team is a LABEL ONLY: nothing about visibility or assignment reads it any
+  // more (that moved to the reporting graph). Do not wire it into access logic.
+  const teamOptions = (currentValue) => {
+    const opts = teams.map(t => ({ value: t.name, label: t.name }));
+    const current = (currentValue || '').trim();
+    if (current && !opts.some(o => o.value === current)) {
+      opts.unshift({ value: current, label: `${current} (not a listed team)` });
+    }
+    return opts;
+  };
+
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const searchUsers = useCallback(async () => {
     if (!user?.id) return;
@@ -1143,6 +1162,7 @@ useEffect(() => {
     setPasswordStrength({ isValid: null, message: '' });
     setShowPassword(false); setShowConfirmPassword(false);
     fetchDropdownUsers();
+    fetchTeams();          // populates the Team dropdown (data hygiene — see the field below)
     setShowAddUserModal(true);
   };
 
@@ -1228,7 +1248,7 @@ useEffect(() => {
     } catch { return []; }
   };
 
-  const handleEditUser = (u) => { setSelectedUser({ ...u }); fetchDropdownUsers(); setShowEditUserModal(true); };
+  const handleEditUser = (u) => { setSelectedUser({ ...u }); fetchDropdownUsers(); fetchTeams(); setShowEditUserModal(true); };
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
@@ -2403,8 +2423,13 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                   <div className="users-page-form-group">
                     <label>Team</label>
-                    <input type="text" value={newUser.team} onChange={e => setNewUser({ ...newUser, team: e.target.value })} placeholder="e.g. Sales Team A, BD North" />
-                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Optional grouping label</span>
+                    <FilterSelect
+                      value={newUser.team || ''}
+                      options={teamOptions(newUser.team)}
+                      placeholder={teamsLoading ? 'Loading teams…' : 'Select Team (optional)'}
+                      onChange={v => setNewUser({ ...newUser, team: v || '' })}
+                    />
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Optional grouping label — manage the list in the Teams tab</span>
                   </div>
                 </div>
                 {/* FIX #7: designation field */}
@@ -2554,7 +2579,13 @@ const deletee = loggedInActualPerms.some(p => p.name === 'users.delete');
                   </div>
                   <div className="users-page-form-group">
                     <label>Team</label>
-                    <input type="text" value={selectedUser.team || ''} onChange={e => setSelectedUser({ ...selectedUser, team: e.target.value })} placeholder="e.g. Sales Team A" />
+                    <FilterSelect
+                      value={selectedUser.team || ''}
+                      options={teamOptions(selectedUser.team)}
+                      placeholder={teamsLoading ? 'Loading teams…' : 'Select Team (optional)'}
+                      onChange={v => setSelectedUser({ ...selectedUser, team: v || '' })}
+                    />
+                    <span style={{ fontSize: 12, color: __stc('#9ca3af'), marginTop: 4, display: 'block' }}>Optional grouping label — manage the list in the Teams tab</span>
                   </div>
                 </div>
                 {/* FIX #7: designation in edit modal */}

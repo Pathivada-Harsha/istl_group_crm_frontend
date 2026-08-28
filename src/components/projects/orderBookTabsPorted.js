@@ -45,7 +45,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import * as XLSXStyle from 'xlsx-js-style'; // style-capable SheetJS fork; used only for the colored export
-import { ArrowLeft, Plus, Trash2, Save, Wand2, Check, Download } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Wand2, Check, Download, RotateCcw } from 'lucide-react';
 import { FaFilePdf, FaFileImage, FaFileAlt, FaFileDownload, FaExternalLinkAlt } from 'react-icons/fa';
 import '../../pages-css/OrderBookDetail.css';
 import ConfirmationModal from '../ConfirmationModal.js';
@@ -542,6 +542,10 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
     trackingMode: 'DETAILED',
   });
   const [phases, setPhases] = useState([]);
+  // Where this scope came from: 'LEAD_COPY' when it was imported from the lead behind
+  // the order book's proposal, 'TEMPLATE' once saved otherwise, null before any save
+  // or after a reset. Drives the Suggest / Reset buttons below.
+  const [scopeSource, setScopeSource] = useState(null);
   // Detailed per-period progress: map keyed `${phaseId}|${subKey||''}|${periodNo}` → {plannedPct, actualPct}
   const [progress, setProgress] = useState({});
   const [savingProgress, setSavingProgress] = useState(false);
@@ -585,6 +589,7 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         // Only used as a default — a saved non-empty projectType always wins, so
         // a user edit is never overwritten.
         const subGroupType = orderBook.subGroupName || '';
+        setScopeSource(s?.scopeSource || null);
         if (s) setScope({
           projectType: s.projectType || subGroupType, scopeOfWork: s.scopeOfWork || '',
           technicalNotes: s.technicalNotes || '', systemCapacity: s.systemCapacity || '',
@@ -644,6 +649,32 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A scope imported from the lead hides "Suggest plan" — the rows are already the
+  // real thing and replacing them with a template would be a step backwards. Only
+  // while rows actually exist: an import that produced nothing leaves Suggest visible.
+  const isLeadDerived = scopeSource === 'LEAD_COPY' && phases.length > 0;
+
+  // "Reset scope" — the way back out of a bad import. Clears the rows and the
+  // lead-derived marker, which re-enables Suggest. BOM lines are deliberately kept.
+  const resetScope = async () => {
+    const ok = await showConfirmation({
+      title: 'Clear scope', type: 'alert',
+      message: 'This removes every scope row and its progress, and re-enables "Suggest plan". '
+             + 'BOM lines are kept, but they lose their link to these rows and move to "General".',
+      confirmText: 'Yes, Clear', cancelText: 'Cancel',
+    });
+    if (!ok) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/projects/${orderBook.id}/scope/items`, {
+        method: 'DELETE', credentials: 'include', headers: authHeaders,
+      });
+      const data = await res.json();
+      if (!data.success) { showError(data.message || 'Failed to clear scope'); return; }
+      showSuccess('Scope cleared');
+      await load();
+    } catch { showError('Failed to clear scope'); }
+  };
 
   // "Suggest plan" — pulls the standardised scope template for this project's
   // sub-group (GET /scope/suggest?target=scope), exactly like the Leads page.
@@ -1440,7 +1471,14 @@ export const TechnicalTab = ({ orderBook, authHeaders, showSuccess, showError })
         <div className="obd-card-head">
           <h4 className="obd-card-title">Work Breakdown &amp; Schedule</h4>
           <div className="obd-card-head-actions">
-            <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest plan</button>
+            {isLeadDerived ? (
+              <button className="obd-btn obd-btn--ghost" onClick={resetScope}
+                title="Clear this imported scope and re-enable Suggest plan">
+                <RotateCcw size={14} /> Reset scope
+              </button>
+            ) : (
+              <button className="obd-btn obd-btn--ghost" onClick={loadDefaultPlan}><Wand2 size={14} /> Suggest plan</button>
+            )}
             <button className="obd-btn obd-btn--ghost" onClick={loadFromLineItems}><Plus size={14} /> Load line items</button>
             <button className="obd-btn obd-btn--ghost" onClick={addPhase}><Plus size={14} /> Add row</button>
           </div>

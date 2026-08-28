@@ -2074,14 +2074,24 @@ const AggregatedDashboard = ({ data, scopeLabel, onRefresh, loading, capacityDat
           // Computed locally — same basis as List/Graphical (received/billed, paid/procurement)
           // so the % shown here always matches those other two views instead of relying on
           // backend %-fields that can use a different denominator.
+          /* "Received" is SUM(receipts) — ALL cash in, including advances taken
+             before any invoice exists. "Billed" is invoices raised. So the ratio
+             legitimately exceeds 100% on a project collecting in advance, and
+             calling that "174.9% collected" reads as a bug when it is not.
+             Past 100% the tile says how much is advance instead. */
           const recvPct = financial.totalBilled  > 0 ? (financial.totalReceived / financial.totalBilled)  * 100 : 0;
+          const recvSub = financial.totalBilled > 0
+            ? (financial.totalReceived > financial.totalBilled
+                ? `${formatCurrency(financial.totalReceived - financial.totalBilled)} in advance`
+                : `${recvPct.toFixed(1)}% of billed`)
+            : (financial.totalReceived > 0 ? 'Advance — nothing billed yet' : 'Nothing received yet');
           const paidPct = financial.totalPayable > 0 ? (financial.totalPaid     / financial.totalPayable) * 100 : 0;
           return (
           <div className="kpi-grid kpi-grid-4col">
             {[
               { label: 'Total Project Value',   val: formatCurrency(financial.totalProjectValue),  color: '#3b82f6', icon: <Wallet size={32} />,      sub: 'Sum of all budgets' },
               { label: 'Total Billed',          val: formatCurrency(financial.totalBilled),         color: '#8b5cf6', icon: <FileText size={32} />,    sub: 'All invoices raised' },
-              { label: 'Total Received',        val: formatCurrency(financial.totalReceived),       color: '#22c55e', icon: <TrendingUp size={32} />,  sub: `${recvPct.toFixed(1)}% collected` },
+              { label: 'Total Received',        val: formatCurrency(financial.totalReceived),       color: '#22c55e', icon: <TrendingUp size={32} />,  sub: recvSub },
               { label: 'Pending Receipts',      val: formatCurrency(financial.pendingReceipts),     color: '#f59e0b', icon: <Clock size={32} />,       sub: 'Yet to receive' },
               { label: 'Total Procurement',     val: formatCurrency(financial.totalPayable),        color: '#ef4444', icon: <ShoppingCart size={32} />,sub: 'All vendor bills' },
               { label: 'Total Paid (Vendors)',  val: formatCurrency(financial.totalPaid),           color: '#06b6d4', icon: <CreditCard size={32} />,  sub: `${paidPct.toFixed(1)}% paid` },

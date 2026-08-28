@@ -1437,6 +1437,19 @@
   color: var(--ct-white, white);
 }
 
+/* ── Site visit report action ──
+   Amber, matching the "Fill Site Visit Report" button in the View Details footer:
+   both open the same modal, so they should read as the same action. Only rendered
+   on Visit follow-ups, where it is the assignee's one route to filing the report. */
+.followup-action-btn.action-sitevisit {
+  color: var(--ct-d97706, #D97706);
+  border-color: var(--c-d97706, #D97706);
+}
+.followup-action-btn.action-sitevisit:hover {
+  background: var(--c-d97706, #D97706);
+  color: var(--ct-white, white);
+}
+
 /* ── Row hover cursor (clickable rows) ── */
 .followups-table tbody tr {
   cursor: pointer;

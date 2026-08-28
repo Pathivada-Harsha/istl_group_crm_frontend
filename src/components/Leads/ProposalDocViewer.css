@@ -1,0 +1,126 @@
+/* ProposalDocViewer — modal preview for a generated proposal .docx.
+   Colours follow the project convention: surfaces var(--c-<hex>), foreground
+   var(--ct-<hex>) — see src/theme.css. Dark mode falls out of the tokens. */
+
+.pdv-overlay {
+  position: fixed; inset: 0; z-index: 100000;
+  background: rgba(15, 23, 42, .55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+}
+
+.pdv-modal {
+  display: flex; flex-direction: column;
+  width: min(1080px, 96vw);
+  height: min(92vh, 1000px);
+  background: var(--c-fff, #fff);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+  overflow: hidden;
+}
+
+/* ── Header ── */
+.pdv-head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; gap: 11px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+  background: var(--c-fafafa, #fafafa);
+}
+.pdv-head-ico {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9px;
+  background: var(--c-eff6ff, #eff6ff);
+  color: var(--ct-2563eb, #2563eb);
+}
+.pdv-head-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.pdv-title {
+  font-size: 14px; font-weight: 700; color: var(--ct-111827, #111827);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pdv-version { font-size: 11px; font-weight: 600; color: var(--ct-374151, #374151); }
+
+.pdv-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 13px; border-radius: 7px;
+  font-family: 'Poppins', sans-serif; font-size: 12px; font-weight: 600;
+  cursor: pointer; white-space: nowrap; transition: all .18s;
+}
+.pdv-btn:disabled { opacity: .5; cursor: not-allowed; }
+.pdv-btn-sec {
+  background: var(--c-fff, #fff);
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  color: var(--ct-374151, #374151);
+}
+.pdv-btn-sec:hover:not(:disabled) { background: var(--c-f3f4f6, #f3f4f6); }
+.pdv-btn-pri {
+  background: var(--c-2563eb, #2563eb);
+  border: 1px solid var(--c-2563eb, #2563eb);
+  color: var(--ct-white, #fff);
+}
+.pdv-btn-pri:hover:not(:disabled) { background: var(--c-1d4ed8, #1d4ed8); }
+
+.pdv-icon-close {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px;
+  border: none; border-radius: 7px;
+  background: transparent; color: var(--ct-6b7280, #6b7280);
+  cursor: pointer;
+}
+.pdv-icon-close:hover { background: var(--c-f3f4f6, #f3f4f6); color: var(--ct-111827, #111827); }
+
+/* ── Body: holds the PDF viewer, which scrolls itself ──
+   overflow:hidden, not auto — leaving it auto puts our scrollbar next to the
+   PDF viewer's own. padding:0 for the same reason: the viewer supplies its own
+   page gutter, and padding here just shrinks the page. */
+.pdv-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-f1f5f9, #f1f5f9);
+}
+
+.pdv-frame {
+  flex: 1 1 auto;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  /* No white flash before the viewer paints; remaps dark with the theme. */
+  background: var(--c-fff, #fff);
+}
+
+/* ── Loading / unavailable / error states ── */
+.pdv-state {
+  flex: 1 1 auto;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 60px 20px; text-align: center;
+  color: var(--ct-6b7280, #6b7280); font-size: 13px;
+}
+.pdv-state-sub { max-width: 460px; line-height: 1.55; }
+.pdv-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 6px; }
+.pdv-state p { margin: 0; }
+.pdv-state-sub { font-size: 12px; color: var(--ct-9ca3af, #9ca3af); }
+.pdv-state--error { color: var(--ct-b91c1c, #b91c1c); }
+.pdv-state--error .pdv-state-sub { color: var(--ct-6b7280, #6b7280); }
+
+.pdv-spinner {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--c-e5e7eb, #e5e7eb);
+  border-top-color: var(--c-2563eb, #2563eb);
+  animation: pdv-spin .7s linear infinite;
+}
+@keyframes pdv-spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 640px) {
+  .pdv-overlay { padding: 0; }
+  .pdv-modal { width: 100vw; height: 100vh; border-radius: 0; }
+  /* iOS Safari renders only page 1 of a PDF in an iframe, with no CSS fix —
+     the header's "Open" link is the way to read the whole document there. */
+}

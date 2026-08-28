@@ -385,14 +385,45 @@ const ProposalsWithTemplate = () => {
     } catch { showError('Failed to delete'); setShowDeleteModal(false); }
   };
 
-  const handleDownloadPDF = async (id) => {
+  /**
+   * Solar is an EPC *sub-group* (Solar_Rooftop / Solar_ground_mounted /
+   * Solar_carports / Solar Wind), not a group. Keep in step with
+   * SolarProposalDocService.isSolar and Leads-Enquire's isSolarLead.
+   */
+  const isSolarProposal = (p) =>
+    String(p?.subGroupName || '').trim().toLowerCase().startsWith('solar') ||
+    String(p?.groupName || '').trim().toLowerCase() === 'solar';
+
+  const save = (blob, name) => {
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Solar proposals are Word documents generated from the lead's tabs and stored
+   * as versions; every other group still renders the generic PDF.
+   */
+  const handleDownloadPDF = async (id, proposal) => {
+    const authHeaders = { 'User-Id': currentUser.id.toString(), 'User-Role': currentUser.role };
+    const isSolar = isSolarProposal(proposal);
     try {
-      const res = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials:'include', headers:{'User-Id':currentUser.id.toString(),'User-Role':currentUser.role} });
+      if (isSolar) {
+        const res = await fetch(`${API_BASE_URL}/proposals/${id}/documents/download`, { credentials: 'include', headers: authHeaders });
+        if (res.status === 404) {
+          showError('No document generated yet — open the lead and use "Generate Proposal".');
+          return;
+        }
+        if (!res.ok) throw new Error();
+        save(await res.blob(), `proposal-${id}.docx`);
+        return;
+      }
+      const res = await fetch(`${API_BASE_URL}/proposals/download-pdf/${id}`, { credentials: 'include', headers: authHeaders });
       if (!res.ok) throw new Error();
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href=url; a.download=`proposal-${id}.pdf`; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
-    } catch { showError('Failed to download PDF'); }
+      save(await res.blob(), `proposal-${id}.pdf`);
+    } catch { showError(isSolar ? 'Failed to download the proposal document' : 'Failed to download PDF'); }
   };
 
   const handleView = async (id) => {
@@ -459,7 +490,7 @@ const ProposalsWithTemplate = () => {
         <div className="p-actions-cell">
           <button className="p-action-btn p-act-view"   onClick={() => handleView(p.id)}           title="View"><FaEye /></button>
           {permissions.EDIT && <button className="p-action-btn p-act-edit" onClick={() => handleEdit(p)} title="Edit"><FaEdit /></button>}
-          <button className="p-action-btn p-act-pdf"    onClick={() => handleDownloadPDF(p.id)}    title="Download PDF"><FaFilePdf /></button>
+          <button className="p-action-btn p-act-pdf"    onClick={() => handleDownloadPDF(p.id, p)}  title={isSolarProposal(p) ? 'Download proposal document' : 'Download PDF'}><FaFilePdf /></button>
           {permissions.DELETE && <button className="p-action-btn p-act-delete" onClick={() => handleDeleteClick(p.id, p.title)} title="Delete"><FaRegTrashAlt /></button>}
         </div>
       );
@@ -672,7 +703,9 @@ const ProposalsWithTemplate = () => {
 
               <div className="p-modal-footer">
                 {permissions.EDIT && <button className="p-btn p-btn-secondary" onClick={()=>handleEdit(selectedProposal)}>Edit</button>}
-                <button className="p-btn p-btn-secondary" onClick={()=>handleDownloadPDF(selectedProposal.id)}>Download PDF</button>
+                <button className="p-btn p-btn-secondary" onClick={()=>handleDownloadPDF(selectedProposal.id, selectedProposal)}>
+                  {isSolarProposal(selectedProposal) ? 'Download Document' : 'Download PDF'}
+                </button>
                 {permissions.APPROVE && (
                   <select className="p-status-sel" value={selectedProposal.status} onChange={async e=>{
                     try { const data=await fetchWithHeaders(`${API_BASE_URL}/proposals/update/${selectedProposal.id}`,{method:'PUT',body:JSON.stringify({status:e.target.value})}); if(data.success){showSuccess('Status updated!');setSelectedProposal({...selectedProposal,status:e.target.value});fetchProposals();} } catch { showError('Failed'); }

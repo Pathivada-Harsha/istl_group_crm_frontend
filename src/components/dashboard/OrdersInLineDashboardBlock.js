@@ -51,8 +51,15 @@ const fmtCapacity = (kwRaw) => {
   return `${kw.toLocaleString('en-IN', { maximumFractionDigits: 2 })} kW`;
 };
 
-/** Mirrors Dashboard.js's KpiCard markup so the tiles are indistinguishable. */
-const Tile = ({ label, value, sub, accent, iconBg, icon, onClick }) => (
+/**
+ * Mirrors Dashboard.js's KpiCard markup so the tiles are indistinguishable.
+ *
+ * `strongSub` promotes the sub-line from an 11px grey caption to a readable
+ * second figure — used for the pipeline's rupee value, which is a headline
+ * number in its own right and was getting lost at caption size. Styled inline
+ * rather than by editing .rd-kpi-sub, which every other dashboard shares.
+ */
+const Tile = ({ label, value, sub, accent, iconBg, icon, onClick, strongSub = false }) => (
   <div
     className="rd-kpi-card"
     style={{ '--kpi-accent': accent, '--kpi-icon-bg': iconBg, cursor: onClick ? 'pointer' : undefined }}
@@ -64,7 +71,16 @@ const Tile = ({ label, value, sub, accent, iconBg, icon, onClick }) => (
     <div className="rd-kpi-icon">{icon}</div>
     <div className="rd-kpi-label">{label}</div>
     <div className="rd-kpi-value">{value ?? '—'}</div>
-    {sub && <div className="rd-kpi-sub">{sub}</div>}
+    {sub && (
+      <div
+        className="rd-kpi-sub"
+        style={strongSub
+          ? { fontSize: 14, fontWeight: 700, color: 'var(--ct-0f172a, #0f172a)', marginTop: 3 }
+          : undefined}
+      >
+        {sub}
+      </div>
+    )}
   </div>
 );
 
@@ -133,6 +149,7 @@ const OrdersInPipelineTiles = () => {
         label="Pipeline Capacity"
         value={fmtCapacity(data.openCapacityKw)}
         sub={`${fmtMoney(data.openEstimatedValue)} estimated`}
+        strongSub
         accent="#8b5cf6"
         iconBg="#f5f3ff"
         icon="⚡"

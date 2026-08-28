@@ -27,7 +27,7 @@
   background: var(--c-fff, #fff); border: 1px solid var(--c-e5e7eb, #E5E7EB); border-radius: 12px;
   padding: 16px; display: flex; flex-direction: column; gap: 6px;
 }
-.lbe-metric-label { font-size: 11px; font-weight: 700; color: var(--ct-9ca3af, #9CA3AF); text-transform: uppercase; letter-spacing: .04em; }
+.lbe-metric-label { font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151); text-transform: uppercase; letter-spacing: .04em; }
 .lbe-metric-value { font-size: 22px; font-weight: 700; color: var(--ct-111827, #111827); display: flex; align-items: center; gap: 8px; }
 .lbe-metric-value--editable { justify-content: space-between; }
 .lbe-margin-pct { font-size: 13px; font-weight: 700; }
@@ -134,8 +134,8 @@
 .lbe-item-wrap { padding: 8px 14px 14px; overflow-x: auto; }
 .lbe-item-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .lbe-item-table thead th {
-  text-align: left; font-size: 10.5px; font-weight: 700; color: var(--ct-9ca3af, #9CA3AF);
-  text-transform: uppercase; letter-spacing: .03em; padding: 6px 8px; border-bottom: 1px solid var(--c-e5e7eb, #E5E7EB);
+  text-align: left; font-size: 11px; font-weight: 700; color: var(--ct-374151, #374151);
+  text-transform: uppercase; letter-spacing: .04em; padding: 6px 8px; border-bottom: 1px solid var(--c-e5e7eb, #E5E7EB);
   white-space: nowrap;
 }
 .lbe-item-table tbody td { padding: 6px 8px; border-bottom: 1px solid var(--c-f3f4f6, #F3F4F6); vertical-align: middle; color: var(--ct-374151, #374151); }

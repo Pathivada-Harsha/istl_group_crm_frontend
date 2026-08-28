@@ -1,0 +1,246 @@
+/* BomItemPicker.css — project BOM item picker, shared by Quotations and Purchase Orders.
+   Class prefix `bip-` is owned exclusively by this component. */
+
+.bip-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;          /* above the create/edit modals that open it */
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+
+.bip-modal {
+  background: var(--c-ffffff, #ffffff);
+  color: var(--c-1f2937, #1f2937);
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 1100px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  animation: bip-pop 0.18s ease;
+}
+
+@keyframes bip-pop {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.bip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.bip-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.bip-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--c-6b7280, #6b7280);
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+}
+.bip-close:hover { background: var(--c-f3f4f6, #f3f4f6); }
+
+/* ── Toolbar ──────────────────────────────────────────────────────────────── */
+.bip-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.bip-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  max-width: 420px;
+  padding: 7px 11px;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 8px;
+  color: var(--c-6b7280, #6b7280);
+}
+.bip-search input {
+  border: none;
+  outline: none;
+  background: transparent;
+  flex: 1;
+  font-size: 13px;
+  color: inherit;
+}
+
+.bip-toolbar-actions { display: flex; gap: 14px; }
+
+.bip-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--c-3b82f6, #3b82f6);
+}
+.bip-link-btn:hover { text-decoration: underline; }
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+.bip-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0 4px;
+}
+
+.bip-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--c-6b7280, #6b7280);
+  font-size: 13.5px;
+}
+.bip-state-error {
+  color: var(--c-ef4444, #ef4444);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.bip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.bip-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--c-f9fafb, #f9fafb);
+  text-align: left;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--c-6b7280, #6b7280);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.bip-table tbody td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--c-f3f4f6, #f3f4f6);
+  vertical-align: top;
+}
+
+.bip-num { text-align: right; }
+.bip-table thead th.bip-num { text-align: right; }
+
+.bip-row-selected { background: var(--c-eff6ff, #eff6ff); }
+.bip-row-loaded   { opacity: 0.55; }
+
+.bip-item-name { font-weight: 500; }
+.bip-item-spec {
+  font-size: 11.5px;
+  color: var(--c-6b7280, #6b7280);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+.bip-tag {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: var(--c-e5e7eb, #e5e7eb);
+  color: var(--c-4b5563, #4b5563);
+}
+.bip-tag-warn {
+  background: var(--c-fef3c7, #fef3c7);
+  color: var(--c-92400e, #92400e);
+}
+
+.bip-qty {
+  width: 100%;
+  max-width: 100px;
+  text-align: right;
+  padding: 5px 8px;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--c-ffffff, #ffffff);
+  color: inherit;
+}
+.bip-qty:disabled {
+  background: var(--c-f9fafb, #f9fafb);
+  cursor: not-allowed;
+}
+/* Over the remaining quantity — allowed here, but flagged. The PO save is what blocks. */
+.bip-qty-over {
+  border-color: var(--c-f59e0b, #f59e0b);
+  background: var(--c-fffbeb, #fffbeb);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.bip-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+}
+
+.bip-footer-note {
+  font-size: 12.5px;
+  color: var(--c-6b7280, #6b7280);
+}
+
+.bip-footer-actions { display: flex; gap: 10px; }
+
+.bip-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.bip-btn-ghost {
+  background: var(--c-ffffff, #ffffff);
+  border-color: var(--c-d1d5db, #d1d5db);
+  color: var(--c-374151, #374151);
+}
+.bip-btn-ghost:hover { background: var(--c-f9fafb, #f9fafb); }
+
+.bip-btn-primary {
+  background: var(--c-3b82f6, #3b82f6);
+  color: #ffffff;
+}
+.bip-btn-primary:hover:not(:disabled) { background: var(--c-2563eb, #2563eb); }
+.bip-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@media (max-width: 820px) {
+  .bip-toolbar { flex-direction: column; align-items: stretch; }
+  .bip-search { max-width: none; }
+  .bip-table { font-size: 12px; }
+}

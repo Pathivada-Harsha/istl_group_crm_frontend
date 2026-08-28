@@ -134,20 +134,34 @@ const capacityLabel = (row) => {
   return [row.capacity, row.capacityUnit, row.capacityType].filter(Boolean).join(' ');
 };
 
+/**
+ * Below this, a per-MW rate is not shown.
+ *
+ * Dividing a sub-MW job by its capacity extrapolates it to a full megawatt and
+ * produces a figure that reads as absurd — a ₹13.75 Cr / 725 kW rooftop comes out
+ * at "₹18.97 Cr per MW", which is arithmetically right and commercially
+ * meaningless. Small jobs are not priced per MW, so the rate is simply withheld.
+ */
+const MIN_MW_FOR_RATE = 1;
+
 /** Cost per MW is derived, not stored — exactly estimatedValue / capacityInMw. */
 const ratePerMwOf = (row) => {
   const mw = toMw(row.capacity, row.capacityUnit);
   const value = parseFloat(row.estimatedValue);
-  if (!mw || !Number.isFinite(value)) return null;
+  if (!mw || mw < MIN_MW_FOR_RATE || !Number.isFinite(value)) return null;
   return value / mw;
 };
 
 export default function OrdersInLine() {
   const { user, pagePermissions } = useAuth();
 
-  // Reuses the existing Leads page permission — no new permission code, so
-  // removing this feature needs no role-configuration unwind.
-  const perms     = pagePermissions?.LEADS || [];
+  // Own page permission (orders_in_pipeline.view/create/edit/delete in the
+  // `permissions` table). Previously this reused LEADS, which meant anyone who
+  // could see leads could see this register and vice versa — the two audiences
+  // are not the same, so it now stands on its own code.
+  // Removal note: dropping this feature now also means deleting the
+  // orders_in_pipeline.* permission rows and the sales_orders_in_pipeline menu item.
+  const perms     = pagePermissions?.ORDERS_IN_PIPELINE || [];
   const canView   = perms.includes('VIEW');
   const canCreate = perms.includes('CREATE');
   const canEdit   = perms.includes('EDIT');
@@ -194,7 +208,7 @@ export default function OrdersInLine() {
       });
       setRecords(data);
     } catch (e) {
-      if (e.message !== 'SESSION_EXPIRED') showError(e.message || 'Failed to load orders in line');
+      if (e.message !== 'SESSION_EXPIRED') showError(e.message || 'Failed to load orders in pipeline');
       setRecords([]);
     } finally {
       setLoading(false);
@@ -237,9 +251,11 @@ export default function OrdersInLine() {
     const mw = toMw(next.capacity, next.capacityUnit);
     if (mw && next.ratePerMw) {
       next.estimatedValue = money2(mw * parseFloat(next.ratePerMw));
-    } else if (mw && next.estimatedValue) {
+    } else if (mw >= MIN_MW_FOR_RATE && next.estimatedValue) {
       next.ratePerMw = money2(parseFloat(next.estimatedValue) / mw);
     }
+    // Dropping below 1 MW clears a rate that would now be misleading.
+    if (!mw || mw < MIN_MW_FOR_RATE) next.ratePerMw = '';
     return next;
   });
 
@@ -256,14 +272,17 @@ export default function OrdersInLine() {
   const setEstimatedValue = (raw) => setForm((p) => {
     const estimatedValue = numeric(raw);
     const mw = toMw(p.capacity, p.capacityUnit);
+    const canRate = mw && mw >= MIN_MW_FOR_RATE;
     return {
       ...p,
       estimatedValue,
-      ratePerMw: mw && estimatedValue ? money2(parseFloat(estimatedValue) / mw) : p.ratePerMw,
+      ratePerMw: canRate && estimatedValue ? money2(parseFloat(estimatedValue) / mw) : p.ratePerMw,
     };
   });
 
   const formMw = toMw(form.capacity, form.capacityUnit);
+  // Per-MW pricing only makes sense at or above a megawatt — see MIN_MW_FOR_RATE.
+  const canUseRate = Boolean(formMw) && formMw >= MIN_MW_FOR_RATE;
 
   /* ── PIN → state / district, same lookup the Leads form uses ────────────── */
   const handlePincodeChange = (value) => {
@@ -301,7 +320,7 @@ export default function OrdersInLine() {
     if (!canEdit) { showWarning('You do not have permission to edit records'); return; }
     setPhoneError('');
     // Rate is not a column — recover it from the stored total and capacity.
-    const mw = toMw(row.capacity, row.capacityUnit);
+    // ratePerMwOf withholds it below 1 MW, so sub-MW records open with it blank.
     setForm({
       id: row.id,
       clientName: row.clientName || '',
@@ -310,7 +329,7 @@ export default function OrdersInLine() {
       capacity: row.capacity || '',
       capacityUnit: row.capacityUnit || 'kW',
       capacityType: row.capacityType || '',
-      ratePerMw: mw && row.estimatedValue ? money2(parseFloat(row.estimatedValue) / mw) : '',
+      ratePerMw: money2(ratePerMwOf(row)),
       category: row.category || '',
       pincode: '',
       state: row.state || '',
@@ -349,10 +368,10 @@ export default function OrdersInLine() {
     try {
       if (form.id) {
         await ordersInLineApi.update(form.id, payload);
-        showSuccess('Order in line updated');
+        showSuccess('Order in pipeline updated');
       } else {
         await ordersInLineApi.create(payload);
-        showSuccess('Order in line added');
+        showSuccess('Order in pipeline added');
       }
       setShowModal(false);
       setForm(emptyForm());
@@ -370,7 +389,7 @@ export default function OrdersInLine() {
     if (!target) return;
     try {
       await ordersInLineApi.remove(target.id);
-      showSuccess('Order in line removed');
+      showSuccess('Order in pipeline removed');
       fetchRecords();
     } catch (err) {
       showError(err.message || 'Delete failed');
@@ -456,13 +475,13 @@ export default function OrdersInLine() {
         <div className="oil-action-buttons">
           {canCreate && (
             <button type="button" className="oil-btn oil-btn-primary" onClick={openCreate}>
-              <Plus size={15} /> Add Order in Line
+              <Plus size={15} /> Add Order in Pipeline
             </button>
           )}
         </div>
       </div>
 
-      {loading && <CrmPreloader text="Loading Orders in Line…" />}
+      {loading && <CrmPreloader text="Loading Orders in Pipeline…" />}
 
       <div className="oil-table-card">
         {records.length === 0 && !loading ? (
@@ -660,12 +679,14 @@ export default function OrdersInLine() {
                         value={form.ratePerMw}
                         onChange={(e) => setRatePerMw(e.target.value)}
                         placeholder="e.g. 32000000"
-                        disabled={!formMw}
+                        disabled={!canUseRate}
                       />
                       <span className="oil-field-hint">
-                        {formMw
-                          ? `${fmtInr(form.ratePerMw) || '—'} per MW`
-                          : 'Enter a capacity in kW / kWp / MW / MWp first'}
+                        {!formMw
+                          ? 'Enter a capacity in kW / kWp / MW / MWp first'
+                          : !canUseRate
+                            ? 'Only for 1 MW and above — enter the value directly below'
+                            : `${fmtInr(form.ratePerMw) || '—'} per MW`}
                       </span>
                     </div>
 
@@ -678,7 +699,7 @@ export default function OrdersInLine() {
                         onChange={(e) => setEstimatedValue(e.target.value)}
                         placeholder="Indicative only — or let the rate above fill it in"
                       />
-                      {(formMw && form.ratePerMw && form.estimatedValue) ? (
+                      {(canUseRate && form.ratePerMw && form.estimatedValue) ? (
                         <div className="oil-calc-hint">
                           <strong>{money2(formMw)} MW</strong> × <strong>{fmtInr(form.ratePerMw)}</strong> per MW
                           {' = '}

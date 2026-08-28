@@ -112,6 +112,12 @@ export default function BomItemsMaster() {
   // bound to `category`, so picking a subgroup can't clobber another filter.
   const [filterGroup, setFilterGroup] = useState("");
 
+  // Which makes are missing a number an active template's auto-sizing basis reads
+  // off them. A module make with no wattage recorded is indistinguishable from a
+  // complete one here, yet it silently blanks the module count on every lead that
+  // picks it — so the gap is named in the screen where it can be filled.
+  const [health, setHealth] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(null);
   const [formTab, setFormTab] = useState("details"); // "details" | "makes"
@@ -167,6 +173,23 @@ export default function BomItemsMaster() {
   }, [search, category, showError]);
 
   useEffect(() => { loadCatalog(); }, [loadCatalog]);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await api.get("/bom-items-master/attribute-health");
+      setHealth(res?.success ? (res.data || null) : null);
+    } catch { /* non-fatal — the catalog is still usable without the check */ }
+  }, []);
+
+  useEffect(() => { loadHealth(); }, [loadHealth]);
+
+  /** This item's auto-sizing health, or null when no template basis reads from it. */
+  const healthOf = (it) => health?.items?.[String(it?.id)] || null;
+  // The health column only earns its place when some template actually sizes off
+  // the catalog; on an install with no driver bases it would be dead space.
+  const showHealthCol = Object.keys(health?.items || {}).length > 0;
+  const attrNames = (h) => (h.requiredAttributes || []).map((a) => a.label).join(", ");
+  const itemsNeedingAttention = Object.values(health?.items || {}).filter((h) => (h.incompleteMakes || []).length > 0);
 
   useEffect(() => {
     (async () => {
@@ -532,6 +555,38 @@ export default function BomItemsMaster() {
   };
   const onColDragEnd = () => { setDragOverCol(null); dragCol.current = null; };
 
+  /**
+   * The auto-sizing column: blank for an item no basis reads from, otherwise
+   * either confirmation that every make carries the number, or exactly which
+   * makes don't. Empty is meaningful here — it means "no template sizes off this".
+   */
+  const healthCell = (it) => {
+    const h = healthOf(it);
+    if (!h) return null;
+    const missing = h.incompleteMakes || [];
+    const names = attrNames(h);
+    const unknownField = (h.requiredAttributes || []).some((a) => a.inSchema === false);
+    if (!missing.length) {
+      return (
+        <span className="bim-badge bim-badge-on"
+          title={`Every make records ${names}, which auto-sizing reads for ${(h.usedByProjectTypes || []).join(", ")}.`}>
+          {names} ✓
+        </span>
+      );
+    }
+    const detail = missing.slice(0, 8)
+      .map((m) => `• ${[m.make, m.model].filter(Boolean).join(" ") || "(unnamed make)"} — no ${(m.missingLabels || []).join(", ")}`)
+      .join("\n");
+    return (
+      <span className={`bim-badge ${h.blocking ? "bim-badge-err" : "bim-badge-warn"}`}
+        title={`${unknownField ? `This item has no "${names}" field, so no make can record one.\n` : ""}`
+          + `Quantities sized from these makes come out blank:\n${detail}`
+          + (missing.length > 8 ? `\n…and ${missing.length - 8} more` : "")}>
+        {missing.length} of {h.makeCount} make{h.makeCount === 1 ? "" : "s"} missing {names}
+      </span>
+    );
+  };
+
   // Shared by both views so the row actions can't drift apart.
   const rowActions = (it) => (
     <div className="bim-actions">
@@ -661,6 +716,20 @@ export default function BomItemsMaster() {
         <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: "none" }} onChange={onFilePicked} />
       </div>
 
+      {itemsNeedingAttention.length > 0 && (
+        <div className="bim-health-banner">
+          <b>
+            {itemsNeedingAttention.length} catalog item{itemsNeedingAttention.length === 1 ? "" : "s"} have makes
+            missing a number that auto-sizing needs.
+          </b>
+          <span>
+            A template line sized from the selected make reads that number off it. Where it is blank, the lead's
+            quantity comes out blank too. Affected:{" "}
+            {itemsNeedingAttention.map((h) => `${h.itemName} (${attrNames(h)})`).join(" · ")}.
+          </span>
+        </div>
+      )}
+
       {activeFilters.length > 0 && (
         <div className="bim-chips">
           <span className="bim-chips-label">Filters</span>
@@ -709,6 +778,7 @@ export default function BomItemsMaster() {
                           {it.isActive === false ? "Inactive" : "Active"}
                         </span>
                       </div>
+                      {healthOf(it) && <div className="bim-card-health">{healthCell(it)}</div>}
                       <div className="bim-card-spec">{it.specification || "No specification"}</div>
                       <div className="bim-card-meta">
                         <span><b>Unit</b>{it.defaultUnit || "—"}</span>
@@ -726,6 +796,12 @@ export default function BomItemsMaster() {
             <table className="bim-table">
               <thead>
                 <tr>
+                  {/* Not draggable or sortable: it is a health check, not catalog data. */}
+                  {showHealthCol && (
+                    <th className="bim-th" title="Whether each make records the number a template's auto-sizing basis reads off it">
+                      <span className="bim-th-content">Auto-sizing</span>
+                    </th>
+                  )}
                   {orderedCols.map((col) => (
                     <th key={col.key} className={`bim-th ${dragOverCol === col.key ? "bim-col-drag-over" : ""}`}
                       draggable onDragStart={(e) => onColDragStart(e, col.key)} onDragOver={(e) => onColDragOver(e, col.key)}
@@ -743,10 +819,11 @@ export default function BomItemsMaster() {
               </thead>
               <tbody>
                 {pageItems.length === 0 && (
-                  <tr><td colSpan={orderedCols.length + 1}>{emptyState}</td></tr>
+                  <tr><td colSpan={orderedCols.length + (showHealthCol ? 2 : 1)}>{emptyState}</td></tr>
                 )}
                 {pageItems.map((it) => (
                   <tr key={it.id} style={{ opacity: it.isActive === false ? 0.55 : 1 }}>
+                    {showHealthCol && <td>{healthCell(it)}</td>}
                     {orderedCols.map((col) => <td key={col.key}>{col.render(it)}</td>)}
                     <td>{rowActions(it)}</td>
                   </tr>
@@ -890,7 +967,8 @@ export default function BomItemsMaster() {
             </div>
 
             {formTab === "makes" && formSaved ? (
-              <ItemMakesModal embedded item={formSaved} showError={showError} showSuccess={showSuccess} />
+              <ItemMakesModal embedded item={formSaved} health={healthOf(formSaved)} onChanged={loadHealth}
+                showError={showError} showSuccess={showSuccess} />
             ) : (
             <div className="bim-modal-body">
               <FormSection>Identification</FormSection>
@@ -1050,7 +1128,8 @@ export default function BomItemsMaster() {
       )}
 
       {makesItem && (
-        <ItemMakesModal item={makesItem} onClose={() => setMakesItem(null)}
+        <ItemMakesModal item={makesItem} health={healthOf(makesItem)} onChanged={loadHealth}
+          onClose={() => setMakesItem(null)}
           showError={showError} showSuccess={showSuccess} />
       )}
     </div>

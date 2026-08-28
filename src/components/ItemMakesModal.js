@@ -63,7 +63,11 @@ const AttrCell = ({ field, value, onChange }) => {
 
 // `embedded` renders just the body — no overlay, head or footer — so the item
 // modal's Makes tab can host the exact same UI. Save behaviour is identical.
-export default function ItemMakesModal({ item, onClose, showError, showSuccess, embedded = false }) {
+//
+// `health` is this item's auto-sizing check (from /bom-items-master/attribute-health):
+// which of these makes are missing a number a template's basis reads off them.
+// Filling those in is what this screen is for, so the gap is marked on the row.
+export default function ItemMakesModal({ item, health, onChanged, onClose, showError, showSuccess, embedded = false }) {
   const itemId = item?.id;
   const [variants, setVariants] = useState([]);
   const [schema, setSchema] = useState([]);
@@ -119,6 +123,14 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess, 
     return c;
   }, [schema]);
 
+  // variantId → the attribute labels this make is missing.
+  const missingByVariant = useMemo(() => {
+    const m = new Map();
+    for (const x of health?.incompleteMakes || []) m.set(x.variantId, x.missingLabels || x.missingKeys || []);
+    return m;
+  }, [health]);
+  const requiredNames = (health?.requiredAttributes || []).map((a) => a.label).join(", ");
+
   const onSort = (key) => {
     if (sortCol === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else { setSortCol(key); setSortDir("asc"); }
@@ -172,6 +184,7 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess, 
       await api.put(`/bom-item-variants/${editingId}`, makeBody(editDraft));
       cancelEdit();
       await load();
+      onChanged?.(); // the missing-attribute marks may have just been resolved
       showSuccess?.("Make updated");
     } catch (e) { if (e.message !== "SESSION_EXPIRED") showError?.(e.message || "Failed to save make"); }
     finally { setBusy(false); }
@@ -210,6 +223,7 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess, 
       for (const r of rows) { await api.post(`/bom-items-master/${itemId}/variants`, makeBody(r)); }
       setNewRows([blankRow()]);
       await load();
+      onChanged?.();
       showSuccess?.(`${rows.length} make${rows.length > 1 ? "s" : ""} added`);
     } catch (e) { if (e.message !== "SESSION_EXPIRED") showError?.(e.message || "Failed to add makes"); }
     finally { setBusy(false); }
@@ -222,6 +236,16 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess, 
           <div className="bim-muted" style={{ fontSize: 12, marginBottom: 10 }}>
             The makes available for this item. Curate which ones a template line allows (and the default) in the template’s BOM tab.
           </div>
+
+          {missingByVariant.size > 0 && (
+            <div className="bim-health-banner" style={{ marginBottom: 10 }}>
+              <b>{missingByVariant.size} make{missingByVariant.size === 1 ? "" : "s"} record no {requiredNames}.</b>
+              <span>
+                An active template sizes quantities from this item's {requiredNames}. A lead that picks one of the
+                marked makes gets a blank quantity for that line until the value is filled in below.
+              </span>
+            </div>
+          )}
 
           {/* ── Existing makes table ── */}
           {loading ? (
@@ -246,10 +270,23 @@ export default function ItemMakesModal({ item, onClose, showError, showSuccess, 
                     )}
                     {pageRows.map((v) => {
                       const editing = editingId === v.id;
+                      const missing = missingByVariant.get(v.id);
                       return (
-                        <tr key={v.id} style={{ opacity: v.isActive === false && !editing ? 0.6 : 1 }}>
-                          {cols.map((col) => (
-                            <td key={col.key}>{editing && col.key !== "isActive" ? editCell(col, v) : col.render(v)}</td>
+                        <tr key={v.id} className={missing ? "bim-row-missing-attr" : undefined}
+                          style={{ opacity: v.isActive === false && !editing ? 0.6 : 1 }}>
+                          {cols.map((col, ci) => (
+                            <td key={col.key}>
+                              {editing && col.key !== "isActive" ? editCell(col, v) : col.render(v)}
+                              {/* On the first cell so it reads as a statement about
+                                  the make, not about whichever column it sits in. */}
+                              {ci === 0 && missing && !editing && (
+                                <div className="bim-attr-missing"
+                                  title={`A template sizes quantities from this make's ${missing.join(", ")}. `
+                                    + "Until it is filled in, leads that pick this make get a blank quantity."}>
+                                  ⚠ no {missing.join(", ")}
+                                </div>
+                              )}
+                            </td>
                           ))}
                           <td>
                             <div className="bim-actions">

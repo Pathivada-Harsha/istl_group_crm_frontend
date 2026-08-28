@@ -1351,21 +1351,15 @@ const VendorManagement = () => {
   });
 
   // ─── API calls ────────────────────────────────────────────────────────────
-  // For ACCOUNTS_*/ADMIN/SUPERADMIN: override User-Role header → SUPERADMIN
-  // so /filters/leads-users returns ALL users (not team-scoped list).
+  // This used to send 'User-Role': 'SUPERADMIN' for privileged users so the backend
+  // would return the unscoped user list. The server no longer reads that header at
+  // all — it scopes the list by the caller's real, session-derived role — so the
+  // override did nothing but assert a role we may not hold. Plain authenticated call.
   const fetchAvailableUsers = async () => {
     try {
-      const overrideRole = isFullAccess ? 'SUPERADMIN' : (user?.role || '');
       const res = await fetch(`${API_BASE_URL}/filters/leads-users`, {
         credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Id':      String(user?.id || ''),
-          'X-User-Id':    String(user?.id || ''),
-          'User-Role':    overrideRole,
-          'X-User-Role':  overrideRole,
-          'Authorization': `Bearer ${localStorage.getItem('authToken')}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
       });
       if (res.ok) {
         const data = await res.json();

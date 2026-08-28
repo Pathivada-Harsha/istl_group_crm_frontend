@@ -6,9 +6,10 @@
 //  Workflow actions commit immediately via `commit`.
 //
 //  Also hosts the "Import from PDF" flow: picking a NIT/tender PDF parses it on
-//  the backend (stateless) and auto-fills empty fields; the file itself is
-//  stored on Save. A "View PDF" button opens the stored (or freshly-picked) file
-//  in an iframe modal, mirroring OrderBook's attached-PO viewer.
+//  the backend (stateless), and the result goes to a review modal — nothing
+//  reaches the form until the user ticks it. The file itself is stored on Save.
+//  A "View PDF" button opens the stored (or freshly-picked) file in an iframe
+//  modal, mirroring OrderBook's attached-PO viewer.
 //
 //  Tab order: Basic Info → Eligibility → Documents → Rate Analysis & Bid →
 //  Workflow → Submission → Result.
@@ -26,6 +27,7 @@ import TenderBoqTab from './TenderBoqTab';
 import TenderWorkflowTab from './TenderWorkflowTab';
 import TenderSubmissionTab from './TenderSubmissionTab';
 import TenderResultTab from './TenderResultTab';
+import TenderImportReviewModal from './TenderImportReviewModal';
 
 const TABS = [
   { k: 'basic', l: 'Basic Info' },
@@ -43,26 +45,23 @@ const TABS = [
 // overriding a failing criterion (on the Eligibility tab) is the way through.
 const GATED_TABS = new Set(['documents', 'boq', 'workflow', 'submission', 'result']);
 
-const isBlank = (v) => v === undefined || v === null || String(v).trim() === '';
-
-// Turn the parser's output into a fill-empty-only patch: scalars overwrite only
-// blank fields; the BOQ / eligibility arrays only seed when currently empty — so
-// re-importing never destroys manual work.
-function applyExtracted(tender, extracted) {
-  const ex = extracted || {};
+// Turn the rows the user ticked in the review modal into a patch. Only what was
+// ticked is written — including over a value already in the form, because the
+// user looked at both and chose. The child arrays arrive as whole collections.
+function patchFromReview(selection) {
   const out = {};
-  Object.entries(ex).forEach(([k, v]) => {
-    if (k === 'boqItems' || k === 'eligibilityCriteria') return;
-    if (isBlank(tender[k])) out[k] = v;
+  Object.entries(selection || {}).forEach(([k, v]) => {
+    if (k === 'boqItems') {
+      // `page` rides along for the review's provenance line only; it is not part
+      // of a BOQ row and must not be saved as one.
+      out.boqItems = v.map(({ page, ...r }) => ({ ...blankBoqItem(r.scope || ''), ...r, _key: genKey() }));
+    } else if (k === 'eligibilityCriteria') {
+      out.eligibilityCriteria = v.map(
+        (r) => ({ ...blankCriterion(r.category || 'Technical'), ...r, _key: genKey() }));
+    } else {
+      out[k] = v;
+    }
   });
-  if (Array.isArray(ex.boqItems) && ex.boqItems.length && (tender.boqItems || []).length === 0) {
-    out.boqItems = ex.boqItems.map((r) => ({ ...blankBoqItem(r.scope || ''), ...r, _key: genKey() }));
-  }
-  if (Array.isArray(ex.eligibilityCriteria) && ex.eligibilityCriteria.length
-      && (tender.eligibilityCriteria || []).length === 0) {
-    out.eligibilityCriteria = ex.eligibilityCriteria.map(
-      (r) => ({ ...blankCriterion(r.category || 'Technical'), ...r, _key: genKey() }));
-  }
   return out;
 }
 
@@ -80,6 +79,9 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
   const pendingPdfRef = useRef(null);                    // File picked but not yet stored (uploaded on Save)
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState('');
+  // Parsed values wait here until the user picks which ones to keep — the
+  // import writes nothing on its own.
+  const [review, setReview] = useState({ open: false, parse: null, file: null });
   const [viewer, setViewer] = useState({ open: false, loading: false, url: '', err: '' });
   const viewerBlobRef = useRef(null);                    // objectURL to revoke on close
 
@@ -157,28 +159,55 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
     });
   }, [eligDecision]);
 
-  // ── import: parse a picked PDF, fill empty fields, stash file for Save ──
+  // ── import: parse a picked PDF, then let the user review before anything
+  //    reaches the form. The file is stashed for Save either way. ──
   const onPickPdf = () => fileInputRef.current && fileInputRef.current.click();
+
+  const runParse = async (file, useAi) => {
+    setImporting(true);
+    setImportMsg('');
+    try {
+      const parse = await tenderApi.parsePdf(file, { ai: useAi });
+      setReview({ open: true, parse, file });
+    } catch (err) {
+      // A failed re-read must not take the regex result down with it — the user
+      // still has a review to work through.
+      if (!useAi) setReview({ open: false, parse: null, file: null });
+      setImportMsg(err.message || 'Import failed');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const onPdfChosen = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (e.target) e.target.value = '';                   // allow re-picking the same file
     if (!file) return;
-    setImporting(true);
-    setImportMsg('');
-    try {
-      const extracted = await tenderApi.parsePdf(file);
-      const changes = applyExtracted(tender, extracted);
-      changes.sourcePdfName = file.name;
-      patch(changes);
-      pendingPdfRef.current = file;
-      const n = Object.keys(changes).filter((k) => k !== 'sourcePdfName').length;
-      setImportMsg(n ? `Filled ${n} field${n === 1 ? '' : 's'} — review & Save` : 'No new fields recognised');
-    } catch (err) {
-      setImportMsg(err.message || 'Import failed');
-    } finally {
-      setImporting(false);
-    }
+    pendingPdfRef.current = file;                        // attached on Save regardless
+    patch({ sourcePdfName: file.name });
+    await runParse(file, false);
+  };
+
+  // Escalation is the user's call, and is offered whether the parse came back
+  // incomplete or came back looking plausible but wrong.
+  const onRereadWithAi = () => {
+    if (review.file) runParse(review.file, true);
+  };
+
+  const onApplyReview = (selection) => {
+    const changes = patchFromReview(selection);
+    patch(changes);
+    const n = Object.keys(changes).length;
+    setImportMsg(n
+      ? `Applied ${n} field${n === 1 ? '' : 's'} — review & Save`
+      : 'Nothing applied');
+    setReview({ open: false, parse: null, file: null });
+  };
+
+  const onCancelReview = () => {
+    setReview({ open: false, parse: null, file: null });
+    // The file still attaches on Save — cancelling declines the values, not the PDF.
+    setImportMsg('Import cancelled — no field was changed');
   };
 
   // ── viewer: blob for a stored tender, or the local file if not yet saved ──
@@ -328,6 +357,18 @@ export default function TenderDetail({ initial, isNew, canCreate = true, canEdit
             </div>
           </div>
         </div>
+      )}
+
+      {review.open && review.parse && (
+        <TenderImportReviewModal
+          parse={review.parse}
+          tender={tender}
+          fileName={review.file && review.file.name}
+          busy={importing}
+          onApply={onApplyReview}
+          onReread={onRereadWithAi}
+          onCancel={onCancelReview}
+        />
       )}
     </div>
   );

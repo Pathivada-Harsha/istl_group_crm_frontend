@@ -2617,3 +2617,90 @@
   height: 38px;
   font-size: 14px;
 }
+/* ── Item source selector ────────────────────────────────────────────────────
+   Replaces the old layout that changed shape depending on which sources happened
+   to exist. All three are always offered; one with nothing to offer is disabled
+   and says why, so the form no longer moves underneath the user. */
+.po-source-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.po-source-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 16px;
+  border: 2px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  background: var(--c-ffffff, #ffffff);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.po-source-card:hover:not(:disabled) { border-color: var(--c-93c5fd, #93c5fd); }
+
+.po-source-card--active {
+  border-color: var(--c-3b82f6, #3b82f6);
+  background: var(--c-eff6ff, #eff6ff);
+}
+
+.po-source-card:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  background: var(--c-f9fafb, #f9fafb);
+}
+
+.po-source-card__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--c-1f2937, #1f2937);
+}
+.po-source-card__hint {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--c-6b7280, #6b7280);
+}
+
+.po-source-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  background: var(--c-f9fafb, #f9fafb);
+}
+
+.po-source-loaded {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--c-374151, #374151);
+}
+
+.po-source-clear,
+.po-source-pick {
+  padding: 6px 13px;
+  border-radius: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.po-source-clear {
+  background: var(--c-fee2e2, #fee2e2);
+  border-color: var(--c-fecaca, #fecaca);
+  color: var(--c-dc2626, #dc2626);
+}
+
+.po-source-pick {
+  background: var(--c-3b82f6, #3b82f6);
+  color: #ffffff;
+}
+.po-source-pick:hover { background: var(--c-2563eb, #2563eb); }

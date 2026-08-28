@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { Repeat } from 'lucide-react';
+import './LeadCardHead.css';
 import api from "../../services/leadsapi.js";
 import "./LeadFollowupsTab.css";
 import FilterSelect from "../Dropdowns/FilterSelect.js";
@@ -127,7 +129,7 @@ export default function LeadFollowupsTab({ lead, currentUser, permissions, onRef
       {/* Header */}
       <div className="lfu-head">
         <div className="lfu-head-left">
-          <h4 className="lfu-heading">Follow-up Log</h4>
+          <span className="lead-card-ico"><Repeat size={17} strokeWidth={2} /></span><h4 className="lfu-heading">Follow-up Log</h4>
           <span className="lfu-count-pill">{followups.length}</span>
           {counts.Overdue > 0 && <span className="lfu-overdue-flag">⚠ {counts.Overdue} overdue</span>}
         </div>

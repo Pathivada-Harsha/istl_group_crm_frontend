@@ -123,7 +123,8 @@ select.lta-inp { cursor: pointer; }
 .lta-c-no { width: 40px; text-align: left; color: var(--ct-9ca3af, #9CA3AF); font-weight: 600; }
 .lta-c-unit { min-width: 120px; }
 .lta-c-item { min-width: 190px; }
-.lta-c-qty { width: 100px; }
+/* Wide enough for the "why this can't size" line to sit under the basis input. */
+.lta-c-qty { width: 150px; }
 .lta-c-amt { width: 155px; white-space: nowrap; }
 .lta-c-basis { width: 120px; }
 .lta-c-move { width: 140px; }
@@ -161,6 +162,46 @@ select.lta-inp { cursor: pointer; }
   font-size: 12px; font-weight: 600; cursor: pointer; transition: all .15s;
 }
 .lta-add-material:hover { background: var(--c-f0f4fb, #F0F4FB); border-color: var(--c-1b3a6b, #1B3A6B); }
+
+/* ── Lines that can't produce a quantity ──────────────────────────────────────
+   A basis is a promise that a quantity can be derived. When the number it needs
+   was never entered, every lead built from this template shows a blank — and the
+   template is the only place that can be fixed, so it is the place that has to
+   say so. Blocking = can never size; warning = works, but not by default. */
+.lta-issues {
+  border-radius: 10px; padding: 10px 14px; font-size: 12px;
+  background: var(--c-fffbeb, #FFFBEB); border: 1px solid var(--c-fde68a, #FDE68A);
+  color: var(--ct-92400e, #92400E);
+}
+.lta-issues--block {
+  background: var(--c-fef2f2, #FEF2F2); border-color: var(--c-fecaca, #FECACA);
+  color: var(--ct-991b1b, #991B1B);
+}
+.lta-issues-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.lta-issues-head .lta-hint { color: inherit; opacity: .8; font-size: 11.5px; }
+.lta-issues-list { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.lta-issues-list li { line-height: 1.45; }
+.lta-issue-warn { opacity: .9; }
+
+.lta-row-block { background: var(--c-fef2f2, #FEF2F2); }
+.lta-row-warn { background: var(--c-fffdf5, #FFFDF5); }
+.lta-issue-dot { margin-left: 4px; font-size: 10px; cursor: help; color: var(--ct-d97706, #D97706); }
+.lta-row-block .lta-issue-dot { color: var(--ct-dc2626, #DC2626); }
+/* Advice, not a fault: a line may legitimately be fixed-quantity, so this is blue
+   and opt-in — it never colours the row or joins the issue count. */
+.lta-cell-advice {
+  display: block; margin-top: 3px; padding: 0; text-align: left;
+  font-size: 10px; line-height: 1.3; font-weight: 700;
+  color: var(--ct-2563eb, #2563EB); background: none; border: none; cursor: pointer;
+}
+.lta-cell-advice:hover { text-decoration: underline; }
+.lta-issue-fix { opacity: .95; }
+[data-theme="dark"] .lta-cell-advice { color: #60A5FA; }
+
+[data-theme="dark"] .lta-issues { background: #2A2312; border-color: #4D3F1D; color: #FCD34D; }
+[data-theme="dark"] .lta-issues--block { background: #2A1212; border-color: #4D1D1D; color: #F87171; }
+[data-theme="dark"] .lta-row-block { background: #2A1212; }
+[data-theme="dark"] .lta-row-warn { background: #241f10; }
 
 /* ── Scope weights ────────────────────────────────────────────────────────────
    Each scope line carries the share of project progress it represents. Unpinned

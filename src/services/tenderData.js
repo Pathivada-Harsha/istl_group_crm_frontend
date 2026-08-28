@@ -79,7 +79,13 @@ export const SECTORS = [
   'Street Lighting', 'BESS / Storage', 'Electrical', 'Civil', 'Other',
 ];
 export const TENDER_TYPES = ['Open', 'Limited', 'EOI', 'RFP', 'RFQ', 'Reverse Auction', 'Nomination'];
-export const SOURCES = ['GeM', 'CPPP', 'State Portal', 'Newspaper', 'Direct / Client', 'Referral', 'Other'];
+// "IREPS / Railways" is its own source, not a state portal: ireps.gov.in is
+// Indian Railways' own e-procurement system, and its tenders are neither GeM
+// nor CPPP.
+export const SOURCES = [
+  'GeM', 'CPPP', 'State Portal', 'IREPS / Railways',
+  'Newspaper', 'Direct / Client', 'Referral', 'Other',
+];
 export const CLIENT_TYPES = ['Government', 'PSU', 'Private', 'Cooperative', 'Individual', 'Developer'];
 export const SUBMISSION_MODES = ['Online Portal', 'Physical', 'Email', 'Both'];
 export const LOSS_REASONS = [

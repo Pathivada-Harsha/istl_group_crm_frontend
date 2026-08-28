@@ -215,11 +215,11 @@ function Sidebar({ isOpen, onClose, collapsed, onToggleCollapse }) {
         },
         {
           // PROVISIONAL — temporary Orders in Line register, see the page file
-          // header. Reuses the Leads permission on purpose: no new permission
-          // code means no role configuration to unwind on removal.
+          // header. Has its own menu permission (menu_items.sales_orders_in_pipeline)
+          // so it can be granted independently of Leads.
           name: 'Orders in Pipeline',
           path: '/sales/orders-in-line',
-          permission: 'SALES_LEADS',
+          permission: 'SALES_ORDERS_IN_PIPELINE',
           // Inbox tray — an enquiry waiting to be picked up. Distinct from the
           // people icon on Leads and the ledger icon on OrderBook.
           icon: 'M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4',

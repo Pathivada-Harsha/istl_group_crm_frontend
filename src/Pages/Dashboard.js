@@ -7,7 +7,23 @@ import { AuthContext } from "../context/AuthContext";
 import "../pages-css/Dashboard.css";
 // Solar Capacity tile is currently hidden — see components/dashboard/ProjectCapacityKpi.js
 // to re-enable (one import here, one <ProjectCapacityKpi /> in the KPI grid below).
-import OrdersInLineDashboardBlock from "../components/dashboard/OrdersInLineDashboardBlock"; // PROVISIONAL add-on — self-contained, fails silently, delete this line and its JSX usage to remove
+// The Orders-in-Pipeline KPI tiles were folded into the Pipeline Value card, so
+// the dashboard now calls that summary endpoint directly instead of mounting
+// components/dashboard/OrdersInLineDashboardBlock (still used nowhere else).
+import ordersInLineApi from "../services/ordersInLineApi";
+// Admin dashboard only. Both already ship with the app — no new dependency.
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from "recharts";
+import {
+  ReceiptIndianRupee, BarChart3, Users, ShoppingBag, ClipboardCheck, Activity,
+  Building2, Briefcase, CheckCircle2, UserCheck,
+  ArrowUp, ArrowDown, ArrowRight,
+  // Manager / BD / Telecaller / Generic — these replace the emoji that used to
+  // be handed to the old KpiCard, so every dashboard speaks one icon language.
+  ClipboardList, RefreshCw, Wallet, FileText, MessagesSquare, PhoneCall,
+  CalendarClock, AlertTriangle, XCircle, Clock, Target, TrendingUp, Sparkles,
+} from "lucide-react";
 
 const API_BASE = process.env.REACT_APP_API_URL || "http://localhost:8080";
 const USER_KEY = "bd_portal_user";
@@ -56,6 +72,14 @@ const fmtMoney = (n) => {
 };
 
 const fmtNum = (n) => (n ?? 0).toLocaleString("en-IN");
+
+/* kW in, human-readable capacity out. */
+const fmtCapacity = (kwRaw) => {
+  const kw = typeof kwRaw === "string" ? parseFloat(kwRaw) : Number(kwRaw);
+  if (!Number.isFinite(kw) || kw <= 0) return null;
+  if (kw >= 1000) return `${(kw / 1000).toLocaleString("en-IN", { maximumFractionDigits: 2 })} MW`;
+  return `${kw.toLocaleString("en-IN", { maximumFractionDigits: 2 })} kW`;
+};
 
 const fmtDate = (d) => {
   if (!d) return "—";
@@ -115,73 +139,6 @@ const Empty   = ({ icon = "📭", msg = "No data available" }) => (
   <div className="rd-empty"><div className="rd-empty-icon">{icon}</div>{msg}</div>
 );
 
-/* `onClick` is optional — cards without it behave exactly as before. */
-const KpiCard = ({ label, value, sub, accent = "#3b82f6", iconBg = "#eff6ff", icon, onClick }) => (
-  <div
-    className="rd-kpi-card"
-    style={{ "--kpi-accent": accent, "--kpi-icon-bg": iconBg, cursor: onClick ? "pointer" : undefined }}
-    onClick={onClick}
-    role={onClick ? "button" : undefined}
-    tabIndex={onClick ? 0 : undefined}
-    onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
-  >
-    <div className="rd-kpi-icon">{icon}</div>
-    <div className="rd-kpi-label">{label}</div>
-    <div className="rd-kpi-value">{value ?? "—"}</div>
-    {sub && <div className="rd-kpi-sub">{sub}</div>}
-  </div>
-);
-
-/* Card with FIXED HEIGHT and internal scroll */
-const Card = ({ title, sub, right, children, height = 340, noBodyPad = false }) => (
-  <div className="rd-card" style={{ height, display: "flex", flexDirection: "column" }}>
-    {title && (
-      <div className="rd-card-head" style={{ flexShrink: 0 }}>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div
-            className="rd-card-title"
-            style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", margin: 0, lineHeight: 1.3, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-          >
-            {title}
-          </div>
-          {sub && (
-            <div
-              className="rd-card-sub"
-              style={{ fontSize: 11, color: "#94a3b8", marginTop: 2, fontWeight: 400 }}
-            >
-              {sub}
-            </div>
-          )}
-        </div>
-        {right}
-      </div>
-    )}
-    <div
-      className="rd-card-body rd-card-scroll"
-      style={{ padding: noBodyPad ? 0 : "14px 18px", flex: 1, minHeight: 0 }}
-    >
-      {children}
-    </div>
-  </div>
-);
-
-/* Tall card for tables that need more space — fixed height, internal scroll */
-const TallCard = ({ title, sub, right, children }) => (
-  <Card title={title} sub={sub} right={right} height={440} noBodyPad>
-    {children}
-  </Card>
-);
-
-// "View more" link that navigates to the full Team Lead Performance page.
-const ViewMoreBtn = () => {
-  const navigate = useNavigate();
-  return (
-    <button className="rd-viewmore" onClick={() => navigate('/team-performance')}>
-      View more
-    </button>
-  );
-};
-
 const MiniBarChart = ({ data = [], color = "#3b82f6" }) => {
   const max = Math.max(...data.map(d => d.value ?? d.v ?? 0), 1);
   return (
@@ -203,121 +160,11 @@ const MiniBarChart = ({ data = [], color = "#3b82f6" }) => {
   );
 };
 
-const Funnel = ({ stages = [] }) => {
-  const max = Math.max(stages[0]?.value || 1, 1);
-  const colors = ["#3b82f6", "#8b5cf6", "#f59e0b", "#10b981", "#ef4444"];
-  return (
-    <div className="rd-funnel">
-      {stages.map((s, i) => (
-        <div key={i} className="rd-funnel-row">
-          <div className="rd-funnel-labels">
-            <span className="rd-funnel-stage">{s.label}</span>
-            <span className="rd-funnel-val">{fmtNum(s.value)}</span>
-          </div>
-          <div className="rd-funnel-bar-bg">
-            <div className="rd-funnel-bar-fill"
-              style={{ width: `${Math.max((s.value / max) * 100, 2)}%`, background: colors[i % colors.length] }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-/* ─── Follow-up block (scrollable inside fixed card) ────────────────────────── */
-const FollowupBlock = ({ todayCount = 0, overdueCount = 0, upcomingCount = 0, followups = [] }) => (
-  <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-    <div className="rd-followup-stats" style={{ flexShrink: 0 }}>
-      <div className="rd-fu-stat">
-        <div className="rd-fu-stat-value rd-fu-today">{todayCount}</div>
-        <div className="rd-fu-stat-label">Today</div>
-      </div>
-      <div className="rd-fu-stat">
-        <div className="rd-fu-stat-value rd-fu-overdue">{overdueCount}</div>
-        <div className="rd-fu-stat-label">Overdue</div>
-      </div>
-      <div className="rd-fu-stat">
-        <div className="rd-fu-stat-value rd-fu-upcoming">{upcomingCount}</div>
-        <div className="rd-fu-stat-label">Upcoming</div>
-      </div>
-    </div>
-    {followups.length === 0
-      ? <Empty icon="✅" msg="All follow-ups are up to date!" />
-      : (
-        <div className="rd-followup-list" style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
-          {followups.map((f, i) => {
-            const dd = daysDiff(f.scheduledAt);
-            const cls = dd < 0 ? "overdue" : dd === 0 ? "today" : "upcoming";
-            const dotColor = dd < 0 ? "#ef4444" : dd === 0 ? "#3b82f6" : "#f59e0b";
-            return (
-              <div key={f.id || i} className={`rd-fu-item ${cls}`}>
-                <div className="rd-fu-dot" style={{ background: dotColor }} />
-                <div className="rd-fu-content">
-                  <div className="rd-fu-lead-name">{f.leadName || `Follow-up #${f.id}`}</div>
-                  <div className="rd-fu-meta">
-                    {f.followupType || "Call"} · {fmtDate(f.scheduledAt)}
-                    {f.assignedToName && ` · ${f.assignedToName}`}
-                  </div>
-                </div>
-                <div className="rd-fu-days" style={{ color: dotColor }}>
-                  {dd < 0 ? `${Math.abs(dd)}d overdue` : dd === 0 ? "Today" : `In ${dd}d`}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )
-    }
-  </div>
-);
-
-/* ─── Team table ─────────────────────────────────────────────────────────────── */
-const TeamTable = ({ members = [] }) => {
-  if (!members.length) return <Empty icon="👥" msg="No team members found. Ask admin to assign team members to you." />;
-  return (
-    <div style={{ overflowX: 'auto', width: '100%' }}>
-    <table className="rd-table" style={{ width: "100%", minWidth: 620 }}>
-      <thead>
-        <tr>
-          <th>Member</th><th>Role</th><th style={{textAlign:'center'}}>Leads</th><th style={{textAlign:'center'}}>Won</th>
-          <th style={{textAlign:'right'}}>Revenue</th><th style={{textAlign:'center'}}>Props</th><th style={{textAlign:'center'}}>FU Done</th><th style={{textAlign:'center'}}>FU Pend.</th><th style={{textAlign:'center'}}>Rate</th>
-        </tr>
-      </thead>
-      <tbody>
-        {members.map((t, i) => {
-          const rs = roleBadgeStyle(t.role);
-          return (
-            <tr key={i}>
-              <td style={{maxWidth: 110, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>
-                <div className="rd-team-member-cell">
-                  <div className="rd-avatar" style={{ background: rs.background, color: rs.color }}>
-                    {(t.name || "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
-                  </div>
-                  <span className="name-cell" style={{overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{t.name}</span>
-                </div>
-              </td>
-              <td><span className="rd-badge" style={{...rs, whiteSpace:'nowrap', fontSize:10}}>{roleFmt(t.role)}</span></td>
-              <td style={{textAlign:'center'}}>{fmtNum(t.leadsHandled)}</td>
-              <td style={{ color: "#059669", fontWeight: 700, textAlign:'center' }}>{fmtNum(t.leadsWon)}</td>
-              <td style={{ color: "#059669", textAlign:'right' }}>{t.revenue ? fmtMoney(t.revenue) : "—"}</td>
-              <td style={{textAlign:'center'}}>{fmtNum(t.proposalsSent)}</td>
-              <td style={{textAlign:'center'}}>{fmtNum(t.followupsDone)}</td>
-              <td style={{ color: t.followupsPending > 0 ? "#f59e0b" : "#10b981", textAlign:'center' }}>{fmtNum(t.followupsPending)}</td>
-              <td style={{textAlign:'center'}}><span style={{ fontWeight: 700, color: t.conversionRate > 20 ? "#059669" : "#374151" }}>{t.conversionRate ?? 0}%</span></td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-    </div>
-  );
-};
-
 /* ─── Leads table ─────────────────────────────────────────────────────────────── */
 const LeadsTable = ({ leads = [], emptyMsg = "No leads found" }) => {
   if (!leads.length) return <Empty icon="📂" msg={emptyMsg} />;
   return (
-    <table className="rd-table" style={{ width: "100%" }}>
+    <table className="rd-table rd-ad-table compact auto" style={{ width: "100%" }}>
       <thead>
         <tr><th>Lead Name</th><th>Status</th><th>Group</th><th>Source</th><th>Date</th></tr>
       </thead>
@@ -340,7 +187,7 @@ const LeadsTable = ({ leads = [], emptyMsg = "No leads found" }) => {
 const ProposalsTable = ({ proposals = [] }) => {
   if (!proposals.length) return <Empty icon="📄" msg="No proposals yet" />;
   return (
-    <table className="rd-table" style={{ width: "100%" }}>
+    <table className="rd-table rd-ad-table compact auto" style={{ width: "100%" }}>
       <thead>
         <tr><th>Proposal No</th><th>Lead</th><th>Value</th><th>Status</th><th>Date</th></tr>
       </thead>
@@ -395,10 +242,420 @@ const TaskList = ({ tasks = [] }) => {
 
 /* ═══════════════════════════════════════════════════════════════════════════════
    SUPER ADMIN / ADMIN
+   ───────────────────────────────────────────────────────────────────────────────
+   Everything named Ad* below is ADMIN-ONLY on purpose. The shared helpers above
+   (Card / TallCard / KpiCard / Funnel / FollowupBlock / TeamTable) are each
+   rendered by three to five role dashboards, so redesigning the admin view means
+   adding components BESIDE them — never restyling theirs.
+
+   Colour lives in Dashboard.css under the rd-ad-* namespace. Inline hex in JSX
+   bypasses theme.css's --c-* / --ct-* token layer and would not flip in dark
+   mode; the only hex kept here is what recharts needs as a literal SVG prop.
+
+   Every field added to /dashboard/admin is read defensively (?? / ?.) so this
+   page renders correctly against a backend that has not been updated yet.
 ═══════════════════════════════════════════════════════════════════════════════ */
+
+/* recharts needs real colour literals for stroke/fill — CSS vars are only safe
+   on the props that take a plain string (grid stroke, tick fill). */
+const AD_BLUE   = "#2563eb";
+const AD_PURPLE = "#7c3aed";
+
+/* Growth pill. Renders NOTHING when the backend has no delta for this KPI, so a
+   dashboard talking to an older API degrades quietly instead of claiming 0%. */
+const AdDelta = ({ value }) => {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  const up = n >= 0;
+  const Arrow = up ? ArrowUp : ArrowDown;
+  return (
+    <div className="rd-ad-delta-wrap">
+      <div className={`rd-ad-delta ${up ? "up" : "down"}`}>
+        <Arrow size={13} strokeWidth={2.8} />
+        {up ? "" : "-"}{Math.abs(n).toFixed(1)}%
+      </div>
+      <div className="rd-ad-delta-note">vs last month</div>
+    </div>
+  );
+};
+
+/* `sub` is the descriptor line the role dashboards carry ("45% conv.",
+   "3 accepted") where admin carries a month-over-month `delta`. Optional and
+   additive: the admin cards never pass it, so they render exactly as before. */
+const AdKpiCard = ({ label, value, sub, delta, extra, icon: Icon, tone = "blue", onClick }) => (
+  <div
+    className={`rd-ad-kpi rd-ad-tone-${tone}`}
+    style={{ cursor: onClick ? "pointer" : undefined }}
+    onClick={onClick}
+    role={onClick ? "button" : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+  >
+    <div className="rd-ad-kpi-top">
+      <div className="rd-ad-kpi-icon"><Icon size={19} strokeWidth={2.1} /></div>
+      <div className="rd-ad-kpi-body">
+        <div className="rd-ad-kpi-label">{label}</div>
+        <div className="rd-ad-kpi-value">{value ?? "—"}</div>
+        <div className="rd-ad-kpi-foot">
+          <AdDelta value={delta} />
+          {sub && <span className="rd-ad-kpi-sub">{sub}</span>}
+          {extra && <span className="rd-ad-kpi-extra">{extra}</span>}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+/* Admin KPI tile in the ORIGINAL block style: coloured rule across the top, icon,
+   label, figure, caption. Admin briefly used AdKpiCard's horizontal icon-beside-text
+   layout; this restores the block look while keeping the growth pill.
+
+   It reuses .rd-kpi-card — the same class the Orders-in-Pipeline tiles already draw
+   with — so there is one definition of the block, not a copy. Only the admin row
+   uses it; every other dashboard keeps AdKpiCard untouched.
+
+   NO growth pill. The "vs last month" deltas were removed from this row: they are
+   computed against the previous calendar month, so early in a month — or on any
+   figure that is a running total rather than a period flow — they printed things
+   like +1276% and +2482%, which is noise dressed up as insight. The KPI is the
+   number; the trend lives in the Order Book Overview chart below. */
+const AdBlockKpi = ({ label, value, sub, strongSub = false, accent, iconBg, icon: Icon, onClick }) => (
+  <div
+    className="rd-kpi-card"
+    style={{ "--kpi-accent": accent, "--kpi-icon-bg": iconBg, cursor: onClick ? "pointer" : undefined }}
+    onClick={onClick}
+    role={onClick ? "button" : undefined}
+    tabIndex={onClick ? 0 : undefined}
+    onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+  >
+    <div className="rd-kpi-icon" style={{ color: accent }}><Icon size={17} strokeWidth={2.2} /></div>
+    <div className="rd-kpi-label">{label}</div>
+    <div className="rd-kpi-value">{value ?? "—"}</div>
+    {/* strongSub promotes the caption to a second headline figure — used for the
+        capacity under Expected Order Value, which is a number in its own right. */}
+    {sub && (
+      <div className="rd-kpi-sub"
+           style={strongSub ? { fontSize: 13, fontWeight: 700, color: "var(--ct-0f172a, #0f172a)", marginTop: 2 } : undefined}>
+        {sub}
+      </div>
+    )}
+  </div>
+);
+
+/* Section shell. Deliberately NOT the shared <Card>, which hard-codes an inline
+   pixel height and is fought by an !important block in Dashboard.css.
+   Flex column so a card that spans two grid rows can give its body the slack. */
+const AdCard = ({ title, right, children, bodyClass = "" }) => (
+  <section className="rd-ad-card">
+    {(title || right) && (
+      <header className="rd-ad-card-head">
+        <h3 className="rd-ad-card-title">{title}</h3>
+        {right}
+      </header>
+    )}
+    <div className={`rd-ad-card-body ${bodyClass}`}>{children}</div>
+  </section>
+);
+
+/* ─── Revenue overview ───────────────────────────────────────────────────────── */
+const AdChartTip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rd-ad-tip">
+      {label && <div className="rd-ad-tip-label">{label}</div>}
+      {payload.map((p, i) => (
+        <div key={i} className="rd-ad-tip-row">
+          <span className="rd-ad-tip-dash" style={{ borderTopColor: p.color || p.stroke }} />
+          <span className="rd-ad-tip-name">{p.name}</span>
+          <b className="rd-ad-tip-val">{fmtMoney(p.value)}</b>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* Named for what the series actually holds. The solid line is monthlyRevenue(),
+   which sums order_book.total_amount — orders BOOKED in each month, not money
+   received. Calling that "Revenue" implied cash collected and put it in direct
+   conflict with the Total Billed Value tile above, which is the invoiced figure
+   and is much smaller. The dashed line is open proposals, i.e. what is not
+   booked yet. Both are order-book quantities, so the card is named for that. */
+const AdOrderBookChart = ({ data = [] }) => {
+  if (!data.length) return <Empty icon="📈" msg="No order history yet" />;
+  return (
+    <>
+      <div className="rd-ad-axis-cap">Amount (Cr)</div>
+      {/* flex:1 + minHeight:0 lets the plot absorb whatever height the stretched
+          card has left over, instead of leaving a gap under a fixed 218px. */}
+      <div style={{ flex: 1, minHeight: 0 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 4, right: 10, bottom: 0, left: -16 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--c-f1f5f9, #f1f5f9)" vertical={false} />
+          {/* Backend labels are "Aug 26"; the axis only needs the month. */}
+          <XAxis dataKey="label" tickFormatter={(v) => String(v).split(" ")[0]}
+                 tick={{ fontSize: 11, fill: "var(--ct-94a3b8, #94a3b8)" }}
+                 tickLine={false} axisLine={false} dy={4} />
+          <YAxis tick={{ fontSize: 11, fill: "var(--ct-94a3b8, #94a3b8)" }}
+                 tickLine={false} axisLine={false} width={52}
+                 tickFormatter={(v) => (Number(v) / 1e7).toFixed(0)} />
+          <Tooltip content={<AdChartTip />} cursor={{ stroke: "var(--c-cbd5e1, #cbd5e1)", strokeWidth: 1 }} />
+          <Line type="linear" dataKey="revenue" name="Booked" stroke={AD_BLUE}
+                strokeWidth={2.4} dot={{ r: 2.5, fill: AD_BLUE, strokeWidth: 0 }}
+                activeDot={{ r: 5, fill: AD_BLUE, strokeWidth: 0 }} />
+          <Line type="linear" dataKey="pipeline" name="Expected" stroke={AD_PURPLE}
+                strokeWidth={2} strokeDasharray="5 4" dot={false}
+                activeDot={{ r: 5, fill: AD_PURPLE, strokeWidth: 0 }} />
+        </LineChart>
+      </ResponsiveContainer>
+      </div>
+      <div className="rd-ad-legend">
+        <span className="rd-ad-leg"><i className="rd-ad-leg-line solid" />Booked</span>
+        <span className="rd-ad-leg"><i className="rd-ad-leg-line dash" />Expected</span>
+      </div>
+    </>
+  );
+};
+
+/* ─── Lead funnel ────────────────────────────────────────────────────────────── */
+const AD_FUNNEL_TONES = ["blue", "indigo", "orange", "amber", "green"];
+
+/* The silhouette is a TEMPLATE, not a bar chart: every band tapers into the one
+   below it by the same fixed step, so the picture is always a clean funnel and
+   the figures on the right carry the data.
+
+   It used to scale each band to its own value against the largest stage. That
+   drew an hourglass whenever a middle stage sagged, and an upside-down funnel
+   whenever a later stage outran an earlier one — "4 leads → 2 proposals →
+   7 closed won" came out as a diamond widening towards the bottom. Both are
+   fixed at the source now (the backend feeds cumulative "reached this stage or
+   beyond" counts over one lead set), but the geometry no longer depends on that
+   holding: bad data shows up as a flagged percentage in the legend, which is
+   readable, instead of as a deformed shape, which is not. */
+const AD_FN_TOP_W = 100;   // widest band, % of the shape box
+const AD_FN_BOT_W = 30;    // the neck
+
+const AdFunnel = ({ stages = [], total = 0 }) => {
+  const rows = (stages || []).filter(Boolean);
+  if (!rows.length) return <Empty icon="🧭" msg="No funnel data yet" />;
+
+  const n    = rows.length;
+  const val  = (s) => Math.max(Number(s?.value) || 0, 0);
+  /* Conversion is measured against the top stage — the explicit `total` when the
+     caller passes one, otherwise the first stage, which is the same thing. */
+  const base = Math.max(Number(total) || val(rows[0]), 1);
+
+  /* n bands need n+1 boundary widths, stepped evenly from the mouth to the neck. */
+  const edgeW = (i) => AD_FN_TOP_W - (AD_FN_TOP_W - AD_FN_BOT_W) * (i / n);
+  const sides = (w) => [(100 - w) / 2, (100 + w) / 2];
+
+  return (
+    <div className="rd-ad-funnel">
+      <div className="rd-ad-funnel-shape">
+        {rows.map((s, i) => {
+          const [tl, tr] = sides(edgeW(i));
+          const [bl, br] = sides(edgeW(i + 1));
+          const pct = (val(s) / base) * 100;
+          return (
+            <div
+              key={i}
+              className={`rd-ad-fn-seg rd-ad-tone-${AD_FUNNEL_TONES[i % AD_FUNNEL_TONES.length]}`}
+              style={{ clipPath: `polygon(${tl}% 0, ${tr}% 0, ${br}% 100%, ${bl}% 100%)` }}
+              title={`${s.label}: ${fmtNum(val(s))}${i ? ` — ${pct.toFixed(1)}% of ${fmtNum(base)}` : ""}`}
+            >
+              <span className="rd-ad-fn-num">{fmtNum(val(s))}</span>
+            </div>
+          );
+        })}
+      </div>
+      <ul className="rd-ad-funnel-legend">
+        {rows.map((s, i) => {
+          const pct  = (val(s) / base) * 100;
+          const prev = i > 0 ? val(rows[i - 1]) : null;
+          /* A stage larger than the one above it is a data problem, not a shape
+             problem. Flag the row and leave the silhouette alone. */
+          const odd  = prev !== null && val(s) > prev;
+          return (
+            <li key={i} className={`rd-ad-fn-row rd-ad-tone-${AD_FUNNEL_TONES[i % AD_FUNNEL_TONES.length]}`}>
+              <span className="rd-ad-fn-dot" />
+              <span className="rd-ad-fn-name">{s.label}</span>
+              <span className="rd-ad-fn-val">{fmtNum(val(s))}</span>
+              {i > 0 && (
+                <span
+                  className={`rd-ad-fn-pct${odd ? " warn" : ""}`}
+                  title={odd ? `Higher than "${rows[i - 1].label}" above it` : undefined}
+                >
+                  ({pct.toFixed(1)}%)
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+};
+/* ─── Business snapshot ──────────────────────────────────────────────────────── */
+const AdSnapshot = ({ snap = {} }) => {
+  const tiles = [
+    { label: "Total Projects",   value: snap.totalProjects,     icon: Building2,    tone: "blue"   },
+    { label: "Active Projects",  value: snap.activeProjects,    icon: Activity,     tone: "green"  },
+    { label: "Completed",        value: snap.completedProjects, icon: CheckCircle2, tone: "green"  },
+    { label: "Total Customers",  value: snap.totalCustomers,    icon: Users,        tone: "orange" },
+    { label: "Active Customers", value: snap.activeCustomers,   icon: UserCheck,    tone: "indigo" },
+    { label: "Total Vendors",    value: snap.totalVendors,      icon: Briefcase,    tone: "amber"  },
+  ];
+  return (
+    <div className="rd-ad-snap">
+      {tiles.map((t, i) => (
+        <div key={i} className={`rd-ad-snap-tile rd-ad-tone-${t.tone}`}>
+          <div className="rd-ad-snap-icon"><t.icon size={16} strokeWidth={2.2} /></div>
+          <div className="rd-ad-snap-text">
+            <div className="rd-ad-snap-value">{fmtNum(t.value)}</div>
+            <div className="rd-ad-snap-label">{t.label}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+/* ─── Team performance ───────────────────────────────────────────────────────── */
+const AdTeamTable = ({ members = [] }) => {
+  if (!members.length) return <Empty icon="👥" msg="No team activity recorded yet" />;
+  return (
+    <div className="rd-ad-table-wrap rd-ad-scroll">
+      <table className="rd-table rd-ad-table compact">
+        <thead>
+          <tr>
+            <th>Member</th><th>Role</th>
+            <th className="num">Leads</th><th className="num">Won</th>
+            <th className="num">Revenue</th><th className="num">Win Rate</th>
+          </tr>
+        </thead>
+        <tbody>
+          {/* Every member renders; .rd-ad-scroll caps the card height and the
+              sticky header keeps the columns readable while scrolling. */}
+          {members.map((t, i) => {
+            const rs = roleBadgeStyle(t.role);
+            const rate = Number(t.conversionRate ?? 0);
+            return (
+              <tr key={t.userId ?? i}>
+                <td>
+                  <div className="rd-team-member-cell">
+                    <div className="rd-avatar" style={{ background: rs.background, color: rs.color }}>
+                      {(t.name || "").split(" ").map(w => w[0]).join("").slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="name-cell">{t.name || "—"}</span>
+                  </div>
+                </td>
+                <td><span className="rd-badge rd-ad-role" style={rs}>{roleFmt(t.role)}</span></td>
+                <td className="num">{fmtNum(t.leadsHandled)}</td>
+                <td className="num rd-ad-won">{fmtNum(t.leadsWon)}</td>
+                {/* Blank rather than a misleading ₹0 when a member has booked nothing. */}
+                <td className="num rd-ad-rev">{t.revenue ? fmtMoney(t.revenue) : "—"}</td>
+                <td className={`num rd-ad-rate ${rate > 0 ? "good" : ""}`}>{rate}%</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+/* ─── Attention required ─────────────────────────────────────────────────────── */
+const AdAttention = ({ overdue = 0, today = 0, upcoming = 0, followups = [], onViewAll }) => (
+  <div className="rd-ad-att">
+    <div className="rd-ad-att-counts">
+      <div className="rd-ad-att-count overdue">
+        <div className="rd-ad-att-num">{fmtNum(overdue)}</div>
+        <div className="rd-ad-att-cap">Overdue</div>
+      </div>
+      <div className="rd-ad-att-count today">
+        <div className="rd-ad-att-num">{fmtNum(today)}</div>
+        <div className="rd-ad-att-cap">Today</div>
+      </div>
+      <div className="rd-ad-att-count upcoming">
+        <div className="rd-ad-att-num">{fmtNum(upcoming)}</div>
+        <div className="rd-ad-att-cap">Upcoming</div>
+      </div>
+    </div>
+    {!followups.length ? (
+      <Empty icon="✅" msg="All follow-ups are up to date!" />
+    ) : (
+      <div className="rd-ad-att-list">
+        {followups.map((f, i) => {
+          const dd = daysDiff(f.scheduledAt);
+          const cls = dd < 0 ? "overdue" : dd === 0 ? "today" : "upcoming";
+          return (
+            <div key={f.id ?? i} className={`rd-ad-att-item ${cls}`}>
+              <span className="rd-ad-att-dot" />
+              <div className="rd-ad-att-main">
+                <div className="rd-ad-att-name">{f.leadName || `Follow-up #${f.id}`}</div>
+                <div className="rd-ad-att-meta">
+                  {f.followupType || "Call"} - {fmtDate(f.scheduledAt)}
+                  {f.assignedToName && ` - ${f.assignedToName}`}
+                </div>
+              </div>
+              <div className="rd-ad-att-when">
+                {dd < 0 ? `${Math.abs(dd)}d overdue` : dd === 0 ? "Today" : `In ${dd}d`}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    )}
+    <button type="button" className="rd-ad-att-all" onClick={onViewAll}>
+      View all follow-ups <ArrowRight size={13} strokeWidth={2.4} />
+    </button>
+  </div>
+);
+
+/* ─── Recent orders ──────────────────────────────────────────────────────────── */
+const AdOrdersTable = ({ orders = [] }) => {
+  if (!orders.length) return <Empty icon="📦" msg="No orders yet" />;
+  return (
+    <div className="rd-ad-table-wrap">
+      <table className="rd-table rd-ad-table">
+        <thead>
+          <tr>
+            <th>Order ID</th><th>Customer</th><th>Segment</th>
+            <th className="num">Amount</th><th>Status</th><th className="num">Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {orders.map((o, i) => (
+            <tr key={o.id ?? i}>
+              <td className="rd-ad-code">{o.orderBookNo || "—"}</td>
+              <td className="name-cell">{o.customerName || "—"}</td>
+              <td className="rd-ad-muted">
+                {[o.groupName, o.subGroupName].filter(Boolean).join(" / ") || "—"}
+              </td>
+              <td className="num rd-ad-rev">{fmtMoney(o.totalAmount)}</td>
+              <td>{statusBadge(o.status)}</td>
+              <td className="num rd-ad-muted">{fmtDate(o.orderDate)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+/* ─── The dashboard ──────────────────────────────────────────────────────────── */
+/* The greeting banner (name, date, "Company Overview" chip) is rendered by the
+   shared RoleDashboard wrapper below and is intentionally left untouched. */
 const SuperAdminDashboard = () => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
+  /* The backend returns a fixed 8-month window; this only narrows what is drawn. */
+  const [range, setRange] = useState("year");
+  /* Orders-in-pipeline summary: the Pipeline Value card shows its estimated
+     value and capacity. Separate endpoint, so it fails silently and the card
+     falls back to the proposals-based figure — it must never take the
+     dashboard down with it. */
+  const [oil, setOil] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -407,89 +664,177 @@ const SuperAdminDashboard = () => {
       .catch(e => setErr(e.message));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    ordersInLineApi.getSummary()
+      .then(sum => { if (!cancelled) setOil(sum); })
+      .catch(() => { /* optional enrichment — ignore */ });
+    return () => { cancelled = true; };
+  }, []);
+
   if (!d && !err) return <Spinner />;
   if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
+  const trend = (d.monthlyTrend ?? []).map(m => ({
+    label:    m.label,
+    revenue:  Number(m.revenue ?? 0),
+    pipeline: Number(m.pipeline ?? 0),
+  }));
+  /* Labels are "MMM yy" — "This Year" keeps the ones whose year matches today's. */
+  const yy      = String(new Date().getFullYear()).slice(2);
+  const shown   = range === "year" ? trend.filter(m => String(m.label).endsWith(yy))
+                : range === "6"    ? trend.slice(-6)
+                :                    trend.slice(-3);
+  const upcoming = Math.max(
+    0,
+    (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0)
+  );
+
   return (
-    <div>
-      {/* Headline tiles, in the order the business reads them: booked work first,
-          then the capacity behind it, then what is still only prospective.
-          auto-fit so the row stays full-width whichever add-on tiles render. */}
-      <div className="rd-kpi-grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))" }}>
-        <KpiCard
-          label="Order Book" value={fmtMoney(d.orderBookValue)} sub={`${fmtNum(d.totalOrders)} orders`}
-          accent="#06b6d4" iconBg="#ecfeff" icon="💰"
-          onClick={() => navigate("/order-book")}
+    <div className="rd-ad">
+      {/* ── KPI row ── */}
+      {/* Five blocks, ordered the way the business reads them: what is booked,
+          how many bookings that is, what is expected next and at what capacity,
+          how many of those are still unconfirmed, and the leads feeding it all.
+
+          "Total Revenue" is gone. It was d.totalRevenue — sumConfirmedRevenue()
+          over the SAME order_book rows as Order Book beside it, so the two tiles
+          printed the same figure (₹576.38 Cr vs ₹576.39 Cr, differing only by
+          rounding) and it read as two separate achievements.
+
+          The grid stays .rd-ad-kpis: it already carries the 5 → 3 → 2 → 1 column
+          breakpoints. Only the tile inside it changed. */}
+      <div className="rd-ad-kpis">
+        <AdBlockKpi
+          label="Order Book"
+          value={fmtMoney(d.orderBookValue)}
+          sub={`${fmtNum(d.totalOrders)} orders`}
+          accent="#10b981" iconBg="#ecfdf5"
+          icon={ShoppingBag} onClick={() => navigate("/order-book")}
         />
-        <OrdersInLineDashboardBlock />
-        <KpiCard
-          label="Total Leads" value={fmtNum(d.totalLeads)} sub={`+${fmtNum(d.leadsThisMonth)} this month`}
-          accent="#3b82f6" iconBg="#eff6ff" icon="🎯"
-          onClick={() => navigate("/sales/leads")}
+        <AdBlockKpi
+          label="Confirmed Orders"
+          value={fmtNum(d.totalOrders)}
+          sub="Booked & confirmed"
+          accent="#3b82f6" iconBg="#eff6ff"
+          icon={ClipboardCheck} onClick={() => navigate("/order-book")}
+        />
+        {/* Billed, NOT booked. An order is booked once and then invoiced in
+            stages, so this trails Order Book on purpose — the gap between the two
+            is what is still to be raised. */}
+        <AdBlockKpi
+          label="Total Billed Value"
+          value={fmtMoney(d.totalBilledValue ?? 0)}
+          sub={`${fmtNum(d.totalInvoices ?? 0)} invoices`}
+          accent="#0ea5e9" iconBg="#e0f2fe"
+          icon={ReceiptIndianRupee} onClick={() => navigate("/sales/invoices")}
+        />
+        <AdBlockKpi
+          label="Expected Order Value"
+          value={fmtMoney(oil?.openEstimatedValue ?? d.pipelineValue ?? 0)}
+          /* Capacity rides on this tile rather than getting one of its own —
+             it is the same pipeline measured in MW instead of rupees. */
+          sub={fmtCapacity(oil?.openCapacityKw) || "Capacity not estimated"}
+          strongSub={!!fmtCapacity(oil?.openCapacityKw)}
+          accent="#8b5cf6" iconBg="#f5f3ff"
+          icon={BarChart3} onClick={() => navigate("/sales/orders-in-line")}
+        />
+        <AdBlockKpi
+          label="Orders in Pipeline"
+          value={fmtNum(oil?.openCount ?? 0)}
+          sub="Unconfirmed prospects"
+          accent="#f59e0b" iconBg="#fffbeb"
+          icon={FileText} onClick={() => navigate("/sales/orders-in-line")}
+        />
+        <AdBlockKpi
+          label="Active Leads"
+          value={fmtNum(d.activeLeads)}
+          sub={`${fmtNum(d.totalLeads)} total`}
+          accent="#6366f1" iconBg="#eef2ff"
+          icon={Users} onClick={() => navigate("/sales/leads")}
         />
       </div>
 
-      {/* Row 1: Chart + Pipeline side by side */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <Card title="📈 Monthly Leads" sub="New leads per month" height={260}>
-          <MiniBarChart data={d.monthlyLeads || []} color="#3b82f6" />
-        </Card>
-        <Card title="🔀 Lead Pipeline" sub="Stage breakdown" height={260}>
-          <Funnel stages={[
-            { label: "Total",         value: d.totalLeads   || 0 },
-            { label: "Contacted",     value: d.contacted    || 0 },
-            { label: "In Discussion", value: d.inDiscussion || 0 },
-            { label: "Proposal Sent", value: d.proposalSent || 0 },
-            { label: "Closed Won",    value: d.closedWon    || 0 },
-          ]} />
-        </Card>
-      </div>
+      {/* ── Main grid: Attention Required is the tall right column, spanning
+             both the chart row and the team row. ── */}
+      <div className="rd-ad-grid">
+        <AdCard
+          title="Order Book Overview"
+          right={
+            <select className="rd-ad-select" value={range}
+                    onChange={(e) => setRange(e.target.value)} aria-label="Chart period">
+              <option value="year">This Year</option>
+              <option value="6">Last 6 Months</option>
+              <option value="3">Last 3 Months</option>
+            </select>
+          }
+          bodyClass="rd-ad-fill"
+        >
+          <AdOrderBookChart data={shown} />
+        </AdCard>
 
-      {/* Row 2: Team Performance + Follow-up Reminders side by side */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        {(d.teamPerformance || []).length > 0 ? (
-          <TallCard title="🏆 Team Performance" sub="All team members' activity" right={<ViewMoreBtn />}>
-            <TeamTable members={d.teamPerformance} />
-          </TallCard>
-        ) : <div />}
-        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={440}>
-          <FollowupBlock
-            todayCount={d.todayFollowups}
-            overdueCount={d.overdueFollowups}
-            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
-            followups={d.followups || []}
+        <AdCard
+          title="Lead Funnel"
+          right={<span className="rd-ad-chip">All Time</span>}
+        >
+          <AdFunnel
+            total={d.totalLeads || 0}
+            /* Cumulative stages, so each is a subset of the one above it and the
+               funnel descends. Falls back to the current-status counts if the
+               backend has not been updated. */
+            stages={[
+              { label: "Total Leads",   value: d.totalLeads         || 0 },
+              { label: "Contacted",     value: d.reachedContacted   ?? d.contacted    ?? 0 },
+              { label: "In Discussion", value: d.reachedDiscussion  ?? d.inDiscussion ?? 0 },
+              { label: "Proposal Sent", value: d.reachedProposal    ?? d.proposalSent ?? 0 },
+              { label: "Closed Won",    value: d.closedWon          || 0 },
+            ]}
           />
-        </Card>
+        </AdCard>
+
+        <div className="rd-ad-tall">
+          <AdCard title="Attention Required" bodyClass="rd-ad-fill">
+            <AdAttention
+              overdue={d.overdueFollowups} today={d.todayFollowups} upcoming={upcoming}
+              followups={d.followups ?? []} onViewAll={() => navigate("/follow-ups")}
+            />
+          </AdCard>
+        </div>
+
+        <AdCard
+          title="Team Performance"
+          right={
+            <button type="button" className="rd-ad-link" onClick={() => navigate("/team-performance")}>
+              View all
+            </button>
+          }
+          bodyClass="rd-ad-flush"
+        >
+          <AdTeamTable members={d.teamPerformance ?? []} />
+        </AdCard>
+
+        <AdCard title="Business Snapshot">
+          <AdSnapshot snap={d.businessSnapshot ?? {}} />
+        </AdCard>
       </div>
 
-      {/* Recent Orders — fixed height, internal scroll */}
-      <div style={{ marginBottom: 14 }}>
-        <Card title="📦 Recent Orders" sub="Latest order book entries" height={360} noBodyPad>
-          {!(d.recentOrders?.length) ? <Empty /> : (
-            <table className="rd-table" style={{ width: "100%" }}>
-              <thead>
-                <tr><th>Order No</th><th>Customer</th><th>Segment</th><th>Amount</th><th>Status</th><th>Date</th></tr>
-              </thead>
-              <tbody>
-                {d.recentOrders.map((o, i) => (
-                  <tr key={i}>
-                    <td style={{ fontWeight: 700, color: "#1d4ed8", fontFamily: "monospace" }}>{o.orderBookNo}</td>
-                    <td className="name-cell">{o.customerName || "—"}</td>
-                    <td style={{ color: "#64748b" }}>{[o.groupName, o.subGroupName].filter(Boolean).join(" / ") || "—"}</td>
-                    <td style={{ color: "#059669", fontWeight: 700 }}>{fmtMoney(o.totalAmount)}</td>
-                    <td>{statusBadge(o.status)}</td>
-                    <td>{fmtDate(o.orderDate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </Card>
+      {/* ── Recent orders ── */}
+      <div className="rd-ad-row">
+        <AdCard
+          title="Recent Orders"
+          right={
+            <button type="button" className="rd-ad-link" onClick={() => navigate("/order-book")}>
+              View all orders
+            </button>
+          }
+          bodyClass="rd-ad-flush"
+        >
+          <AdOrdersTable orders={d.recentOrders ?? []} />
+        </AdCard>
       </div>
     </div>
   );
 };
-
 /* ═══════════════════════════════════════════════════════════════════════════════
    MANAGER DASHBOARD
    Handles: MANAGER, SALES_MANAGER, BD_MANAGER + any manager variant
@@ -498,6 +843,7 @@ const ManagerDashboard = () => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/dashboard/sales-manager")
@@ -518,62 +864,100 @@ const ManagerDashboard = () => {
   if (!d && !err) return <Spinner />;
   if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
+  /* Every figure below is the manager's reporting subtree — themselves plus
+     everyone whose manager_id chains up to them. `teamSize` is the count of
+     reports; 0 means this user has nobody under them, in which case the page is
+     honestly just their own numbers and the copy says so. */
+  const teamSize = Number(d.teamSize ?? 0);
+  const hasTeam  = teamSize > 0;
+
   const kpis = [
-    { label: "Team Leads",      value: fmtNum(d.myLeads),          sub: "Total in pipeline",           accent: "#3b82f6", iconBg: "#eff6ff", icon: "📋" },
-    { label: "Active",          value: fmtNum(d.activeLeads),      sub: "In progress",                 accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
-    { label: "Closed Won",      value: fmtNum(d.closedWon),        sub: `${d.conversionRate}% conv.`,  accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
-    { label: "Team Revenue",    value: fmtMoney(d.revenue),        sub: "From closed deals",           accent: "#059669", iconBg: "#ecfdf5", icon: "💰" },
-    { label: "Proposals",       value: fmtNum(d.myProposals),      sub: `${fmtNum(d.acceptedProposals)} accepted`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📝" },
-    { label: "In Discussion",   value: fmtNum(d.inDiscussion),     sub: "Active deals",                accent: "#6366f1", iconBg: "#eef2ff", icon: "🤝" },
-    { label: "Pending FU",      value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
-    { label: "Today's FUs",     value: fmtNum(d.todayFollowups),   sub: "Due today",                   accent: "#ec4899", iconBg: "#fdf2f8", icon: "📅" },
+    { label: hasTeam ? "Team Leads" : "My Leads",
+      value: fmtNum(d.myLeads),          sub: hasTeam ? `Across ${teamSize + 1} people` : "Total in pipeline", icon: ClipboardList,  tone: "blue"   },
+    { label: "Active",        value: fmtNum(d.activeLeads),      sub: "In progress",                             icon: RefreshCw,      tone: "indigo" },
+    { label: "Closed Won",    value: fmtNum(d.closedWon),        sub: `${d.conversionRate}% conv.`,               icon: CheckCircle2,   tone: "green"  },
+    { label: "Team Revenue",  value: fmtMoney(d.revenue),        sub: "From closed deals",                       icon: Wallet,         tone: "green"  },
+    { label: "Proposals",     value: fmtNum(d.myProposals),      sub: `${fmtNum(d.acceptedProposals)} accepted`,  icon: FileText,       tone: "amber"  },
+    { label: "In Discussion", value: fmtNum(d.inDiscussion),     sub: "Active deals",                            icon: MessagesSquare, tone: "indigo" },
+    { label: "Pending FU",    value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`,    icon: PhoneCall,      tone: "orange" },
+    { label: "Today's FUs",   value: fmtNum(d.todayFollowups),   sub: "Due today",                               icon: CalendarClock,  tone: "amber"  },
   ];
 
+  const upcomingFU = Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0));
+
   return (
-    <div>
-      <div className="rd-kpi-grid rd-kpi-grid-8">
-        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+    <div className="rd-ad">
+      <div className="rd-ad-kpis-auto">
+        {kpis.map((k, i) => <AdKpiCard key={i} {...k} />)}
       </div>
 
-      {/* Row 1: Monthly chart + Pipeline side by side */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <Card title="📈 Team Monthly Leads" sub="Last 6 months" height={260}>
+      {/* Row 1: monthly leads + funnel.
+          MiniBarChart stays: d.monthlyLeads is {label, value} lead COUNTS, and
+          AdOrderBookChart draws {label, revenue, pipeline} money. Only the shell
+          around it becomes an AdCard. */}
+      <div className="rd-ad-eqrow cols-2 h-sm">
+        <AdCard title={hasTeam ? "Team Monthly Leads" : "Monthly Leads"} right={<span className="rd-ad-chip">Last 6 months</span>}
+                bodyClass="rd-ad-fill rd-ad-chartfill">
           <MiniBarChart data={d.monthlyLeads || []} color="#8b5cf6" />
-        </Card>
-        <Card title="🔀 Team Lead Funnel" sub="Stage breakdown" height={260}>
-          <Funnel stages={[
-            { label: "Total",         value: d.myLeads       || 0 },
-            { label: "Contacted",     value: d.contacted     || 0 },
-            { label: "In Discussion", value: d.inDiscussion  || 0 },
-            { label: "Proposals",     value: d.myProposals   || 0 },
-            { label: "Closed Won",    value: d.closedWon     || 0 },
-          ]} />
-        </Card>
-      </div>
-
-      {/* Row 2: Team Performance + Follow-up Reminders */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <TallCard title="🏆 Your Team's Performance" sub="All team members under you" right={<ViewMoreBtn />}>
-          <TeamTable members={d.teamMembers || []} />
-        </TallCard>
-        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={440}>
-          <FollowupBlock
-            todayCount={d.todayFollowups}
-            overdueCount={d.overdueFollowups}
-            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
-            followups={d.followups || []}
+        </AdCard>
+        <AdCard title={hasTeam ? "Team Lead Funnel" : "Lead Funnel"} right={<span className="rd-ad-chip">Stage breakdown</span>}>
+          {/* Cumulative stages, so each is a subset of the one above it. The old
+              current-status counts (d.contacted / d.inDiscussion) read ~0 on new
+              data — the lead UI no longer sets either status — which collapsed
+              the middle of the funnel. They are kept as the fallback for a
+              backend that has not been updated. */}
+          <AdFunnel
+            total={d.myLeads || 0}
+            stages={[
+              { label: "Team Leads",    value: d.myLeads           || 0 },
+              { label: "Contacted",     value: d.reachedContacted  ?? d.contacted    ?? 0 },
+              { label: "In Discussion", value: d.reachedDiscussion ?? d.inDiscussion ?? 0 },
+              { label: "Proposal Sent", value: d.reachedProposal   ?? d.myProposals  ?? 0 },
+              { label: "Closed Won",    value: d.closedWon         || 0 },
+            ]}
           />
-        </Card>
+        </AdCard>
       </div>
 
-      {/* Row 3: Recent leads + Tasks */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <Card title="📋 Recent Team Leads" sub="Latest leads in your team" height={360} noBodyPad>
-          <LeadsTable leads={d.leads || []} emptyMsg="No leads assigned yet" />
-        </Card>
-        <Card title="✅ My Pending Tasks" height={360}>
-          <TaskList tasks={tasks} />
-        </Card>
+      {/* Row 2: team performance + follow-ups */}
+      <div className="rd-ad-eqrow cols-2 h-lg">
+        <AdCard
+          title={hasTeam ? "Your Team's Performance" : "Performance"}
+          right={
+            <button type="button" className="rd-ad-link" onClick={() => navigate("/team-performance")}>
+              View more
+            </button>
+          }
+          bodyClass="rd-ad-flush rd-ad-fill"
+        >
+          {/* An empty table here used to be the norm — the team was resolved from
+              users.created_by, which records who typed the account into the admin
+              screen (user #1 for nearly every row), not who it reports to. */}
+          <AdTeamTable members={d.teamMembers || []} />
+        </AdCard>
+        <AdCard title="Follow-up Reminders" bodyClass="rd-ad-fill">
+          <AdAttention
+            today={d.todayFollowups}
+            overdue={d.overdueFollowups}
+            upcoming={upcomingFU}
+            followups={d.followups || []}
+            onViewAll={() => navigate("/follow-ups")}
+          />
+        </AdCard>
+      </div>
+
+      {/* Row 3: recent leads + tasks */}
+      <div className="rd-ad-eqrow cols-2 h-md">
+        <AdCard title="Recent Team Leads" bodyClass="rd-ad-flush rd-ad-fill">
+          <div className="rd-ad-pane rd-ad-table-wrap">
+            <LeadsTable leads={d.leads || []} emptyMsg="No leads assigned yet" />
+          </div>
+        </AdCard>
+        <AdCard title="My Pending Tasks" bodyClass="rd-ad-fill">
+          <div className="rd-ad-pane">
+            <TaskList tasks={tasks} />
+          </div>
+        </AdCard>
       </div>
     </div>
   );
@@ -586,6 +970,7 @@ const BDExecutiveDashboard = () => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/dashboard/bd")
@@ -605,55 +990,74 @@ const BDExecutiveDashboard = () => {
   if (!d && !err) return <Spinner />;
   if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
+  /* Same eight figures as before — only the card that draws them changed. */
   const kpis = [
-    { label: "BD Leads",        value: fmtNum(d.totalLeads),    sub: "Assigned to me as BD",           accent: "#3b82f6", iconBg: "#eff6ff", icon: "📂" },
-    { label: "Active",          value: fmtNum(d.activeLeads),   sub: "In my pipeline",                 accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
-    { label: "Closed Won",      value: fmtNum(d.closedWon),     sub: `${d.conversionRate}% conv.`,     accent: "#10b981", iconBg: "#ecfdf5", icon: "✅" },
-    { label: "In Discussion",   value: fmtNum(d.inDiscussion),  sub: "Active deals",                   accent: "#6366f1", iconBg: "#eef2ff", icon: "🤝" },
-    { label: "Proposals Sent",  value: fmtNum(d.proposalsSent), sub: `${fmtNum(d.acceptedProposals)} accepted`, accent: "#f59e0b", iconBg: "#fffbeb", icon: "📋" },
-    { label: "My Revenue",      value: fmtMoney(d.revenue),     sub: "From closed deals",              accent: "#059669", iconBg: "#ecfdf5", icon: "💰" },
-    { label: "Pending FU",      value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
-    { label: "Today's FUs",     value: fmtNum(d.todayFollowups),sub: "Due today",                      accent: "#ec4899", iconBg: "#fdf2f8", icon: "📅" },
+    { label: "BD Leads",       value: fmtNum(d.totalLeads),       sub: "Assigned to me as BD",                    icon: ClipboardList,  tone: "blue"   },
+    { label: "Active",         value: fmtNum(d.activeLeads),      sub: "In my pipeline",                          icon: RefreshCw,      tone: "indigo" },
+    { label: "Closed Won",     value: fmtNum(d.closedWon),        sub: `${d.conversionRate}% conv.`,               icon: CheckCircle2,   tone: "green"  },
+    { label: "In Discussion",  value: fmtNum(d.inDiscussion),     sub: "Active deals",                            icon: MessagesSquare, tone: "indigo" },
+    { label: "Proposals Sent", value: fmtNum(d.proposalsSent),    sub: `${fmtNum(d.acceptedProposals)} accepted`,  icon: FileText,       tone: "amber"  },
+    { label: "My Revenue",     value: fmtMoney(d.revenue),        sub: "From closed deals",                       icon: Wallet,         tone: "green"  },
+    { label: "Pending FU",     value: fmtNum(d.pendingFollowups), sub: `${fmtNum(d.overdueFollowups)} overdue`,    icon: PhoneCall,      tone: "orange" },
+    { label: "Today's FUs",    value: fmtNum(d.todayFollowups),   sub: "Due today",                               icon: CalendarClock,  tone: "amber"  },
   ];
 
+  const upcomingFU = Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0));
+
   return (
-    <div>
-      <div className="rd-kpi-grid rd-kpi-grid-8">
-        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+    <div className="rd-ad">
+      <div className="rd-ad-kpis-auto">
+        {kpis.map((k, i) => <AdKpiCard key={i} {...k} />)}
       </div>
 
-      {/* Row 1: Leads + Funnel */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <Card title="📋 My Lead Conversions" sub="Leads where I am the BD" height={340} noBodyPad>
-          <LeadsTable leads={d.leads || []} emptyMsg="No BD leads assigned yet" />
-        </Card>
-        <Card title="🔀 My Conversion Funnel" height={340}>
-          <Funnel stages={[
-            { label: "BD Leads",      value: d.totalLeads        || 0 },
-            { label: "In Discussion", value: d.inDiscussion      || 0 },
-            { label: "Proposals",     value: d.proposalsSent     || 0 },
-            { label: "Accepted",      value: d.acceptedProposals || 0 },
-            { label: "Closed Won",    value: d.closedWon         || 0 },
-          ]} />
-        </Card>
-      </div>
-
-      {/* Row 2: Follow-up Reminders + Proposals + Tasks — all equal height */}
-      <div className="rd-row rd-row-3" style={{ marginBottom: 14 }}>
-        <Card title="⏰ Follow-up Reminders" sub="Your pending actions" height={420}>
-          <FollowupBlock
-            todayCount={d.todayFollowups}
-            overdueCount={d.overdueFollowups}
-            upcomingCount={Math.max(0, (d.pendingFollowups || 0) - (d.overdueFollowups || 0) - (d.todayFollowups || 0))}
-            followups={d.followups || []}
+      {/* Row 1: my leads + funnel */}
+      <div className="rd-ad-eqrow cols-2 h-md">
+        <AdCard title="My Lead Conversions" right={<span className="rd-ad-chip">Leads where I am the BD</span>}
+                bodyClass="rd-ad-flush rd-ad-fill">
+          <div className="rd-ad-pane rd-ad-table-wrap">
+            <LeadsTable leads={d.leads || []} emptyMsg="No BD leads assigned yet" />
+          </div>
+        </AdCard>
+        <AdCard title="My Conversion Funnel" right={<span className="rd-ad-chip">All Time</span>}>
+          {/* Cumulative stages over this BD's own leads. The proposal stage is
+              deliberately the lead count that reached "Proposal Sent", not
+              d.proposalsSent: that KPI counts proposal DOCUMENTS prepared by the
+              user, several of which can hang off one lead — mixing the two units
+              in one funnel is what put 23 proposals under 0 in-discussion. */}
+          <AdFunnel
+            total={d.totalLeads || 0}
+            stages={[
+              { label: "BD Leads",      value: d.totalLeads        || 0 },
+              { label: "Contacted",     value: d.reachedContacted  ?? d.activeLeads  ?? 0 },
+              { label: "In Discussion", value: d.reachedDiscussion ?? d.inDiscussion ?? 0 },
+              { label: "Proposal Sent", value: d.reachedProposal   ?? d.proposalsSent ?? 0 },
+              { label: "Closed Won",    value: d.reachedWon        ?? d.closedWon    ?? 0 },
+            ]}
           />
-        </Card>
-        <Card title="📝 My Proposals" height={420} noBodyPad>
-          <ProposalsTable proposals={d.proposals || []} />
-        </Card>
-        <Card title="✅ My Pending Tasks" height={420}>
-          <TaskList tasks={tasks} />
-        </Card>
+        </AdCard>
+      </div>
+
+      {/* Row 2: follow-ups + proposals + tasks — three equal columns */}
+      <div className="rd-ad-eqrow cols-3 h-lg">
+        <AdCard title="Follow-up Reminders" bodyClass="rd-ad-fill">
+          <AdAttention
+            today={d.todayFollowups}
+            overdue={d.overdueFollowups}
+            upcoming={upcomingFU}
+            followups={d.followups || []}
+            onViewAll={() => navigate("/follow-ups")}
+          />
+        </AdCard>
+        <AdCard title="My Proposals" bodyClass="rd-ad-flush rd-ad-fill">
+          <div className="rd-ad-pane rd-ad-table-wrap">
+            <ProposalsTable proposals={d.proposals || []} />
+          </div>
+        </AdCard>
+        <AdCard title="My Pending Tasks" bodyClass="rd-ad-fill">
+          <div className="rd-ad-pane">
+            <TaskList tasks={tasks} />
+          </div>
+        </AdCard>
       </div>
     </div>
   );
@@ -666,6 +1070,7 @@ const TelecallerDashboard = () => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/dashboard/telecaller")
@@ -699,106 +1104,94 @@ const TelecallerDashboard = () => {
 
   const pct = d.total > 0 ? Math.round((d.interested / d.total) * 100) : 0;
 
-  /* Compact stat pill — replaces full KpiCard for telecaller */
-  const StatPill = ({ icon, label, value, accent, bg }) => (
-  <div style={{
-    background: "#fff", borderRadius: 8, padding: "10px 12px",
-    border: `1px solid #f1f5f9`, borderTop: `3px solid ${accent}`,
-    display: "flex", alignItems: "center", gap: 8, minWidth: 0,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.05)", overflow: "hidden",
-  }}>
-    <div style={{ width: 26, height: 26, borderRadius: 6, background: bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, flexShrink: 0 }}>{icon}</div>
-    <div style={{ minWidth: 0, flex: 1 }}>
-      <div style={{ fontSize: 17, fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{value}</div>
-      <div style={{ fontSize: 10, fontWeight: 600, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.04em", marginTop: 2, whiteSpace: "normal", lineHeight: 1.3, wordBreak: "break-word" }}>{label}</div>
-    </div>
-  </div>
-);
-
-  const CARD_HEIGHT = 440; // single consistent height for all 3 bottom cards
+  /* Same nine figures the StatPill strip showed — now on the shared KPI card. */
+  const kpis = [
+    { label: "Assigned",       value: fmtNum(d.total),            icon: ClipboardList,  tone: "blue"   },
+    { label: "Called",         value: fmtNum(d.called),           icon: PhoneCall,      tone: "indigo" },
+    { label: "Interested",     value: fmtNum(d.interested),       icon: CheckCircle2,   tone: "green"  },
+    { label: "Not Interested", value: fmtNum(d.notInterested),    icon: XCircle,        tone: "orange" },
+    { label: "No Response",    value: fmtNum(d.notResponded),     icon: Clock,          tone: "amber"  },
+    { label: "Pending",        value: fmtNum(d.pending),          icon: RefreshCw,      tone: "indigo" },
+    { label: "Handed to BD",   value: fmtNum(d.handedOff),        icon: MessagesSquare, tone: "cyan"   },
+    { label: "Today's FUs",    value: fmtNum(d.todayFollowups),   icon: CalendarClock,  tone: "amber"  },
+    { label: "Overdue FUs",    value: fmtNum(d.overdueFollowups), icon: AlertTriangle,  tone: "orange" },
+  ];
 
   return (
-    <div>
-
-      {/* ── Compact KPI strip (horizontal pills, not tall cards) ── */}
-      <div className="rd-tc-kpi-strip">
-        <StatPill icon="📋" label="Assigned"       value={fmtNum(d.total)}          accent="#3b82f6" bg="#eff6ff" />
-        <StatPill icon="📞" label="Called"          value={fmtNum(d.called)}         accent="#8b5cf6" bg="#f5f3ff" />
-        <StatPill icon="🟢" label="Interested"      value={fmtNum(d.interested)}     accent="#10b981" bg="#ecfdf5" />
-        <StatPill icon="🔴" label="Not Interested"  value={fmtNum(d.notInterested)}  accent="#ef4444" bg="#fef2f2" />
-        <StatPill icon="⏳" label="No Response"     value={fmtNum(d.notResponded)}   accent="#f59e0b" bg="#fffbeb" />
-        <StatPill icon="🆕" label="Pending"         value={fmtNum(d.pending)}        accent="#6366f1" bg="#eef2ff" />
-        <StatPill icon="🤝" label="Handed to BD"    value={fmtNum(d.handedOff)}      accent="#06b6d4" bg="#ecfeff" />
-        <StatPill icon="📅" label="Today's FUs"     value={fmtNum(d.todayFollowups)} accent="#ec4899" bg="#fdf2f8" />
-        <StatPill icon="⚠️" label="Overdue FUs"     value={fmtNum(d.overdueFollowups)} accent="#dc2626" bg="#fef2f2" />
+    <div className="rd-ad">
+      <div className="rd-ad-kpis-auto c5">
+        {kpis.map((k, i) => <AdKpiCard key={i} {...k} />)}
       </div>
 
-      {/* ── Interest rate bar (compact, inline) ── */}
+      {/* Interest rate — same pct, same three legend counts, new shell. */}
       {d.total > 0 && (
-        <div className="rd-tc-interest-bar">
-          <div className="rd-tc-interest-left">
-            <span style={{ fontWeight: 700, fontSize: 13, color: "#0f172a" }}>📊 Interest Rate</span>
-            <div className="rd-tc-progress-track">
-              <div className="rd-tc-progress-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
+        <div className="rd-ad-ir">
+          <div className="rd-ad-ir-left">
+            <span className="rd-ad-ir-title">
+              <TrendingUp size={15} strokeWidth={2.4} />Interest Rate
+            </span>
+            <div className="rd-ad-ir-track">
+              <div className="rd-ad-ir-fill" style={{ width: `${Math.min(pct, 100)}%` }} />
             </div>
           </div>
-          <div className="rd-tc-interest-right">
-            <span style={{ fontSize: 22, fontWeight: 800, color: "#059669" }}>{pct}%</span>
-            <span style={{ fontSize: 11, color: "#64748b" }}>interest rate</span>
+          <div className="rd-ad-ir-right">
+            <span className="rd-ad-ir-pct">{pct}%</span>
+            <span className="rd-ad-ir-cap">interest rate</span>
           </div>
-          <div className="rd-tc-interest-legend">
-            <span style={{ color: "#059669" }}>● {fmtNum(d.interested)} interested</span>
-            <span style={{ color: "#ef4444" }}>● {fmtNum(d.notInterested)} not interested</span>
-            <span style={{ color: "#f59e0b" }}>● {fmtNum(d.notResponded)} no response</span>
+          <div className="rd-ad-ir-legend">
+            <span className="yes"><b>{fmtNum(d.interested)}</b> interested</span>
+            <span className="no"><b>{fmtNum(d.notInterested)}</b> not interested</span>
+            <span className="none"><b>{fmtNum(d.notResponded)}</b> no response</span>
           </div>
         </div>
       )}
 
-      {/* ── Three equal-height cards side by side ── */}
-      <div className="rd-row rd-row-3">
-
-        {/* Lead Queue */}
-        <Card title="📋 My Lead Queue" sub="Leads assigned for calling" height={CARD_HEIGHT} noBodyPad>
+      {/* Three equal-height cards side by side */}
+      <div className="rd-ad-eqrow cols-3 h-lg">
+        <AdCard title="My Lead Queue" right={<span className="rd-ad-chip">For calling</span>}
+                bodyClass="rd-ad-flush rd-ad-fill">
           {!(d.leads?.length) ? <Empty icon="📞" msg="No leads in your queue" /> : (
-            <table className="rd-table" style={{ width: "100%" }}>
-              <thead>
-                <tr>
-                  <th>Name</th><th>Phone</th><th>Status</th><th>BD</th><th>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.leads.map((l, i) => (
-                  <tr key={i}>
-                    <td className="name-cell">{l.name}</td>
-                    <td style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>{l.phone || "—"}</td>
-                    <td>{tcBadge(l.telecallerStatus)}</td>
-                    <td>{l.handedOffToBD
-                      ? <span className="rd-badge rd-badge-green" style={{ fontSize: 10 }}>{l.bdAssigneeName || "✓"}</span>
-                      : <span style={{ color: "#94a3b8", fontSize: 11 }}>—</span>}
-                    </td>
-                    <td style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDate(l.createdAt)}</td>
+            <div className="rd-ad-pane rd-ad-table-wrap">
+              <table className="rd-table rd-ad-table compact auto" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th>Name</th><th>Phone</th><th>Status</th><th>BD</th><th>Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {d.leads.map((l, i) => (
+                    <tr key={i}>
+                      <td className="name-cell">{l.name}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: 11, color: "#64748b" }}>{l.phone || "—"}</td>
+                      <td>{tcBadge(l.telecallerStatus)}</td>
+                      <td>{l.handedOffToBD
+                        ? <span className="rd-badge rd-badge-green" style={{ fontSize: 10 }}>{l.bdAssigneeName || "✓"}</span>
+                        : <span style={{ color: "#94a3b8", fontSize: 11 }}>—</span>}
+                      </td>
+                      <td style={{ fontSize: 11, color: "#94a3b8", whiteSpace: "nowrap" }}>{fmtDate(l.createdAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </Card>
+        </AdCard>
 
-        {/* Follow-up Reminders */}
-        <Card title="⏰ Follow-up Reminders" sub="Pending actions" height={CARD_HEIGHT}>
-          <FollowupBlock
-            todayCount={d.todayFollowups}
-            overdueCount={d.overdueFollowups}
-            upcomingCount={0}
+        <AdCard title="Follow-up Reminders" bodyClass="rd-ad-fill">
+          <AdAttention
+            today={d.todayFollowups}
+            overdue={d.overdueFollowups}
+            upcoming={0}
             followups={d.followups || []}
+            onViewAll={() => navigate("/follow-ups")}
           />
-        </Card>
+        </AdCard>
 
-        {/* Tasks */}
-        <Card title="✅ My Tasks" sub="Pending tasks" height={CARD_HEIGHT}>
-          <TaskList tasks={tasks} />
-        </Card>
-
+        <AdCard title="My Tasks" bodyClass="rd-ad-fill">
+          <div className="rd-ad-pane">
+            <TaskList tasks={tasks} />
+          </div>
+        </AdCard>
       </div>
     </div>
   );
@@ -813,6 +1206,7 @@ const GenericDashboard = ({ role }) => {
   const [d, setD] = useState(null);
   const [err, setErr] = useState(null);
   const [tasks, setTasks] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
     apiFetch("/dashboard/generic")
@@ -833,7 +1227,14 @@ const GenericDashboard = ({ role }) => {
   if (err) return <div className="rd-empty" style={{ color: "#ef4444" }}>⚠ {err}</div>;
 
   const hasLeads   = (d.myLeads || 0) > 0 || (d.activeLeads || 0) > 0;
-  const isL3       = d.levelOrder === 3;
+  /* Whoever has people under them gets the team card — driven by the reporting
+     line, not by the role's level. The old `d.levelOrder === 3` check hid the
+     card from every manager-ish role sitting at another level (ACCOUNTS_MANAGER,
+     PROCUREMENT_MANAGER) and from any role missing from role_hierarchy, whose
+     levelOrder comes back as Integer.MAX_VALUE. teamSize is the backend's count
+     of reports, resolved transitively down users.manager_id. */
+  const teamSize   = Number(d.teamSize ?? 0);
+  const hasTeam    = teamSize > 0;
 
   const pendingFU  = d.pendingFollowups || 0;
   const overdueFU  = d.overdueFollowups || 0;
@@ -843,87 +1244,121 @@ const GenericDashboard = ({ role }) => {
   const pendingTasks  = tasks.filter(t => t.status === "Pending" || t.status === "In Progress").length;
   const overdueTasks  = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== "Completed").length;
 
+  /* Base four, plus the same three that only appear when this role owns leads. */
   const kpis = [
-    { label: "Pending Follow-ups", value: fmtNum(pendingFU),  sub: `${fmtNum(overdueFU)} overdue`, accent: "#ef4444", iconBg: "#fef2f2", icon: "📞" },
-    { label: "Today's FUs",        value: fmtNum(todayFU),    sub: "Due today",                    accent: "#f59e0b", iconBg: "#fffbeb", icon: "📅" },
-    { label: "My Tasks",           value: fmtNum(tasks.length),sub: `${fmtNum(pendingTasks)} pending`, accent: "#3b82f6", iconBg: "#eff6ff", icon: "📋" },
-    { label: "Overdue Tasks",      value: fmtNum(overdueTasks),sub: "Need attention",              accent: "#dc2626", iconBg: "#fef2f2", icon: "⚠️" },
+    { label: "Pending Follow-ups", value: fmtNum(pendingFU),     sub: `${fmtNum(overdueFU)} overdue`,    icon: PhoneCall,     tone: "orange" },
+    { label: "Today's FUs",        value: fmtNum(todayFU),       sub: "Due today",                       icon: CalendarClock, tone: "amber"  },
+    { label: "My Tasks",           value: fmtNum(tasks.length),  sub: `${fmtNum(pendingTasks)} pending`, icon: ClipboardList, tone: "blue"   },
+    { label: "Overdue Tasks",      value: fmtNum(overdueTasks),  sub: "Need attention",                  icon: AlertTriangle, tone: "orange" },
     ...(hasLeads ? [
-      { label: "My Leads",         value: fmtNum(d.myLeads),   sub: `${fmtNum(d.closedWon)} won`, accent: "#059669", iconBg: "#ecfdf5", icon: "🎯" },
-      { label: "Active Leads",     value: fmtNum(d.activeLeads),sub: "In pipeline",               accent: "#8b5cf6", iconBg: "#f5f3ff", icon: "🔄" },
-      { label: "My Proposals",     value: fmtNum(d.myProposals),sub: "All proposals",             accent: "#6366f1", iconBg: "#eef2ff", icon: "📝" },
+      { label: hasTeam ? "Team Leads" : "My Leads",
+        value: fmtNum(d.myLeads),     sub: `${fmtNum(d.closedWon)} won`,      icon: Target,        tone: "green"  },
+      { label: "Active Leads",     value: fmtNum(d.activeLeads), sub: "In pipeline",                     icon: RefreshCw,     tone: "indigo" },
+      { label: hasTeam ? "Team Proposals" : "My Proposals",
+        value: fmtNum(d.myProposals), sub: "All proposals",                   icon: FileText,      tone: "amber"  },
     ] : []),
   ];
 
   return (
-    <div>
-      <div className="rd-kpi-grid rd-kpi-grid-8">
-        {kpis.map((k, i) => <KpiCard key={i} {...k} />)}
+    <div className="rd-ad">
+      <div className="rd-ad-kpis-auto">
+        {kpis.map((k, i) => <AdKpiCard key={i} {...k} />)}
       </div>
 
-      {/* L3 managers: show team performance */}
-      {isL3 && (d.teamMembers || []).length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <TallCard title="🏆 Your Team's Performance" sub="Performance of team members under you">
-            <TeamTable members={d.teamMembers} />
-          </TallCard>
+      {/* Row 1: recent leads + funnel.
+          The funnel sits directly under the KPI row on EVERY dashboard that has
+          one — admin, manager and BD all put it there. This view used to bury it
+          below follow-ups and tasks, so a PROCUREMENT_MANAGER had to scroll past
+          two full-height rows to reach the same chart their manager sees first. */}
+      {hasLeads && (
+        <div className="rd-ad-eqrow cols-2 h-md">
+          <AdCard title={hasTeam ? "Recent Team Leads" : "My Recent Leads"} bodyClass="rd-ad-flush rd-ad-fill">
+            <div className="rd-ad-pane rd-ad-table-wrap">
+              <LeadsTable leads={d.leads || []} />
+            </div>
+          </AdCard>
+          <AdCard
+            title={hasTeam ? "Team Lead Funnel" : "My Lead Funnel"}
+            right={<span className="rd-ad-chip">All Time</span>}
+            bodyClass="rd-ad-fill"
+          >
+            <div className="rd-ad-pane rd-ad-perf">
+              {/* Cumulative stages over one lead set — see AdFunnel. "Active"
+                  is not a funnel stage at all (it is everything NOT closed, so
+                  it grows as Closed Won shrinks); it is replaced by the leads
+                  that got past New. */}
+              <AdFunnel
+                total={d.myLeads || 0}
+                stages={[
+                  { label: hasTeam ? "Team Leads" : "My Leads",
+                                            value: d.myLeads           || 0 },
+                  { label: "Contacted",     value: d.reachedContacted  ?? (d.activeLeads || 0) },
+                  { label: "In Discussion", value: d.reachedDiscussion ?? 0 },
+                  { label: "Proposal Sent", value: d.reachedProposal   ?? (d.myProposals || 0) },
+                  { label: "Closed Won",    value: d.closedWon         || 0 },
+                ]}
+              />
+              <div className="rd-ad-stats">
+                <div className="rd-ad-stat good">
+                  <div className="rd-ad-stat-val">
+                    {d.myLeads > 0 ? Math.round(((d.closedWon || 0) / d.myLeads) * 100) : 0}%
+                  </div>
+                  <div className="rd-ad-stat-cap">Conversion Rate</div>
+                </div>
+                <div className="rd-ad-stat info">
+                  <div className="rd-ad-stat-val">{fmtNum(d.myProposals)}</div>
+                  <div className="rd-ad-stat-cap">Proposals Made</div>
+                </div>
+              </div>
+            </div>
+          </AdCard>
+        </div>
+      )}
+
+      {/* Anyone with reports: show team performance */}
+      {hasTeam && (d.teamMembers || []).length > 0 && (
+        <div className="rd-ad-eqrow cols-1 h-lg">
+          <AdCard
+            title="Your Team's Performance"
+            right={<span className="rd-ad-chip">
+              {teamSize === 1 ? "1 person reports to you" : `${teamSize} people report to you`}
+            </span>}
+            bodyClass="rd-ad-flush rd-ad-fill"
+          >
+            <AdTeamTable members={d.teamMembers} />
+          </AdCard>
         </div>
       )}
 
       {/* Row: Follow-ups + Tasks */}
-      <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-        <Card title="⏰ Follow-up Reminders" sub="Your pending follow-up actions" height={420}>
-          <FollowupBlock
-            todayCount={todayFU}
-            overdueCount={overdueFU}
-            upcomingCount={upcomingFU}
+      <div className="rd-ad-eqrow cols-2 h-lg">
+        <AdCard title="Follow-up Reminders" bodyClass="rd-ad-fill">
+          <AdAttention
+            today={todayFU}
+            overdue={overdueFU}
+            upcoming={upcomingFU}
             followups={d.followups || []}
+            onViewAll={() => navigate("/follow-ups")}
           />
-        </Card>
-        <Card title="✅ My Pending Tasks" sub="Tasks assigned to you" height={420}>
-          <TaskList tasks={tasks} />
-        </Card>
+        </AdCard>
+        <AdCard title="My Pending Tasks" right={<span className="rd-ad-chip">Assigned to you</span>}
+                bodyClass="rd-ad-fill">
+          <div className="rd-ad-pane">
+            <TaskList tasks={tasks} />
+          </div>
+        </AdCard>
       </div>
-
-      {/* Leads section if applicable */}
-      {hasLeads && (
-        <div className="rd-row rd-row-2" style={{ marginBottom: 14 }}>
-          <Card title="📋 My Recent Leads" height={340} noBodyPad>
-            <LeadsTable leads={d.leads || []} />
-          </Card>
-          <Card title="📊 My Performance" height={340}>
-            <Funnel stages={[
-              { label: "My Leads",   value: d.myLeads     || 0 },
-              { label: "Active",     value: d.activeLeads || 0 },
-              { label: "Proposals",  value: d.myProposals || 0 },
-              { label: "Closed Won", value: d.closedWon   || 0 },
-            ]} />
-            <div style={{ display: "flex", gap: 16, marginTop: 20 }}>
-              <div style={{ flex: 1, textAlign: "center", padding: 12, background: "#f8fafc", borderRadius: 10 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: "#059669" }}>
-                  {d.myLeads > 0 ? Math.round(((d.closedWon || 0) / d.myLeads) * 100) : 0}%
-                </div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Conversion Rate</div>
-              </div>
-              <div style={{ flex: 1, textAlign: "center", padding: 12, background: "#f8fafc", borderRadius: 10 }}>
-                <div style={{ fontSize: 28, fontWeight: 800, color: "#3b82f6" }}>{fmtNum(d.myProposals)}</div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Proposals Made</div>
-              </div>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* Empty state for roles with no relevant data at all */}
       {!hasLeads && !tasks.length && !pendingFU && (
-        <div style={{ marginBottom: 20 }}>
-          <Card title="👋 Getting Started" height={200}>
-            <div style={{ textAlign: "center", padding: "20px 0", color: "#64748b" }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>🌟</div>
-              <div style={{ fontWeight: 600, marginBottom: 4 }}>Welcome to your dashboard!</div>
-              <div style={{ fontSize: 13 }}>Your activity will show up here as you start working in the system.</div>
+        <div className="rd-ad-row">
+          <AdCard title="Getting Started">
+            <div className="rd-ad-welcome">
+              <div className="rd-ad-welcome-icon"><Sparkles size={22} strokeWidth={2.1} /></div>
+              <div className="rd-ad-welcome-title">Welcome to your dashboard!</div>
+              <div className="rd-ad-welcome-sub">Your activity will show up here as you start working in the system.</div>
             </div>
-          </Card>
+          </AdCard>
         </div>
       )}
     </div>

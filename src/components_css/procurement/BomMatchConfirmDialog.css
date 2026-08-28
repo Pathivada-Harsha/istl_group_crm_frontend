@@ -1,0 +1,235 @@
+/* BomMatchConfirmDialog.css — confirm the BOM lines that were INFERRED, not picked.
+   Class prefix `bmc-` is owned exclusively by this component.
+   Colours follow the app theme convention: --c-* for surfaces, --ct-* for text, so
+   the dialog reads correctly in both light and dark. */
+
+.bmc-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;          /* above BomItemPicker and the create/edit modals */
+  padding: 24px;
+  backdrop-filter: blur(2px);
+}
+
+.bmc-modal {
+  background: var(--c-ffffff, #ffffff);
+  color: var(--ct-1f2937, #1f2937);
+  border-radius: 14px;
+  box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  width: 100%;
+  max-width: 680px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  border-top: 4px solid var(--c-3b82f6, #3b82f6);
+  animation: bmc-pop 0.18s ease;
+}
+
+@keyframes bmc-pop {
+  from { transform: scale(0.97); opacity: 0; }
+  to   { transform: scale(1);    opacity: 1; }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+.bmc-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px 12px;
+}
+
+.bmc-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+
+.bmc-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ct-6b7280, #6b7280);
+  padding: 4px;
+  border-radius: 6px;
+  display: flex;
+  flex-shrink: 0;
+}
+.bmc-close:hover { background: var(--c-f3f4f6, #f3f4f6); }
+
+/* ── Body ─────────────────────────────────────────────────────────────────── */
+.bmc-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px 4px;
+}
+
+.bmc-lede {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ct-4b5563, #4b5563);
+}
+
+.bmc-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bmc-item {
+  border: 1px solid var(--c-e5e7eb, #e5e7eb);
+  border-radius: 10px;
+  padding: 11px 13px;
+  background: var(--c-f9fafb, #f9fafb);
+}
+/* A corrected row reads differently from a confirmed-as-is one. */
+.bmc-item-changed {
+  border-color: var(--c-3b82f6, #3b82f6);
+  background: var(--c-eff6ff, #eff6ff);
+}
+
+.bmc-item-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.bmc-line-no {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--c-e5e7eb, #e5e7eb);
+  color: var(--ct-374151, #374151);
+  white-space: nowrap;
+}
+
+.bmc-item-name { font-weight: 600; font-size: 13.5px; }
+
+.bmc-item-qty {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.bmc-typed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  margin-top: 9px;
+  font-size: 12.5px;
+}
+.bmc-typed span { display: flex; flex-direction: column; gap: 1px; }
+.bmc-typed label {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ct-6b7280, #6b7280);
+  font-weight: 600;
+}
+
+.bmc-ambiguous {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 9px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.4;
+  background: var(--c-fef3c7, #fef3c7);
+  color: var(--ct-92400e, #92400e);
+}
+.bmc-ambiguous svg { flex-shrink: 0; margin-top: 1px; }
+
+.bmc-field {
+  display: block;
+  margin-top: 10px;
+}
+.bmc-field-label {
+  display: block;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--ct-6b7280, #6b7280);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.bmc-select {
+  width: 100%;
+  padding: 7px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  background: var(--c-ffffff, #ffffff);
+  color: var(--ct-1f2937, #1f2937);
+  font-size: 12.5px;
+  font-family: inherit;
+}
+.bmc-select:focus {
+  outline: none;
+  border-color: var(--c-3b82f6, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.bmc-matched-note {
+  margin-top: 8px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ct-6b7280, #6b7280);
+}
+
+/* ── Footer ───────────────────────────────────────────────────────────────── */
+.bmc-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--c-e5e7eb, #e5e7eb);
+  flex-wrap: wrap;
+}
+
+.bmc-changed-note {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ct-1d4ed8, #1d4ed8);
+}
+
+.bmc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--c-d1d5db, #d1d5db);
+  background: var(--c-ffffff, #ffffff);
+  color: var(--ct-374151, #374151);
+}
+.bmc-btn:hover { background: var(--c-f9fafb, #f9fafb); }
+
+.bmc-btn-primary {
+  background: var(--c-3b82f6, #3b82f6);
+  border-color: transparent;
+  color: #ffffff;
+  margin-left: auto;
+}
+.bmc-btn-primary:hover { background: var(--c-2563eb, #2563eb); }
