@@ -137,8 +137,103 @@ const borrowerApi = {
     return URL.createObjectURL(await res.blob());
   },
 
-  docDownloadUrl: (sanctionId) =>
-    `${API_BASE_URL}/borrower/sanction/${sanctionId}/download-doc?forceDownload=true`,
+  // Authenticated file download for an SPA: fetch the bytes ourselves (so
+  // User-Id/User-Role go out as real headers, same as every other call
+  // here), then hand the browser a blob URL to save exactly the way a
+  // normal download link would. Same fetch-then-blob shape as docBlobUrl
+  // above, just triggering a save instead of an inline viewer.
+  downloadDocFile: async (sanctionId, fileName) => {
+    const res = await fetch(
+      `${API_BASE_URL}/borrower/sanction/${sanctionId}/download-doc?forceDownload=true`,
+      { method: 'GET', credentials: 'include', headers: authHeadersRaw() },
+    );
+    if (!res.ok) throw new Error(`Could not download the document (HTTP ${res.status})`);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName || 'sanction-letter';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
+  // ── company hierarchy ──
+
+  // Top-level Parent Groups when parentId is omitted, else the Sub Groups
+  // under that Parent Group.
+  getGroups: async (parentId) => {
+    const qs = parentId ? `?parentId=${parentId}` : '';
+    return (await req(`/borrower/groups${qs}`)).data || [];
+  },
+
+  searchGroups: async (q) =>
+    (await req(`/borrower/groups/search?q=${encodeURIComponent(q || '')}`)).data || [],
+
+  createGroup: async (group) =>
+    (await req('/borrower/groups', { method: 'POST', body: group })).data,
+
+  updateGroup: async (id, group) =>
+    (await req(`/borrower/groups/${id}`, { method: 'PUT', body: group })).data,
+
+  // Deletes a Parent Group or Sub Group and everything under it — every
+  // company in it (sanctions and documents with it) and, for a Parent
+  // Group, every Sub Group beneath it too. Irreversible.
+  deleteGroup: async (id) => req(`/borrower/groups/${id}`, { method: 'DELETE' }),
+
+  // With no args: the whole Group -> Sub Group -> Company tree, plus
+  // standalone companies (used by Group Detail's own summary lookups
+  // elsewhere going away — kept for any caller that still wants everything
+  // in one shot). With page/size: just that page of the Level-1 list
+  // (top-level Parent Groups + standalone companies) plus registry-wide
+  // stats and pagination metadata — what the hierarchy view itself uses.
+  getHierarchy: async (page, size, search) => {
+    const qs = new URLSearchParams();
+    if (page !== undefined) qs.set('page', page);
+    if (size !== undefined) qs.set('size', size);
+    if (search) qs.set('search', search);
+    const suffix = qs.toString() ? `?${qs}` : '';
+    return (await req(`/borrower/hierarchy${suffix}`)).data;
+  },
+
+  // One Parent Group or Sub Group's own summary — breadcrumb + stat-card
+  // figures (direct/total companies, sub-group count, total SPVs, total
+  // sanctioned amount) — no nested companies/subGroups arrays; those come
+  // from getGroupCompanies/getSubGroups below, one page at a time.
+  getGroupDetail: async (id) => (await req(`/borrower/groups/${id}`)).data,
+
+  // One page of the companies sitting directly under a group — used for
+  // both a Parent Group's Direct Companies table and any Sub Group's own
+  // inline table (call with that Sub Group's id).
+  getGroupCompanies: async (groupId, page, size) =>
+    (await req(`/borrower/groups/${groupId}/companies?page=${page}&size=${size}`)).data,
+
+  // One page of the Sub Groups sitting directly under a Parent Group, each
+  // with its own summary (company count, sanctions, total amount) — not
+  // their companies, which come from getGroupCompanies once a panel opens.
+  getSubGroups: async (groupId, page, size) =>
+    (await req(`/borrower/groups/${groupId}/subgroups?page=${page}&size=${size}`)).data,
+
+  // Move a company between groups (or in/out of standalone). Never touches
+  // its sanctions — group_id lives only on the borrower row.
+  updateHierarchy: async (borrowerId, { groupId, isSubsidiary, isSpv }) =>
+    (await req(`/borrower/${borrowerId}/hierarchy`, {
+      method: 'PUT', body: { groupId, isSubsidiary, isSpv },
+    })).data,
+
+  // Candidate borrowers for a parsed letter's identity, ranked by
+  // confidence (CIN > normalized name > alias > fuzzy). Never auto-attaches
+  // anything — always a list for the reviewer to confirm or reject.
+  matchBorrower: async (identity) =>
+    (await req('/borrower/match', { method: 'POST', body: identity })).data || [],
+
+  // Soft duplicate check: same lender + sanction date on the same company.
+  // Advisory only — the ref. no. duplicate check elsewhere is the hard block.
+  checkDuplicateSanction: async (borrowerId, lenderName, sanctionDate) => {
+    const qs = new URLSearchParams({ borrowerId, lenderName, sanctionDate });
+    return (await req(`/borrower/sanction/check-duplicate?${qs}`)).data || [];
+  },
 };
 
 export default borrowerApi;

@@ -85,7 +85,7 @@ function Navbar({ onMenuClick }) {
 
         {/* LEFT SECTION */}
         <div className="navbar-left">
-          <button onClick={onMenuClick} className="menu-button" aria-label="Open menu">
+          <button onClick={onMenuClick} className="menu-button" aria-label="Open menu" data-tooltip="Menu">
             <svg className="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>

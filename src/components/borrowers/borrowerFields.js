@@ -74,7 +74,7 @@ export const BORROWER_FIELDS = [
  * someone typed.
  */
 export const BORROWER_IMPORT_KEYS = [
-  'promoterName', 'sponsorName', 'guarantorName',
+  'cin', 'promoterName', 'sponsorName', 'guarantorName',
   'groupName', 'borrowerCategory', 'borrowerSubCategory', 'state',
 ];
 

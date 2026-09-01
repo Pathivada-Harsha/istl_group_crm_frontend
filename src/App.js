@@ -47,6 +47,8 @@ import ProjectDetailPage from "./components/projects/ProjectDetailPage.js";
 import Tenders from "./Pages/Tenders.js";
 import BorrowerRegistry from "./Pages/BorrowerRegistry.js";
 import BorrowerDetail from "./components/borrowers/BorrowerDetail.js";
+import GroupDetail from "./components/borrowers/GroupDetail.js";
+import SanctionDetail from "./components/borrowers/SanctionDetail.js";
 import ProjectCostExpenseManagement from './Pages/ProjectCostExpenseManagement.js';
 import NotFound from "./Pages/NotFound";
 import TaskManagement from './Pages/TaskManagement.js';
@@ -267,6 +269,14 @@ function AppShell({ hideShell }) {
 
           <Route path="/lender/borrowers/:id" element={
             <ProtectedRoute><BorrowerDetail /></ProtectedRoute>
+          } />
+
+          <Route path="/lender/borrowers/group/:groupId" element={
+            <ProtectedRoute><GroupDetail /></ProtectedRoute>
+          } />
+
+          <Route path="/lender/borrowers/:id/sanctions/:sanctionId" element={
+            <ProtectedRoute><SanctionDetail /></ProtectedRoute>
           } />
 
           <Route path="/sales/invoices" element={

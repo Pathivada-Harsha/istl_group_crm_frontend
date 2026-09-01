@@ -74,7 +74,10 @@ const normalise = (raw, kind) => {
 const SanctionCompareModal = ({ current, parsed, fileName, onCancel, onConfirm }) => {
   // Rows where the two genuinely disagree AND the letter actually supplied a
   // value. A field the parser couldn't find is not evidence of a mistake.
-  const rows = useMemo(() => FIELDS.map((f) => {
+  // `readOnly` fields (roiPct) are excluded — there's nothing to "adopt",
+  // the sanction form works that figure out itself and would just overwrite
+  // whatever was chosen here on the next render.
+  const rows = useMemo(() => FIELDS.filter((f) => !f.readOnly).map((f) => {
     const mine = current?.[f.key] ?? '';
     const theirs = parsed?.[f.key] ?? '';
     const differs = String(theirs).trim() !== ''

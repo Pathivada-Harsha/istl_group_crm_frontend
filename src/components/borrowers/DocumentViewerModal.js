@@ -77,10 +77,14 @@ const DocumentViewerModal = ({ sanctionId, fileName, onClose }) => {
             </div>
           </div>
           <div className="br-viewer-actions">
-            <a className="br-btn br-btn-sm" href={borrowerApi.docDownloadUrl(sanctionId)}>
+            <button
+              type="button"
+              className="br-btn br-btn-sm"
+              onClick={() => borrowerApi.downloadDocFile(sanctionId, displayName)}
+            >
               <Download size={14} aria-hidden="true" />
               <span>Download</span>
-            </a>
+            </button>
             <button type="button" className="br-icon-btn" onClick={onClose} aria-label="Close">
               <X size={18} aria-hidden="true" />
             </button>
@@ -98,10 +102,14 @@ const DocumentViewerModal = ({ sanctionId, fileName, onClose }) => {
           {state.status === 'error' && (
             <div className="br-viewer-centered">
               <span className="br-tone-warn">{state.message}</span>
-              <a className="br-btn br-btn-sm" href={borrowerApi.docDownloadUrl(sanctionId)}>
+              <button
+                type="button"
+                className="br-btn br-btn-sm"
+                onClick={() => borrowerApi.downloadDocFile(sanctionId, displayName)}
+              >
                 <Download size={14} aria-hidden="true" />
                 Download instead
-              </a>
+              </button>
             </div>
           )}
 
